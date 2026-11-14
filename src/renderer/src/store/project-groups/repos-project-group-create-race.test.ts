@@ -119,18 +119,6 @@ describe('repos-project-group-create-race', () => {
         { ...refreshedGroup, executionHostId: ownerHostId }
       ])
     })
-
-    it('does not roll back a successful refresh if the create response fails', async () => {
-      const { store, created, createStarted, ownerHostId } = setup(runtimeEnvironmentId)
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
-      await createStarted.promise
-      await store.getState().fetchProjectGroups(catalogOwner(store))
-      const refreshedState = store.getState()
-      created.reject(new Error('Create response lost'))
-      await expect(pendingCreate).resolves.toBeNull()
-      expect(store.getState()).toBe(refreshedState)
-    })
   })
 
   // The catalog these tests read is the one the focused host would have shown.

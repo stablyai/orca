@@ -71,8 +71,17 @@ export type FleetLiveness =
         /** The Dispatch settled with no worker row, so no process was ever supervised. */
         | 'unsupervised_settled'
       observedAt?: number
+      /** What the host could not verify, when it said. */
+      detail?: string
     }
   | { verdict: 'exited'; source: 'resource_release' | 'worker_stop' | 'execution_host' }
+
+/** The structured host's verdict on a chat-mode worker, which has no terminal hook stream. */
+export type FleetSessionObservation =
+  /** `activity` is the session's own status row: its turn state and when it last changed. */
+  | { status: 'live'; activity?: FleetAgentStatusEvidence }
+  | { status: 'exited' }
+  | { status: 'unverifiable'; detail: string }
 
 export type FleetResourceProjection =
   | {
@@ -148,6 +157,8 @@ export function refreshOrchestrationFleetLivenessAttention(worker: Orchestration
 export function projectOrchestrationFleet(args: {
   workers: readonly FleetDurableWorker[]
   statuses: readonly FleetAgentStatusEvidence[]
+  /** Chat-mode workers' host verdicts; undefined selects the terminal path. */
+  observeSession?: (worker: FleetDurableWorker) => FleetSessionObservation | undefined
   now?: number
   cursor?: string
   limit?: number
@@ -164,7 +175,12 @@ export function projectOrchestrationFleet(args: {
   const statusIndex = createFleetStatusIndex(args.statuses, rows)
   const now = args.now ?? Date.now()
   const workers = rows.map((worker) =>
-    projectOrchestrationFleetWorker(worker, statusForFleetWorker(worker, statusIndex), now)
+    projectOrchestrationFleetWorker(
+      worker,
+      statusForFleetWorker(worker, statusIndex),
+      now,
+      args.observeSession?.(worker)
+    )
   )
   const hasMore = start + workers.length < args.workers.length
   return {

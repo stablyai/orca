@@ -1,4 +1,4 @@
-import { holdPaneResumeInPlace } from '@/lib/pane-spawn-deferral-registry'
+import { holdPaneResumeInPlace } from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 /** While `attempt` runs and `isLive`, the pane owns the resume record `startup` came from. */

@@ -12,7 +12,7 @@ import {
   parsePairingCode
 } from '../../../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { sendRemoteRuntimeRequest } from '../../../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   type DelegatedMobileDeviceSyncResult
@@ -93,11 +93,17 @@ describe('pairing.delegatedMobileDevice.sync', () => {
     desktop: PairingOffer,
     phones: { phoneKey: string; name: string }[]
   ): Promise<DelegatedDevice[]> {
-    const response = await sendRemoteRuntimeRequest<DelegatedMobileDeviceSyncResult>(
+    const response = await sendRemoteRuntimeRequestOnSocket<DelegatedMobileDeviceSyncResult>(
       pairedRuntimeConnectionFromOffer(desktop),
       DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
       { phones },
-      5_000
+      5_000,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
     )
     if (!response.ok) {
       throw new Error(`sync failed: ${response.error.code} ${response.error.message}`)

@@ -1,16 +1,16 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
-import type { StructuredAgentCliConversations } from '../../../native-chat/structured-agent-cli-conversations'
+import type { StructuredAgentCliConversations } from '../../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionLifecycleEvent
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
-import type { AcpHostBackendSettings } from '../../../acp/acp-launch-specs'
+import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
+import type { AcpHostBackendSettings } from '../../../acp/launch/acp-launch-contract'
 import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
+import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { AgentModelCatalogDiscovery } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { createStructuredAgentSessionDispatchFollowUps } from '../structured-agent-session-dispatch-followups'
@@ -25,7 +25,7 @@ import type {
 export type StructuredAgentAdapterContext = {
   deps: StructuredAgentSessionRuntimeDeps
   store: AgentSessionRecordStore
-  journalDatabase: JournalHostDatabase
+  journalDatabase: JournalSqlDatabase
   environment: ReturnType<typeof createStructuredAgentEnvironmentResolvers>
   /** Hands the host an exit or other lifecycle event the agent observed. */
   deliverLifecycle: (event: StructuredAgentSessionLifecycleEvent) => void

@@ -6,16 +6,19 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as accountTypes from '../../shared/antigravity-account-types'
-import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
+import {
+  createAcpAgentConnection,
+  type AcpAgentConnection
+} from '../acp/process/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
-import { acpPrivateTempConnect } from '../acp/acp-private-temp'
-import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
+import { acpPrivateTempConnect } from '../acp/launch/acp-private-temp'
+import type { ConnectAcpAgent } from '../acp/process/acp-structured-connection'
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchSettings
-} from '../acp/acp-structured-launch-resolution'
-import { prepareAcpLaunch } from '../acp/acp-structured-launch-preparation'
-import { AcpAgentError, AcpConnectionClosedError } from '../acp/acp-errors'
+} from '../acp/launch/acp-structured-launch-resolution'
+import { prepareAcpLaunch } from '../acp/launch/acp-structured-launch-preparation'
+import { AcpAgentError, AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import { captureSignInModelPublisher } from './antigravity-sign-in-models'
 import { SIGN_IN_FAILED, antigravitySignInFailure } from './antigravity-sign-in-failure'
 import type { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'

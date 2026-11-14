@@ -6,21 +6,21 @@ import type { RemoteInstallTransport } from './remote-install-transport'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
 import { remoteInstallDirName, type RemoteInstallModel } from './remote-install-model'
+import { probeRemoteInstallCompleteCommand } from './remote-install-completeness-command'
 import {
-  probeRemoteInstallCompleteCommand,
   removeRemoteTreeCommand,
   writeRemoteEmptyFileCommand
-} from '../../ssh/ssh-remote-commands'
+} from '../../ssh/remote-exec/ssh-remote-commands'
 import {
   assertSafeRemotePathSegment,
   getRemoteHostPlatform,
   joinRemotePath,
   type RemoteHostPlatform,
   type RemotePathFlavor
-} from '../../ssh/ssh-remote-platform'
-import { isSshSessionLimitError } from '../../ssh/ssh-session-limit-error'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import { isSshSessionLimitError } from '../../ssh/connection/ssh-session-limit-error'
 
 const INSTALL_COMPLETE_NAME = '.install-complete'
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')

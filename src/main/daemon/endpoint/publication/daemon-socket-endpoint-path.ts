@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { lstatSync, mkdirSync } from 'node:fs'
 import { posix } from 'node:path'
 import { unixSocketPathFits } from '../../../../shared/unix-socket-path-limit'
-import { hasErrorCode } from '../identity/daemon-process-inspection'
+import { errnoCodeOrUnknown } from '../../../../shared/errno-code'
 import { PRIVATE_DIR_MODE } from './daemon-private-file-modes'
 
 // Keep the fallback path independent of user-directory length.
@@ -35,7 +35,7 @@ export function ensureOwnedPrivateDir(dir: string, uid: number): void {
   try {
     mkdirSync(dir, { mode: PRIVATE_DIR_MODE })
   } catch (error) {
-    if (!hasErrorCode(error, 'EEXIST')) {
+    if (errnoCodeOrUnknown(error) !== 'EEXIST') {
       throw error
     }
   }

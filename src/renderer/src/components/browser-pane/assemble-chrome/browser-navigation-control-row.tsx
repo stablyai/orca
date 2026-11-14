@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE,
   BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS
@@ -45,7 +45,7 @@ export function BrowserNavigationControlRow({
   return (
     <div
       ref={rowRef}
-      className="relative z-10 flex shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
+      className="relative z-10 flex shrink-0 items-center gap-1 border-b border-border/70 bg-background/95 px-2 py-1"
       {...(showTourAnchors ? { 'data-contextual-tour-target': 'browser-toolbar' } : {})}
     >
       <Button
@@ -82,7 +82,7 @@ export function BrowserNavigationControlRow({
 
       <div
         className={cn(
-          'flex min-w-0 flex-1 items-stretch',
+          'mx-1 flex min-w-0 flex-1 items-stretch',
           BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS
         )}
         {...{ [BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE]: 'true' }}

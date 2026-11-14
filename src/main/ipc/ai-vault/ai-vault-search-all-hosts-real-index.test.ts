@@ -1,3 +1,4 @@
+import '../../ai-vault-search/worker/session-search-worker.test-fixture'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -8,7 +9,7 @@ import {
   claudeLines,
   openSessionSearchIndexerHarness,
   type SessionSearchIndexerHarness
-} from '../../ai-vault-search/session-search-indexer-test-fixture'
+} from '../../ai-vault-search/indexing/session-search-indexer-test-fixture'
 import type { AiVaultSearchResponse } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
@@ -106,40 +107,7 @@ function everyKey(): string[] {
   )
 }
 
-async function paginate(
-  limit: number,
-  sort: 'relevance' | 'newest',
-  hostLegs = legs()
-): Promise<{ keys: string[]; pages: number }> {
-  const request = { query: 'needle', limit, filters: { sort } }
-  const keys: string[] = []
-  let cursor: string | null = null
-  let pages = 0
-  do {
-    const response = resultsOf(
-      await searchAllExecutionHosts(cursor === null ? request : { ...request, cursor }, hostLegs)
-    )
-    keys.push(...keysOf(response))
-    cursor = response.page.cursor
-    pages++
-    expect(pages).toBeLessThan(40)
-  } while (cursor !== null)
-  return { keys, pages }
-}
-
-it('hands out every hit on every host exactly once, at limit 5 and limit 20', async () => {
-  const expected = everyKey().sort()
-  expect(expected).toHaveLength(40)
-  for (const limit of [5, 20]) {
-    for (const sort of ['relevance', 'newest'] as const) {
-      const { keys } = await paginate(limit, sort)
-      expect(new Set(keys).size, `${sort} at ${limit} repeated a hit`).toBe(keys.length)
-      expect([...keys].sort(), `${sort} at ${limit} lost a hit`).toEqual(expected)
-    }
-  }
-})
-
-it('fences the purged host and keeps the other two paginating', async () => {
+it('replays snapshot tails then fences the changed host at its next read while healthy hosts finish', async () => {
   const request = { query: 'needle', limit: 5 }
   const first = resultsOf(await searchAllExecutionHosts(request, legs()))
   expect(first.hosts?.every((host) => host.outcome === 'searched')).toBe(true)
@@ -151,25 +119,27 @@ it('fences the purged host and keeps the other two paginating', async () => {
   const second = resultsOf(
     await searchAllExecutionHosts({ ...request, cursor: first.page.cursor! }, legs())
   )
-  expect(second.hosts).toContainEqual({
-    executionHostId: 'ssh:beta',
-    outcome: 'stale'
-  })
-  expect(second.hits.some((hit) => hit.executionHostId === 'ssh:beta')).toBe(false)
+  expect(second.hosts).toContainEqual({ executionHostId: 'ssh:beta', outcome: 'searched' })
+  expect(second.hits.some((hit) => hit.executionHostId === 'ssh:beta')).toBe(true)
 
   const seen = [...keysOf(first), ...keysOf(second)]
   let cursor = second.page.cursor
   let pages = 0
+  let stale = false
   while (cursor !== null) {
     const page = resultsOf(await searchAllExecutionHosts({ ...request, cursor }, legs()))
+    stale ||=
+      page.hosts?.some((host) => host.executionHostId === 'ssh:beta' && host.outcome === 'stale') ??
+      false
     seen.push(...keysOf(page))
     cursor = page.page.cursor
     // Fail boundedly if a host is never retired.
     expect((pages += 1)).toBeLessThan(40)
   }
-  // Purged beta retains only previously emitted hits; healthy hosts finish without duplicates.
+  expect(stale).toBe(true)
+  // The first host page was already hydrated, so its carried tail survives the write.
   expect(new Set(seen).size).toBe(seen.length)
-  const betaEmitted = keysOf(first).filter((key) => key.startsWith('ssh:beta/'))
+  const betaEmitted = [39, 38, 37, 36, 35].map((id) => `ssh:beta/${sessionIdFor(id)}`)
   expect([...seen].sort()).toEqual(
     [
       ...hosts[0]!.sessionIds.map((id) => `local/${id}`),

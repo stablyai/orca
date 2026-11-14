@@ -5,7 +5,7 @@ import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { useAppStore } from '@/store/index'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
 
@@ -99,7 +99,7 @@ export function ArtifactsSettingsPane({
           onChange={() => void updateSettings({ artifactSharingEnabled: !sharingEnabled })}
         />
         <SettingsSwitchRow
-          label={t('auto.components.settings.artifacts.showButton', 'Show Artifacts Button')}
+          label={t('auto.components.settings.artifacts.09f41ce46c', 'Show artifacts button')}
           description={t(
             'auto.components.settings.artifacts.showButtonDescription',
             'Show the Artifacts shortcut in the sidebar.'
@@ -174,7 +174,7 @@ export function ArtifactsSettingsPane({
             </span>
             <span className="min-w-0 flex-1 space-y-0.5">
               <span className="block text-sm font-medium text-foreground">
-                {t('auto.components.settings.artifacts.openArtifacts', 'Open Artifacts')}
+                {t('auto.components.settings.artifacts.7b2b114099', 'Open artifacts')}
               </span>
               <span className="block text-xs font-normal text-muted-foreground">
                 {t(

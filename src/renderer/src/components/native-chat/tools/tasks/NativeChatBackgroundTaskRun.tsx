@@ -1,9 +1,9 @@
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import type { NativeChatBackgroundTaskBlock } from '../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatBackgroundTaskRun } from '../../../../../../shared/native-chat/transcript/native-chat-background-task-run'
+import { nativeChatBackgroundTaskRun } from '../../../../../../shared/native-chat/transcript/turns/native-chat-background-task-run'
 import { sayBackgroundTaskTranslated } from './background-task-words-text'
 import { KIND_ICONS } from './NativeChatBackgroundTasksStatus'
 

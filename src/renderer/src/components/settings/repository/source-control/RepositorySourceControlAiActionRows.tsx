@@ -23,11 +23,12 @@ import { isCustomAgentId } from '../../../../../../shared/source-control/ai/gene
 import {
   type SourceControlActionId,
   SOURCE_CONTROL_ACTION_IDS,
-  SOURCE_CONTROL_ACTION_LABELS
+  SOURCE_CONTROL_ACTION_LABELS,
+  resolveSourceControlActionCommandTemplate
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { RepositorySourceControlAiActionSaveControls } from '../../source-control/RepositorySourceControlAiActionSaveControls'
+import { RepositorySourceControlAiActionSaveControls } from './RepositorySourceControlAiActionSaveControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
 import {
@@ -45,7 +46,6 @@ import {
   agentArgsStateLabel,
   commandTemplateStateLabel,
   readInheritedAgentArgs,
-  readInheritedCommandTemplate,
   resolveAgentArgsPlaceholderAgent
 } from './repository-source-control-ai-labels'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository-settings-targets'
@@ -129,7 +129,10 @@ const SelectedRepositoryActionRows = memo(
         {SOURCE_CONTROL_ACTION_IDS.map((actionId) => {
           const hasOverride = hasOwnActionOverride(repoAi.actionOverrides, actionId)
           const override = repoAi.actionOverrides?.[actionId]
-          const inheritedTemplate = readInheritedCommandTemplate(source, actionId)
+          const inheritedTemplate = resolveSourceControlActionCommandTemplate(
+            source.actions,
+            actionId
+          )
           const inheritedAgentArgs = readInheritedAgentArgs(source, actionId)
           const templateValue =
             hasOverride && typeof override?.commandInputTemplate === 'string'
@@ -308,8 +311,10 @@ const SelectedRepositoryActionRows = memo(
                   {!isLaunchAction ? (
                     <SourceControlActionOptionField
                       label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+                      controlId={`${sectionId}-arguments`}
                     >
                       <Input
+                        id={`${sectionId}-arguments`}
                         value={agentArgsValue}
                         onChange={(event) => onActionAgentArgsChange(actionId, event.target.value)}
                         disabled={!hasOverride}
@@ -321,13 +326,14 @@ const SelectedRepositoryActionRows = memo(
                   ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[11px] text-muted-foreground">
+                  <Label variant="settings" htmlFor={`${sectionId}-command-template`}>
                     {t(
                       'auto.components.settings.RepositorySourceControlAiActionRows.548a6e1281',
                       'Command template'
                     )}
                   </Label>
                   <textarea
+                    id={`${sectionId}-command-template`}
                     rows={3}
                     value={templateValue}
                     onChange={(event) => onActionTemplateChange(actionId, event.target.value)}

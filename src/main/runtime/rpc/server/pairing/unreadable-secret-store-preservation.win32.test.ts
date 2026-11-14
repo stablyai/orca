@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync, type Stats } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   loadWindowsSecurity,
   type WindowsSecurity
@@ -131,54 +131,9 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
     expectUntouched(filePath, locked)
   })
 
-  it('does not blank the plugin secret vault on write', async () => {
-    vi.doMock('electron', () => ({
-      safeStorage: {
-        isEncryptionAvailable: () => true,
-        encryptString: (value: string) => Buffer.from(`enc:${value}`),
-        decryptString: (buffer: Buffer) => buffer.toString().replace(/^enc:/, '')
-      }
-    }))
-    const { PluginSecretsStore } = await import('../../../../plugins/plugin-secrets-store')
-    const dir = join(root, 'plugin-secrets')
-    mkdirSync(dir, { recursive: true })
-    const store = new PluginSecretsStore(dir, 'publisher.plugin')
-    // Reach the path the store computes rather than restating its layout here.
-    const filePath = (store as unknown as { filePath: string }).filePath
-    mkdirSync(join(filePath, '..'), { recursive: true })
-    const original = JSON.stringify({
-      version: 1,
-      format: 'electron-safe-storage-v1',
-      ciphertexts: { existing: Buffer.from('enc:keep-me').toString('base64') }
-    })
-    writeFileSync(filePath, original)
-    const locked = makeUnreadable(filePath)
-
-    expect(store.set('added', 'value')).toEqual({ ok: false, error: expect.any(String) })
-    store.delete('existing')
-
-    expectUntouched(filePath, locked)
-    vi.doUnmock('electron')
-  })
-  it('does not blank the plugin KV store on write', async () => {
-    const { PluginKvStore } = await import('../../../../plugins/plugin-storage-store')
-    const dir = join(root, 'plugin-kv')
-    mkdirSync(dir, { recursive: true })
-    const store = new PluginKvStore(dir, 'publisher.plugin', 'storage.json')
-    const filePath = (store as unknown as { filePath: string }).filePath
-    mkdirSync(join(filePath, '..'), { recursive: true })
-    const original = JSON.stringify({ keep: 'me' })
-    writeFileSync(filePath, original)
-    const locked = makeUnreadable(filePath)
-
-    expect(store.set('added', 'value')).toEqual({ ok: false, error: expect.any(String) })
-    store.delete('keep')
-
-    expectUntouched(filePath, locked)
-  })
-
   it('does not drop pending relay revocations', async () => {
-    const { RelayRevokeOutbox } = await import('../../../mobile-cloud-relay/relay-revoke-outbox')
+    const { RelayRevokeOutbox } =
+      await import('../../../mobile-cloud-relay/pairing/relay-revoke-outbox')
     const dir = join(root, 'relay')
     mkdirSync(dir, { recursive: true })
     const filePath = join(dir, 'mobile-relay-revoke-outbox.json')

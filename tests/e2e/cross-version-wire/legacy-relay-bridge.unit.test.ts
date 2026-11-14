@@ -10,23 +10,23 @@ import { toAppSshPtyId } from '../../../src/shared/ssh-pty-id'
 import {
   LegacyRelayClient,
   LegacyRelayOwnerHeldError
-} from '../../../src/main/ssh/legacy-relay/legacy-relay-client'
-import { LegacyRelayTargetBridge } from '../../../src/main/ssh/legacy-relay/legacy-relay-target-bridge'
-import { LegacyRelayPaneOwners } from '../../../src/main/ssh/legacy-relay/legacy-relay-pane-owners'
+} from '../../../src/main/ssh/legacy-relay/bridge/legacy-relay-client'
+import { LegacyRelayTargetBridge } from '../../../src/main/ssh/legacy-relay/bridge/legacy-relay-target-bridge'
+import { LegacyRelayPaneOwners } from '../../../src/main/ssh/legacy-relay/bridge/legacy-relay-pane-owners'
 import {
   listLegacyRelayEndpoints,
   posixEndpointExited,
   type LegacyRelayEndpoint
-} from '../../../src/main/ssh/legacy-relay/legacy-relay-endpoints'
-import { createLegacyRelayBridgeConnections } from '../../../src/main/ssh/legacy-relay/legacy-relay-bridge-connections'
-import { waitForSentinel } from '../../../src/main/ssh/legacy-relay/ssh-relay-sentinel'
-import { relaySocketNameForInstanceId } from '../../../src/main/ssh/legacy-relay/ssh-relay-instance-id'
-import { detectRemoteHostPlatform } from '../../../src/main/ssh/ssh-remote-platform-detection'
+} from '../../../src/main/ssh/legacy-relay/endpoints/legacy-relay-endpoints'
+import { createLegacyRelayBridgeConnections } from '../../../src/main/ssh/legacy-relay/bridge/legacy-relay-bridge-connections'
+import { waitForSentinel } from '../../../src/main/ssh/legacy-relay/handshake/ssh-relay-sentinel'
+import { relaySocketNameForInstanceId } from '../../../src/main/ssh/legacy-relay/endpoints/ssh-relay-instance-id'
+import { detectRemoteHostPlatform } from '../../../src/main/ssh/remote-host/ssh-remote-platform-detection'
 import {
   startRealOpenSshFixture,
   type RealOpenSshFixture
-} from '../../../src/main/ssh/system-transport/real-openssh-sshd-fixture'
-import { getRemoteHostPlatform } from '../../../src/main/ssh/ssh-remote-platform'
+} from '../../../src/main/ssh/system-transport/testing/real-openssh-sshd-fixture'
+import { getRemoteHostPlatform } from '../../../src/main/ssh/remote-host/ssh-remote-platform'
 import { materializeReleaseCheckout } from './release-checkout'
 import {
   buildReleasedRelayBundle,

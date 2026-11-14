@@ -1,6 +1,16 @@
-import type { Tab } from '../../../../../shared/tab-types'
 import { createBrowserLinkHostMatcher } from './browser-link-owner'
 import { createBrowserLinkSessionMatcher } from './browser-link-session'
+import {
+  normalizeBrowserNavigationUrl,
+  redactKagiSessionToken
+} from '../../../../../shared/browser-url'
+import { browserPageDocLocationsEqual } from '../../../../../shared/browser-page-doc-location'
+import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
+import { isLiveLinkOpenGroup, liveLinkOpenGroupIds } from '../../links/placement/link-open-intent'
+import type { LinkOpenIntent } from '../../links/placement/link-open-intent'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
+import { resolveLinkOpenSidePlacement } from '../../links/placement/adjacent-link-open-group'
+import type { Tab } from '../../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import type {
   BrowserPage,
@@ -8,17 +18,7 @@ import type {
   BrowserWorkspace
 } from '../../../../../shared/browser-workspace-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import {
-  normalizeBrowserNavigationUrl,
-  redactKagiSessionToken
-} from '../../../../../shared/browser-url'
-import { browserPageDocLocationsEqual } from '../../../../../shared/browser-page-doc-location'
-import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
-import { isLiveLinkOpenGroup, liveLinkOpenGroupIds } from '../../link-open-intent'
-import type { LinkOpenIntent } from '../../link-open-intent'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
-import { resolveLinkOpenSidePlacement } from '../../adjacent-link-open-group'
 
 export type BrowserLinkDestination = {
   worktreeId: string
@@ -130,11 +130,8 @@ export function browserOpenResultForPage(
   workspaceId: string,
   pageId: string
 ): BrowserOpenResult | null {
-  const matchesHost = createBrowserLinkHostMatcher(
-    state,
-    destination.worktreeId,
-    destination.executionHostId
-  )
+  const { worktreeId, executionHostId } = destination
+  const matchesHost = createBrowserLinkHostMatcher(state, worktreeId, executionHostId)
   const wrapper = (state.unifiedTabsByWorktree[destination.worktreeId] ?? []).find(
     (tab) =>
       tab.contentType === 'browser' &&
@@ -209,6 +206,12 @@ export function selectBrowserLinkDestination(
   ) {
     return { status: 'refused' }
   }
+  const reusePage =
+    destination.resource.kind !== 'website' ||
+    (destination.browserRuntimeEnvironmentId !== null && !!intent?.targetGroupId)
+  if (intent?.targetGroupId && !reusePage) {
+    return { status: 'ready', groupId: intent.targetGroupId, match: null }
+  }
   const workspaces = new Map(
     (state.browserTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
   )
@@ -226,12 +229,7 @@ export function selectBrowserLinkDestination(
   const matchingGroups = new Set<string>()
   const liveGroups = liveLinkOpenGroupIds(state, worktreeId)
   for (const tab of wrappersByWorkspace.values()) {
-    if (
-      !tab ||
-      tab.contentType !== 'browser' ||
-      !matchesHost(tab.executionHostId) ||
-      !liveGroups.has(tab.groupId)
-    ) {
+    if (!tab || !matchesHost(tab.executionHostId) || !liveGroups.has(tab.groupId)) {
       continue
     }
     const workspace = workspaces.get(tab.entityId)
@@ -300,10 +298,9 @@ export function selectBrowserLinkDestination(
     return { status: 'ready', ...placement, match: null }
   }
   const group = groups.find((item) => item.id === groupId)
-  const ids = group ? [group.activeTabId, ...group.tabOrder] : []
-  for (const id of ids) {
+  for (const id of group ? [group.activeTabId, ...group.tabOrder] : []) {
     const match = id ? matchesByTab.get(id) : undefined
-    if (match && match.groupId === groupId) {
+    if (reusePage && match && match.groupId === groupId) {
       return { status: 'ready', groupId, match }
     }
   }

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getReorderUnnestRows,
   getWorktreeLineageDropTargetIdentity,
-  isReorderInsideFolderRow
+  isReorderInsideFolderBounds
 } from './worktree-lineage-drag-drop'
 
 describe('getWorktreeLineageDropTargetIdentity', () => {
@@ -64,26 +64,20 @@ describe('getWorktreeLineageDropTargetIdentity', () => {
   })
 })
 
-describe('isReorderInsideFolderRow', () => {
-  it('keeps a reorder inside the folder card only when the pointer and the insertion line are in it', () => {
-    const folder = document.createElement('div')
-    folder.setAttribute('data-worktree-lineage-drop-row', '')
-    folder.setAttribute('data-worktree-host-identity', 'local|folder:f-1')
-    folder.getBoundingClientRect = () => new DOMRect(0, 100, 290, 200)
-    const card = document.createElement('div')
-    card.setAttribute('data-worktree-card-surface', 'true')
-    card.getBoundingClientRect = () => new DOMRect(15, 100, 265, 200)
-    folder.append(card)
-    document.body.append(folder)
+describe('isReorderInsideFolderBounds', () => {
+  it('keeps first and last insertion gutters inside an offscreen folder, with an outer unnest escape', () => {
+    const bounds = { left: 15, right: 280, top: -100, bottom: 300 }
     const inside = { clientX: 140, clientY: 200, lineClientY: 180 }
-    expect(isReorderInsideFolderRow('local|folder:f-1', inside)).toBe(true)
-    expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, clientX: 900 })).toBe(false)
-    expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, clientX: 4 })).toBe(false)
-    expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, lineClientY: 320 })).toBe(
-      false
+    expect(isReorderInsideFolderBounds(inside, bounds)).toBe(true)
+    expect(isReorderInsideFolderBounds({ ...inside, clientY: 2, lineClientY: -3 }, bounds)).toBe(
+      true
     )
-    expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, clientY: 340 })).toBe(false)
-    folder.remove()
+    expect(isReorderInsideFolderBounds({ ...inside, clientY: 295, lineClientY: 297 }, bounds)).toBe(
+      true
+    )
+    expect(isReorderInsideFolderBounds({ ...inside, clientX: 4 }, bounds)).toBe(false)
+    expect(isReorderInsideFolderBounds({ ...inside, lineClientY: 303 }, bounds)).toBe(false)
+    expect(isReorderInsideFolderBounds({ ...inside, clientY: 340 }, bounds)).toBe(false)
   })
 })
 

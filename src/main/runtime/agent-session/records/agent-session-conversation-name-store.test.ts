@@ -1,11 +1,13 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  closeTestAgentSessionRecordStores,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -45,7 +47,7 @@ beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-conversation-name-store-'))
 })
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -61,7 +63,7 @@ describe('AgentSessionRecordStore.setConversationName', () => {
 
     await store.setConversationName(SESSION, 'Fix the lease probe')
 
-    const reloaded = await openTestAgentSessionRecordStore(directory)
+    const reloaded = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(reloaded.getRecord(SESSION)?.conversationName).toBe('Fix the lease probe')
   })
 
@@ -74,7 +76,7 @@ describe('AgentSessionRecordStore.setConversationName', () => {
     expect(name).toHaveLength(200)
     expect(name.startsWith('Fix the ')).toBe(true)
     // Reload validates rows; oversized names must not make the record unreadable.
-    const reloaded = await openTestAgentSessionRecordStore(directory)
+    const reloaded = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(reloaded.getRecord(SESSION)?.conversationName).toBe(name)
   })
 
@@ -112,5 +114,24 @@ describe('AgentSessionRecordStore.setConversationName', () => {
     expect(
       await store.compareAndSetConversationName(SESSION, 'Stale generation', placeholder)
     ).toBeNull()
+  })
+
+  it('checks a stale generation against the saved user name before writing', async () => {
+    const store = await reservedStore()
+    await store.compareAndSetConversationName(SESSION, 'First prompt', null)
+    const stale = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
+    await store.setUserConversationName(SESSION, 'First prompt', 'rename')
+
+    expect(
+      await stale.compareAndSetConversationName(SESSION, 'Late generated name', 'First prompt')
+    ).toBeNull()
+    await stale.pinLaunchDirectory(SESSION, '/workspace/current')
+    expect(
+      (await openTestAgentSessionRecordStore(directory, { mode: 'observe' })).getRecord(SESSION)
+    ).toMatchObject({
+      conversationName: 'First prompt',
+      conversationNameSource: 'user',
+      launchDirectory: '/workspace/current'
+    })
   })
 })

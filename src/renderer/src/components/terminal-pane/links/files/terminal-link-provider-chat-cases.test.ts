@@ -9,7 +9,7 @@ vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => doubles.storeState }
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 

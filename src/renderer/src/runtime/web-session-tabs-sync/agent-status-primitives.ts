@@ -8,12 +8,13 @@ import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane
 import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
-import type { TerminalSurface, WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
+import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 import {
   type RetiredTerminalTabSweepState,
   buildRetiredTerminalTabStateSweepPatch
-} from '../../store/terminals/retired-terminal-tab-state-sweep'
+} from '../../store/terminals/retirement/retired-terminal-tab-state-sweep'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import { isAgentStatusFresh } from './state-equality-core'
 
@@ -29,7 +30,7 @@ export function isMirroredAgentStatusOwnedBy(
 }
 
 export function toMirroredPaneKey(
-  surface: TerminalSurface,
+  surface: RuntimeMobileSessionTerminalClientTab,
   leafId = surface.leafId
 ): string | null {
   if (!isTerminalLeafId(leafId)) {
@@ -42,9 +43,9 @@ export function toMirroredPaneKey(
  *  frame publishes: older hosts omit it on agents restored after a restart, and clients judge a
  *  row's ownership (and retraction) by worktree, so every reader must see the same owner. */
 export function remapHostAgentStatus(
-  surface: TerminalSurface,
+  surface: RuntimeMobileSessionTerminalClientTab,
   frameWorktreeId: string,
-  retainedSurface?: TerminalSurface
+  retainedSurface?: RuntimeMobileSessionTerminalClientTab
 ): AgentStatusEntry | null {
   if (!surface.agentStatus) {
     return null
@@ -66,7 +67,8 @@ export function remapHostAgentStatus(
     ...entry,
     worktreeId: entry.worktreeId || frameWorktreeId,
     paneKey,
-    tabId: toWebTerminalSurfaceTabId(surface.parentTabId)
+    tabId: toWebTerminalSurfaceTabId(surface.parentTabId),
+    ...(surface.launchAttested !== undefined ? { launchAttested: surface.launchAttested } : {})
   }
 }
 

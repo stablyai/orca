@@ -1,4 +1,4 @@
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,

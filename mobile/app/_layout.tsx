@@ -1,10 +1,10 @@
-import { startAndroidForegroundPushPresentation } from '../src/notifications/android-foreground-push'
-import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
-import { readNativeNotificationData } from '../src/notifications/native-notification-data'
+import { startAndroidForegroundPushPresentation } from '../src/notifications/foreground-delivery/android-foreground-push'
+import { registerPushDismissalTask } from '../src/notifications/dismissal/push-background-dismissal'
+import { readNativeNotificationData } from '../src/notifications/payload-identity/native-notification-data'
 import {
   notificationViewingOfRoute,
   setNotificationViewingWorkspace
-} from '../src/notifications/notification-viewing-policy'
+} from '../src/notifications/delivery-policy/notification-viewing-policy'
 import { useCallback, useEffect } from 'react'
 import { View } from 'react-native'
 import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
@@ -16,21 +16,21 @@ import { startMobileAppearance } from '../src/theme/mobile-appearance'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
-import { RpcClientProvider } from '../src/transport/client-context'
+import { RpcClientProvider } from '../src/transport/connection/client-context'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider'
-import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
-import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
+import { getNotificationNavigationTarget } from '../src/notifications/navigation/notification-routing'
+import { useOpenNotificationRoute } from '../src/notifications/navigation/use-open-notification-route'
 import {
   isRemotePushTrigger,
   pushNotificationRouteData,
   foregroundNotificationBehavior
-} from '../src/notifications/push-receive'
+} from '../src/notifications/foreground-delivery/push-receive'
 import { startPushTokenSync } from '../src/notifications/push-registration'
-import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
-import { loadHostCatalog } from '../src/transport/host-store'
+import { ensureDesktopNotificationChannel } from '../src/notifications/foreground-delivery/desktop-notification-channel'
+import { loadHostCatalog } from '../src/host-catalog/host-store'
 import { usePairingLinks } from '../src/navigation/use-pairing-links'
 import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
-import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
+import { recoverMobileRelayPairing } from '../src/pairing/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { SideRailProvider } from '../src/layout/side-rail'

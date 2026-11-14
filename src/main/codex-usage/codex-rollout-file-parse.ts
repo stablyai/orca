@@ -1,13 +1,16 @@
 import { basename } from 'node:path'
-import { readJsonlFileSnapshot, type JsonlFileSnapshot } from '../usage/jsonl-file-snapshot'
-import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
+import {
+  readJsonlFileSnapshot,
+  type JsonlFileSnapshot
+} from '../usage/source-input/jsonl/jsonl-file-snapshot'
+import { readJsonlLinesFromOffset } from '../usage/source-input/jsonl/jsonl-line-offsets'
 import {
   openJsonlFileReader,
   validateJsonlFileReader,
   jsonlPhysicalFileId
-} from '../usage/jsonl-file-checkpoint'
+} from '../usage/source-input/jsonl/jsonl-file-checkpoint'
 import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
-import type { UsageWorktreeResolver } from '../usage/usage-worktree-resolver'
+import type { UsageWorktreeResolver } from '../usage/worktree-attribution/usage-worktree-resolver'
 import { parseCodexUsageRecord, type CodexUsageParseContext } from './codex-usage-record-parser'
 import { codexUsageAggregation } from './codex-usage-aggregation'
 import {

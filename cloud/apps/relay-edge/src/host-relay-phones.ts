@@ -61,6 +61,8 @@ export abstract class HostRelayPhones extends HostRelayControl {
       return { ok: false, code: RELAY_CLOSE_CODE.DRAINING }
     }
     if (!reservation) { return { ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL } }
+    // A keepalive host may have died unnoticed (no alarm watches an idle one): probe it first.
+    await this.probeSilentControls()
     const control = this.activeControl()
     const seated =
       control !== null &&
@@ -95,6 +97,8 @@ export abstract class HostRelayPhones extends HostRelayControl {
       relayDeviceId: reservation.relayDeviceId,
       attachDeadlineMs: RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs
     })
+    // The first phone of a keepalive host arms its silence check (reschedule).
+    if (this.keepalive(control.a)) { await this.reschedule() }
     return { ok: true, connTicket, generation }
   }
 

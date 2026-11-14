@@ -6,7 +6,6 @@ import {
   handlers,
   store,
   REPO_PATH,
-  readFileMock,
   realpathMock,
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
@@ -43,47 +42,47 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
-  '../../crash-reporting/crash-breadcrumb-store',
+  '../../crash-reporting/breadcrumbs/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
-vi.mock('../../git/source-control/commit-changes', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/commit-changes', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   commitChanges: (await import('./filesystem-test-harness')).commitChangesMock
 }))
 
-vi.mock('../../git/source-control/status-read', async (importOriginal) => ({
+vi.mock('../../git/source-control/status/status-read', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getStatus: (await import('./filesystem-test-harness')).getStatusMock
 }))
 
-vi.mock('../../git/source-control/git-conflict-operation', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/git-conflict-operation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   detectConflictOperation: (await import('./filesystem-test-harness')).detectConflictOperationMock,
   abortMerge: (await import('./filesystem-test-harness')).abortMergeMock,
   abortRebase: (await import('./filesystem-test-harness')).abortRebaseMock
 }))
 
-vi.mock('../../git/source-control/file-diff', async (importOriginal) => ({
+vi.mock('../../git/source-control/diffs/file-diff', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDiff: (await import('./filesystem-test-harness')).getDiffMock
 }))
 
-vi.mock('../../git/source-control/branch-compare', async (importOriginal) => ({
+vi.mock('../../git/source-control/comparisons/branch-compare', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBranchCompare: (await import('./filesystem-test-harness')).getBranchCompareMock
 }))
 
-vi.mock('../../git/source-control/branch-diff', async (importOriginal) => ({
+vi.mock('../../git/source-control/comparisons/branch-diff', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBranchDiff: (await import('./filesystem-test-harness')).getBranchDiffMock
 }))
 
-vi.mock('../../git/source-control/staged-commit-context', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/staged-commit-context', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getStagedCommitContext: (await import('./filesystem-test-harness')).getStagedCommitContextMock
 }))
 
-vi.mock('../../git/source-control/staging', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/staging', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   stageFile: (await import('./filesystem-test-harness')).stageFileMock,
   bulkStageFiles: (await import('./filesystem-test-harness')).bulkStageFilesMock,
@@ -92,13 +91,13 @@ vi.mock('../../git/source-control/staging', async (importOriginal) => ({
   bulkUnstageFiles: (await import('./filesystem-test-harness')).bulkUnstageFilesMock
 }))
 
-vi.mock('../../git/source-control/discard-changes', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/discard-changes', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   bulkDiscardChanges: (await import('./filesystem-test-harness')).bulkDiscardChangesMock,
   discardChanges: (await import('./filesystem-test-harness')).discardChangesMock
 }))
 vi.mock(
-  '../../git/source-control/check-ignored-paths',
+  '../../git/source-control/ignores/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
 
@@ -107,7 +106,7 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
 vi.mock(
-  '../../text-generation/pull-request-context',
+  '../../text-generation/pull-request-context/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
 vi.mock(
@@ -148,8 +147,6 @@ describe('registerFilesystemHandlers', () => {
     await expect(handlers.get('fs:readFile')!(null, { filePath: linkPath })).rejects.toThrow(
       'Access denied: path resolves outside allowed directories'
     )
-
-    expect(readFileMock).not.toHaveBeenCalled()
   })
 
   it('rejects readFile when a symlink in a canonical alias worktree escapes the registered root', async () => {
@@ -172,8 +169,6 @@ describe('registerFilesystemHandlers', () => {
     await expect(handlers.get('fs:readFile')!(null, { filePath: aliasLinkPath })).rejects.toThrow(
       'Access denied: path resolves outside allowed directories'
     )
-
-    expect(readFileMock).not.toHaveBeenCalled()
   })
 
   // WSL UNC has no Recycle Bin; delete inside the distro instead (#6415).

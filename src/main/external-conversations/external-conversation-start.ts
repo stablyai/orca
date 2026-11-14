@@ -3,13 +3,13 @@ import type {
   AgentLaunchResult as AgentLaunchPublishedSurface
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { ConnectorAgent } from '../../shared/external-conversation-link'
-import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 
 import {
   agentPaneWorkspace,
   type AgentPaneWorkspace
-} from '../agent-hooks/agent-transition-detector'
+} from '../agent-hooks/observations/agent-transition-detector'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { resolveUnlaunchedIntent } from '../runtime/rpc/methods/agent-launch/agent-launch-intent-resolution'
 import { agentLaunchSurfaceFactory } from '../runtime/rpc/methods/agent-launch/agent-launch-surfaces'

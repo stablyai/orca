@@ -1,8 +1,8 @@
 import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { track } from '@/lib/telemetry'
-import { useAppStore } from '@/store'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { useAppStore } from '@/store/index'
 import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION

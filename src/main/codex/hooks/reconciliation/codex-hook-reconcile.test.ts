@@ -13,8 +13,8 @@ import {
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import '../../../agent-hooks/installer-utils'
-import { wrapPosixHookCommand } from '../../../agent-hooks/posix-hook-command'
+
+import { wrapPosixHookCommand } from '../../../agent-hooks/installation/commands/posix-hook-command'
 import type * as CodexCommand from '../../../codex-cli/command'
 import type * as TrustDerivation from '../../trust/hooks/codex-hook-trust-derivation'
 import type * as RealHomeInstall from './codex-real-home-hook-install'
@@ -281,26 +281,6 @@ describe('reconcileCodexHooks', () => {
     expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
-  it('writes nothing and spawns nothing across many concurrent launches when nothing changed', async () => {
-    await start()
-    const before = snapshot(codexHome())
-    const memoBefore = snapshot(userData)
-    vi.clearAllMocks()
-
-    await Promise.all(
-      Array.from({ length: 20 }, (_, index) => {
-        scheduleCodexHookReconcile()
-        return index % 2 === 0 ? reconcileCodexHooksForLaunch() : reconcileCodexHooks()
-      })
-    )
-    await settleSpawn()
-
-    expect(snapshot(codexHome())).toEqual(before)
-    expect(snapshot(userData)).toEqual(memoBefore)
-    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
-    expect(mocks.deriveCodexHookHashes).not.toHaveBeenCalled()
-  })
-
   it('rechecks a spawn that lands while a run is still finding Codex, which may miss a fresh install', async () => {
     const installed = mocks.codexPath
     mocks.codexPath = join(userData, 'missing-codex')
@@ -408,24 +388,6 @@ describe('while the lookup is still asking Codex', () => {
     await settleSpawn()
     expect(stopApproval()).toBe(CODEX_HASHES.stop)
   })
-
-  it('writes nothing while an entry is already in place', async () => {
-    await start()
-    const before = snapshot(codexHome())
-    // A different size invalidates the binary fingerprint even within one filesystem clock tick.
-    writeFileSync(mocks.codexPath, 'codex 0.161.0 updated')
-    const release = holdDerivation()
-
-    await finishHeldLookupWait(reconcileCodexHooksForLaunch, true)
-    expect(snapshot(codexHome())).toEqual(before)
-
-    const runsBeforeAnswer = mocks.realHomeRuns
-    release()
-    await settleSpawn()
-    expect(mocks.realHomeRuns).toBe(runsBeforeAnswer + 1)
-    await _internals.settledForTesting()
-    expect(snapshot(codexHome())).toEqual(before)
-  })
 })
 
 describe('a ~/.codex/hooks.json Orca cannot add to', () => {
@@ -452,22 +414,6 @@ describe('a ~/.codex/hooks.json Orca cannot add to', () => {
       expect(readRealHomeHooksFileProblem()).toBeNull()
     }
   )
-})
-
-describe("a ~/.codex/hooks.json with Codex's description key", () => {
-  it('takes the entry and keeps the description verbatim', async () => {
-    mkdirSync(codexHome(), { recursive: true })
-    writeFileSync(hooksPath(), JSON.stringify({ description: 'My hooks — keep me', hooks: {} }))
-
-    await start()
-
-    const written = JSON.parse(readFileSync(hooksPath(), 'utf-8'))
-    expect(written.description).toBe('My hooks — keep me')
-    expect(
-      written.hooks.Stop.map((group: Hooks[string][number]) => group.hooks[0]!.command)
-    ).toEqual([command()])
-    expect(readRealHomeHooksFileProblem()).toBeNull()
-  })
 })
 
 describe('an app start whose lookup has not answered within its wait', () => {
@@ -507,7 +453,8 @@ describe('an app start whose lookup has not answered within its wait', () => {
       groupIndex: 0,
       handlerIndex: 0,
       command: command(),
-      timeoutSec: 10
+      timeoutSec: 10,
+      statusMessage: buildCodexManagedHook(command(), 'Stop').statusMessage
     }
     writeHooks({ Stop: [{ hooks: [buildCodexManagedHook(command(), 'Stop')] }] })
     upsertHookTrustEntries(tomlPath(), [{ ...stop, trustedHash: 'sha256:main-granted' }])

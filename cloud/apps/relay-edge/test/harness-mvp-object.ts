@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs'
 import { SignJWT, type KeyLike } from 'jose'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
-import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
-import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-transport'
+import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client'
+import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/transports/relay-transport'
 
 export const PORT = 8789
 export const REMOTE = process.env.MVP_URL?.replace(/\/$/, '')
@@ -47,20 +47,22 @@ export function newHost(): Host {
   }
 }
 
-export async function mint(key: KeyLike, relayHostId: string, issuer = ISSUER): Promise<string> {
+export async function mint(key: KeyLike, relayHostId: string, issuer = ISSUER, expiresIn = '5m'): Promise<string> {
   return new SignJWT({ purpose: 'host-control', prof: `prof-${USER}`, relayHostId })
     .setProtectedHeader({ alg: 'ES256', kid: REMOTE ? 'spike' : 'mvp' })
     .setSubject(USER)
     .setIssuer(issuer)
     .setAudience('orca-relay')
     .setIssuedAt()
-    .setExpirationTime('5m')
+    .setExpirationTime(expiresIn)
     .sign(key)
 }
 
 // `drop` returns true for an outbound frame the test wants lost (a host that stops answering pings).
-export function control(host: Host, jwt: string, epoch = EPOCH, opts: { drop?: (frame: string) => boolean } = {}) {
-  const events = { closes: [] as number[], opens: [] as { connId: string }[], drains: [] as Record<string, unknown>[], dropped: 0 }
+// `caps` replaces the shipped desktop's capability header (default: as shipped today).
+export const SHIPPED_CAPS = 'pending-conn-details,idle-regional-rehome-v1'
+export function control(host: Host, jwt: string, epoch = EPOCH, opts: { drop?: (frame: string) => boolean; caps?: string } = {}) {
+  const events = { closes: [] as number[], opens: [] as { connId: string }[], drains: [] as Record<string, unknown>[], dropped: 0, pings: 0, offers: 0, acks: 0 }
   let transport: CloudRelayTransport | null = null
   const client = new RelayControlClient({
     cellUrl: ORIGIN,
@@ -78,9 +80,15 @@ export function control(host: Host, jwt: string, epoch = EPOCH, opts: { drop?: (
     onClose: (code) => events.closes.push(code),
     createSocket: (url, token) => {
       const ws = new WebSocket(url, {
-        headers: { authorization: `Bearer ${token}`, 'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1' },
+        headers: { authorization: `Bearer ${token}`, 'x-orca-host-capabilities': opts.caps ?? process.env.MVP_HOST_CAPS ?? SHIPPED_CAPS },
         perMessageDeflate: false,
         maxPayload: 64 * 1024
+      })
+      ws.on('message', (raw) => {
+        const type = (JSON.parse(raw.toString()) as { type?: unknown }).type
+        if (type === 'ping') { events.pings++ }
+        if (type === 'keepalive-offer') { events.offers++ }
+        if (type === 'keepalive-ack') { events.acks++ }
       })
       const send = ws.send.bind(ws)
       ws.send = ((data: string, ...rest: never[]) => {

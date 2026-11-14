@@ -2,9 +2,9 @@ import type {
   BrowserCookieImportResult,
   BrowserSessionProfile
 } from '../../../shared/browser-workspace-types'
-import type { GoogleCookieClearLocalTarget } from '../../../shared/browser-google-cookie-clear'
+import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { bindRoutePartition } from './client-route/browser-client-route-cookie-import'
-import { browserSessionRegistry } from '../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { clearGoogleCookiesFromPartition } from './browser-google-cookie-clear'
 

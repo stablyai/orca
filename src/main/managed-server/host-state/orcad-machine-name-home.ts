@@ -1,7 +1,7 @@
 // ORCA_MACHINE_NAME separates hosts that share a home and a cloned machine-id (#32918).
 import { createHash } from 'node:crypto'
 import { ORCA_MACHINE_NAME_ENV } from '../../../shared/orcad-managed-launch-env'
-import type { RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import type { OrcadMachineHomeDecision } from './orcad-machine-home'
 
 const MACHINE_NAME_PREFIX = `${ORCA_MACHINE_NAME_ENV}=`

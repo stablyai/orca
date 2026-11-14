@@ -7,7 +7,7 @@ import {
   isTabEntryAbsolutePathLike
 } from './tab-create-entry-action'
 import {
-  configuredAgentPickerLaunchOption,
+  agentResultSetupOption,
   matchingAgentLaunchOptions,
   tabAgentLaunchOptionDisabled
 } from './tab-agent-launch-options'
@@ -15,6 +15,7 @@ import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
 import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
 import {
   EntryActionRow,
+  useEntrySetupSubmenu,
   EntryStatusRow,
   RESULT_LISTBOX_ID,
   resultOptionDomId
@@ -26,8 +27,8 @@ import { useTabEntryMenuReturnFocus } from './use-tab-entry-menu-return-focus'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
 import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { useAppStore } from '@/store'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { useAppStore } from '@/store/index'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { isQuickOpenQueryTooLarge } from '../../../../shared/quick-open/quick-open-path-search'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
@@ -71,6 +72,7 @@ function TabBarCreateEntrySession({
   const [selectionGuidance, setSelectionGuidance] = useState<string | null>(null)
   // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
   const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
+  const setupSubmenu = useEntrySetupSubmenu()
   const inputRef = useRef<HTMLInputElement>(null)
   const submissionIdRef = useRef(0)
   useEffect(
@@ -384,17 +386,13 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
+                setupOpen={setupSubmenu.openId === getActiveOptionId(option)}
+                onSetupOpenChange={(open) => setupSubmenu.change(getActiveOptionId(option), open)}
+                onHover={() => setupSubmenu.hover(getActiveOptionId(option))}
                 onUseAgent={
                   option.kind === 'agent' && option.option.pickerEntry
                     ? (draft) =>
-                        submitOption({
-                          kind: 'agent',
-                          option: configuredAgentPickerLaunchOption(
-                            option.option,
-                            draft,
-                            terminalPending
-                          )
-                        })
+                        submitOption(agentResultSetupOption(option, draft, terminalPending))
                     : undefined
                 }
                 terminalPending={terminalPending}

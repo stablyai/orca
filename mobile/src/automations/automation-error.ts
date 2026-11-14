@@ -1,6 +1,6 @@
 import { translate } from '../i18n/mobile-i18n'
 import { matchAutomationOwnerConflict } from '../../../src/shared/automations/ownership/automation-owner-conflict'
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 
 export const AUTOMATION_OUTCOME_UNKNOWN =
   'The host may have applied this action. Refresh to check before trying again.'

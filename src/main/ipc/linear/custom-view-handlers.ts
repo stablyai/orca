@@ -4,7 +4,7 @@ import {
   listCustomViewIssues,
   listCustomViewProjects,
   listCustomViews
-} from '../../linear/linear-custom-view-queries'
+} from '../../linear/custom-views/linear-custom-view-queries'
 import {
   normalizeConcreteWorkspaceId,
   normalizeCustomViewModel,

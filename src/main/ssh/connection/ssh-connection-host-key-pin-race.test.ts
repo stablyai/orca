@@ -1,29 +1,34 @@
 import { expect, it, vi } from 'vitest'
-import { clientInstances, ssh2Mock } from '../__tests__/ssh-connection-test-client'
-import { resetSshConnectionMocks, spawnSystemSshCommandMock } from './ssh-connection-test-harness'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+import { clientInstances, ssh2Mock } from './testing/ssh-connection-test-client'
+import {
+  resetSshConnectionMocks,
+  spawnSystemSshCommandMock
+} from './testing/ssh-connection-test-harness'
+import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 
-vi.mock('../ssh2-module-load', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
+vi.mock('../authentication/ssh2-module-load', async () =>
+  (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
-  (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
+  (await import('./testing/ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
 vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshCommandMocks(await importOriginal())
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
+    await importOriginal()
+  )
 )
-vi.mock('../ssh-control-socket', async () =>
-  (await import('./ssh-connection-test-harness')).createControlSocketModule()
+vi.mock('../system-transport/ssh-control-socket', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createControlSocketModule()
 )
 vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSshGConfigResolutionMocks(
     await importOriginal()
   )
 )
 
 const { installMock } = vi.hoisted(() => ({ installMock: vi.fn() }))
-vi.mock('./ssh2-host-key-verification', () => ({
+vi.mock('../host-keys/ssh2-host-key-verification', () => ({
   installSsh2HostKeyVerification: installMock,
   readHostKeyTrustSources: vi.fn()
 }))

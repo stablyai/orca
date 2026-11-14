@@ -1,4 +1,4 @@
-import { getTuiStatusDeliverySource } from '../opencode/status-plugin-delivery-source'
+import { getTuiStatusDeliverySource } from '../opencode/status-hooks/plugin-source/status-plugin-delivery-source'
 
 // Report from each TUI’s own PTY and current session data so ownership and reconnects self-correct.
 export function getOpenCode2TuiSource(): string[] {

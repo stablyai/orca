@@ -25,6 +25,7 @@ export type MobileWebShellGates = {
 
 export type MobileWebShellManifestFacts = MobileWebBundleCompatManifest & {
   readonly buildId: string
+  // A download with nothing to reuse, in fetch progress's unit (each brotli copy where read, else asset bytes).
   readonly totalBytes: number
   readonly totalAssets: number
   // Older desktops omit routes and serve none.

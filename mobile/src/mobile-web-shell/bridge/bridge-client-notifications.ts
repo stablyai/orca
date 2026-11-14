@@ -1,5 +1,5 @@
 import type { BridgeTerminalToolbar } from './bridge-terminal-key'
-import type { ForegroundNudgeReason } from '../../transport/types'
+import type { ForegroundNudgeReason } from '../../transport/connection/connection-state'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,

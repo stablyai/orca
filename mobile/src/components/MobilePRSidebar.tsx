@@ -1,5 +1,12 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type HostInstance
+} from 'react-native'
 import {
   ArrowRight,
   CircleCheck,
@@ -16,14 +23,15 @@ import { MobileLoadErrorState, MobileStateView } from './MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
-import type { PrSidebarData } from '../session/mobile-pr-sidebar-state'
-import { isPrSidebarDetailsPlaceholder } from '../session/mobile-pr-sidebar-state'
+import type { PrSidebarData } from '../source-control/review/mobile-pr-sidebar-state'
+import { isPrSidebarDetailsPlaceholder } from '../source-control/review/mobile-pr-sidebar-state'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { ListGroup, ListRow, LIST_LEADING_INSET } from './list/ListGroup'
 import { useNow } from '../hooks/use-now'
 import { commentRelativeTime } from './pr-sidebar/pr-comment-relative-time'
 import { prStateBadge } from './pr-sidebar/pr-checks-presentation'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
+import { PrStateIcon } from './PrStateIcon'
 import { PrTabEmptyState } from './pr-sidebar/PrTabEmptyState'
 import { PrChangesCard, PrDescription } from './pr-sidebar/PrTabOverviewCards'
 import { PrTabBottomAction } from './pr-sidebar/PrTabBottomAction'
@@ -231,6 +239,7 @@ function PrTabHeader({ data }: { data: PrSidebarData }) {
     <View style={styles.header}>
       <View style={styles.metaRow}>
         <View style={[styles.badge, { borderColor: badgeColor }]}>
+          <PrStateIcon state={pr.state} size={12} color={badgeColor} strokeWidth={2.2} />
           <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
         </View>
         <Text style={styles.number}>#{pr.number}</Text>
@@ -331,7 +340,7 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
       }
     ]
   ]
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const close = () => setScreen(null)
   // The dock's drawer would otherwise take Back and close the whole PR panel from a pushed screen.

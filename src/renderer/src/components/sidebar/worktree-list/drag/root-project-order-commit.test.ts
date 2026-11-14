@@ -28,10 +28,63 @@ function group(id: string, overrides: Partial<ProjectGroup> = {}): ProjectGroup 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return { id, path: `/${id}`, displayName: id, badgeColor: '', addedAt: 1, ...overrides }
 }
+function applyGroupUpdate(base: ProjectGroup, updates: ProjectGroupUpdate): ProjectGroup {
+  const { rootProjectOrder, ...rest } = updates
+  const next: ProjectGroup = { ...base, ...rest }
+  if (rootProjectOrder === null) {
+    delete next.rootProjectOrder
+  } else if (rootProjectOrder !== undefined) {
+    next.rootProjectOrder = rootProjectOrder
+  }
+  return next
+}
 
 beforeEach(() => clearRuntimeCompatibilityCache())
 
 describe('saving root project order', () => {
+  it('inserts a project among legacy groups and preserves their relative order', async () => {
+    const groups = [group('a'), group('b', { tabOrder: 1 }), group('c', { tabOrder: 2 })]
+    const project = repo('x')
+    const store = createTestStore()
+    store.setState({ projectGroups: groups, repos: [project] })
+    vi.stubGlobal('window', {
+      api: {
+        projectGroups: {
+          updateMany: async ({
+            mutations
+          }: {
+            mutations: { groupId: string; updates: ProjectGroupUpdate }[]
+          }) =>
+            mutations
+              .map(({ groupId, updates }) => ({
+                ...groups.find((entry) => entry.id === groupId),
+                ...updates
+              }))
+              .toReversed()
+        },
+        repos: {
+          update: async ({ updates }: { updates: Partial<Repo> }) => ({ ...project, ...updates })
+        }
+      }
+    })
+
+    await expect(
+      saveRootProjectOrderForSidebarDrop({
+        state: store.getState(),
+        visibleKeys: ['group:a', 'group:b', 'group:c', 'repo:x'],
+        draggedKey: 'repo:x',
+        dropIndex: 1,
+        onCommit: () => {}
+      })
+    ).resolves.toBe(true)
+    expect(store.getState().projectGroups).toMatchObject([
+      { id: 'a', tabOrder: 0 },
+      { id: 'b', rootProjectOrder: 1000, tabOrder: 1 },
+      { id: 'c', rootProjectOrder: 2000, tabOrder: 2 }
+    ])
+    expect(store.getState().repos).toMatchObject([{ id: 'x', projectGroupOrder: 0 }])
+  })
+
   it('persists the moved logical group on both owners and leaves unrelated roots intact', async () => {
     const local = group('a', { rootProjectOrder: 0 })
     const remote = { ...local, executionHostId: 'runtime:remote' }
@@ -252,6 +305,59 @@ describe('saving root project order', () => {
     ).resolves.toBe(false)
     expect(persistedProject).toEqual(project)
     expect(store.getState().repos).toEqual([project])
+  })
+
+  it('restores surviving groups when another group disappears before rollback', async () => {
+    const groups = [group('a'), group('b', { tabOrder: 1 }), group('c', { tabOrder: 2 })]
+    const persisted = new Map(groups.map((entry) => [entry.id, { ...entry }]))
+    const store = createTestStore()
+    store.setState({ projectGroups: groups, repos: [repo('x')] })
+    vi.stubGlobal('window', {
+      api: {
+        projectGroups: {
+          updateMany: async ({
+            mutations
+          }: {
+            mutations: { groupId: string; updates: ProjectGroupUpdate }[]
+          }) => {
+            const updated = mutations.map(({ groupId, updates }) => {
+              const entry = applyGroupUpdate(persisted.get(groupId)!, updates)
+              persisted.set(groupId, entry)
+              return entry
+            })
+            store.setState({ projectGroups: groups.filter((entry) => entry.id !== 'b') })
+            return updated
+          },
+          update: async ({
+            groupId,
+            updates
+          }: {
+            groupId: string
+            updates: ProjectGroupUpdate
+          }) => {
+            const entry = applyGroupUpdate(persisted.get(groupId)!, updates)
+            persisted.set(groupId, entry)
+            return entry
+          }
+        },
+        repos: { update: async () => null }
+      }
+    })
+
+    await expect(
+      saveRootProjectOrderForSidebarDrop({
+        state: store.getState(),
+        visibleKeys: ['group:a', 'group:b', 'group:c', 'repo:x'],
+        draggedKey: 'repo:x',
+        dropIndex: 1,
+        onCommit: () => {}
+      })
+    ).resolves.toBe(false)
+    expect(persisted.get('c')).toEqual(groups[2])
+    expect(store.getState().projectGroups).toEqual([
+      groups[0],
+      { ...groups[2], executionHostId: 'local' }
+    ])
   })
 
   it('merges confirmed initial ranks into a group already refreshed by the catalog', async () => {

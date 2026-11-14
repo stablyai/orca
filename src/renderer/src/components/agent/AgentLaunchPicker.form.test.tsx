@@ -4,7 +4,10 @@ import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/nat
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 import { afterEach, beforeEach, it, vi } from 'vitest'
-import { verifyOmniboxPresetIdentity } from './agent-launch-picker-omnibox.test-fixture'
+import {
+  verifyOmniboxPresetIdentity,
+  verifyOmniboxSetupKeepsSearchFocus
+} from './agent-launch-picker-omnibox.test-fixture'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
@@ -58,4 +61,8 @@ afterEach(() => {
 
 it('keeps + ordinary and actual omnibox original presets independent after editing the ordinary effort', async () => {
   await verifyOmniboxPresetIdentity(root, launch)
+})
+
+it('keeps typing in the omnibox search when a search row setup opens on hover and closes', async () => {
+  await verifyOmniboxSetupKeepsSearchFocus(root, launch)
 })

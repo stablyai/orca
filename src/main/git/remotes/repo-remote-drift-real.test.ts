@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getRecentDriftSubjects, getRemoteDrift } from '../repo'
+import { getRecentDriftSubjects, getRemoteDrift } from './repo-remote-queries'
 
 describe('remote drift real Git contract', () => {
   const tempPaths: string[] = []

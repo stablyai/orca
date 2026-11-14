@@ -1,6 +1,6 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useTranslate } from '@/i18n/use-translate'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { Button } from '../ui/button'

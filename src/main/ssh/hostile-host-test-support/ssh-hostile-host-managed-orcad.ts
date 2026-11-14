@@ -8,11 +8,14 @@ import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime
 import { ORCAD_RUNTIMES_DIRNAME } from '../../../shared/orcad-artifacts'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { readOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record-store'
-import { classifyOrcadHostUnavailable } from '../../orcad/orcad-host-unavailable'
+import { classifyOrcadHostUnavailable } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { managedOrcadSlot } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
-import { orcadSlotDir, type OrcadSlotOptions } from '../orcad-recovery-slot'
+import {
+  orcadSlotDir,
+  type OrcadSlotOptions
+} from '../../managed-server/activation/orcad-recovery-slot'
 import { resolveOrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
-import { deployOrcad } from '../orcad-remote-deploy'
+import { deployOrcad } from '../../managed-server/install/orcad-remote-deploy'
 import { getMainHttpClient, setMainHttpClient } from '../../network/http-client'
 import {
   orcadLivenessProbeCommand,

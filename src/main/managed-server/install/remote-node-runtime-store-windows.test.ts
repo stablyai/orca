@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { parseRuntimeStoreInventory } from './remote-node-runtime-store-inventory'
 import { windowsRuntimeStoreInventoryCommand } from './remote-node-runtime-store-windows'
-import { decodeRemotePowerShellScript } from '../../ssh/ssh-remote-powershell'
+import { decodeRemotePowerShellScript } from '../../ssh/remote-exec/ssh-remote-powershell'
 import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
 const sha = (c: string): string => c.repeat(64)
 

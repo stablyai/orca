@@ -13,6 +13,23 @@ import type {
   ActivityLiveAgentState
 } from './activity-thread-types'
 import { buildPaneActivityEvents } from './activity-pane-events'
+import {
+  buildActivityTabContext,
+  buildActivityTabHostIndex,
+  type ActivityTabContext,
+  type ActivityTabHostIndex
+} from './activity-event-builder-context'
+import type { BuildActivityEventsArgs } from './activity-event-builder'
+
+type ActivityTabInputs = Pick<
+  BuildActivityEventsArgs,
+  'tabsByWorktree' | 'unifiedTabsByWorktree' | 'chatNames'
+>
+
+type ActivityTabIndexes = ActivityTabInputs & {
+  context: Map<string, ActivityTabContext>
+  hosts: ActivityTabHostIndex
+}
 
 type PaneActivityCacheEntry = {
   source: unknown
@@ -29,10 +46,44 @@ type PaneActivityCacheEntry = {
 
 export type ActivityEventBuildCache = {
   panes: Map<string, PaneActivityCacheEntry>
+  tabs?: ActivityTabIndexes
 }
 
 export function createActivityEventBuildCache(): ActivityEventBuildCache {
   return { panes: new Map() }
+}
+
+export function resolveActivityTabIndexes(
+  args: ActivityTabInputs,
+  cache: ActivityEventBuildCache | undefined
+): ActivityTabIndexes {
+  const previous = cache?.tabs
+  if (
+    previous &&
+    previous.tabsByWorktree === args.tabsByWorktree &&
+    previous.unifiedTabsByWorktree === args.unifiedTabsByWorktree &&
+    previous.chatNames === args.chatNames
+  ) {
+    return previous
+  }
+  const next: ActivityTabIndexes = {
+    tabsByWorktree: args.tabsByWorktree,
+    unifiedTabsByWorktree: args.unifiedTabsByWorktree,
+    chatNames: args.chatNames,
+    context: buildActivityTabContext(
+      args.tabsByWorktree,
+      args.unifiedTabsByWorktree,
+      args.chatNames
+    ),
+    hosts:
+      previous && previous.unifiedTabsByWorktree === args.unifiedTabsByWorktree
+        ? previous.hosts
+        : buildActivityTabHostIndex(args.unifiedTabsByWorktree)
+  }
+  if (cache) {
+    cache.tabs = next
+  }
+  return next
 }
 
 export type PaneBuildRequest = {
@@ -110,7 +161,8 @@ export function resolvePaneBuild(
           repo: request.repo,
           entry: rowEntry,
           tab: request.tab,
-          agentType: request.agentType
+          agentType: request.agentType,
+          migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
         }
 
   cache?.panes.set(request.cacheKey, {

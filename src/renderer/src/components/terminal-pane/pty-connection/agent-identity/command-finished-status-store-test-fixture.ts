@@ -2,7 +2,7 @@ import { createStore } from 'zustand/vanilla'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { createAgentStatusSlice } from '@/store/slices/agent-status/agent-status'
-import { createTerminalTabPresentationActions } from '@/store/terminals/terminal-tab-presentation'
+import { createTerminalTabPresentationActions } from '@/store/terminals/tabs/presentation/terminal-tab-presentation'
 
 export function createCommandFinishedStatusStore(): {
   acceptWorkingClaudeStatus: (paneKey: string) => AgentStatusEntry

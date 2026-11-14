@@ -2,7 +2,7 @@ import React from 'react'
 import { PluginDeclarativeBadge } from '@/components/plugins/declarative/PluginDeclarativeDisplay'
 import { PluginDeclarativeIconGlyph } from '@/components/plugins/declarative/plugin-declarative-icons'
 import type { PluginDeclarativeTone } from '../../../../../../shared/plugins/declarative/plugin-declarative-catalog'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { cardElement, type CardHostElement } from './card-template-compiler'
 
 const GAP: Readonly<Record<string, string>> = {

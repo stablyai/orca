@@ -1,15 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Copy } from 'lucide-react'
-import { cn } from '../../lib/utils'
-import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
+import { cn } from '../../lib/class-names'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
 import type { InstallCopy } from './mobile-platform-copy'
 import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { MobileHeroPairingStep } from './MobileHeroPairingStep'
 import { MobileAndroidInstallHelp } from './MobileAndroidInstallHelp'
-export { HeroIntro } from './MobileHeroIntro'
-export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
 import { useTranslate } from '@/i18n/use-translate'
 
 export type Platform = 'ios' | 'android'
@@ -38,7 +36,7 @@ type HeroFlowProps = {
   onRegeneratePairing: () => void
   canGeneratePairing: boolean
   onCopyPairingCode: () => void
-  networkInterfaces: readonly MobileNetworkInterface[]
+  networkInterfaces: readonly PairingNetworkInterface[]
   customAddresses: readonly string[]
   selectedAddress: string | undefined
   selectedAddressIsCustom: boolean

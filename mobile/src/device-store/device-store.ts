@@ -1,12 +1,17 @@
+import type {
+  DeviceStore,
+  DeviceStoreOptions,
+  DeviceStoreWriteResult
+} from './device-store-contract'
 import type { AESEncryptionKey } from 'expo-crypto'
 import { Directory, Paths } from 'expo-file-system'
 import { AppState } from 'react-native'
+import { createExpoGenerationFileSystem } from '../mobile-web-shell/generations/generation-store-file-system'
+import { loadStoredHostProfiles } from '../host-catalog/host-metadata-store'
 import {
-  createExpoGenerationFileSystem,
-  type GenerationFileSystem
-} from '../mobile-web-shell/generation-store-file-system'
-import { loadStoredHostProfiles } from '../transport/host-metadata-store'
-import { readPairingKeychainItem, writePairingKeychainItem } from '../transport/pairing-keychain'
+  readPairingKeychainItem,
+  writePairingKeychainItem
+} from '../host-credentials/pairing-keychain'
 import {
   createRootIndex,
   DEVICE_STORE_CAPS,
@@ -25,58 +30,11 @@ import {
   deviceStoreRows,
   hostDirectoryUri,
   readDeviceStoreRow,
-  writeDeviceStoreRow,
-  type DeviceStoreRoots
+  writeDeviceStoreRow
 } from './device-store-files'
-import {
-  DEVICE_STORE_KEY_ITEM,
-  loadDeviceStoreKey,
-  type DeviceStoreKeychain
-} from './device-store-key'
+import { DEVICE_STORE_KEY_ITEM, loadDeviceStoreKey } from './device-store-key'
 import { sealDeviceStoreValue, type DeviceStoreTable } from './device-store-seal'
 import { DEVICE_STORE_MAX_VALUE_LENGTH } from './device-store-value-codec'
-
-export type { DeviceStoreTable } from './device-store-seal'
-
-export type DeviceStoreWriteOp = { readonly key: string; readonly value: string | null }
-export type DeviceStoreRefusal = 'too-large' | 'over-cap' | 'unavailable'
-export type DeviceStoreWriteResult =
-  | { readonly written: true }
-  | { readonly written: false; readonly refusal: DeviceStoreRefusal }
-export type DeviceStoreReadResult =
-  | { readonly status: 'ok'; readonly values: readonly (string | null)[] }
-  | { readonly status: 'unavailable' }
-
-export type DeviceStore = {
-  // Values come back in key order; null is a miss.
-  read(
-    hostId: string,
-    table: DeviceStoreTable,
-    keys: readonly string[]
-  ): Promise<DeviceStoreReadResult>
-  // Resolves once every op is on disk, applied in order; a null value deletes.
-  write(
-    hostId: string,
-    table: DeviceStoreTable,
-    ops: readonly DeviceStoreWriteOp[]
-  ): Promise<DeviceStoreWriteResult>
-  // Every table by default; a revoked host loses only its cached screens and keeps drafts until removal.
-  wipeHost(hostId: string, tables?: readonly DeviceStoreTable[]): Promise<void>
-  // While a host is revoked its cache refuses writes, so a page's pending flush can't bring a wipe back.
-  fenceHostCache(hostId: string, fenced: boolean): void
-  // Loads the key unless it is already loaded; an unavailable store retries here.
-  open(): Promise<'ready' | 'unavailable'>
-  // The launch pass over both roots. Later runs redo only a pass that missed files.
-  runLaunchMaintenance(): Promise<void>
-}
-
-export type DeviceStoreOptions = {
-  readonly fileSystem: GenerationFileSystem
-  readonly roots: DeviceStoreRoots
-  readonly keychain: DeviceStoreKeychain
-  // Null when the host list can't be read.
-  loadPairedHostIds(): Promise<readonly string[] | null>
-}
 
 const UNAVAILABLE: DeviceStoreWriteResult = { written: false, refusal: 'unavailable' }
 
@@ -302,25 +260,29 @@ let processStore: DeviceStore | null = null
 let started = false
 
 export function processDeviceStore(): DeviceStore {
-  processStore ??= createDeviceStore({
-    fileSystem: createExpoGenerationFileSystem(),
-    roots: {
+  if (processStore === null) {
+    const roots = {
       cache: new Directory(Paths.cache, 'orca-store', 'v1').uri,
       draft: new Directory(Paths.document, 'orca-drafts', 'v1').uri
-    },
-    keychain: {
-      read: () => readPairingKeychainItem(DEVICE_STORE_KEY_ITEM),
-      write: (hexKey) => writePairingKeychainItem(DEVICE_STORE_KEY_ITEM, hexKey)
-    },
-    loadPairedHostIds: async () => (await loadStoredHostProfiles())?.map((host) => host.id) ?? null
-  })
+    }
+    processStore = createDeviceStore({
+      fileSystem: createExpoGenerationFileSystem(roots.cache),
+      roots,
+      keychain: {
+        read: () => readPairingKeychainItem(DEVICE_STORE_KEY_ITEM),
+        write: (hexKey) => writePairingKeychainItem(DEVICE_STORE_KEY_ITEM, hexKey)
+      },
+      loadPairedHostIds: async () =>
+        (await loadStoredHostProfiles())?.map((host) => host.id) ?? null
+    })
+  }
   return processStore
 }
 
-// Once per process, after the splash: nothing reads the store before first paint, and its keychain and
-// AsyncStorage reads would otherwise compete with the launch work that holds the splash. Loads the key,
-// runs the launch sweeps and index seed in idle slices, and on each return to the foreground retries an
-// unavailable store and a pass that missed files.
+// Once per process, after the splash: the sweeps' AsyncStorage and file reads would otherwise compete with
+// the launch work that holds the splash. Native Home's first read may have loaded the key already. Runs the launch sweeps
+// and index seed in idle slices, and on each return to the foreground retries an unavailable store and a
+// pass that missed files.
 export function startDeviceStore(): void {
   if (started) {
     return

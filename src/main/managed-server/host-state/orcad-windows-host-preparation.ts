@@ -8,8 +8,8 @@ import {
   orcadRemoteBaseDir
 } from '../install/orcad-remote-windows-node'
 import { materializeNodeRuntimeArchive } from '../../node-runtime/pinned-runtime-materializer'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import type { OrcadHostTransport } from '../install/orcad-host-transport'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 export async function prepareWindowsOrcadHost(options: {
   conn: OrcadHostTransport

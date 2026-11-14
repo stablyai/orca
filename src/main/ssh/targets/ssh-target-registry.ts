@@ -1,4 +1,4 @@
-import type { SshConnectionStore } from '../connection/ssh-connection-store'
+import type { SshConnectionStore } from './ssh-connection-store'
 import type { SshConnectionManager } from '../connection/ssh-connection-manager'
 import type {
   SshConnectionState,

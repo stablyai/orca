@@ -17,7 +17,7 @@ vi.mock('os', async () => {
 })
 
 import { AntigravityHookService } from './hook-service'
-import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
 
 const ANTIGRAVITY_PRE_INVOCATION_COMMAND =
   process.platform === 'win32' ? 'antigravity-pre-invocation.cmd' : 'antigravity-hook.sh'

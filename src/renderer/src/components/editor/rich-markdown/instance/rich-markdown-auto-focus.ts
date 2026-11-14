@@ -11,9 +11,15 @@ export function autoFocusRichEditor(
   if (force && !nextEditor.isDestroyed && shouldFocus()) {
     nextEditor.view?.dom?.focus?.({ preventScroll: true })
   }
+  const scheduled = nextEditor.state
   let frameId: number | null = requestAnimationFrame(() => {
     frameId = null
     if (nextEditor.isDestroyed || !shouldFocus()) {
+      return
+    }
+    // Why: a late frame (hidden windows paint at 1Hz) must not move a caret the user already placed or typed at.
+    const { doc, selection } = nextEditor.state
+    if (nextEditor.isFocused && (doc !== scheduled.doc || !selection.eq(scheduled.selection))) {
       return
     }
     const active = document.activeElement

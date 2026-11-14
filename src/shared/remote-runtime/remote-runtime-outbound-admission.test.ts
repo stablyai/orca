@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { WebSocketServer } from 'ws'
 import { generateKeyPair, publicKeyToBase64 } from './e2ee/node/e2ee-crypto'
 import { encodePairingOffer, parsePairingCode } from './pairing/pairing'
-import { sendRemoteRuntimeRequest } from './remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from './requests/remote-runtime-request-socket'
 import { REMOTE_RUNTIME_MAX_PROCESS_PENDING_REQUESTS } from './remote-runtime-memory-limits'
 import { getRemoteRuntimeRequestAdmissionEvidence } from './requests/remote-runtime-prepared-request-admission'
 import { RemoteRuntimeRequestConnection } from './requests/remote-runtime-request-connection'
@@ -60,7 +60,18 @@ describe('remote runtime outbound admission', () => {
       code: 'remote_runtime_busy'
     })
     await expect(
-      sendRemoteRuntimeRequest(pairing, 'status.one-shot-overflow', undefined, 60_000)
+      sendRemoteRuntimeRequestOnSocket(
+        pairing,
+        'status.one-shot-overflow',
+        undefined,
+        60_000,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      )
     ).rejects.toMatchObject({ code: 'remote_runtime_busy' })
     expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(
       REMOTE_RUNTIME_MAX_PROCESS_PENDING_REQUESTS

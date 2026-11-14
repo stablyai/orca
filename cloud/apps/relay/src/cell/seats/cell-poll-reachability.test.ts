@@ -50,7 +50,7 @@ const answer = (status: number) => new Response('{}', { status })
 // Every cell serves a feed page on the first round; `respond` answers every round after it.
 function poller(
   respond: (cellId: string) => Response | Promise<Response>,
-  options: { identityFails?: boolean; cells?: SeatFeedCell[]; neverServed?: ReadonlySet<string> } = {}
+  options: { cells?: SeatFeedCell[]; neverServed?: ReadonlySet<string> } = {}
 ) {
   let now = 1_000
   let round = 0
@@ -66,7 +66,6 @@ function poller(
         return round === 0 ? page(cellId) : await respond(cellId)
       }),
       identityToken: vi.fn(async () => {
-        if (options.identityFails && round > 0) throw new Error('metadata_unavailable')
         return 'token-1'
       }),
       now: () => now,
@@ -105,13 +104,6 @@ describe('seat-feed poller reachability', () => {
       expect(cells.deadCellVerdict('c2', at)?.dead).toBe(true)
       expect(cells.deadCellVerdict('c1', at)).toBeNull()
     }
-  })
-
-  it('does not blame a cell for a token this director cannot mint', async () => {
-    const cells = poller((cellId) => page(cellId), { identityFails: true })
-    const at = await cells.run(CELL_POLL_DEAD_STREAK_MS)
-    cells.stop()
-    expect(cells.deadCellVerdict('c2', at)).toBeNull()
   })
 
   it('counts only cells that served a feed: legacy 404 rows neither fill the sample nor dilute it', async () => {

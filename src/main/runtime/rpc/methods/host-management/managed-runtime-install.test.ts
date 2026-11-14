@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { acpLaunchSpecFor } from '../../../../acp/acp-launch-specs'
-import type * as LaunchSpecs from '../../../../acp/acp-launch-specs'
+import { acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
+import type * as LaunchSpecs from '../../../../acp/launch/acp-launch-registry'
 import { writeRuntimeReleaseReceipt } from '../../../../node-runtime/managed-runtime-release'
 import type { RpcContext } from '../../core'
 import { MANAGED_RUNTIME_INSTALL_METHODS } from './managed-runtime-install'
@@ -42,9 +42,9 @@ vi.mock(
     })
   })
 )
-vi.mock('../../../../acp/acp-launch-specs', async (importOriginal) => {
+vi.mock('../../../../acp/launch/acp-launch-registry', async (importOriginal) => {
   const actual = await importOriginal<typeof LaunchSpecs>()
-  const { AcpLaunchGate } = await import('../../../../acp/acp-launch-gate')
+  const { AcpLaunchGate } = await import('../../../../acp/launch/acp-launch-gate')
   const launchGate = new AcpLaunchGate('Grok')
   const pin = {
     version: '1.0',

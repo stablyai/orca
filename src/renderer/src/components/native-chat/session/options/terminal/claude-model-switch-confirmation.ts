@@ -2,9 +2,9 @@ import { subscribeToPtyData } from '../../../../terminal-pane/pty-transport/deli
 import { isRemoteRuntimePtyId } from '../../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { subscribeToRuntimeTerminalData } from '@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription'
-import { NATIVE_CHAT_SUBMIT } from '../../../../../../../shared/native-chat/input/native-chat-paste-bytes'
+import { NATIVE_CHAT_SUBMIT } from '../../../../../../../shared/native-chat/input/composer/native-chat-paste-bytes'
 import { stripScrollbackAnsi } from '../../terminal/assembly/native-chat-scrape-fallback'
-import type { ClaudeModelSwitchOutcome } from '../../../../../../../shared/native-chat/input/native-chat-session-option-dispatch'
+import type { ClaudeModelSwitchOutcome } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-dispatch'
 
 const DETECTION_TIMEOUT_MS = 5_000
 const MAX_OBSERVED_BYTES = 64 * 1024
@@ -33,12 +33,14 @@ function compactTerminalText(buffer: string): string {
 
 function hasClaudeModelSwitchSuccess(buffer: string, modelLabel: string): boolean {
   const text = compactTerminalText(buffer)
-  const marker = `setmodelto${modelLabel.replace(/\s+/g, '').toLowerCase()}`
+  // Claude echoes neither the vendor prefix nor Orca's picker-only `alias` suffix.
+  const label = modelLabel.replace(/^claude[\s-]+/i, '').replace(/\s+alias$/i, '')
+  const marker = `setmodelto${label.replace(/\s+/g, '').toLowerCase()}`
   if (text.includes(marker)) {
     return true
   }
   // Match every picker token so a versioned echo cannot confirm the wrong context variant.
-  const labelTokens = modelLabel.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
+  const labelTokens = label.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
   const successStart = text.lastIndexOf('setmodelto')
   if (successStart === -1 || labelTokens.length === 0) {
     return false

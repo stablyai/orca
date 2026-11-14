@@ -6,7 +6,7 @@ import {
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
-import { worktreeOwnerRowsTokenOf } from '../../../worktree-owner-rows-token'
+import { worktreeOwnerRowsTokenOf } from '../../../workspace/ownership/worktree-owner-rows-token'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,

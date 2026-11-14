@@ -1,3 +1,4 @@
+import type * as MobileFileTapOpenModule from '../../../files/session-documents/mobile-file-tap-open'
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -12,8 +13,8 @@ export function fileTapOpenMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'files.terminal-path-tap': ({ client, effect }) => {
-      const open = modules.load<typeof import('../../../session/mobile-file-tap-open')>(
-        'mobile/src/session/mobile-file-tap-open.ts'
+      const open = modules.load<typeof MobileFileTapOpenModule>(
+        'mobile/src/files/session-documents/mobile-file-tap-open.ts'
       ).openMobileFileTap
       type Tab = { id: string; relativePath?: string }
       const timers: ReturnType<typeof setTimeout>[] = []

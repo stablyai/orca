@@ -1,30 +1,25 @@
+import { resolveAgentModelCatalogAccount } from './agent-model-catalog-account-resolution'
 import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
-import { recordCatalogKey } from './agent-model-catalog-fingerprint'
-import { newChatCatalogKey } from './agent-model-catalog-prewarm'
 import {
   agentModelCatalogDefaultFollowsAccount,
-  agentModelCatalogListedDefault,
-  catalogFolder,
-  sessionWorkspacePath
+  agentModelCatalogListedDefault
 } from './agent-model-catalog-workspace'
 import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
-import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
+import { scopedAgentModelCatalogLister } from './agent-model-catalog-scoped-lister'
 import { seedAccountList } from './agent-model-catalog-account-list'
+import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 import {
   agentModelCatalogReleasedOwner,
   bindAgentModelCatalogScope,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
-import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from './agent-model-catalog-listing-waiters'
-
-/** One budget for a whole refresh: setup, the folder's settings, admission and the listing. */
-const AGENT_MODEL_CATALOG_REFRESH_MS = AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
 
 /** What a refresh resolves, captured when it starts; no reader's session, deadline or callback. */
 export type AgentModelCatalogLaunch = {
@@ -47,6 +42,7 @@ export type AgentModelCatalogRefresh = {
   defaults: Promise<void>
   /** Its listing ingested and the account's list seeded, or it ended. */
   done: Promise<void>
+  hold: (reader: AgentModelCatalogReadOperation) => void
   /** Also lists efforts for a reader's selected model. */
   want: (model: string | undefined) => void
 }
@@ -54,7 +50,7 @@ export type AgentModelCatalogRefresh = {
 type Held = AgentModelCatalogRefresh & { workspaceId?: string; end: () => void }
 
 /** Equivalent requests share one refresh that belongs to no reader. It ends when it finishes, at
- *  its fixed budget, on its agent's or workspace's retirement, or with the service; readers only
+ *  on its agent's or workspace's retirement, or with the service; readers only
  *  wait on it, each until its own deadline or cancellation, and never extend or end it. */
 export function createAgentModelCatalogRefreshes(context: {
   deps: AgentModelCatalogServiceDeps
@@ -69,16 +65,11 @@ export function createAgentModelCatalogRefreshes(context: {
   const start = (key: string, launch: AgentModelCatalogLaunch): Held => {
     const { agent } = launch
     const retirement = deps.store.retirementRevision(agent)
-    const deadline = Date.now() + AGENT_MODEL_CATALOG_REFRESH_MS
     const ended = new AbortController()
-    // Retiring its agent ends it at once, like its budget, its workspace or shutdown.
+    // Scope work belongs to the host, independent of reader deadlines.
     const signal = AbortSignal.any([lifetime, ended.signal, deps.store.retirements.signal(agent)])
     const current = (): boolean =>
-      !signal.aborted &&
-      Date.now() < deadline &&
-      deps.store.retirementRevision(agent) === retirement
-    const timer = setTimeout(() => ended.abort(), AGENT_MODEL_CATALOG_REFRESH_MS)
-    timer.unref?.()
+      !signal.aborted && deps.store.retirementRevision(agent) === retirement
     const gone = new Promise<null>((resolve) => {
       signal.addEventListener('abort', () => resolve(null), { once: true })
     })
@@ -94,10 +85,12 @@ export function createAgentModelCatalogRefreshes(context: {
     const listing = Promise.withResolvers<void>()
     const defaults = Promise.withResolvers<void>()
     const targets = new Set<string>()
-    let list: ((model: string | undefined) => void) | undefined
+    const holders = new Set<AbortSignal>()
+    let register: ((holder?: AbortSignal) => void) | undefined
+    let demand: ((model: string) => void) | undefined
     let projecting: Promise<void> | undefined
     const run = async (): Promise<void> => {
-      const facts = await bounded(resolveAccount(deps, launch, current))
+      const facts = await bounded(resolveAgentModelCatalogAccount(deps, launch, current))
       if (!facts) {
         return
       }
@@ -134,6 +127,7 @@ export function createAgentModelCatalogRefreshes(context: {
         if (keepDefault !== null) {
           bound.keepDefault = keepDefault
         }
+        bound.projecting = undefined
       })
       projecting = bound.projecting
       void projecting.finally(defaults.resolve)
@@ -145,7 +139,7 @@ export function createAgentModelCatalogRefreshes(context: {
           base,
           probeHome,
           current,
-          { deadline, current, signal }
+          { current, signal }
         )
       )
       if (!scope) {
@@ -155,6 +149,7 @@ export function createAgentModelCatalogRefreshes(context: {
       Object.assign(bound, { fingerprint, exact, cwd })
       bindAgentModelCatalogScope(bindings, launch.bindingKey, bound, requestKey)
       const probe = deps.probes?.[agent]
+      let completion: Promise<AgentModelCatalogEntry | null> | undefined
       if (
         !launch.passive &&
         (exact || !agentModelCatalogReleasedOwner(scoped)) &&
@@ -163,60 +158,102 @@ export function createAgentModelCatalogRefreshes(context: {
       ) {
         const lister = scopedAgentModelCatalogLister({
           legacy: launch.legacy,
-          admission,
           signal: lifetime,
           resolved,
           probe,
           probeHome,
           workspacePath: cwd ?? folder
         })
-        list = (model) => {
-          if (
-            current() &&
-            (deps.store.probeDue(fingerprint) ||
-              deps.store.efforts.due(fingerprint, model) ||
-              deps.store.isListing(fingerprint))
+        const attach = (holder: AbortSignal) => {
+          if (holder.aborted || !current()) {
+            return
+          }
+          completion = deps.store.refresh(
+            fingerprint,
+            agent,
+            (selected, owner, publish) => {
+              const task = lister(selected, owner, publish)
+              tasks.add(task)
+              void task.finally(() => tasks.delete(task)).catch(() => {})
+              return task
+            },
+            { signal: holder, lifetime, admission }
+          )
+        }
+        register = (holder) => {
+          if (!current()) {
+            return
+          }
+          if (deps.store.isListing(fingerprint)) {
+            if (holder) {
+              attach(holder)
+            } else {
+              for (const live of holders) {
+                attach(live)
+              }
+            }
+          } else if (
+            deps.store.probeDue(fingerprint) ||
+            [...targets].some((model) => deps.store.efforts.due(fingerprint, model))
           ) {
-            // A listing another refresh started keeps that refresh's budget.
-            void deps.store.refresh(
-              fingerprint,
-              agent,
-              (selected, owner) => {
-                const task = lister(selected, owner)
-                tasks.add(task)
-                void task.finally(() => tasks.delete(task)).catch(() => {})
-                return task
-              },
-              { deadline, signal: lifetime },
-              model
-            )
+            for (const live of holders) {
+              attach(live)
+            }
+            for (const model of targets) {
+              deps.store.efforts.demand(fingerprint, model)
+            }
           }
         }
-        for (const model of targets.size > 0 ? [...targets] : [undefined]) {
-          list(model)
+        demand = (model) => {
+          if (!deps.store.isListing(fingerprint)) {
+            register?.()
+          } else {
+            deps.store.efforts.demand(fingerprint, model)
+          }
         }
-        listing.resolve()
-        await bounded(
-          deps.store.pendingListing(fingerprint, true, true, signal) ?? Promise.resolve(null)
-        )
+        register()
       }
       listing.resolve()
       if (launch.passive) {
         await bound.projecting
-      } else if (current()) {
-        seedAccountList(deps, scope, agent)
+      } else {
+        // Readers can leave while current discovery continues.
+        const seeded = Promise.resolve(completion).then((entry) => {
+          if (entry !== null && bound.current()) {
+            seedAccountList(deps, scope, agent)
+          }
+        })
+        await bounded(seeded)
       }
     }
     const end = (): void => ended.abort()
     const held: Held = {
       current: () => current() && refreshes.get(key) === held,
+      hold: (reader) => {
+        if (reader.signal.aborted) {
+          return
+        }
+        const released = new AbortController()
+        const timer =
+          reader.deadline === undefined
+            ? undefined
+            : setTimeout(() => released.abort(), Math.max(0, reader.deadline - Date.now()))
+        const holder = AbortSignal.any([signal, reader.signal, released.signal])
+        const leave = () => {
+          clearTimeout(timer)
+          holders.delete(holder)
+        }
+        holders.add(holder)
+        holder.addEventListener('abort', leave, { once: true })
+        register?.(holder)
+      },
       listing: listing.promise,
       defaults: defaults.promise,
       done: Promise.resolve(),
       want: (model) => {
         if (model && !targets.has(model)) {
           targets.add(model)
-          list?.(model)
+          demand?.(model)
         }
       },
       workspaceId: launch.records.record?.location.workspaceId,
@@ -226,11 +263,10 @@ export function createAgentModelCatalogRefreshes(context: {
     held.done = run()
       .catch(() => {})
       .finally(() => listing.resolve())
-    // The folder's settings may still arrive, inside the same budget, after the listing ends.
+    // The folder's settings may still arrive after the listing ends.
     const settled = held.done
       .then(() => projecting)
       .finally(() => {
-        clearTimeout(timer)
         ended.abort()
         defaults.resolve()
         if (refreshes.get(key) === held) {
@@ -256,45 +292,5 @@ export function createAgentModelCatalogRefreshes(context: {
         }
       }
     }
-  }
-}
-
-async function resolveAccount(
-  deps: AgentModelCatalogServiceDeps,
-  launch: AgentModelCatalogLaunch,
-  current: () => boolean
-) {
-  const { agent, records } = launch
-  const { record, scoped } = records
-  const workspacePath =
-    launch.inSessionWorkspace ||
-    (record &&
-      launch.workspacePath === undefined &&
-      !launch.legacy &&
-      (independentAgentModelCatalog(agent) || deps.agentReadsProjectModelConfig?.(agent) === true))
-      ? record
-        ? await sessionWorkspacePath(deps, record)
-        : null
-      : launch.workspacePath
-  if (!current()) {
-    return null
-  }
-  const folder = await catalogFolder(deps, agent, workspacePath, scoped)
-  if (!current()) {
-    return null
-  }
-  const account = scoped
-    ? recordCatalogKey(scoped, folder)
-    : await newChatCatalogKey(deps, agent, folder)
-  if (!current() || !account) {
-    return null
-  }
-  return {
-    record,
-    scoped,
-    workspacePath,
-    folder,
-    base: account.fingerprint,
-    probeHome: account.accountHome
   }
 }

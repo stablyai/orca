@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { useTranslate } from '@/i18n/use-translate'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'

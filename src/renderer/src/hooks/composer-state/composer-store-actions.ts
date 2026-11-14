@@ -1,6 +1,5 @@
+import type { RepoSlice, RepoUpdate } from '../../store/repos/repo-state'
 import type { UISlice } from '../../store/slices/ui/ui-slice-contract'
-import type { RepoUpdate } from '../../store/repos/repo-state'
-import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
@@ -12,19 +11,7 @@ export type ComposerStoreActions = {
     updates: RepoUpdate,
     options?: { hostId?: ExecutionHostId }
   ) => Promise<boolean>
-  createFolderWorkspace: (
-    args: {
-      projectGroupId: string
-      name?: string
-      folderPath?: string | null
-      connectionId?: string | null
-      linkedTask?: FolderWorkspace['linkedTask']
-      linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
-      createdWithAgent?: FolderWorkspace['createdWithAgent']
-      pendingFirstAgentMessageRename?: boolean
-    },
-    options: { runtimeEnvironmentId: string | null }
-  ) => Promise<FolderWorkspace | null>
+  createFolderWorkspace: RepoSlice['createFolderWorkspace']
   closeModal: () => void
   openSettingsPage: () => void
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void

@@ -1,4 +1,4 @@
-import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import type {
   BrowserScreencastOptions,
   ScreencastImageSize

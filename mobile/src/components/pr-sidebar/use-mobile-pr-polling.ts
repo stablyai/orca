@@ -3,9 +3,9 @@ import { useFocusEffect } from 'expo-router'
 import {
   ChecksDetailPollingPolicy,
   nextChecksPollBackoffMs
-} from '../../../../src/shared/github/checks-detail-polling-policy'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/checks/checks-detail-polling-policy'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
+import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import { useHostQuery } from '../../query/host-query'
 import {
   NO_BRANCH,
@@ -15,8 +15,11 @@ import {
   prChecksQuery,
   prDetailsQuery,
   type PrQueryScope
-} from '../../session/mobile-pr-queries'
-import { prSidebarResourceKey, type PrSidebarState } from '../../session/mobile-pr-sidebar-state'
+} from '../../source-control/review/mobile-pr-queries'
+import {
+  prSidebarResourceKey,
+  type PrSidebarState
+} from '../../source-control/review/mobile-pr-sidebar-state'
 
 /** What is on screen: nothing to keep fresh, the PR and its checks, or its comments too. */
 export type PrTabLive = false | 'checks' | 'details'

@@ -12,7 +12,7 @@ import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { fingerprintAuthenticatedPairingCredential } from '../../../server/pairing/device-principal'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { syncFederationBarrier } from './federation-sync-barrier.test-support'
+import { syncFederationBarrier } from './testing/federation-sync-barrier.test-support'
 
 describe('orchestration federation control mail', () => {
   const homeToken = 'run-home-device-token'
@@ -186,26 +186,6 @@ describe('orchestration federation control mail', () => {
     expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(0)
   })
 
-  it('wakes a remote worker waiter when control mail imports', async () => {
-    const waiting = workerDispatcher.dispatch(checkRequest('wait-for-control', true))
-    await Promise.resolve()
-
-    const imported = await dispatchImport(importRequest('import-control', 1, 'relay-control'))
-
-    expect(imported).toMatchObject({
-      ok: true,
-      result: { acknowledgedThrough: 1, imported: 1 }
-    })
-    await expect(waiting).resolves.toMatchObject({
-      ok: true,
-      result: {
-        dispatchId,
-        count: 1,
-        messages: [{ id: 'relay-control', subject: 'Continue' }]
-      }
-    })
-  })
-
   it('accepts a repeated import after a lost acknowledgment without duplicating mail', async () => {
     const first = await dispatchImport(importRequest('first-import', 1, 'relay-control'))
     const repeated = await dispatchImport(
@@ -215,6 +195,48 @@ describe('orchestration federation control mail', () => {
     expect(first).toMatchObject({ ok: true, result: { imported: 1 } })
     expect(repeated).toMatchObject({ ok: true, result: { imported: 0 } })
     expect(workerDb.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
+  })
+
+  it('refuses a reply to a finished paired-host report by naming a new worker there', async () => {
+    const taskId = homeDb.getDispatchContextById(dispatchId)!.task_id
+    workerDb.enqueueFederationRelay({
+      dispatchId,
+      direction: 'to_home',
+      kind: 'worker_done',
+      payload: JSON.stringify({
+        from: `dispatch:${dispatchId}`,
+        subject: 'Done',
+        body: 'Finished remotely.',
+        type: 'worker_done',
+        priority: 'normal',
+        threadId: null,
+        payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded', filesModified: [] })
+      }),
+      settleRemoteOutcome: 'succeeded'
+    })
+    await syncFederationBarrier(homeRuntime, homeDb)
+    const report = homeDb
+      .getUnreadMessages(`run:${runId}`)
+      .find((message) => message.type === 'worker_done')!
+
+    await expect(
+      homeDispatcher.dispatch({
+        id: 'reply-finished-remote',
+        authToken: 'coordinator-token',
+        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+        orchestrationRequestId: 'reply-finished-remote-request',
+        method: 'orchestration.reply',
+        params: { from: 'term_coord', id: report.id, body: 'One more thing' }
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: 'dispatch_inactive',
+        data: { followUp: { kind: 'worker_start_on', server: 'worker' } }
+      }
+    })
+    expect(homeDb.getAllMessagesForHandle(`dispatch:${dispatchId}`)).toHaveLength(0)
+    expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(0)
   })
 
   function checkRequest(id: string, wait = false, timeoutMs = 5_000, types?: string): RpcRequest {

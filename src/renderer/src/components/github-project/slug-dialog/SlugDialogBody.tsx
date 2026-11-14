@@ -8,14 +8,14 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
 import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { projectViewErrorMessage } from '../project-view-error-copy'
+import { projectViewErrorMessage } from '../auth-errors/project-view-error-copy'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function SlugDialogBody({
@@ -137,7 +137,9 @@ export function SlugDialogBody({
       toast.error(projectViewErrorMessage(res.error))
       return
     }
-    setDetails((prev) => (prev ? { ...prev, body: bodyDraft } : prev))
+    setDetails((prev) =>
+      prev ? { ...prev, body: bodyDraft, bodyImageUrls: res.bodyImageUrls } : prev
+    )
   }, [bodyDraft, body, patchProjectIssueOrPr, cacheKey, row])
 
   const labels = row?.content.labels.map((l) => l.name) ?? []
@@ -306,7 +308,11 @@ export function SlugDialogBody({
                     setEditingBody(true)
                   }}
                 >
-                  <CommentMarkdown content={body} variant="document" />
+                  <CommentMarkdown
+                    content={body}
+                    bodyImageUrls={details?.bodyImageUrls}
+                    variant="document"
+                  />
                 </button>
               ) : (
                 <button

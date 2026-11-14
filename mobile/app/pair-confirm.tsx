@@ -1,18 +1,18 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, Pressable, BackHandler } from 'react-native'
+import { View, Text, Pressable, BackHandler, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import {
   resolvePairConfirmRouteState,
   type PairConfirmRouteState
-} from '../src/transport/pair-confirm-state'
+} from '../src/pairing/pair-confirm-state'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
-} from '../src/transport/pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry } from '../src/transport/types'
-import { useRefreshHostClient } from '../src/transport/host-client-hooks'
+} from '../src/pairing/pre-profile-pairing-coordinator'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
+import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
 import { colors, spacing, radii, typography, pressedStyle } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
@@ -27,7 +27,7 @@ import {
   PairingProgress,
   waitForBeat
 } from '../src/pairing/pairing-visuals'
-import { triggerSuccess } from '../src/platform/haptics'
+import { triggerSuccess } from '../src/platform/haptics/haptics'
 import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
@@ -86,7 +86,7 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
     }, [cancel])
   )
 
-  const setPairConfirmRootRef = useCallback((node: View | null): void => {
+  const setPairConfirmRootRef = useCallback((node: HostInstance | null): void => {
     if (node !== null) {
       mountedRef.current = true
       return

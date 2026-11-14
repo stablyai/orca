@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
-import type { AcpAgentError } from '../acp-errors'
+import type { AcpAgentError } from '../transport/acp-errors'
 import type { AcpCompactionReply, AcpDialect, AcpModelCommandReply } from './acp-dialect'
 
 // Read raw result text instead of the repeated command echo in content.

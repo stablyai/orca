@@ -1,12 +1,10 @@
-// Admission allocates/writes nothing; deferred resolvers read current journal state because recovery
-// may land after admission but before sink binding.
+// Admission allocates/writes nothing; the writer resolves each write against what has committed,
+// because recovery or another writer may land after admission.
 
-import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { StructuredAgentSessionItemAppendOptions } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type { ProviderTimelineContext } from './provider-timeline-context'
+import type { JournalTimelineItemResolution } from '../agent-session-journal/writing/journal-timeline-resolution'
+import type { JournalStepOutcome } from '../agent-session-journal/writing/journal-writer-step'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import {
   decideFrame,
@@ -16,6 +14,7 @@ import {
 } from './provider-timeline-item-decisions'
 import type { ProviderTimelineTurnRef } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
+import type { ProviderTimelineSettlementResolution } from './provider-timeline-writer-resolution'
 import {
   decideContextUsage,
   decideInput,
@@ -29,11 +28,8 @@ export type ProviderTimelineDropRule =
   | 'session-ended'
   | 'turn-duplicate'
   | 'turn-settled'
-  | 'turn-unknown'
   | 'no-turn'
   | 'item-settled'
-  | 'request-duplicate'
-  | 'request-unknown'
   | 'stream-unknown'
   | 'stream-mismatch'
 
@@ -42,31 +38,25 @@ export type ProviderTimelineDecidedEvent =
   /** Another writer settled the turn; cancel text/prompts but leave calls for the provider’s end. */
   | { type: 'turn.settled'; turn: ProviderTimelineTurnRef }
 
-type Journal = StructuredAgentSessionTransitionJournal
-
-export type ProviderTimelineResolvedWrite = {
-  identity: AgentJournalItemIdentity
-  body: AgentJournalItemBody
-}
-
 /** Placement is fixed at admission; content resolves at execution. */
 export type ProviderTimelineItemWrite = {
   reservedBytes: number
   lifecycle: boolean
   /** Existing rows keep their scope; new rows use admission placement. */
   options: StructuredAgentSessionItemAppendOptions
-  resolve: (journal: Journal) => ProviderTimelineResolvedWrite | null
+  onResolved?: (outcome: JournalStepOutcome) => void
+  resolution: JournalTimelineItemResolution
 }
 
 export type ProviderTimelineDecision = {
   dropped?: ProviderTimelineDropRule
   /** Apply state changes only after sink admission. */
   commit?: (state: ProviderTimelineState) => void
-  /** Resolve settlement from the journal at execution. */
+  /** The writer chooses the settlement's mutations at execution. */
   settle?: {
     what: string
     recovered?: true
-    resolve: (journal: Journal) => readonly JournalLifecycleMutationInput[]
+    resolution: ProviderTimelineSettlementResolution
   }
   writes?: readonly ProviderTimelineItemWrite[]
   /** Replace this stream with the event’s full snapshot. */
@@ -78,8 +68,6 @@ export type ProviderTimelineDecision = {
 export type ProviderTimelineDecisionInput = {
   context: ProviderTimelineContext
   state: ProviderTimelineState
-  /** Null until sink binding. */
-  journal: Journal | null
   /** Consume serials only on admission. */
   serial: () => number
 }

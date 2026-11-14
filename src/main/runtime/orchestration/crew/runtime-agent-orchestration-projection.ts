@@ -1,6 +1,12 @@
+import type { OrchestrationTerminalCandidates } from './orchestration-terminal-candidates'
+import { composeOrchestrationDispatch } from './orchestration-dispatch-context'
+import { orchestrationProjectionFacts } from './orchestration-projection-facts'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
-import { creatorFirstParent, crewTaskDisplay } from './crew-rules'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../terminal-authority/orchestration-compatibility-authority'
 import type {
@@ -8,19 +14,19 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../terminal/records/runtime-terminal-state-records'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import {
-  buildWorkerAttentionContext,
-  projectWorkerAttentionContext
-} from '../workers/reports/worker-attention-context'
-import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { projectWorkerAttentionContext } from '../workers/reports/worker-attention-context'
 import type { AgentSessionRecordReader } from '../addressing/session-lineage/structured-session-lineage'
 import { createOrchestrationProjectionScope } from './runtime-agent-orchestration-scope'
-import { isRecentPresentationDispatch } from '../db/dispatch-context/dispatch-lookup'
-import { currentRunCoordinatorOrcaSessionId } from '../db/runs/run-coordinator-orca-session'
+import { isRecentPresentationDispatch } from '../db/dispatch-context/dispatch-presentation'
 import type { DispatchContextRow } from '../db/orchestration-records'
 import type { PtyPaneOf } from '../../terminal/surface/pty-pane-query'
+import {
+  createDispatchSessionLivenessReader,
+  type DispatchSessionObserver
+} from '../workers/lifecycle/session-worker-liveness'
 
 export type RuntimeAgentOrchestrationDependencies = {
+  captureTerminalCandidates?(): OrchestrationTerminalCandidates
   getDb(): OrchestrationDb | null
   getLeaves(): Iterable<RuntimeLeafRecord>
   getPtys(): Iterable<RuntimePtyWorktreeRecord>
@@ -33,68 +39,101 @@ export type RuntimeAgentOrchestrationDependencies = {
   getPaneKey(handle: string): string | null
   getDispatchAuthority(handle: string): OrchestrationCompatibilityTerminalAuthority | null
   getAgentStatusSnapshot(): readonly FleetAgentStatusEvidence[]
+  getAgentStatusForPaneKey?(
+    paneKey: string,
+    contextForPane?: (paneKey: string) => AgentStatusOrchestrationContext | undefined
+  ): readonly FleetAgentStatusEvidence[]
   getSessionRecords(): AgentSessionRecordReader | null
+}
+
+export type DispatchProjectionOptions = {
+  // Handles are process-local; pane identity still names the Dispatch after restart.
+  paneKey?: string
+  evidence?: FleetAgentStatusEvidence
+  observeSession?: DispatchSessionObserver
+  deferAttention?: boolean
 }
 
 export class RuntimeAgentOrchestrationProjection {
   constructor(private readonly deps: RuntimeAgentOrchestrationDependencies) {}
 
   buildByPaneKey(): Record<string, AgentStatusOrchestrationContext> | undefined {
-    const db = this.deps.getDb()
-    if (!db || db.hasAnyDispatchContexts?.() === false) {
+    const raw = this.deps.getDb()
+    const source = raw?.db ? orchestrationProjectionFacts(raw) : undefined
+    if (raw?.db && !source) {
+      return undefined
+    }
+    const db = source?.view ?? raw
+    if (!db || (source ? source.rows().next().done : db.hasAnyDispatchContexts?.() === false)) {
       return undefined
     }
     const scope = createOrchestrationProjectionScope(db, this.deps)
     const contexts: Record<string, AgentStatusOrchestrationContext> = {}
-    const evidenceByPaneKey = new Map(
-      this.deps.getAgentStatusSnapshot().map((evidence) => [evidence.activity.paneKey, evidence])
-    )
-    // Batch attention queries below; per-pane reads would repeat every 16ms publication.
-    const batchAttention = typeof db.getWorkerAttentionFactsForDispatches === 'function'
-    const queriedHandles = new Set<string>()
-    for (const leaf of this.deps.getLeaves()) {
-      if (!leaf.ptyId) {
-        continue
-      }
-      const handle = this.deps.issueLeafHandle(leaf)
-      queriedHandles.add(handle)
-      const paneKey = this.deps.makePaneKey(leaf)
-      const context = this.getForHandle(
-        handle,
-        db,
-        {
-          paneKey,
-          evidence: evidenceByPaneKey.get(paneKey),
-          deferAttention: batchAttention
-        },
-        scope
-      )
-      if (context) {
-        contexts[paneKey] = context
+    const terminals = new Map<string, Iterable<string>>()
+    const terminalCandidates = this.deps.captureTerminalCandidates?.()
+    const expanded = new Set<ReturnType<OrchestrationTerminalCandidates>>()
+    for (const candidate of source?.rows() ?? []) {
+      const handle =
+        candidate.assignee_handle && this.deps.getWorktreeId(candidate.assignee_handle) !== null
+          ? candidate.assignee_handle
+          : candidate.assignee_pane_key
+            ? this.deps.getHandleForPaneKey(candidate.assignee_pane_key)
+            : null
+      const paneKey = handle ? this.deps.getPaneKey(handle) : null
+      for (const address of new Set([paneKey, candidate.assignee_pane_key])) {
+        if (!address) {
+          continue
+        }
+        const groups =
+          terminalCandidates?.(address) ??
+          (handle && paneKey ? [{ paneKey, handles: [handle] }] : [])
+        if (expanded.has(groups)) {
+          continue
+        }
+        expanded.add(groups)
+        for (const group of groups) {
+          if (!terminals.has(group.paneKey)) {
+            terminals.set(group.paneKey, group.handles)
+          }
+        }
       }
     }
-    for (const pty of this.deps.getPtys()) {
-      const { paneKey } = this.deps.paneOf(pty)
-      if (!paneKey || contexts[paneKey]) {
-        continue
-      }
-      const handle = this.deps.issuePtyHandle(pty)
-      if (queriedHandles.has(handle)) {
-        continue
-      }
-      queriedHandles.add(handle)
-      const context = this.getForHandle(
-        handle,
-        db,
-        {
-          paneKey,
-          evidence: evidenceByPaneKey.get(paneKey),
-          deferAttention: batchAttention
-        },
-        scope
-      )
-      if (context) {
-        contexts[paneKey] = context
+    const statuses =
+      source && this.deps.getAgentStatusForPaneKey
+        ? [
+            ...new Set([
+              ...terminals.keys(),
+              ...[...source.rows()].flatMap((row) =>
+                row.assignee_orca_session_id ? [scope.resolve(row.assignee_orca_session_id)] : []
+              )
+            ])
+          ].flatMap((pane) =>
+            this.deps.getAgentStatusForPaneKey!(pane, (key) => this.identityContext(key, db, scope))
+          )
+        : this.deps.getAgentStatusSnapshot()
+    const evidenceByPaneKey = new Map(
+      statuses.map((evidence) => [evidence.activity.paneKey, evidence])
+    )
+    const sessions = createDispatchSessionLivenessReader(db, statuses, scope.records)
+    const observeSession = sessions.observe
+    const batchAttention = typeof db.getWorkerAttentionFactsForDispatches === 'function'
+    for (const [paneKey, handles] of terminals) {
+      for (const handle of handles) {
+        const context = this.getForHandle(
+          handle,
+          db,
+          {
+            paneKey,
+            evidence: evidenceByPaneKey.get(paneKey),
+            observeSession,
+            deferAttention: batchAttention
+          },
+          scope
+        )
+        if (context) {
+          contexts[paneKey] = context
+          break
+        }
       }
     }
     for (const [paneKey, { dispatch }] of scope.sessionDispatches()) {
@@ -106,6 +145,7 @@ export class RuntimeAgentOrchestrationProjection {
           {
             paneKey,
             evidence: evidenceByPaneKey.get(paneKey),
+            observeSession,
             deferAttention: batchAttention
           },
           scope
@@ -131,6 +171,7 @@ export class RuntimeAgentOrchestrationProjection {
               facts,
               isRoot: facts.isRoot,
               evidence: evidenceByPaneKey.get(paneKey),
+              session: sessions.observed(context.dispatchId),
               now
             })
           }
@@ -140,153 +181,124 @@ export class RuntimeAgentOrchestrationProjection {
     return contexts
   }
 
+  getForPaneKey(paneKey: string): AgentStatusOrchestrationContext | undefined {
+    const raw = this.deps.getDb()
+    if (!raw) {
+      return undefined
+    }
+    const source = raw.db ? orchestrationProjectionFacts(raw) : undefined
+    if (raw.db && !source) {
+      return undefined
+    }
+    const db = source?.view ?? raw
+    const scope = createOrchestrationProjectionScope(db, this.deps)
+    const statuses =
+      this.deps.getAgentStatusForPaneKey?.(paneKey, (key) =>
+        this.identityContext(key, db, scope)
+      ) ?? this.deps.getAgentStatusSnapshot().filter((entry) => entry.activity.paneKey === paneKey)
+    const options = {
+      paneKey,
+      evidence: statuses.at(-1),
+      observeSession: createDispatchSessionLivenessReader(db, statuses, scope.records).observe
+    }
+    const groups = this.deps.captureTerminalCandidates?.()(paneKey)
+    const fallback = this.deps.getHandleForPaneKey(paneKey)
+    const handles =
+      groups?.find((group) => group.paneKey === paneKey)?.handles ?? (fallback ? [fallback] : [])
+    for (const handle of handles) {
+      const terminal = this.getForHandle(handle, db, options, scope)
+      if (terminal) {
+        return terminal
+      }
+    }
+    const parsed = parsePaneKey(paneKey)
+    const prefix = 'structured-agent-session-'
+    if (!parsed?.tabId.startsWith(prefix)) {
+      return undefined
+    }
+    const session = parsed.tabId.slice(prefix.length)
+    if (structuredAgentSessionPaneKey(structuredAgentSessionTabId(session), session) !== paneKey) {
+      return undefined
+    }
+    const ids = new Set([session])
+    const visit = (id: string) => {
+      for (const predecessor of scope.records?.listClearedFrom?.(id) ?? []) {
+        if (!ids.has(predecessor)) {
+          ids.add(predecessor)
+          visit(predecessor)
+        }
+      }
+    }
+    visit(session)
+    // Old record readers have no predecessor index; only their compatibility path enumerates.
+    if (scope.records && !scope.records.listClearedFrom) {
+      for (const record of scope.records.listRecords()) {
+        ids.add(record.sessionId)
+      }
+    }
+    const candidate = scope.sessionDispatches([...ids]).get(paneKey)
+    return candidate
+      ? this.projectDispatch(
+          candidate.dispatch,
+          candidate.dispatch.assignee_handle ?? '',
+          db,
+          options,
+          scope
+        )
+      : undefined
+  }
+
+  private identityContext(
+    paneKey: string,
+    db: OrchestrationDb,
+    scope: ReturnType<typeof createOrchestrationProjectionScope>
+  ) {
+    const handle = this.deps.getHandleForPaneKey(paneKey)
+    return handle
+      ? this.getForHandle(handle, db, { paneKey, deferAttention: true }, scope)
+      : undefined
+  }
+
   getForHandle(
     handle: string,
     db = this.deps.getDb(),
-    options: {
-      // Handles are process-local; pane identity still names the Dispatch after restart.
-      paneKey?: string
-      evidence?: FleetAgentStatusEvidence
-      deferAttention?: boolean
-    } = {},
+    options: DispatchProjectionOptions = {},
     scope = createOrchestrationProjectionScope(db, this.deps)
   ): AgentStatusOrchestrationContext | undefined {
+    const facts = db?.db ? orchestrationProjectionFacts(db, scope.now) : undefined
+    if (db?.db && !facts) {
+      return undefined
+    }
+    if (facts && facts.view !== db) {
+      db = facts.view
+      scope = createOrchestrationProjectionScope(db, this.deps, scope.now)
+    }
     const { paneKey } = options
     const dispatch =
       db?.getActiveDispatchForTerminal?.(handle, paneKey) ?? this.getRecent(handle, db, scope.now)
     if (!dispatch) {
       return undefined
     }
-    return this.projectDispatch(dispatch, handle, db, options, scope)
+    const read = () => this.projectDispatch(dispatch, handle, db, options, scope)
+    return facts ? facts.withDispatch(dispatch.id, read) : read()
   }
 
   private projectDispatch(
     dispatch: DispatchContextRow,
     handle: string,
     db: OrchestrationDb | null,
-    options: { paneKey?: string; evidence?: FleetAgentStatusEvidence; deferAttention?: boolean },
+    options: DispatchProjectionOptions,
     scope: ReturnType<typeof createOrchestrationProjectionScope>
   ): AgentStatusOrchestrationContext {
-    const { paneKey, evidence, deferAttention = false } = options
-    const task = scope.task(dispatch.task_id, dispatch.run_id)
-    const display = crewTaskDisplay(task)
-    const owningRun =
-      task?.run_id && task.run_id === dispatch.run_id ? scope.run(dispatch.run_id) : undefined
-    const runCoordinatorHandle = owningRun?.coordinator_handle ?? undefined
-    const legacyActiveRun =
-      owningRun?.legacy === 1 && (dispatch.status === 'pending' || dispatch.status === 'dispatched')
-        ? db?.getActiveCoordinatorRun?.()
-        : undefined
-    const handleWorktreeId = legacyActiveRun ? this.deps.getWorktreeId(handle) : null
-    const coordinatorWorktreeId = legacyActiveRun
-      ? this.deps.getWorktreeId(legacyActiveRun.coordinator_handle)
-      : null
-    const scopedLegacyRun =
-      legacyActiveRun &&
-      handleWorktreeId &&
-      coordinatorWorktreeId &&
-      worktreeIdsEqual(coordinatorWorktreeId, handleWorktreeId)
-        ? legacyActiveRun
-        : undefined
-    const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyRun?.coordinator_handle
-    const orchestrationRunId = owningRun?.legacy === 0 ? owningRun.id : scopedLegacyRun?.id
-    const creatorPaneKey = task?.created_by_pane_key
-    const creatorPaneHandle = creatorPaneKey ? this.deps.getHandleForPaneKey(creatorPaneKey) : null
-    const creatorAuthority = creatorPaneHandle
-      ? this.deps.getDispatchAuthority(creatorPaneHandle)
-      : null
-    const storedCreatorPane = creatorPaneKey ? parsePaneKey(creatorPaneKey) : null
-    const currentCreatorPane = creatorAuthority?.paneKey
-      ? parsePaneKey(creatorAuthority.paneKey)
-      : null
-    const sameCreatorPane = Boolean(
-      creatorPaneKey &&
-      creatorAuthority?.paneKey &&
-      (creatorPaneKey === creatorAuthority.paneKey ||
-        (storedCreatorPane &&
-          currentCreatorPane &&
-          storedCreatorPane.leafId === currentCreatorPane.leafId))
-    )
-    const paneRuns = creatorPaneKey ? scope.paneRuns(creatorPaneKey) : []
-    const paneRun = paneRuns.find((run) => run.id === owningRun?.id) ?? paneRuns[0]
-    const sameRunCreatorDispatch = Boolean(
-      task?.creator_dispatch_id &&
-      task.creator_dispatch_run_id === owningRun?.id &&
-      task.creator_dispatch_pane_key &&
-      task.creator_dispatch_process_incarnation === task.created_by_process_incarnation &&
-      parsePaneKey(task.creator_dispatch_pane_key)?.leafId === storedCreatorPane?.leafId
-    )
-    // Durable Run membership identifies the creator; live incarnation/handle checks only decide mutation authority.
-    const creatorLineageInRun = Boolean(
-      owningRun?.legacy === 0 &&
-      task?.created_by_run_generation === owningRun.consumer_generation &&
-      creatorPaneKey &&
-      (paneRun
-        ? paneRun.id === owningRun.id &&
-          paneRun.consumer_generation === task.created_by_run_generation
-        : sameRunCreatorDispatch)
-    )
-    const currentCreatorHandle =
-      creatorLineageInRun &&
-      task?.created_by_process_incarnation === creatorAuthority?.processIncarnation &&
-      sameCreatorPane
-        ? (creatorPaneHandle ?? undefined)
-        : undefined
-    const selfSession = dispatch.assignee_orca_session_id
-    const selfPane = selfSession ? scope.resolve(selfSession) : paneKey
-    const coordinatorSession =
-      owningRun?.legacy === 0 ? currentRunCoordinatorOrcaSessionId(owningRun) : null
-    // Why: a chat party nests by its visible row; its handle and minted pane key match no row.
-    const coordinator: { handle?: string; paneKey?: string } = coordinatorSession
-      ? { paneKey: scope.resolve(coordinatorSession) }
-      : scope.resolveTerminal(
-          coordinatorHandle,
-          owningRun?.legacy === 0 ? owningRun.coordinator_pane_key : null
-        )
-    const creatorSession =
-      dispatch.creator_orca_session_id && dispatch.creator_orca_session_id !== selfSession
-        ? dispatch.creator_orca_session_id
-        : null
-    const creator: { handle?: string; paneKey?: string } | undefined = creatorSession
-      ? { paneKey: scope.resolve(creatorSession) }
-      : currentCreatorHandle
-        ? scope.resolveTerminal(currentCreatorHandle, creatorAuthority?.paneKey ?? null)
-        : creatorLineageInRun
-          ? scope.resolveTerminal(creatorPaneHandle, creatorPaneKey ?? null)
-          : undefined
-    const coordinatorIsSelf =
-      coordinator.handle === handle ||
-      (coordinatorSession !== null && coordinatorSession === selfSession) ||
-      (paneKey !== undefined &&
-        coordinator.paneKey !== undefined &&
-        coordinator.paneKey === paneKey)
-    // Why: a creator whose pane is gone still has a coordinator to nest under.
-    const parent =
-      creatorFirstParent(
-        (creator?.handle || (creatorSession && creator?.paneKey)) &&
-          (!selfPane || creator?.paneKey !== selfPane) &&
-          creator?.handle !== handle
-          ? creator
-          : undefined,
-        coordinator,
-        coordinatorIsSelf || coordinator.paneKey === selfPane
-      ) ?? {}
-    const attention =
-      !deferAttention && db && typeof db.getWorkerAttentionFacts === 'function'
-        ? buildWorkerAttentionContext({ db, dispatch, task, evidence, now: scope.now })
-        : undefined
-    return {
-      taskId: dispatch.task_id,
-      dispatchId: dispatch.id,
-      dispatchStatus: dispatch.status,
-      ...(display.taskTitle ? { taskTitle: display.taskTitle } : {}),
-      ...(display.displayName ? { displayName: display.displayName } : {}),
-      ...(parent.handle ? { parentTerminalHandle: parent.handle } : {}),
-      ...(parent.paneKey ? { parentPaneKey: parent.paneKey } : {}),
-      ...(coordinator.handle ? { coordinatorHandle: coordinator.handle } : {}),
-      ...(orchestrationRunId ? { orchestrationRunId } : {}),
-      ...(attention ? { attention } : {})
+    const facts = db?.db ? orchestrationProjectionFacts(db, scope.now) : undefined
+    if (facts && db !== facts.view) {
+      db = facts.view
     }
+    return facts
+      ? facts.withDispatch(dispatch.id, () =>
+          composeOrchestrationDispatch(this.deps, dispatch, handle, db, options, scope)
+        )
+      : composeOrchestrationDispatch(this.deps, dispatch, handle, db, options, scope)
   }
 
   private getRecent(handle: string, db: OrchestrationDb | null, now: number) {

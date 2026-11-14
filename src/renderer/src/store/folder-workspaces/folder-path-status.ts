@@ -16,10 +16,7 @@ import {
   getRuntimeTargetHostId,
   runtimeTargetForOwnerEnvironment
 } from '../../runtime/rpc/targets/runtime-client-target'
-import {
-  catalogOwnsHost,
-  getProjectGroupHostId
-} from '../project-groups/project-group-owner-routing'
+import { catalogOwnsHost } from '../project-groups/project-group-owner-routing'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-fields'
@@ -53,7 +50,7 @@ function getFolderPathStatusScope(
     const groups = state.projectGroups.filter(
       (group) =>
         group.id === request.projectGroupId &&
-        catalogOwnsHost(ownerHostId, getProjectGroupHostId(group))
+        catalogOwnsHost(ownerHostId, getRepoExecutionHostId(group))
     )
     const group = groups.length === 1 ? groups[0] : null
     return group?.parentPath
@@ -61,7 +58,7 @@ function getFolderPathStatusScope(
           path: group.parentPath,
           projectGroupId: group.id,
           connectionId: group.connectionId ?? null,
-          executionHostId: getProjectGroupHostId(group)
+          executionHostId: getRepoExecutionHostId(group)
         }
       : null
   }
@@ -77,7 +74,8 @@ function getFolderPathStatusScope(
   const executionHostId = getFolderWorkspaceHostId(folder, state.projectGroups)
   const group = state.projectGroups.find(
     (candidate) =>
-      candidate.id === folder.projectGroupId && getProjectGroupHostId(candidate) === executionHostId
+      candidate.id === folder.projectGroupId &&
+      getRepoExecutionHostId(candidate) === executionHostId
   )
   return {
     path: folder.folderPath,
@@ -100,7 +98,7 @@ export function getFolderWorkspaceStatusRequestDependencies(
     return null
   }
   const projectGroups = state.projectGroups.filter((group) =>
-    catalogOwnsHost(ownerHostId, getProjectGroupHostId(group))
+    catalogOwnsHost(ownerHostId, getRepoExecutionHostId(group))
   )
   const groupIds = scope.projectGroupId
     ? getProjectGroupSubtreeIds(projectGroups, scope.projectGroupId)

@@ -14,7 +14,7 @@ import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runt
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { mintServePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
-import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
+import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 import {
   buildHeadlessMobileSessionTabGroups,
@@ -181,7 +181,12 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       }
       if (recipe) {
         livePty.pty.launchAgent ??= recipe.launchAgent ?? null
-        if (!livePty.pty.launchConfig && recipe.launchConfig) {
+        // A finished launch's recipe must not return to the shell left behind.
+        if (
+          !livePty.pty.launchConfig &&
+          recipe.launchConfig &&
+          livePty.pty.launchEvidence?.kind !== 'gone'
+        ) {
           livePty.pty.launchConfig = copySleepingAgentLaunchConfig(recipe.launchConfig)
         }
       }

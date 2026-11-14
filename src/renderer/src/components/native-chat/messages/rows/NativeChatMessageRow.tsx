@@ -8,17 +8,13 @@ import type {
   NativeChatMessage,
   NativeChatToolCallBlock
 } from '../../../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { NativeChatReasoningRow } from '../reasoning/NativeChatReasoningRow'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
 import { ProviderFrameRow } from '../diagnostics/NativeChatProviderDetails'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
-import type {
-  NativeChatSubagentDisclosure,
-  NativeChatSubagentRosterState
-} from '../../subagents/native-chat-subagent-sections'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useNativeChatRowNavigation } from '../actions/use-native-chat-row-navigation'
@@ -55,18 +51,18 @@ export type MessageRowProps = {
   activeTurnIsWorking?: boolean
   /** This row's tool run is the turn's last, so it is the one still live. */
   trailingRun?: boolean
-  /** Hover controls would overlap the next row. */
+  /** Response controls would overlap the next row. */
   continuesTurn?: boolean
   /** In a turn: whether this row holds the response's actions (its last words, else its last images). */
   endsResponse?: boolean
+  latestResponse?: boolean
+  /** Response controls may hang into the gap below; otherwise they keep their own height. */
+  actionsHang?: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
   deliveryNotice?: NativeChatDeliveryNotice
-  /** On a roster row: its list's state and the subagents whose rows open below it. */
-  subagentRoster?: NativeChatSubagentRosterState
-  subagentDisclosure?: NativeChatSubagentDisclosure
-  /** Inside a subagent's section, whose border has to reach past the row's controls. */
-  inSubagentSection?: boolean
+  /** On a roster row: opens one of its subagents in its own view. */
+  onOpenSubagent?: (agentId: string) => void
   structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */

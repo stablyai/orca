@@ -7,6 +7,11 @@ import type { AgentSessionStoreState } from './records/agent-session-store-state
 
 let incarnation = randomUUID()
 
+export type AgentSessionRuntimeFacts = {
+  incarnation: string
+  ends: AgentSessionStoreState['runtimeEnds']
+}
+
 export function agentSessionRuntimeIncarnation(): string {
   return incarnation
 }
@@ -15,16 +20,17 @@ export function beginAgentSessionRuntimeIncarnationForTest(): void {
   incarnation = randomUUID()
 }
 
-function attributed(
+export function attributeAgentSessionRuntimeRecord(
   before: AgentSessionRecord | undefined,
   after: AgentSessionRecord,
-  runtimeEnds: AgentSessionStoreState['runtimeEnds']
+  runtimeEnds: AgentSessionStoreState['runtimeEnds'],
+  runtime: string = incarnation
 ): AgentSessionRecord {
   const { ownerProcess, deathEvidence } = after.lease
   if (ownerProcess && !ownerProcess.runtime && ownerProcess !== before?.lease.ownerProcess) {
     return {
       ...after,
-      lease: { ...after.lease, ownerProcess: { ...ownerProcess, runtime: incarnation } }
+      lease: { ...after.lease, ownerProcess: { ...ownerProcess, runtime } }
     }
   }
   const heldBy = before?.lease.ownerProcess?.runtime
@@ -33,7 +39,7 @@ function attributed(
     deathEvidence === before?.lease.deathEvidence ||
     deathEvidence.runtimeEnd !== undefined ||
     !heldBy ||
-    heldBy === incarnation ||
+    heldBy === runtime ||
     // Terminal-owned agents never depended on Orca's pipes.
     before?.lease.claimStatus === 'conflicted' ||
     !runtimeEnds
@@ -55,7 +61,7 @@ export function attributeAgentSessionRuntime(
   for (const [sessionId, record] of draft.records) {
     const before = published.records.get(sessionId)
     if (record !== before) {
-      const next = attributed(before, record, draft.runtimeEnds)
+      const next = attributeAgentSessionRuntimeRecord(before, record, draft.runtimeEnds)
       if (next !== record) {
         draft.records.set(sessionId, next)
       }

@@ -1,4 +1,4 @@
-import { registerTerminalDa1Owner } from '../../../lib/pane-manager/terminal-da1-ownership'
+import { registerTerminalDa1Owner } from '../../../lib/pane-manager/terminal-protocol/terminal-da1-ownership'
 import type { IDisposable, IParser, Terminal } from '@xterm/xterm'
 import {
   sendTerminalOscColorQueryReplies as sendTerminalOscColorQueryRepliesForColors,

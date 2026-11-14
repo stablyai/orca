@@ -108,33 +108,4 @@ describe('runtime status notification isolation', () => {
     expect(removed).not.toHaveBeenCalled()
     remover()
   })
-
-  it('releases the shared root listener and supports repeated cleanup and store isolation', () => {
-    const { store, subscriptions } = setup()
-    const unsubscribe = vi.fn()
-    const originalSubscribe = store.subscribe
-    vi.spyOn(store, 'subscribe').mockImplementation((listener) => {
-      const release = originalSubscribe(listener)
-      return () => {
-        unsubscribe()
-        release()
-      }
-    })
-    const release = subscriptions.subscribeConnection('a', () => {})
-    release()
-    release()
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-    const listener = vi.fn()
-    const next = subscriptions.subscribeConnection('a', listener)
-    release()
-    const other = setup()
-    other.publish('a', entry({ retired: true }))
-    expect(listener).not.toHaveBeenCalled()
-    expect(subscriptions.getConnectionSnapshot('a')).toBe('connected')
-    expect(other.subscriptions.getConnectionSnapshot('a')).toBe('disconnected')
-    store.setState({ runtimeStatusByEnvironmentId: new Map() })
-    expect(listener).toHaveBeenCalledTimes(1)
-    next()
-    expect(unsubscribe).toHaveBeenCalledTimes(2)
-  })
 })

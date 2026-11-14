@@ -23,15 +23,19 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
   protected abstract failActiveDispatchOnExit(
     handle: string,
     paneKey: string | null,
-    exitCode: number,
-    cause: TerminalExitCause
+    cause: TerminalExitCause,
+    lastOutput?: string
   ): void
+
+  protected abstract readPtyLastOutput(ptyId: string | null | undefined): string | undefined
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
   protected abstract resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void
 
   protected abstract cancelPendingDriverMutations(ptyId: string): void
+
+  protected abstract dropLayoutQueue(ptyId: string): void
 
   protected abstract rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void
 
@@ -88,6 +92,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     const exitCause: TerminalExitCause =
       stopRequested && !stopNeverConfirmed ? OPERATOR_CLOSE_EXIT_CAUSE : observedCause
     this.stopRequestedPtyIds.delete(ptyId)
+    // Read before the transcript prune below empties it: a worker gone without reporting is told with it.
+    const lastOutput = this.readPtyLastOutput(ptyId)
     const preservesAbnormalSshSurface =
       this.isSshOwnedPtyId(ptyId) &&
       pty?.connectionId != null &&
@@ -209,9 +215,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       if (exitedTeamLeaderHandle) {
         this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
       }
-      // Queued layout work rechecks missing layout and refuses pty-exited after cleanup.
       this.layouts.delete(ptyId)
-      this.layoutQueues.delete(ptyId)
+      this.dropLayoutQueue(ptyId)
       this.freshSubscribeGuard.delete(ptyId)
       this.cancelPendingDriverMutations(ptyId)
       // Cold restore can reuse ids during delayed Enter; revoke it before it injects into a replacement.
@@ -237,7 +242,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       // Clear and notify driver state so dead panes cannot retain mobile lock banners.
       this.terminalDrivers.clear(ptyId)
       this.remoteDesktopFloor.clearPty(ptyId)
-      this.disposeHeadlessTerminal(ptyId)
+      this.disposeHeadlessTerminalOnExit(ptyId)
       this.trustDialogStatus.forget(ptyId)
       if (processDeathCertified) {
         // The bounded verdict register also fences late graphs after the PTY record was pruned.
@@ -311,10 +316,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         paneKey: closedPane?.paneKey ?? this.paneOfPty(pty).paneKey
       })
     }
-    if (!preservesAbnormalSshSurface) {
-      for (const surface of exitedSurfaces) {
-        this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
-      }
+    for (const surface of preservesAbnormalSshSurface ? [] : exitedSurfaces) {
+      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput)
     }
     this.pruneDisconnectedPtyRecords()
     if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {

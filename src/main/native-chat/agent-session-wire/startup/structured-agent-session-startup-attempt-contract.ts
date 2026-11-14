@@ -10,7 +10,7 @@ import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/chi
 import type { StructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
-/** Absolute registration-time ceiling, independent of shorter protocol-step bounds. */
+/** Absolute registration-time ceiling, independent of protocol readiness. */
 export const STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS = 10 * 60_000
 
 export type StructuredAgentSessionStartupLimits = { ceilingMs: number }

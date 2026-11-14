@@ -1,9 +1,13 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import '../lib/workspace/ownership/worktree-runtime-owner-index'
-import { getCatalogOwnerHostId } from '../lib/workspace/ownership/workspace-catalog-owner-index'
+import '../lib/workspace/ownership/workspace-catalog-owner-index'
 
 export type WorkspaceSurface = { id: string; path: string }
 
@@ -19,7 +23,7 @@ function getStampedFolderWorkspaceHostId(
   const namesOwnHost = Boolean(
     parseExecutionHostId(workspace.executionHostId) ?? workspace.connectionId?.trim()
   )
-  return namesOwnHost ? getCatalogOwnerHostId(workspace) : null
+  return namesOwnHost ? getRepoExecutionHostId(workspace) : null
 }
 
 /** Workbench state/keys support one surface per bare workspace ID, unlike host-qualified listing catalogs (STA-4343). Collapse only here; Git IDs encode repo/path so first-wins is lossless. */
@@ -63,7 +67,7 @@ export function projectWorkspaceSurfaces({
         id,
         kept: surfaces[existingIndex].path,
         dropped: surface.path,
-        droppedHost: getCatalogOwnerHostId(workspace)
+        droppedHost: getRepoExecutionHostId(workspace)
       })
     }
   }

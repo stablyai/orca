@@ -2,7 +2,7 @@ import type React from 'react'
 import { toast } from 'sonner'
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { addPRReviewCommentForRepo } from '@/components/github/github-work-item-comment-mutations'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff/sections/diff-section-height-cache'
 import {
   getStoredTextDiffContent,
@@ -13,15 +13,15 @@ import {
   getPRFileDiffResult
 } from '@/components/github/pr-file-diff-mapping'
 import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import type {
-  GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents
-} from '../../../../../shared/github/pull-request-types'
+} from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { loadPRFileContents } from '../load-item-details/pr-file-content-cache'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type LoadSectionArgs = {
   index: number

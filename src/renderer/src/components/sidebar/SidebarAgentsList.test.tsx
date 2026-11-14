@@ -126,7 +126,7 @@ it('keeps filtered live badge counts across sidebar modes and excludes retained 
   expect(badgeTarget.textContent).toBe('0')
 })
 
-it('preserves historical search, unread filtering and migration blocks in badge-only mode', () => {
+it('preserves historical search, live badges and migration blocks in badge-only mode', () => {
   vi.spyOn(Date, 'now').mockReturnValue(10_000)
   const tab = makeTab()
   useAppStore.setState({
@@ -164,9 +164,9 @@ it('preserves historical search, unread filtering and migration blocks in badge-
   view.rerender(<SidebarAgentsList {...props} active />)
   expect(badgeTarget.textContent).toBe('1')
   act(() => useAppStore.setState({ acknowledgedAgentsByPaneKey: { [PANE_KEY]: 2_000 } }))
-  expect(badgeTarget.textContent).toBe('0')
+  expect(badgeTarget.textContent).toBe('1')
   view.rerender(<SidebarAgentsList {...props} active={false} />)
-  expect(badgeTarget.textContent).toBe('0')
+  expect(badgeTarget.textContent).toBe('1')
   act(() => useAppStore.setState({ agentStatusByPaneKey: {} }))
   view.rerender(<SidebarAgentsList {...props} query="" readFilter="all" active={false} />)
   expect(badgeTarget.textContent).toBe('0')

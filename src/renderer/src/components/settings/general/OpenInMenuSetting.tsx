@@ -14,14 +14,14 @@ import {
 } from '../../ui/dropdown-menu'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getOpenInAppPreset,
   isOpenInAppPresetAdded,
   OpenInApplicationIcon,
   getOpenInAppPresets,
   type OpenInAppPreset
-} from '@/lib/open-in-app-catalog'
+} from '@/lib/files/os-open/open-in-app-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 
@@ -216,11 +216,7 @@ function OpenInMenuRow({
   )
 }
 
-export function OpenInMenuSetting({
-  applications,
-  updateSettings
-}: OpenInMenuSettingProps): React.JSX.Element {
-  const t = useTranslate()
+export function useOpenInMenuDraft(applications: OpenInApplication[] | undefined) {
   const [draftState, setDraftState] = useState(() =>
     createOpenInApplicationsDraftState(applications)
   )
@@ -232,6 +228,23 @@ export function OpenInMenuSetting({
     setDraftState(resolvedDraftState)
   }
   const draft = resolvedDraftState.draft
+  return { draft, setDraftState, editingIds, setEditingIds }
+}
+
+export function OpenInMenuSetting(props: OpenInMenuSettingProps): React.JSX.Element {
+  const draftOwner = useOpenInMenuDraft(props.applications)
+  return <OpenInMenuEditor {...props} draftOwner={draftOwner} />
+}
+
+export function OpenInMenuEditor({
+  applications,
+  updateSettings,
+  draftOwner
+}: OpenInMenuSettingProps & {
+  draftOwner: ReturnType<typeof useOpenInMenuDraft>
+}): React.JSX.Element {
+  const t = useTranslate()
+  const { draft, setDraftState, editingIds, setEditingIds } = draftOwner
   const isAtLimit = draft.length >= OPEN_IN_APPLICATIONS_MAX
 
   const commit = (nextDraft: OpenInApplication[]): void => {
@@ -274,7 +287,7 @@ export function OpenInMenuSetting({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <Label>
-            {t('auto.components.settings.OpenInMenuSetting.6ed52fe71e', 'Open In Apps')}
+            {t('auto.components.settings.OpenInMenuSetting.d686e15816', 'Open in apps')}
           </Label>
           <p className="text-xs text-muted-foreground">
             {t(

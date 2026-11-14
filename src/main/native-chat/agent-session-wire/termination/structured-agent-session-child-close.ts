@@ -24,7 +24,7 @@ export async function joinStructuredAgentSessionChildClose(
 ): Promise<StructuredAgentSessionChildCloseVerdict> {
   // Capture startup state before provider release loses that evidence.
   const unanswered = child.phase === 'starting'
-  const closed = await closeProviderRoot(context, sessionId, observeClose)
+  const closed = await closeProviderRoot(context, sessionId, child, observeClose)
   if (!closed) {
     return 'unverifiable'
   }
@@ -71,7 +71,7 @@ export async function joinClosingStructuredAgentSessionChild(
     return { ok: true }
   }
   const unanswered = child.phase === 'starting'
-  const closing = closeProviderRoot(context, sessionId)
+  const closing = closeProviderRoot(context, sessionId, child)
   const closed = await (lock ? lock.wait(closing) : closing)
   if (closed) {
     const end = () =>
@@ -96,6 +96,7 @@ export async function joinClosingStructuredAgentSessionChild(
 function closeProviderRoot(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
+  child: StructuredAgentSessionProviderChild,
   observeClose?: AgentSessionCloseObserver
 ): Promise<boolean | 'kill-delivered'> {
   const { adapter, logger } = context.deps
@@ -107,7 +108,12 @@ function closeProviderRoot(
   return stopAgentSessionProviderRoot(
     async () => {
       const close = adapter.disposeSession ?? adapter.closeSession
-      return (await close?.call(adapter, sessionId, observeClose)) === true
+      // The clear's divider waits on this stop, so the old agent gets only a brief grace.
+      const closing =
+        child.close?.cause === 'context-clear'
+          ? close?.call(adapter, sessionId, observeClose, { grace: 'brief' })
+          : close?.call(adapter, sessionId, observeClose)
+      return (await closing) === true
     },
     // Proven exit stands; descendant/follow-up failures are log-only.
     (error) =>

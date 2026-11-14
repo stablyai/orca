@@ -21,7 +21,7 @@ globalThis.window = { api: {} }
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../repos/repo.test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')
 

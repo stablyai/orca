@@ -6,8 +6,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function ConversationTabDescription({
@@ -21,6 +21,7 @@ export function ConversationTabDescription({
   bodySaving,
   bodyChanged,
   body,
+  bodyImageUrls,
   resolvedBodyDraft,
   markdownGitHubRepo,
   setBodyDraft,
@@ -37,6 +38,7 @@ export function ConversationTabDescription({
   bodySaving: boolean
   bodyChanged: boolean
   body: string
+  bodyImageUrls?: Record<string, string>
   resolvedBodyDraft: string
   markdownGitHubRepo: GitHubOwnerRepo | null
   setBodyDraft: (value: string) => void
@@ -136,6 +138,7 @@ export function ConversationTabDescription({
         ) : body.trim() ? (
           <CommentMarkdown
             content={body}
+            bodyImageUrls={bodyImageUrls}
             variant="document"
             githubRepo={markdownGitHubRepo}
             className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"

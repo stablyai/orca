@@ -2,16 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
-  InteractionManager,
   Pressable,
   Text,
-  TextInput,
-  View
+  View,
+  type TextInputInstance
 } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
-import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
-import { isBlockingJiraUrlIntent } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import {
+  isBlockingJiraUrlIntent,
+  type SmartWorkspaceSourceRow as SourceRow,
+  type SmartNameMode
+} from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   MR_STATE_FILTER_OPTIONS,
   resolveAvailableSmartModes,
@@ -19,14 +21,14 @@ import {
   SMART_MODE_OPTIONS,
   type SmartModeAvailabilityInput,
   type SmartModeOption
-} from '../tasks/mobile-smart-source-modes'
-import type { MrStateFilter, SmartNameMode } from '../tasks/mobile-composer-source-types'
+} from '../new-workspace/source-selection/mobile-smart-source-modes'
+import type { MrStateFilter } from '../new-workspace/source-selection/mobile-composer-source-types'
 import {
   lookupGitHubItemByOwnerRepo,
   type PasteRepoCandidate
-} from '../tasks/smart-source-paste-intent'
-import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
-import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
+} from '../new-workspace/source-selection/smart-source-paste-intent'
+import { useSmartWorkspaceSource } from '../new-workspace/source-selection/use-smart-workspace-source'
+import type { MobileComposerSource } from '../new-workspace/source-selection/use-mobile-composer-source'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -36,6 +38,7 @@ import { TextField } from './composer-input/TextField'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
 import { SheetHeader } from './nav-bar/SheetHeader'
+import { runAfterInteractions } from '../platform/after-interactions'
 
 // Delay focus like MobileSearchField: native autoFocus may not raise keyboard during drawer animation.
 const SOURCE_INPUT_FOCUS_DELAY_MS = 120
@@ -76,7 +79,7 @@ export function SmartWorkspaceSourceDrawer({
   const availableModes = useMemo(() => resolveAvailableSmartModes(availability), [availability])
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<TextInputInstance>(null)
   // Reseed only on open so a recreated availability object cannot reset the picked mode.
   const [wasVisible, setWasVisible] = useState(visible)
   if (wasVisible !== visible) {
@@ -92,7 +95,7 @@ export function SmartWorkspaceSourceDrawer({
       return
     }
     let timeout: ReturnType<typeof setTimeout> | undefined
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = runAfterInteractions(() => {
       timeout = setTimeout(() => {
         inputRef.current?.focus()
       }, SOURCE_INPUT_FOCUS_DELAY_MS)
@@ -305,7 +308,7 @@ export function SmartWorkspaceSourceDrawer({
                     'Type a workspace name in the field below.'
                   )}
                 </Text>
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => (
               <SmartWorkspaceSourceRow row={item} onPress={() => handleSelectRow(item)} />

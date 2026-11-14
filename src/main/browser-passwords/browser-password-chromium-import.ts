@@ -12,7 +12,7 @@ import {
   type ChromiumBrowserDef
 } from '../browser/cookies/sources/browser-cookie-source-profiles'
 import { getEncryptionKey } from '../browser/cookies/sources/browser-cookie-key'
-import type { EncryptionKeyResult } from '../browser/cookies/sources/browser-cookie-sqlite'
+import type { EncryptionKeyResult } from '../browser/cookies/sources/chromium-encryption-key-contract'
 import { createChromiumCookieSnapshot } from '../browser/cookies/chromium/chromium-cookie-snapshot'
 import type { BrowserPasswordImportRow } from './browser-password-import-merge'
 

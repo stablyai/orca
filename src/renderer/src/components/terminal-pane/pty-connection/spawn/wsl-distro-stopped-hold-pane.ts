@@ -1,4 +1,4 @@
-import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
 import { holdPaneForStoppedWslDistro } from '../../session-restore/wsl-distro/wsl-distro-stopped-hold-state'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

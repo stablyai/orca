@@ -5,15 +5,15 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../ssh/orcad-local-build-hash', () => ({
+vi.mock('../../managed-server/install/orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
 }))
 
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { emptyOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
-import { OrcadActiveReadinessError } from '../../ssh/orcad-active-readiness'
+import { OrcadActiveReadinessError } from '../../managed-server/activation/orcad-active-readiness'
 import { probeWslActiveOrcad, wslOrcadActiveProbeCommand } from './wsl-orcad-active-probe'
 
 const mockExec = vi.mocked(execCommand)

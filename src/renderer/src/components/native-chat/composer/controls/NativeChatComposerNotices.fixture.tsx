@@ -44,7 +44,32 @@ export const claudeSignIn = defineFixture({
           agentLabel: 'Claude',
           sessionError: null,
           composerError: null,
-          signIn: { signingIn: false, signIn: () => {} }
+          setup: { signIn: { signingIn: false, signIn: () => {} }, install: null }
+        })}
+      />
+    </div>
+  )
+})
+
+export const codexInstall = defineFixture({
+  width: 720,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <NativeChatComposerNotices
+        notices={structuredSessionNotices({
+          launch: {
+            lifecycle: 'failed',
+            failure: {
+              kind: 'refused',
+              code: 'agent_session_operation_invalid',
+              details: { reason: 'cliMissing' }
+            },
+            retry: () => {}
+          },
+          agentLabel: 'Codex',
+          sessionError: null,
+          composerError: null,
+          setup: { signIn: null, install: { phase: 'install', busy: false, run: () => {} } }
         })}
       />
     </div>

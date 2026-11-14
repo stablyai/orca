@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { SourceControlTextActionAgentPicker } from './text-actions/SourceControlTextActionAgentPicker'
 import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 import type {
@@ -126,6 +127,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   onSave
 }: SourceControlActionRecipeRowProps<ActionId>): React.JSX.Element {
   const t = useTranslate()
+  const fieldIdPrefix = useId()
   const draftScope = useAgentPickerDraftScope(setupDiscardSignal)
   const isLaunchAction = !AI_TEXT_ACTION_ID_SET.has(actionId)
   const templateDirty =
@@ -212,8 +214,10 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
         {!isLaunchAction ? (
           <SourceControlActionOptionField
             label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+            controlId={`${fieldIdPrefix}-arguments`}
           >
             <Input
+              id={`${fieldIdPrefix}-arguments`}
               value={draftValue.agentArgs ?? ''}
               spellCheck={false}
               placeholder={agentArgsPlaceholder}
@@ -224,13 +228,14 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
           </SourceControlActionOptionField>
         ) : null}
         <div className="min-w-0 space-y-2">
-          <Label variant="settings">
+          <Label variant="settings" htmlFor={`${fieldIdPrefix}-command-template`}>
             {t(
               'auto.components.settings.SourceControlAiActionRecipeDefaults.fb09da4345',
               'Command template'
             )}
           </Label>
           <textarea
+            id={`${fieldIdPrefix}-command-template`}
             value={draftValue.commandInputTemplate}
             rows={3}
             spellCheck={false}

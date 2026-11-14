@@ -1,7 +1,9 @@
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
-import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
-import type { RpcEnvelopeFields } from '../transport/rpc-envelope-fields'
-import type { ConnectionState, RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
+import type { BrowserScreencastFrame } from '../browser/screencast/browser-screencast-protocol'
+import type { RpcEnvelopeFields } from '../transport/rpc/rpc-envelope-fields'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge/bridge-envelope'
 
 export type SentRequest = {

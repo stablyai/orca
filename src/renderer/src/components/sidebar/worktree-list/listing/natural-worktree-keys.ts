@@ -1,4 +1,4 @@
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 

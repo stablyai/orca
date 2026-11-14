@@ -5,10 +5,10 @@ import { listEnvironments } from '../../../shared/remote-runtime/host-store/runt
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
-} from '../../ssh/orcad-migration-cutover-journal'
-import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
+} from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
+import { orcadMigrationCutoverFixture } from '../migration/cutover/testing/orcad-migration-cutover-fixture'
 import { createManagedLifecycleHarness } from './orcad-managed-lifecycle-test-fixture'
-import { isManagedOrcadSshTarget } from '../../ssh/connection/ssh-connection-store'
+import { isManagedOrcadSshTarget } from '../../ssh/targets/ssh-target-runtime-ownership'
 import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'

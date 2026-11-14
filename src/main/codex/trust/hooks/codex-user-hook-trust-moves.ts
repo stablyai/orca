@@ -1,4 +1,7 @@
-import type { HookCommandConfig, HookDefinition } from '../../../agent-hooks/installer-utils'
+import type {
+  HookCommandConfig,
+  HookDefinition
+} from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import { createCodexHookTrustEntry } from '../../hooks/definitions/codex-hook-identity'
 import { moveHookTrustEntries, type CodexTrustEntry } from '../toml/config-toml-trust'
 import { computeCodexTrustKey as computeTrustKey } from '../identity/codex-trust-identity'

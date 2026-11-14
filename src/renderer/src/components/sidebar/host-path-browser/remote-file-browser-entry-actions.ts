@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '@/lib/text-control-paste'
+import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '@/lib/text-input/paste/text-control-paste'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
 import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 import {

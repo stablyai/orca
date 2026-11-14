@@ -32,6 +32,7 @@ describe('clear pane identity', () => {
               color: null,
               createdAt: 1,
               sortOrder: 0,
+              lastFocusedAt: 123,
               isPinned: true
             }
           ]
@@ -92,6 +93,7 @@ describe('clear pane identity', () => {
         entityId: 'new-session',
         contentType: 'agent-session',
         groupId: 'local-group',
+        lastFocusedAt: 123,
         isPinned: true
       })
       // An omitted groups patch means the snapshot left every group as it was.

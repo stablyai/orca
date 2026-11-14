@@ -2,18 +2,21 @@ import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-
 import { join } from 'node:path'
 import {
   buildManagedCommandHook,
-  getSharedManagedScriptPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  writeHooksJson,
   type HookCommandConfig,
   type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../../../agent-hooks/hook-stdin-contract'
+} from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { getSharedManagedScriptPath } from '../../../agent-hooks/installation/scripts/managed-hook-script-path'
+import { writeHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-write'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../../../agent-hooks/installation/scripts/hook-stdin-contract'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { buildCodexHookCommand as getManagedCommand } from './codex-hook-command-form'
+import {
+  buildCodexHookCommand as getManagedCommand,
+  codexHookCommandCarriesStatusMessage
+} from './codex-hook-command-form'
 import { CODEX_HOOK_EVENT_LABEL, getCodexManagedScriptFileName } from './codex-hook-identity'
 import { getManagedScript } from './codex-hook-script'
 import type { CodexEventLabel } from '../../trust/toml/config-toml-trust'
@@ -68,15 +71,26 @@ export const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEvent
   Interrupt: CODEX_HOOK_EVENT_LABEL.Interrupt!
 }
 
+// Codex's hook review lists unnamed hooks as "Hook N"; Codex hashes this, so changing it needs a new command form.
+const CODEX_MANAGED_HOOK_STATUS_MESSAGE = 'Reporting status to Orca'
+
+export function getCodexManagedHookStatusMessage(command: string): string | undefined {
+  return codexHookCommandCarriesStatusMessage(command)
+    ? CODEX_MANAGED_HOOK_STATUS_MESSAGE
+    : undefined
+}
+
 // Clamp to Codex's per-event timeout caps (Interrupt: 3s) to avoid startup warnings.
 export function buildCodexManagedHook(
   command: string,
   eventName: (typeof CODEX_EVENTS)[number]
 ): HookCommandConfig {
-  return buildManagedCommandHook(
+  const hook = buildManagedCommandHook(
     command,
     normalizeCodexHookTimeoutSec(CODEX_EVENT_LABEL[eventName], MANAGED_HOOK_TIMEOUT_SECONDS)
   )
+  const statusMessage = getCodexManagedHookStatusMessage(command)
+  return statusMessage ? { ...hook, statusMessage } : hook
 }
 
 export const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(
@@ -90,6 +104,7 @@ export function computeOrcaCodexHookHashes(
   return Object.fromEntries(
     CODEX_EVENTS.map((eventName) => {
       const eventLabel = CODEX_EVENT_LABEL[eventName]
+      const hook = buildCodexManagedHook(command, eventName)
       return [
         eventLabel,
         computeCodexTrustedHash({
@@ -98,7 +113,8 @@ export function computeOrcaCodexHookHashes(
           groupIndex: 0,
           handlerIndex: 0,
           command,
-          timeoutSec: buildCodexManagedHook(command, eventName).timeout
+          timeoutSec: hook.timeout,
+          statusMessage: hook.statusMessage
         })
       ]
     })

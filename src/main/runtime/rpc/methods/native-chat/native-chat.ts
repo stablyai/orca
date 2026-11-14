@@ -10,8 +10,8 @@ import { readNativeChatTranscriptTail } from '../../../../native-chat/transcript
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
-} from '../../../../native-chat/transcript-watch-contract'
-import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat/ssh-transcript-path'
+} from '../../../../native-chat/transcript-watching/transcript-watch-contract'
+import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat/transcript-filesystem/ssh-transcript-path'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 import {
@@ -23,7 +23,7 @@ import {
   NativeChatSession,
   NativeChatUnsubscribe,
   type NativeChatResumePoint
-} from '../../../../../shared/rpc-contract/native-chat-params'
+} from '../../../../../shared/rpc-contract/native-chat/native-chat-params'
 
 // Default to a small transcript tail for fast paired-client paint; clients page older history, while local IPC stays virtualized.
 const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40

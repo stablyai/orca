@@ -7,24 +7,27 @@ import type {
   SshManagedServerUpdateNote,
   SshTarget
 } from '../../../shared/ssh-types'
-import type { HostServerOnConnectResult } from '../../ssh/ssh-host-server-on-connect'
-import { unservedHostServerMessage, unservedServerStatus } from '../../ssh/ssh-host-unserved-status'
+import type { HostServerOnConnectResult } from '../../ssh/host-server/ssh-host-server-on-connect'
+import {
+  unservedHostServerMessage,
+  unservedServerStatus
+} from '../../ssh/host-server/ssh-host-unserved-status'
 import {
   clearSshHostServerStatus,
   getSshHostServerStatus,
   isSshHostKeptForBridgedTerminals,
   setSshHostServerStatus
-} from '../../ssh/ssh-host-server-status'
+} from '../../ssh/host-server/ssh-host-server-status'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { broadcastSshState, getPublicSshState } from './ssh-renderer-broadcast'
-import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
-import { isSshSessionStartFailure } from '../../ssh/ssh-session-start-failure'
-import { describeSshConnectFailure } from '../../ssh/ssh-connect-failure-next-step'
+import { isAuthError } from '../../ssh/connection/reconnect/ssh-reconnect-error-classification'
+import { isSshSessionStartFailure } from '../../ssh/connection/ssh-session-start-failure'
+import { describeSshConnectFailure } from '../../ssh/connection/ssh-connect-failure-next-step'
 
 export async function decideHostServer(target: SshTarget): Promise<HostServerOnConnectResult> {
   // Load managed-server deploy/migration/tunnel dependencies only when connecting.
   const [{ resolveHostServerOnConnect }, { hostServerOnConnectDeps }] = await Promise.all([
-    import('../../ssh/ssh-host-server-on-connect'),
+    import('../../ssh/host-server/ssh-host-server-on-connect'),
     import('./ssh-host-server-on-connect-wiring')
   ])
   return await resolveHostServerOnConnect(
@@ -36,7 +39,7 @@ export async function decideHostServer(target: SshTarget): Promise<HostServerOnC
 /** Rechecks a host another desktop's update held during this connect, until the fence clears. */
 export function recheckWhenManagedFenceClears(target: SshTarget, environmentId: string): void {
   void Promise.all([
-    import('../../ssh/managed-server-fence-recheck'),
+    import('../../ssh/host-server/managed-server-fence-recheck'),
     import('./ssh-host-server-on-connect-wiring')
   ]).then(([{ recheckFencedManagedServer, scheduleManagedServerFenceRecheck }, wiring]) => {
     const deps = wiring.hostServerOnConnectDeps(getAppEnvironment().getPath('userData'))

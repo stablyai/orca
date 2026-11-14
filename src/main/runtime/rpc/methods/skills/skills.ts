@@ -11,7 +11,7 @@ import {
   previewSkillDeleteRequest,
   runSkillDeleteRequest,
   type SkillDeleteRequestDependencies
-} from '../../../../skills/skill-delete/request-service'
+} from '../../../../skills/skill-delete/skill-delete-request'
 import type { SkillDiscoveryTargetSchema } from '../../../../../shared/skills'
 import {
   SkillInstallPreviewRequestSchema,
@@ -30,7 +30,7 @@ import {
 import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget
-} from '../../../../skills/skill-discovery-target'
+} from '../../../../skills/discovery/skill-discovery-target'
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../../../../shared/skill-install-capability'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
@@ -43,8 +43,8 @@ import {
   SkillsCancelInstallParams,
   SkillsDiscoverParams,
   SkillsGetInstallProgressParams
-} from '../../../../../shared/rpc-contract/skills-params'
-import { unavailableWhileWslDistroStopped } from '../../../../skills/skill-discovery-stopped-wsl-roots'
+} from '../../../../../shared/rpc-contract/skills/skills-params'
+import { unavailableWhileWslDistroStopped } from '../../../../skills/discovery/skill-discovery-stopped-wsl-roots'
 import { runAsWslUserAct, wslDistroForPath } from '../../../../wsl/filesystem/wsl-unc-access-gate'
 
 // Use the same target resolution for discovery and delete-plan roots, including WSL.

@@ -9,7 +9,7 @@ import {
   findAmbiguousWorktreeIds,
   getPaletteOwnershipWorktreeIds,
   isUnifiedTabOwnedByWorktree
-} from '../../unified-tab-host-ownership'
+} from '../../workspace/ownership/unified-tab-host-ownership'
 
 type BrowserWorkspaceTabTarget = {
   worktreeId: string

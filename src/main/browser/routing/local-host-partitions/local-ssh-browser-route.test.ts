@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserNetworkExecutionRoute,
   BrowserNetworkExecutionRouteContext
-} from '../../network/execution-routes/browser-network-execution-route'
+} from '../../network/execution-routes/browser-network-execution-route-contract'
 import type { BrowserNetworkTunnelSocket } from '../../network/tunnels/browser-network-tunnel-stream-state'
 import {
   closeAllLocalSshBrowserRoutes,

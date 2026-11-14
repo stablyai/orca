@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type { Platform, StepIndex } from './MobileHero'
-import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import { translate } from '@/i18n/i18n'
 import { useMobilePageEscape } from './use-mobile-page-escape'
 import { MobilePageContent } from './MobilePageContent'
@@ -39,7 +39,7 @@ export default function MobilePage(): React.JSX.Element {
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const refreshAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
-  const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
+  const [networkInterfaces, setNetworkInterfaces] = useState<PairingNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})
   const notifyPairingAddressChange = useCallback(
     (change: MobilePairingAddressChange): void => pairingAddressChangeRef.current(change),

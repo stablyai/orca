@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { toast } from 'sonner'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useMountedRef } from '@/hooks/useMountedRef'

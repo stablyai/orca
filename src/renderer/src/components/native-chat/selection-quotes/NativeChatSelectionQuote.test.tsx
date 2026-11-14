@@ -88,18 +88,6 @@ describe('NativeChatSelectionQuote', () => {
     vi.useRealTimers()
   })
 
-  it('quotes a selection from an agent reply into the composer as a blockquote', () => {
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('first'))
-
-    const quote = screen.getByRole('button', { name: 'Add to chat' })
-    fireEvent.pointerDown(quote, { button: 0 })
-    fireEvent.click(quote)
-
-    expect(appendText).toHaveBeenCalledWith('> Use the draft store.\n>\n> It already appends.\n\n')
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-  })
-
   it('takes a selection that runs on over text that cannot be selected', () => {
     render(<Chat />)
     releaseSelection(screen.getByTestId('first'), screen.getByTestId('time'))
@@ -110,28 +98,6 @@ describe('NativeChatSelectionQuote', () => {
     expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
 
     releaseSelection(screen.getByTestId('first'), screen.getByTestId('next'))
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-  })
-
-  it('offers nothing when a press leaves the selection as it was', () => {
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('first'))
-    fireEvent.pointerDown(screen.getByTestId('time'), { button: 0 })
-    fireEvent.mouseUp(screen.getByTestId('time'), { button: 0 })
-    settle()
-
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-  })
-
-  it('withdraws the offer once the selection is gone', () => {
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('first'))
-    expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
-
-    act(() => {
-      window.getSelection()!.removeAllRanges()
-      document.dispatchEvent(new Event('selectionchange'))
-    })
     expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
   })
 })

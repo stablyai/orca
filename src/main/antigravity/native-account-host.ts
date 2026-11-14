@@ -12,7 +12,7 @@ import {
 } from './native-account-service'
 import { isSameAntigravityLogin } from './native-account-usage-reading'
 import type { RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
-import { ANTIGRAVITY_USAGE_HOST_TARGET } from '../rate-limits/antigravity-account-usage'
+import { ANTIGRAVITY_USAGE_HOST_TARGET } from '../rate-limits/providers/antigravity/antigravity-account-usage'
 
 let service: AntigravityAccountService | null = null
 const wslServices = new Map<string, AntigravityAccountService>()

@@ -1,6 +1,6 @@
 import type { BrowserHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RemoteRuntimeSubscriptionOptions } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { resolveBrowserHostReconnectDelay } from '../../client-hosts/leases/browser-host-lease-reconnect-delay'

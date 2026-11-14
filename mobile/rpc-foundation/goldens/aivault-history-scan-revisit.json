@@ -4,10 +4,93 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "values": {
+    "03fd6edde488": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "issues": [],
+            "sessions": [
+              {
+                "agent": "claude",
+                "cwd": "/repo/feature",
+                "id": "s1"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "2182656920b3": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"],\"scopeOnly\":true}}"
+    },
     "44a27dbf05e2": {
       "name": "status.get#1",
       "ordinal": 3,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "74067e8858fa": {
+      "name": "aiVault.listSessions#2",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 31000
+      }
+    },
+    "7a3238411452": {
+      "name": "aiVault.listSessions#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"],\"scopeOnly\":true}}"
     },
     "7e8b2964ad63": {
       "name": "streams-registered-at-teardown",
@@ -19,11 +102,6 @@
           "payload": "agentSession.subscribeStatus#1"
         }
       ]
-    },
-    "7f300f2af8fd": {
-      "name": "aiVault.listSessions#2",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
     },
     "9aa0df31dc4d": {
       "activeWorktreePath": "/repo/feature",
@@ -62,11 +140,6 @@
         ]
       }
     },
-    "b6a16cc83e18": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
-    },
     "c61a146bd377": {
       "status": "fulfilled",
       "startedAt": 31000,
@@ -75,50 +148,7 @@
         "$rpc": "undefined"
       }
     },
-    "cb5715e0f275": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "issues": [],
-            "sessions": [
-              {
-                "agent": "claude",
-                "cwd": "/repo/feature",
-                "id": "s1"
-              }
-            ]
-          }
-        }
-      }
-    },
-    "d3637311be53": {
+    "c6add689704f": {
       "name": "aiVault.listSessions#2",
       "ordinal": 6,
       "args": [
@@ -131,6 +161,7 @@
           "value": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           }
         },
@@ -205,34 +236,6 @@
       "ordinal": 1,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
     },
-    "e702c32cb3d5": {
-      "name": "aiVault.listSessions#2",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 31000
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -248,8 +251,8 @@
       {
         "id": "ready",
         "observation": {
-          "sender": ["daf52dc85a58", "cb5715e0f275"],
-          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "03fd6edde488"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "2182656920b3"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -260,8 +263,8 @@
       {
         "id": "cached",
         "observation": {
-          "sender": ["daf52dc85a58", "cb5715e0f275", "e702c32cb3d5"],
-          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
+          "sender": ["daf52dc85a58", "03fd6edde488", "74067e8858fa"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "2182656920b3", "7a3238411452"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "leave": "eb79a9b3682a",
@@ -274,8 +277,8 @@
       {
         "id": "revalidated",
         "observation": {
-          "sender": ["daf52dc85a58", "cb5715e0f275", "d3637311be53"],
-          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
+          "sender": ["daf52dc85a58", "03fd6edde488", "c6add689704f"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "2182656920b3", "7a3238411452"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "leave": "eb79a9b3682a",
@@ -288,8 +291,8 @@
       {
         "id": "cleanup",
         "observation": {
-          "sender": ["daf52dc85a58", "cb5715e0f275", "d3637311be53"],
-          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
+          "sender": ["daf52dc85a58", "03fd6edde488", "c6add689704f"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "2182656920b3", "7a3238411452"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "leave": "eb79a9b3682a",

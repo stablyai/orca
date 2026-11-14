@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { captureOrcadStateSnapshotCommand, parseOrcadSnapshotCapture } from './orcad-state-snapshot'
 import { orcadSnapshotFailureReason } from './orcad-state-snapshot-space'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const posix = getRemoteHostPlatform('linux-x64')
 const SHELL = process.env.ORCA_TEST_POSIX_SHELL ?? '/bin/sh'

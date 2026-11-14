@@ -1,4 +1,4 @@
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { ProxyHandshakeSocket, type ProxyHandshakeTransport } from './proxy-handshake-socket'
 
 const SOCKS_VERSION = 5

@@ -15,11 +15,11 @@ vi.mock('electron', () => ({
   app: { getPath: () => mocks.userData },
   session: { fromPartition: mocks.fromPartition }
 }))
-vi.mock('../../sessions/browser-session-partition-policies', () => ({
+vi.mock('../../sessions/partition-policies/browser-session-partition-policies', () => ({
   installBrowserSessionPartitionPolicies: vi.fn(async () => {}),
   clearBrowserSessionPartitionPolicies: mocks.clearPolicies
 }))
-vi.mock('../../sessions/browser-session-profile-retirement', () => ({
+vi.mock('../../sessions/profiles/browser-session-profile-retirement', () => ({
   retireDeletedBrowserSessionProfile: vi.fn(async () => {}),
   retireFailedBrowserSessionProfile: vi.fn(async () => {})
 }))

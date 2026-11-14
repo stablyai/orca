@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native'
+import { Platform, StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
@@ -59,13 +59,31 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   foldRow: {
     minHeight: 32,
     flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: colors.diffFoldBg
+  },
+  foldIcon: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.diffFoldGutter
+  },
+  foldBody: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm
   },
   foldText: {
+    flexShrink: 0,
+    color: colors.diffFoldText,
+    fontSize: typography.metaSize
+  },
+  foldContext: {
+    flexShrink: 1,
     color: colors.textMuted,
+    fontFamily: typography.monoFamily,
     fontSize: typography.metaSize
   },
   diffListFrame: {
@@ -77,8 +95,14 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgBase
   },
   diffList: {
-    paddingBottom: 140,
-    backgroundColor: colors.editorSurface
+    flex: 1,
+    backgroundColor: colors.bgBase
+  },
+  // On the page the rows run as wide as the longest line and scroll sideways together. A sideways scroller inside
+  // the vertical list keeps each swipe on one axis, as nested scrollers do in WebKit.
+  diffListContent: {
+    ...(Platform.OS === 'web' ? { overflowX: 'auto' as const } : {}),
+    paddingBottom: 140
   },
   truncatedText: {
     color: colors.textMuted,

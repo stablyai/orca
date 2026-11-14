@@ -257,6 +257,7 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_recovered'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      reflowHeadlessTerminalToPtyGrid: vi.fn(),
       ...runtimeOverrides
     }
     registerPtyHandlers(mainWindow as never, runtime as never)

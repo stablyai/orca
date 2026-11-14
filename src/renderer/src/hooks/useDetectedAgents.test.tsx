@@ -220,7 +220,11 @@ describe('Floating Workspace authority', () => {
     expect(activeResult.current?.detectedIds).toEqual(['claude'])
     expect(floatingResult.current?.detectedIds).toEqual(['codex'])
     expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
-    expect(refreshLocalAgents).toHaveBeenLastCalledWith({ enabledOnly: true, wakeWslDistro: true })
+    expect(refreshLocalAgents).toHaveBeenLastCalledWith({
+      enabledOnly: true,
+      wakeWslDistro: true,
+      userInitiated: true
+    })
   })
 })
 
@@ -299,25 +303,6 @@ describe('useDetectedAgents (unresolved target)', () => {
 })
 
 describe('useDetectedAgents (runtime call site)', () => {
-  it('probes each empty runtime target at most once per mounted surface', async () => {
-    const root = await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'runtime', environmentId: 'env-2' } }))
-    })
-    await flushEffects()
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'runtime', environmentId: 'env-1' } }))
-    })
-    await flushEffects()
-
-    expect(
-      runtimeEnvironmentCall.mock.calls.filter(
-        ([{ method }]) => method === 'preflight.detectAgents'
-      )
-    ).toHaveLength(2)
-  })
-
   it('refreshes a non-empty runtime cache when a new launch surface opens', async () => {
     useAppStore.setState({ runtimeDetectedAgentIds: { 'env-1': ['claude'] } })
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {

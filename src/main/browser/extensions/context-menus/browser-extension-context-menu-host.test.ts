@@ -7,8 +7,12 @@ const mocks = vi.hoisted(() => ({
 }))
 const VAULT = 'a'.repeat(32)
 
-vi.mock('../api/web-navigation', () => ({ chromeFrameId: () => 0 }))
-vi.mock('../api/permissions', () => ({ noteBrowserExtensionUserGesture: vi.fn() }))
+vi.mock('../tabs-and-windows/browser-extension-frame-projection', () => ({
+  chromeFrameId: () => 0
+}))
+vi.mock('../permissions/browser-extension-user-gesture', () => ({
+  noteBrowserExtensionUserGesture: vi.fn()
+}))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({
   emitBrowserExtensionEvent: mocks.emit,
   getBrowserExtensionProfileIdForSession: () => 'default'
@@ -37,7 +41,6 @@ vi.mock('../tabs-and-windows/browser-extension-tab-model', () => ({
   resolveBrowserExtensionTab: () => null,
   describeBrowserExtensionTab: vi.fn()
 }))
-
 import { createContextMenuItem } from './browser-extension-context-menu-model'
 import * as menuHost from './browser-extension-context-menu-host'
 

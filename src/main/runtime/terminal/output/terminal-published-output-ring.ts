@@ -23,6 +23,8 @@ export class TerminalPublishedOutputRing {
   /** Changes whenever coverage restarts; output recorded under an older epoch can't be resumed from. */
   epoch = 0
   private chunks: (PublishedTerminalOutput & { size: TerminalSize })[] = []
+  // Chunks before `head` are dropped; compacting only once they are half the array keeps append O(1).
+  private head = 0
   private units = 0
   private startSeq = 0
   private endSeq = 0
@@ -43,20 +45,26 @@ export class TerminalPublishedOutputRing {
     this.chunks.push({ ...chunk, size: this.currentSize() })
     this.units += chunk.data.length
     this.endSeq = chunk.seq
-    let dropCount = 0
-    while (this.units > RING_MAX_UNITS && dropCount < this.chunks.length) {
-      this.units -= this.chunks[dropCount]!.data.length
-      dropCount += 1
+    let head = this.head
+    while (this.units > RING_MAX_UNITS && head < this.chunks.length) {
+      this.units -= this.chunks[head]!.data.length
+      head += 1
     }
-    if (dropCount > 0) {
-      this.startSeq = this.chunks[dropCount - 1]!.seq
-      this.chunks.splice(0, dropCount)
+    if (head === this.head) {
+      return
+    }
+    this.startSeq = this.chunks[head - 1]!.seq
+    this.head = head
+    if (head * 2 >= this.chunks.length) {
+      this.chunks = this.chunks.slice(head)
+      this.head = 0
     }
   }
 
   resetCoverage(seq = this.endSeq): void {
     this.epoch = nextCoverageEpoch++
     this.chunks = []
+    this.head = 0
     this.units = 0
     this.startSeq = seq
     this.endSeq = seq
@@ -68,7 +76,10 @@ export class TerminalPublishedOutputRing {
 
   /** The point a client reaches by receiving output through `seq`: the grid that output was written for. */
   pointAt(seq: number): PublishedOutputPoint {
-    const chunk = this.chunks.findLast((candidate) => candidate.seq - candidate.rawLength < seq)
+    const index = this.chunks.findLastIndex(
+      (candidate) => candidate.seq - candidate.rawLength < seq
+    )
+    const chunk = index >= this.head ? this.chunks[index] : undefined
     const size = chunk && seq <= chunk.seq ? chunk.size : this.currentSize()
     return { seq, epoch: this.epoch, size }
   }
@@ -85,7 +96,8 @@ export class TerminalPublishedOutputRing {
       return null
     }
     const gap: PublishedTerminalOutput[] = []
-    for (const { size: chunkSize, ...chunk } of this.chunks) {
+    for (let index = this.head; index < this.chunks.length; index += 1) {
+      const { size: chunkSize, ...chunk } = this.chunks[index]!
       if (chunk.seq <= point.seq) {
         continue
       }

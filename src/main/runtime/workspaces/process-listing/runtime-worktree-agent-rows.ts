@@ -7,6 +7,10 @@ import type {
   RuntimeWorktreeAgentRow,
   RuntimeWorktreePsSummary
 } from '../../../../shared/runtime-worktree-contracts'
+import type {
+  AgentListPublication,
+  AgentListVerdict
+} from '../../../../shared/agent-status/presentation/agent-list-status'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
 import {
   resolveRuntimeWorktreeSidebarStatus,
@@ -25,6 +29,19 @@ type OrchestrationDisplay = {
   parentPaneKey?: string | null
 }
 
+const UNLISTED: AgentListVerdict = { listed: false }
+
+/** A pane the window gave no verdict is not in its list, unless it changed after the window last looked. */
+function agentListVerdict(
+  agentList: AgentListPublication,
+  source: RuntimeWorktreeAgentSource
+): AgentListVerdict | undefined {
+  return (
+    agentList.verdicts[source.paneKey] ??
+    (source.updatedAt > agentList.publishedAt ? undefined : UNLISTED)
+  )
+}
+
 export function attachRuntimeWorktreeAgentRows(args: {
   summaries: Map<string, RuntimeWorktreePsSummary>
   rowSources: ReadonlyMap<string, RuntimeWorktreeAgentSource>
@@ -35,6 +52,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
   getSummary: RuntimeWorktreePsSummaryLookup
   conversationName?: (source: RuntimeWorktreeAgentSource) => string | null
+  /** The desktop window's Agents-list verdicts; null when no window has published them. */
+  agentList?: AgentListPublication | null
 }): void {
   const { rowSources } = args
   const now = Date.now()
@@ -56,6 +75,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
       parent && parent.tabId === source.tabId ? null : args.conversationName?.(source)
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
+      ...(source.orcaSessionId ? { orcaSessionId: source.orcaSessionId } : {}),
       parentPaneKey,
       state: source.state,
       ...(source.workingMode ? { workingMode: source.workingMode } : {}),
@@ -79,6 +99,10 @@ export function attachRuntimeWorktreeAgentRows(args: {
     }
     if (source.children !== undefined || source.subagents !== undefined) {
       row.subagentObservation = isAgentStatusFresh(row, now) ? 'live' : 'unverifiable'
+    }
+    const activity = args.agentList && agentListVerdict(args.agentList, source)
+    if (activity) {
+      row.activity = activity
     }
     const rows = rowsBySummary.get(summary)
     if (rows) {

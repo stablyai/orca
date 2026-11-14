@@ -6,14 +6,14 @@ import {
   getPairedMobileDevicesSnapshot,
   usePairedMobileDevices
 } from '../../mobile/paired-mobile-devices'
-import { useMobilePairingDevicePolling } from './pairing/mobile-pairing-device-polling'
+import { useMobilePairingDevicePolling } from '../../mobile/pairing/mobile-pairing-device-polling'
 import { useMobilePairedDeviceRevocation } from './pairing/use-mobile-paired-device-revocation'
-import type { MobileNetworkInterface } from './pairing/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../../shared/pairing-address-auto-selection'
 import { MachineNameField } from '../../machine-identity/MachineNameField'
 import { MobilePairingQrSection } from './pairing/MobilePairingQrSection'
 import { MobilePairedDevicesSection } from './pairing/MobilePairedDevicesSection'
 import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
-import { MobilePairingConnectionOptions } from './pairing/MobilePairingConnectionOptions'
+import { MobilePairingConnectionOptions } from '../../mobile/pairing/MobilePairingConnectionOptions'
 import { MobilePairingSetupSection } from './pairing/MobilePairingSetupSection'
 import { MobileRelayMintFailureNotice } from '../../mobile/mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from '../../mobile/WindowsFirewallNotice'
@@ -27,7 +27,7 @@ import type { MobileRelayMintFailure } from '../../../../../shared/remote-runtim
 import { useMobilePairingConnectionMode } from '../../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../../mobile/use-mobile-pairing-address-preference'
 import { usePairingOfferExpiry } from '../../mobile/use-pairing-offer-expiry'
-import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
+import { MOBILE_SETTING_ANCHORS, shouldOpenMobilePairingAddress } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
   const t = useTranslate()
@@ -42,7 +42,7 @@ export function MobilePane(): React.JSX.Element {
   const [endpoint, setEndpoint] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [qrEnlarged, setQrEnlarged] = useState(false)
-  const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
+  const [networkInterfaces, setNetworkInterfaces] = useState<PairingNetworkInterface[]>([])
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
@@ -349,7 +349,7 @@ export function MobilePane(): React.JSX.Element {
         <MachineNameField id="mobile-machine-name" />
       </div>
 
-      <div data-settings-row="" className="space-y-6 py-4">
+      <div id={MOBILE_SETTING_ANCHORS.pairing} data-settings-row="" className="space-y-6 py-4">
         <MobilePairingSetupSection
           connectionMode={connectionMode}
           canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}
@@ -416,7 +416,7 @@ export function MobilePane(): React.JSX.Element {
         />
       </div>
 
-      <div data-settings-row="" className="py-4">
+      <div id={MOBILE_SETTING_ANCHORS.devices} data-settings-row="" className="py-4">
         <MobilePairedDevicesSection
           devices={devices}
           hasQrCode={qrDataUrl != null}

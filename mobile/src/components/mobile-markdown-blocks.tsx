@@ -1,4 +1,10 @@
-import type { Code, List, Nodes, PhrasingContent, RootContent, Table } from 'mdast'
+import { renderImageParagraph } from './mobile-markdown-image-paragraph'
+import {
+  mobileMarkdownBlockIsLiteral,
+  mobileMarkdownNestedBlocks,
+  mobileMarkdownParagraphImages
+} from './mobile-markdown-image-placement'
+import type { Code, List, Nodes, RootContent, Table } from 'mdast'
 import { Fragment, type ReactNode } from 'react'
 import { Square, SquareCheck } from 'lucide-react-native'
 import {
@@ -34,9 +40,6 @@ import { colors, pressedStyle } from '../theme/mobile-theme'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
-/** Containers nested deeper than this draw as plain text, so a pathological nesting cannot
- *  exhaust native layout. */
-const MAX_NESTING = 8
 
 /** A field added here is compared in mobile-markdown-drawn-blocks' `sameContext` too. */
 export type MarkdownBlockContext = MarkdownInlineContext & {
@@ -77,6 +80,7 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
 }
 
 function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: number): ReactNode {
+  const nested = mobileMarkdownNestedBlocks(node, depth)
   const itemText: ParagraphText = { style: ctx.listText, selectable: true }
   return (
     <View key={key} style={styles.list}>
@@ -105,7 +109,7 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
             </View>
           )}
           <View style={styles.listItemBody}>
-            {renderBlocks(item.children, ctx, itemText, depth + 1)}
+            {renderBlocks(nested[itemIndex]!.nodes, ctx, itemText, nested[itemIndex]!.depth)}
           </View>
         </View>
       ))}
@@ -161,79 +165,6 @@ function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): React
   )
 }
 
-function isBlankInline(node: PhrasingContent): boolean {
-  return node.type === 'break' || (node.type === 'text' && node.value.trim() === '')
-}
-
-/** Images draw as blocks between the paragraph's text runs; an image `renderImage` declines stays a link. */
-function renderImageParagraph(
-  children: PhrasingContent[],
-  key: number,
-  ctx: MarkdownBlockContext,
-  text: ParagraphText
-): ReactNode {
-  const { renderImage } = ctx
-  if (!renderImage || !children.some((child) => child.type === 'image')) {
-    return null
-  }
-  const parts: ReactNode[] = []
-  let drewImage = false
-  let run: PhrasingContent[] = []
-  const flushRun = (): void => {
-    if (!run.every(isBlankInline)) {
-      parts.push(
-        <MarkdownText key={parts.length} selectable={text.selectable} style={text.style}>
-          {renderInline(trimRunEdges(run), ctx)}
-        </MarkdownText>
-      )
-    }
-    run = []
-  }
-  for (const child of children) {
-    const image =
-      child.type === 'image' ? renderImage(child.url, child.alt ?? '', child.data?.width) : null
-    if (image === null || image === undefined) {
-      run.push(child)
-      continue
-    }
-    flushRun()
-    parts.push(<Fragment key={parts.length}>{image}</Fragment>)
-    drewImage = true
-  }
-  if (!drewImage) {
-    return null
-  }
-  flushRun()
-  // One wrapper whatever the part count, so a growing paragraph never remounts its images.
-  return (
-    <View key={key} style={styles.imageParagraph}>
-      {parts}
-    </View>
-  )
-}
-
-// The line breaks beside an image would otherwise leave blank lines in the text around it.
-function trimRunEdges(run: PhrasingContent[]): PhrasingContent[] {
-  let start = 0
-  let end = run.length
-  while (start < end && run[start]?.type === 'break') {
-    start += 1
-  }
-  while (end > start && run[end - 1]?.type === 'break') {
-    end -= 1
-  }
-  const trimmed = run.slice(start, end)
-  const first = trimmed[0]
-  if (first?.type === 'text') {
-    trimmed[0] = { ...first, value: first.value.trimStart() }
-  }
-  const last = trimmed.at(-1)
-  if (last?.type === 'text') {
-    trimmed[trimmed.length - 1] = { ...last, value: last.value.trimEnd() }
-  }
-  return trimmed
-}
-
 function renderBlock(
   node: RootContent,
   key: number,
@@ -241,13 +172,14 @@ function renderBlock(
   text: ParagraphText,
   depth: number
 ): ReactNode {
-  if (depth > MAX_NESTING && 'children' in node) {
+  if (mobileMarkdownBlockIsLiteral(node, depth)) {
     return (
       <MarkdownText key={key} selectable={text.selectable} style={text.style}>
         {plainText(node)}
       </MarkdownText>
     )
   }
+  const nested = mobileMarkdownNestedBlocks(node, depth)[0]
   switch (node.type) {
     case 'paragraph': {
       const [only] = node.children
@@ -263,7 +195,13 @@ function renderBlock(
           </Fragment>
         ) : null
       }
-      const withImages = renderImageParagraph(node.children, key, ctx, text)
+      const withImages = renderImageParagraph(
+        node.children,
+        mobileMarkdownParagraphImages(node, depth),
+        key,
+        ctx,
+        text
+      )
       if (withImages) {
         return withImages
       }
@@ -316,12 +254,12 @@ function renderBlock(
       // A GitHub alert's body is ordinary text, not a muted quote.
       return node.data?.callout ? (
         <MobileMarkdownCallout key={key} kind={node.data.callout} textScale={ctx.textScale}>
-          {renderBlocks(node.children, ctx, { style: text.style, selectable: true }, depth + 1)}
+          {renderBlocks(nested!.nodes, ctx, { style: text.style, selectable: true }, nested!.depth)}
         </MobileMarkdownCallout>
       ) : (
         <View key={key} style={styles.quote}>
           {renderBlocks(
-            node.children,
+            nested!.nodes,
             ctx,
             {
               style: [
@@ -331,7 +269,7 @@ function renderBlock(
               ],
               selectable: true
             },
-            depth + 1
+            nested!.depth
           )}
         </View>
       )
@@ -366,7 +304,7 @@ function renderBlock(
               : translate('pullRequest.markdownBlocks.details', 'Details')
           }
         >
-          {renderBlocks(node.children, ctx, text, depth + 1)}
+          {renderBlocks(nested!.nodes, ctx, text, nested!.depth)}
         </MobileMarkdownDetails>
       )
     case 'footnoteDefinition':
@@ -374,7 +312,12 @@ function renderBlock(
         <View key={key} style={styles.listItem}>
           <NativeText style={ctx.listMarker}>{`${node.label ?? node.identifier}.`}</NativeText>
           <View style={styles.listItemBody}>
-            {renderBlocks(node.children, ctx, { style: ctx.listText, selectable: true }, depth + 1)}
+            {renderBlocks(
+              nested!.nodes,
+              ctx,
+              { style: ctx.listText, selectable: true },
+              nested!.depth
+            )}
           </View>
         </View>
       )

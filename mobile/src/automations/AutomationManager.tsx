@@ -10,7 +10,7 @@ import { ScrollView, Text, View } from 'react-native'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { toAutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
 import { ConfirmModal } from '../components/ConfirmModal'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { AutomationButton, AutomationChoice, AutomationTabs } from './AutomationControls'
 import { AutomationList } from './AutomationList'
 import { AutomationDetail } from './AutomationDetail'
@@ -389,13 +389,13 @@ export function AutomationManager(props: {
       <OrcaHookTrustDrawer {...setupConsent.drawer} />
       <ConfirmModal
         visible={deleting !== null}
-        title={t('automations.mobile.deleteAutomationTitle', 'Delete automation?')}
+        title={t('common.delete', 'Delete')}
         message={t(
           'automations.mobile.deleteRetained',
           'Delete “{{name}}” and its retained runs?',
           { name: deleting?.automation.name ?? '' }
         )}
-        confirmLabel={t('automations.mobile.deleteAutomation', 'Delete automation')}
+        confirmLabel={t('common.delete', 'Delete')}
         destructive
         onCancel={() => setDeleting(null)}
         onConfirm={() => deleting && remove(deleting)}

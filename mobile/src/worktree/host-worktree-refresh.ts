@@ -1,12 +1,12 @@
 import {
   subscribeSharedClientEvents,
   type SharedClientEventsClient
-} from '../transport/shared-client-events'
-import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
+} from '../transport/connection/shared-client-events'
+import type { HostSidebarFeedTriggers } from '../host-screen/sidebar-feed/host-sidebar-feed-connection'
 
 // Keep lifecycle callers independent of RN types.
 type HostAppState = {
-  currentState: string
+  currentState: string | null | undefined
   addEventListener: (type: 'change', listener: (state: string) => void) => { remove: () => void }
 }
 

@@ -2,7 +2,7 @@ import { disposeGitGraphHistory } from '../../git-graph/git-graph-tab-controller
 import type { StoreApi } from 'zustand'
 import type { editor } from 'monaco-editor'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 import {
   disposeClosedEditorModels,
   disposeClosedCheckDetailsReadingCache,

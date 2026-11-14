@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript-api'
 
-export const TEXT_INPUT_FONT_SIZE_SEAM = 'src/platform/text-input-font-size.web.ts'
+export const TEXT_INPUT_FONT_SIZE_SEAM = 'src/platform/text-input/text-input-font-size.web.ts'
 
 const FLOOR_EXPORT = 'TEXT_INPUT_FONT_SIZE_FLOOR'
 

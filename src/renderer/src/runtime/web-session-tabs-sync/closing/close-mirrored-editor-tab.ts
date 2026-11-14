@@ -1,5 +1,5 @@
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { recordWebSessionCloseIntent } from './web-session-close-intent'
 import { isServerFrameDrawnWorkspace } from '../frame-drawn-server-workspace-set'
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'

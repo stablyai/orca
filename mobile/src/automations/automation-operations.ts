@@ -1,8 +1,8 @@
 import * as z from 'zod'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 import {
   automationListSchema,

@@ -2,12 +2,12 @@
 // eligibility, and the proof that activates a control (generation, resume secret, pending conns).
 import nacl from 'tweetnacl'
 import { buildHostChallengePlaintext, buildHostProofMacInput, buildHostProofTranscript } from '../../../packages/relay-contract/src/host-proof-transcript'
-import { HostChallengeAckSchema, HostHelloSchema, RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS } from '../../../packages/relay-contract/src/control-messages'
+import { HostChallengeAckSchema, HostHelloSchema, RELAY_HOST_CAPABILITY_CLIENT_KEEPALIVE, RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS } from '../../../packages/relay-contract/src/control-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { metric } from './metrics'
 import type { EdgeClaims } from './env'
 import { b64, b64url, fromB64, hmacSha256, sha256B64url, timingSafeEqualStr } from './bytes'
-import { HostRelayBase, ASSIGNMENT_CHECK_DEADLINE_MS, NO_DEADLINE, LEASE_BASE_MS, LEASE_JITTER_MS, type ControlAttachment, type Session } from './host-relay-base'
+import { HostRelayBase, ASSIGNMENT_CHECK_DEADLINE_MS, NO_DEADLINE, LEASE_BASE_MS, LEASE_JITTER_MS, type ControlAttachment, type Session, LAST_CONTROL_CLOSE_KEY, type LastControlClose } from './host-relay-base'
 
 export abstract class HostRelayHandshake extends HostRelayBase {
   protected async onHostHello(ws: WebSocket, a: ControlAttachment, type: unknown, body: Record<string, unknown>): Promise<void> {
@@ -157,11 +157,13 @@ export abstract class HostRelayHandshake extends HostRelayBase {
     })
     const leaseExpiresAt = now + LEASE_BASE_MS + Math.round((Math.random() * 2 - 1) * LEASE_JITTER_MS)
     a.phase = 'active'
+    a.activeAt = now
     a.generation = generation
     a.lastPongAt = now
     a.lastPingAt = now
     a.leaseExpiresAt = leaseExpiresAt
     a.deadline = NO_DEADLINE
+    a.clientKeepalive = this.config.clientKeepalive && a.caps.includes(RELAY_HOST_CAPABILITY_CLIENT_KEEPALIVE)
     delete a.expectedProof
     delete a.hello
     delete a.rebind
@@ -188,7 +190,14 @@ export abstract class HostRelayHandshake extends HostRelayBase {
       activeConnIds: activeConnIds.slice(0, 8),
       pendingConns: pendingConns.slice(0, 8)
     })
-    metric(this.env, 'control_active', 1, rebind ? 'rebind' : 'new', [], '', a.place)
+    // After the ack, which strict shipped parsers must see unchanged; only hosts that asked get it.
+    if (a.clientKeepalive) { this.send(ws, { type: 'keepalive-offer', v: 1, intervalMs: this.config.pingIntervalMs }) }
+    metric(this.env, 'control_active', 1, rebind ? 'rebind' : 'new', [a.openedAt === undefined ? -1 : now - a.openedAt], a.clientKeepalive ? 'keepalive' : 'legacy', a.place)
+    const last = await this.ctx.storage.get<LastControlClose>(LAST_CONTROL_CLOSE_KEY)
+    if (last) {
+      await this.ctx.storage.delete(LAST_CONTROL_CLOSE_KEY)
+      metric(this.env, 'reconnect_gap', Math.round((now - last.goneAt) / 1000), String(last.code), [Math.round((last.closedAt - last.goneAt) / 1000)], a.clientKeepalive ? 'keepalive' : 'legacy', a.place)
+    }
     await this.reschedule()
   }
 }

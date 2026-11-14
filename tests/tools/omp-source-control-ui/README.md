@@ -19,7 +19,3 @@ generator is called or mocked. Current Source Control AI settings expose action
 recipes with CLI arguments; they do not have a Discover Models button. The separate
 `omp-source-control-discovery.test.ts` regression covers production generation
 selection with cached models, including SSH host keys.
-
-`tests/tools/omp-source-control-runtime-smoke.mjs` separately validates argv against
-the actual OMP argument parser in a read-only reference checkout. It makes no model
-call and must not be described as real generated output.

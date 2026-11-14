@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import * as z from 'zod'
-import { usePageBridgeClient } from '../../transport/client-context.web'
+import { usePageBridgeClient } from '../../transport/connection/client-context.web'
 import {
   mediaNameResultSchema,
   mediaPickResultSchema,
@@ -18,6 +18,7 @@ import {
 } from './bridge-audio-verbs'
 import {
   clipboardReadResultSchema,
+  a11yAnnounceResultSchema,
   clipboardWriteResultSchema,
   pdfViewResultSchema,
   type BridgeClipboardMime,
@@ -70,6 +71,10 @@ export type NativeVerbs = {
   speechRead: () => Promise<BridgeSpeechRead>
   speechFinish: () => Promise<BridgeSpeechFinish>
   speechCancel: () => Promise<void>
+  // Older shells lack it; the page then keeps its live region, which VoiceOver may not read.
+  canAnnounce: boolean
+  // True when the shell spoke it.
+  announce: (message: string) => Promise<boolean>
 }
 
 // Expose stable reason codes, including local ungranted and frame refusals. Unknown newer-shell codes floor to unreported so caller switches remain exhaustive.
@@ -204,7 +209,10 @@ export function useNativeVerbs(): NativeVerbs {
       speechFinish: () => call(BRIDGE_SPEECH_VERB, { action: 'finish' }, speechFinishResultSchema),
       speechCancel: async () => {
         await call(BRIDGE_SPEECH_VERB, { action: 'cancel' }, speechCancelResultSchema)
-      }
+      },
+      canAnnounce: has('native.a11y.announce'),
+      announce: async (message) =>
+        (await call('native.a11y.announce', { message }, a11yAnnounceResultSchema)).announced
     }
   }, [client])
 }

@@ -1,24 +1,24 @@
-import type { RuntimeBrowserDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 
 type RuntimeBrowserDriverControllerDeps = {
-  notifyChanged: (browserPageId: string, next: RuntimeBrowserDriverState) => void
+  notifyChanged: (browserPageId: string, next: RuntimeTerminalDriverState) => void
   cancelScreencast: (browserPageId: string) => void
 }
 
 export class RuntimeBrowserDriverController {
-  private readonly drivers = new Map<string, RuntimeBrowserDriverState>()
+  private readonly drivers = new Map<string, RuntimeTerminalDriverState>()
 
   constructor(private readonly deps: RuntimeBrowserDriverControllerDeps) {}
 
-  getAll(): Map<string, RuntimeBrowserDriverState> {
+  getAll(): Map<string, RuntimeTerminalDriverState> {
     return new Map(this.drivers)
   }
 
-  get(browserPageId: string): RuntimeBrowserDriverState {
+  get(browserPageId: string): RuntimeTerminalDriverState {
     return this.drivers.get(browserPageId) ?? { kind: 'idle' }
   }
 
-  set(browserPageId: string, next: RuntimeBrowserDriverState): void {
+  set(browserPageId: string, next: RuntimeTerminalDriverState): void {
     const prev = this.get(browserPageId)
     if (prev.kind === next.kind) {
       if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {

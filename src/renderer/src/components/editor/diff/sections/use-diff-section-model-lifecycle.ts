@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { monaco } from '@/lib/monaco-setup'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
 import { disposeUnattachedMonacoModelPaths } from '../monaco-view/diff-monaco-model-disposal'
 
 // Dispose virtualized rows’ models on unmount/collapse so remounts cannot leak detached models.

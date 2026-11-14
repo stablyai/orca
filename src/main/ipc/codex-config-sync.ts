@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { getSystemCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { getCodexConfigSyncStatus } from '../codex/configuration/settings/config-sync-stall'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
-import type { CodexMirroredHomeStatus } from '../codex-accounts/runtime-home-service'
+import type { CodexMirroredHomeStatus } from '../codex-accounts/runtime-home/runtime-home-service-types'
 
 /** The read-only slice of the runtime home service this channel needs. */
 type CodexMirroredHomeResolver = {

@@ -1,11 +1,12 @@
 import { useLayoutEffect } from 'react'
 import { syncSessionRestoredBannerTitleSpace } from './session-restored-banner-pane-state'
 import { fitPanes } from '../viewport/mounted-pane-fit'
-import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
 
 export function useRestoredBannerTitleSpace({
   isVisible,
   managerRef,
+  terminalManager,
   paneCount,
   paneLayoutRevision,
   paneTitles,
@@ -13,9 +14,10 @@ export function useRestoredBannerTitleSpace({
   sessionRestoredBannerPaneIds,
   shouldMeasureHiddenStartup
 }: Pick<
-  TerminalPaneCloseController,
+  TerminalPaneMountedController,
   | 'isVisible'
   | 'managerRef'
+  | 'terminalManager'
   | 'paneCount'
   | 'paneLayoutRevision'
   | 'paneTitles'
@@ -25,7 +27,7 @@ export function useRestoredBannerTitleSpace({
 >): void {
   useLayoutEffect(() => {
     const manager = managerRef.current
-    if (!manager) {
+    if (!terminalManager || manager !== terminalManager) {
       return
     }
     const needsFit = syncSessionRestoredBannerTitleSpace({
@@ -45,6 +47,7 @@ export function useRestoredBannerTitleSpace({
     sessionRestoredBannerPaneIds,
     isVisible,
     shouldMeasureHiddenStartup,
-    managerRef
+    managerRef,
+    terminalManager
   ])
 }

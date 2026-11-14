@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
@@ -14,7 +14,7 @@ export type TabGroupWorktreeSnapshot = {
   unifiedTabs: readonly Tab[]
   terminalTabs: readonly TerminalTab[]
   openFiles: TabGroupAppState['openFiles']
-  browserTabs: readonly BrowserTabState[]
+  browserTabs: readonly BrowserWorkspace[]
   expandedPaneByTabId: TabGroupAppState['expandedPaneByTabId']
   terminalLayoutsByTabId: NonNullable<TabGroupAppState['terminalLayoutsByTabId']>
   generatedTabTitlesEnabled: boolean
@@ -22,7 +22,7 @@ export type TabGroupWorktreeSnapshot = {
 }
 
 export type GroupEditorItem = OpenFile & { tabId: string }
-export type GroupBrowserItem = BrowserTabState & { tabId: string }
+export type GroupBrowserItem = BrowserWorkspace & { tabId: string }
 export type GroupAgentSessionItem = Tab & { contentType: 'agent-session' }
 
 type TerminalTabItem = TerminalTab & { unifiedTabId: string }

@@ -56,6 +56,7 @@ import type {
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
 import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
+import type { LastStatusStore } from './last-status-store'
 
 export abstract class AgentHookServerState {
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
@@ -129,8 +130,12 @@ export abstract class AgentHookServerState {
   protected endpointFileWritten = false
   protected state: HookListenerState = createHookListenerState({
     nextListingOrder: this.nextStatusListingOrder,
-    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey)
+    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey),
+    ...this.legacyRowHooks
   })
+  protected get legacyRowHooks(): Parameters<typeof createHookListenerState>[0] {
+    return {}
+  }
   protected onTransportInterference: ((report: HookTransportInterferenceReport) => void) | null =
     null
   protected transportInterference = createHookTransportInterferenceTracker(
@@ -308,10 +313,9 @@ export abstract class AgentHookServerState {
     payload: AgentHookEventPayload | EnrichedAgentHookEventPayload,
     launchTokenHashOverride?: string
   ): AgentHookAuthorityEvidence | null
-  protected abstract serializeStatusFile(): string
   protected abstract scheduleStatusPersist(): void
-  protected abstract runStatusPersist(): void
-  protected abstract primeStatusPersistBaseline(onDiskJson: string): void
+  protected abstract runStatusPersist(): boolean
+  protected abstract getStatusStore(): LastStatusStore | null
 
   abstract _getStateForTests(): HookListenerState
   abstract _resetPromptSentDedupeForTests(): void

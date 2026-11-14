@@ -8,7 +8,7 @@ import {
 } from '../../../shared/desktop-browser-bridge-host-control-contract'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { isRuntimeOwnedSshTarget } from '../../ssh/connection/ssh-connection-store'
+import { isRuntimeOwnedSshTarget } from '../../ssh/targets/ssh-target-runtime-ownership'
 import { setDesktopBrowserBridgeHostStopped } from './desktop-browser-bridge-reconcile'
 
 /** Old entries fall off so runtime-created hosts cannot grow the list without bound. */

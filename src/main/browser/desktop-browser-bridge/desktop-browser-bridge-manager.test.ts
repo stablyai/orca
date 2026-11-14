@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
+import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   DesktopBrowserBridgeManager,
@@ -33,7 +33,7 @@ function harness(options: { supports?: boolean } = {}) {
   }))
   const subscribe = vi.fn(
     () =>
-      async (callbacks: Callbacks): Promise<RemoteRuntimeSubscription> => {
+      async (callbacks: Callbacks): Promise<RemoteRuntimeTransportSubscription> => {
         const entry = {
           callbacks,
           close: vi.fn(),

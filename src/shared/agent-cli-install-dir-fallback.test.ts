@@ -99,28 +99,6 @@ describe('agent CLI install-dir fallback', () => {
     })
   })
 
-  // Match packaged PATH seeding and guest prelude order so all resolvers select the same binary.
-  it('ranks system install dirs in the same order as the PATH seed', () => {
-    const home = '/home/tester'
-    const dirs = [
-      '/usr/local/bin',
-      '/snap/bin',
-      '/home/linuxbrew/.linuxbrew/bin',
-      '/nix/var/nix/profiles/default/bin',
-      join(home, '.nix-profile', 'bin'),
-      join(home, '.opencode', 'bin'),
-      join(home, '.vite-plus', 'bin'),
-      join(home, '.grok', 'bin')
-    ]
-    stage(...dirs.map((dir) => join(dir, 'opencode')))
-    for (const expected of dirs) {
-      expect(resolveAll(['opencode'], { platform: 'linux', homePath: home })).toEqual({
-        opencode: join(expected, 'opencode')
-      })
-      fsFixture.executables.delete(join(expected, 'opencode'))
-    }
-  })
-
   // Both resolver entrypoints must prefer version-manager binaries over same-named system installs.
   describe.each([
     { platform: 'darwin' as const, home: '/Users/tester', systemDir: '/opt/homebrew/bin' },

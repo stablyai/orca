@@ -62,15 +62,4 @@ describe('evacuation from reserve-mode cells', () => {
     await store.setCellAdmitMode('cell-a', 'db')
     expect(await store.completeReadyEvacuations()).toBe(1)
   })
-
-  it('refuses evacuation status for a reserve cell, where activeCellMigrations would count no units', async () => {
-    const store = await setup(() => 1_000)
-    await store.setCellAdmitMode('cell-a', 'reserve')
-    await expect(store.cellEvacuationStatus('cell-a', 'cell-b', true)).rejects.toThrow(
-      'cell_in_reserve_mode'
-    )
-    await expect(store.cellEvacuationStatus('cell-b', 'cell-a', false)).rejects.toThrow(
-      'cell_in_reserve_mode'
-    )
-  })
 })

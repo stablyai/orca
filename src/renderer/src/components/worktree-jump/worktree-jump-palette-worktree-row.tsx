@@ -7,8 +7,7 @@ import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
-import { cn } from '@/lib/utils'
+} from '@/lib/workspace/display/worktree-default-display-name'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
@@ -23,7 +22,7 @@ import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import type { WorktreePaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { getWorkspaceLastActiveAt } from '../../../../shared/workspace-last-active'
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import {
   getPaletteSupportingTextLabel,
   HighlightedText,
@@ -85,10 +84,7 @@ export function WorktreeJumpPaletteWorktreeRow({
       value={renderKey}
       onSelect={() => handleSelectItem(entry)}
       data-current={isCurrentWorktree ? 'true' : undefined}
-      className={cn(
-        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-        'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-      )}
+      shape="palette-row"
     >
       <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start">
         <PaletteWorktreeStatusDot worktree={worktree} />

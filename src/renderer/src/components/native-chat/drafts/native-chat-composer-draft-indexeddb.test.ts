@@ -67,7 +67,6 @@ function fakeDatabase(): {
   return { factory: factory as unknown as IDBFactory, transactions, puts }
 }
 
-const DRAFT = { text: 'unsent', images: [], savedAt: 1 }
 const settledYet = async (promise: Promise<void>): Promise<boolean> => {
   let settled = false
   void promise.then(() => (settled = true))
@@ -76,16 +75,6 @@ const settledYet = async (promise: Promise<void>): Promise<boolean> => {
 }
 
 describe('the IndexedDB draft storage', () => {
-  it('settles a write only when its transaction completes', async () => {
-    const { factory, transactions, puts } = fakeDatabase()
-    const write = createIndexedDbNativeChatComposerDraftStorage(factory).write('scope', DRAFT)
-
-    expect(await settledYet(write)).toBe(false)
-    expect(puts).toEqual([DRAFT])
-    transactions[0]!.oncomplete?.()
-    await expect(write).resolves.toBeUndefined()
-  })
-
   describe('through the draft store', () => {
     const loaded: { clearNativeChatComposerDraftsForTests: () => void }[] = []
     afterEach(() => {

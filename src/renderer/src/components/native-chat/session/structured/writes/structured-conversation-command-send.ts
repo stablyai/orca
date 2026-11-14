@@ -24,6 +24,7 @@ import {
   type StructuredConversationCommandHold
 } from '../../../../../../../shared/structured-conversation-command-hold'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
+import { structuredAgentSessionCommandWriteRefusalCause } from '../../../../../../../shared/agent-session/failures/structured-agent-session-command-refusal-cause'
 
 type CommandOutcome = Omit<StructuredAgentSessionCommandOutcome, 'handled'>
 
@@ -40,9 +41,13 @@ export async function sendStructuredConversationCommand(input: {
   causes: StructuredConversationCommandCauses
   /** What the chat's loaded start-failure rows state, read when the reply lands. */
   startFailures: () => readonly AgentSessionFailureFact[]
+  /** Called as a /clear goes out; the returned restore runs unless the host accepts it. */
+  onClearSent?: () => () => void
   send: (
     command: AgentSessionConversationCommand
   ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>
+  /** The command passed every local hold and is on its way to the host. */
+  onSent?: () => void
 }): Promise<CommandOutcome> {
   const refused = (
     error: string | null,
@@ -70,10 +75,17 @@ export async function sendStructuredConversationCommand(input: {
     )
   }
   input.pending.current = true
+  const restoreClear = input.command === 'clear' ? input.onClearSent?.() : undefined
+  let accepted = false
   try {
-    const outcome = await input.send(input.command)
+    const sending = input.send(input.command)
+    input.onSent?.()
+    const outcome = await sending
     if (outcome.kind === 'not-done') {
-      return { accepted: false, error: outcome.notice }
+      return refused(
+        outcome.notice,
+        structuredAgentSessionCommandWriteRefusalCause(outcome.failure)
+      )
     }
     // The pane stopped waiting on this reply (closed, left the chat, or sent a newer command).
     if (outcome.kind === 'dropped') {
@@ -84,9 +96,13 @@ export async function sendStructuredConversationCommand(input: {
       startFailures: input.startFailures(),
       say: sayAgentSessionFailureTranslated
     })
+    accepted = reply.accepted
     return reply.accepted ? { accepted: true, error: null } : refused(reply.error, reply.cause)
   } finally {
     input.pending.current = false
+    if (!accepted) {
+      restoreClear?.()
+    }
   }
 }
 
@@ -109,6 +125,7 @@ export function structuredConversationCommandRunner(args: {
   sends: readonly StructuredAgentSessionPendingSend[]
   /** The loaded rows, read when the reply lands, for the start failures they state. */
   items: () => readonly AgentJournalRenderItem[]
+  onClearSent?: () => () => void
   send: (
     command: AgentSessionConversationCommand,
     delivery?: 'queue-if-active',
@@ -117,7 +134,8 @@ export function structuredConversationCommandRunner(args: {
 }): {
   runConversationCommand: (
     command: AgentSessionConversationCommand,
-    instructions?: string
+    instructions?: string,
+    onSent?: () => void
   ) => Promise<CommandOutcome>
   commandRefusalCauses: StructuredConversationCommandCauses
 } {
@@ -132,7 +150,11 @@ export function structuredConversationCommandRunner(args: {
     sending: sendPending,
     retry: false
   }
-  const run = (command: AgentSessionConversationCommand, instructions?: string) => {
+  const run = (
+    command: AgentSessionConversationCommand,
+    instructions?: string,
+    onSent?: () => void
+  ) => {
     const waitsInLine =
       command === 'compact' &&
       args.commandsWait &&
@@ -142,16 +164,18 @@ export function structuredConversationCommandRunner(args: {
       agentName: args.agentName,
       pending: args.pending,
       hold: structuredConversationCommandHold({
+        command,
         waitsInLine,
         agentWorking,
         promptPending,
-        // A rewind on its way holds a command as background work does, in the same words.
-        backgroundTasksRunning:
-          args.chat.backgroundTasks.isMonitoring || args.rewindInFlight.current,
+        backgroundTasksRunning: args.chat.backgroundTasks.isMonitoring,
+        rewindInFlight: args.rewindInFlight.current,
         sendPending
       }),
       causes,
       startFailures: () => agentSessionVisibleFailureFacts(args.items()),
+      onClearSent: args.onClearSent,
+      onSent,
       send: (command) =>
         args.send(
           command,

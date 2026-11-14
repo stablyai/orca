@@ -11,16 +11,22 @@ import type { ActionSheetAction } from './ActionSheetModal'
 import { ActionSheetContent } from './ActionSheetModal'
 import { ConfirmContent } from './ConfirmModal'
 import { KeyedBottomDrawer } from './bottom-drawer/keyed-bottom-drawer'
-import type { ComposerState, SendSheetState } from '../session/mobile-diff-review-screen-model'
-import { reviewSheetKey, type ReviewSheet } from '../session/mobile-diff-review-sheets'
-import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
+import type {
+  ComposerState,
+  SendSheetState
+} from '../source-control/review/mobile-diff-review-screen-model'
+import {
+  reviewSheetKey,
+  type ReviewSheet
+} from '../source-control/review/mobile-diff-review-sheets'
+import type { useMobileDiffReviewController } from '../source-control/review/use-mobile-diff-review-controller'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import { MessageBox } from './composer-input/MessageBox'
 import { composerInputStyles } from './composer-input/composer-input-styles'
 import { hostOs } from '../platform/host-os'
 import { MobileDiffReviewFilesSheet } from './MobileDiffReviewFilesSheet'
 import { MobileDiffReviewRangeSheet } from './MobileDiffReviewRangeSheet'
-import { mobileDiffReviewFilesSubtitle } from '../session/mobile-diff-review-screen-model'
+import { mobileDiffReviewFilesSubtitle } from '../source-control/review/mobile-diff-review-screen-model'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>

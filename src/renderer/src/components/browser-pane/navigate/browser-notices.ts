@@ -2,9 +2,9 @@ import type {
   BrowserDownloadFinishedEvent,
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
-} from '../../../../../shared/browser-guest-events'
+} from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import { isChromiumCertificateErrorCode } from '../../../../../shared/browser-certificate-errors'
+import { isChromiumCertificateErrorCode } from '../../../../../shared/browser/certificate-trust/browser-certificate-errors'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'

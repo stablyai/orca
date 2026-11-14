@@ -1,0 +1,116 @@
+import { describe, expect, it, vi } from 'vitest'
+import {
+  collectKeyboardInteractiveResponses,
+  isKeyboardInteractivePasswordPrompt,
+  type KeyboardInteractiveSession
+} from './ssh-keyboard-interactive'
+
+function createSession(
+  overrides: Partial<KeyboardInteractiveSession> = {}
+): KeyboardInteractiveSession & { cancelled: { value: boolean } } {
+  const cancelled = { value: false }
+  return {
+    targetId: 'target-1',
+    hostDetail: 'example.com',
+    requestCredential: vi.fn(async () => 'answer'),
+    getCachedPassword: () => null,
+    setCachedPassword: vi.fn(),
+    markCachedPasswordRejected: vi.fn(),
+    markCancelled: () => {
+      cancelled.value = true
+    },
+    isCancelled: () => cancelled.value,
+    state: { passwordAutoAnswered: false },
+    cancelled,
+    ...overrides
+  }
+}
+
+describe('isKeyboardInteractivePasswordPrompt', () => {
+  it('rejects echoed prompts even when they mention a password', () => {
+    expect(isKeyboardInteractivePasswordPrompt({ prompt: 'Password: ', echo: true })).toBe(false)
+  })
+
+  it('rejects one-time password and OTP prompts', () => {
+    expect(isKeyboardInteractivePasswordPrompt({ prompt: 'One-time password:', echo: false })).toBe(
+      false
+    )
+    expect(isKeyboardInteractivePasswordPrompt({ prompt: 'OTP password code:', echo: false })).toBe(
+      false
+    )
+  })
+})
+
+describe('collectKeyboardInteractiveResponses', () => {
+  it('answers a password prompt from the cache without prompting', async () => {
+    const requestCredential = vi.fn(async () => 'unused')
+    const session = createSession({
+      requestCredential,
+      getCachedPassword: () => 'password-123'
+    })
+
+    const responses = await collectKeyboardInteractiveResponses(session, '', [
+      { prompt: 'Password: ', echo: false }
+    ])
+
+    expect(responses).toEqual(['password-123'])
+    expect(requestCredential).not.toHaveBeenCalled()
+    expect(session.state.passwordAutoAnswered).toBe(true)
+  })
+
+  it('re-prompts when the server rejects the auto-answered cached password', async () => {
+    const requestCredential = vi.fn(async () => 'corrected-password')
+    const setCachedPassword = vi.fn()
+    const markCachedPasswordRejected = vi.fn()
+    const session = createSession({
+      requestCredential,
+      getCachedPassword: () => 'stale-password',
+      setCachedPassword,
+      markCachedPasswordRejected,
+      state: { passwordAutoAnswered: true }
+    })
+
+    const responses = await collectKeyboardInteractiveResponses(session, '', [
+      { prompt: 'Password: ', echo: false }
+    ])
+
+    expect(responses).toEqual(['corrected-password'])
+    expect(markCachedPasswordRejected).toHaveBeenCalledTimes(1)
+    expect(requestCredential).toHaveBeenCalledWith('target-1', 'password', 'example.com')
+    expect(setCachedPassword).toHaveBeenCalledWith('corrected-password')
+  })
+
+  it('returns null and marks the session cancelled when the user dismisses a prompt', async () => {
+    const session = createSession({ requestCredential: vi.fn(async () => null) })
+
+    const responses = await collectKeyboardInteractiveResponses(session, '', [
+      { prompt: 'Duo passcode:', echo: false }
+    ])
+
+    expect(responses).toBeNull()
+    expect(session.isCancelled()).toBe(true)
+  })
+
+  it('discards a password resolved after the attempt is cancelled', async () => {
+    let answer: (value: string) => void = () => {}
+    const requestCredential = vi
+      .fn(async () => 'code')
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            answer = resolve
+          })
+      )
+    const setCachedPassword = vi.fn()
+    const session = createSession({ requestCredential, setCachedPassword })
+    const collecting = collectKeyboardInteractiveResponses(session, '', [
+      { prompt: 'Password:', echo: false },
+      { prompt: 'Code:', echo: false }
+    ])
+    session.markCancelled()
+    answer('obsolete-password')
+    expect(await collecting).toBeNull()
+    expect(setCachedPassword).not.toHaveBeenCalled()
+    expect(requestCredential).toHaveBeenCalledTimes(1)
+  })
+})

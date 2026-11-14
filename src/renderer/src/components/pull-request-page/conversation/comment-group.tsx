@@ -13,8 +13,9 @@ import {
   type PRCommentGroup
 } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { MentionOption } from '../page-types'
 import { ConversationCommentCard } from './comment-card'

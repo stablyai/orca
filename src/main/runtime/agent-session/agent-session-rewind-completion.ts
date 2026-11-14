@@ -1,16 +1,16 @@
 import {
   cancelAgentSessionUsageLimitContinue,
   type UsageLimitContinueIdentity
-} from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+} from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionStoreState } from './records/agent-session-store-state'
 import { settleAgentSessionOperationInto } from './ownership/agent-session-operation-admission'
 import {
   agentSessionProviderHandleChainHead,
   appendAgentSessionProviderHandleLink
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
 function rewindProviderChain(

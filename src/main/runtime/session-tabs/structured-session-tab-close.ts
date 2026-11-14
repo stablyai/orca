@@ -4,7 +4,7 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as Browser
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import { OrcaRuntimeWithStructuredSessionTabProjection } from './restored-chat-tab-changes'
-import type { BrowserTabInfo } from '../../../shared/runtime-browser-contracts'
+import type { BrowserTabInfo } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,

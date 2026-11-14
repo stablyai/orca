@@ -4,7 +4,7 @@ import type { AppState } from '@/store/types'
 import type { ActiveWorktreeStateTransition } from '@/store/slices/worktrees/session/worktree-selection-contract'
 import { stampWorktreeVisit } from '@/store/slices/worktrees/session/worktree-visit-recency'
 import { appendHistoryEntry } from '@/store/slices/ui/workspace-navigation-history'
-import { noteUserWorkspaceOpen } from '../../workspace-switch-user-act'
+import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 
 type PreviousActive = { worktreeId: string | null; hostId: ExecutionHostId | null }
 type VisitState = Pick<

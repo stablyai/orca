@@ -1,39 +1,9 @@
-import type { BrowserWindow } from 'electron'
 import type { BrowserCookieImportResult } from '../../../shared/browser-workspace-types'
-import {
-  detectInstalledBrowsers as detectBrowsers,
-  selectBrowserProfile as selectProfile
-} from './sources/browser-cookie-detection'
 import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
-import {
-  pickCookieFile as pickFile,
-  importCookiesFromFile as importFile,
-  type CookieImportOptions
-} from './browser-cookie-import-pipeline'
+import type { CookieImportOptions } from './imports/cookie-import-contracts'
 import { importChromiumCookies } from './chromium/import-cookies'
 import { importCookiesFromFirefox } from './sources/browser-cookie-firefox-import'
 import { importCookiesFromSafari } from './sources/browser-cookie-safari-import'
-export function detectInstalledBrowsers(): DetectedBrowser[] {
-  return detectBrowsers()
-}
-
-export function selectBrowserProfile(
-  browser: DetectedBrowser,
-  profileDirectory: string
-): DetectedBrowser | null {
-  return selectProfile(browser, profileDirectory)
-}
-
-export async function pickCookieFile(parentWindow: BrowserWindow | null): Promise<string | null> {
-  return pickFile(parentWindow)
-}
-
-export async function importCookiesFromFile(
-  filePath: string,
-  targetPartition: string
-): Promise<BrowserCookieImportResult> {
-  return importFile(filePath, targetPartition)
-}
 
 export async function importCookiesFromBrowser(
   browser: DetectedBrowser,

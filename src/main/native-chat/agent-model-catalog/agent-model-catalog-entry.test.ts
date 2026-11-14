@@ -60,10 +60,6 @@ describe('a model whose newer chat listing does not know its efforts', () => {
     expect(merged).not.toHaveProperty('effortsKnown')
   })
 
-  it('stays unknown when no listing knows its menu', () => {
-    expect(model(unknownChat(1), unknownChat(2))).toMatchObject({ effortsKnown: false })
-  })
-
   it('prefers known probe evidence over an older unknown chat offering the configured effort', () => {
     const merged = model(
       listing('probe', 2, menu('low', 'high')),
@@ -74,14 +70,16 @@ describe('a model whose newer chat listing does not know its efforts', () => {
     expect(merged).not.toHaveProperty('defaultEffort')
   })
 
-  it('keeps native suggestions unknown without a known model menu', () => {
+  it('drops an OMP menu an older build borrowed from the running model', () => {
+    const saved = unknownChat(1, menu('low', 'medium', 'max'))
+    expect(agentModelCatalogEntry('omp', 'fp', saved, null, null)?.models[0]).toMatchObject({
+      efforts: [],
+      effortsKnown: false
+    })
+  })
+
+  it('keeps an older unknown menu when the newer listing has none', () => {
     const older = unknownChat(1, menu('low', 'high'))
-    const newer = unknownChat(2, menu('off', 'auto'))
-    for (const discovered of [null, { ...older, origin: 'probe' as const }]) {
-      const merged = agentModelCatalogEntry('omp', 'fp', discovered, newer, null)?.models[0]
-      expect(merged).toMatchObject({ efforts: menu('off', 'auto'), effortsKnown: false })
-      expect(merged).not.toHaveProperty('defaultEffort')
-    }
     expect(model({ ...older, origin: 'probe' }, unknownChat(2))).toMatchObject({
       efforts: menu('low', 'high'),
       effortsKnown: false

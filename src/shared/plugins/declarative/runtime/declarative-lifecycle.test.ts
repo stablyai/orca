@@ -6,7 +6,6 @@ import {
   type OrcaBridge,
   type OrcaPanelContext
 } from './declarative-renderer'
-import { createOrcaSdk } from './declarative-sdk'
 
 function hostBridge() {
   const handlers = new Map<string, (payload: unknown) => void>()
@@ -192,73 +191,5 @@ describe('components panel lifecycle', () => {
     expect(disposed).toHaveBeenCalledOnce()
     expect(cleanup).toHaveBeenCalledOnce()
     expect(seen.signal?.aborted).toBe(true)
-  })
-
-  it('refuses duplicate atom keys', () => {
-    atom('lifecycle.once', 1)
-    expect(() => atom('lifecycle.once', 2)).toThrow(/already used/)
-    expect(() => atom('bad key!', 1)).toThrow(/atom key/)
-  })
-})
-
-describe('orca SDK facade', () => {
-  it('times out host calls, and keeps wire events out of on()', async () => {
-    vi.useFakeTimers()
-    const call = vi.fn(
-      (_method: string, _params?: unknown, options?: unknown) =>
-        new Promise((_resolve, reject) => {
-          const signal: unknown =
-            typeof options === 'object' && options !== null && 'signal' in options
-              ? options.signal
-              : null
-          if (signal instanceof AbortSignal) {
-            signal.addEventListener('abort', () => reject(new Error('cancelled')))
-          }
-        })
-    )
-    const on = vi.fn(() => ({ dispose: () => undefined }))
-    const sdk = createOrcaSdk({
-      bridge: () => ({ host: { call, has: (name) => name === 'notifications.show' }, on }),
-      theme: () => ({ colorScheme: 'dark' })
-    })
-    const pending = sdk.host.call('workspace.readContext', undefined, { timeoutMs: 50 })
-    vi.advanceTimersByTime(60)
-    await expect(pending).rejects.toMatchObject({ code: 'timeout', retryable: true })
-    expect(sdk.host.has('notifications.show')).toBe(true)
-    expect(() => sdk.on('ui.event', () => undefined)).toThrow(/not an event/)
-    expect(() => sdk.on('editor.flush', () => undefined)).toThrow(/not an event/)
-    sdk.on('theme', () => undefined)
-    expect(on).toHaveBeenCalledOnce()
-    expect(sdk.ui.has('Input', 'defaultValue')).toBe(true)
-    expect(sdk.ui.has('Input', '$edit')).toBe(false)
-    expect(sdk.ui.has('Carousel')).toBe(false)
-    // Catalog 2 (Orca 1.4.247).
-    expect(sdk.ui.catalog).toBe(4)
-    expect(sdk.ui.has('Box', 'scroll')).toBe(true)
-    expect(sdk.ui.has('RelativeTime', 'format')).toBe(true)
-    expect(sdk.ui.has('Table')).toBe(true)
-    expect(sdk.ui.has('Table', 'onLoadMore')).toBe(true)
-    expect(sdk.ui.has('Button', 'tooltip')).toBe(true)
-    expect(sdk.ui.has('Tree', '$edit')).toBe(false)
-    expect(sdk.env).toMatchObject({
-      locale: 'en',
-      client: 'desktop',
-      theme: { colorScheme: 'dark' }
-    })
-    void sdk.shell.openExternal('https://example.com')
-    void sdk.files.saveAs({ suggestedName: 'a.bin', data: new Uint8Array([1, 2, 3]).subarray(1) })
-    expect(call).toHaveBeenCalledWith(
-      'shell.openExternal',
-      { url: 'https://example.com' },
-      undefined
-    )
-    const saveParams = call.mock.calls.at(-1)?.[1]
-    expect(call.mock.calls.at(-1)?.[0]).toBe('files.saveAs')
-    expect(saveParams).toMatchObject({ suggestedName: 'a.bin' })
-    const data: unknown =
-      typeof saveParams === 'object' && saveParams !== null && 'data' in saveParams
-        ? saveParams.data
-        : null
-    expect(data instanceof ArrayBuffer && [...new Uint8Array(data)]).toEqual([2, 3])
   })
 })

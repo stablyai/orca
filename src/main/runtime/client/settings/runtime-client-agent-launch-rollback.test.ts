@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import {
   fixture,
   withReopenedProfileStore
-} from '../../../persistence/loading-store/profile-state-delayed-authority-fixture'
+} from '../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
 import {
   agentPermissionChoices,
@@ -21,7 +21,7 @@ vi.mock('../../../ssh/config/ssh-config-parser', () => ({
 vi.mock('../../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
-vi.mock('../../../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: vi.fn(async () => {})
 }))
 

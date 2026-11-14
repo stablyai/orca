@@ -1,4 +1,4 @@
-import type { DeviceStore } from '../device-store/device-store'
+import type { DeviceStore } from '../device-store/device-store-contract'
 import { DEVICE_STORE_MAX_VALUE_LENGTH } from '../device-store/device-store-value-codec'
 import {
   BRIDGE_STORE_READ_REPLY_BUDGET_CHARS,

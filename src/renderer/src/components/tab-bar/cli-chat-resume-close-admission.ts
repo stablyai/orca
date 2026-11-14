@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
 import { structuredChatUnavailableText } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
@@ -7,7 +7,6 @@ import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structur
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { probePtyRunningWork } from '../terminal/pty-running-work-probe'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
@@ -16,18 +15,17 @@ import {
   namesCliConversation
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { CliChatResumeSource } from './cli-chat-resume-source'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'
 import { cliChatResumeClosingPaneKeys } from './cli-chat-resume-close-terminal'
-import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
-import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/cli-conversation-exit-guidance'
 import { structuredLaunchesHoldingIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-holders'
-import {
-  structuredLaunchIdentity,
-  type StructuredLaunchState
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { structuredLaunchIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { CliChatResumeSource } from './cli-chat-resume-source'
+import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-state-store'
 
 /** keep: the agent quit, so the terminal stays; close: continuing stops the pane's agent;
  *  ask: the pane runs another job, so the terminal's own running-process prompt asks. */
@@ -161,9 +159,9 @@ export async function admitCliChatResumeClose(
     toast.error(structuredChatUnavailableText(support.reason))
     return null
   }
-  // Closing is irreversible: a host that could not say whether it checked the other writers has
-  // not admitted it.
-  if (support.kind !== 'admitted' || support.writers === 'unknown') {
+  // A host that could not say whether it checked the other writers still lets the switch go on:
+  // the create judges them again.
+  if (support.kind !== 'admitted') {
     throw new Error('chat unavailable')
   }
   const permission = await readStructuredChatHostPermissionVerdict(target, agent)

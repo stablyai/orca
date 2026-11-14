@@ -2,13 +2,13 @@ import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import { effectiveServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-effective-tier'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import { effectiveServiceTier } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-tier'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import {
   CODEX_DEFAULT_SERVICE_TIER,
@@ -101,40 +101,28 @@ export type CodexModelCatalogListing = {
   listedServiceTiers?: readonly string[]
 }
 
-export async function fetchCodexModelCatalogListing(input: {
-  connection: Pick<CodexAppServerConnection, 'request'>
-  timeoutMs?: number
-  deadlineMs?: number
-  cwd?: string
-  operation?: StructuredAgentResolutionOperation
-}): Promise<CodexModelCatalogListing> {
-  const deadline = Math.min(
-    input.operation?.deadline ?? Infinity,
-    input.deadlineMs === undefined ? Infinity : Date.now() + input.deadlineMs
-  )
-  const remainingTimeout = (): number | undefined => {
-    assertStructuredAgentResolutionCurrent(input.operation)
-    if (!Number.isFinite(deadline)) {
-      return input.timeoutMs
-    }
-    const remaining = deadline - Date.now()
-    if (remaining <= 0) {
-      throw new Error('codex model listing deadline exceeded')
-    }
-    return Math.min(remaining, input.timeoutMs ?? remaining)
-  }
-  const parsedModels: AgentSessionModelOption[] = []
+export type CodexModelPages = {
+  models: AgentSessionModelOption[]
+  /** False when a page was malformed, a row unreadable, or the page cap cut the listing short. */
+  complete: boolean
+}
+
+/** Pages `model/list` (hidden rows excluded) through any transport's request. */
+export async function listCodexModelPages(
+  request: (params: Record<string, unknown>) => Promise<unknown>
+): Promise<CodexModelPages> {
+  const models: AgentSessionModelOption[] = []
+  const seen = new Set<string>()
   let cursor: string | null = null
   let complete = true
   for (let page = 0; page < MAX_MODEL_PAGES; page += 1) {
     const response = record(
-      await input.connection.request(
-        'model/list',
-        { limit: MODEL_PAGE_LIMIT, includeHidden: false, ...(cursor ? { cursor } : {}) },
-        { timeoutMs: remainingTimeout() }
-      )
+      await request({
+        limit: MODEL_PAGE_LIMIT,
+        includeHidden: false,
+        ...(cursor ? { cursor } : {})
+      })
     )
-    assertStructuredAgentResolutionCurrent(input.operation)
     if (!Array.isArray(response?.data)) {
       complete = false
     }
@@ -144,8 +132,9 @@ export async function fetchCodexModelCatalogListing(input: {
       if (!parsed && record(row)?.hidden !== true) {
         complete = false
       }
-      if (parsed && !parsedModels.some((model) => model.id === parsed.id)) {
-        parsedModels.push(parsed)
+      if (parsed && !seen.has(parsed.id)) {
+        seen.add(parsed.id)
+        models.push(parsed)
       }
     }
     if (
@@ -160,6 +149,45 @@ export async function fetchCodexModelCatalogListing(input: {
       break
     }
   }
+  return { models, complete: complete && cursor === null }
+}
+
+export async function fetchCodexModelCatalogListing(input: {
+  connection: Pick<CodexAppServerConnection, 'request'>
+  timeoutMs?: number | null
+  deadlineMs?: number
+  cwd?: string
+  operation?: StructuredAgentResolutionOperation
+  publish?: (listing: CodexModelCatalogListing) => void
+}): Promise<CodexModelCatalogListing> {
+  const deadline = Math.min(
+    input.operation?.deadline ?? Infinity,
+    input.deadlineMs === undefined ? Infinity : Date.now() + input.deadlineMs
+  )
+  const remainingTimeout = (): number | null | undefined => {
+    assertStructuredAgentResolutionCurrent(input.operation)
+    if (!Number.isFinite(deadline)) {
+      return input.timeoutMs
+    }
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) {
+      throw new Error('codex model listing deadline exceeded')
+    }
+    return Math.min(remaining, input.timeoutMs ?? remaining)
+  }
+  const { models: parsedModels, complete } = await listCodexModelPages((params) =>
+    input.connection
+      .request('model/list', params, { timeoutMs: remainingTimeout() })
+      .then((response) => {
+        assertStructuredAgentResolutionCurrent(input.operation)
+        return response
+      })
+  )
+  assertStructuredAgentResolutionCurrent(input.operation)
+  if (parsedModels.length === 0) {
+    return { models: [], complete: false }
+  }
+  input.publish?.({ models: parsedModels, complete: false })
   const configured = await readCodexConfiguredLaunchDefaults(
     input.connection,
     remainingTimeout(),
@@ -168,7 +196,7 @@ export async function fetchCodexModelCatalogListing(input: {
   assertStructuredAgentResolutionCurrent(input.operation)
   return {
     models: applyCodexConfiguredLaunchDefaults(parsedModels, configured),
-    complete: complete && cursor === null && configured !== null,
+    complete: complete && configured !== null,
     ...(configured
       ? {
           configured: {

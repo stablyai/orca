@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
-import type { AcpAgentError } from '../acp-errors'
+import type { AcpAgentError } from '../transport/acp-errors'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
+import { OPENCODE_CHILD_SESSION_CAPABILITY, openCodeChildUpdate } from './opencode-child-sessions'
 
 // Normalize rawOutput.metadata to the shared stdout/exitCode fields.
 const commandRawOutputSchema = z.looseObject({
@@ -102,8 +103,16 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 export const OPENCODE_ACP_DIALECT: AcpDialect = {
-  clientCapabilities: { elicitation: { form: {} } },
+  clientCapabilities: {
+    elicitation: { form: {} },
+    _meta: { [OPENCODE_CHILD_SESSION_CAPABILITY]: true }
+  },
+  childSessionStop: {
+    supported: (initialized) => initialized.agentCapabilities?.sessionCapabilities?.close != null
+  },
   effortChangesModel: true,
+  linksFileMentions: true,
   normalizeToolUpdate,
+  notification: openCodeChildUpdate,
   promptFailure
 }

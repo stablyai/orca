@@ -3,19 +3,17 @@ import type {
   AsyncProfileStateAuthority,
   ProfileStateDomainReplacement,
   ProfileStateMaintenance
-} from '../loading-store/profile-state-authority'
-import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
-import { runProfileStateBackupWorker } from './profile-state-backup-worker'
-import { quarantineProfileStateDatabase } from './profile-state-database-quarantine'
-import {
-  ProfileStateWriteWorkerClient,
-  ProfileStateWriterError,
-  type ProfileStateWriterInitialization
-} from './profile-state-writer-worker-client'
+} from '../loading-store/profile-writing/profile-state-authority'
+import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
+import { runProfileStateBackupWorker } from './backup/profile-state-backup-worker'
+import { quarantineProfileStateDatabase } from './recovery/profile-state-database-quarantine'
+import { ProfileStateWriteWorkerClient } from './writer/profile-state-writer-worker-client'
+import { ProfileStateWriterError } from './writer/profile-state-writer-errors'
+import type { ProfileStateWriterInitialization } from './writer/profile-state-writer-protocol'
 import {
   ProfileStateWriterReopenPolicy,
   reportTerminalReopenFailure
-} from './profile-state-writer-reopen-policy'
+} from './writer/profile-state-writer-reopen-policy'
 
 export type ProfileStateWorkerAuthorityOptions = {
   workerPath?: string
@@ -133,16 +131,17 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     return this.backups.drain()
   }
 
-  close(): Promise<void> {
+  /** By default a graceful shutdown, which also brings the downgrade copy current. */
+  close(options: { refreshLegacyDocuments?: boolean } = {}): Promise<void> {
     this.cancelIdleStop()
     this.writer?.stopAdmission()
-    this.closing ??= this.finishClose()
+    this.closing ??= this.finishClose(options.refreshLegacyDocuments !== false)
     return this.closing
   }
 
   async pauseForMaintenance(): Promise<ProfileStateMaintenance> {
     this.assertWritable()
-    await this.close()
+    await this.close({ refreshLegacyDocuments: false })
     const writer = this.writer
     const revision = writer ? writer.acknowledgedRevision : this.requireStoppedRevision()
     let consumed = false
@@ -163,7 +162,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
           await this.writer.ready
           this.assertWritable()
         } catch (error) {
-          await this.close()
+          await this.close({ refreshLegacyDocuments: false })
           throw error
         }
       }
@@ -171,7 +170,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   async quarantineDatabase(quarantineRoot?: string, reason?: string) {
-    await this.close()
+    await this.close({ refreshLegacyDocuments: false })
     return quarantineProfileStateDatabase(
       this.initialization.databasePath,
       this.initialization.profileId,
@@ -180,12 +179,12 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     )
   }
 
-  private async finishClose(): Promise<void> {
+  private async finishClose(refreshLegacyDocuments: boolean): Promise<void> {
     this.backups.stop()
     // A stop already under way owns the writer; let it finish before deciding what is left to close.
     const writerClosed = this.stopping
-      ? this.stopping.then(() => this.writer?.close())
-      : this.writer?.close()
+      ? this.stopping.then(() => this.writer?.close({ refreshLegacyDocuments }))
+      : this.writer?.close({ refreshLegacyDocuments })
     const settled = await Promise.allSettled([this.backups.drain(), writerClosed])
     for (const result of settled) {
       if (result.status === 'rejected') {
@@ -309,7 +308,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       return
     }
     this.stopping = writer
-      .close()
+      .close({ refreshLegacyDocuments: true })
       .then(() => {
         if (this.writer === writer) {
           this.writer = null

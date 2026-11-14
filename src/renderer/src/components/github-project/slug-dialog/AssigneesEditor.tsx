@@ -1,7 +1,7 @@
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { useTranslate } from '@/i18n/use-translate'
 

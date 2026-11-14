@@ -124,8 +124,12 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
   lastSynchronizedLivePtyIds = livePtyIds
   const live = new Set(livePtyIds.filter((id) => id.length > 0))
   let capabilityChanged = false
+  const changedPtyIds = new Set<string>()
   for (const cachedId of authoritativeSnapshotByPtyId.keys()) {
     if (!live.has(cachedId)) {
+      if (authoritativeSnapshotByPtyId.get(cachedId) === true) {
+        changedPtyIds.add(cachedId)
+      }
       capabilityChanged ||= authoritativeSnapshotByPtyId.get(cachedId) === true
       authoritativeSnapshotByPtyId.delete(cachedId)
     }
@@ -150,7 +154,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
     }
     refreshEarliestUnknownCapabilityRetry()
     if (capabilityChanged) {
-      publishTerminalProviderCapabilityChange()
+      publishTerminalProviderCapabilityChange(changedPtyIds)
     }
     return unknownCapabilityRetryDelayMs(nowMs)
   }
@@ -163,7 +167,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
       if (generation !== synchronizationGeneration) {
         // Return zero to preserve a superseded caller’s retry chain; the winning startup pass ignores its return value.
         if (capabilityChanged) {
-          publishTerminalProviderCapabilityChange()
+          publishTerminalProviderCapabilityChange(changedPtyIds)
         }
         return 0
       }
@@ -176,7 +180,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
     if (generation !== synchronizationGeneration) {
       // Supersession must preserve the caller’s timer chain for later slow re-asks.
       if (capabilityChanged) {
-        publishTerminalProviderCapabilityChange()
+        publishTerminalProviderCapabilityChange(changedPtyIds)
       }
       return 0
     }
@@ -190,6 +194,9 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
     for (const id of batch) {
       const authoritative = resolvedById.get(id)
       if (typeof authoritative === 'boolean') {
+        if ((authoritativeSnapshotByPtyId.get(id) === true) !== (authoritative === true)) {
+          changedPtyIds.add(id)
+        }
         capabilityChanged ||=
           (authoritativeSnapshotByPtyId.get(id) === true) !== (authoritative === true)
         authoritativeSnapshotByPtyId.set(id, authoritative)
@@ -202,7 +209,7 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
   }
   refreshEarliestUnknownCapabilityRetry()
   if (capabilityChanged) {
-    publishTerminalProviderCapabilityChange()
+    publishTerminalProviderCapabilityChange(changedPtyIds)
   }
   return unknownCapabilityRetryDelayMs(observedAtMs === undefined ? Date.now() : nowMs)
 }
@@ -213,7 +220,11 @@ export async function refreshTerminalProviderSnapshotCapabilities(
 ): Promise<number | null> {
   lastSynchronizedLivePtyIds = null
   let capabilityChanged = false
+  const changedPtyIds = new Set<string>()
   for (const id of livePtyIds) {
+    if (authoritativeSnapshotByPtyId.get(id) === true) {
+      changedPtyIds.add(id)
+    }
     capabilityChanged ||= authoritativeSnapshotByPtyId.get(id) === true
     authoritativeSnapshotByPtyId.delete(id)
     unknownCapabilityRetryAtByPtyId.delete(id)
@@ -221,7 +232,7 @@ export async function refreshTerminalProviderSnapshotCapabilities(
   }
   refreshEarliestUnknownCapabilityRetry()
   if (capabilityChanged) {
-    publishTerminalProviderCapabilityChange()
+    publishTerminalProviderCapabilityChange(changedPtyIds)
   }
   return synchronizeTerminalProviderSnapshotCapabilities(livePtyIds, resolveCapabilities)
 }

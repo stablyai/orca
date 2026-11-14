@@ -1,8 +1,8 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Editor } from '@tiptap/react'
-import { Copy, ExternalLink, Pencil, Unlink } from 'lucide-react'
+import { Copy, Pencil, Unlink } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -14,13 +14,13 @@ export type LinkBubbleState = {
   href: string
   left: number
   top: number
-  openEnabled: boolean
   copyEnabled: boolean
   label?: string
+  targetRange?: { from: number; to: number }
 }
 
 const LINK_BUBBLE_VIEWPORT_MARGIN = 8
-const LINK_BUBBLE_MAX_WIDTH = 344
+const LINK_BUBBLE_MAX_WIDTH = 320
 const LINK_BUBBLE_HEIGHT = 40
 
 function hasRectChanged(initialRect: DOMRect, nextRect: DOMRect): boolean {
@@ -141,28 +141,44 @@ type RichMarkdownLinkBubbleProps = {
   anchorElement: HTMLElement | null
   linkBubble: LinkBubbleState
   isEditing: boolean
+  readOnly?: boolean
   onDismiss: () => void
   onSave: (href: string) => void
   onRemove: () => void
   onEditStart: () => void
   onEditCancel: () => void
-  onOpen: () => void
   onCopy: () => void
+  onPointerEnter?: React.PointerEventHandler<HTMLDivElement>
+  onPointerLeave?: React.PointerEventHandler<HTMLDivElement>
   ownerId?: string
   portalToDocument?: boolean
+}
+
+function selectLinkBubbleUrlText(event: React.MouseEvent<HTMLSpanElement>): void {
+  const selection = event.currentTarget.ownerDocument.getSelection()
+  if (!selection) {
+    return
+  }
+  event.preventDefault()
+  const range = event.currentTarget.ownerDocument.createRange()
+  range.selectNodeContents(event.currentTarget)
+  selection.removeAllRanges()
+  selection.addRange(range)
 }
 
 export function RichMarkdownLinkBubble({
   anchorElement,
   linkBubble,
   isEditing,
+  readOnly = false,
   onDismiss,
   onSave,
   onRemove,
   onEditStart,
   onEditCancel,
-  onOpen,
   onCopy,
+  onPointerEnter,
+  onPointerLeave,
   ownerId,
   portalToDocument = false
 }: RichMarkdownLinkBubbleProps): React.JSX.Element {
@@ -256,9 +272,14 @@ export function RichMarkdownLinkBubble({
       data-rich-markdown-link-bubble=""
       data-rich-markdown-link-bubble-owner={ownerId}
       style={positionStyle}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       onMouseDown={(e) => {
-        // Keep button clicks from blurring the editor while allowing inputs to receive focus.
-        if (!(e.target instanceof HTMLInputElement)) {
+        // Keep button clicks from blurring the editor while allowing inputs and URL text selection.
+        if (
+          !(e.target instanceof HTMLInputElement) &&
+          !(e.target instanceof Element && e.target.closest('[data-rich-markdown-link-url]'))
+        ) {
           e.preventDefault()
         }
       }}
@@ -285,20 +306,19 @@ export function RichMarkdownLinkBubble({
         buttons[(currentIndex + direction + buttons.length) % buttons.length]?.focus()
       }}
     >
-      {isEditing ? (
+      {isEditing && !readOnly ? (
         <LinkEditInput initialHref={linkBubble.href} onSave={onSave} onCancel={onEditCancel} />
       ) : (
         <>
-          <span className="rich-markdown-link-url" title={linkBubble.href}>
-            {linkBubble.href.length > 40 ? `${linkBubble.href.slice(0, 40)}…` : linkBubble.href}
-          </span>
-          <LinkBubbleAction
-            label={t('auto.components.editor.RichMarkdownLinkBubble.bfc813e909', 'Open link')}
-            disabled={!linkBubble.openEnabled}
-            onClick={onOpen}
+          <span
+            className="rich-markdown-link-url"
+            data-rich-markdown-link-url=""
+            tabIndex={-1}
+            title={linkBubble.href}
+            onDoubleClick={selectLinkBubbleUrlText}
           >
-            <ExternalLink size={14} />
-          </LinkBubbleAction>
+            {linkBubble.href}
+          </span>
           <LinkBubbleAction
             label={t('auto.components.editor.RichMarkdownLinkBubble.copyLink', 'Copy link')}
             disabled={!linkBubble.copyEnabled}
@@ -306,7 +326,7 @@ export function RichMarkdownLinkBubble({
           >
             <Copy size={14} />
           </LinkBubbleAction>
-          {linkBubble.kind === 'markdown' ? (
+          {linkBubble.kind === 'markdown' && !readOnly ? (
             <>
               <LinkBubbleAction
                 label={t('auto.components.editor.RichMarkdownLinkBubble.cdfe166f6f', 'Edit link')}

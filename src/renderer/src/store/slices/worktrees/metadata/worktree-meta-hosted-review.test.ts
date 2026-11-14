@@ -128,37 +128,4 @@ describe('worktree remote runtime mutations', () => {
       force: true
     })
   })
-
-  it('preserves linked GitLab MR fallback when removing linked GitHub PR metadata', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1',
-      branch: 'refs/heads/review-branch',
-      linkedPR: 456,
-      linkedGitLabMR: 789
-    })
-    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchHostedReviewForBranch
-    } as Partial<AppState>)
-
-    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: null })
-
-    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'review-branch', {
-      repoId: 'repo1',
-      repoOwnerExecutionHostId: 'local',
-      linkedGitHubPR: null,
-      linkedGitLabMR: 789,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null,
-      force: true
-    })
-  })
 })

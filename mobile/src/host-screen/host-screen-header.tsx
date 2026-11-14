@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, type HostInstance } from 'react-native'
 import {
   CalendarClock,
   ChevronLeft,
@@ -21,12 +21,12 @@ import { useRefreshHint } from '../query/refresh-hint'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useCalmConnectionState } from '../transport/calm-connection-state'
+import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 import {
   isConnectionOutage,
   verdictDisplayLabel,
   type ConnectionVerdict
-} from '../transport/connection-health'
+} from '../transport/connection/connection-health'
 import type { HostScreenController } from './use-host-screen-controller'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
@@ -95,7 +95,7 @@ export function HostScreenHeader({
     onHideSidebar,
     router
   } = controller
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
   const disconnected = connState !== 'connected'

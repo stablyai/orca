@@ -218,7 +218,7 @@ Mobile and desktop talk over a versioned protocol. Because mobile updates lag de
 Constants live in two files (Metro can't resolve outside `mobile/`):
 
 - `src/shared/protocol-version.ts` — `DESKTOP_PROTOCOL_VERSION`, `MIN_COMPATIBLE_MOBILE_VERSION`
-- `mobile/src/transport/protocol-version.ts` — `MOBILE_PROTOCOL_VERSION`, `MIN_COMPATIBLE_DESKTOP_VERSION`
+- `mobile/src/transport/connection/protocol-version.ts` — `MOBILE_PROTOCOL_VERSION`, `MIN_COMPATIBLE_DESKTOP_VERSION`
 
 Today all four are set so `evaluateCompat` always returns `{ kind: 'ok' }` — nothing blocks. The wire format is in place to flip a switch when needed.
 
@@ -240,7 +240,7 @@ Set `MIN_COMPATIBLE_MOBILE_VERSION` (kill-switch) when desktop ships a change th
 
 When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS) or GitHub Releases (Android). When desktop is too old it opens GitHub Releases.
 
-To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
+To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/connection/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
 
 ## Mock Server
 

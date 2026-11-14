@@ -8,7 +8,9 @@ import { collectLinks } from './terminal-link-provider-buffer-fixtures'
 
 const doubles = createTerminalLinkTestDoubles()
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => doubles.storeState } }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: vi.fn(() => null)
+}))
 installTerminalLinkTestEnvironment(doubles)
 
 describe('terminal Markdown destination existence', () => {

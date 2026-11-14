@@ -2,7 +2,7 @@ import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolveCommittedTitleAgentType } from '../../../../lib/pane-agent-evidence'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 
 type CtrlEnterPaneState = {
@@ -26,7 +26,7 @@ export function hasCtrlEnterCsiUAuthorityForPane(
   if (foreground?.routingTrusted === true) {
     return agentAcceptsCtrlEnterCsiU(foreground.agent)
   }
-  const titleAgent = terminalTitle ? resolveCommittedTitleAgentType(terminalTitle) : null
+  const titleAgent = terminalTitle ? resolveExplicitTerminalTitleAgentType(terminalTitle) : null
   if (foreground?.agent != null && foreground.agent !== titleAgent) {
     return false
   }

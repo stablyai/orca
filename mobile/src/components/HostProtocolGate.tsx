@@ -4,8 +4,8 @@ import { useGlobalSearchParams, usePathname } from 'expo-router'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import { firstParam } from '../navigation/route-param-reader'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import { useHostClient } from '../transport/host-client-hooks'
-import { useHostStatusGates } from '../transport/host-status-gates'
+import { useHostClient } from '../transport/connection/host-client-hooks'
+import { useHostStatusGates } from '../transport/connection/host-status-gates'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -133,7 +133,7 @@ const styles = themedStyleSheet(() => ({
     flex: 1
   },
   pendingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgBase,

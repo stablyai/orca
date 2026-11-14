@@ -1,12 +1,16 @@
-import { Fragment } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
-import type { AgentCatalogEntry } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
-import { AgentCatalogRow, type AgentCatalogRowProps } from './AgentCatalogRow'
+import type { AgentCatalogRowProps } from './AgentCatalogRow'
+import { agentCatalogRowInitiallyExpanded } from './agent-catalog-row-expansion'
+import { AgentCatalogRowHost } from './AgentCatalogRowHost'
+import type { AgentCatalogRowHost as RowHost } from './agent-catalog-row-placement'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { SettingsBadge } from '../../form-controls/SettingsFormControls'
-import { SettingsGroupHeader } from '../../section-layout/SettingsGroup'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { AGENTS_INSTALLED_SECTION_ID } from '../agents-search'
 
 export function AgentDetectionCatalog({
@@ -31,6 +35,43 @@ export function AgentDetectionCatalog({
   getRowProps: (agent: AgentCatalogEntry, isDetected: boolean) => AgentCatalogRowProps
 }): React.JSX.Element {
   const t = useTranslate()
+  const installedBody = useRef<HTMLDivElement>(null)
+  const availableBody = useRef<HTMLDivElement>(null)
+  const [hosts] = useState(() => new Map<TuiAgent, RowHost>())
+  const [expandedByAgent, setExpandedByAgent] = useState<Partial<Record<TuiAgent, boolean>>>({})
+  const sections = [
+    { agents: detectedAgents, installed: true },
+    { agents: undetectedAgents, installed: false }
+  ]
+  const rows = sections.flatMap(({ agents, installed }) =>
+    agents.map((agent) => ({ agent, row: getRowProps(agent, installed) }))
+  )
+  const arriving = rows.filter(({ agent }) => !Object.hasOwn(expandedByAgent, agent.id))
+  if (arriving.length > 0) {
+    setExpandedByAgent({
+      ...expandedByAgent,
+      ...Object.fromEntries(
+        arriving.map(({ agent, row }) => [agent.id, agentCatalogRowInitiallyExpanded(row)])
+      )
+    })
+  }
+  useLayoutEffect(() => {
+    for (const { agents, installed } of sections) {
+      const parent = (installed ? installedBody : availableBody).current
+      if (!parent) {
+        continue
+      }
+      let before: HTMLElement | null = null
+      for (const agent of agents.toReversed()) {
+        const host = hosts.get(agent.id)
+        if (!host) {
+          continue
+        }
+        host.place(parent, before)
+        before = host.element
+      }
+    }
+  })
   return (
     <>
       {detectedAgents.length === 0 && !detectionPending && !detectionFailed && (
@@ -45,95 +86,95 @@ export function AgentDetectionCatalog({
         </div>
       )}
 
-      {/* Focusable so "Choose per agent" can move focus here. One keyed list (not one SettingsGroup per
-          section) so a row keeps its state, e.g. expanded setup, when it moves from available to installed. */}
-      <section id={AGENTS_INSTALLED_SECTION_ID} tabIndex={-1} className="scroll-mt-8 outline-none">
-        {[
-          ...detectedAgents.map((agent) => ({ agent, installed: true })),
-          ...undetectedAgents.map((agent) => ({ agent, installed: false }))
-        ].map(({ agent, installed }, index) => {
-          const sectionLength = installed ? detectedAgents.length : undetectedAgents.length
-          const indexInSection = installed ? index : index - detectedAgents.length
-          const firstInSection = indexInSection === 0
-          const lastInSection = indexInSection === sectionLength - 1
-          return (
-            <Fragment key={agent.id}>
-              {firstInSection ? (
-                <SettingsGroupHeader
-                  className={cn('mb-3', index > 0 && 'mt-8')}
+      <section
+        data-agent-inventory-state={
+          detectionFailed ? 'failed' : detectionPending ? 'pending' : 'ready'
+        }
+        id={AGENTS_INSTALLED_SECTION_ID}
+        tabIndex={-1}
+        className="space-y-8 scroll-mt-8 outline-none"
+      >
+        {sections.map(({ agents, installed }) => (
+          <SettingsGroup
+            key={installed ? 'installed' : 'available'}
+            bodyRef={installed ? installedBody : availableBody}
+            className="has-[[data-settings-group-body]:empty]:hidden"
+            scrollLabel={
+              installed
+                ? t('settings.agents.installedRegion', 'Installed agents')
+                : t('settings.agents.availableRegion', 'Agents available to install')
+            }
+            title={
+              installed ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  {t('auto.components.settings.AgentsPane.02e0143be5', 'Installed')}
+                  <SettingsBadge tone="accent">
+                    {agents.length}{' '}
+                    {t('auto.components.settings.AgentsPane.ed3e110e61', 'detected')}
+                  </SettingsBadge>
+                  {activeServerName ? (
+                    <SettingsBadge tone="muted">
+                      {t('auto.components.settings.AgentsPane.03e1a5081a', 'on {{value0}}', {
+                        value0: activeServerName
+                      })}
+                    </SettingsBadge>
+                  ) : null}
+                </span>
+              ) : (
+                <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  {t('auto.components.settings.AgentsPane.e8da2af684', 'Available to install')}
+                  <SettingsBadge tone="muted">
+                    {agents.length} {t('auto.components.settings.AgentsPane.024bd95089', 'agents')}
+                  </SettingsBadge>
+                </span>
+              )
+            }
+            action={
+              installed ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
                   title={
-                    installed ? (
-                      <span className="flex items-center gap-2">
-                        {t('auto.components.settings.AgentsPane.02e0143be5', 'Installed')}
-                        <SettingsBadge tone="accent">
-                          {detectedAgents.length}{' '}
-                          {t('auto.components.settings.AgentsPane.ed3e110e61', 'detected')}
-                        </SettingsBadge>
-                        {activeServerName ? (
-                          <SettingsBadge tone="muted">
-                            {t('auto.components.settings.AgentsPane.03e1a5081a', 'on {{value0}}', {
-                              value0: activeServerName
-                            })}
-                          </SettingsBadge>
-                        ) : null}
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        {t(
-                          'auto.components.settings.AgentsPane.e8da2af684',
-                          'Available to install'
-                        )}
-                        <SettingsBadge tone="muted">
-                          {undetectedAgents.length}{' '}
-                          {t('auto.components.settings.AgentsPane.024bd95089', 'agents')}
-                        </SettingsBadge>
-                      </span>
-                    )
+                    activeServerEnvironmentId
+                      ? t(
+                          'auto.components.settings.AgentsPane.25a41a9aad',
+                          'Re-detect agents installed on this server'
+                        )
+                      : t(
+                          'auto.components.settings.AgentsPane.13647f9f80',
+                          'Re-read your shell PATH and re-detect installed agents'
+                        )
                   }
-                  action={
-                    installed ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        onClick={onRefresh}
-                        disabled={isRefreshing}
-                        title={
-                          activeServerEnvironmentId
-                            ? t(
-                                'auto.components.settings.AgentsPane.25a41a9aad',
-                                'Re-detect agents installed on this server'
-                              )
-                            : t(
-                                'auto.components.settings.AgentsPane.13647f9f80',
-                                'Re-read your shell PATH and re-detect installed agents'
-                              )
-                        }
-                        className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
-                        {isRefreshing
-                          ? t('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
-                          : t('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              ) : null}
-              <div
-                className={cn(
-                  'border-x border-border bg-card/50 px-5',
-                  firstInSection && 'rounded-t-xl border-t',
-                  lastInSection && 'rounded-b-xl border-b shadow-xs'
-                )}
-              >
-                <div className={cn(!firstInSection && 'border-t border-border')}>
-                  <AgentCatalogRow {...getRowProps(agent, installed)} />
-                </div>
-              </div>
-            </Fragment>
-          )
-        })}
+                  className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+                  {isRefreshing
+                    ? t('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
+                    : t('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}
+                </Button>
+              ) : undefined
+            }
+          />
+        ))}
+        {/* A stable portal target preserves drafts and pending writes when a row changes cards. */}
+        {rows.map(({ agent, row }) => (
+          <AgentCatalogRowHost
+            key={agent.id}
+            registry={hosts}
+            row={{
+              ...row,
+              expanded: expandedByAgent[agent.id] ?? false,
+              onExpandedChange: (expanded) =>
+                setExpandedByAgent((previous) => ({
+                  ...previous,
+                  [agent.id]: expanded
+                }))
+            }}
+          />
+        ))}
       </section>
 
       {detectionPending && !detectionFailed && (

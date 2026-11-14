@@ -3,7 +3,7 @@ import type {
   BrowserPasswordSavePrompt,
   BrowserPasswordSavePromptResponse
 } from '../../shared/browser-passwords-types'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import type { BrowserPasswordSucceededLogin } from './browser-password-login-tracker'
 import { decideBrowserPasswordSave } from './browser-password-save-decision'
 import type { BrowserPasswordStore } from './browser-password-store'

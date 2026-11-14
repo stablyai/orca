@@ -1,4 +1,4 @@
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 import type {
   BridgeTerminalKeyId,
   BridgeTerminalToolbar,
@@ -6,7 +6,7 @@ import type {
 } from './bridge/bridge-terminal-key'
 import type { BridgePageGeometry } from './bridge/bridge-page-geometry'
 import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-terminal-output-backlog'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeRefusal } from './bridge/bridge-caps'
 import type {
@@ -168,6 +168,8 @@ export type BridgeHost = {
    * every page older than the frame; the caller then leaves the key to the navigator.
    */
   sendBack: () => boolean
+  /** Tells a page that reads it that the app is leaving the foreground; nothing for older pages. */
+  sendAppInactive: () => void
   // Transfer the session’s Back state on client-driven host rebuild; the mounted page never reclaims it. Ending sessions simply discard it.
   readSessionBack: () => BridgeSessionBack
   dispose: () => void

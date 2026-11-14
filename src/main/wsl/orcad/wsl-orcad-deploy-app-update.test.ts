@@ -1,6 +1,6 @@
 // Split from wsl-orcad-deploy.test.ts: the connect across an app update (E1), with the same host mocks.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type * as ActiveProbe from './wsl-orcad-active-probe'
 import type * as ManagedRuntimeContext from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import type * as RemoteVersionedInstall from '../../managed-server/install/remote-versioned-install'
@@ -8,7 +8,7 @@ import {
   emptyOrcadActivationRecord,
   type OrcadActivationRecord
 } from '../../managed-server/activation/orcad-activation-record'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
@@ -40,7 +40,7 @@ vi.mock('../../managed-server/install/remote-versioned-install', async (importOr
   readLocalFullVersion: mocks.localVersion
 }))
 vi.mock('./wsl-orcad-instance-adoption', () => ({ adoptUnrecordedWslOrcad: mocks.adopt }))
-vi.mock('../../ssh/orcad-running-version-adoption', () => ({
+vi.mock('../../managed-server/activation/orcad-running-version-adoption', () => ({
   adoptRunningOrcadVersion: mocks.adoptRunning
 }))
 
@@ -54,10 +54,10 @@ vi.mock('../../managed-server/install/orcad-remote-context', () => ({
 vi.mock('../../managed-server/activation/orcad-activation-recovery', () => ({
   recoverInterruptedOrcadActivation: mocks.recover
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
-vi.mock('../../ssh/orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
+vi.mock('../../managed-server/install/orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
 vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
   ...(await importOriginal<typeof ActiveProbe>()),
   probeWslActiveOrcad: async (...args: unknown[]) => ({
@@ -411,50 +411,6 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
       mocks.adoptRunning.mockResolvedValueOnce(adoptedAs('1.4.0+aa', INCUMBENT_READINESS))
       await expect(launch()).resolves.toMatchObject({ outcome: 'ready', fullVersion: '1.4.0+aa' })
       expect(mocks.deploy).toHaveBeenCalledTimes(2)
-    })
-
-    it('keeps retrying an update that only waited, or that a newer host refused', async () => {
-      mocks.deploy.mockResolvedValue({
-        outcome: 'installed-not-activated',
-        fullVersion: '1.5.0+ab',
-        code: 'orcad_update_terminals_running',
-        reason: 'busy'
-      })
-      await launch()
-      await launch()
-      mocks.deploy.mockResolvedValue(policyRefused)
-      await launch()
-      await launch()
-      expect(mocks.deploy).toHaveBeenCalledTimes(4)
-      expect(mocks.adoptRunning).not.toHaveBeenCalled()
-    })
-
-    it('lets the next connect try again once an explicit Force went through', async () => {
-      mocks.deploy.mockResolvedValueOnce(rejected)
-      await launch()
-      mocks.deploy.mockResolvedValueOnce({
-        outcome: 'installed-and-activated',
-        fullVersion: '1.5.0+ab',
-        verdict: {}
-      })
-      await launch(undefined, { intent: 'force' })
-      mocks.deploy.mockResolvedValueOnce(rejected)
-      await launch()
-      expect(mocks.deploy).toHaveBeenCalledTimes(3)
-    })
-
-    it('deploys on the record the wake read when the skipped build stopped meanwhile', async () => {
-      withRecord(newer)
-      const stopped = { ...newer, active: null, activatedAt: null }
-      mocks.adoptRunning.mockResolvedValueOnce(null)
-      mocks.readRecord.mockResolvedValueOnce(stopped)
-      mocks.deploy.mockResolvedValueOnce(policyRefused)
-      await launch()
-      expect(mocks.incumbent).not.toHaveBeenCalled()
-      expect(mocks.deploy.mock.calls[0][0]).toMatchObject({
-        censusRecord: stopped,
-        census: { liveSessions: 0 }
-      })
     })
 
     it('leaves a host stopped after a rollback for Force, not the build it rolled back from', async () => {

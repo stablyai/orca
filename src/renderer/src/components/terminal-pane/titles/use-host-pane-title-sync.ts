@@ -2,8 +2,9 @@ import { useEffect } from 'react'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from '../layout/terminal-layout-leaf-traversal'
-import type { TerminalPaneLayoutController } from '../layout/persistence/use-terminal-pane-layout-persistence'
+import '../layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
 
 /** Sync owner-published pane titles while retaining pending local renames until host echo. */
 export function hostPaneTitleUpdates(args: {
@@ -17,7 +18,7 @@ export function hostPaneTitleUpdates(args: {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN && !ptyIds.some((ptyId) => isRemoteRuntimePtyId(ptyId))) {
     return updates
   }
-  const hostLeafIds = new Set(collectLeafIdsInOrder(args.layout.root))
+  const hostLeafIds = new Set(collectLayoutLeafIdsInOrder(args.layout.root))
   for (const pane of args.panes) {
     if (!hostLeafIds.has(pane.leafId)) {
       continue
@@ -31,11 +32,18 @@ export function hostPaneTitleUpdates(args: {
 }
 
 /** Open panes follow pane names the host publishes, not only the ones they opened with. */
-export function useHostPaneTitleSync(controller: TerminalPaneLayoutController): void {
-  const { managerRef, paneLayoutRevision, paneTitlesRef, savedLayout, setPaneTitles } = controller
+export function useHostPaneTitleSync(controller: TerminalPaneMountedController): void {
+  const {
+    terminalManager,
+    managerRef,
+    paneLayoutRevision,
+    paneTitlesRef,
+    savedLayout,
+    setPaneTitles
+  } = controller
   useEffect(() => {
     const manager = managerRef.current
-    if (!manager) {
+    if (!terminalManager || manager !== terminalManager) {
       return
     }
     const updates = hostPaneTitleUpdates({
@@ -60,5 +68,5 @@ export function useHostPaneTitleSync(controller: TerminalPaneLayoutController): 
     // The store already holds the owner's layout, so nothing is persisted or pushed back.
     paneTitlesRef.current = apply(paneTitlesRef.current)
     setPaneTitles(apply)
-  }, [managerRef, paneLayoutRevision, paneTitlesRef, savedLayout, setPaneTitles])
+  }, [terminalManager, managerRef, paneLayoutRevision, paneTitlesRef, savedLayout, setPaneTitles])
 }

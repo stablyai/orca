@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { brotliCompressSync } from 'node:zlib'
 import { installFakeAppEnvironment } from '../../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
@@ -8,7 +9,9 @@ import { MOBILE_WEB_BUNDLE_METHODS } from './mobile-web-bundle'
 import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
-  type MobileWebBundleAsset
+  mobileWebBundleBrotliPath,
+  type MobileWebBundleAsset,
+  type MobileWebBundleCatalog
 } from '../../../../../shared/mobile-web-bundle/manifest-contract'
 
 export const sha256Hex = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
@@ -22,7 +25,8 @@ export function mobileWebBundleFiller(byteLength: number, seed: number): Buffer 
   return bytes
 }
 
-export type SyntheticAsset = { path: string; bytes: Buffer; contentType: string }
+/** `brotli` writes the asset's brotli copy and lists its length, as the shipped build does. */
+export type SyntheticAsset = { path: string; bytes: Buffer; contentType: string; brotli?: boolean }
 
 /** Use synthetic multi-chunk assets because the current builder emits smaller files and CI unit jobs do not build the bundle. */
 function syntheticAssets(seed: number): SyntheticAsset[] {
@@ -49,24 +53,41 @@ export type SyntheticMobileWebBundle = {
   root: string
   buildId: string
   assets: MobileWebBundleAsset[]
+  catalogs: MobileWebBundleCatalog[]
 }
 
 export function writeSyntheticMobileWebBundle(
   root: string,
   seed: number,
-  extraAssets: readonly SyntheticAsset[] = []
+  extraAssets: readonly SyntheticAsset[] = [],
+  localeCatalogs: Readonly<Record<string, Record<string, unknown>>> = {}
 ): SyntheticMobileWebBundle {
   mkdirSync(join(root, 'assets'), { recursive: true })
+  const catalogs = Object.entries(localeCatalogs).map(([locale, catalog]) => {
+    const bytes = Buffer.from(JSON.stringify(catalog), 'utf8')
+    const sha256 = sha256Hex(bytes)
+    const path = `catalogs/${sha256}.json`
+    mkdirSync(join(root, 'catalogs'), { recursive: true })
+    writeFileSync(join(root, path), bytes)
+    return { locale, path, sha256, byteLength: bytes.byteLength }
+  })
   const written = [...syntheticAssets(seed), ...extraAssets]
+  const copies = new Map<string, Buffer>()
   for (const asset of written) {
     writeFileSync(join(root, asset.path), asset.bytes)
+    if (asset.brotli === true) {
+      const copy = brotliCompressSync(asset.bytes)
+      writeFileSync(join(root, mobileWebBundleBrotliPath(asset.path)), copy)
+      copies.set(asset.path, copy)
+    }
   }
   const assets = written
     .map((asset) => ({
       path: asset.path,
       sha256: sha256Hex(asset.bytes),
       byteLength: asset.bytes.byteLength,
-      contentType: asset.contentType
+      contentType: asset.contentType,
+      ...(copies.has(asset.path) ? { brotliByteLength: copies.get(asset.path)?.byteLength } : {})
     }))
     .sort((left, right) => (left.path < right.path ? -1 : 1))
   const buildId = computeMobileWebBundleId(assets)
@@ -81,11 +102,12 @@ export function writeSyntheticMobileWebBundle(
       entrypoint: 'index.html',
       totalBytes: assets.reduce((total, asset) => total + asset.byteLength, 0),
       assets,
-      routes: []
+      routes: [],
+      ...(catalogs.length === 0 ? {} : { catalogs })
     }),
     'utf8'
   )
-  return { root, buildId, assets }
+  return { root, buildId, assets, catalogs }
 }
 
 /** Only the envelope reads runtimeId; bundle methods read directly from this install. */

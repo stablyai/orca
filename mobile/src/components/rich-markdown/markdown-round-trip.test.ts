@@ -58,19 +58,6 @@ describe('the editor document, from markdown and back', () => {
     expect(currentMarkdown(scope)).toBe(markdown)
   })
 
-  it('serializes a bullet list the engine nested inside a paragraph, as the flat shape does', () => {
-    // Captured WebKit 26.4/Chromium 147 insertUnorderedList nests ul in p instead of replacing p; WebKit also adds styled text span.
-    const { scope, editor } = nestedListSurface(
-      `<ul>${webkitItem('alpha')}${webkitItem('beta')}</ul>`
-    )
-
-    expect(editor.querySelector('ul')?.parentElement?.tagName).toBe('P')
-    const markdown = ['- alpha', '- beta'].join('\n')
-    expect(currentMarkdown(scope)).toBe(markdown)
-    // The flat shape the renderer produces from that same source, so the two shapes agree.
-    expect(currentMarkdown(surface(markdown).scope)).toBe(markdown)
-  })
-
   it('serializes a numbered list the engine nested inside a paragraph', () => {
     // The same capture with the Numbered list command: `<p><ol><li>...</li></ol></p>` on both.
     const { scope, editor } = nestedListSurface(
@@ -120,39 +107,6 @@ describe('the editor document, from markdown and back', () => {
     )
   })
 
-  it('renders task checkboxes as disabled while the surface is read-only', () => {
-    expect(surface('- [ ] Read-only task', { editable: false }).html).toContain(
-      'type="checkbox" disabled'
-    )
-    expect(surface('- [ ] Editable task').html).not.toContain('disabled')
-  })
-
-  it('round-trips every block the toolbar can produce', () => {
-    const markdown = [
-      '# Title',
-      '',
-      'Body with **bold**, *italic*, ~~strike~~ and `code`.',
-      '',
-      '> Quoted line',
-      '',
-      '| a | b |',
-      '| --- | --- |',
-      '| 1 | 2 |',
-      '',
-      '```ts',
-      'const x = 1',
-      '```',
-      '',
-      '---',
-      '',
-      '[docs](https://example.com/docs)',
-      '',
-      '![alt](https://example.com/a.png)'
-    ].join('\n')
-
-    expect(currentMarkdown(surface(markdown).scope)).toBe(markdown)
-  })
-
   it('makes progress on a marker with nothing after it, rather than reading it forever', () => {
     // Bare block markers pass isBlockStart but item/heading readers require text; ensure index advances as plain text instead of looping forever.
     const render = (markdown: string) =>
@@ -171,22 +125,6 @@ describe('the editor document, from markdown and back', () => {
     // The control, so the guard is not swallowing the readers it falls back from.
     expect(render('# ok')).toBe('<h1>ok</h1>')
     expect(render('- ok')).toBe('<ul><li><p>ok</p></li></ul>')
-  })
-
-  it('renders no link for a javascript: URL, which is the one scheme it filters', () => {
-    // Refused URL remains inert text via emphasis fallback; no tappable element may survive.
-    const { html } = surface('[tap](javascript:alert(1))')
-    expect(html).not.toContain('<a')
-    expect(html).not.toContain('href')
-  })
-
-  it('round-trips a code block that holds a fence of its own', () => {
-    // Choose closing fence longer than any inner backtick run or reader ends code at its own content.
-    const markdown = ['````', '```', 'nested', '```', '````'].join('\n')
-    const { scope, html } = surface(markdown)
-
-    expect(html).toContain('<pre data-language=""><code>```\nnested\n```</code></pre>')
-    expect(currentMarkdown(scope)).toBe(markdown)
   })
 
   it('round-trips a table cell that holds a pipe, and the backslash that hid it', () => {

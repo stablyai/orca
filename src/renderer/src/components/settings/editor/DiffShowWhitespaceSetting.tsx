@@ -1,3 +1,4 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -16,9 +17,10 @@ export function DiffShowWhitespaceSetting({
   const t = useTranslate()
   return (
     <SearchableSetting
+      id={GENERAL_SETTING_ANCHORS.diffWhitespace}
       title={t(
-        'auto.components.settings.GeneralEditorSettingsSection.f1b3ceeb98',
-        'Diff Show Whitespace'
+        'auto.components.settings.GeneralEditorSettingsSection.0971ef5c63',
+        'Diff show whitespace'
       )}
       description={t(
         'auto.components.settings.GeneralEditorSettingsSection.94a479cef3',
@@ -30,8 +32,8 @@ export function DiffShowWhitespaceSetting({
       <div className="min-w-0 flex-1 space-y-0.5">
         <Label>
           {t(
-            'auto.components.settings.GeneralEditorSettingsSection.f1b3ceeb98',
-            'Diff Show Whitespace'
+            'auto.components.settings.GeneralEditorSettingsSection.0971ef5c63',
+            'Diff show whitespace'
           )}
         </Label>
         <p className="text-xs text-muted-foreground">
@@ -43,8 +45,8 @@ export function DiffShowWhitespaceSetting({
       </div>
       <SettingsSegmentedControl
         ariaLabel={t(
-          'auto.components.settings.GeneralEditorSettingsSection.f1b3ceeb98',
-          'Diff Show Whitespace'
+          'auto.components.settings.GeneralEditorSettingsSection.0971ef5c63',
+          'Diff show whitespace'
         )}
         value={settings.diffShowWhitespace ? 'on' : 'off'}
         onChange={(option) => updateSettings({ diffShowWhitespace: option === 'on' })}

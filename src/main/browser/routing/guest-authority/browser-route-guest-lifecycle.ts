@@ -1,5 +1,7 @@
+import type { BrowserRouteWebContentsRegistryDependencies } from './browser-route-webcontents-registry-dependencies'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import type { WebContents } from 'electron'
 import {
   browserRoutePageKey,
@@ -170,4 +172,39 @@ export function retireBrowserRouteGuest(input: {
     input.revokeUnregistered(input.state)
   }
   return isRouteGuestDestroyed(input.state.guest) ? 'retired' : 'retiring'
+}
+
+export function retireBrowserRouteGuestPage(
+  state: BrowserRouteGuestState,
+  dependencies: BrowserRouteWebContentsRegistryDependencies,
+  revoke: () => void
+): void {
+  if (state.retirementRequested) {
+    return
+  }
+  state.retirementRequested = true
+  state.navigationGranted = false
+  // Fence popups before the logical retirement round trip.
+  state.popups?.closeAll()
+  const registration = state.registration
+  const pageAuthority = state.pageAuthority
+  if (!registration || pageAuthority === null) {
+    revoke()
+    return
+  }
+  let started = false
+  try {
+    started = dependencies.retirePreparedPage({
+      partition: registration.partition,
+      browserPageId: registration.browserPageId,
+      pageHostGeneration: registration.pageHostGeneration,
+      rendererWebContentsId: registration.rendererWebContentsId,
+      pageAuthority
+    })
+  } catch {
+    // Exact guest stays revoked even if logical retirement cannot start.
+  }
+  if (!started) {
+    revoke()
+  }
 }

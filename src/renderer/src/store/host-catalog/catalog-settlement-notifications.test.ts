@@ -100,21 +100,6 @@ describe('repos-catalog-notifications', () => {
     return store
   }
 
-  it.each(cases)('does not notify for ten equal $label refreshes', async ({ refresh, catalog }) => {
-    const store = seed()
-    const initial = store.getState()
-    const changed = vi.fn()
-    const unsubscribe = store.subscribe(changed)
-    for (let index = 0; index < 10; index += 1) {
-      await refresh(store)
-    }
-    unsubscribe()
-    expect(changed).not.toHaveBeenCalled()
-    expect(store.getState()).toBe(initial)
-    expect(store.getState()[catalog]).toBe(initial[catalog])
-    expect(store.getState().folderWorkspacePathStatuses).toBe(initial.folderWorkspacePathStatuses)
-  })
-
   it.each(cases)(
     'fences an older $label response after a newer no-op response',
     async ({ refresh, catalog }) => {

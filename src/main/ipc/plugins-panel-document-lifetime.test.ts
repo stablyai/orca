@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
 import type { Store } from '../persistence/loading-store/store'
-import { PluginContentVerifier } from '../plugins/plugin-content-integrity'
-import type { ValidDiscoveredPlugin } from '../plugins/plugin-discovery'
+import { PluginContentVerifier } from '../plugins/artifacts/plugin-content-integrity'
+import type { ValidDiscoveredPlugin } from '../plugins/discovery/plugin-discovery'
 import { PluginPanelController } from '../plugins/panels/plugin-panel-controller'
 import type { PluginService } from '../plugins/plugin-service'
 
@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
 }))
 
 // The real guest session needs Electron; these cases pin ownership, which guests do not change.
-vi.mock('../plugins/panels/plugin-frame-guest-sessions', () => ({
+vi.mock('../plugins/panels/guest-isolation/plugin-frame-guest-sessions', () => ({
   bindPluginFrameGuests: () => {},
   clearPluginFrameStorage: async () => {},
   preparePluginFrameGuest: async () => guestSetup.result

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import type { OrcadStdioBridge } from '../../ssh/orcad-stdio-bridge'
+import type { OrcadStdioBridge } from './orcad-stdio-bridge'
 import { OrcadStdioBridgePortForwardProvider } from './orcad-stdio-bridge-provider'
 import { spawnLocalBridgeChannel, startEchoServer } from './orcad-stdio-bridge-test-channel'
 import { ORCAD_WINDOWS_HOST_SCRIPT } from '../host-state/orcad-windows-host-script'

@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { readAgentStateJsonFileSync } from '../../codex/configuration/agent-state-file-reader'
-import { writeFileAtomically } from '../../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { getOrcaUserDataPath } from '../../codex/configuration/homes/codex-home-paths'
 
 /**

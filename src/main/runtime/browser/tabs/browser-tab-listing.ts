@@ -1,4 +1,4 @@
-import type { BrowserTabInfo } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
 
 /** A browser tab as the tab bar shows it, whether or not its page has loaded. */

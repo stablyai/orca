@@ -1,11 +1,14 @@
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import { buildActivityEvents, createActivityEventBuildCache } from './activity-event-builder'
-import { freshActivityLiveAgentState } from './activity-event-state'
+import { buildActivityEvents } from './activity-event-builder'
+import { createActivityEventBuildCache } from '@/components/activity/activity-event-build-cache'
+import { freshActivityLiveAgentState, isRunningActivityState } from './activity-event-state'
 import {
-  useAgentPaneThreadStoreData,
-  type AgentPaneThreadsStoreData
+  useAgentPaneThreadsDefaultHostId,
+  useAllAgentPaneThreadStoreData,
+  type AgentPaneThreadsStoreData,
+  type AllAgentPaneThreadsStoreData
 } from './use-agent-pane-thread-store-data'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
 import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
@@ -32,6 +35,86 @@ const EMPTY_ACTIVITY_BUILD: ReturnType<typeof buildActivityEvents> = {
   events: [],
   liveAgentByPaneKey: {},
   paneEntryByPaneKey: {}
+}
+
+/** Every Activity thread before any view filter: store data to events and threads. */
+export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: boolean } = {}): {
+  storeData: AllAgentPaneThreadsStoreData
+  allThreads: AgentPaneThread[]
+} {
+  const storeData = useAllAgentPaneThreadStoreData()
+  // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
+  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const chatNames = useStructuredChatTabNames()
+
+  // Per-hook caches preserve unchanged pane/event/thread identities across status writes, including repeated StrictMode/deferred builds.
+  const eventBuildCacheRef = useRef<ReturnType<typeof createActivityEventBuildCache>>(undefined!)
+  eventBuildCacheRef.current ??= createActivityEventBuildCache()
+  const threadReuseCacheRef = useRef<ReturnType<typeof createAgentPaneThreadReuseCache>>(undefined!)
+  threadReuseCacheRef.current ??= createAgentPaneThreadReuseCache()
+
+  const {
+    events: allEvents,
+    liveAgentByPaneKey,
+    paneEntryByPaneKey
+  } = useMemo(
+    () => {
+      const now = Date.now()
+      if (
+        badgeOnly &&
+        Object.keys(storeData.migrationUnsupportedByPtyId).length === 0 &&
+        !Object.values(storeData.agentStatusByPaneKey).some((entry) =>
+          freshActivityLiveAgentState(entry, now)
+        )
+      ) {
+        eventBuildCacheRef.current.panes.clear()
+        eventBuildCacheRef.current.tabs = undefined
+        return EMPTY_ACTIVITY_BUILD
+      }
+      // Global history caps affect live-thread unread and search state.
+      return buildActivityEvents(
+        {
+          chatNames,
+          agentStatusByPaneKey: storeData.agentStatusByPaneKey,
+          runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
+          migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
+          retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
+          tabsByWorktree: storeData.tabsByWorktree,
+          ptyIdsByTabId: storeData.ptyIdsByTabId,
+          unifiedTabsByWorktree: storeData.activityTabs,
+          worktreeMap: storeData.worktreeMap,
+          repoMap: storeData.repoMap,
+          repos: storeData.repos,
+          resolveWorktree: storeData.getKnownWorktreeById,
+          acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
+          activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
+          // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
+          now
+        },
+        eventBuildCacheRef.current
+      )
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [storeData, agentStatusEpoch, chatNames, badgeOnly]
+  )
+
+  const allThreads = useMemo(
+    () =>
+      buildAgentPaneThreads(
+        {
+          events: badgeOnly
+            ? allEvents.filter((event) => liveAgentByPaneKey[event.entry.paneKey])
+            : allEvents,
+          liveAgentByPaneKey,
+          paneEntryByPaneKey,
+          generatedTitlesEnabled: storeData.generatedTitlesEnabled
+        },
+        threadReuseCacheRef.current
+      ),
+    [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled, badgeOnly]
+  )
+
+  return { storeData, allThreads }
 }
 
 /** Shared Activity/sidebar pipeline: store data to events, threads, filters and groups. */
@@ -83,74 +166,11 @@ export function useAgentPaneThreads(args: {
         : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     [runtimeEnvironments, runtimeStatusByEnvironmentId]
   )
-  const storeData = useAgentPaneThreadStoreData()
-  // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const chatNames = useStructuredChatTabNames()
-
-  // Per-hook caches preserve unchanged pane/event/thread identities across status writes, including repeated StrictMode/deferred builds.
-  const eventBuildCacheRef = useRef<ReturnType<typeof createActivityEventBuildCache>>(undefined!)
-  eventBuildCacheRef.current ??= createActivityEventBuildCache()
-  const threadReuseCacheRef = useRef<ReturnType<typeof createAgentPaneThreadReuseCache>>(undefined!)
-  threadReuseCacheRef.current ??= createAgentPaneThreadReuseCache()
-
-  const {
-    events: allEvents,
-    liveAgentByPaneKey,
-    paneEntryByPaneKey
-  } = useMemo(
-    () => {
-      const now = Date.now()
-      if (
-        badgeOnly &&
-        Object.keys(storeData.migrationUnsupportedByPtyId).length === 0 &&
-        !Object.values(storeData.agentStatusByPaneKey).some((entry) =>
-          freshActivityLiveAgentState(entry, now)
-        )
-      ) {
-        eventBuildCacheRef.current.panes.clear()
-        return EMPTY_ACTIVITY_BUILD
-      }
-      // Global history caps affect live-thread unread and search state.
-      return buildActivityEvents(
-        {
-          chatNames,
-          agentStatusByPaneKey: storeData.agentStatusByPaneKey,
-          runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
-          migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
-          retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
-          tabsByWorktree: storeData.tabsByWorktree,
-          unifiedTabsByWorktree: storeData.activityTabs,
-          worktreeMap: storeData.worktreeMap,
-          repoMap: storeData.repoMap,
-          repos: storeData.repos,
-          resolveWorktree: storeData.getKnownWorktreeById,
-          acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
-          activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
-          // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
-          now
-        },
-        eventBuildCacheRef.current
-      )
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storeData, agentStatusEpoch, chatNames, badgeOnly]
-  )
-
-  const allThreads = useMemo(
-    () =>
-      buildAgentPaneThreads(
-        {
-          events: badgeOnly
-            ? allEvents.filter((event) => liveAgentByPaneKey[event.entry.paneKey])
-            : allEvents,
-          liveAgentByPaneKey,
-          paneEntryByPaneKey,
-          generatedTitlesEnabled: storeData.generatedTitlesEnabled
-        },
-        threadReuseCacheRef.current
-      ),
-    [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled, badgeOnly]
+  const { storeData: unscopedStoreData, allThreads } = useAllAgentPaneThreads({ badgeOnly })
+  const defaultHostId = useAgentPaneThreadsDefaultHostId()
+  const storeData = useMemo(
+    () => ({ ...unscopedStoreData, defaultHostId }),
+    [unscopedStoreData, defaultHostId]
   )
 
   const selectedPaneKeyIsLive =
@@ -201,12 +221,15 @@ export function useAgentPaneThreads(args: {
     const normalizedQuery = isActivitySearchQueryTooLarge(deferredQuery)
       ? null
       : deferredQuery.trim().toLowerCase()
-    let matchesSearchQuery: ReturnType<typeof createActivityThreadSearchMatcher> | undefined
+    const matchesSearchQuery =
+      normalizedQuery === null ? null : createActivityThreadSearchMatcher(normalizedQuery)
     return scopeVisibleThreads.filter((thread) => {
-      // Why: keep the just-selected thread visible after auto-mark-read flips it to read, else unread-only mode makes the clicked row vanish from the list.
+      // Keep live agents and the selected row visible after marking read; migration blocks are unavailable.
       if (
         readFilter === 'unread' &&
         !thread.unread &&
+        (!isRunningActivityState(thread.currentAgentState) ||
+          thread.migrationUnsupportedPtyId !== undefined) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false
@@ -219,11 +242,7 @@ export function useAgentPaneThreads(args: {
       ) {
         return false
       }
-      if (normalizedQuery === null) {
-        return false
-      }
-      matchesSearchQuery ??= createActivityThreadSearchMatcher(normalizedQuery)
-      return matchesSearchQuery(thread)
+      return matchesSearchQuery !== null && matchesSearchQuery(thread)
     })
   }, [
     scopeVisibleThreads,

@@ -9,7 +9,7 @@ import type { NativeChatContextMenuTarget } from './native-chat-context-menu-tar
 import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
 
 function copyText(text: string): void {
-  // Best-effort, as the hover copy buttons are: the clipboard can reject when unfocused.
+  // Best-effort, as the row Copy buttons are: the clipboard can reject when unfocused.
   window.api.ui.writeClipboardText(text).catch(() => {})
 }
 

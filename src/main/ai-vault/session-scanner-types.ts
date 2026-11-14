@@ -59,6 +59,8 @@ export type AiVaultScanOptions = {
   limitPerAgent?: number
   // Include sessions for these workspace paths beyond the recency cap (AI_VAULT_SCOPE_CWD_SOURCES).
   scopePaths?: readonly string[]
+  // Return only scopePaths sessions, skipping the global recency pass (Workspace and Project).
+  scopeOnly?: boolean
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
   signal?: AbortSignal
@@ -86,6 +88,17 @@ export type SessionFileCandidate = {
   antigravityHistoryPath?: string
 }
 
+// Pass-local wrapper; only its original physical candidates may reach parsers or IPC.
+export type SessionFileChoice = SessionFileCandidate & {
+  alternatives?: readonly SessionFileCandidate[]
+}
+
+export function physicalSessionCandidates(
+  choice: SessionFileChoice
+): readonly SessionFileCandidate[] {
+  return choice.alternatives ?? [choice]
+}
+
 export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
@@ -97,11 +110,13 @@ export type SessionFileDiscovery = {
 }
 
 export type SessionParseResult = {
+  sourceFailed?: boolean
   session: AiVaultSession | null
   issue: AiVaultScanIssue | null
 }
 
 export type ResumableParseFinalizeOptions = {
+  signal?: AbortSignal
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
 }

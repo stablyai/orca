@@ -12,12 +12,11 @@ import {
 } from 'react'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { useAppStore } from '@/store'
-import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
+import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserLoadError,
   BrowserViewportPresetId
 } from '../../../../../shared/browser-workspace-types'
-import { getBrowserDisplayTitle } from '../describe-page/browser-page-url-display'
 import {
   EMPTY_BROWSER_ANNOTATIONS,
   type BrowserOverlayViewport
@@ -34,7 +33,6 @@ import type {
 export function useBrowserPageWebviewLifecycle({
   browserTabId,
   browserTabUrl,
-  browserTabLoading,
   browserTabLoadError,
   workspaceId,
   worktreeId,
@@ -114,7 +112,6 @@ export function useBrowserPageWebviewLifecycle({
   const guestRecoveryPendingRef = useRef(false)
   const validateVisibleGuestRegistrationRef = useRef<() => void>(() => {})
   const wasPaintableForGuestValidationRef = useRef(isPaintable)
-  const browserTabLoadingRef = useRef(browserTabLoading)
   const inputLockedRef = useRef(inputLocked)
   const faviconUrlRef = useRef<string | null>(faviconUrl)
   const initialBrowserUrlRef = useRef(browserTabUrl)
@@ -137,7 +134,6 @@ export function useBrowserPageWebviewLifecycle({
   const invalidatePendingCaptureRef = useRef(cancelPendingBrowserCapture)
 
   useLayoutEffect(() => {
-    browserTabLoadingRef.current = browserTabLoading
     inputLockedRef.current = inputLocked
     viewportPresetIdRef.current = viewportPresetId
     isActiveRef.current = isActive
@@ -145,7 +141,6 @@ export function useBrowserPageWebviewLifecycle({
     invalidatePendingCaptureRef.current = cancelPendingBrowserCapture
     isPaintableRef.current = isPaintable
   }, [
-    browserTabLoading,
     cancelPendingBrowserCapture,
     inputLocked,
     isActive,
@@ -178,27 +173,6 @@ export function useBrowserPageWebviewLifecycle({
     onSetUrlRef.current = onSetUrl
     addBrowserHistoryEntryRef.current = addBrowserHistoryEntry
   }, [onSetUrl, onUpdatePageState, addBrowserHistoryEntry, onSetUrlRef, onUpdatePageStateRef])
-
-  const syncNavigationState = useCallback(
-    (webview: Electron.WebviewTag): void => {
-      try {
-        // Reconcile parked guests only for known navigations; attach-time loading transients must not flash the indicator.
-        const loading = browserTabLoadingRef.current ? webview.isLoading() : undefined
-        onUpdatePageStateRef.current(browserTabId, {
-          title: getBrowserDisplayTitle(
-            webview.getTitle(),
-            webview.getURL() || browserTabUrlRef.current
-          ),
-          ...(loading === undefined ? {} : { loading }),
-          canGoBack: webview.canGoBack(),
-          canGoForward: webview.canGoForward()
-        })
-      } catch {
-        // Guest getters can reject until attachment finishes.
-      }
-    },
-    [browserTabId, browserTabUrlRef, onUpdatePageStateRef]
-  )
 
   const syncBrowserAnnotationViewportBridge = useCallback((): void => {
     const state = useAppStore.getState()
@@ -252,7 +226,6 @@ export function useBrowserPageWebviewLifecycle({
       onUpdatePageStateRef,
       setGuestRecoveryGeneration,
       focusAddressBarNow,
-      syncNavigationState,
       syncBrowserAnnotationViewportBridge,
       faviconUrlRef,
       addressBarInputRef,
@@ -280,7 +253,6 @@ export function useBrowserPageWebviewLifecycle({
     createBrowserTab,
     focusAddressBarNow,
     focusWebviewNow,
-    syncNavigationState,
     syncBrowserAnnotationViewportBridge
   ])
 

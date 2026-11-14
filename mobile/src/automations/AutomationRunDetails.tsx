@@ -7,7 +7,7 @@ import { getAutomationRunContent } from '../../../src/shared/automations/history
 import { mobileSessionRouteTarget } from '../session/mobile-session-route'
 import { hostStackRouteHref } from '../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { AutomationButton, AutomationMetadata } from './AutomationControls'
 import {
   automationDate,

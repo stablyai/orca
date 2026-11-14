@@ -114,6 +114,7 @@ export function dictationMountAdapters(
               heldAudio,
               isActive: () => true,
               transcriptSoFar: new chunks.MobileDictationTranscriptSoFar(),
+              stopAtAudioLimit: () => {},
               failActiveDictation: (id: string, error: unknown) => {
                 failures.push(error instanceof Error ? error.message : String(error))
                 effect('dictation-failed', { id })

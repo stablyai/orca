@@ -8,7 +8,7 @@ import type { ProviderTimelineEvent } from '../../native-chat/agent-session-time
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import { AcpHistoryJournalOverlay, type AcpHistoryItem } from './acp-history-journal-overlay'
 import {
@@ -16,7 +16,7 @@ import {
   type AcpHistoryTurnIdentity,
   type AcpIdentifiedHistoryTurn
 } from './acp-history-replay'
-import { AcpTimelineTranslator } from '../acp-timeline-translator'
+import { AcpTimelineTranslator } from '../timeline/acp-timeline-translator'
 
 /** The chat a replay belongs to. */
 export type AcpHistoryScope = {
@@ -41,7 +41,7 @@ export function translateHistoryTurn(
   turn: AcpIdentifiedHistoryTurn,
   check: () => void = () => {}
 ): AcpHistoryItem[] {
-  const overlay = new AcpHistoryJournalOverlay('history-snapshot')
+  const overlay = new AcpHistoryJournalOverlay()
   const translator = new AcpHistoryTranslator({
     sessionId: scope.providerSessionId,
     dialect: scope.dialect,

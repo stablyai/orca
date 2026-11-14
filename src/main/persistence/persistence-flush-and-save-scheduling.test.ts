@@ -16,7 +16,7 @@ import { makeTerminalTab, TEST_LEAF_1 } from './persistence-session-fixtures'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { _resetTracerForTests } from '../observability/tracer'
-import { _resetPtyBindingSpanSamplingForTests } from './loading-store/pty-binding-span'
+import { _resetPtyBindingSpanSamplingForTests } from './loading-store/terminal-bindings/pty-binding-span'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -190,7 +190,7 @@ describe('Store', () => {
     })
   })
 
-  it('keeps GitHub cache sidecars scoped to explicit profile data files', async () => {
+  it('keeps the GitHub cache scoped to explicit profile data files', async () => {
     const profileADir = join(testState.dir, 'profiles', 'a')
     const profileBDir = join(testState.dir, 'profiles', 'b')
     const profileADataFile = join(profileADir, 'orca-data.json')
@@ -204,12 +204,12 @@ describe('Store', () => {
     initDataPath()
     const profileAStore = createSqliteTestStore(Store, { dataFile: profileADataFile })
     profileAStore.setGitHubCache({ pr: { 'o/r#a': { fetchedAt: 10 } as never }, issue: {} })
-    profileAStore.flush()
+    await profileAStore.flushPendingOrThrowAsync()
 
     const profileBStore = createSqliteTestStore(Store, { dataFile: profileBDataFile })
     expect(profileBStore.getGitHubCache().pr['o/r#a']).toBeUndefined()
     profileBStore.setGitHubCache({ pr: { 'o/r#b': { fetchedAt: 20 } as never }, issue: {} })
-    profileBStore.flush()
+    await profileBStore.flushPendingOrThrowAsync()
 
     const restartedProfileA = createSqliteTestStore(Store, { dataFile: profileADataFile })
     const restartedProfileB = createSqliteTestStore(Store, { dataFile: profileBDataFile })

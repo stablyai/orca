@@ -1,18 +1,20 @@
 import { presentAgentLaunchTab } from '@/lib/agent-session/launch/pane/agent-launch-tab-presentation'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
-import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
-import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
+import { resolveTerminalTabPtyOwnership } from '@/lib/workspace/tabs/terminal-tab-for-pty-id'
+import {
+  dispatchTerminalPaneSplitRequest,
+  queueTerminalPaneSplitRequest
+} from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
-import { singlePaneLayoutSnapshot } from '@/store/terminals/terminal-single-pane-layout'
-import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
-import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
+import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
+import { verifyTerminalRevealIdentity } from '@/lib/workspace/tabs/terminal-reveal-identity'
+import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
 import { tryMakePaneKey } from './agent-status-routing'
 import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane/agent-launch-pane-closes'
-import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
-import { useAppStore } from '../../store'
+import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
+import { useAppStore } from '../../store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   activateExistingLeafInLayout,
@@ -189,9 +191,26 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             }
             if (splitFromLeafId) {
               // Runtime splits already use their parent paneKey; reuse the tab rather than minting a colliding ID.
-              store.updateTabPtyId(tab.id, ptyId)
               const existingLayout = store.terminalLayoutsByTabId?.[tab.id]
-              const sourcePtyId = existingLayout?.ptyIdsByLeafId?.[splitFromLeafId]
+              const detail: SplitTerminalPaneDetail = {
+                tabId: tab.id,
+                worktreeId,
+                paneRuntimeId: -1,
+                direction: splitDirection ?? 'horizontal',
+                sourceLeafId: splitFromLeafId,
+                sourcePtyId: existingLayout?.ptyIdsByLeafId?.[splitFromLeafId],
+                telemetrySource: splitTelemetrySource,
+                newLeafId: leafId,
+                ptyId,
+                ...(shouldActivate ? {} : { activate: false })
+              }
+              const targetMounted = hasRegisteredRuntimeTerminalTab(tab.id, worktreeId)
+              if (!targetMounted) {
+                // Hold the cold tab through PTY adoption before topology changes can mount it.
+                queueTerminalPaneSplitRequest(detail)
+                requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
+              }
+              store.updateTabPtyId(tab.id, ptyId)
               store.setTabLayout(
                 tab.id,
                 addSplitLeafToLayout(
@@ -204,21 +223,9 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                   shouldActivate
                 )
               )
-              window.dispatchEvent(
-                new CustomEvent<SplitTerminalPaneDetail>(SPLIT_TERMINAL_PANE_EVENT, {
-                  detail: {
-                    tabId: tab.id,
-                    worktreeId,
-                    paneRuntimeId: -1,
-                    direction: splitDirection ?? 'horizontal',
-                    sourceLeafId: splitFromLeafId,
-                    sourcePtyId,
-                    telemetrySource: splitTelemetrySource,
-                    newLeafId: leafId,
-                    ptyId
-                  }
-                })
-              )
+              if (targetMounted) {
+                dispatchTerminalPaneSplitRequest(detail)
+              }
             } else {
               const paneTitle = ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : title
               // Why: CLI/runtime PTYs emit hook events before the tab mounts, so the leaf must exist in layout for paneKey validation.
@@ -280,31 +287,6 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         }
       }
     )
-  )
-
-  // Why: background-mount a mobile-subscribed tab's PTY without navigating the desktop (STA-1840).
-  unsubs.push(
-    window.api.ui.onRequestTerminalTabMount(({ worktreeId, tabId, ptyId }) => {
-      if (!worktreeId) {
-        return
-      }
-      // Why: synthetic pty handles need persisted-tab resolution; a miss must not mount every saved tab in a hidden worktree.
-      const mount = planMobileTerminalTabMount(
-        useAppStore.getState(),
-        {
-          worktreeId,
-          ...(tabId ? { tabId } : {}),
-          ...(ptyId ? { ptyId } : {})
-        },
-        {
-          isTabMounted: (tabId, targetWorktreeId) =>
-            hasRegisteredRuntimeTerminalTab(tabId, targetWorktreeId)
-        }
-      )
-      if (mount) {
-        requestBackgroundTerminalWorktreeMount(mount)
-      }
-    })
   )
 
   // Why: CLI-driven terminal creation waits for the tabId reply so it can hand the caller a usable handle immediately.

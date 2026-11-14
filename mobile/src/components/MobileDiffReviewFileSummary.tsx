@@ -6,7 +6,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
+import type { MobileDiffReviewQueueItem } from '../source-control/review/mobile-diff-review-queue'
 import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
 type Props = {

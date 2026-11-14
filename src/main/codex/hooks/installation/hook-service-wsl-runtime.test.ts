@@ -4,8 +4,8 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../../../agent-hooks/installer-utils'
-import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../../../agent-hooks/hook-stdin-contract'
+import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../../../agent-hooks/installation/scripts/hook-stdin-contract'
 import { readHookTrustEntries, type CodexTrustEntry } from '../../trust/toml/config-toml-trust'
 import {
   computeCodexTrustKey as computeTrustKey,

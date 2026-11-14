@@ -1,4 +1,5 @@
-import { openTestChats } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-open-test-chats.test-support'
+import { openTestChats } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-open-test-chats.test-fixture'
+import { abandonStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-abandon.test-fixture'
 import { describe, expect, it } from 'vitest'
 import {
   hostTestState,
@@ -6,17 +7,20 @@ import {
   attach,
   seedApproval,
   envelope,
-  CALLER
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+  CALLER,
+  hostTestRecoveryCapsuleSettled
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW as NOW,
   hostTestMessage
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from './agent-session-record-store-test-harness'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
@@ -86,6 +90,9 @@ describe('prompt delivery after host recovery', () => {
     }
     unsubscribe()
     await original.closeDismissals()
+    await abandonStructuredAgentSessionHost(h.host)
+    // A restarted process starts after the old one's capsule writes finished or died with it.
+    await hostTestRecoveryCapsuleSettled()
     const restarted = new RuntimeMobileNotificationController()
     restarted.configureDismissalStore(h.root)
     const events: MobileNotificationEvent[] = []
@@ -96,7 +103,7 @@ describe('prompt delivery after host recovery', () => {
       logger: h.log.logger,
       store,
       adapter: adapter(),
-      journalDatabase: openTestJournalHostDatabase(h.root),
+      journalDatabase: await openTestAgentSessionDatabase(h.root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async () => ({ outcome: 'pid-absent' }),

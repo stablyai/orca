@@ -15,7 +15,7 @@ import type {
   SkillUploadBeginRequest,
   SkillUploadChunkRequest
 } from '../../../../shared/skill-upload-session-contract'
-import type { SkillUploadSessionService } from '../../../skills/skill-upload-session-service'
+import type { SkillUploadSessionService } from '../../../skills/runtime-upload/skill-upload-session-service'
 import type { RuntimeSkillCommands } from './runtime-skill-command-surface'
 import type {
   SkillCloudDownloadGrant,
@@ -26,7 +26,7 @@ import type {
   SkillCloudPublishResult,
   SkillCloudVersion
 } from '../../../../shared/skill-cloud-contract'
-import type { SkillCloudService } from '../../../skills/skill-cloud-service'
+import type { SkillCloudService } from '../../../skills/cloud/skill-cloud-package-service'
 import type {
   ManagedSkillInstall,
   SkillInstallPreview,
@@ -35,7 +35,7 @@ import type {
   SkillInstallResult,
   SkillRemoveRequest
 } from '../../../../shared/skill-install-contract'
-import type { SkillProviderRootOverrides } from '../../../skills/skill-provider-destinations'
+import type { SkillProviderRootOverrides } from '../../../skills/providers/skill-provider-destinations'
 import type {
   BundledSkillAutoUpdateRequest,
   LocalBundledSkillExecuteRequest,

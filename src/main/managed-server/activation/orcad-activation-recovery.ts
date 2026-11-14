@@ -14,16 +14,16 @@ import {
   withStaleOrcadActivationRecoveryLock
 } from './orcad-activation-lock'
 import { RemoteInstallLockBusyError } from '../install/remote-install-lock'
-import { ensureOrcadSlotServing, resolveOrcadSlotIdentity } from '../../ssh/orcad-recovery-slot'
+import { ensureOrcadSlotServing, resolveOrcadSlotIdentity } from './orcad-recovery-slot'
 import { reconcileOrcadDecommission } from '../lifecycle/orcad-decommission-recovery'
 import {
   recoverOrcadIncumbent,
   type OrcadIncumbentRecoveryOptions
-} from '../../ssh/orcad-incumbent-recovery'
+} from './orcad-incumbent-recovery'
 import type { OrcadManagedRefusal } from '../../../shared/orcad-managed-runtime'
-import { resumeInterruptedOrcadCandidate } from '../../ssh/orcad-interrupted-candidate-resume'
+import { resumeInterruptedOrcadCandidate } from './orcad-interrupted-candidate-resume'
 import { errorMessage } from '../../../shared/error-message'
-import { isOrcadLaunchFailure } from '../../ssh/orcad-launch-failure'
+import { isOrcadLaunchFailure } from './orcad-launch-failure'
 
 export type OrcadActivationRecoveryResult =
   | { outcome: 'none' }

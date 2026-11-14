@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { AutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
 import { compareAutomationRunsNewestFirst } from '../../../src/shared/automations/history/automation-run-cursor'
 import { automationRunsRead } from './automation-operations'

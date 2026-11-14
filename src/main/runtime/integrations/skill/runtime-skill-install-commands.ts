@@ -1,11 +1,11 @@
 import '../../../../shared/git/admission/git-admission-state'
-import '../../../crash-reporting/main-process-lifecycle-identity'
+import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { join } from 'node:path'
 import { detectInstalledAgentsWithShellPathHydration } from '../../../preflight/installed-agent-detection'
-import { executeSkillInstallRequest } from '../../../skills/skill-install-request-service'
-import { executeSkillBundleInstallRequest } from '../../../skills/skill-bundle-install-request-service'
-import { SkillUploadSessionService } from '../../../skills/skill-upload-session-service'
-import { SKILL_UPLOAD_STAGING_ROOT_NAME } from '../../../skills/skill-upload-staging-ownership'
+import { executeSkillInstallRequest } from '../../../skills/install/skill-install-request'
+import { executeSkillBundleInstallRequest } from '../../../skills/install/skill-bundle-install-request'
+import { SkillUploadSessionService } from '../../../skills/runtime-upload/skill-upload-session-service'
+import { SKILL_UPLOAD_STAGING_ROOT_NAME } from '../../../skills/runtime-upload/skill-upload-staging-ownership'
 import type {
   SkillBundleInstallProgress,
   SkillBundleInstallRequest,

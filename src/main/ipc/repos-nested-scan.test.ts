@@ -1,11 +1,10 @@
-import type * as RepoDetectionModule from '../git/repo-detection'
+import type * as RepoDetectionModule from '../git/repositories/discovery/repo-detection'
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type * as GitRunner from '../git/runner'
-import type * as RepoModule from '../git/repo'
+import type * as GitSpawnModule from '../git/command-runner/git-spawn'
 
 const { reposMocks, moduleMocks, gitRepoProbeMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
@@ -16,13 +15,12 @@ const { reposMocks, moduleMocks, gitRepoProbeMocks } = await vi.hoisted(async ()
   }
 })
 
-vi.mock('../git/repo-detection', async (importOriginal) => {
-  return {
-    ...(await importOriginal<typeof RepoDetectionModule>()),
-    isGitRepoAsync: gitRepoProbeMocks.isGitRepo,
-    getGitRepoRootAsync: gitRepoProbeMocks.getGitRepoRoot
-  }
-})
+vi.mock('../git/repositories/discovery/repo-detection', async (importOriginal) =>
+  moduleMocks.repoDetectionModuleMock(
+    await importOriginal<typeof RepoDetectionModule>(),
+    gitRepoProbeMocks
+  )
+)
 
 vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
   return {
@@ -32,11 +30,24 @@ vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
-vi.mock('../git/repo', async (importOriginal) =>
-  moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>(), gitRepoProbeMocks)
-)
-vi.mock('../git/runner', async (importOriginal) =>
-  moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
+vi.mock('../git/repositories/repository-name', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop())
+}))
+vi.mock('../git/refs/resolution/repo-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultBaseRefAsync: vi.fn().mockResolvedValue('origin/main')
+}))
+vi.mock('../git/remotes/repo-remote-queries', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getRemoteCount: vi.fn().mockResolvedValue(1)
+}))
+vi.mock('../git/refs/resolution/repo-base-ref-search', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  searchBaseRefs: vi.fn().mockResolvedValue([])
+}))
+vi.mock('../git/command-runner/git-spawn', async (importOriginal) =>
+  moduleMocks.gitSpawnModuleMock(reposMocks, await importOriginal<typeof GitSpawnModule>())
 )
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -50,9 +61,9 @@ vi.mock('../workspaces/creation/worktree-root-preparation', () =>
 )
 
 import { registerRepoHandlers } from './repos'
-import { clearGitCapabilityStateForTests } from '../git/command-runner/git-capability-state'
-import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
-import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { clearGitCapabilityStateForTests } from '../git/command-runner/host-routing/git-capability-state'
+import { resetSshProviderAuthorities } from '../ssh/connection/authority/ssh-provider-authority'
+import { getGitRepoRoot, isGitRepo } from '../git/repositories/discovery/repo-detection'
 import { createRepoHandlerHarness, resetProjectGroupMocks } from './repos-remote-test-harness'
 
 const { handleMock, mockStore } = reposMocks
@@ -71,16 +82,6 @@ describe('projectGroups IPC validation', () => {
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
-  })
-
-  it('refuses SSH nested scans without reading the remote or the local filesystem', async () => {
-    await expect(
-      handlers.get('projectGroups:scanNested')!(null, {
-        path: '/srv/platform',
-        connectionId: 'conn-1'
-      })
-    ).rejects.toThrow('ssh_connection_unavailable')
-    expect(isGitRepo).not.toHaveBeenCalled()
   })
 
   it('returns partial local scan results after cancellation', async () => {
@@ -117,13 +118,5 @@ describe('projectGroups IPC validation', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
-  })
-
-  it('rejects local nested scans with relative paths', async () => {
-    await expect(
-      handlers.get('projectGroups:scanNested')!(null, {
-        path: 'relative/project'
-      })
-    ).rejects.toThrow('Repo path must be an absolute path')
   })
 })

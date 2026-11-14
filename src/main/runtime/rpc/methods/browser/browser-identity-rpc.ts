@@ -1,9 +1,9 @@
 import { defineMethod } from '../../core'
-import { BrowserIdentitySet } from '../../../../../shared/rpc-contract/browser-identity-params'
+import { BrowserIdentitySet } from '../../../../../shared/rpc-contract/browser/browser-identity-params'
 import {
   getBrowserIdentityModeStatus,
   setBrowserIdentityMode
-} from '../../../../browser/identity/browser-identity-mode-store'
+} from '../../../../browser/identity/mode/browser-identity-mode-store'
 
 // Process identity has no BrowserTarget and does not drive pages, so keep it separate from browser-core.
 export const BROWSER_IDENTITY_METHODS = [

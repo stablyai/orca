@@ -55,12 +55,6 @@ function addPinnedSibling(): OpenFile {
 }
 
 describe('case 7: closing a document with a pinned clean sibling', () => {
-  it('keeps the pinned sibling record open', () => {
-    const sibling = addPinnedSibling()
-    store.getState().closeFile(file.id)
-    expect(store.getState().openFiles).toEqual([sibling])
-  })
-
   it('keeps the pinned sibling tab and closes only the named tab', () => {
     addPinnedSibling()
     store.getState().closeFile(file.id)

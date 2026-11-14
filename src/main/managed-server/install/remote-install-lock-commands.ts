@@ -1,7 +1,10 @@
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import { powerShellCommand } from '../../ssh/ssh-remote-powershell'
+import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
-import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import {
+  isWindowsRemoteHost,
+  type RemoteHostPlatform
+} from '../../ssh/remote-host/ssh-remote-platform'
 import * as exitedOwnerSteal from './remote-install-lock-exited-owner'
 
 const INSTALL_LOCK_BOOT_ID_NAME = '.boot-id'

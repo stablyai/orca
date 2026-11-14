@@ -1,6 +1,6 @@
 import type { PathExistenceResult } from '../../../../../shared/file-access/path-existence-batch'
 import { describe, expect, it, vi } from 'vitest'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { openFilePathLinkAtBufferPosition } from './files/terminal-file-link-hit-testing'
 import { openDetectedFilePath } from './files/terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -33,7 +33,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 

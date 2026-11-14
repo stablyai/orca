@@ -7,8 +7,8 @@ import {
   listRegisteredSshTargets,
   SshTargetManagementUnservedError
 } from '../../../../ssh/targets/ssh-target-registry'
-import { isManagedOrcadSshTarget } from '../../../../ssh/connection/ssh-connection-store'
-import { browseSshDirectory } from '../../../../ssh/ssh-remote-directory-browse'
+import { isManagedOrcadSshTarget } from '../../../../ssh/targets/ssh-target-runtime-ownership'
+import { browseSshDirectory } from '../../../../ssh/filesystem/ssh-remote-directory-browse'
 import { defineMethod } from '../../core'
 import {
   getPublicSshError,
@@ -30,7 +30,7 @@ import {
   SshTarget,
   SshTargetAdd,
   SshTargetUpdate
-} from '../../../../../shared/rpc-contract/ssh-params'
+} from '../../../../../shared/rpc-contract/ssh/ssh-params'
 
 // Keep generation optional so older server rows still key by target id.
 function toSshTargetSummary(

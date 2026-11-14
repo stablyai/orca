@@ -1,13 +1,17 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Mock } from 'vitest'
-import { AgentSessionTransitionRecorder } from './agent-session-transition-recorder'
-import type { AgentSessionSink, AgentSessionStatusEvent } from './agent-session-transition-recorder'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+
+import {
+  AgentSessionTransitionRecorder,
+  type AgentSessionSink,
+  type AgentSessionStatusEvent
+} from './agent-session-transition-recorder'
+
 import { StatsCollector } from './collector'
-import { AgentHookServer, _internals } from '../agent-hooks/server'
-import { PANE as STORE_PANE } from '../agent-hooks/server.test-fixtures'
+import { AgentHookServer, _internals } from '../agent-hooks/server/agent-hook-server'
+import { PANE as STORE_PANE } from '../agent-hooks/server/testing/server.test-fixtures'
 
 let userDataDir: string
 

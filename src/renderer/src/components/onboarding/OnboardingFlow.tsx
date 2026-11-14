@@ -1,8 +1,11 @@
 import { OnboardingLanguageSwitcher } from './OnboardingLanguageSwitcher'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
-import { isEditableTarget } from '@/lib/editable-target'
-import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import {
+  getScreenSubmitModifierLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { AgentStep } from './AgentStep'
@@ -16,8 +19,8 @@ import { OnboardingFooter } from './OnboardingFooter'
 import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
 import { useTranslate } from '@/i18n/use-translate'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { useScrollEdgeFades } from '@/lib/list-interaction/use-scroll-edge-fades'
 import { AgentSurfaceStep } from './AgentSurfaceStep'
 import { stepCopy, stepTooltipLabels } from './onboarding-step-copy'
 
@@ -102,7 +105,7 @@ export default function OnboardingFlow({
   }, [requestSkipConfirmation, skipConfirmOpen, languagePickerOpen])
 
   return (
-    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+    <TooltipProvider skipDelayDuration={0}>
       <div
         className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground"
         data-onboarding-overlay

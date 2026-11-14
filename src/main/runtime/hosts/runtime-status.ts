@@ -5,17 +5,17 @@ import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
-} from '../../../shared/browser-runtime-capabilities'
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
   runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from '../browser/installation/runtime-browser-commands-factory'
-import { isBrowserIdentityModeStoreInitialized } from '../../browser/identity/browser-identity-mode-store'
-import { servesLocalWslMigrationSource } from '../../orcad/orcad-migration-wsl-destination'
+import { isBrowserIdentityModeStoreInitialized } from '../../browser/identity/mode/browser-identity-mode-store'
+import { servesLocalWslMigrationSource } from '../../orcad/migration/orcad-migration-wsl-destination'
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
-import { advertisedOrcadMigrationDestinationCapabilities } from '../../orcad/orcad-migration-destination-capabilities'
+import { advertisedOrcadMigrationDestinationCapabilities } from '../../orcad/migration/orcad-migration-destination-capabilities'
 import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../../shared/account-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
@@ -45,7 +45,7 @@ import {
   TERMINAL_PERSISTENCE_UNAVAILABLE_MESSAGE
 } from '../../../shared/runtime-capability-degradation'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../shared/mobile-web-bundle/mobile-web-bundle-capability'
-import { loadBundledMobileWebBundle } from '../rpc/methods/mobile-delivery/bundled-mobile-web-bundle'
+import { getBundledMobileWebBundleRoot } from '../rpc/methods/mobile-delivery/bundled-mobile-web-bundle'
 import { runtimeTerminalDegradation } from '../terminal/launch/native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../../windows/windows-process-table'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../workspaces/creation/worktree-create-idempotency'
@@ -120,8 +120,8 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
       capabilities.push(DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY)
     }
     capabilities.push(...darkSwitchRuntimeCapabilities())
-    // Dev/serve installs may lack out/mobile-web; never advertise downloads this install cannot produce.
-    if (loadBundledMobileWebBundle()) {
+    // Dev/serve installs may lack out/mobile-web; advertise downloads only where the install ships it.
+    if (getBundledMobileWebBundleRoot()) {
       capabilities.push(MOBILE_WEB_BUNDLE_CAPABILITY)
     }
     // Report the actual failure so operators are not told to fix already-correct configuration.

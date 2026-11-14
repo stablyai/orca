@@ -2,9 +2,12 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
-import { isPlainObject, parseHooksJsonText } from '../../agent-hooks/hooks-json-read'
-import { writeHooksJsonAsync } from '../../agent-hooks/hooks-json-write-async'
-import { withManagedHookInstallLock } from '../../agent-hooks/managed-hook-install-lock'
+import {
+  isPlainObject,
+  parseHooksJsonText
+} from '../../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJsonAsync } from '../../agent-hooks/installation/configuration/hooks-json-write-async'
+import { withManagedHookInstallLock } from '../../agent-hooks/installation/locking/managed-hook-install-lock'
 
 /** What Orca replaced in one config dir's settings.json, so turning the sync off can put it back. */
 export type ClaudeThemeOwnership = {

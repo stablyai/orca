@@ -6,6 +6,7 @@ type RegistrationRuntime = Pick<
   | 'subscribeToPtyExit'
   | 'handleMobileSubscribe'
   | 'handleMobileUnsubscribe'
+  | 'holdHeadlessTerminalThroughExit'
 >
 
 /** `ptyExited`: the PTY's exit released the stream, so its last output should still go out. */
@@ -14,11 +15,15 @@ export type TerminalSubscriptionTeardown = (release: { ptyExited: boolean }) => 
 /** One `terminal.subscribe` request, addressable from admission until it is released. */
 export type TerminalSubscriptionRegistration = {
   readonly released: boolean
+  /** Set once the watched PTY exits, even while `publishFirstScreen` holds the release back. */
+  readonly ptyExited: boolean
   /** Aborted once release has torn everything down. */
   readonly signal: AbortSignal
   /** Runs the stream's teardown on release, or now if the registration was already released. */
   setTeardown(teardown: TerminalSubscriptionTeardown): void
   releaseOnPtyExit(ptyId: string): void
+  /** Runs `publish` with a PTY exit's release held until it settles, so the first screen goes out before `end`. */
+  publishFirstScreen(publish: () => Promise<void>): Promise<void>
   addMobilePresence(
     ptyId: string,
     clientId: string,
@@ -51,6 +56,8 @@ export function registerTerminalSubscription({
   let ended = false
   let teardown: TerminalSubscriptionTeardown | null = null
   let ptyExited = false
+  let exitPtyId: string | null = null
+  let publishingFirstScreen = false
   let stopWatchingExit = (): void => {}
   let presence: { ptyId: string; clientId: string } | null = null
 
@@ -105,6 +112,9 @@ export function registerTerminalSubscription({
     get released() {
       return released
     },
+    get ptyExited() {
+      return ptyExited
+    },
     signal: controller.signal,
     setTeardown(nextTeardown) {
       if (released) {
@@ -114,9 +124,12 @@ export function registerTerminalSubscription({
       teardown = nextTeardown
     },
     releaseOnPtyExit(ptyId) {
+      exitPtyId = ptyId
       const unsubscribe = runtime.subscribeToPtyExit(ptyId, () => {
         ptyExited = true
-        release()
+        if (!publishingFirstScreen) {
+          release()
+        }
       })
       if (released) {
         // An already-exited PTY releases synchronously before unsubscribe is available.
@@ -124,6 +137,22 @@ export function registerTerminalSubscription({
         return
       }
       stopWatchingExit = unsubscribe
+    },
+    async publishFirstScreen(publish) {
+      // The exit disposes the PTY's model; hold it so publication can still serialize it.
+      const releaseModel = exitPtyId
+        ? runtime.holdHeadlessTerminalThroughExit?.(exitPtyId)
+        : undefined
+      publishingFirstScreen = true
+      try {
+        await publish()
+      } finally {
+        publishingFirstScreen = false
+        releaseModel?.()
+        if (ptyExited) {
+          release()
+        }
+      }
     },
     async addMobilePresence(ptyId, clientId, viewport) {
       if (released) {

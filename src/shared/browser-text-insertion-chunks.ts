@@ -1,5 +1,4 @@
-import { measureClipboardTextByteLength } from './clipboard-text'
-import { getUtf8ChunkEndIndex } from './utf8-byte-limits'
+import { getUtf8ChunkEndIndex, measureUtf8ByteLength } from './utf8-byte-limits'
 
 export const BROWSER_TEXT_INSERT_CHUNK_BYTES = 64 * 1024
 
@@ -18,7 +17,7 @@ export function* iterateBrowserTextInsertionChunks(
     return
   }
   const normalizedMax = Number.isFinite(maxChunkBytes) && maxChunkBytes > 0 ? maxChunkBytes : 1
-  const measurement = measureClipboardTextByteLength(text, { stopAfterBytes: normalizedMax })
+  const measurement = measureUtf8ByteLength(text, { stopAfterBytes: normalizedMax })
   if (!measurement.exceededLimit) {
     yield text
     return
