@@ -1,6 +1,8 @@
 import { MAX_TIMER_DELAY_MS } from '../timer-delay'
 
 export const AGENT_PROMPT_EFFECT_TIMEOUT_MS = 30_000
+/** How long a fresh launch's brief write may wait for the agent to claim the terminal's foreground. */
+export const FRESH_LAUNCH_FOREGROUND_CLAIM_TIMEOUT_MS = 10_000
 export const ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS = 5_000
 export const ORCHESTRATION_READINESS_TIMEOUT_MS = 60_000
 export const ORCHESTRATION_FEDERATION_ATTACH_GRACE_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 10_000

@@ -1,4 +1,5 @@
 import type { RuntimeTerminalSend } from '../../../../../../../../shared/runtime-terminal-send-contract'
+import { FRESH_LAUNCH_FOREGROUND_CLAIM_TIMEOUT_MS } from '../../../../../../../../shared/orchestration/orchestration-timing-budgets'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import {
@@ -44,6 +45,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   launchedAgent?: string | null
   /** The caller's readiness budget; a structured worker's start counts against it. */
   readinessTimeoutMs?: number
+  /** Absolute end of the caller's readiness budget; a fresh launch's foreground poll must not outlive it. */
+  readinessDeadline?: number
 }): Promise<{
   prompt?: RuntimeTerminalSend['prompt']
   structuredTurnStart?: WorkerTurnStartObservation
@@ -107,7 +110,21 @@ export async function deliverWorkerDispatchPreamble(args: {
     }
   }
   // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
-  const briefGuard = createWorkerBriefWriteGuard(runtime, args.launchedAgent, !!args.launchedAgent)
+  // A fresh launch can reach this write before the agent claims the foreground; wait inside the caller's budget.
+  const briefGuard = createWorkerBriefWriteGuard(
+    runtime,
+    args.launchedAgent,
+    !!args.launchedAgent,
+    {
+      agentForegroundWaitMs: Math.min(
+        args.readinessTimeoutMs ?? FRESH_LAUNCH_FOREGROUND_CLAIM_TIMEOUT_MS,
+        FRESH_LAUNCH_FOREGROUND_CLAIM_TIMEOUT_MS
+      ),
+      ...(args.readinessDeadline === undefined
+        ? {}
+        : { agentForegroundDeadlineMs: args.readinessDeadline })
+    }
+  )
   try {
     const sent = await sendAgentTurn({
       kind: 'terminal',
