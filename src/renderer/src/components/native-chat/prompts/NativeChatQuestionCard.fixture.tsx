@@ -330,3 +330,14 @@ export const narrow = defineFixture({
   width: 400,
   render: () => <FocusedQuestion />
 })
+
+// Answered the first step, then skipped to the last: the footer must still offer Submit.
+export const skippedLastStep = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={2} />,
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[1]?.click()
+    await new Promise(requestAnimationFrame)
+  }
+})
