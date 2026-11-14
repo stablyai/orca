@@ -14,7 +14,7 @@ import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-t
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { extractString } from '../../../shared/trimmed-string'
 import { parseJsonObject } from '../parsing/session-json-object'
-import { recordRefusal, type IssueSink } from './session-scanner-scope-discovery'
+import { recordRefusal, type IssueSink } from '../parsing/session-scan-issues'
 
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
 

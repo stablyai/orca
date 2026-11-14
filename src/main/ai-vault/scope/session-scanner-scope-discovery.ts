@@ -8,16 +8,17 @@ import {
 } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { createAiVaultScopeCwdMatcher } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
-import type {
-  AiVaultAgent,
-  AiVaultScanIssue
-} from '../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseWslUncPath, toWindowsWslUncPathSpellings } from '../../../shared/wsl-paths'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
 import type { FileWithMtime } from '../session-scanner-types'
-import { scanIssueTextFromError } from '../parsing/session-scan-issues'
-import { isMissingTranscriptPathError } from '../discovery/session-path-absence'
+import {
+  recordRefusal,
+  scanIssueTextFromError,
+  type IssueSink
+} from '../parsing/session-scan-issues'
+export { recordRefusal, type IssueSink } from '../parsing/session-scan-issues'
 import { noteAiVaultScanFileFound } from '../scan-lifecycle/ai-vault-scan-progress'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.
@@ -27,22 +28,9 @@ const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
 // Bucket encodings are lossy; retain Claude’s cache and verify other transcripts individually.
 const PROJECT_DIR_CWD_CACHE_MAX = 2048
 const projectDirCwdCache = new Map<string, string>()
-export type IssueSink = (issue: AiVaultScanIssue, error?: unknown) => void
 
 export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
-}
-
-// Report refusals (WSL, permissions) so an unreadable folder or transcript is not mistaken for an empty one.
-export function recordRefusal(
-  issues: IssueSink,
-  path: string,
-  error: unknown,
-  agent: AiVaultAgent
-): void {
-  if (!isMissingTranscriptPathError(error)) {
-    issues({ agent, path, ...scanIssueTextFromError(error) }, error)
-  }
 }
 
 export async function cachedProjectDirCwd(

@@ -1,3 +1,4 @@
+import { createTranscriptReadStream } from './transcript-read-stream'
 import {
   beginTranscriptWholeRead,
   noteTranscriptFsActivity,
@@ -270,7 +271,10 @@ export async function readTranscriptSlice(
   }
 }
 
-export {
-  openTranscriptReadStream,
-  type TranscriptReadStreamOptions
-} from './transcript-read-stream'
+export const openTranscriptReadStream = createTranscriptReadStream({
+  open: openTranscriptFile,
+  read: readTranscriptFile,
+  close: closeTranscriptHandleWithSignal,
+  chunkBytes: WSL_TRANSCRIPT_READ_CHUNK_BYTES
+})
+export type { TranscriptReadStreamOptions } from './transcript-read-stream'

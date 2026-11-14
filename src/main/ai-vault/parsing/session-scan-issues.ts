@@ -1,4 +1,8 @@
-import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { isMissingTranscriptPathError } from '../discovery/session-path-absence'
+import type {
+  AiVaultAgent,
+  AiVaultScanIssue
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultScanIssueText,
   type AiVaultScanIssueText
@@ -43,4 +47,18 @@ export function scanIssueTextFromError(error: unknown): AiVaultScanIssueText {
     return error.text
   }
   return { message: errorMessage(error) }
+}
+
+export type IssueSink = (issue: AiVaultScanIssue, error?: unknown) => void
+
+// Report refusals (WSL, permissions) so an unreadable folder or transcript is not mistaken for an empty one.
+export function recordRefusal(
+  issues: IssueSink,
+  path: string,
+  error: unknown,
+  agent: AiVaultAgent
+): void {
+  if (!isMissingTranscriptPathError(error)) {
+    issues({ agent, path, ...scanIssueTextFromError(error) }, error)
+  }
 }

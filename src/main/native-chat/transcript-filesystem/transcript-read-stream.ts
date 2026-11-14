@@ -5,12 +5,18 @@ import { isWslUncPath } from '../../../shared/wsl-paths'
 import { noteTranscriptFsActivity } from './transcript-fs-observation'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
 import type { WslTranscriptFsTaskPriority } from './wsl-transcript-fs-gate'
-import {
+import type {
   openTranscriptFile,
   readTranscriptFile,
-  closeTranscriptHandleWithSignal,
-  WSL_TRANSCRIPT_READ_CHUNK_BYTES
+  closeTranscriptHandleWithSignal
 } from './wsl-transcript-fs-access'
+
+type TranscriptStreamAccess = {
+  open: typeof openTranscriptFile
+  read: typeof readTranscriptFile
+  close: typeof closeTranscriptHandleWithSignal
+  chunkBytes: number
+}
 
 export type TranscriptReadStreamOptions = {
   start?: number
@@ -20,12 +26,13 @@ export type TranscriptReadStreamOptions = {
 }
 
 async function* gatedChunks(
+  access: TranscriptStreamAccess,
   path: string,
   options: TranscriptReadStreamOptions,
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): AsyncGenerator<Buffer | string> {
-  const handle = await openTranscriptFile(path, priority, signal)
+  const handle = await access.open(path, priority, signal)
   // Decode across chunk boundaries to avoid replacement characters on split codepoints.
   const decoder = options.encoding ? new StringDecoder(options.encoding) : null
   try {
@@ -33,13 +40,13 @@ async function* gatedChunks(
     for (;;) {
       const length =
         options.end === undefined
-          ? WSL_TRANSCRIPT_READ_CHUNK_BYTES
-          : Math.min(WSL_TRANSCRIPT_READ_CHUNK_BYTES, options.end - position + 1)
+          ? access.chunkBytes
+          : Math.min(access.chunkBytes, options.end - position + 1)
       if (length <= 0) {
         break
       }
       const buffer = Buffer.allocUnsafe(length)
-      const { bytesRead } = await readTranscriptFile(
+      const { bytesRead } = await access.read(
         handle,
         path,
         buffer,
@@ -69,22 +76,24 @@ async function* gatedChunks(
     }
   } finally {
     // Readable.destroy calls generator return, closing handles even after aborted head reads.
-    await closeTranscriptHandleWithSignal(handle, path, signal)
+    await access.close(handle, path, signal)
   }
 }
 
-/** Deadline each UNC chunk separately; gate refusal reaches consumers as a stream error. */
-export function openTranscriptReadStream(
-  path: string,
-  options: TranscriptReadStreamOptions,
-  priority: WslTranscriptFsTaskPriority,
-  signal?: AbortSignal
-): Readable {
-  if (!isWslUncPath(path) && !parseSshTranscriptPath(path)) {
-    const stream = createReadStream(path, { ...options, signal })
-    stream.on('data', noteTranscriptFsActivity)
-    stream.pause()
-    return stream
+/** Bind the existing handle operations without a runtime dependency back to the public facade. */
+export function createTranscriptReadStream(access: TranscriptStreamAccess) {
+  return function openTranscriptReadStream(
+    path: string,
+    options: TranscriptReadStreamOptions,
+    priority: WslTranscriptFsTaskPriority,
+    signal?: AbortSignal
+  ): Readable {
+    if (!isWslUncPath(path) && !parseSshTranscriptPath(path)) {
+      const stream = createReadStream(path, { ...options, signal })
+      stream.on('data', noteTranscriptFsActivity)
+      stream.pause()
+      return stream
+    }
+    return Readable.from(gatedChunks(access, path, options, priority, signal))
   }
-  return Readable.from(gatedChunks(path, options, priority, signal))
 }
