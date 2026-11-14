@@ -116,7 +116,7 @@ export async function initializeAcpStructuredSession(
       )
       assertStarting()
       replayed = input.lanes.finishLoad()
-      attaching.translator.finishLoad()
+      attaching.apply(attaching.translator.finishLoad())
     } catch (error) {
       withAcpStartupDiagnostic(error, connection, spec.dialect)
       takeover = acpReopenTakeover(error, resume, {
