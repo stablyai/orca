@@ -35,6 +35,8 @@ import type { ProfileStatePersistenceAuthority } from './profile-writing/profile
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/terminal-history/orcad-shell-history-installer'
 import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store'
+import { ProfileStateSaveIntent } from './profile-writing/profile-state-save-intent'
+import { WorkspaceSessionFieldCapture } from './profile-writing/workspace-session-field-capture'
 
 export type DurableProfileStateMutation<T> = {
   value: T
@@ -79,12 +81,13 @@ export class StoreRuntimeState {
   quitFlushStarted = false
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null
+  readonly workspaceSessionFieldCapture = new WorkspaceSessionFieldCapture()
   lastDurableWriteGeneration = -1
   /** Required durable generation for locally committed migrations; disk-loaded receipts have no entry. */
   readonly orcadMigrationCommitWriteGenerations = new Map<string, number>()
   firstPendingSaveAt: number | null = null
   /** Null requests complete-document fallback. */
-  dirtyProfileStateDomains: Set<string> | null = new Set()
+  dirtyProfileStateDomains: Set<string> | null = new ProfileStateSaveIntent()
   pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
   githubCacheDirty = false
   githubCachePersistedAt = Date.now()

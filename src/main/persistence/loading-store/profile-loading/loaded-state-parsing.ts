@@ -37,6 +37,7 @@ import {
 import { backfillFolderScopeConnectionIds } from '../../restoring-sessions/folder-scope-migration'
 import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
+import { parseProfileStateInput } from './parse-profile-state-input'
 import { normalizeLoadedProfileState } from './normalize-loaded-profile-state'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
@@ -55,6 +56,7 @@ type LoadedStateParsingOperationsRuntime = Pick<
   | 'loadNeedsSave'
   | 'originalExperimentalNativeChat'
   | 'protectedSecrets'
+  | 'profileStateAuthority'
   | 'storageAuthority'
   | 'terminalScrollbackSnapshotStorage'
 >
@@ -90,20 +92,8 @@ export class LoadedStateParsingOperations {
     let chatUiLaunchTipAudience: ChatUiLaunchTipAudience | null = null
     try {
       if (fileExistedOnLoad) {
-        const readStartedAt = performance.now()
-        const raw = parsedInput === undefined ? serialized : undefined
-        if (raw !== undefined) {
-          logStartupMilestone('persistence-read-done', {
-            bytes: Buffer.byteLength(raw),
-            durationMs: Math.round(performance.now() - readStartedAt)
-          })
-          logStartupMilestone('persistence-json-parse-start')
-          parsed = JSON.parse(raw)
-          logStartupMilestone('persistence-json-parse-done')
-        } else {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Legacy partial records enter the existing domain normalizers through this loader type.
-          parsed = parsedInput as PersistedState
-        }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Admitted JSON records enter the existing domain normalizers through this loader type.
+        parsed = parseProfileStateInput(serialized, parsedInput) as LoadedProfileState | undefined
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
         }

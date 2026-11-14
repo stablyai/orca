@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../terminal-authority/orchestration-compatibility-authority'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { mainTerminalSourceInputs } from '../../terminal/surface/pty-pane-query'
@@ -32,12 +33,12 @@ export function watchCrewRuntimeSources(
   const namesByHost = new Map(
     hostIds().map((hostId) => [
       hostId,
-      crewWorkspaceNames(deps.store?.getWorkspaceSession?.(hostId))
+      crewWorkspaceNames(borrowWorkspaceSession(deps.store, hostId))
     ])
   )
   const topology = (id: ReturnType<typeof hostIds>[number]) =>
     mainTerminalSourceInputs(
-      deps.store?.getWorkspaceSession?.(id),
+      borrowWorkspaceSession(deps.store, id),
       runtimeLayoutLoadContext(deps.store, id)
     )
   const topologyByHost = new Map(
@@ -56,7 +57,7 @@ export function watchCrewRuntimeSources(
             wake(new Set(['topology']))
           }
         }
-        const next = crewWorkspaceNames(deps.store?.getWorkspaceSession?.(id))
+        const next = crewWorkspaceNames(borrowWorkspaceSession(deps.store, id))
         if (!isDeepStrictEqual(namesByHost.get(id), next)) {
           namesByHost.set(id, next)
           wake(new Set(['names']))

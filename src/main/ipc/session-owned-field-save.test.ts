@@ -1,0 +1,77 @@
+import { expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { registerSessionHandlers } from './session'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { requireSwitchedOn } from '../runtime/construction/require-sidebar-inputs-enabled'
+import { readRuntimeDesktopSidebarFacts } from '../runtime/sidebar-inputs/sidebar-inputs-feed-domains'
+import { TERMINAL_QUERY_METHODS } from '../runtime/rpc/methods/terminal/terminal-query-methods'
+import { createWorkerMaintenanceFixture } from '../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
+
+const { handlers } = vi.hoisted(() => ({
+  handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
+}))
+vi.mock('electron', () => ({
+  app: { getPath: () => tmpdir(), getName: () => 'orca', getVersion: () => '0.0.0' },
+  BrowserWindow: { fromId: () => null, getAllWindows: () => [] },
+  webContents: { fromId: () => null },
+  safeStorage: { isEncryptionAvailable: () => false },
+  ipcMain: {
+    handle: (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    }
+  }
+}))
+vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
+vi.mock('../ssh/config/ssh-config-parser', () => ({
+  loadUserSshConfig: () => ({ hosts: [] }),
+  sshConfigHostsToTargets: () => []
+}))
+
+it('keeps renderer field saves after runtime startup, sidebar, crew and agent identity reads', async () => {
+  const { store, authority, readState } = await createWorkerMaintenanceFixture()
+  const runtime = new OrcaRuntimeService(store)
+  const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
+  feed.acquire('field-save-test')
+  const unwatch = runtime.watchOrchestrationCrew(() => {})
+  try {
+    registerSessionHandlers(store, runtime)
+    const get = handlers.get('session:get')!
+    const patch = handlers.get('session:patch')!
+    const first = structuredClone(get({}))
+    expect(first).toHaveProperty('tabsByWorktree')
+    patch({}, structuredClone({ activeTabId: 'first' }))
+    await store.flushPendingOrThrowAsync()
+    readRuntimeDesktopSidebarFacts(store, undefined)
+    for (const method of TERMINAL_QUERY_METHODS) {
+      if (method.name === 'terminal.agentId') {
+        await method.handler(
+          { paneKey: 'tab-local:leaf-local', worktreeId: 'repo-local::/fixture/local' },
+          { runtime }
+        )
+      }
+    }
+    await runtime.resolveActiveWorktreeContext()
+    await runtime.listMobileSessionTabs('id:repo-local::/fixture/local')
+    await runtime.listTerminals()
+    const writes = vi.spyOn(authority, 'writePreparedState')
+    structuredClone(get({}))
+    patch({}, structuredClone({ activeTabId: 'second' }))
+    await store.flushPendingOrThrowAsync()
+    expect(writes.mock.calls[0]?.[0]).toMatchObject({
+      replacements: [],
+      patches: [
+        {
+          domain: 'workspaceSession',
+          operations: [{ kind: 'set', path: ['activeTabId'], payload: '"second"' }]
+        }
+      ]
+    })
+    expect(readState().workspaceSession.activeTabId).toBe('second')
+  } finally {
+    unwatch()
+    feed.release('field-save-test')
+  }
+})

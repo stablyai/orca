@@ -1,4 +1,4 @@
-import { splitPaneTitle } from './sender-pane-title'
+import { paneNamingTab, splitPaneTitle } from './sender-pane-title'
 import { senderDispatchLaunch, senderDispatchLaunchReader } from './sender-dispatch-launch'
 // Name another agent from host records when sending on its behalf or listing its worktree.ps row.
 
@@ -50,6 +50,7 @@ type RuntimeSenderNameDeps = {
   getTerminalPaneKey: (handle: string) => string | null
   /** The workspace session this host mirrors. */
   getWorkspaceSession: (worktreeId: string) => MirroredTabs | null | undefined
+  isWorkspaceSessionOwned?: (worktreeId: string) => boolean
   /** The person's "generate tab titles" setting, which decides whether a generated title names a tab. */
   getGeneratedTitlesEnabled: () => boolean
   getAgentStatusSnapshotForPane: (paneKey: string) => readonly SenderHookRow[] | undefined
@@ -139,13 +140,11 @@ export class RuntimeOrchestrationSenderNames {
   agentRowNamer(): (source: AgentRowNamingSource) => string | null {
     // A pass reads the setting and each worktree's session at most once, however many rows it lists.
     let generatedTitlesEnabled: boolean | undefined
-    const sessions = new Map<string, MirroredTabs | null | undefined>()
-    const session: SessionLookup = (worktreeId) => {
-      if (!sessions.has(worktreeId)) {
-        sessions.set(worktreeId, this.deps.getWorkspaceSession(worktreeId))
-      }
-      return sessions.get(worktreeId)
-    }
+    const tabs = captureMirroredTabs(
+      this.deps.getWorkspaceSession,
+      this.deps.isWorkspaceSessionOwned ?? (() => false)
+    )
+    const session = tabs.session
     const chatSources = this.chatSources(session)
     return (source) => {
       const { tabId, worktreeId } = source
@@ -158,7 +157,9 @@ export class RuntimeOrchestrationSenderNames {
         return chat ? chat.ownName || chat.fallback : null
       }
       const record = { worktreeId, tabId, ptyId: source.ptyId ?? null }
-      const pane = this.paneNaming(record, source.paneKey, session)
+      const pane = this.paneNaming(record, source.paneKey, session, tabs.terminalTab, (id) =>
+        tabs.layout(record.worktreeId, id)
+      )
       generatedTitlesEnabled ??= this.deps.getGeneratedTitlesEnabled()
       return pane.tab
         ? getAgentRowConversationName(
@@ -315,7 +316,7 @@ export class RuntimeOrchestrationSenderNames {
         )
     const trackedTitle = record.ptyId ? this.deps.getTrackedTitle(record.ptyId) : null
     return {
-      tab: tab ? { ...tab, title: tab.title ?? '', customTitle: tab.customTitle ?? null } : null,
+      tab: paneNamingTab(tab, this.deps.isWorkspaceSessionOwned?.(record.worktreeId) === true),
       paneTitle:
         trackedTitle ??
         splitPaneTitle(

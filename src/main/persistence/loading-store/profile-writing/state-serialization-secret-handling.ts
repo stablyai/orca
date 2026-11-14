@@ -23,6 +23,12 @@ import {
   type SecretSentinelSubstitution
 } from './secret-sentinel-substitution'
 import type { StoreRuntimeState } from '../store-runtime-state'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import { defineProfileStateOwnValue } from '../../profile-state/documents/profile-state-domain-patches'
+import {
+  capturePreparedProfileStateWrite,
+  type CapturedProfileStateWrite
+} from './profile-state-prepared-write'
 
 /** Domains whose saved form differs from state; whole saves keep this order after the durable spread. */
 const PROJECTED_SAVE_DOMAINS = [
@@ -62,11 +68,51 @@ function withDependentSaveDomains(domains: ReadonlySet<string>): ReadonlySet<str
 
 type StateSerializationSecretHandlingOperationsRuntime = Pick<
   StoreRuntimeState,
-  'protectedSecrets' | 'state' | 'originalExperimentalNativeChat'
+  'protectedSecrets' | 'state' | 'originalExperimentalNativeChat' | 'workspaceSessionFieldCapture'
 >
 
 export class StateSerializationSecretHandlingOperations {
   constructor(private readonly runtime: StateSerializationSecretHandlingOperationsRuntime) {}
+
+  buildPreparedStateWrite(
+    dirtyDomains: ReadonlySet<string> | null,
+    automationRuns?: readonly AutomationRun[]
+  ): CapturedProfileStateWrite {
+    const pendingEncryption = this.runtime.protectedSecrets.hasPendingEncryption()
+    const complete = dirtyDomains === null || dirtyDomains.size === 0 || pendingEncryption
+    let stateToSave: Record<string, unknown>
+    let protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
+    const projection = complete ? this.buildCompleteProjection() : undefined
+    if (projection) {
+      ;({ stateToSave, protectedSecretUpdates } = projection)
+    } else {
+      stateToSave = {}
+      const encrypt = (slot: string, plaintext: string): string => {
+        const encrypted = this.runtime.protectedSecrets.encrypt(slot, plaintext)
+        if (encrypted.retentionUpdate) {
+          protectedSecretUpdates.push(encrypted.retentionUpdate)
+        }
+        return encrypted.blob
+      }
+      for (const domain of withDependentSaveDomains(dirtyDomains ?? new Set())) {
+        if (domain !== 'automationRuns' || automationRuns === undefined) {
+          defineProfileStateOwnValue(stateToSave, domain, this.projectDomainToSave(domain, encrypt))
+        }
+      }
+    }
+    return capturePreparedProfileStateWrite({
+      fields: this.runtime.workspaceSessionFieldCapture,
+      dirtyDomains,
+      stateToSave,
+      complete,
+      pendingEncryption: pendingEncryption || this.runtime.protectedSecrets.hasPendingEncryption(),
+      protectedSecretUpdates,
+      automationRuns,
+      serializeRoot: projection
+        ? () => this.serializeCompleteProjection(projection, true)
+        : undefined
+    })
+  }
 
   getDurableState(): Omit<PersistedState, 'githubCache'> {
     const { githubCache: _memoryOnly, ...durable } = this.runtime.state
@@ -109,29 +155,23 @@ export class StateSerializationSecretHandlingOperations {
     stateHash: string
     protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
   } {
-    // Mint slot UUIDs after user data is captured; ciphertext searches could match user data and hide real changes.
-    const secretSubs: SecretSentinelSubstitution[] = []
-    const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
-    let protectedStorageDegraded = false
-    const encryptToSentinel = (slot: string, plaintext: string): string => {
-      const encrypted = this.runtime.protectedSecrets.encrypt(slot, plaintext)
-      if (encrypted.retentionUpdate) {
-        protectedSecretUpdates.push(encrypted.retentionUpdate)
-      }
-      protectedStorageDegraded ||= encrypted.degraded
-      const { blob, hashValue = plaintext } = encrypted
-      if (blob === plaintext && hashValue === plaintext) {
-        return blob
-      }
-      const sentinel = `orca-secret-slot-${randomUUID()}`
-      secretSubs.push({ sentinel, blob, hashValue })
-      return sentinel
-    }
-    // Clone before encryption to keep in-memory state plaintext.
-    const stateToSave: Record<string, unknown> = { ...this.getDurableState() }
-    for (const domain of PROJECTED_SAVE_DOMAINS) {
-      stateToSave[domain] = this.projectDomainToSave(domain, encryptToSentinel)
-    }
+    return this.serializeCompleteProjection(this.buildCompleteProjection(), serializeDomains)
+  }
+
+  private serializeCompleteProjection(
+    {
+      stateToSave,
+      secretSubs,
+      protectedStorageDegraded,
+      protectedSecretUpdates
+    }: ReturnType<StateSerializationSecretHandlingOperations['buildCompleteProjection']>,
+    serializeDomains: boolean
+  ): {
+    domains?: readonly ProfileStateDomainReplacement[]
+    payload: Buffer
+    stateHash: string
+    protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+  } {
     if (
       serializeDomains &&
       !('toJSON' in stateToSave && typeof stateToSave.toJSON === 'function')
@@ -158,6 +198,33 @@ export class StateSerializationSecretHandlingOperations {
       protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
     )
     return { payload, stateHash, protectedSecretUpdates }
+  }
+
+  private buildCompleteProjection() {
+    // Mint slot UUIDs after user data is captured; ciphertext searches could match user data and hide real changes.
+    const secretSubs: SecretSentinelSubstitution[] = []
+    const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
+    let protectedStorageDegraded = false
+    const encryptToSentinel = (slot: string, plaintext: string): string => {
+      const encrypted = this.runtime.protectedSecrets.encrypt(slot, plaintext)
+      if (encrypted.retentionUpdate) {
+        protectedSecretUpdates.push(encrypted.retentionUpdate)
+      }
+      protectedStorageDegraded ||= encrypted.degraded
+      const { blob, hashValue = plaintext } = encrypted
+      if (blob === plaintext && hashValue === plaintext) {
+        return blob
+      }
+      const sentinel = `orca-secret-slot-${randomUUID()}`
+      secretSubs.push({ sentinel, blob, hashValue })
+      return sentinel
+    }
+    // Clone before encryption to keep in-memory state plaintext.
+    const stateToSave: Record<string, unknown> = { ...this.getDurableState() }
+    for (const domain of PROJECTED_SAVE_DOMAINS) {
+      stateToSave[domain] = this.projectDomainToSave(domain, encryptToSentinel)
+    }
+    return { stateToSave, secretSubs, protectedStorageDegraded, protectedSecretUpdates }
   }
 
   /** The one saved form of each domain, shared by selective and whole saves. */

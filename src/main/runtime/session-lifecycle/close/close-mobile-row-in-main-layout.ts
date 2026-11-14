@@ -37,7 +37,7 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
         applyLayoutCommand: (command) => this.applyLayoutCommand(command),
         stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
         remoteSessionIdOf: (id) =>
-          this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[id]
+          this.borrowWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[id]
       },
       {
         worktreeId,

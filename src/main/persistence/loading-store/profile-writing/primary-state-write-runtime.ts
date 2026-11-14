@@ -1,3 +1,4 @@
+import { ProfileStateSaveIntent } from './profile-state-save-intent'
 import type { StoreRuntimeState } from '../store-runtime-state'
 
 export type PrimaryStateWriteOperationsRuntime = Pick<
@@ -17,6 +18,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'pendingWrite'
   | 'profileMaintenancePending'
   | 'profileStateAuthority'
+  | 'workspaceSessionFieldCapture'
   | 'protectedSecrets'
   | 'quitFlushStarted'
   | 'state'
@@ -60,10 +62,44 @@ export async function stopAfterFailedPrimaryStateMutation(
   // Throwing callbacks supply no rollback; freeze persistence rather than commit partial edits.
   runtime.writesFrozen = true
   runtime.quitFlushStarted = true
+  runtime.workspaceSessionFieldCapture.clear()
   runtime.fatalMutationError = error instanceof Error ? error : new Error(String(error))
   if (runtime.writeTimer) {
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null
   }
   await runtime.profileStateAuthority?.close?.()
+}
+
+export function capturePrimaryStateWriteIntent(runtime: PrimaryStateWriteOperationsRuntime) {
+  const generation = runtime.writeGeneration
+  const dirtyDomains = runtime.dirtyProfileStateDomains
+  const automationRuns = runtime.pendingAutomationRunsAfter
+  runtime.dirtyProfileStateDomains = new ProfileStateSaveIntent()
+  runtime.pendingAutomationRunsAfter = undefined
+
+  const restoreIntent = (): void => {
+    if (dirtyDomains === null) {
+      runtime.dirtyProfileStateDomains = null
+    } else if (runtime.dirtyProfileStateDomains !== null) {
+      if (runtime.dirtyProfileStateDomains instanceof ProfileStateSaveIntent) {
+        runtime.dirtyProfileStateDomains.restore(dirtyDomains)
+      } else {
+        for (const domain of dirtyDomains) {
+          runtime.dirtyProfileStateDomains.add(domain)
+        }
+      }
+    }
+    if (automationRuns === undefined || runtime.pendingAutomationRunsAfter !== undefined) {
+      return
+    }
+    // A run list replaced while this write was in flight is newer; save it as a whole row instead.
+    if (automationRuns === runtime.state.automationRuns) {
+      runtime.pendingAutomationRunsAfter = automationRuns
+    } else {
+      runtime.dirtyProfileStateDomains?.add('automationRuns')
+    }
+  }
+
+  return { generation, dirtyDomains, automationRuns, restoreIntent }
 }

@@ -78,12 +78,13 @@ export const TERMINAL_QUERY_METHODS = [
     params: TerminalAgentId,
     handler: async (params, { runtime }): Promise<{ orcaSessionId: OrcaSessionAddress | null }> => {
       // Re-read on each look: the pane may wake or sleep while the worker answers.
-      const id = await agentHookServer.resolvePaneAgentId(
-        params.paneKey,
-        () =>
-          runtime.getWorkspaceSessionForWorktree(params.worktreeId)
-            ?.sleepingAgentSessionsByPaneKey?.[params.paneKey]
-      )
+      const id = await agentHookServer.resolvePaneAgentId(params.paneKey, () => {
+        const record = runtime.borrowWorkspaceSessionForWorktree(params.worktreeId)
+          ?.sleepingAgentSessionsByPaneKey?.[params.paneKey]
+        return record && runtime.isWorkspaceSessionOwnedForWorktree(params.worktreeId)
+          ? { ...record, providerSession: { ...record.providerSession } }
+          : record
+      })
       return { orcaSessionId: id ? formatOrcaSessionAddress(id) : null }
     }
   }),

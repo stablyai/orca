@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 // Main restores unshown live terminals and reconnect facts at startup/window load, including headless hosts.
 
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -154,7 +155,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends LegacyWor
         this.pendingPtyRegistrationIncarnations.has(pty.ptyId) ||
         this.terminalMutationLock.hasActiveSpawns(worktreeIdentityKey(pty.worktreeId)),
       hostIds: () => this.store?.getWorkspaceSessionHostIds?.() ?? [],
-      session: (hostId) => this.store?.getWorkspaceSession?.(hostId),
+      session: (hostId) => borrowWorkspaceSession(this.store, hostId),
       apply: (command) => this.applyLayoutCommand(command),
       recordPane: (ptyId, paneKey) => {
         const pty = this.ptysById.get(ptyId)
@@ -180,7 +181,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends LegacyWor
   }
 
   private markDeadBoundPanesSleeping(): void {
-    const session = this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
+    const session = borrowWorkspaceSession(this.store, LOCAL_EXECUTION_HOST_ID)
     for (const paneKey of session
       ? panesBoundToGoneLocalTerminals(
           session,
@@ -195,7 +196,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends LegacyWor
   private async unbindPanesFromOtherWorkspacesTerminals(): Promise<void> {
     const store = this.store
     for (const hostId of store?.getWorkspaceSessionHostIds?.() ?? []) {
-      const session = store?.getWorkspaceSession?.(hostId)
+      const session = borrowWorkspaceSession(store, hostId)
       for (const binding of session ? panesBoundToAnotherWorkspace(session) : []) {
         const { worktreeId, ...pane } = binding
         await this.applyLayoutCommand({
@@ -235,7 +236,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends LegacyWor
       // The connection list is global: relay sessions in every partition name its targets.
       otherPartitions: () =>
         (store?.getWorkspaceSessionHostIds?.() ?? []).flatMap((hostId) => {
-          const other = hostId === partition ? null : store?.getWorkspaceSession?.(hostId)
+          const other = hostId === partition ? null : borrowWorkspaceSession(store, hostId)
           return other ? [other] : []
         })
     })

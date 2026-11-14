@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/terminal-bindings/pty-binding-refusals'
@@ -19,7 +20,7 @@ export async function persistFreshPaneBinding(
   let targetChanged = false
   const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
   const persisted = await store.persistPtyBinding(() => {
-    const session = store.getWorkspaceSession(hostId)
+    const session = borrowWorkspaceSession(store, hostId)
     const paneKey = makePaneKey(binding.tabId, binding.leafId)
     if (ptyBindingIsRefused(binding, session, binding.worktreeId, paneKey, [])) {
       return binding

@@ -29,13 +29,14 @@ import { deleteRemovedTerminalScrollbackSnapshots } from './terminal-session-cle
 import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-session-terminal-binding-replay'
 import type { SessionSnapshotOperations } from './session-snapshot-operations'
 import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
-import { scheduleSave } from '../profile-writing/write-scheduling'
+import { scheduleSave, scheduleSessionFieldSave } from '../profile-writing/write-scheduling'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,
   session: PersistedState['workspaceSession'],
-  deferSnapshotFiles = false
+  deferSnapshotFiles = false,
+  fields = false
 ): void {
   const context = getSessionSnapshotOperationsContext(owner)
   const prior = context.runtime.state.workspaceSession
@@ -130,7 +131,8 @@ export function setLocalWorkspaceSession(
       LOCAL_EXECUTION_HOST_ID
     )
   } else {
-    scheduleSave(
+    const schedule = fields ? scheduleSessionFieldSave : scheduleSave
+    schedule(
       context.scheduling,
       remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession'],
       LOCAL_EXECUTION_HOST_ID

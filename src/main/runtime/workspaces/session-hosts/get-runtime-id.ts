@@ -37,14 +37,34 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
     return this.workspaceSessions.get(worktreeId)
   }
 
-  protected getOwnWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
-    return this.workspaceSessions.getOwnPartition(worktreeId)
+  /** Internal borrowed input; retaining consumers must detach their concrete projection. */
+  borrowWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
+    return this.workspaceSessions.borrow(worktreeId)
+  }
+
+  isWorkspaceSessionOwnedForWorktree(worktreeId: string): boolean {
+    return this.workspaceSessions.isOwned(worktreeId)
+  }
+
+  protected setBorrowedWorkspaceSessionForWorktree(
+    worktreeId: string,
+    session: WorkspaceSessionState
+  ): void {
+    const before = crewWorkspaceNames(this.workspaceSessions.borrow(worktreeId))
+    this.workspaceSessions.setBorrowed(worktreeId, session)
+    if (!isDeepStrictEqual(before, crewWorkspaceNames(this.workspaceSessions.borrow(worktreeId)))) {
+      this.crewChanges.notify(new Set(['names']))
+    }
+  }
+
+  protected borrowOwnWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
+    return this.workspaceSessions.borrowOwnPartition(worktreeId)
   }
 
   setWorkspaceSessionForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
-    const before = crewWorkspaceNames(this.workspaceSessions.get(worktreeId))
+    const before = crewWorkspaceNames(this.workspaceSessions.borrow(worktreeId))
     this.workspaceSessions.setForWorktree(worktreeId, session)
-    if (!isDeepStrictEqual(before, crewWorkspaceNames(this.workspaceSessions.get(worktreeId)))) {
+    if (!isDeepStrictEqual(before, crewWorkspaceNames(this.workspaceSessions.borrow(worktreeId)))) {
       this.crewChanges.notify(new Set(['names']))
     }
   }
@@ -56,6 +76,6 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
   protected getWorkspaceSessionHydrationTargets(
     includeAllPersistedWorktrees: boolean
   ): Map<string, WorkspaceSessionState> {
-    return this.workspaceSessions.getHydrationTargets(includeAllPersistedWorktrees)
+    return this.workspaceSessions.borrowHydrationTargets(includeAllPersistedWorktrees)
   }
 }

@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -59,7 +60,8 @@ export function assertPaneStillExists(
   if (!store) {
     throw new Error('terminal_pane_owner_changed')
   }
-  const session = store.getWorkspaceSession(
+  const session = borrowWorkspaceSession(
+    store,
     connectionId ? toSshExecutionHostId(connectionId) : undefined
   )
   if (

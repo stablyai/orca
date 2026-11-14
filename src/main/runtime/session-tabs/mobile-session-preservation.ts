@@ -107,7 +107,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     incoming: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot
   ): { tab: RuntimeMobileSessionTerminalTab; scope: 'tab' | 'leaf' }[] {
-    const session = this.getWorkspaceSessionForWorktree(existing.worktree)
+    const session = this.borrowWorkspaceSessionForWorktree(existing.worktree)
     const persistedTabs = session?.tabsByWorktree?.[existing.worktree]
     if (!session || !persistedTabs) {
       return []

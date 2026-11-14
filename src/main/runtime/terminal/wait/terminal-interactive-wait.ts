@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { heldLaunchConfig } from '../launch/launch-evidence'
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
@@ -18,9 +19,9 @@ import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
-  activeSessionWorkspaceId,
+  activeWorkspaceSelection,
   activeWorkspaceSelectorScopes,
-  resolveRemoteWorkspaceContext,
+  resolveRemoteWorkspaceContext as resolveRemoteContext,
   type ActiveWorkspaceContext,
   type PairedWorkspaceContextSource
 } from './active-worktree-context-fallback'
@@ -152,9 +153,10 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
 
   /** The focused workspace, preferring stored selection, then the renderer graph. */
   async resolveActiveWorktreeContext(): Promise<ActiveWorkspaceContext | null> {
-    const session = this.store?.getWorkspaceSession?.()
-    const hostId = session?.activeWorkspaceExecutionHostId ?? undefined
-    let worktreeId = activeSessionWorkspaceId(session)
+    const { hostId, worktreeId: savedWorktreeId } = activeWorkspaceSelection(
+      borrowWorkspaceSession(this.store)
+    )
+    let worktreeId = savedWorktreeId
     if (!worktreeId && this.graphStatus === 'ready') {
       for (const tab of this.tabs.values()) {
         if (tab.activeLeafId && tab.worktreeId) {
@@ -180,12 +182,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         // A remote worktree is not in the local catalog; project what the stored row knows.
       }
     }
-    return resolveRemoteWorkspaceContext(
-      this.store,
-      this.pairedWorkspaceContexts,
-      worktreeId,
-      hostId
-    )
+    return resolveRemoteContext(this.store, this.pairedWorkspaceContexts, worktreeId, hostId)
   }
 
   getExactWorkerProviderSession(

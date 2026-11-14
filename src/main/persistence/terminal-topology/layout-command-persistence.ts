@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { LayoutLiveContext } from './pane-admission/terminal-pane-admission'
 import {
+  borrowWorkspaceSession,
   resolveHostId,
   type SessionHostPartitionOperations
 } from '../loading-store/workspace-sessions/session-host-partitions'
@@ -97,7 +98,7 @@ export class LayoutCommandPersistence {
     const commit = raisingBindingGenerations(
       context.runtime,
       resolved,
-      (hostId) => context.sessions.getWorkspaceSession(hostId),
+      (hostId) => borrowWorkspaceSession(context.sessions, hostId),
       applyLayout(resolved, command, topologyCommitContext(context), {
         live: { ...run.live, visibility: run.visibility },
         stopBeforeWrite: run.stopBeforeWrite,

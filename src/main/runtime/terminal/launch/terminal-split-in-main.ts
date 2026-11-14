@@ -71,7 +71,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
   }
 
   private holdsLeaf(worktreeId: string, leafId: string): boolean {
-    const layouts = this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId ?? {}
+    const layouts = this.borrowWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId ?? {}
     return Object.values(layouts).some((layout) => collectLeafIds(layout?.root).includes(leafId))
   }
 

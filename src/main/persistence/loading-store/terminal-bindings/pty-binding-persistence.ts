@@ -10,7 +10,7 @@ import type { PtyBindingSourceExpectation } from '../store'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
 // oxfmt-ignore
-import { resolveHostId, type SessionHostPartitionOperations } from '../workspace-sessions/session-host-partitions'
+import { borrowWorkspaceSession, resolveHostId, type SessionHostPartitionOperations } from '../workspace-sessions/session-host-partitions'
 import {
   withdrawUnstartedPane,
   type UnstartedPaneKept
@@ -127,7 +127,7 @@ export class PtyBindingPersistenceOperations {
       markPtyBindingSessionDirty(runtime, resolved)
     }
     return runtime.runDurableMutation(() => {
-      const session = sessions.getWorkspaceSession(resolved)
+      const session = borrowWorkspaceSession(sessions, resolved)
       const currentId =
         session.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
       if (!currentId) {
@@ -160,7 +160,7 @@ export class PtyBindingPersistenceOperations {
             rollbackWorkspaceSessionAfterFailedAsyncWrite(
               before,
               staged,
-              sessions.getWorkspaceSession(resolved)
+              borrowWorkspaceSession(sessions, resolved)
             )
           )
           bumpPtyBindingGeneration(runtime, resolved, binding.leafId)
@@ -193,10 +193,10 @@ export class PtyBindingPersistenceOperations {
         })
         const paneKey = `${args.tabId}:${args.leafId}`
         const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
-        const session = sessions.getWorkspaceSession(resolvedHostId)
+        const session = borrowWorkspaceSession(sessions, resolvedHostId)
         const partitions = sessions
           .getWorkspaceSessionHostIds()
-          .map((hostId) => ({ hostId, session: sessions.getWorkspaceSession(hostId) }))
+          .map((hostId) => ({ hostId, session: borrowWorkspaceSession(sessions, hostId) }))
         if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey, partitions)) {
           outcome = 'refused'
           return { value: false, persist: false }
@@ -302,7 +302,7 @@ function writePtyBinding(
     markPtyBindingSessionDirty(runtime, resolvedHostId)
     const boundSession = cloneWorkspaceSessionState(session)
     return () => {
-      const current = sessions.getWorkspaceSession(resolvedHostId)
+      const current = borrowWorkspaceSession(sessions, resolvedHostId)
       const rolledBack = rollbackFailedPtyBinding(
         sessionBeforeBinding,
         boundSession,

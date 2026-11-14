@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import { PaneOwnerContentionError } from '../../../ipc/pty/pane/pane-spawn-operation'
 import {
@@ -82,7 +83,7 @@ function paneStillWritten(
   store: RuntimeStore | null | undefined,
   args: AdmittedSpawnArgs
 ): boolean {
-  const layout = store?.getWorkspaceSession?.(hostIdOf(args))?.terminalLayoutsByTabId?.[args.tabId]
+  const layout = borrowWorkspaceSession(store, hostIdOf(args))?.terminalLayoutsByTabId?.[args.tabId]
   return collectLeafIds(layout?.root).includes(args.leafId)
 }
 

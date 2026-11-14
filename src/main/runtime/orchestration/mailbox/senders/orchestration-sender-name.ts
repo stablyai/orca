@@ -47,7 +47,7 @@ export type MirroredTabs = {
   >
 }
 
-type MirroredTerminalTab = Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>
+export type MirroredTerminalTab = Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>
 type MirroredChatTab = Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>
 
 export type SenderNamingLayout = {
@@ -92,7 +92,10 @@ export function layoutNameInputs(layout: SenderNamingLayout): SenderNamingLayout
 }
 
 /** Capture naming values, never workspace buffers or editor drafts. */
-export function captureMirroredTabs(read: (worktreeId: string) => MirroredTabs | null | undefined) {
+export function captureMirroredTabs(
+  read: (worktreeId: string) => MirroredTabs | null | undefined,
+  isOwned: (worktreeId: string) => boolean = () => true
+) {
   const workspaces = new Map<string, MirroredTabs | null>()
   const terminalTabs = new Map<string, Map<string, MirroredTerminalTab>>()
   const chatTabs = new Map<string, Map<string, MirroredChatTab>>()
@@ -100,6 +103,10 @@ export function captureMirroredTabs(read: (worktreeId: string) => MirroredTabs |
   const session = (id: string) => {
     if (!workspaces.has(id)) {
       const live = read(id)
+      if (!isOwned(id)) {
+        workspaces.set(id, live ?? null)
+        return live
+      }
       const terminals = (live?.tabsByWorktree?.[id] ?? []).map(terminalNameInputs)
       const chats = (live?.unifiedTabs?.[id] ?? []).map(chatNameInputs)
       for (const tab of terminals) {
@@ -125,12 +132,18 @@ export function captureMirroredTabs(read: (worktreeId: string) => MirroredTabs |
   }
   return {
     session,
-    terminalTab: (worktreeId: string, tabId: string) => terminalTabs.get(worktreeId)?.get(tabId),
+    terminalTab: (worktreeId: string, tabId: string) =>
+      isOwned(worktreeId)
+        ? terminalTabs.get(worktreeId)?.get(tabId)
+        : session(worktreeId)?.tabsByWorktree?.[worktreeId]?.find((tab) => tab.id === tabId),
     chatTab: (worktreeId: string, sessionId: string) => {
       session(worktreeId)
       return chatTabs.get(worktreeId)?.get(sessionId) ?? null
     },
     layout: (worktreeId: string, tabId: string) => {
+      if (!isOwned(worktreeId)) {
+        return session(worktreeId)?.terminalLayoutsByTabId?.[tabId]
+      }
       const key = JSON.stringify([worktreeId, tabId])
       if (!layouts.has(key)) {
         const live = read(worktreeId)?.terminalLayoutsByTabId?.[tabId]

@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -45,7 +46,7 @@ export class StructuredConversationLabelChanges {
       'local',
       ...(this.store?.getWorkspaceSessionHostIds?.() ?? [])
     ])) {
-      const claim = routeClaim(this.store?.getWorkspaceSession?.(id), workspaceId)
+      const claim = routeClaim(borrowWorkspaceSession(this.store, id), workspaceId)
       if (claim !== 0) {
         claims.set(id, claim)
       }
@@ -54,7 +55,7 @@ export class StructuredConversationLabelChanges {
       hostId,
       claims,
       aliases: savedAliases(
-        hostId ? this.store?.getWorkspaceSession?.(hostId) : undefined,
+        hostId ? borrowWorkspaceSession(this.store, hostId) : undefined,
         workspaceId
       )
     })
@@ -79,7 +80,7 @@ export class StructuredConversationLabelChanges {
     const sessions = new Map<ExecutionHostId, WorkspaceSessionState | undefined>()
     const sessionFor = (id: ExecutionHostId) => {
       if (!sessions.has(id)) {
-        sessions.set(id, this.store?.getWorkspaceSession?.(id))
+        sessions.set(id, borrowWorkspaceSession(this.store, id))
       }
       return sessions.get(id)
     }

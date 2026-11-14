@@ -79,6 +79,29 @@ describe('persistence single-serialize save guard', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('retains the stored ciphertext across repeated synchronous complete saves and protection recovery', async () => {
+    const store = await createStore()
+    store.updateSettings({ opencodeSessionCookie: 'synthetic-cookie' })
+    await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+    const first = JSON.parse(readPersistedStateJson(dataFile())).settings.opencodeSessionCookie
+    await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+    expect(JSON.parse(readPersistedStateJson(dataFile())).settings.opencodeSessionCookie).toBe(
+      first
+    )
+    cipherState.encryptionAvailable = false
+    await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+    expect(JSON.parse(readPersistedStateJson(dataFile())).settings.opencodeSessionCookie).toBe(
+      first
+    )
+    cipherState.encryptionAvailable = true
+    store.getWorkspaceSession().activeTabId = 'getter-change'
+    await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+    expect(JSON.parse(readPersistedStateJson(dataFile())).workspaceSession.activeTabId).toBe(
+      'getter-change'
+    )
+    expect((await createStore()).getSettings().opencodeSessionCookie).toBe('synthetic-cookie')
+  })
+
   // Ciphertext can equal a user-controlled value; value-based normalization could hash distinct states equally.
   it('persists a swap between a plaintext field and a secret when the plaintext equals the secret ciphertext (deterministic cipher)', async () => {
     cipherState.deterministic = true

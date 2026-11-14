@@ -1,3 +1,5 @@
+import { savedResumeRecord } from './saved-resume-record'
+export { savedResumeRecord } from './saved-resume-record'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   normalizeAgentProviderSession,
@@ -16,8 +18,6 @@ import {
   listStructuredProviderSessionOwnership
 } from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   keysMayMatch,
   terminalConversationKey
@@ -207,20 +207,6 @@ export function forgetRefusedResume(
     // The shell still starts, and the next restore refuses and retries the cleanup.
     console.warn('[pty] could not forget a resume a native chat holds', error)
   }
-}
-
-/** The pane's saved resume on this host, which its window resumes from after a cold restore. */
-export function savedResumeRecord(
-  store:
-    | { getWorkspaceSession?(hostId: ExecutionHostId): WorkspaceSessionState | undefined }
-    | undefined,
-  paneKey: string | null
-): SleepingAgentSessionRecord | undefined {
-  return paneKey
-    ? store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.sleepingAgentSessionsByPaneKey?.[
-        paneKey
-      ]
-    : undefined
 }
 
 /** Runs only in the fresh branch, after stable/claimed owner adoption has settled. */

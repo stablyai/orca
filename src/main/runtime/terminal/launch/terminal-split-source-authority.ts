@@ -57,7 +57,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
         liveIncarnationId: string | null
       }
     | null {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const session = this.borrowWorkspaceSessionForWorktree(worktreeId)
     const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
     const persistedTab = sessionWorktreeId
       ? session?.tabsByWorktree[sessionWorktreeId]?.find(

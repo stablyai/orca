@@ -19,8 +19,8 @@ describe('loading Store write-risk characterization', () => {
     const committed = maintenanceBarrier()
     const acknowledge = maintenanceBarrier()
     // A UI change saves only the ui domain.
-    const writeDomains = authority.writeSerializedDomains.bind(authority)
-    vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce(async (replacements) => {
+    const writeDomains = authority.writePreparedState.bind(authority)
+    vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async (replacements) => {
       await writeDomains(replacements)
       committed.resolve()
       await acknowledge.promise

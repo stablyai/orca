@@ -1,7 +1,10 @@
+import { ProfileStateSaveIntent } from './profile-state-save-intent'
 import { writeSelectiveProfileState } from './profile-state-selective-write'
+import { profileStateWriterFailureOutcome } from '../../profile-state/writer/profile-state-writer-errors'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
 import {
   canReuseDurableProfileState,
+  capturePrimaryStateWriteIntent,
   markPrimaryStateWriteDurable
 } from './primary-state-write-runtime'
 
@@ -27,6 +30,51 @@ export function writeToDiskSync(
     opts.expectedGeneration === undefined
       ? undefined
       : () => runtime.writeGeneration === opts.expectedGeneration
+  if (authority.writePreparedState) {
+    const intent = capturePrimaryStateWriteIntent(runtime)
+    try {
+      const captured = serialization.buildPreparedStateWrite(
+        intent.dirtyDomains,
+        intent.automationRuns
+      )
+      if (isCurrent && !isCurrent()) {
+        intent.restoreIntent()
+        return false
+      }
+      if (
+        !captured.bypassEquality &&
+        captured.stateHash !== null &&
+        canReuseDurableProfileState(runtime, captured.stateHash)
+      ) {
+        captured.acknowledge()
+      } else {
+        if (captured.write) {
+          authority.writePreparedState(captured.write)
+        } else if (captured.domains && authority.writeCompleteSerializedDomains) {
+          authority.writeCompleteSerializedDomains(captured.domains)
+        } else {
+          authority.writeSerializedState(captured.payload)
+        }
+        captured.acknowledge()
+        runtime.protectedSecrets.commitRetentionUpdates(captured.protectedSecretUpdates)
+      }
+      runtime.lastWrittenStateHash =
+        runtime.writeGeneration === intent.generation ? captured.stateHash : null
+      markPrimaryStateWriteDurable(runtime, intent.generation)
+    } catch (error) {
+      if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
+        runtime.workspaceSessionFieldCapture.clear()
+      }
+      intent.restoreIntent()
+      throw error
+    }
+    try {
+      authority.scheduleBackup?.()
+    } catch (error) {
+      console.error('[persistence] Failed to schedule profile state backup:', error)
+    }
+    return true
+  }
   const selective = writeSelectiveProfileState(
     authority,
     serialization,
@@ -56,7 +104,7 @@ export function writeToDiskSync(
   }
   // The authority fences the revision even when the complete state is unchanged.
   if (canReuseDurableProfileState(runtime, stateHash)) {
-    runtime.dirtyProfileStateDomains = new Set()
+    runtime.dirtyProfileStateDomains = new ProfileStateSaveIntent()
     runtime.pendingAutomationRunsAfter = undefined
     markPrimaryStateWriteDurable(runtime, opts.expectedGeneration ?? runtime.writeGeneration)
     return true
@@ -66,7 +114,7 @@ export function writeToDiskSync(
   } else {
     authority.writeSerializedState(built.payload)
   }
-  runtime.dirtyProfileStateDomains = new Set()
+  runtime.dirtyProfileStateDomains = new ProfileStateSaveIntent()
   runtime.pendingAutomationRunsAfter = undefined
   if (!isCurrent || isCurrent()) {
     runtime.lastWrittenStateHash = stateHash

@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { OrcaRuntimeWithPtyControllerInventoryListing } from './pty-controller-inventory-listing'
 
 import type * as PtyControllerContract from './runtime-pty-controller-contract'
@@ -90,7 +91,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
       if (existing) {
         return existing
       }
-      const persistedSession = this.store?.getWorkspaceSession?.(hostId)
+      const persistedSession = borrowWorkspaceSession(this.store, hostId)
       const indexes = {
         worktreeIdByPtyId: indexPersistedPtyWorktreeBindings(persistedSession),
         surfaceByPtyId: indexPersistedPtySurfaceBindings(persistedSession)

@@ -70,6 +70,170 @@ const v2 =
   '{"runtime:a":{"tabsByWorktree":{"wt2":[{"id":"t2"}],"wt3":[],"wt1":[{"id":"t1","title":"renamed"}]},"activeTabId":"t1"},"ssh:b":{"tabsByWorktree":{}}}'
 
 describe('profile state document parts', () => {
+  it('applies sparse patches, complete omissions and empty documents with a shared revision fence', () => {
+    const db = open()
+    try {
+      const initial = writeProfileStateDomains(db, {
+        expectedRevision: 0,
+        replacements: [],
+        complete: true,
+        patches: [
+          {
+            domain: 'workspaceSession',
+            operations: [{ kind: 'set', path: [], payload: '{"tabsByWorktree":{"a":[],"b":[]}}' }]
+          }
+        ]
+      })
+      expect(initial.revision).toBe(1)
+      write(db, { workspaceSession: '{"tabsByWorktree":{"a":[],"b":[]}}', obsolete: '1' })
+      const revision = readProfileStateRevision(db)
+      const result = writeProfileStateDomains(db, {
+        expectedRevision: revision,
+        replacements: [],
+        complete: true,
+        patches: [{ domain: 'workspaceSession', operations: [] }]
+      })
+      expect(result.revision).toBe(revision + 1)
+      expect(exportProfileStateJson(db)).toBe(
+        '{"workspaceSession":{"tabsByWorktree":{"a":[],"b":[]}}}'
+      )
+      expect(() =>
+        writeProfileStateDomains(db, {
+          expectedRevision: revision,
+          replacements: [],
+          patches: [{ domain: 'workspaceSession', operations: [] }]
+        })
+      ).toThrow('revision changed')
+      writeProfileStateDomains(db, {
+        expectedRevision: result.revision,
+        replacements: [],
+        patches: [
+          { domain: 'workspaceSession', operations: [{ kind: 'set', path: [], payload: '{}' }] }
+        ]
+      })
+      expect(exportProfileStateJson(db)).toBe('{"workspaceSession":{}}')
+      writeProfileStateDomains(db, {
+        expectedRevision: readProfileStateRevision(db),
+        replacements: [],
+        complete: true
+      })
+      expect(exportProfileStateJson(db)).toBe('{}')
+    } finally {
+      db.close()
+    }
+  })
+
+  it('normalizes an unchanged legacy document through an empty patch', () => {
+    const db = open()
+    try {
+      write(db, { workspaceSession: '{ "tabsByWorktree": { "a": [] } }' })
+      writeProfileStateDomains(db, {
+        expectedRevision: readProfileStateRevision(db),
+        replacements: [],
+        patches: [{ domain: 'workspaceSession', operations: [] }]
+      })
+      expect(exportProfileStateJson(db)).toBe('{"workspaceSession":{"tabsByWorktree":{"a":[]}}}')
+    } finally {
+      db.close()
+    }
+  })
+
+  it('rejects a changed patch when an untouched part no longer matches the assembled hash', () => {
+    const db = open()
+    try {
+      write(db, { workspaceSession: '{"tabsByWorktree":{"a":[],"b":[]}}' })
+      db.prepare(`UPDATE profile_state_document_parts SET payload = ?, content_hash = ?
+        WHERE domain = 'workspaceSession' AND part_key = ?`).run(
+        '["corrupt"]',
+        hashProfileStatePayload('["corrupt"]'),
+        '["tabsByWorktree","b"]'
+      )
+      const revision = readProfileStateRevision(db)
+      expect(
+        writeProfileStateDomains(db, {
+          expectedRevision: revision,
+          replacements: [],
+          patches: [{ domain: 'workspaceSession', operations: [] }]
+        })
+      ).toMatchObject({ changed: false, revision })
+      expect(() =>
+        writeProfileStateDomains(db, {
+          expectedRevision: revision,
+          replacements: [],
+          patches: [
+            {
+              domain: 'workspaceSession',
+              operations: [{ kind: 'set', path: ['tabsByWorktree', 'a'], payload: '["changed"]' }]
+            }
+          ]
+        })
+      ).toThrow('parts hash mismatch')
+      expect(readProfileStateRevision(db)).toBe(revision)
+    } finally {
+      db.close()
+    }
+  })
+
+  it('replaces a complete field prefix, normalizes incoming JSON and preserves omitted-field deletion', () => {
+    const db = open()
+    try {
+      write(db, {
+        workspaceSession:
+          '{"tabsByWorktree":{"2":[],"10":[],"4294967294":[],"01":[],"4294967295":[],"__proto__":[]},"activeTabId":"a"}'
+      })
+      const patch = (payload: string) =>
+        writeProfileStateDomains(db, {
+          expectedRevision: readProfileStateRevision(db),
+          replacements: [],
+          patches: [
+            {
+              domain: 'workspaceSession',
+              operations: [{ kind: 'set', path: ['tabsByWorktree'], payload }]
+            }
+          ]
+        })
+      patch(
+        '{ "10": [ "changed" ], "2": [], "4294967294": [], "01": [], "4294967295": [], "__proto__": [] }'
+      )
+      expect(exportProfileStateJson(db)).toBe(
+        '{"workspaceSession":{"tabsByWorktree":{"2":[],"10":["changed"],"4294967294":[],"01":[],"4294967295":[],"__proto__":[]},"activeTabId":"a"}}'
+      )
+      patch('{"10":[]}')
+      expect(exportProfileStateJson(db)).toBe(
+        '{"workspaceSession":{"tabsByWorktree":{"10":[]},"activeTabId":"a"}}'
+      )
+    } finally {
+      db.close()
+    }
+  })
+
+  it.each([{ path: ['tabsByWorktree', 'a'] }, { path: ['activeTabId'] }])(
+    'does not conceal a corrupt $path row with a field replacement',
+    ({ path }) => {
+      const db = open()
+      try {
+        write(db, { workspaceSession: '{"tabsByWorktree":{"a":[],"b":[]},"activeTabId":"old"}' })
+        db.prepare(
+          'UPDATE profile_state_document_parts SET payload = ? WHERE domain = ? AND part_key = ?'
+        ).run('["corrupt"]', 'workspaceSession', JSON.stringify(path))
+        expect(() =>
+          writeProfileStateDomains(db, {
+            expectedRevision: readProfileStateRevision(db),
+            replacements: [],
+            patches: [
+              {
+                domain: 'workspaceSession',
+                operations: [{ kind: 'set', path: ['tabsByWorktree'], payload: '{"a":[],"b":[]}' }]
+              }
+            ]
+          })
+        ).toThrow('part is invalid')
+      } finally {
+        db.close()
+      }
+    }
+  )
+
   it('reads back the exact document after entries change, appear and move', () => {
     const db = open()
     try {

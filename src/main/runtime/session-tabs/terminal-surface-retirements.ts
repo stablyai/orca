@@ -1,3 +1,5 @@
+import { setBorrowedWorkspaceSession } from '../../persistence/loading-store/workspace-sessions/session-snapshot-operations'
+import { borrowWorkspaceSession } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
 import { OrcaRuntimeWithTouchMobileSessionTabsForWorktree } from './mobile-session-membership'
 import type { RetiredTerminalSurface } from '../terminal/surface/mobile-session-terminal-retirement'
@@ -36,7 +38,7 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
     for (const surface of retiredSurfaces) {
       const hostId =
         this.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId) ?? LOCAL_EXECUTION_HOST_ID
-      const current = this.store?.getWorkspaceSession?.(hostId)
+      const current = borrowWorkspaceSession(this.store, hostId)
       if (!current) {
         unpersisted.push(surface)
         continue
@@ -61,7 +63,7 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
       }
       try {
         // The existing catch handles a missing store setter.
-        this.store!.setWorkspaceSession!(next, hostId)
+        setBorrowedWorkspaceSession(this.store, next, hostId)
         accepted.push(surface)
       } catch (error) {
         // The process is gone even when quit/maintenance prevents profile writes.

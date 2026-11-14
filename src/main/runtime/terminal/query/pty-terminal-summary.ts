@@ -114,9 +114,9 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
   protected getPtyManualTitle(pty: RuntimePtyWorktreeRecord, orphaned: boolean): string | null {
     const tab = orphaned
       ? undefined
-      : this.getWorkspaceSessionForWorktree(pty.worktreeId)?.tabsByWorktree[pty.worktreeId]?.find(
-          (candidate) => candidate.id === this.paneOfPty(pty).tabId
-        )
+      : this.borrowWorkspaceSessionForWorktree(pty.worktreeId)?.tabsByWorktree[
+          pty.worktreeId
+        ]?.find((candidate) => candidate.id === this.paneOfPty(pty).tabId)
     return tab ? tab.customTitle?.trim() || null : (pty.manualTitle ?? null)
   }
 

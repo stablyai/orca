@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
@@ -10,8 +11,8 @@ import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktre
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import {
-  buildRuntimeWorktreeSummaryPathIndex,
-  createRuntimeWorktreePsSummaryLookup
+  buildRuntimeWorktreeSummaryPathIndex as summaryPathIndex,
+  createRuntimeWorktreePsSummaryLookup as summaryLookup
 } from './runtime-worktree-summary-paths'
 import {
   applyRuntimeWorktreePsSessionActivity,
@@ -92,11 +93,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       platformByRepoId,
       worktreeId
     })
-    const getSummary = createRuntimeWorktreePsSummaryLookup(
-      summaries,
-      buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
-    )
-    const session = this.store?.getWorkspaceSession?.()
+
+    const getSummary = summaryLookup(summaries, summaryPathIndex(summaries, platformByRepoId))
+    const session = borrowWorkspaceSession(this.store)
     const countedPtyIds = new Set<string>()
     const terminalTitleEvidenceByRow = applyRuntimeWorktreePsTerminalActivity({
       freshPtyLiveness,

@@ -1,6 +1,15 @@
 import type { LegacyPaneKeyAliasEntry } from '../../../../shared/persisted-state-types'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { ProfileStateDatabaseQuarantine } from '../../profile-state/recovery/profile-state-database-quarantine'
+import type { ProfileStateDomainPatch } from '../../profile-state/documents/profile-state-domain-patches'
+
+export type PreparedProfileStateWrite = {
+  domainOrder: readonly string[]
+  replacements: readonly ProfileStateDomainReplacement[]
+  patches: readonly ProfileStateDomainPatch[]
+  runPayloads?: readonly string[]
+  complete?: boolean
+}
 
 export type ProfileStateMaintenance = {
   resume(): Promise<void>
@@ -16,6 +25,8 @@ export type ProfileStateAuthority = {
 
   /** Without selective domain writes, callers replace the full document. */
   writeSerializedDomains?: (replacements: readonly ProfileStateDomainReplacement[]) => void
+
+  writePreparedState?: (write: PreparedProfileStateWrite) => void
 
   /** Commit definitions and run projections atomically without serializing unrelated domains. */
   writeSerializedAutomationRuns?: (
@@ -48,6 +59,7 @@ export type AsyncProfileStateAuthority = Omit<
   | 'asynchronous'
   | 'assertCurrentRevision'
   | 'writeSerializedDomains'
+  | 'writePreparedState'
   | 'writeSerializedAutomationRuns'
   | 'writeSerializedState'
   | 'writeCompleteSerializedDomains'
@@ -60,6 +72,7 @@ export type AsyncProfileStateAuthority = Omit<
   abort(): Promise<void>
   assertCurrentRevision(): Promise<void>
   writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void>
+  writePreparedState?: (write: PreparedProfileStateWrite) => Promise<void>
   writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],
     runs: readonly AutomationRun[]

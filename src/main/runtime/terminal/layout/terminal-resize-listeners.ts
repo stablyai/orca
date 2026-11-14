@@ -232,7 +232,9 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
   protected getTerminalTopologyRevision(worktreeId: string): number {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     return (
-      this.getWorkspaceSessionForWorktree(worktreeId)?.terminalTopologyRevisionByRepoId?.[repoId] ??
+      this.borrowWorkspaceSessionForWorktree(worktreeId)?.terminalTopologyRevisionByRepoId?.[
+        repoId
+      ] ??
       this.terminalTopologyRevisionByRepoId.get(repoId) ??
       0
     )

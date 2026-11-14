@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 // Close removes the pane before exit; resolve it by PTY and incarnation in closed-pane records, then retire that entry (L80 Q2).
 import { closedTerminalPaneOf } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-panes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -22,7 +23,7 @@ export function closedPaneOfExitedPty(
   if (!ORCA_LAYOUT_OWNER_IS_MAIN || !incarnationId || !store?.getWorkspaceSession) {
     return null
   }
-  const session = store.getWorkspaceSession(hostId ?? undefined)
+  const session = borrowWorkspaceSession(store, hostId ?? undefined)
   const pane = closedTerminalPaneOf(session?.closedTerminalPanesByPaneKey, pty.ptyId, incarnationId)
   const separator = pane?.paneKey.lastIndexOf(':') ?? -1
   if (!pane || separator < 1 || !worktreeIdsEqual(pane.worktreeId, pty.worktreeId)) {

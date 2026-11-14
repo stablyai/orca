@@ -2,13 +2,17 @@ import type { AutomationRun } from '../../../shared/automations/history/automati
 import type {
   AsyncProfileStateAuthority,
   ProfileStateDomainReplacement,
+  PreparedProfileStateWrite,
   ProfileStateMaintenance
 } from '../loading-store/profile-writing/profile-state-authority'
 import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
 import { runProfileStateBackupWorker } from './backup/profile-state-backup-worker'
 import { quarantineProfileStateDatabase } from './recovery/profile-state-database-quarantine'
 import { ProfileStateWriteWorkerClient } from './writer/profile-state-writer-worker-client'
-import { ProfileStateWriterError } from './writer/profile-state-writer-errors'
+import {
+  ProfileStateWriterError,
+  closedProfileStateWriterError
+} from './writer/profile-state-writer-errors'
 import type { ProfileStateWriterInitialization } from './writer/profile-state-writer-protocol'
 import {
   ProfileStateWriterReopenPolicy,
@@ -62,7 +66,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     } else if (this.stoppedFailure) {
       throw this.stoppedFailure
     } else if (this.closing) {
-      throw closedWriterError()
+      throw closedProfileStateWriterError()
     }
   }
 
@@ -87,6 +91,10 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
 
   writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void> {
     return this.run((writer) => writer.writeSerializedDomains(replacements)).then(() => {})
+  }
+
+  writePreparedState(write: PreparedProfileStateWrite): Promise<void> {
+    return this.run((writer) => writer.writePreparedState(write)).then(() => {})
   }
 
   writeSerializedAutomationRuns(
@@ -226,7 +234,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       throw this.stoppedFailure
     }
     if (this.closing) {
-      throw closedWriterError()
+      throw closedProfileStateWriterError()
     }
     this.reopenPolicy.admit()
     const writer = new ProfileStateWriteWorkerClient(
@@ -332,12 +340,4 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     }
     return this.stoppedRevision
   }
-}
-
-function closedWriterError(): ProfileStateWriterError {
-  return new ProfileStateWriterError(
-    'profile-state-writer-closed',
-    'Profile state writer is closing',
-    'known-failure'
-  )
 }

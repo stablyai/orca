@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { app } from 'electron'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isLocalExecutionHost } from '../../../shared/execution-host'
@@ -117,7 +118,7 @@ async function sweepRestoredStatusesAgainstLocalPtys(): Promise<void> {
     return
   }
   const persistedPtyIdByPaneKey = indexPersistedPaneKeyPtyIds(
-    store.getWorkspaceSession().terminalLayoutsByTabId ?? {}
+    borrowWorkspaceSession(store).terminalLayoutsByTabId ?? {}
   )
   await retireRestoredStatusesWithDeadTerminals({
     server: agentHookServer,

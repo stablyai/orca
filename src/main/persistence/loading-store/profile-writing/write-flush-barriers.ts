@@ -23,6 +23,7 @@ type WriteFlushBarrierOperationsRuntime = Pick<
   | 'pendingProfileMaintenance'
   | 'profileMaintenancePending'
   | 'profileStateAuthority'
+  | 'workspaceSessionFieldCapture'
   | 'quitFlushPromise'
   | 'quitFlushStarted'
   | 'staleProfileStateTempCleanup'
@@ -107,6 +108,7 @@ export class WriteFlushBarrierOperations {
       .finally(async () => {
         if (runtime.profileStateAuthority?.asynchronous) {
           runtime.writesFrozen = true
+          runtime.workspaceSessionFieldCapture.clear()
           await runtime.profileStateAuthority.close()
         }
       })

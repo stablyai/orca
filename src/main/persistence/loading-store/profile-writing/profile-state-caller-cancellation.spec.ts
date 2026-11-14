@@ -25,8 +25,8 @@ export function registerProfileStateCallerCancellationTests(): void {
       const { store, authority, readState } = await createWorkerMaintenanceFixture()
       const started = maintenanceBarrier()
       const release = maintenanceBarrier()
-      const write = authority.writeSerializedDomains.bind(authority)
-      vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce(async (domains) => {
+      const write = authority.writePreparedState.bind(authority)
+      vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async (domains) => {
         await write(domains)
         started.resolve()
         await release.promise
@@ -62,8 +62,8 @@ export function registerProfileStateCallerCancellationTests(): void {
       const { store, authority, readState } = await createWorkerMaintenanceFixture()
       const started = maintenanceBarrier()
       const release = maintenanceBarrier()
-      const write = authority.writeSerializedDomains.bind(authority)
-      vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce(async (domains) => {
+      const write = authority.writePreparedState.bind(authority)
+      vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async (domains) => {
         started.resolve()
         await release.promise
         await write(domains)
@@ -75,7 +75,8 @@ export function registerProfileStateCallerCancellationTests(): void {
       await started.promise
       controller.abort()
       store.getWorkspaceSession().activeTabId = 'shutdown-edit'
-      const capture = vi.spyOn(authority, 'writeCompleteSerializedDomains')
+      const capture = vi.spyOn(authority, 'writePreparedState')
+      capture.mockClear()
       const final = store.flushFinalOrThrowAsync()
       const result = final.catch((error: unknown) => error)
       try {

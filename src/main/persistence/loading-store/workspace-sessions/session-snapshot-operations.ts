@@ -20,11 +20,17 @@ import {
   type SessionHostPartitionOperations,
   resolveHostId,
   setHostWorkspaceSession,
-  withRequiredWorkspaceSessionMaps
+  withRequiredWorkspaceSessionMaps,
+  borrowWorkspaceSession,
+  sessionDomain
 } from './session-host-partitions'
 import { dropClosedTerminalTabs } from '../../closed-terminal-tab-write-fence'
 import { keepWslMoveFrozenSessionsForStore } from '../../moving-wsl-projects/terminal-state/wsl-move-session-freeze'
-import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
+import {
+  type WriteSchedulingOperations,
+  scheduleSave,
+  scheduleSessionFieldSave
+} from '../profile-writing/write-scheduling'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export class SessionSnapshotOperations {
@@ -40,91 +46,164 @@ export class SessionSnapshotOperations {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
-    const resolved = resolveHostId(hostId)
-    const { runtime } = this[sessionSnapshotOperationsContext]
-    if (runtime.durableMutationPhase === 'rollback') {
-      this.assertSnapshotAdmission(true)
-      // The fieldwise rollback already preserves newer edits; renderer rebasing would undo it.
-      this.publishSession(
-        resolved === LOCAL_EXECUTION_HOST_ID
-          ? keepWslMoveFrozenSessionsForStore(session, runtime.state.workspaceSession)
-          : session,
-        resolved
-      )
-      return
-    }
-    if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      this.assertSnapshotAdmission(true)
-      setLocalWorkspaceSession(this, session)
-      return
-    }
-    setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
+    this[sessionSnapshotOperationsContext].runtime.workspaceSessionFieldCapture.expose(
+      sessionDomain(hostId)
+    )
+    setSession(this, session, hostId)
   }
 
   stageWorkspaceSessionBeforeUnload(
     session: PersistedState['workspaceSession'],
     hostId?: string | null
   ): void {
+    this[sessionSnapshotOperationsContext].runtime.workspaceSessionFieldCapture.expose(
+      sessionDomain(hostId)
+    )
     const resolved = resolveHostId(hostId)
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      this.assertSnapshotAdmission()
+      assertSnapshotAdmission(this)
       setLocalWorkspaceSession(this, session, true)
-      return
+    } else {
+      setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
     }
-    setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
   }
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
-    const resolved = resolveHostId(hostId)
-    // Scalar patches skip topology work; membership patches retain stale-binding protections.
-    let next: WorkspaceSessionState = {
-      ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),
-      ...patch
-    }
-    if (workspaceSessionPatchNeedsFullNormalization(patch)) {
-      this.setWorkspaceSession(next, resolved)
-      return
-    }
-    if (Object.hasOwn(patch, 'browserUrlHistory')) {
-      next = pruneWorkspaceSessionBrowserHistory(next)
-    }
-    // Unified-tab patches bypass full normalization but still need close tombstones.
-    if (Object.hasOwn(patch, 'unifiedTabs')) {
-      next = dropClosedTerminalTabs(next)
-    }
-    if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      const { state } = this[sessionSnapshotOperationsContext].runtime
-      next = keepWslMoveFrozenSessionsForStore(next, state.workspaceSession)
-    }
-    this.publishSession(next, resolved)
-  }
-
-  private publishSession(session: WorkspaceSessionState, hostId: ExecutionHostId): void {
-    session = orderTerminalRowsByTabGroups(session)
-    const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
-    if (hostId === LOCAL_EXECUTION_HOST_ID) {
-      runtime.state.workspaceSession = session
-    } else {
-      runtime.state.workspaceSessionsByHostId = {
-        ...runtime.state.workspaceSessionsByHostId,
-        [hostId]: withRequiredWorkspaceSessionMaps(session)
-      }
-    }
-    scheduleSave(
-      scheduling,
-      hostId === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId'],
-      hostId
+    this[sessionSnapshotOperationsContext].runtime.workspaceSessionFieldCapture.expose(
+      sessionDomain(hostId)
     )
+    patchSession(this, patch, hostId)
   }
+}
 
-  private assertSnapshotAdmission(allowAdmittedMutation = false): void {
-    const { runtime } = this[sessionSnapshotOperationsContext]
-    if (
-      runtime.writesFrozen ||
-      ((runtime.profileMaintenancePending || runtime.quitFlushStarted) &&
-        !(allowAdmittedMutation && runtime.durableMutationPhase !== null))
-    ) {
-      throw new Error('Profile maintenance or finalization is blocking new terminal snapshot work')
+function setSession(
+  owner: SessionSnapshotOperations,
+  session: WorkspaceSessionState,
+  hostId?: string | null,
+  fields = false
+): void {
+  const resolved = resolveHostId(hostId)
+  const { runtime, sessions } = owner[sessionSnapshotOperationsContext]
+  if (runtime.durableMutationPhase === 'rollback') {
+    assertSnapshotAdmission(owner, true)
+    publishSession(
+      owner,
+      resolved === LOCAL_EXECUTION_HOST_ID
+        ? keepWslMoveFrozenSessionsForStore(session, runtime.state.workspaceSession)
+        : session,
+      resolved
+    )
+  } else if (resolved === LOCAL_EXECUTION_HOST_ID) {
+    assertSnapshotAdmission(owner, true)
+    setLocalWorkspaceSession(owner, session, false, fields)
+  } else {
+    setHostWorkspaceSession(sessions, resolved, session, fields)
+  }
+}
+
+function patchSession(
+  owner: SessionSnapshotOperations,
+  patch: WorkspaceSessionPatch,
+  hostId?: string | null,
+  fields = false
+): void {
+  const resolved = resolveHostId(hostId)
+  const { runtime, sessions } = owner[sessionSnapshotOperationsContext]
+  let next: WorkspaceSessionState = { ...borrowWorkspaceSession(sessions, resolved), ...patch }
+  if (workspaceSessionPatchNeedsFullNormalization(patch)) {
+    setSession(owner, next, resolved, fields)
+    return
+  }
+  if (Object.hasOwn(patch, 'browserUrlHistory')) {
+    next = pruneWorkspaceSessionBrowserHistory(next)
+  }
+  if (Object.hasOwn(patch, 'unifiedTabs')) {
+    next = dropClosedTerminalTabs(next)
+  }
+  if (resolved === LOCAL_EXECUTION_HOST_ID) {
+    next = keepWslMoveFrozenSessionsForStore(next, runtime.state.workspaceSession)
+  }
+  publishSession(owner, next, resolved, fields)
+}
+
+function publishSession(
+  owner: SessionSnapshotOperations,
+  session: WorkspaceSessionState,
+  hostId: ExecutionHostId,
+  fields = false
+): void {
+  session = orderTerminalRowsByTabGroups(session)
+  const { runtime, scheduling } = owner[sessionSnapshotOperationsContext]
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    runtime.state.workspaceSession = session
+  } else {
+    runtime.state.workspaceSessionsByHostId = {
+      ...runtime.state.workspaceSessionsByHostId,
+      [hostId]: withRequiredWorkspaceSessionMaps(session)
     }
   }
+  const schedule = fields ? scheduleSessionFieldSave : scheduleSave
+  schedule(scheduling, [sessionDomain(hostId)], hostId)
+}
+
+function assertSnapshotAdmission(
+  owner: SessionSnapshotOperations,
+  allowAdmittedMutation = false
+): void {
+  const { runtime } = owner[sessionSnapshotOperationsContext]
+  if (
+    runtime.writesFrozen ||
+    ((runtime.profileMaintenancePending || runtime.quitFlushStarted) &&
+      !(allowAdmittedMutation && runtime.durableMutationPhase !== null))
+  ) {
+    throw new Error('Profile maintenance or finalization is blocking new terminal snapshot work')
+  }
+}
+
+/** Existing Electron IPC has already detached the sender's graph. No wire hint grants ownership. */
+export function setDetachedWorkspaceSession(
+  owner: SessionSnapshotOperations,
+  session: WorkspaceSessionState,
+  hostId?: string | null
+): void {
+  setSession(owner, session, hostId, true)
+}
+
+export function patchDetachedWorkspaceSession(
+  owner: SessionSnapshotOperations,
+  patch: WorkspaceSessionPatch,
+  hostId?: string | null
+): void {
+  patchSession(owner, patch, hostId, true)
+}
+
+type SessionWriter = {
+  setWorkspaceSession?(session: WorkspaceSessionState, hostId?: string | null): void
+}
+/** The close/retire owners keep their aliases only for the durable mutation and rollback. */
+export function setBorrowedWorkspaceSession(
+  owner: SessionWriter | null | undefined,
+  session: WorkspaceSessionState,
+  hostId?: string | null
+): void {
+  if (owner && isSnapshotOwner(owner)) {
+    setSession(owner, session, hostId)
+  } else {
+    owner!.setWorkspaceSession!(session, hostId)
+  }
+}
+
+function isSnapshotOwner(owner: SessionWriter): owner is SessionSnapshotOperations {
+  return sessionSnapshotOperationsContext in owner
+}
+
+export function admitDetachedWorkspaceSessionInput(
+  owner: SessionSnapshotOperations,
+  input: unknown,
+  hostId?: string | null
+): void {
+  owner[sessionSnapshotOperationsContext].runtime.workspaceSessionFieldCapture.admit(
+    sessionDomain(hostId),
+    input
+  )
 }

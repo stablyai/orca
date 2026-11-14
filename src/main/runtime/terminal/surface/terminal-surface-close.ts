@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { RuntimeSessionTabCloseReason } from '../../../../shared/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
@@ -195,12 +196,12 @@ export function captureTerminalCloseRequest(
   store: { getWorkspaceSession: (hostId: ExecutionHostId) => WorkspaceSessionState | undefined },
   fenced: boolean
 ): Pick<TerminalSurfaceCloseCommit, 'requestedSession' | 'requestedHolders'> {
-  const requestedSession = hostIds[0] ? store.getWorkspaceSession(hostIds[0]) : null
+  const requestedSession = hostIds[0] ? borrowWorkspaceSession(store, hostIds[0]) : null
   if (!fenced) {
     return { requestedSession }
   }
   const copyOf = (id: ExecutionHostId) =>
-    capturePersistedTerminalTabCopy(store.getWorkspaceSession(id), worktreeId, target.tabId)
+    capturePersistedTerminalTabCopy(borrowWorkspaceSession(store, id), worktreeId, target.tabId)
   return { requestedSession, requestedHolders: new Map(hostIds.map((id) => [id, copyOf(id)])) }
 }
 

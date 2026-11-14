@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
 import type { Repo } from '../../../../shared/repo-types'
@@ -220,7 +221,7 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
     const repo = args.repoById.get(summary.repoId)
     // Same-id repos on two hosts share one repoById entry; the row's own host names its session.
     const hostId = summary.hostId ?? (repo ? getRepoExecutionHostId(repo) : 'local')
-    const session = args.store?.getWorkspaceSession?.(hostId)
+    const session = borrowWorkspaceSession(args.store, hostId)
     if (session) {
       sessionsByHostId.set(hostId, session)
     }

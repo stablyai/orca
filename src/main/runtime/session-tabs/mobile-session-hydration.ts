@@ -1,4 +1,11 @@
 import {
+  detachMobileSessionTerminalValues,
+  isOwnedMobileSessionSource,
+  savedMobileSessionNavigation,
+  registeredSessionWorkspaces
+} from './mobile-session-persisted-inputs'
+import { borrowWorkspaceSession } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
+import {
   normalizeMobileSessionTabSelection,
   restoreLegacyMobileSessionNavigation
 } from './mobile-session-tab-selection'
@@ -9,7 +16,6 @@ import type { BrowserWindow } from 'electron'
 import { RuntimeSessionTabsInventoryPublication } from './session-tabs-inventory-publication'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
-import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { buildHeadlessMobileSessionTerminalTabs } from '../terminal/surface/mobile-session-terminal-projection'
 import { buildHeadlessMobileSessionEditorTabs } from './headless-editor-tabs'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
@@ -127,11 +133,17 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
     const session =
       options.workspaceSession ??
       (worktreeId
-        ? this.getWorkspaceSessionForWorktree(worktreeId)
-        : this.store?.getWorkspaceSession?.())
+        ? this.borrowWorkspaceSessionForWorktree(worktreeId)
+        : borrowWorkspaceSession(this.store))
     if (!session) {
       return reconciledWorktreeIds
     }
+    const owned = isOwnedMobileSessionSource(
+      this.workspaceSessions,
+      this.store,
+      worktreeId,
+      session
+    )
     // Runtime-only hydration without owned terminals/offscreen backend always yields zero rows; skip per-workspace rebuilds on graph sync.
     if (
       options.onlyRuntimeOwnedTerminals === true &&
@@ -159,19 +171,10 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
               ...Object.keys(session.tabGroups ?? {})
             ])
           ].map((id) => [id, session.tabsByWorktree?.[id] ?? []] as const)
-    // Skip removed-repo session keys to avoid phantom workspaces; resolve inventory lazily for parseable keys and preserve unknown inventory as unavailable.
-    let liveRepoIds: Set<string> | null | undefined
-    for (const [entryWorktreeId, persistedTabs] of entries) {
-      const ownerRepoId = splitWorktreeIdForFilesystem(entryWorktreeId)?.repoId
-      if (ownerRepoId) {
-        if (liveRepoIds === undefined) {
-          const knownRepos = this.store?.getRepos?.()
-          liveRepoIds = knownRepos ? new Set(knownRepos.map((repo) => repo.id)) : null
-        }
-        if (liveRepoIds && !liveRepoIds.has(ownerRepoId)) {
-          continue
-        }
-      }
+    for (const [entryWorktreeId, persistedTabs] of registeredSessionWorkspaces(
+      entries,
+      this.store
+    )) {
       const stored = this.readRebuildableMobileSessionSnapshot(entryWorktreeId)
       if (
         stored &&
@@ -193,11 +196,14 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
       const runtimeOwnedOnly =
         options.onlyRuntimeOwnedTerminals === true &&
         (existing !== undefined || hasAuthoritativeWindow)
-      const terminalTabs = buildHeadlessMobileSessionTerminalTabs(
-        entryWorktreeId,
-        persistedTabs,
-        session,
-        this.store?.getSettings?.()?.tabAutoGenerateTitle === true
+      const terminalTabs = detachMobileSessionTerminalValues(
+        buildHeadlessMobileSessionTerminalTabs(
+          entryWorktreeId,
+          persistedTabs,
+          session,
+          this.store?.getSettings?.()?.tabAutoGenerateTitle === true
+        ),
+        owned
       ).filter(
         (tab) =>
           !runtimeOwnedOnly ||
@@ -245,12 +251,12 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         .map((tab) => tab.id)
       // Restore persisted split groups or cold rebuilds coalesce them into one.
       const hasCurrentNavigation = currentNavigation?.tabGroups !== undefined
-      const navigationGroups = hasCurrentNavigation
-        ? currentNavigation.tabGroups
-        : session.tabGroups?.[entryWorktreeId]
+      const persisted = savedMobileSessionNavigation(session, entryWorktreeId, owned)
+      const persistedGroups = persisted.groups
+      const navigationGroups = hasCurrentNavigation ? currentNavigation.tabGroups : persistedGroups
       const navigationLayout = hasCurrentNavigation
         ? currentNavigation.tabGroupLayout
-        : session.tabGroupLayouts?.[entryWorktreeId]
+        : persisted.layout
       const navigationActiveGroupId = hasCurrentNavigation
         ? currentNavigation.activeGroupId
         : session.activeGroupIdByWorktree?.[entryWorktreeId]
@@ -275,7 +281,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
               restoredGroups,
               mergedTabs,
               mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null,
-              session.tabGroups?.[entryWorktreeId]
+              persistedGroups
             ),
             mergedBrowserOrder
           )

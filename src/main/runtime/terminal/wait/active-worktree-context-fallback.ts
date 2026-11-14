@@ -1,3 +1,4 @@
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -29,6 +30,13 @@ export function activeSessionWorkspaceId(
     session?.activeWorkspaceKey ?? null,
     session?.activeWorktreeId ?? null
   )
+}
+
+export function activeWorkspaceSelection(session: WorkspaceSessionState | null | undefined) {
+  return {
+    hostId: session?.activeWorkspaceExecutionHostId ?? undefined,
+    worktreeId: activeSessionWorkspaceId(session)
+  }
 }
 
 /**

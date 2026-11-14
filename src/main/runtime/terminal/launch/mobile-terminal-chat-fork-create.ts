@@ -107,7 +107,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         )
         const win = this.getAvailableAuthoritativeWindow()
         const placement = resolveSavedChatForkAnchor(
-          this.getWorkspaceSessionForWorktree(worktreeId),
+          this.borrowWorkspaceSessionForWorktree(worktreeId),
           worktreeId,
           afterTabId
         )

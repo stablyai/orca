@@ -59,3 +59,13 @@ export function parseWorkspaceSessionsByHostId(
   }
   return { partitions, repaired }
 }
+
+export function withRequiredWorkspaceSessionMaps(
+  session: WorkspaceSessionState
+): WorkspaceSessionState {
+  return {
+    ...session,
+    tabsByWorktree: session.tabsByWorktree ?? {},
+    terminalLayoutsByTabId: session.terminalLayoutsByTabId ?? {}
+  }
+}

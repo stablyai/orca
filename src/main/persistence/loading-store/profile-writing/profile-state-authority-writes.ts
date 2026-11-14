@@ -54,7 +54,10 @@ export function serializeCompleteProfileStateDomains(
   }
 }
 
-function serializeSelectiveProfileStateDomainFragment(domain: string, value: unknown): string {
+export function serializeSelectiveProfileStateDomainFragment(
+  domain: string,
+  value: unknown
+): string {
   let needsNormalization = false
   const fragment = serializeProfileStateDomainFragment(domain, value, (_key, entry) => {
     if (entry !== null && typeof entry === 'object') {
@@ -70,7 +73,7 @@ function serializeSelectiveProfileStateDomainFragment(domain: string, value: unk
   return needsNormalization ? JSON.stringify(JSON.parse(fragment.toWellFormed())) : fragment
 }
 
-function serializeProfileStateDomainFragment(
+export function serializeProfileStateDomainFragment(
   domain: string,
   value: unknown,
   replacer?: (key: string, value: unknown) => unknown
@@ -79,6 +82,6 @@ function serializeProfileStateDomainFragment(
   return JSON.stringify({ [domain]: value }, replacer)
 }
 
-function extractProfileStateDomainPayload(domain: string, fragment: string): string {
+export function extractProfileStateDomainPayload(domain: string, fragment: string): string {
   return fragment.slice(JSON.stringify(domain).length + 2, -1)
 }

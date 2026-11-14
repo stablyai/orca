@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { captureMainTerminalPaneLookup, findMainTerminalPane } from './pty-pane-query'
 // Publish main-owned workspace panes from Store layout changes, even without a window graph.
 
@@ -33,7 +34,7 @@ class MainSurfacePublisher {
       reads: host.reads,
       hostIds: () => host.store()?.getWorkspaceSessionHostIds?.() ?? [],
       homeHostId: host.homeHostId,
-      savedSession: (hostId) => host.store()?.getWorkspaceSession?.(hostId) ?? null,
+      savedSession: (hostId) => borrowWorkspaceSession(host.store(), hostId) ?? null,
       generatedTitlesEnabled: () => host.store()?.getSettings?.().tabAutoGenerateTitle === true,
       onChanged: () => this.schedule({ merge: true })
     })

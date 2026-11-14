@@ -26,6 +26,7 @@ export function freezeProfileStateWrites(runtime: StoreRuntimeState): void {
     runtime.writeTimer = null
   }
   suspendGithubCachePersistence(runtime)
+  runtime.workspaceSessionFieldCapture.clear()
   runtime.profileStateAuthority?.close?.()
 }
 
@@ -44,6 +45,7 @@ export async function freezeProfileStateWritesAsync(runtime: StoreRuntimeState):
     ])
   } finally {
     runtime.writesFrozen = true
+    runtime.workspaceSessionFieldCapture.clear()
     await runtime.profileStateAuthority?.close?.()
   }
 }
@@ -150,6 +152,7 @@ async function pauseProfileState(
   }
   signal?.throwIfAborted()
   runtime.writesFrozen = true
+  runtime.workspaceSessionFieldCapture.clear()
   if (!flush) {
     await authority?.close?.()
     return {

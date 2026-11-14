@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './workspace-facts/orca-runtime-detected-checkouts-live-content'
@@ -137,7 +138,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
         isLocalWorkspace: (worktreeId) =>
           !!store && isLocalExecutionHost(this.workspaceHostId(worktreeId)),
         terminalPtyIds: (worktreeId) => {
-          const session = store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
+          const session = borrowWorkspaceSession(store, LOCAL_EXECUTION_HOST_ID)
           const ptyIds = new Set<string>()
           for (const tab of session?.tabsByWorktree?.[worktreeId] ?? []) {
             if (tab.ptyId) {

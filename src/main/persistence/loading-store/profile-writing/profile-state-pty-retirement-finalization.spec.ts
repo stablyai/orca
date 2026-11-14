@@ -10,8 +10,8 @@ export function registerProfileStatePtyRetirementFinalizationTests(): void {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const started = maintenanceBarrier()
     const release = maintenanceBarrier()
-    const write = authority.writeSerializedDomains.bind(authority)
-    vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce(async (domains) => {
+    const write = authority.writePreparedState.bind(authority)
+    vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async (domains) => {
       started.resolve()
       await release.promise
       await write(domains)
