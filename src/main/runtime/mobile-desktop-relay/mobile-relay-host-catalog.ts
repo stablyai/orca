@@ -204,7 +204,7 @@ export class MobileRelayHostCatalog {
   async worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult> {
     const parsed = parseExecutionHostId(hostId)
     // Re-pairing since status publication must fetch under the new identity.
-    this.options.serverRows.sync()
+    await this.options.serverRows.sync()
     const host =
       parsed?.kind === 'runtime'
         ? (await describeRelayHosts(this.options.hosts)).find(
@@ -222,10 +222,11 @@ export class MobileRelayHostCatalog {
     }
     const { environments, statusByEnvironmentId } = await this.options.hosts.list()
     const current = environments.find((environment) => environment.id === host.environmentId)
-    // Re-pairing during fetch can leave old-server rows; recheck identity afterward.
-    const rows = current
-      ? this.options.serverRows.rows(host.environmentId, relayHostFence(current))
-      : null
+    // The request belongs to the pairing that admitted its fetch.
+    if (!current || relayHostFence(current) !== relayHostFence(host.identity)) {
+      return { worktrees: null }
+    }
+    const rows = this.options.serverRows.rows(host.environmentId, relayHostFence(current))
     if (!current || !rows) {
       return { worktrees: null }
     }

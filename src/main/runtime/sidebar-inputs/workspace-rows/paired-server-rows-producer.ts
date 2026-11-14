@@ -257,12 +257,14 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
   }
 
   private snapshotFromListing(listing: MobileDesktopRelayListing | null): PairedServerRowsSnapshot {
-    return pairedServerRowsSnapshot(
-      listing,
-      this.servers.values(),
-      this.revision.value,
-      this.options.hostLabelOverrides()
-    )
+    return listing
+      ? pairedServerRowsSnapshot(
+          listing,
+          this.servers.values(),
+          this.revision.value,
+          this.options.hostLabelOverrides()
+        )
+      : { revision: this.revision.value, servers: [] }
   }
 
   /** Each server's catalog as last fetched, kept like its rows while it is out of contact. */
