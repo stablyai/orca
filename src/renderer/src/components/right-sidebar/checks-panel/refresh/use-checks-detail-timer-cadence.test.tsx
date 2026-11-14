@@ -260,12 +260,14 @@ describe('checks detail timer follows PR auto-refresh cadence changes while moun
       let hostRead: Observation | null = null
       let visible: Observation | null = null
       const saturate = () => {
+        // ast-grep-ignore: test-no-polling-loop -- Fixed fake-clock operations fill the real RPC admission pool.
         for (let call = 0; call < 24; call += 1) {
           const blocker: (typeof blockers)[number] = { queuedAt: Date.now() }
           blockers.push(blocker)
           pending.push(
             pool.enqueue('env-1', 'files.read', async () => {
               blocker.admittedAt = Date.now()
+              // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider time holds the real admission slot.
               await new Promise((resolve) => setTimeout(resolve, 21_000))
               blocker.doneAt = Date.now()
             })
@@ -284,6 +286,7 @@ describe('checks detail timer follows PR auto-refresh cadence changes while moun
           'github.prChecks',
           async () => {
             operation.admittedAt = Date.now()
+            // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider completion preserves the tested response ordering.
             await new Promise((resolve) => setTimeout(resolve, 2_000))
             const paced =
               operation.background &&

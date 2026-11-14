@@ -43,6 +43,7 @@ let renderer: ReturnType<typeof createTestStore>
 
 beforeEach(() => {
   moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
+  vi.setSystemTime(1_000)
   provider.resolve.mockReset()
   provider.gate.mockReset().mockResolvedValue(null)
   resetRemoteRuntimeMocks()

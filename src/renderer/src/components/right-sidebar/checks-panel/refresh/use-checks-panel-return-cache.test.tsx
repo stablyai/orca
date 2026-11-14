@@ -55,11 +55,13 @@ it.each(['background', 'fresh'] as const)(
     let hostObservedAt = -Infinity
     let reusedObservationAt = -Infinity
     const saturate = () => {
+      // ast-grep-ignore: test-no-polling-loop -- Fixed fake-clock operations fill the real RPC admission pool.
       for (let call = 0; call < 24; call += 1) {
         pending.push(
           pool.enqueue(
             'env-1',
             'files.read',
+            // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider time holds the real admission slot.
             () => new Promise((resolve) => setTimeout(resolve, 21_000))
           )
         )
@@ -80,6 +82,7 @@ it.each(['background', 'fresh'] as const)(
         'github.prChecks',
         async () => {
           read.admittedAt = Date.now()
+          // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider completion preserves the tested response ordering.
           await new Promise((resolve) => setTimeout(resolve, 2_000))
           read.completedAt = Date.now()
           if (

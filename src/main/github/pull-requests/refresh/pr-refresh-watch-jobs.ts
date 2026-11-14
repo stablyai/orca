@@ -58,7 +58,9 @@ export function prWatchCadence(
 }
 
 /** The plan a read of the PR gives its watch; none for a failed read. */
-export function prWatchReadPlan(outcome: PRRefreshOutcome): PRWatchPlan | null {
+export function prWatchReadPlan(
+  outcome: PRRefreshOutcome
+): Extract<PRWatchPlan, { kind: 'read' }> | null {
   if (outcome.kind === 'upstream-error') {
     return null
   }
