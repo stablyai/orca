@@ -82,7 +82,6 @@ export type OriginLineMethods = Pick<
   OriginBufferLine,
   | 'loadCell'
   | 'setCell'
-  | 'set'
   | 'insertCells'
   | 'deleteCells'
   | 'replaceCells'
@@ -91,7 +90,8 @@ export type OriginLineMethods = Pick<
   | 'copyFrom'
   | 'clone'
   | 'copyCellsFrom'
->
+> &
+  Partial<Pick<OriginBufferLine, 'set'>>
 export type OriginLineAttachment = OriginLineState & {
   owner: HeadlessContentOrigins
   originals?: OriginLineMethods
