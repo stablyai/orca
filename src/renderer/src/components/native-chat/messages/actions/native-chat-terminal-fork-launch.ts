@@ -43,9 +43,19 @@ function leaveDraftInNewTab(tabId: string, draft: string): void {
   if (place()) {
     return
   }
+  // place() writes the store, which notifies this listener again; the nested call must not recurse.
+  let placing = false
   const stop = useAppStore.subscribe(() => {
-    if (place()) {
-      stop()
+    if (placing) {
+      return
+    }
+    placing = true
+    try {
+      if (place()) {
+        stop()
+      }
+    } finally {
+      placing = false
     }
   })
   // A tab that never lays out (a failed launch) must not keep a listener alive.
