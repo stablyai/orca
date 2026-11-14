@@ -270,7 +270,6 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
   }
 )
 
-
 async function foregroundWindowOwnerPid(): Promise<number> {
   const { stdout } = await promisify(execFile)('powershell.exe', [
     '-NoProfile',
