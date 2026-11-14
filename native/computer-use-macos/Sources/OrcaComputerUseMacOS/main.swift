@@ -133,13 +133,15 @@ final class ElementRecord {
     let localFrame: CGRect?
     let actions: [String]
     let signature: String
+    let disabled: Bool
 
-    init(index: Int, element: AXUIElement, localFrame: CGRect?, actions: [String], signature: String) {
+    init(index: Int, element: AXUIElement, localFrame: CGRect?, actions: [String], signature: String, disabled: Bool) {
         self.index = index
         self.element = element
         self.localFrame = localFrame
         self.actions = actions
         self.signature = signature
+        self.disabled = disabled
     }
 }
 
@@ -1064,6 +1066,10 @@ final class Provider {
             "treeText": snapshot.treeText,
             "elementCount": snapshot.scope?.walkedIndexes.count ?? snapshot.elements.count,
             "focusedElementId": snapshot.focusedElementId as Any,
+            "disabledElementIndexes": snapshot.elements.values
+                .filter { $0.disabled && snapshot.scope?.walkedIndexes.contains($0.index) != false }
+                .map(\.index)
+                .sorted(),
             "truncation": [
                 "truncated": snapshot.truncated,
                 "maxNodes": TreeRenderer.maxNodes,
@@ -2709,7 +2715,8 @@ private final class TreeRenderer {
             element: element,
             localFrame: localFrame,
             actions: rawActions,
-            signature: elementSignature(node)
+            signature: elementSignature(node),
+            disabled: traits.contains("disabled")
         )
         if let focused, CFEqual(focused, element) {
             focusedElementId = index
@@ -2808,7 +2815,7 @@ extension TreeRenderer {
         )
         let renumbered = Dictionary(uniqueKeysWithValues: zip(walked.map(\.index), assignment.indexes))
         records = Dictionary(uniqueKeysWithValues: zip(walked, assignment.indexes).map { record, index in
-            (index, ElementRecord(index: index, element: record.element, localFrame: record.localFrame, actions: record.actions, signature: record.signature))
+            (index, ElementRecord(index: index, element: record.element, localFrame: record.localFrame, actions: record.actions, signature: record.signature, disabled: record.disabled))
         })
         lines = lines.map { StableElementIndexes.renumber(line: $0, indexes: renumbered) }
         focusedElementId = focusedElementId.flatMap { renumbered[$0] }
