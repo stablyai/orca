@@ -76,7 +76,7 @@ it('publishes nothing when the exit write lands after a replacement is admitted'
   unsubscribe()
 })
 
-async function exitWithFailedDurableWrite(f: ReturnType<typeof fixture>): Promise<void> {
+async function exitWithFailedDurableWrite(f: Awaited<ReturnType<typeof fixture>>): Promise<void> {
   await f.store.flushPendingOrThrowAsync()
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   f.authority.failNextWrite()
