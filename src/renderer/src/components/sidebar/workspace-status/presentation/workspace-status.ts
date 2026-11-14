@@ -95,26 +95,26 @@ export const getWorkspaceStatusColorOptions = createLocalizedCatalog(() => [
   {
     id: 'conductor-done',
     label: translate('auto.components.sidebar.workspace.status.895f381714', 'Conductor Done'),
-    tone: 'text-[#c7a594]',
-    swatch: 'bg-[#c7a594]',
-    border: 'border-t-[#c7a594]/70',
-    laneTint: 'bg-[#c7a594]/[0.04]'
+    tone: 'text-workspace-status-done',
+    swatch: 'bg-workspace-status-done',
+    border: 'border-t-workspace-status-done/70',
+    laneTint: 'bg-workspace-status-done/[0.04]'
   },
   {
     id: 'conductor-review',
     label: translate('auto.components.sidebar.workspace.status.caebe3c10f', 'Conductor Review'),
-    tone: 'text-[#16a34a]',
-    swatch: 'bg-[#16a34a]',
-    border: 'border-t-[#16a34a]/70',
-    laneTint: 'bg-[#16a34a]/[0.04]'
+    tone: 'text-workspace-status-review',
+    swatch: 'bg-workspace-status-review',
+    border: 'border-t-workspace-status-review/70',
+    laneTint: 'bg-workspace-status-review/[0.04]'
   },
   {
     id: 'conductor-progress',
     label: translate('auto.components.sidebar.workspace.status.1a9383112b', 'Conductor Progress'),
-    tone: 'text-[#d4a300]',
-    swatch: 'bg-[#d4a300]',
-    border: 'border-t-[#d4a300]/70',
-    laneTint: 'bg-[#d4a300]/[0.04]'
+    tone: 'text-workspace-status-progress',
+    swatch: 'bg-workspace-status-progress',
+    border: 'border-t-workspace-status-progress/70',
+    laneTint: 'bg-workspace-status-progress/[0.04]'
   }
 ])
 

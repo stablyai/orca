@@ -87,7 +87,18 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--git-decoration-renamed': 'Renamed files',
   '--git-decoration-untracked': 'Untracked files',
   '--git-decoration-copied': 'Copied files',
-  '--git-decoration-ignored': 'Git-ignored files'
+  '--git-decoration-ignored': 'Git-ignored files',
+  '--agent-working': 'Working-agent icons and spinners',
+  '--agent-question': 'Agents waiting for you: icons, and the tint of their cards',
+  '--agent-question-text': 'Text of a waiting agent',
+  '--workspace-status-progress':
+    'In-progress workspace and PR status, and any status given the Conductor Progress color',
+  '--workspace-status-review':
+    'In-review workspace and PR status, and any status given the Conductor Review color',
+  '--workspace-status-done':
+    'Done workspace and PR status, and any status given the Conductor Done color',
+  '--status-success': 'Success text and badges; its tints follow it',
+  '--status-warning': 'Warning text and badges; its tints follow it'
 }
 
 // Why: these mix per mode in main.css, or from chat-internal colors that authors cannot set.

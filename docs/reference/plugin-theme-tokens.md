@@ -79,6 +79,14 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--git-decoration-untracked` | Untracked files | no | Orca's built-in color |
 | `--git-decoration-copied` | Copied files | no | Orca's built-in color |
 | `--git-decoration-ignored` | Git-ignored files | no | Orca's built-in color |
+| `--agent-working` | Working-agent icons and spinners | no | Orca's built-in color |
+| `--agent-question` | Agents waiting for you: icons, and the tint of their cards | no | Orca's built-in color |
+| `--agent-question-text` | Text of a waiting agent | no | Orca's built-in color |
+| `--workspace-status-progress` | In-progress workspace and PR status, and any status given the Conductor Progress color | no | Orca's built-in color |
+| `--workspace-status-review` | In-review workspace and PR status, and any status given the Conductor Review color | no | Orca's built-in color |
+| `--workspace-status-done` | Done workspace and PR status, and any status given the Conductor Done color | no | Orca's built-in color |
+| `--status-success` | Success text and badges; its tints follow it | no | Orca's built-in color |
+| `--status-warning` | Warning text and badges; its tints follow it | no | Orca's built-in color |
 
 ## Frame CSS variables
 

@@ -82,7 +82,15 @@ export const PLUGIN_APP_THEME_TOKENS = [
   '--git-decoration-renamed',
   '--git-decoration-untracked',
   '--git-decoration-copied',
-  '--git-decoration-ignored'
+  '--git-decoration-ignored',
+  '--agent-working',
+  '--agent-question',
+  '--agent-question-text',
+  '--workspace-status-progress',
+  '--workspace-status-review',
+  '--workspace-status-done',
+  '--status-success',
+  '--status-warning'
 ] as const
 
 const THEME_TOKEN_SET = new Set<string>(PLUGIN_APP_THEME_TOKENS)
