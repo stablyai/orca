@@ -41,16 +41,6 @@ function cookieSetArguments(params: Record<string, unknown>): string[] {
   }
   return args
 }
-function cookieDeleteArguments(params: Record<string, unknown>): string[] {
-  const args = ['cookies', 'clear']
-  if (params.name) {
-    args.push('--name', String(params.name))
-  }
-  if (params.domain) {
-    args.push('--domain', String(params.domain))
-  }
-  return args
-}
 
 export function externalChromiumCommandArguments(
   method: string,
@@ -139,8 +129,6 @@ export function externalChromiumCommandArguments(
       return ['highlight', text('selector')]
     case 'browserCookieGet':
       return ['cookies', 'get']
-    case 'browserCookieDelete':
-      return cookieDeleteArguments(params)
     case 'browserSetGeolocation':
       return ['set', 'geo', text('latitude'), text('longitude')]
     case 'browserInterceptDisable':

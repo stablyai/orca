@@ -7,7 +7,7 @@ import {
   nativeChatTaskLabel,
   type NativeChatTask,
   type NativeChatTaskList as TaskList
-} from '../../../../../src/shared/native-chat/input/native-chat-task-list'
+} from '../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list'
 import { nativeChatTaskListCopy } from './native-chat-task-list-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'

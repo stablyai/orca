@@ -11,6 +11,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { matchesSettingsSearch } from '../../search/settings-search'
 import { Switch } from '@/components/ui/switch'
 import { RepositoryHooksYamlStatus } from './RepositoryHooksYamlStatus'
+import type { HookYamlPresentation } from './repository-hook-settings-draft'
 
 type PolicyOption<Policy> = { policy: Policy; label: string; description: string }
 
@@ -177,6 +178,7 @@ export function RepositoryHookCommandSourceSetting({
   searchQuery,
   selectedPolicy,
   setupOnly = false,
+  yamlPresentation,
   yamlState,
   yamlHooks,
   copiedTemplate,
@@ -188,6 +190,7 @@ export function RepositoryHookCommandSourceSetting({
   searchQuery: string
   selectedPolicy: HookCommandSourcePolicy
   setupOnly?: boolean
+  yamlPresentation?: HookYamlPresentation
   yamlState: string
   yamlHooks: OrcaHooks | null
   copiedTemplate: boolean
@@ -282,6 +285,7 @@ export function RepositoryHookCommandSourceSetting({
         </div>
         <RepositoryHooksYamlStatus
           setupOnly={setupOnly}
+          yamlPresentation={yamlPresentation}
           yamlState={yamlState}
           yamlHooks={yamlHooks}
           copiedTemplate={copiedTemplate}

@@ -29,7 +29,7 @@ import {
 } from '../structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
-import { finishedListingIds } from '../../../../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
+import { finishedListingIds } from '../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-listing-verified-ids'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({

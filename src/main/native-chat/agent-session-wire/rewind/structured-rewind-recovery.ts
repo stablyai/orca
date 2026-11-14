@@ -7,7 +7,7 @@ import {
   settleUnsupportedClaudeRewind
 } from './structured-rewind-record'
 
-import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import { renderJournalStatus } from '../../agent-session-journal/projection/journal-public-read'
 import { journalInputOrder } from '../../agent-session-journal/input-order/journal-input-order'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
@@ -18,14 +18,14 @@ import type {
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { latestUsageLimitContinueIdentity } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   agentSessionJournalProviderHandle,
   claudeProviderHandle
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { isDeepStrictEqual } from 'node:util'
 import { legacyRewindTurns, rewindJournalCut } from './structured-rewind-cut'
-import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'

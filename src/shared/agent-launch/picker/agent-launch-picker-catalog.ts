@@ -1,14 +1,14 @@
-import { modelMenuOptions } from '../../agent-session/options/model-menu-options'
-import { listedModelDescribing } from '../../agent-session/options/structured-agent-session-listed-model'
+import { modelMenuOptions } from '../../agent-session/options/view/model-menu-options'
+import { listedModelDescribing } from '../../agent-session/options/model-catalog/structured-agent-session-listed-model'
 import {
   discoveredModel,
   structuredModelEfforts
-} from '../../agent-session/options/structured-agent-session-discovered-model'
-import { createClaudeCatalogOptions } from '../../agent-session/options/agent-session-option-catalog-claude-codex'
+} from '../../agent-session/options/model-catalog/structured-agent-session-discovered-model'
+import { createClaudeCatalogOptions } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import type {
   CatalogModel,
   CatalogOption
-} from '../../agent-session/options/agent-session-option-catalog-types'
+} from '../../agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
 import { sourceControlActionOptions } from '../../source-control/ai/recipes/source-control-action-options'
 import {

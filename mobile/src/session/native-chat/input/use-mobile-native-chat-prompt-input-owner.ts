@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from 'react'
 import type { TextInputInstance } from 'react-native'
 import { isNewerApprovalSubject } from '../../../../../src/shared/agent-session/agent-session-approval-subject'
-import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 // As on desktop a shown card replaces the composer (kept mounted for its draft), except while dictation runs or lands

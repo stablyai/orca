@@ -6,7 +6,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
-import type { AgentSessionRewindReason } from './lifecycle/agent-session-rewind'
+import type { AgentSessionRewindReason } from './lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
 import type {

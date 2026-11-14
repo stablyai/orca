@@ -3,12 +3,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import '../structured-agent-session-dead-generation-settlement'
 import { settleStaleStructuredAgentSessionState } from '../structured-agent-session-stale-state-settlement'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   RUNNING_IDENTITY,
   THREAD,

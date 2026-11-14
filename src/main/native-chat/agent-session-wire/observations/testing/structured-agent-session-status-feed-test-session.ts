@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionProviderChildIdentity } from '../../host/structured-agent-session-host-types'

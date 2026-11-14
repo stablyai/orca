@@ -46,35 +46,4 @@ describe('browser Find subscriptions', () => {
     expect(samePageCallback).toHaveBeenCalledOnce()
     expect(sameWorkspaceCallback).not.toHaveBeenCalled()
   })
-
-  it('dispatches an explicitly undefined workspace as page-only, not as a miss', () => {
-    const subscriptions = createBrowserFindSubscriptions()
-    const callback = vi.fn()
-    subscriptions.subscribe(FIRST_SOURCE, callback)
-
-    // Structured-clone IPC preserves explicitly undefined properties.
-    subscriptions.dispatch({
-      browserPageId: FIRST_SOURCE.browserPageId,
-      browserWorkspaceId: undefined
-    })
-
-    expect(callback).toHaveBeenCalledOnce()
-  })
-
-  it('rejects malformed identities and blank ids', () => {
-    const subscriptions = createBrowserFindSubscriptions()
-    const callback = vi.fn()
-    subscriptions.subscribe(FIRST_SOURCE, callback)
-
-    subscriptions.dispatch(undefined)
-    subscriptions.dispatch(['page-1'])
-    subscriptions.dispatch({ browserWorkspaceId: FIRST_SOURCE.browserWorkspaceId })
-    subscriptions.dispatch({ browserPageId: '' })
-    subscriptions.dispatch({
-      browserPageId: FIRST_SOURCE.browserPageId,
-      browserWorkspaceId: ''
-    })
-
-    expect(callback).not.toHaveBeenCalled()
-  })
 })

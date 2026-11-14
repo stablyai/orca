@@ -7,7 +7,7 @@ import { fingerprintPluginConsent } from '../../../shared/plugins/approval/plugi
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_HOST_API } from '../../../shared/plugins/workers/plugin-host-api'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { devFolderConsentIdentity } from '../plugin-discovery'
+import { devFolderConsentIdentity } from '../discovery/plugin-discovery'
 import { PluginService } from '../plugin-service'
 import { createPluginAppearanceService } from './plugin-appearance-service'
 

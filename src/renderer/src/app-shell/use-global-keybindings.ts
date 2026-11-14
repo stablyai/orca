@@ -40,7 +40,7 @@ import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { textInputOwnsComposition } from '../../../shared/text-input-shortcut-policy'
-import { isAgentTerminalPreviewTarget } from '../components/dashboard-popout/agent-terminal-preview-target'
+import { isAgentTerminalPreviewTarget } from '../components/dashboard/terminal-preview/agent-terminal-preview-target'
 
 /** Register window listeners once; each key event reads the latest committed shortcut state through a ref. */
 export function useGlobalKeybindings(args: {

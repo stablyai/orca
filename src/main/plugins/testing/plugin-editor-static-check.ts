@@ -21,7 +21,7 @@ import {
 import {
   readContainedPluginArtifactText,
   resolveContainedPluginArtifact
-} from '../plugin-contained-artifact'
+} from '../artifacts/plugin-contained-artifact'
 import {
   lineColumn,
   readHtmlScripts,

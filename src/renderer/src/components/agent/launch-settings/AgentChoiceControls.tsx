@@ -1,4 +1,4 @@
-import { modelMenuOptions } from '../../../../../shared/agent-session/options/model-menu-options'
+import { modelMenuOptions } from '../../../../../shared/agent-session/options/view/model-menu-options'
 import type {
   AgentChoicePatch,
   AgentDedicatedChoices
@@ -12,7 +12,7 @@ import {
   sourceControlActionAgentPicksModel,
   sourceControlActionOptions
 } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
-import { encodeCatalogOptionValue } from '../../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { encodeCatalogOptionValue } from '../../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 import {

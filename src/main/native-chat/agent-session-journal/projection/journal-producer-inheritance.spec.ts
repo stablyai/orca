@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export function registerJournalProducerInheritanceTests(): void {
   const child: AgentJournalItemIdentity = {

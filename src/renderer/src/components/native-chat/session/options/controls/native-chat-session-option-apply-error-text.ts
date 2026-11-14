@@ -3,7 +3,7 @@ import {
   SESSION_OPTION_APPLY_FAILURE_COPY as EN,
   type SessionOptionApplyError,
   type SessionOptionApplyFailureCode
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-apply-failure'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-apply-failure'
 
 const COPY: Record<SessionOptionApplyFailureCode, (id: string) => string> = {
   startOnly: () => translate('components.native-chat.sessionOptionErrors.startOnly', EN.startOnly),

@@ -3,7 +3,7 @@ import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } fro
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { useMobileNativeChatProjection } from './transcript/use-mobile-native-chat-projection'
-import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/native-chat-task-list-state'
+import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileNativeChatStructuredComposer } from './composer/mobile-native-chat-structured-composer'

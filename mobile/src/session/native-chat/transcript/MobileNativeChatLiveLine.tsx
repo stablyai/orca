@@ -1,7 +1,7 @@
 import { useContext } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
+import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import { formatMobileNativeChatActiveTurnLabel } from './native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'

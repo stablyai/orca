@@ -14,7 +14,7 @@ import {
 import type {
   AgentSessionOperationOutcome,
   AgentSessionOperationRefusalCode
-} from '../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-replay-outcome'
 import type { TerminalSpawnDispatch } from '../../../../agent-launch/agent-launch-not-started'
 import type { RpcContext } from '../../core'

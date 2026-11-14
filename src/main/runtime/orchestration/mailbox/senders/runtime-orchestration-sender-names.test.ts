@@ -2,7 +2,7 @@ import { acceptedAnswerSender } from './accepted-answer-sender'
 
 import { OrcaRuntimeService } from '../../../orca-runtime'
 
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
@@ -13,7 +13,7 @@ import type { AgentSessionRecord } from '../../../../../shared/agent-session/lif
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 

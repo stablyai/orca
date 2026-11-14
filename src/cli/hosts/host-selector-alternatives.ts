@@ -157,7 +157,7 @@ export async function resolveSshHostTargetId(
   if (matched) {
     return matched.id
   }
-  const { RuntimeClientError } = await import('../runtime/types.js')
+  const { RuntimeClientError } = await import('../runtime/connection/types.js')
   const ambiguous = ambiguousSshTargets(targets, targetId)
   if (ambiguous.length > 0) {
     throw new RuntimeClientError(

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { createClaudeJournalTranslator } from '../../../../claude/structured/journal/claude-structured-journal-translation'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
 import {
   closeTestJournalHostDatabase,

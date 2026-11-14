@@ -7,8 +7,8 @@ import { useContext, useMemo } from 'react'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
-} from '../../../../../../shared/native-chat/transcript/native-chat-live-line'
-import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
+} from '../../../../../../shared/native-chat/transcript/row-content/native-chat-live-line'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-live-turn-membership'
 import {
   buildNativeChatTranscript,
   type NativeChatTranscriptSlot

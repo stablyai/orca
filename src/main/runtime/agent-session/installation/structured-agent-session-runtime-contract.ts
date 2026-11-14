@@ -2,7 +2,7 @@ import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from '../structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { StructuredAttentionMobileDelivery } from '../structured-agent-session-mobile-attention'
 import type {
   StructuredAgentCommand,

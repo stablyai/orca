@@ -1,4 +1,4 @@
-import type { AgentSessionRewindNotice } from '../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
+import type { AgentSessionRewindNotice } from '../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import { translate } from '../../i18n/mobile-i18n'
 
 const copy = {

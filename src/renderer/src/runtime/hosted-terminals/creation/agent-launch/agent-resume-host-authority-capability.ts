@@ -14,7 +14,7 @@ import {
   AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_LOOP_RESUME_RUNTIME_CAPABILITY
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-resume-runtime-capabilities'
+} from '../../../../../../shared/agent-session/lifecycle/resume/agent-session-resume-runtime-capabilities'
 import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeCapability } from '../../../../../../shared/protocol-version'
 

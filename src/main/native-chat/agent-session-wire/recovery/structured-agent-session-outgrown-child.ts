@@ -16,7 +16,7 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session/jour
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
   journal: Pick<

@@ -1,7 +1,7 @@
 import type {
   NativeChatSubagentGroupCopyId,
   NativeChatSubagentGroupSay
-} from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-group-header'
+} from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
 import { translate } from '../../../i18n/mobile-i18n'
 
 export const sayMobileNativeChatSubagentGroup: NativeChatSubagentGroupSay = (id, values) => {

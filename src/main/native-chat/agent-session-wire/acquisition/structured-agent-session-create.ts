@@ -4,7 +4,7 @@ import {
 } from '../operations/structured-agent-session-command-receipt'
 import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
 import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import type { StructuredAgentSessionFirstMessage } from '../../../../shared/agent-session/structured-agent-session-create'

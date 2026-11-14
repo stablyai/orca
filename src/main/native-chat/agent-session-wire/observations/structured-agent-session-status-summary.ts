@@ -1,6 +1,6 @@
-import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import { structuredAgentSessionRuntimePermission } from '../options/structured-agent-session-ran-options'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import {
   normalizeOptionalField,

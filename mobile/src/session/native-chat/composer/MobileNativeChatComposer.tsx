@@ -1,5 +1,5 @@
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft
@@ -9,7 +9,7 @@ import {
   focusMobileNativeChatTextDestination,
   pruneMobileNativeChatDraftSkills
 } from './mobile-native-chat-draft-inputs'
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import { MobileNativeChatComposerAllocation } from './MobileNativeChatComposerAllocation'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'

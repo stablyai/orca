@@ -1,5 +1,5 @@
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
-import { readClaudePermissionMode } from './provider-session-live-settings'
+import { readClaudePermissionMode } from './resume/provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
 import type {
   AgentStatusCacheIdentity,
@@ -8,8 +8,6 @@ import type {
 import type { AgentStatusState } from '../../agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
-
-export { agentProviderSessionsEqual } from './agent-provider-session-equality'
 
 export const RESUMABLE_TUI_AGENTS = [
   'claude',

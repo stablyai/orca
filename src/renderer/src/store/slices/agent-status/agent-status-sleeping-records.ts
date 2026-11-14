@@ -7,7 +7,7 @@ import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { resumeRecordFromStatus } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { resumeRecordFromStatus } from '../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
 

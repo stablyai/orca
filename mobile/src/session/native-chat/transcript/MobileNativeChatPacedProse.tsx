@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
-import { nativeChatProseToMarkdown } from '../../../../../src/shared/native-chat/transcript/native-chat-prose'
+import { nativeChatProseToMarkdown } from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-prose'
 import {
   isTextBlock,
   type NativeChatBlock

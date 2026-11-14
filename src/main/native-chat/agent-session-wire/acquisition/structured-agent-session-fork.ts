@@ -3,7 +3,7 @@ import {
   type StructuredAgentSessionForkInput
 } from './structured-agent-session-fork-source'
 import { prepareForkSnapshot } from './structured-agent-session-fork-snapshot'
-import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 import {
   normalizeAgentSessionConversationName,

@@ -1,6 +1,6 @@
 import React from 'react'
-import MermaidBlock from '@/components/editor/MermaidBlock'
-import { useMermaidDiagramExpand } from '@/components/editor/use-mermaid-diagram-expand'
+import MermaidBlock from '@/components/editor/diagrams/MermaidBlock'
+import { useMermaidDiagramExpand } from '@/components/editor/diagrams/use-mermaid-diagram-expand'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { cn } from '@/lib/class-names'
 

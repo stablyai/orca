@@ -21,7 +21,7 @@ import { isSubagentBlock } from '../../../../../shared/native-chat/native-chat-t
 import {
   subagentFoldKey,
   subagentItemBlock
-} from '../../../../../shared/native-chat/transcript/native-chat-subagent-items'
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2

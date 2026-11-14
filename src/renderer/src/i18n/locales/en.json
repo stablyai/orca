@@ -76,6 +76,14 @@
     "failed": "Failed to open the file."
   },
   "sidebar": {
+    "worktreeCardsUpdateNotice": {
+      "newLabel": "New",
+      "title": "Worktree cards",
+      "exampleChildren": "1 child",
+      "statusCaption": "Title flags agents that need you",
+      "childrenCaption": "Parents sum up child worktrees",
+      "dismiss": "Dismiss"
+    },
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
       "description": "The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.",
@@ -1003,6 +1011,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Installed agents",
+      "availableRegion": "Agents available to install",
       "permissionsTitle": "Permissions",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",
@@ -1453,7 +1463,9 @@
       "useExample": "Use this example",
       "description": "Scripts that run in this folder when a workspace is created. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
       "invalidSetup": "The file is present, but Orca could not find a valid setup script.",
-      "supportedKeys": "Define only the supported keys: `scripts` and `setup`."
+      "supportedKeys": "Define only the supported keys: `scripts` and `setup`.",
+      "supportedArchiveKeys": "Define only the supported keys: `scripts`, `setup`, and `archive`.",
+      "invalidArchive": "The file is present, but Orca could not find a valid setup or archive script."
     }
   },
   "menu": {
@@ -2683,9 +2695,9 @@
         "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
-        "titleOne": "macOS just interrupted an agent",
-        "titleMany": "macOS interrupted your agents {{count}}×",
-        "subtitle": "Full Disk Access stops these file prompts.",
+        "titleOne": "macOS just showed a file prompt",
+        "titleMany": "macOS showed {{count}} file prompts",
+        "subtitle": "Full Disk Access stops these prompts.",
         "enable": "Turn on Full Disk Access",
         "close": "Close",
         "dismiss": "Don't show again"
@@ -14818,11 +14830,6 @@
             "locallyResolvedConflictOfKind": "Conflict resolved locally ({{kind}})",
             "locallyResolvedConflict": "Conflict resolved locally",
             "pushesToForkTarget": "Pushes to fork {{target}}",
-            "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
-            "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
-            "mergedReviewHeadMoved": "{{review}} is merged, but Orca could not confirm that it includes this branch’s current commits.",
-            "mergedReviewNothingLeft": "{{review}} is merged and includes this branch’s committed changes.",
-            "mergedReviewSafeToDelete": "{{review}} is merged and includes this branch’s committed changes. Ignored files may still be lost when deleting this workspace.",
             "abortRebaseConfirmTitle": "Abort rebase?",
             "abortMergeConfirmTitle": "Abort merge?",
             "abortRebaseConfirmDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
@@ -18166,7 +18173,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome extensions",
+                        "title": "Bring your Chrome extensions",
+                        "everydayTitle": "Your everyday browser tools, in Orca",
                         "body": "Install from the Chrome Web Store and pin them next to the address bar.",
                         "action": "Open Web Store",
                         "secondaryAction": "Got it"

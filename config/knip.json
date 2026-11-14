@@ -60,7 +60,7 @@
     "src/**/*.test-fixture.{ts,tsx}",
     "src/main/runtime/rpc/dispatch/rpc-params-type-parity.ts",
     "src/main/runtime/rpc/methods/client-state/ui-state-schema-parity-checks.ts",
-    "src/renderer/src/components/editor/monaco-internal-test-module-types.ts",
+    "src/renderer/src/components/editor/monaco/monaco-internal-test-module-types.ts",
     "mobile/**/*.{ts,tsx}",
     "cloud/**/*.{ts,tsx,mjs}"
   ],

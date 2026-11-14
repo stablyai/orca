@@ -4,8 +4,8 @@ import {
   applyMentionSuggestion,
   deriveComposerAutocomplete,
   isSkillPickerTriggered
-} from '../../../../../src/shared/native-chat/input/native-chat-composer-autocomplete'
-import { applyPickerSuggestion } from '../../../../../src/shared/native-chat/input/native-chat-picker-triggers'
+} from '../../../../../src/shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import { applyPickerSuggestion } from '../../../../../src/shared/native-chat/input/composer/native-chat-picker-triggers'
 import {
   structuredAgentSessionModePickDraft,
   structuredAgentSessionPickEntersGoalMode
@@ -13,8 +13,8 @@ import {
 import {
   agentSessionInteractionCommand,
   type AgentSessionInteractionMode
-} from '../../../../../src/shared/agent-session/options/agent-session-interaction-mode'
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
+} from '../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
+import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import {
   boundedMenuItems,
   draftAfterSkillEdit,

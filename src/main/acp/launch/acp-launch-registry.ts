@@ -12,7 +12,7 @@ import {
   parseOpenCodeModelListing
 } from '../../opencode/model-launch/opencode-model-catalog-listing'
 
-import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/agent-session-setup-commands'
+import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,

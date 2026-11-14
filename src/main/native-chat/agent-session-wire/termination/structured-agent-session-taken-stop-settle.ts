@@ -1,4 +1,4 @@
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { runningTurnLifecycleRevisions } from './structured-agent-session-stale-turn-verdict'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 

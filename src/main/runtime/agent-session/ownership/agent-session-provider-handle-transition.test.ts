@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { isPersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
 } from './agent-session-provider-handle-transition'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 function resumedLink(fence: number): AgentSessionProviderHandleLink {
   return {

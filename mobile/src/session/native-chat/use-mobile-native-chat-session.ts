@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { EMPTY_NATIVE_CHAT_TRANSCRIPT } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
+import { EMPTY_NATIVE_CHAT_TRANSCRIPT } from '../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-retention'
 import {
   createNativeChatMerger,
   replaceList

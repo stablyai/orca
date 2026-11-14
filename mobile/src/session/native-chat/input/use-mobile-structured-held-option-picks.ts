@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AgentSessionOptionResult } from '../../../../../src/shared/agent-session/agent-session-wire'
-import { acceptedStructuredSessionSelectionOutcome } from '../../../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
-import type { StructuredSessionSelectionController } from '../../../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
+import { acceptedStructuredSessionSelectionOutcome } from '../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
+import type { StructuredSessionSelectionController } from '../../../../../src/shared/agent-session/options/selection/structured-agent-session-selection-operations'
 import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
   nativeChatModelPillLabel,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { translate } from '../../../i18n/mobile-i18n'
 import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'

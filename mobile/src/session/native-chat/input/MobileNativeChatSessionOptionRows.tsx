@@ -16,11 +16,11 @@ import {
   nativeChatSessionChoiceLabel,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import {
   loneFastTier,
   speedButtonTiers
-} from '../../../../../src/shared/native-chat/input/native-chat-session-speed-tiers'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { MobileSwitch } from '../../../components/MobileSwitch'
 

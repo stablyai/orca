@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatSettledTurns } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatSettledTurns } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import {
   mergeNativeChatLiveSession,
   nativeChatHookHasWorkingSubagents,
@@ -25,7 +25,7 @@ import type { MobileNativeChatResolution } from '../mobile-native-chat-eligibili
 import {
   pendingSendsAsMessages,
   type NativeChatPendingSend
-} from '../../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
+} from '../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 
 const NO_MESSAGES: NativeChatMessage[] = []
 

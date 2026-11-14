@@ -2,7 +2,7 @@ import { createElement, Fragment, useMemo, useState, type ReactNode, type RefObj
 import type { TextInputInstance } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedTaskList'
-import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
+import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list'
 import {
   MobileNativeChatQueuedMessages,
   mobileNativeChatChordHeadId,
