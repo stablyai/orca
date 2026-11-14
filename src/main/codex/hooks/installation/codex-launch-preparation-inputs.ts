@@ -1,8 +1,7 @@
-import { lstatSync, readlinkSync, realpathSync, statSync } from 'node:fs'
+import { lstat, readlink, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { readNodeFileSyncWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
-import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/configuration/hook-config-write-path'
+import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { getGuardedOperationHeldPath } from '../../../filesystem/atomic-file-publication'
 import {
   digestFileContent,
@@ -13,10 +12,8 @@ import {
 import { MAX_AGENT_STATE_FILE_BYTES } from '../../configuration/agent-state-file-reader'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { getCodexSettingsBaselinePath } from '../../configuration/settings/config-settings-baseline'
-import { resolvePromotionWriteTarget } from '../../configuration/settings/config-settings-promotion-write-target'
-import { resolveTomlWritePath } from '../../configuration/toml/config-toml-atomic-write'
 import { getProvenancePath } from '../../trust/hooks/hook-trust-promotion'
-import { getExplicitHomeCodexHookSourcePath } from '../../trust/identity/codex-trust-identity'
+import { normalizeCodexTrustSourcePath } from '../../trust/identity/codex-trust-identity'
 import { getManagedScriptPath } from '../definitions/codex-hook-definition'
 import { getLegacyCodexProfileTomlPath } from '../reconciliation/codex-hook-legacy-cleanup'
 
@@ -27,16 +24,17 @@ export type CodexLaunchPreparationInputs = {
 }
 
 /** Unknown inputs only prevent reuse; preparation retains its existing error/retry behavior. */
-export function readCodexLaunchPreparationInputs(
+export async function readCodexLaunchPreparationInputs(
   runtimeHomePath: string,
   isStillValid: () => boolean = () => true
-): CodexLaunchPreparationInputs | null {
+): Promise<CodexLaunchPreparationInputs | null> {
   try {
     const systemHome = getSystemCodexHomePath()
     const homes = [...new Set([runtimeHomePath, systemHome])]
     const files: ObservedFileContent[] = []
     const paths = new Map<string, string>()
     const facts: unknown[] = []
+    let systemTomlPath: string | undefined
     const recordPath = (kind: string, input: string, output: string): void => {
       paths.set(`${kind}\0${input}`, output)
       observeResolvedFilePath(kind, input, output)
@@ -45,7 +43,7 @@ export function readCodexLaunchPreparationInputs(
       if (!isStillValid()) {
         return null
       }
-      const resolvedHome = resolveHome(home)
+      const resolvedHome = await resolveHome(home)
       facts.push([home, resolvedHome])
       recordPath('marketplace-home', home, resolvedHome)
       recordPath('daemon-home', home, resolvedHome)
@@ -54,29 +52,39 @@ export function readCodexLaunchPreparationInputs(
           return null
         }
         const filePath = join(home, leaf)
-        files.push(snapshotFile(filePath, facts))
+        const snapshot = await snapshotFile(filePath, facts)
+        files.push(snapshot.observation)
+        if (home === systemHome && leaf === 'config.toml') {
+          systemTomlPath = snapshot.realPath ?? filePath
+        }
         if (!isStillValid()) {
           return null
         }
-        const writePath =
-          leaf === 'hooks.json'
-            ? resolveHooksJsonWritePath(filePath)
-            : resolveTomlWritePath(filePath)
+        const writePath = snapshot.writePath
         recordPath(leaf === 'hooks.json' ? 'hooks-write' : 'toml-write', filePath, writePath)
-        facts.push([`${writePath}.bak`, entryType(`${writePath}.bak`)])
+        facts.push([`${writePath}.bak`, await entryType(`${writePath}.bak`)])
         const held = getGuardedOperationHeldPath(filePath)
-        if (entryType(held) !== 'absent') {
+        if ((await entryType(held)) !== 'absent') {
           return null
         }
         files.push({ digest: null, aliases: [held] })
         observeFileDigest(held, null)
         if (leaf === 'hooks.json') {
-          recordPath('trust-source', filePath, getExplicitHomeCodexHookSourcePath(filePath))
+          recordPath(
+            'trust-source',
+            filePath,
+            normalizeCodexTrustSourcePath(join(resolvedHome, 'hooks.json'))
+          )
         }
       }
     }
     const systemToml = join(systemHome, 'config.toml')
-    recordPath('promotion-write', systemToml, resolvePromotionWriteTarget(systemToml).path)
+    if (systemTomlPath === undefined) {
+      return null
+    }
+    recordPath('promotion-write', systemToml, systemTomlPath)
+    let scriptMode: number | null = null
+    let legacyWritePath: string | null = null
     for (const filePath of [
       getCodexSettingsBaselinePath(runtimeHomePath),
       getProvenancePath(runtimeHomePath),
@@ -86,22 +94,29 @@ export function readCodexLaunchPreparationInputs(
       if (!isStillValid()) {
         return null
       }
-      files.push(snapshotFile(filePath, facts))
+      const snapshot = await snapshotFile(filePath, facts)
+      files.push(snapshot.observation)
+      if (filePath === getManagedScriptPath()) {
+        scriptMode = snapshot.mode
+      }
+      if (filePath === getLegacyCodexProfileTomlPath()) {
+        legacyWritePath = snapshot.writePath
+      }
     }
     if (!isStillValid()) {
       return null
     }
-    const scriptPath = getManagedScriptPath()
     // A mode repair is not a fixed point, even if another writer undoes chmod before the final read.
-    const scriptMode = statSync(scriptPath).mode & 0o777
+    if (scriptMode === null || legacyWritePath === null) {
+      return null
+    }
     if (process.platform !== 'win32' && scriptMode !== 0o755) {
       return null
     }
     facts.push(['script-mode', process.platform === 'win32' ? null : scriptMode])
     const legacyPath = getLegacyCodexProfileTomlPath()
-    const legacyWritePath = resolveTomlWritePath(legacyPath)
     recordPath('toml-write', legacyPath, legacyWritePath)
-    facts.push([`${legacyWritePath}.bak`, entryType(`${legacyWritePath}.bak`)])
+    facts.push([`${legacyWritePath}.bak`, await entryType(`${legacyWritePath}.bak`)])
     facts.push([...paths], files)
     if (!isStillValid()) {
       return null
@@ -112,9 +127,9 @@ export function readCodexLaunchPreparationInputs(
   }
 }
 
-function resolveHome(home: string): string {
+async function resolveHome(home: string): Promise<string> {
   try {
-    return realpathSync.native(home)
+    return await realpath(home)
   } catch (error) {
     if (!isDefinitiveAbsence(error)) {
       throw error
@@ -124,13 +139,13 @@ function resolveHome(home: string): string {
   }
 }
 
-function entryType(filePath: string): string {
+async function entryType(filePath: string): Promise<string> {
   try {
-    const stat = lstatSync(filePath)
-    if (stat.isSymbolicLink()) {
-      return `symlink:${readlinkSync(filePath)}`
+    const stats = await lstat(filePath)
+    if (stats.isSymbolicLink()) {
+      return `symlink:${await readlink(filePath)}`
     }
-    return stat.isFile() ? 'file' : stat.isDirectory() ? 'directory' : 'other'
+    return stats.isFile() ? 'file' : stats.isDirectory() ? 'directory' : 'other'
   } catch (error) {
     if (!isDefinitiveAbsence(error)) {
       throw error
@@ -139,36 +154,51 @@ function entryType(filePath: string): string {
   }
 }
 
-function snapshotFile(filePath: string, facts: unknown[]): ObservedFileContent {
-  const kind = entryType(filePath)
+async function snapshotFile(
+  filePath: string,
+  facts: unknown[]
+): Promise<{
+  observation: ObservedFileContent
+  realPath: string | null
+  writePath: string
+  mode: number | null
+}> {
+  const kind = await entryType(filePath)
   let realPath: string
   let digest: string | null
+  let mode: number | null = null
   if (kind === 'absent') {
     // Resolve an absent leaf through its actual parent; unknown/missing ancestors decline reuse.
-    realPath = join(realpathSync.native(dirname(filePath)), basename(filePath))
+    realPath = join(await realpath(dirname(filePath)), basename(filePath))
     digest = null
   } else {
-    const stat = statSync(filePath)
+    const stats = await stat(filePath)
     // A shared inode lets a write at an unobserved alias affect another input.
-    if (!stat.isFile() || stat.nlink !== 1) {
+    if (!stats.isFile() || stats.nlink !== 1) {
       throw new Error('Nonexclusive preparation input')
     }
-    facts.push([filePath, stat.mode & 0o777])
-    realPath = realpathSync.native(filePath)
-    const { buffer, stats } = readNodeFileSyncWithinLimit(filePath, MAX_AGENT_STATE_FILE_BYTES, {
+    mode = stats.mode & 0o777
+    facts.push([filePath, mode])
+    realPath = await realpath(filePath)
+    const opened = await readNodeFileWithinLimit(filePath, MAX_AGENT_STATE_FILE_BYTES, {
       regularFileOnly: true
     })
     if (
-      stats.nlink !== 1 ||
-      stats.dev !== stat.dev ||
-      stats.ino !== stat.ino ||
-      stats.mode !== stat.mode
+      opened.stats.nlink !== 1 ||
+      opened.stats.dev !== stats.dev ||
+      opened.stats.ino !== stats.ino ||
+      opened.stats.mode !== stats.mode
     ) {
       throw new Error('Preparation input changed while opening')
     }
-    digest = digestFileContent(buffer)
+    digest = digestFileContent(opened.buffer)
   }
   facts.push([filePath, kind, realPath, digest])
   observeFileDigest(filePath, digest)
-  return { digest, aliases: [...new Set([filePath, realPath])] }
+  return {
+    observation: { digest, aliases: [...new Set([filePath, realPath])] },
+    realPath: kind === 'absent' ? null : realPath,
+    writePath: kind.startsWith('symlink:') ? realPath : filePath,
+    mode
+  }
 }

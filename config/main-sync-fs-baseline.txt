@@ -4,10 +4,9 @@
 # Prune after removing calls: pnpm check:main-sync-fs-ratchet --prune
 1 src/main/agent-hooks/first-work/first-work-rename-runtime.ts
 2 src/main/agent-hooks/installation/configuration/hook-config-write-path.ts
-1 src/main/agent-hooks/installation/configuration/hooks-json-read.ts
-11 src/main/agent-hooks/installation/configuration/hooks-json-write.ts
+6 src/main/agent-hooks/installation/configuration/hooks-json-write.ts
 6 src/main/agent-hooks/installation/scripts/locked-executable-rename.ts
-9 src/main/agent-hooks/installation/scripts/managed-hook-script-write.ts
+6 src/main/agent-hooks/installation/scripts/managed-hook-script-write.ts
 1 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
 3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 1 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
@@ -142,7 +141,7 @@
 5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
 3 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
-8 src/main/codex/configuration/toml/config-toml-atomic-write.ts
+6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 17 src/main/codex/history/bridges/codex-session-bridge.ts
 5 src/main/codex/history/index/codex-session-index-heal-state.ts
@@ -153,17 +152,15 @@
 2 src/main/codex/history/rollouts/codex-session-link.ts
 1 src/main/codex/hooks/installation/codex-hook-local-install.ts
 2 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
-4 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts
+1 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts
 2 src/main/codex/hooks/reconciliation/codex-hook-status.ts
-4 src/main/codex/hooks/reconciliation/codex-real-home-hooks-json.ts
+1 src/main/codex/hooks/reconciliation/codex-real-home-hooks-json.ts
 3 src/main/codex/trust/grants/codex-trust-grant-ledger.ts
 2 src/main/codex/trust/hooks/codex-hook-trust-derivation.ts
 1 src/main/codex/trust/hooks/codex-hook-trust-memo.ts
-2 src/main/codex/trust/hooks/codex-hook-user-mirroring.ts
-4 src/main/codex/trust/hooks/hook-trust-promotion.ts
+1 src/main/codex/trust/hooks/hook-trust-promotion.ts
 1 src/main/codex/trust/identity/codex-trust-identity.ts
 1 src/main/codex/trust/toml/config-toml-project-trust.ts
-7 src/main/codex/trust/toml/config-toml-trust.ts
 2 src/main/computer/desktop-script/desktop-script-provider-paths.ts
 1 src/main/computer/macos-native/macos-native-provider-client.ts
 3 src/main/computer/macos-native/macos-native-provider-paths.ts
@@ -245,7 +242,8 @@
 7 src/main/emulator/serve-sim-execution.ts
 17 src/main/emulator/serve-sim-runtime-materializer.ts
 12 src/main/external-editors/external-editor-launch.ts
-17 src/main/filesystem/atomic-file-publication.ts
+14 src/main/filesystem/atomic-file-publication.ts
+3 src/main/filesystem/file-content-observation.ts # Existing reads/existence checks relocated from observed callers; no new synchronous I/O.
 9 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/rolling-file-backup.ts
 2 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts

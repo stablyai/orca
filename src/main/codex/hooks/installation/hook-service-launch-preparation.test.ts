@@ -1,6 +1,8 @@
 import type * as Lookup from '../../trust/hooks/codex-hook-hash-lookup'
 import type * as Mirror from '../../configuration/settings/codex-config-mirror'
 import type * as Legacy from '../reconciliation/codex-hook-legacy-cleanup'
+import type * as Inputs from './codex-launch-preparation-inputs'
+import type { CodexHookAnswer } from '../../trust/hooks/codex-hook-trust-derivation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   cpSync,
@@ -22,11 +24,15 @@ const { getPathMock, homedirMock, controls } = vi.hoisted(() => {
     afterCleanup: null | (() => void)
     hideLegacy: boolean
     failLegacyDelete: boolean
+    afterSnapshot: null | (() => void)
+    answer: CodexHookAnswer | null
   } = {
     aroundMirror: null,
     afterCleanup: null,
     hideLegacy: false,
-    failLegacyDelete: false
+    failLegacyDelete: false,
+    afterSnapshot: null,
+    answer: null
   }
   return {
     getPathMock: vi.fn<(name: string) => string>(),
@@ -62,17 +68,24 @@ vi.mock('node:fs', async (importOriginal) => {
 })
 vi.mock('../../trust/hooks/codex-hook-hash-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof Lookup>()),
-  resolveCodexHookAnswerForLaunch: async () => ({
-    kind: 'hashes',
-    codexVersion: 'codex-cli 0.157.0',
-    hashes: { stop: 'sha256:prepared-stop' }
-  }),
-  readKnownCodexHookAnswer: () => ({
-    kind: 'hashes',
-    codexVersion: 'codex-cli 0.157.0',
-    hashes: { stop: 'sha256:prepared-stop' }
-  })
+  resolveCodexHookAnswerForLaunch: async () => controls.answer,
+  readKnownCodexHookAnswer: () => controls.answer
 }))
+vi.mock('./codex-launch-preparation-inputs', async (importOriginal) => {
+  const actual = await importOriginal<typeof Inputs>()
+  return {
+    ...actual,
+    readCodexLaunchPreparationInputs: async (
+      ...args: Parameters<typeof actual.readCodexLaunchPreparationInputs>
+    ) => {
+      const result = await actual.readCodexLaunchPreparationInputs(...args)
+      const callback = controls.afterSnapshot
+      controls.afterSnapshot = null
+      callback?.()
+      return result
+    }
+  }
+})
 vi.mock('../../configuration/settings/codex-config-mirror', async (importOriginal) => {
   const actual = await importOriginal<typeof Mirror>()
   return {
@@ -114,6 +127,12 @@ beforeEach(() => {
   controls.afterCleanup = null
   controls.hideLegacy = false
   controls.failLegacyDelete = false
+  controls.afterSnapshot = null
+  controls.answer = {
+    kind: 'hashes',
+    codexVersion: 'codex-cli 0.157.0',
+    hashes: { stop: 'sha256:prepared-stop' }
+  }
 })
 
 function seed(model = 'B'): {
@@ -137,6 +156,33 @@ async function settle(service: CodexHookService, home: string): Promise<void> {
 }
 
 describe('completed Codex launch preparation', () => {
+  it('reports a newly pending Codex answer after an asynchronous refresh snapshot', async () => {
+    const { service, home } = seed()
+    await settle(service, home)
+    for (let index = 0; index < 3; index++) {
+      await service.refreshRuntimeUserHooksForLaunchPrep(home)
+    }
+    controls.afterSnapshot = () => {
+      controls.answer = null
+    }
+    expect((await service.refreshRuntimeUserHooksForLaunchPrep(home)).detail).toContain(
+      'Orca has not asked Codex yet'
+    )
+  })
+
+  it('honors Off before effects when it changes during the asynchronous snapshot', async () => {
+    const { service, home } = seed()
+    await settle(service, home)
+    const script = getManagedScriptPath()
+    writeFileSync(script, 'stale script\n')
+    let enabled = true
+    controls.afterSnapshot = () => {
+      enabled = false
+    }
+    await service.installForLaunchPrep(home, true, () => enabled)
+    expect(readFileSync(script, 'utf8')).toBe('stale script\n')
+  })
+
   it('applies source edits to both managed homes after settled launches', async () => {
     const { service, home, source, runtime } = seed()
     const other = join(homes.userDataDir, 'other-home')

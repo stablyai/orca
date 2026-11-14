@@ -51,12 +51,12 @@ export class CodexHookLaunchPreparation {
     isHooksEnabled: () => boolean,
     reuseKey?: string
   ): Promise<AgentHookInstallStatus> {
-    const answer =
+    let answer =
       (await resolveCodexHookAnswerForLaunch(launchesCodex ? CODEX_HOOK_LAUNCH_WAIT_MS : 0)) ??
       CODEX_ANSWER_AWAITED
     return runExclusivelyForRuntimeAndSystemTrustConfig(runtimeHomePath, () => {
       // Recheck in the queue so an Off that landed during hash lookup wins.
-      const enabled = isHooksEnabled()
+      let enabled = isHooksEnabled()
       const run = (onComplete?: () => void): Promise<AgentHookInstallStatus> => {
         if (!enabled || answer.kind === 'refused') {
           return refreshCodexRuntimeUserHooksExclusively(
@@ -91,6 +91,11 @@ export class CodexHookLaunchPreparation {
         reuseKey,
         runtimeHomePath,
         JSON.stringify([enabled, answer]),
+        () => {
+          enabled = isHooksEnabled()
+          answer = readKnownCodexHookAnswer() ?? CODEX_ANSWER_AWAITED
+          return answer.kind === 'hashes' ? JSON.stringify([enabled, answer]) : null
+        },
         run
       )
     })
@@ -133,20 +138,8 @@ export class CodexHookLaunchPreparation {
           launchPrepKey('refresh', homePath),
           homePath,
           answerKey,
-          async (onComplete) => {
-            let complete = false
-            const status = await refreshCodexRuntimeUserHooksExclusively(
-              homePath,
-              getStatus,
-              () => {
-                complete = true
-              }
-            )
-            if (complete && JSON.stringify(readKnownCodexHookAnswer()) === answerKey) {
-              onComplete?.()
-            }
-            return status
-          }
+          () => JSON.stringify(readKnownCodexHookAnswer()),
+          (onComplete) => refreshCodexRuntimeUserHooksExclusively(homePath, getStatus, onComplete)
         )
       })
     )
@@ -156,9 +149,14 @@ export class CodexHookLaunchPreparation {
     key: string,
     homePath: string,
     context: string,
+    readContext: () => string | null,
     run: (onComplete?: () => void) => Promise<AgentHookInstallStatus>
   ): Promise<AgentHookInstallStatus> {
-    const before = readCodexLaunchPreparationInputs(homePath)
+    const before = await readCodexLaunchPreparationInputs(homePath)
+    if (readContext() !== context) {
+      this.completedLaunchPrep.delete(key)
+      return run()
+    }
     const digest = before ? `${context}\0${before.digest}` : null
     const previous = this.completedLaunchPrep.get(key)
     if (digest !== null && previous?.digest === digest) {
@@ -180,7 +178,9 @@ export class CodexHookLaunchPreparation {
         const stable =
           complete &&
           isStillValid() &&
-          readCodexLaunchPreparationInputs(homePath, isStillValid)?.digest === before.digest
+          (await readCodexLaunchPreparationInputs(homePath, isStillValid))?.digest ===
+            before.digest &&
+          readContext() === context
         return { status, stable }
       }
     )
