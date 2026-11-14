@@ -1,6 +1,6 @@
-import type { GitHubPRFile } from '../../../../src/shared/github/pull-request-types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
-import { getPRInlineCommentPlacement } from '../../../../src/shared/github/pr-inline-comment-placement'
+import type { GitHubPRFile } from '../../../../src/shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
+import { getPRInlineCommentPlacement } from '../../../../src/shared/github/comments/pr-inline-comment-placement'
 import {
   groupPRComments,
   type PRCommentGroup

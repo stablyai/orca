@@ -12,7 +12,7 @@ import {
   MoreHorizontal
 } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import { styles } from '../mobile-tasks-legacy-styles'
 import {
   taskExternalOpenLabel,

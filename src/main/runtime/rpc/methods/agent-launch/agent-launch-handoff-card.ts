@@ -2,13 +2,12 @@ import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contr
 import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
 
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import {
   prepareAgentCreationCard,
   startedAgentSender
 } from '../../../orchestration/workers/launch/worker-start-card'
 import type { RpcContext } from '../../core'
-import { isAgentRpcCaller } from '../../callers/rpc-caller-identity'
 
 /** An agent that hands work to another from its chat leaves a card there linking to it.
  *  Display bookkeeping: nothing here refuses, holds or fails the launch, whose result passes through. */
@@ -27,10 +26,10 @@ function prepareHandoffRecord(
   params: AgentLaunchParams & { operationId: string },
   context: RpcContext
 ): (result: AgentLaunchResult) => void {
-  // Only the orca CLI on this host names its chat; windows, phones and remote CLIs launch for a person.
+  // Only the orca CLI on this host names a chat here; windows and phones launch for a person, and a remote CLI's chat is on its own host.
   const callerSessionId = context.orchestrationCompatibilityEvidence?.agentSessionId
   if (
-    !isAgentRpcCaller(context.caller) ||
+    context.caller?.kind !== 'local-cli' ||
     callerSessionId === undefined ||
     !isOrcaSessionId(callerSessionId)
   ) {

@@ -3,7 +3,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   buildWorktreeSortLabels,
   compareWorktreeSortLabel
-} from '../../../../../../shared/sidebar-list/smart-sort'
+} from '../../../../../../shared/sidebar-list/sorting/smart-sort'
 
 /** The comparator with labels derived per comparison instead of precomputed. */
 

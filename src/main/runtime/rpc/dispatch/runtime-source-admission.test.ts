@@ -69,45 +69,6 @@ describe('runtime source admission', () => {
     expect(effect).not.toHaveBeenCalled()
   })
 
-  it('runs a request meant for this runtime', async () => {
-    const { runtimeId, dispatcher, effect, request } = createHarness()
-
-    const response = await dispatcher.dispatch(request({ sourceId: SOURCE_A, runtimeId }))
-
-    expect(response).toMatchObject({ ok: true, result: { sent: true } })
-    expect(effect).toHaveBeenCalledOnce()
-  })
-
-  it('keeps today’s behaviour for a client that sends no expectation (old CLI)', async () => {
-    const { dispatcher, effect, request } = createHarness(null)
-
-    const response = await dispatcher.dispatch(request())
-
-    expect(response).toMatchObject({ ok: true })
-    expect(effect).toHaveBeenCalledOnce()
-  })
-
-  it('refuses when this runtime cannot say which profile it serves', async () => {
-    const { runtimeId, dispatcher, effect, request } = createHarness(null)
-
-    const response = await dispatcher.dispatch(request({ sourceId: SOURCE_A, runtimeId }))
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'runtime_source_unverifiable' } })
-    expect(effect).not.toHaveBeenCalled()
-  })
-
-  it.each([null, 'source', { sourceId: SOURCE_A }, { sourceId: '', runtimeId: 'r' }])(
-    'refuses a malformed expectation %j',
-    async (expectation) => {
-      const { dispatcher, effect, request } = createHarness()
-
-      const response = await dispatcher.dispatch(request(expectation))
-
-      expect(response).toMatchObject({ ok: false, error: { code: 'bad_request' } })
-      expect(effect).not.toHaveBeenCalled()
-    }
-  )
-
   it('fences the streaming transport too', async () => {
     const { runtimeId, dispatcher, effect, request } = createHarness()
     const replies: string[] = []

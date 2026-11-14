@@ -3,7 +3,7 @@ import type { BrowserWindow, WebContents } from 'electron'
 import {
   isBackgroundLaunch,
   showWhenAppActive
-} from '../../../../window/foreground-activation-policy'
+} from '../../../../window/activation/foreground-activation-policy'
 import type { PopupChildWindowOptions, PopupOriginBarWindow } from './browser-popup-window-contract'
 import {
   isNativeBrowserPopupWindow,

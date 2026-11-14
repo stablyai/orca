@@ -10,19 +10,19 @@ import {
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { buildWorkspaceRows } from '../../../../../../shared/sidebar-list/workspace-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { buildWorkspaceRows } from '../../../../../../shared/sidebar-list/feed-facts/workspace-rows'
 import {
   buildPairedServerReviewFacts,
   buildWorkspaceReviewFacts
-} from '../../../../../../shared/sidebar-list/workspace-review-facts'
+} from '../../../../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 import type {
   SidebarFeedCatalog,
   SidebarFeedView
-} from '../../../../../../shared/sidebar-list/sidebar-feed-rows'
-import type { SmartStampFields } from '../../../../../../shared/sidebar-list/sort-stamps'
-import { buildPairedServerActivityFacts } from '../../../../../../shared/sidebar-list/paired-server-activity-facts'
-import { keyWorkspaceActivityByRow } from '../../../../../../shared/sidebar-list/workspace-activity-facts'
+} from '../../../../../../shared/sidebar-list/feed/sidebar-feed-rows'
+import type { SmartStampFields } from '../../../../../../shared/sidebar-list/sorting/sort-stamps'
+import { buildPairedServerActivityFacts } from '../../../../../../shared/sidebar-list/feed-facts/paired-server-activity-facts'
+import { keyWorkspaceActivityByRow } from '../../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import { GOLDEN_NOW, folder, lineage } from './sidebar-list-golden-factories.test-fixture'
 import {
   GROUPED_REPOS,
@@ -39,9 +39,9 @@ import {
   readWindowPairedServerHosts,
   readWindowPairedServerRows
 } from '@/components/sidebar/worktree-list/parity/sidebar-paired-server-rows.test-fixture'
-import type { SidebarInputsFeedDomain } from '../../../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
-import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
-import { buildSidebarFeedCatalog } from '../../../../../../shared/sidebar-list/sidebar-feed-catalog'
+import type { SidebarInputsFeedDomain } from '../../../../../../main/runtime/sidebar-inputs/feed/sidebar-inputs-feed'
+import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/feed/sidebar-feed-domains'
+import { buildSidebarFeedCatalog } from '../../../../../../shared/sidebar-list/catalog/sidebar-feed-catalog'
 import {
   projectCatalogDomain,
   windowCatalogFromServerAnswers

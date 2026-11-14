@@ -5,11 +5,11 @@ import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contra
 import { WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { WorkspacePortHostScanResult } from '../../shared/workspace-ports'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import type { CommandHandler, HandlerContext } from '../dispatch'
-import { getOptionalStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
+import { getOptionalStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import { formatPortsScan } from './ports-format'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import {
   normalizeWorktreeSelectorForCaller,

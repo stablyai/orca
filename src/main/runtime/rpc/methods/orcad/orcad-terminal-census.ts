@@ -40,7 +40,8 @@ async function countTerminals(
   runtime: Pick<OrcaRuntimeService, 'releaseFinishedAutomationRunTerminals'>
 ): Promise<OrcadTerminalCensus> {
   // Import lazily: daemon modules install xterm's global window and must not contaminate every dispatcher process.
-  const { collectOrcadTerminalCensus } = await import('../../../../orcad/orcad-terminal-census')
+  const { collectOrcadTerminalCensus } =
+    await import('../../../../orcad/diagnostics/orcad-terminal-census')
   if (!params.releaseFinishedAutomationTerminals) {
     return collectOrcadTerminalCensus(params.activatedAt)
   }

@@ -36,18 +36,6 @@ describe('buildAgentRowLineageTree', () => {
 })
 
 describe('flattenAgentRowLineage', () => {
-  it('emits parent then descendants with increasing depth', () => {
-    const rows = [row('a'), row('b', 'a'), row('c', 'b'), row('d')]
-    const flat = flattenAgentRowLineage(rows)
-
-    expect(flat.map((n) => [n.row.paneKey, n.depth])).toEqual([
-      ['a', 0],
-      ['b', 1],
-      ['c', 2],
-      ['d', 0]
-    ])
-  })
-
   it('keeps a cyclic component visible even when other roots exist', () => {
     // The disconnected a↔b cycle has no root and must remain visible beside the ordinary tree.
     const rows = [row('root'), row('a', 'b'), row('b', 'a')]

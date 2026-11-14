@@ -2,7 +2,7 @@ import { MountedTerminalWorktrees } from './terminal/split-group-mount'
 import { useEffect, useRef } from 'react'
 import { useTerminalStartupActivation } from './terminal/use-terminal-startup-activation'
 import { useTerminalParkingWorkspaceChanges } from './terminal-pane/parking/use-terminal-parking-workspace-changes'
-import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/terminal-tab-owner-index'
+import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
 import {
   syncParkedTerminalTabWatchersForWorkspaces,

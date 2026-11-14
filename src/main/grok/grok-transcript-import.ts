@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { findGrokChatHistoryByCwd, resolveGrokHomeDir } from '../../shared/grok-session-paths'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { directoryTranscriptImport } from '../native-chat/structured-agent-cli-conversations'
+import { directoryTranscriptImport } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export const GROK_TRANSCRIPT_IMPORT = directoryTranscriptImport({
   conversationStore: ({ accountHomePath }) => join(accountHomePath, 'sessions'),

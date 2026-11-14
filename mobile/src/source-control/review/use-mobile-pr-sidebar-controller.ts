@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import type { GitHubPRFileViewedState } from '../../../../src/shared/github/pull-request-types'
+import type { GitHubPRFileViewedState } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { readHostQueryLive, useHostQuery } from '../../query/host-query'
 import { isHostNotConnectedError } from '../../query/host-query-errors'

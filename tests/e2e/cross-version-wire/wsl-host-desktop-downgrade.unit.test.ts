@@ -51,7 +51,7 @@ beforeAll(async () => {
       'src/shared/rpc-contract/rpc-params-catalog.generated.ts'
     ),
     importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/dispatcher-request-parsing.ts'),
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/errors.ts')
+    importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/responses/rpc-response.ts')
   ])
   const oldCatalog = releaseModuleExport<Record<string, unknown>>(catalog, 'RPC_PARAMS_BY_METHOD')
   const parse = releaseModuleExport<ParseParams>(parsing, 'parseRpcRequestParams')

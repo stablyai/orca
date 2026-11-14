@@ -1,5 +1,5 @@
 import { toAgentLaunchPreferences } from '../choices/agent-launch-preferences'
-import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/agent-session-option-launch'
+import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/launch/agent-session-option-launch'
 import { expect, it } from 'vitest'
 
 it('never emits a chat-only effort into terminal argv or legacy host preferences', () => {

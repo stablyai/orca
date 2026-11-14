@@ -155,11 +155,7 @@ export function parseClaudeModelList(stdout: string): ClaudeListedModel[] {
       const model = toListedModel(entry)
       const resolved = resolvedModelOf(entry)
       if (model && !listed.some((row) => row.id === model.id)) {
-        listed.push({
-          ...model,
-          label: `${model.label} alias`,
-          ...(resolved ? { resolvedModel: resolved } : {})
-        })
+        listed.push({ ...model, ...(resolved ? { resolvedModel: resolved } : {}) })
       }
     }
     if (listed.length > 0) {

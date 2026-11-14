@@ -1,8 +1,10 @@
+import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
 import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
+import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
 import { remoteRuntimeTerminalColorPush } from '@/runtime/hosted-terminals/streams/remote-runtime-terminal-color-push'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
@@ -33,6 +35,7 @@ import { registerSettingsAndSidebarIpcBridge } from './settings-sidebar-ipc-brid
 import { registerQuitAndStopAllSessionsIpcBridge } from './quit-and-stop-all-sessions-ipc-bridge'
 import { registerTabLifecycleIpcBridge } from './tab-lifecycle-ipc-bridge'
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
+import { registerTerminalTabMountIpcBridge } from './terminal-tab-mount-ipc-bridge'
 import { registerPtySourceDisownedIpcBridge } from './pty-source-disowned-ipc-bridge'
 import { registerTerminalRequestIpcBridge } from './terminal-request-ipc-bridge'
 import { registerAgentLaunchTabIpcBridge } from './agent-launch-tab-ipc-bridge'
@@ -58,11 +61,16 @@ function remountTerminalTabsAwaitingHostHydration(): void {
 }
 
 export function installAppLifetimeIpcEvents(): () => void {
-  const unsubs: (() => void)[] = []
+  const unsubs: (() => void)[] = [installBrowserInitializationPresentationLifetime()]
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)
   unsubs.push(
     window.api.automations.onChanged((payload) => emitAutomationsChangedWindowEvent(payload))
+  )
+  unsubs.push(
+    window.api.workspaceCleanup.onRunFinished((run) =>
+      emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
+    )
   )
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
@@ -126,6 +134,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   )
 
   registerTerminalPresentationIpcBridge(unsubs)
+  registerTerminalTabMountIpcBridge(unsubs)
   registerTerminalRequestIpcBridge(unsubs)
   registerAgentLaunchTabIpcBridge(unsubs)
   registerPtySourceDisownedIpcBridge(unsubs)

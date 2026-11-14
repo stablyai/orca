@@ -4,7 +4,7 @@ import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { resolveDefaultBaseRefWithLocalGit } from '../git/refs/resolution/repo-default-base-ref'
 import { getLocalProjectGitExecOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-refs/base-ref'
 
 const PROVISIONED_ROOT_SOURCE_REF_TIMEOUT_MS = 15_000
 

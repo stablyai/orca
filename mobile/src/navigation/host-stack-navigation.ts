@@ -124,7 +124,7 @@ function focusedRouteOf(state: HostStackNavigationState): HostStackNavigationRou
 }
 
 // Match decoded and encoded ids so slash/hash/percent host ids recognize their own push.
-function hostParamMatches(param: unknown, expectedHostId: string): boolean {
+export function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   if (typeof param !== 'string') {
     return false
   }

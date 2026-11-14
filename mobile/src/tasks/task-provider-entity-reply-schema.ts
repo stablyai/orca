@@ -1,6 +1,6 @@
-import { normalizePRCheckHeadSha } from '../../../src/shared/github/pr-check-head'
+import { normalizePRCheckHeadSha } from '../../../src/shared/github/checks/pr-check-head'
 import * as z from 'zod'
-import type { GitHubPRFile } from '../../../src/shared/github/pull-request-types'
+import type { GitHubPRFile } from '../../../src/shared/github/pull-requests/pull-request-types'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import {
   prCount,

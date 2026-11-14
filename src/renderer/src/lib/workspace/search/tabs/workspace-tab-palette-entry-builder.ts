@@ -2,7 +2,7 @@ import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../../../../shared/tab-title-resolution'
-import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-labels'
 import { buildPaletteTabDocument } from '../../../../../../shared/palette-match/tab-document'
 import {
   getPaletteWorktreeIdentity,

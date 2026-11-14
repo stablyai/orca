@@ -66,6 +66,7 @@ export function createBrowserClientPageWebview(options: {
   const webview =
     options.createWebview?.() ?? (options.document.createElement('webview') as Electron.WebviewTag)
   webview.setAttribute('partition', options.identity.partition)
+  webview.setAttribute('allowpopups', '')
   webview.setAttribute('webpreferences', ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE)
   webview.setAttribute('src', 'about:blank')
   Object.assign(webview.style, { display: 'flex', width: '100%', height: '100%' })

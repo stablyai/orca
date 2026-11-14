@@ -24,7 +24,7 @@ vi.mock('../ssh/ssh', () => ({
 
 import { createChildSessionSearchService } from '../../ai-vault-search/session-search-child-service'
 import { registerAiVaultSearchHandlers } from './ai-vault-search'
-import { aiVaultApi } from '../../../preload/api/ai-vault-bridge'
+import { aiVaultApi } from '../../../preload/api/ai-vault/ai-vault-bridge'
 import { setSessionSearchService } from '../../ai-vault-search/session-search-service-registry'
 import { fakeSearchService } from '../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'

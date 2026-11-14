@@ -4,7 +4,7 @@ import { renderHook } from '@testing-library/react'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../shared/worktree/retired-name-registry'
+import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../shared/worktree/naming/retired-name-registry'
 
 import type { Repo } from '../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'

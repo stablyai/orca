@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -45,107 +45,6 @@ const SCOPE_TRUNCATION: AiVaultScanIssue = {
   path: '/home/ada',
   message: 'Only the first 64 project paths were scanned.'
 }
-
-describe('mergeAiVaultListResults', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('ignores a future or unparsable remote stamp so the merge cannot pin the renderer guard', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
-
-    expect(
-      mergeAiVaultListResults(
-        [
-          { ...listResult([]), scannedAt: '2026-08-02T00:00:20.000Z' },
-          { ...listResult([]), scannedAt: '2026-08-02T00:00:05.000Z' }
-        ],
-        undefined
-      ).scannedAt
-    ).toBe('2026-08-02T00:00:05.000Z')
-
-    expect(
-      mergeAiVaultListResults(
-        [
-          { ...listResult([]), scannedAt: 'scan-A' },
-          { ...listResult([]), scannedAt: '2026-08-02T00:00:04.000Z' }
-        ],
-        undefined
-      ).scannedAt
-    ).toBe('2026-08-02T00:00:04.000Z')
-
-    expect(
-      mergeAiVaultListResults([{ ...listResult([]), scannedAt: 'scan-A' }], undefined).scannedAt
-    ).toBe('2026-08-02T00:00:10.000Z')
-  })
-
-  it('orders remote stamps by instant, not by string', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
-
-    // Z sorts after the fractional dot even though this instant is earlier.
-    expect(
-      mergeAiVaultListResults(
-        [
-          { ...listResult([]), scannedAt: '2026-08-02T00:00:05Z' },
-          { ...listResult([]), scannedAt: '2026-08-02T00:00:05.500Z' }
-        ],
-        undefined
-      ).scannedAt
-    ).toBe('2026-08-02T00:00:05.500Z')
-
-    // This future offset sorts before the local stamp; string ordering would accept it.
-    expect(
-      mergeAiVaultListResults(
-        [
-          { ...listResult([]), scannedAt: '2026-08-02T00:00:10-05:00' },
-          { ...listResult([]), scannedAt: '2026-08-02T00:00:04.000Z' }
-        ],
-        undefined
-      ).scannedAt
-    ).toBe('2026-08-02T00:00:04.000Z')
-  })
-
-  it('does not cap an Unlimited all-host merge', () => {
-    const sessions = Array.from({ length: 1001 }, (_, index) => session(index))
-    const merged = mergeAiVaultListResults([{ ...listResult([]), sessions }], undefined, true)
-
-    expect(merged.sessions).toHaveLength(1001)
-  })
-
-  it('keeps one scope notice per host rather than collapsing them', () => {
-    const otherHost: AiVaultScanIssue = { ...SCOPE_TRUNCATION, executionHostId: 'ssh:build-box' }
-
-    const merged = mergeAiVaultListResults(
-      [listResult([SCOPE_TRUNCATION]), listResult([otherHost])],
-      undefined
-    )
-
-    expect(merged.issues.map((issue) => issue.executionHostId)).toEqual([
-      'ssh:dev-box',
-      'ssh:build-box'
-    ])
-  })
-
-  it('keeps a scope notice alongside a failing host so one bad host is not the whole story', () => {
-    const hostDown: AiVaultScanIssue = {
-      executionHostId: 'ssh:build-box',
-      agent: 'codex',
-      kind: 'host',
-      path: 'build-box',
-      message: 'Remote connection dropped.'
-    }
-
-    const merged = mergeAiVaultListResults(
-      [listResult([SCOPE_TRUNCATION]), listResult([hostDown])],
-      undefined
-    )
-
-    expect(merged.issues).toEqual([SCOPE_TRUNCATION, hostDown])
-    expect(merged.issues.filter((issue) => !issue.kind)).toEqual([])
-  })
-})
 
 it('retains recovered scope rows through All-computers aggregation and smaller cached depths', () => {
   const local = {

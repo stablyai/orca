@@ -9,12 +9,12 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { GeneratedTabTitle } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
 import type { Store } from '../../../persistence/loading-store/store'
-import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
+import { WindowSession } from '../../../persistence/terminal-topology/testing/terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID as GIT,
   openTopologyStore
-} from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
+} from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
 import { installLayoutFrameModelCheck } from './workspace-layout-frame-model-check.test-fixture'
 import './workspace-layout-stream'

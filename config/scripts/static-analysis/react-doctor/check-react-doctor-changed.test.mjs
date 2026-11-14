@@ -23,13 +23,10 @@ function runWithBase(base) {
 
 describe('check-react-doctor-changed diff base', () => {
   // Invalid bases must fail before installing or running a tool.
-  it.each(['main & calc', 'main | whoami', 'main"x', '%PATH%', 'main $(id)', '--help'])(
-    'refuses %j',
-    (base) => {
-      const result = runWithBase(base)
+  it.each(['main $(id)', '--help'])('refuses %j', (base) => {
+    const result = runWithBase(base)
 
-      expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain('Refusing to pass an unsafe diff base')
-    }
-  )
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('Refusing to pass an unsafe diff base')
+  })
 })

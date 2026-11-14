@@ -4,12 +4,13 @@ import {
   BRIDGE_MAX_ROUTE_HREF_CHARS,
   BRIDGE_ROUTE_HREF_PATTERN
 } from '../mobile-web-shell/bridge/bridge-caps'
+import { BRIDGE_SESSION_PANE_RETURN_GRANT } from '../mobile-web-shell/bridge/bridge-frame-fields'
 import { matchesRoutePattern } from '../mobile-web-shell/page-route-policy'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { stringifyRouteHref, type RouterHref } from './route-href'
 import { useBackClaim } from './use-back-claim.web'
-import type { RouteHandoff } from './route-handoff'
+import type { RouteHandoff, ShellSessionHandoff } from './route-handoff'
 
 function pathnameOf(href: string): string {
   const cut = href.search(/[?#]/)
@@ -92,9 +93,15 @@ export function handOffRoute(
   report: (reason: RouteHandoffRefusal, target: string) => void,
   replace = false
 ): RouteHandoffOutcome {
-  if (servedHere(client, target)) {
-    return 'local'
-  }
+  return servedHere(client, target) ? 'local' : postRouteToShell(client, target, report, replace)
+}
+
+function postRouteToShell(
+  client: BridgeRpcClient,
+  target: string,
+  report: (reason: RouteHandoffRefusal, target: string) => void,
+  replace = false
+): Exclude<RouteHandoffOutcome, 'local'> {
   // Validate the full href before posting: send success cannot prove shell acceptance, and pathname matching alone ignores refused fragments.
   if (target.length > BRIDGE_MAX_ROUTE_HREF_CHARS || !BRIDGE_ROUTE_HREF_PATTERN.test(target)) {
     report('malformed-href', target)
@@ -173,4 +180,21 @@ export function useRouteHandoff(): RouteHandoff {
       }
     }
   }, [client, router])
+}
+
+// The session to return to is an entry on the native stack, so the shell is asked even for a target this document serves.
+export function useShellSessionHandoff(): ShellSessionHandoff {
+  const client = usePageBridgeClient()
+  return useMemo(() => {
+    const report = createRefusalReporter()
+    return {
+      returns: () => {
+        const held = client.getShellSession()?.grants.native ?? []
+        return held.includes(BRIDGE_SESSION_PANE_RETURN_GRANT) && held.includes('navigate')
+      },
+      open: (href) => {
+        postRouteToShell(client, href, report)
+      }
+    }
+  }, [client])
 }

@@ -4,7 +4,7 @@ import {
   openTranscriptReadStream,
   wslGatedReaddir,
   wslGatedStat
-} from '../../native-chat/wsl-transcript-fs-access'
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { createAiVaultScopeCwdMatcher } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
 import type {

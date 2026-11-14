@@ -8,7 +8,7 @@ import type { ServeReadiness } from '../../server/serve-readiness'
 
 import { recoverInterruptedOrcadActivation } from '../../managed-server/activation/orcad-activation-recovery'
 import { readOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record-store'
-import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
+import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../managed-server/activation/orcad-installed-activation'
 import { orcadBoundPort } from '../../managed-server/lifecycle/orcad-managed-bound-port'

@@ -10,8 +10,8 @@ export function registerJournalUnsentSendHoldRecoveryTests(
       const journal = await fixture.open()
       await fixture.accept(journal, 'mine', { origin: 'client', source: USER_MESSAGE_SOURCE })
       await fixture.hold(journal)
-      expect(journal.submission('mine')?.dispatchState).toBe('pending')
-      expect(journal.queuedMessages.list()).toEqual([])
+      expect((await journal.reads.submission('mine'))?.dispatchState).toBe('pending')
+      expect(await journal.queuedMessages.list()).toEqual([])
     })
   })
 }

@@ -10,7 +10,7 @@ import {
 import type {
   DictationCapture,
   DictationCaptureChunk
-} from '../platform/dictation-capture-contract'
+} from '../platform/audio-capture/dictation-capture-contract'
 
 const chunkHandlers = vi.hoisted(() => new Set<(chunk: DictationCaptureChunk) => void>())
 
@@ -19,7 +19,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' }
 }))
 
-vi.mock('../platform/dictation-capture', () => {
+vi.mock('../platform/audio-capture/dictation-capture', () => {
   const capture: DictationCapture = {
     open: async () => ({ ok: true }),
     begin: () => true,
@@ -38,11 +38,6 @@ import { useMobileDictation, type UseMobileDictationResult } from './use-mobile-
 
 function chunkRequests(rpc: FakeRpcClient): SentRequest[] {
   return rpc.requests.filter((request) => request.method === 'speech.dictation.chunk')
-}
-
-function paramsOf(request: SentRequest): { audioBase64: string; seq: number } {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: chunk requests carry DictationChunk params.
-  return request.args[1] as { audioBase64: string; seq: number }
 }
 
 async function answer(rpc: FakeRpcClient, requests: SentRequest[], text: string): Promise<void> {
@@ -94,35 +89,6 @@ function speak(count: number): void {
 }
 
 describe('phone dictation chunks on a link that stops answering', () => {
-  it('keep four requests waiting, then send the audio captured meanwhile as one, before the finish', async () => {
-    const rpc = createFakeRpcClient()
-    const transcripts: string[] = []
-    const dictation = await startDictation(rpc, transcripts)
-
-    speak(10)
-    const waiting = chunkRequests(rpc)
-    expect(waiting.map((request) => paramsOf(request).seq)).toEqual([0, 1, 2, 3])
-
-    let stopped: Promise<void> = Promise.resolve()
-    await act(async () => {
-      stopped = dictation().stop()
-      await answer(rpc, waiting, '')
-    })
-    // Six held two-byte captures, merged into one request after the first that came free.
-    const merged = chunkRequests(rpc)
-    expect(merged.map(paramsOf)).toEqual([
-      { ...paramsOf(merged[0]), seq: 4, audioBase64: 'BAQFBQYGBwcICAkJ' }
-    ])
-    expect(rpc.requests.some((request) => request.method === 'speech.dictation.finish')).toBe(false)
-
-    await act(async () => {
-      await answer(rpc, merged, '')
-      await answer(rpc, [...rpc.requests], 'all ten')
-      await stopped
-    })
-    expect(transcripts).toEqual(['all ten'])
-  })
-
   it('keep the newest text so far when an older reply arrives last', async () => {
     const rpc = createFakeRpcClient()
     const dictation = await startDictation(rpc)

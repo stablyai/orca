@@ -2,7 +2,8 @@
 export type AgentSessionUsageLimitContinue = {
   turnItemId: string
   resetsAt: number
-  /** The later reset the account still shows spent, which Orca waits for; absent: `resetsAt`. */
+  /** When Orca continues instead of `resetsAt`: later while the account still shows spent,
+   *  earlier once the chat would continue on another account. Absent: `resetsAt`. */
   continueAt?: number
   state: 'scheduled' | 'cancelled' | 'failed' | 'off'
 }

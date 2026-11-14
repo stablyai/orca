@@ -1,4 +1,7 @@
-import type { PRCheckJob, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import type {
+  PRCheckJob,
+  PRCheckRunDetails
+} from '../../../../../../shared/github/checks/check-types'
 import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
 import {
   scrollTopCache,

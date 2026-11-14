@@ -15,7 +15,7 @@ import type { Repo } from '../../../../../shared/repo-types'
 import type {
   GitHubWorkItemDetails,
   GitHubWorkItem
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/work-items/task-source-context'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
 

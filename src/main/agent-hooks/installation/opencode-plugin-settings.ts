@@ -1,4 +1,4 @@
-import type { PluginSources } from '../../../wsl-guest/plugin-sources'
+import type { PluginSources } from '../../../wsl-guest/plugins/installation/plugin-sources'
 import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 

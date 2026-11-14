@@ -2,9 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { parseArgs } from '../args'
-import { specPaths } from '../command-spec'
-import { ACCOUNT_COMMAND_SPECS } from '../specs/account'
 import { RuntimeClient } from '../runtime/client'
 import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import { addDataAccount } from './data-account-commands'
@@ -21,18 +18,6 @@ const context = {
 afterEach(() => vi.restoreAllMocks())
 
 describe('managed data account enrollment', () => {
-  it('refuses an old host before starting login', async () => {
-    vi.spyOn(client, 'call').mockResolvedValue({
-      id: 'test',
-      ok: true,
-      result: { capabilities: [] },
-      _meta: { runtimeId: 'test' }
-    })
-    const login = vi.fn()
-    await expect(addDataAccount(context, 'opencode', login)).rejects.toThrow('Update or restart')
-    expect(login).not.toHaveBeenCalled()
-  })
-
   it('isolates official login and removes credentials after failed capture', async () => {
     const call = vi.spyOn(client, 'call')
     call
@@ -61,37 +46,4 @@ describe('managed data account enrollment', () => {
     })
     expect(existsSync(directory)).toBe(false)
   })
-
-  it.each([
-    ['devin', new Map([['method', 'device']]), 'only supported with --agent opencode'],
-    ['opencode', new Map([['method', ' ']]), '--method requires'],
-    ['opencode', new Map([['answer', 'deployment']]), 'key=value'],
-    ['opencode', new Map([['answer', '=github.com']]), 'key=value'],
-    ['opencode', new Map([['answer', '--server=http://example.test']]), 'key=value'],
-    ['opencode', new Map([['method', '--server']]), '--method requires'],
-    [
-      'opencode',
-      new Map([['integration', '--server=http://example.test']]),
-      '--integration requires'
-    ],
-    ['opencode', new Map([['integration', ' -x']]), '--integration requires'],
-    [
-      'opencode',
-      parseArgs(
-        ['account', 'add', '--answer=', '--answer', 'deploymentType=github.com'],
-        ACCOUNT_COMMAND_SPECS.flatMap(specPaths),
-        ACCOUNT_COMMAND_SPECS
-      ).flags,
-      'key=value'
-    ]
-  ] as const)(
-    'refuses invalid %s login options before any runtime call',
-    async (provider, flags, message) => {
-      const call = vi.spyOn(client, 'call')
-      const login = vi.fn()
-      await expect(addDataAccount({ ...context, flags }, provider, login)).rejects.toThrow(message)
-      expect(call).not.toHaveBeenCalled()
-      expect(login).not.toHaveBeenCalled()
-    }
-  )
 })

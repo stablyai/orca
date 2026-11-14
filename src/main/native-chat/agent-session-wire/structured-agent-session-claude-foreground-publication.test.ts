@@ -1,13 +1,13 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
 } from '../../../shared/agent-session/structured-agent-session-reducer'
 import { toolUse, toolResult } from '../../claude/structured/claude-foreground-task-test-support'
-import { HOST_TEST_SESSION as SESSION } from './host/testing/structured-agent-session-host-test-data'
-import { fixture } from './host/testing/structured-agent-session-claude-stop-contract-test-fixture'
-import { openTurn } from './host/testing/structured-agent-session-claude-stop-contract-test-actions'
+import { HOST_TEST_SESSION as SESSION } from './host/testing/structured-agent-session-host-test-data.test-fixture'
+import { fixture } from './host/testing/structured-agent-session-claude-stop-contract.test-fixture'
+import { openTurn } from './host/testing/structured-agent-session-claude-stop-contract-test-actions.test-fixture'
 
 it('delivers a running root Bash action before its result and removes it when it ends', async () => {
   const connection = fixture.claude.connections[0]!
@@ -24,10 +24,12 @@ it('delivers a running root Bash action before its result and removes it when it
   try {
     connection.handlers.onMessage?.(toolUse('toolu_build', 'Bash', { command: 'pnpm build' }))
     await fixture.host.flushStreamedEvents(SESSION)
-    expect(pane.backgroundTasks?.foregroundTasks).toMatchObject([{ toolUseId: 'toolu_build' }])
+    await vi.waitFor(() =>
+      expect(pane.backgroundTasks?.foregroundTasks).toMatchObject([{ toolUseId: 'toolu_build' }])
+    )
     connection.handlers.onMessage?.(toolResult('toolu_build', 'Build passed'))
     await fixture.host.flushStreamedEvents(SESSION)
-    expect(pane.backgroundTasks?.foregroundTasks ?? []).toEqual([])
+    await vi.waitFor(() => expect(pane.backgroundTasks?.foregroundTasks ?? []).toEqual([]))
   } finally {
     close()
   }

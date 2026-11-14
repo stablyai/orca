@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
+import { recordWakeSignal } from '../power/wake-signal-clock'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
@@ -16,6 +17,7 @@ import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-g
 import { initObservability } from '../observability/index'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { recoverPendingSkillTransactions } from '../skills/transaction-state/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
@@ -25,9 +27,23 @@ import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktr
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
-import { runAfterFirstWindowShown } from './first-window-deferral'
+import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 
 const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
+
+function feedWakeSignalClock(): () => void {
+  const onResume = (): void => recordWakeSignal('resume')
+  const onUnlock = (): void => recordWakeSignal('unlock-screen')
+  const onUserActive = (): void => recordWakeSignal('user-did-become-active')
+  powerMonitor.on('resume', onResume)
+  powerMonitor.on('unlock-screen', onUnlock)
+  powerMonitor.on('user-did-become-active', onUserActive)
+  return () => {
+    powerMonitor.off('resume', onResume)
+    powerMonitor.off('unlock-screen', onUnlock)
+    powerMonitor.off('user-did-become-active', onUserActive)
+  }
+}
 
 export function initializeMainProcessObservers(): void {
   const store = state.store
@@ -35,6 +51,9 @@ export function initializeMainProcessObservers(): void {
     throw new Error('Store must be initialized before observers')
   }
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
+  if (process.platform === 'darwin') {
+    state.unsubscribeWakeSignalClock = feedWakeSignalClock()
+  }
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
     listTargets: listCapableSharedControlSockets,
@@ -113,10 +132,23 @@ export function initializeMainProcessObservers(): void {
   })
   state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
   if (state.hangDetection) {
-    track('main_thread_hang_detected', {
-      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
-      self_recovered: state.hangDetection.selfRecovered
-    })
+    const marker = state.hangDetection
+    const report = (details: NativeHangTelemetry): void => {
+      track('main_thread_hang_detected', {
+        unresponsive_ms: Math.round(marker.unresponsiveMs),
+        self_recovered: marker.selfRecovered,
+        ...details
+      })
+    }
+    if (process.platform === 'darwin') {
+      void import('../hang-watchdog/previous-native-hang-telemetry')
+        .then(({ readPreviousNativeHangTelemetry }) =>
+          readPreviousNativeHangTelemetry(getCanonicalUserDataPath(), marker)
+        )
+        .then(report, () => report({}))
+    } else {
+      report({})
+    }
   }
   state.skillTransactionRecovery = recoverPendingSkillTransactions(
     join(app.getPath('userData'), 'skill-installs')

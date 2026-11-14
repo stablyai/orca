@@ -21,4 +21,21 @@ export class AutomationEnablementTransitions {
     }
     return updated
   }
+
+  /** `track` for a batch: counts each updated row whose `enabled` flipped. */
+  trackMany<R extends { id: string; automation?: Automation }>(
+    stored: readonly Automation[],
+    update: () => R[]
+  ): R[] {
+    const wasEnabled = new Map(stored.map((entry) => [entry.id, entry.enabled]))
+    const results = update()
+    for (const result of results) {
+      const before = wasEnabled.get(result.id)
+      if (result.automation && before !== undefined && result.automation.enabled !== before) {
+        this.counts.set(result.id, this.revision(result.id) + 1)
+        wasEnabled.set(result.id, result.automation.enabled)
+      }
+    }
+    return results
+  }
 }

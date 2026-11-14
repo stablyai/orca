@@ -19,7 +19,7 @@ import {
   seedCurrentCodexTranscript,
   terminalIdentity
 } from './helpers/completed-worker-retirement-fixture'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../src/shared/runtime-types'
 import { splitWorktreeIdForFilesystem } from '../../src/shared/worktree/id'
 

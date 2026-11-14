@@ -1,4 +1,9 @@
 import type { StateCreator } from 'zustand'
+import {
+  projectGroupHookTrustHost,
+  projectGroupHookTrustKey
+} from '../../../../shared/workspace-hook-owner'
+import { catalogOwnsHost } from './project-group-owner-routing'
 import type { AppState } from '../types'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import type { FetchedProjectGroupCatalog } from './project-group-catalog'
@@ -28,11 +33,23 @@ export function createProjectGroupCatalogActions(
         return s
       }
       const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, s.projectGroups)
-      if (arrayElementsUnchanged(projectGroups, s.projectGroups)) {
+      const validHookOwners = new Set(
+        projectGroups.filter((group) => group.parentPath).map(projectGroupHookTrustKey)
+      )
+      const retiredKeys = Object.keys(s.trustedOrcaHooks).filter((key) => {
+        const host = projectGroupHookTrustHost(key)
+        return host && catalogOwnsHost(catalog.hostId, host) && !validHookOwners.has(key)
+      })
+      if (arrayElementsUnchanged(projectGroups, s.projectGroups) && retiredKeys.length === 0) {
         return s
+      }
+      const trustedOrcaHooks = { ...s.trustedOrcaHooks }
+      for (const key of retiredKeys) {
+        delete trustedOrcaHooks[key]
       }
       return {
         projectGroups,
+        trustedOrcaHooks,
         folderWorkspacePathStatuses: {}
       }
     })

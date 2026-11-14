@@ -2,15 +2,15 @@ import type {
   LinearMcpIssueListRequest,
   LinearMcpIssueListResult
 } from '../../shared/linear/mcp-issue-list'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag
-} from '../flags'
-import { printResult } from '../command-result-output'
+} from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import { formatLinearMcpIssueList, printLinearMcpIssueListWarnings } from './linear-format'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export const runLinearListIssues: CommandHandler = async ({ flags, client, json }) => {
   const priority = getOptionalNonNegativeIntegerFlag(flags, 'priority')

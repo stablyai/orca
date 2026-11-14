@@ -5,8 +5,8 @@ import {
   getStructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusFeedOwner
 } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import { structuredAgentSessionOptionStamp } from '../../../../../../shared/agent-session/options/structured-agent-session-option-state'
-import { runtimePermissionReport } from '../../../../../../shared/agent-session/options/structured-agent-session-permission-option'
+import { structuredAgentSessionOptionStamp } from '../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-option-state'
+import { runtimePermissionReport } from '../../../../../../shared/agent-session/options/permissions/structured-agent-session-permission-option'
 
 /** The host feed plus a subscription that wakes only for this chat's updates. */
 function useSessionFeed(

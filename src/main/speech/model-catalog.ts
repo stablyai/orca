@@ -31,6 +31,20 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     recommended: true
   },
   {
+    // Ahead of v2, which measures the same, so it wins the tie as the most accurate English pick.
+    id: 'parakeet-unified-en-0.6b',
+    label: 'Parakeet Unified EN',
+    type: 'transducer',
+    provider: 'local',
+    language: 'en',
+    ...getGgufSpeechModelDownload('parakeet-unified-en-0.6b'),
+    languages: ['en'],
+    ...getSpeechModelErrorRates('parakeet-unified-en-0.6b'),
+    licence: 'NVIDIA Open Model License',
+    sampleRate: 16000,
+    streaming: true
+  },
+  {
     id: 'parakeet-tdt-0.6b-v2-int8',
     label: 'Parakeet TDT v2',
     type: 'transducer',
@@ -180,8 +194,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelErrorRates('nemotron-3.5-asr-streaming-0.6b'),
     licence: 'OpenMDW-1.1',
     sampleRate: 16000,
-    // Decoded per chunk for now; live text arrives with the streaming engine path.
-    streaming: false
+    streaming: true
   },
   {
     id: 'openai-gpt-transcribe',

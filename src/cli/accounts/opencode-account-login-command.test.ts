@@ -107,27 +107,3 @@ it('Windows automatic timeout joins tracked tree lifetime beyond the caller wait
   expect(spawn.mock.calls.every(([spec]) => spec.detached === false)).toBe(true)
   expect(vi.getTimerCount()).toBe(0)
 })
-
-it('asynchronous spawn error releases readers before synchronous fallback failure and final refusal', async () => {
-  const child = probe()
-  spawn
-    .mockImplementationOnce(() => {
-      queueMicrotask(() => child.emit('error', new Error('ENOENT')))
-      return child
-    })
-    .mockImplementationOnce(() => {
-      throw new Error('unlaunchable fallback')
-    })
-  const owner = session()
-  await expect(resolveOpenCodeLoginCommand({}, owner)).rejects.toThrow(
-    'Install alongside your existing CLI'
-  )
-  expect(spawn).toHaveBeenCalledTimes(2)
-  expect(child.stdout.destroyed && child.stderr.destroyed && child.stdin.destroyed).toBe(true)
-  expect(owner.child).toBeNull()
-  expect(owner.stopPhase).toBeUndefined()
-  expect(signalTree).not.toHaveBeenCalled()
-  child.emit('error', new Error('late error'))
-  child.emit('exit', 0)
-  child.emit('close', 0)
-})

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import { buildMobileDiffReviewQueue } from './mobile-diff-review-queue'
 import { buildMobileDiffReviewGitHub, canCommentOnGitHub } from './mobile-diff-review-github'
 

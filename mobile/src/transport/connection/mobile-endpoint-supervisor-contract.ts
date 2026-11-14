@@ -13,6 +13,8 @@ export type MobileEndpointSupervisorDependencies = {
   openDirect: () => RpcClient
   directPath: Exclude<MobileConnectionPath, 'relay'>
   directProbeTimeoutMs: number
+  /** The stored direct endpoint can never answer (link-local), so never probe a return to it. */
+  directUnavailable?: boolean
   openRelay: (
     relay: MobileRelayEndpoint,
     credential: { token: string; version: number },
