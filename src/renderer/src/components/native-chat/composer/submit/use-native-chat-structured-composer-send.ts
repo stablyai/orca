@@ -97,7 +97,7 @@ export function useNativeChatStructuredComposerSend({
       // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
         structuredTransport.sendBlockedReason !== undefined &&
-        (!hostCommand || structuredAgentSessionCommandChangesConversation(text))
+        (!hostCommand || structuredAgentSessionCommandChangesConversation(text, agent))
       ) {
         return false
       }
@@ -117,7 +117,7 @@ export function useNativeChatStructuredComposerSend({
         return false
       }
       // A conversation command reveals at the press, not after its round trip; options move nothing.
-      if (hostCommand && structuredAgentSessionCommandChangesConversation(text)) {
+      if (hostCommand && structuredAgentSessionCommandChangesConversation(text, agent)) {
         structuredTransport.onSubmitted?.()
       }
       const isCurrent = structuredTransport.capturePresentation()
