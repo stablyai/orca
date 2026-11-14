@@ -4,7 +4,7 @@ import {
   emptiedWorktreeLandingPatch,
   landOnEmptiedWorktree
 } from './tabs-empty-workspace'
-import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
+import { retireRemovedNativeChatTabs } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
@@ -127,7 +127,7 @@ export function createTabsCloseActions(
           set((current) => {
             const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter((item) => {
               if (item.id === tabId) {
-                retireRemovedNativeChatDraftPositions([item], [])
+                retireRemovedNativeChatTabs([item], [])
               }
               return item.id !== tabId
             })
