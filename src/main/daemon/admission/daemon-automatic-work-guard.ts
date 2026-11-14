@@ -7,7 +7,8 @@ import type {
 import type { ProcessGrowthTrip } from '../../../shared/process-growth-breaker'
 import { AutomaticWorkRunMarker } from './automatic-work-run-marker-store'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
-import { DaemonProcessGrowthMonitor } from './daemon-process-growth-monitor'
+import { DaemonProcessGrowthMonitor, type HostPressureCause } from './daemon-process-growth-monitor'
+import type { CgroupPidsUsage } from './cgroup-pids-headroom'
 import { HostTerminalLedger, resolveMaxHostTerminals } from './host-terminal-ledger'
 import { LegacyRestoreRecords, legacyRestoreRecordsPathFor } from './legacy-restore-records'
 import type { HostTerminalPolicy } from './host-terminal-policy'
@@ -32,6 +33,7 @@ export class DaemonAutomaticWorkGuard {
   private readonly legacyRestores: LegacyRestoreRecords
   private readonly monitor: DaemonProcessGrowthMonitor
   private pressurePausedSince: number | null = null
+  private pidsLevel: HostPressureLevel = 'ok'
 
   constructor(private readonly options: DaemonAutomaticWorkGuardOptions) {
     this.marker = new AutomaticWorkRunMarker(options.markerPath, options.log, options.ownsEndpoint)
@@ -45,14 +47,25 @@ export class DaemonAutomaticWorkGuard {
         listSessions: options.listSessions,
         recentAutomaticWork: () => this.gate.hasRecentAutomaticWork(),
         sampleWhenIdle: options.mode === 'enforce',
-        onLevelChanged: (level) => this.onPressureChanged(level),
-        onTrip: (trips) => this.onTrip(trips)
+        onLevelChanged: (level, cause) => this.onPressureChanged(level, cause),
+        onTrip: (trips) => this.onTrip(trips),
+        onPidsUsage: (usage, level, first) => this.onPidsUsage(usage, level, first),
+        onPidsDirectories: ({ directories, problem }) => {
+          if (problem) {
+            // Protection against the cap is off on this host; say why rather than stay silent.
+            options.log.log('cgroup-pids-limit-unknown', { problem })
+          } else if (directories.length > 0) {
+            options.log.log('cgroup-pids-directories', { directories })
+          }
+        },
+        onPidsReadStalled: (waitedMs) => options.log.log('cgroup-pids-read-stalled', { waitedMs })
       })
     const policy = options.terminalPolicy
     this.gate = new TerminalSpawnGate({
       log: (event, details) => options.log.log(event, details),
       mode: options.mode,
-      pressure: () => this.monitor.level,
+      pressure: () => this.monitor.admissionLevel(),
+      pressureReading: () => this.monitor.initialReading(),
       automaticWorkMode: () => this.automaticWorkMode(),
       armAutomaticWork: () => this.marker.arm(),
       legacyRestores: this.legacyRestores,
@@ -111,8 +124,28 @@ export class DaemonAutomaticWorkGuard {
     return { ...this.status(), cleared: before.kind === 'paused' ? before : null }
   }
 
-  private onPressureChanged(level: HostPressureLevel): void {
-    this.options.log.log('process-growth-level', { level })
+  private onPidsUsage(
+    usage: CgroupPidsUsage | null,
+    level: HostPressureLevel,
+    first: boolean
+  ): void {
+    if (first) {
+      // Only Linux has cgroup task limits; elsewhere there is nothing to report.
+      if (usage || process.platform === 'linux') {
+        this.options.log.log('cgroup-pids-limit', usage ?? { limit: 'none' })
+      }
+    } else if (level !== this.pidsLevel) {
+      // New automatic spawns wait while the cgroup is nearly out of tasks; terminals a user opens still run.
+      this.options.log.log('cgroup-pids-pressure', { level, ...usage })
+    }
+    this.pidsLevel = level
+  }
+
+  private onPressureChanged(level: HostPressureLevel, cause: HostPressureCause): void {
+    // A task-limit change was already logged as cgroup-pids-pressure with its reading.
+    if (cause === 'process-growth') {
+      this.options.log.log('process-growth-level', { level })
+    }
     this.gate.onPressureChanged()
   }
 

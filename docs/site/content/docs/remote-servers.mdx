@@ -224,6 +224,18 @@ orca-ide serve --pairing-address 100.64.1.20
 - Orca reads them only when its terminal host process starts. That process keeps running when `orca serve` restarts, so terminals keep their old limits until it restarts too, for example after the server reboots.
 - They have no effect on macOS or Windows.
 
+### Process limits in a container
+
+Containers and systemd units often cap how many processes and threads they can run (`pids.max`, for example `docker run --pids-limit`). Every terminal, the agents in it and each of their threads count against that cap.
+
+- When the terminal host starts, it logs the fullest cap it found as `cgroup-pids-limit` in the daemon log (`logs/daemon.log` in the Orca data directory). The `cgroup` field names the cgroup that cap belongs to. If it can't find where the caps live, it logs `cgroup-pids-limit-unknown` with the reason, and this protection is off on that host.
+- At 90% of the cap, Orca holds back terminals it starts on its own (restored agents, dispatched workers, resumes beyond a client's allowance) and logs `cgroup-pids-pressure`. It lets them start again once usage falls below 85%. Terminals you open yourself still start.
+- Clients older than this server may report a held-back restore as refused once its wait runs out.
+- With `ORCA_TERMINAL_SPAWN_ADMISSION=observe`, Orca only logs and holds nothing back.
+- If the cap is reached anyway, only the terminal being started fails, with a message that the process limit was reached.
+- None of this applies on macOS or Windows, or when the cap is unset (`max`).
+- To raise it, raise the cap on the cgroup that `cgroup-pids-limit` names. For a container that is `--pids-limit` (or `pids_limit` in Compose); on Kubernetes it is the kubelet's `podPidsLimit`. For a systemd unit it is `TasksMax=` on that unit. When terminals run in your systemd user manager, that is usually `user-<uid>.slice`, not the unit that runs `orca serve`.
+
 ### Use the GPU on a Linux server
 
 On Linux, `orca serve` turns off hardware acceleration by default, because most headless hosts have no GPU and a failing GPU process can stop the server from starting. Browser panes then render in software. If the host gives the Orca process a GPU (for example a render node such as `/dev/dri/renderD128`), set `ORCA_SERVE_GPU=1` in the environment that starts `orca serve` (or in its service unit) to keep hardware acceleration on:
