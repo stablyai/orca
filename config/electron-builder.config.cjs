@@ -91,6 +91,9 @@ const {
 const {
   buildMacShipItScheduling
 } = require('./scripts/desktop-distribution/macos/macos-shipit-scheduling.cjs')
+const {
+  buildMacNativeAddon
+} = require('./scripts/desktop-distribution/macos/macos-native-addon.cjs')
 
 // Dev channels need release bundle ID/signature/notarization so Squirrel.Mac accepts updates and macOS retains app identity.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
@@ -443,6 +446,13 @@ module.exports = {
       const architecture = macSliceArch(context.arch, 'local-build compatibility')
       const schedulingAddon = buildMacShipItScheduling(resourcesDir, architecture)
       await signMacStandaloneHelper(schedulingAddon, 'ShipIt scheduling', context.packager)
+      const keyboardLayoutAddon = buildMacNativeAddon({
+        nativeDir: 'keyboard-layout-macos',
+        addon: 'orca_keyboard_layout.node',
+        outputDir: resourcesDir,
+        arch: architecture
+      })
+      await signMacStandaloneHelper(keyboardLayoutAddon, 'keyboard layout', context.packager)
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {
@@ -539,11 +549,6 @@ module.exports = {
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
         'orca-notification-status',
-        context.packager
-      )
-      await signMacStandaloneHelper(
-        join(resourcesDir, '..', 'MacOS', 'orca-keyboard-layout'),
-        'orca-keyboard-layout',
         context.packager
       )
       await signMacStandaloneHelper(
@@ -666,10 +671,6 @@ module.exports = {
       {
         from: 'native/notification-status-macos/.build/release/orca-notification-status',
         to: 'MacOS/orca-notification-status'
-      },
-      {
-        from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
-        to: 'MacOS/orca-keyboard-layout'
       },
       {
         from: 'native/process-footprint-macos/.build/release/orca-process-footprint',
