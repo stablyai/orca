@@ -144,11 +144,11 @@
 3 src/renderer/src/components/editor/loading/useEditorPanelFileContentLoader.ts
 4 src/renderer/src/components/editor/loading/log-tail/useLocalLogTail.ts
 1 src/renderer/src/components/editor/markdown-preview/viewport/usePreserveSectionDuringExternalEdit.ts
-1 src/renderer/src/components/emulator-pane/emulator-screen-stream-content.tsx
-3 src/renderer/src/components/emulator-pane/use-emulator-pane-session.ts
-1 src/renderer/src/components/emulator-pane/use-emulator-pane-shutdown.ts
-1 src/renderer/src/components/emulator-pane/use-emulator-video-stream.ts
-1 src/renderer/src/components/emulator-pane/use-mobile-emulator-agent-setup-state.ts
+1 src/renderer/src/components/emulator-pane/streaming/emulator-screen-stream-content.tsx
+3 src/renderer/src/components/emulator-pane/session/use-emulator-pane-session.ts
+1 src/renderer/src/components/emulator-pane/session/use-emulator-pane-shutdown.ts
+1 src/renderer/src/components/emulator-pane/streaming/use-emulator-video-stream.ts
+1 src/renderer/src/components/emulator-pane/agent-setup/use-mobile-emulator-agent-setup-state.ts
 1 src/renderer/src/components/feature-tips/FeatureTipsModal.tsx
 1 src/renderer/src/components/feature-wall/setup/agent-capabilities/AgentCapabilitiesSetupAction.tsx
 1 src/renderer/src/components/feature-wall/browser-storyboard/BrowserPricingStoryboard.tsx
