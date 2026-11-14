@@ -4638,7 +4638,6 @@
             "c8857b40f7": "Nutzungsdaten aktualisieren",
             "75ded02687": "Konten verwalten…",
             "ff0fbe9311": "Aktiv",
-            "7657e3db9c": "Codex-Konto",
             "38b5647724": "Codex-Nutzung: Laufzeitumgebung",
             "ba55303942": "Codex-Details und Kontowechsel öffnen",
             "c35af53b73": "Anmelden",
@@ -4646,7 +4645,6 @@
             "5c938d39ac": "Wo.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
             "59c6e7b4e0": "Sichtbare Sitzungen werden jetzt neu gestartet. Andere werden neu gestartet, sobald ihr Worktree aktiv wird.",
@@ -4924,7 +4922,8 @@
             "compact": "Kompakt",
             "detailedTooltip": "Vollständige Nutzung mit Balken, Beschriftungen und Prozentwerten",
             "compactTooltip": "Kompakte Nutzung: eine Zusammenfassung pro Anbieter",
-            "footerDetailAria": "Detailangabe in der Nutzungsfußzeile"
+            "footerDetailAria": "Detailangabe in der Nutzungsfußzeile",
+            "notChecked": "Nicht geprüft"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} werden aktualisiert",
@@ -5114,12 +5113,17 @@
           "AccountSwitchList": {
             "used": "Verbraucht",
             "left": "Übrig",
-            "reset": "Zurücksetzung"
+            "reset": "Zurücksetzung",
+            "accounts": "Konten"
           },
           "InlineUsageBars": {
             "now": "jetzt",
             "resetsNow": "Zurücksetzung jetzt",
             "resetsIn": "Zurücksetzung in {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Verbleibende Nutzung anzeigen",
+            "showUsed": "Verbrauchte Nutzung anzeigen"
           }
         }
       },

@@ -9,7 +9,6 @@ import type {
   RateLimitWindow
 } from '../../../../../shared/rate-limit-types'
 import {
-  getDisplayedUsagePercentage,
   type UsagePercentageDisplay,
   clampUsedPercent
 } from '../../../../../shared/usage-percentage-display'
@@ -17,17 +16,20 @@ import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-
 import { formatCurrencyAmount } from '../../../../../shared/currency-format'
 import { formatCreditCount } from '../../../../../shared/credit-count-format'
 import { ProviderIcon } from './provider-usage-panel'
-import { USAGE_URGENT_PERCENT, USAGE_WARNING_PERCENT } from './provider-extra-usage-section'
-
+import { USAGE_URGENT_PERCENT, USAGE_WARNING_PERCENT, usageTextClass } from './usage-health-tone'
+import { UsageBar } from './usage-meter'
+import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
 import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
   isClaudeUsageWaitingForClaude
 } from './usage-error-copy'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
-import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
-
-import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
+import {
+  getTightestUsageSection,
+  getUsageHeadlineSection,
+  hasOnlyScopedUsage
+} from './usage-headline-sections'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
@@ -46,17 +48,7 @@ function MiniBar({
   usedPct: number
   display: UsagePercentageDisplay
 }): React.JSX.Element {
-  return (
-    <div
-      data-usage-bar
-      className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0"
-    >
-      <div
-        className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
-        style={{ width: `${getDisplayedUsagePercentage(usedPct, display)}%` }}
-      />
-    </div>
-  )
+  return <UsageBar usedPercent={usedPct} display={display} className="h-[6px] w-[48px] shrink-0" />
 }
 
 function WindowLabel({
@@ -76,7 +68,9 @@ function WindowLabel({
   return (
     <span className="tabular-nums">
       {showLabel && labelFirst ? `${label} ` : ''}
-      {formatBareUsagePercentage(w.usedPercent, display, t)}
+      <span className={usageTextClass(w.usedPercent)}>
+        {formatBareUsagePercentage(w.usedPercent, display, t)}
+      </span>
       {showLabel && !labelFirst ? ` ${label}` : ''}
     </span>
   )
@@ -294,7 +288,7 @@ export function ProviderSegment({
       ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
       : showLabels
         ? groupedBuckets
-            .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_URGENT_PERCENT)
+            .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
             .map((bucket) => bucket.resetsAt)
         : []
   )
@@ -336,6 +330,22 @@ export function ProviderSegment({
         <ProviderIcon provider={provider} />
         {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
         {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
+      </span>
+    )
+  }
+
+  // Why: a Fable/MCP-only reading says nothing about ordinary requests, so it never stands in as the number.
+  if (!tightest && hasOnlyScopedUsage(p, t)) {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <ProviderIcon provider={provider} />
+        {compact ? (
+          '--'
+        ) : (
+          <span className="text-[11px]">
+            {t('auto.components.status.bar.UsageRosterPanel.notChecked', 'Not checked')}
+          </span>
+        )}
       </span>
     )
   }

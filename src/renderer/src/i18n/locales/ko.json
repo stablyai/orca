@@ -4065,7 +4065,6 @@
             "c8857b40f7": "사용량 데이터 새로 고침",
             "75ded02687": "계정 관리…",
             "ff0fbe9311": "활성",
-            "7657e3db9c": "Codex 계정",
             "38b5647724": "Codex 사용 런타임",
             "ba55303942": "Codex 세부정보 및 계정 전환 도구 열기",
             "c35af53b73": "로그인",
@@ -4073,7 +4072,6 @@
             "5c938d39ac": "주간",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude 계정",
             "11e2354daf": "Claude 사용 런타임",
             "3dd7ddfae1": "Claude 세부정보 및 계정 전환 도구 열기",
             "59c6e7b4e0": "보이는 세션은 지금 다시 시작됩니다. 나머지는 해당 작업 트리가 활성화될 때 다시 시작됩니다.",
@@ -4332,7 +4330,8 @@
             "compact": "압축",
             "footerDetailAria": "사용량 푸터 세부 정보",
             "detailedTooltip": "막대, 레이블, 백분율을 포함한 전체 사용량",
-            "compactTooltip": "간략한 사용량: 제공자별 요약 하나"
+            "compactTooltip": "간략한 사용량: 제공자별 요약 하나",
+            "notChecked": "확인 안 됨"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} 업데이트 중",
@@ -4506,12 +4505,17 @@
           "AccountSwitchList": {
             "used": "사용량",
             "left": "남음",
-            "reset": "초기화"
+            "reset": "초기화",
+            "accounts": "계정"
           },
           "InlineUsageBars": {
             "now": "지금",
             "resetsNow": "지금 초기화",
             "resetsIn": "{{duration}} 후 초기화"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "남은 사용량 표시",
+            "showUsed": "사용한 사용량 표시"
           }
         }
       },

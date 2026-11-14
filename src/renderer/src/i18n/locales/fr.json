@@ -4409,7 +4409,6 @@
             "c8857b40f7": "Actualiser les données d'utilisation",
             "75ded02687": "Gérer les comptes…",
             "ff0fbe9311": "Actif",
-            "7657e3db9c": "Compte Codex",
             "38b5647724": "Runtime d'utilisation Codex",
             "ba55303942": "Ouvrir les détails Codex et le sélecteur de compte",
             "c35af53b73": "Se connecter",
@@ -4417,7 +4416,6 @@
             "5c938d39ac": "sem.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Compte Claude",
             "11e2354daf": "Runtime d'utilisation Claude",
             "3dd7ddfae1": "Ouvrir les détails Claude et le sélecteur de compte",
             "59c6e7b4e0": "Les sessions visibles redémarrent maintenant. Les autres redémarrent quand leur worktree devient actif.",
@@ -4701,7 +4699,8 @@
             "compact": "Compact",
             "detailedTooltip": "Utilisation complète avec barres, libellés et pourcentages",
             "compactTooltip": "Utilisation condensée : un résumé par fournisseur",
-            "footerDetailAria": "Détail du pied de page d'utilisation"
+            "footerDetailAria": "Détail du pied de page d'utilisation",
+            "notChecked": "Non vérifié"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Mise à jour de {{value0}}/{{value1}}",
@@ -4913,12 +4912,17 @@
           "AccountSwitchList": {
             "used": "Utilisé",
             "left": "Restant",
-            "reset": "Réinitialisation"
+            "reset": "Réinitialisation",
+            "accounts": "Comptes"
           },
           "InlineUsageBars": {
             "now": "maintenant",
             "resetsNow": "réinitialisation maintenant",
             "resetsIn": "réinitialisation dans {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Afficher l’utilisation restante",
+            "showUsed": "Afficher l’utilisation consommée"
           }
         }
       },

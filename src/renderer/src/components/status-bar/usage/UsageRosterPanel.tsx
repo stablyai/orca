@@ -3,125 +3,97 @@ import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
-import {
-  formatRateLimitWindowChipLabel,
-  formatWindowLabel
-} from './rate-limit-window-localized-label'
-import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/cursor-usage-buckets'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import {
-  clampUsedPercent,
-  getDisplayedUsagePercentage,
-  type UsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
-import { getWindowSections, ProviderIcon } from './provider-usage-panel'
-import { barColor } from './provider-extra-usage-section'
-import { formatResetCountdown } from '../../../../../shared/rate-limit-reset-format'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { ProviderIcon } from './provider-usage-panel'
 import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
-import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
+import { formatPlanLabel } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import {
+  getUrgentScopedSection,
+  getUsageHeadlineSection,
+  providerPrimaryMaxUsed,
+  shortUsageLabel,
+  usedSections,
+  type UsageSection
+} from './usage-headline-sections'
+import { formatResetsInCaption } from './usage-reset-caption'
+import { formatBareUsagePercentage } from './usage-percentage-label'
+import { usageTextClass } from './usage-health-tone'
+import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
 
 type ProviderId = ProviderRateLimits['provider']
-export type UsageSection = { label: string; window: RateLimitWindow }
-
-// Drop null and missing windows from partial/rehydrated snapshots before reading percentages.
-function usedSections(p: ProviderRateLimits, t?: Translate): UsageSection[] {
-  return getWindowSections(p, t).filter(
-    (s): s is UsageSection => s.window !== null && s.window !== undefined
-  )
-}
-
-function providerMaxUsed(sections: UsageSection[]): number {
-  return sections.length > 0
-    ? Math.max(...sections.map((s) => clampUsedPercent(s.window.usedPercent)))
-    : 0
-}
-
-// Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
-function shortLabel(
-  p: ProviderRateLimits,
-  section: UsageSection,
-  useRemainingDuration = false
-): string {
-  if (p.buckets?.some((b) => b.name === section.label)) {
-    return section.label
-  }
-  // Distinguish Fable from the other weekly window instead of rendering two wk labels.
-  if (section.window === p.fableWeekly) {
-    return 'Fable'
-  }
-  if (p.provider === 'zcode' && section.window === p.monthly) {
-    return section.label
-  }
-  return useRemainingDuration
-    ? formatRateLimitWindowChipLabel(section.window)
-    : formatWindowLabel(section.window.windowMinutes)
-}
-
-export function getTightestUsageSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
-  const sections = usedSections(p, t)
-  if (sections.length === 0) {
-    return null
-  }
-  // Rank by consumption even when the displayed percentage means remaining allowance.
-  const tightest = sections.reduce((current, candidate) =>
-    clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
-      ? candidate
-      : current
-  )
-  return { ...tightest, label: shortLabel(p, tightest, true) }
-}
-
-export function getUsageHeadlineSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
-  if (p.provider === 'cursor') {
-    const primary = usedSections(p, t).find(
-      (section) => section.label === CURSOR_MODELS_BUCKET_NAME
-    )
-    if (primary) {
-      return { ...primary, label: shortLabel(p, primary, true) }
-    }
-  }
-  return getTightestUsageSection(p, t)
-}
-
-function soonestResetLabel(sections: UsageSection[], now: number): string | null {
-  const resets = sections
-    .map((s) => s.window.resetsAt)
-    .filter((r): r is number => typeof r === 'number' && Number.isFinite(r))
-  if (resets.length === 0) {
-    return null
-  }
-  return formatResetCountdown(Math.min(...resets) - now)
-}
-
-function UsageMetric({
+function DetailMetric({
   section,
   label,
-  display,
-  showBar = true
+  display
 }: {
   section: UsageSection
   label: string
   display: UsagePercentageDisplay
-  showBar?: boolean
 }): React.JSX.Element {
-  const used = clampUsedPercent(section.window.usedPercent)
-  const shown = getDisplayedUsagePercentage(section.window.usedPercent, display)
-
   return (
     <span data-usage-window={section.label} className="flex shrink-0 items-center gap-1.5">
       <span className="text-[10px] text-muted-foreground">{label}</span>
-      {showBar ? (
-        <span data-usage-bar className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
-          <span
-            className={`block h-full rounded-full ${barColor(used)}`}
-            style={{ width: `${shown}%` }}
-          />
+      <UsageBar
+        usedPercent={section.window.usedPercent}
+        display={display}
+        className="h-[5px] w-7"
+      />
+      <UsageValue
+        usedPercent={section.window.usedPercent}
+        display={display}
+        className="text-[11px]"
+      />
+    </span>
+  )
+}
+
+function RowUsageSummary({
+  p,
+  display,
+  now
+}: {
+  p: ProviderRateLimits
+  display: UsagePercentageDisplay
+  now: number
+}): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const headline = getUsageHeadlineSection(p, t)
+  if (!headline) {
+    return (
+      <span data-usage-not-checked className="ml-auto shrink-0 text-[11px] text-muted-foreground">
+        {t('auto.components.status.bar.UsageRosterPanel.notChecked', 'Not checked')}
+      </span>
+    )
+  }
+  const scoped = getUrgentScopedSection(p, t)
+  const caption = formatResetsInCaption(headline.window.resetsAt, now, intlLocale, t)
+  return (
+    <span className="ml-auto flex shrink-0 items-center gap-2">
+      {scoped ? (
+        <span
+          data-usage-scoped-urgent
+          className={`text-[11px] @max-[340px]:hidden ${usageTextClass(scoped.window.usedPercent)}`}
+        >
+          {`${scoped.label} ${formatBareUsagePercentage(scoped.window.usedPercent, display, t)}`}
         </span>
+      ) : caption ? (
+        <span className="text-[11px] text-muted-foreground @max-[340px]:hidden">{caption}</span>
       ) : null}
-      <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>{shown}%</span>
+      <UsageBar
+        usedPercent={headline.window.usedPercent}
+        display={display}
+        className="h-[5px] w-[30px]"
+      />
+      <UsageValue
+        usedPercent={headline.window.usedPercent}
+        display={display}
+        className="w-9 text-right text-[12px] font-medium"
+      />
     </span>
   )
 }
@@ -146,8 +118,6 @@ export function UsageRow({
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
-  const reset = hasUsage ? soonestResetLabel(sections, now) : null
-  const tightest = mode === 'compact' ? getUsageHeadlineSection(p, t) : null
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -155,7 +125,7 @@ export function UsageRow({
         <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border bg-secondary">
           <ProviderIcon provider={p.provider} />
         </span>
-        <span className="min-w-0 shrink truncate text-[13px] font-medium text-foreground">
+        <span className="min-w-14 shrink truncate text-[13px] font-medium text-foreground">
           {name}
           {plan ? <span className="font-normal text-muted-foreground"> · {plan}</span> : null}
         </span>
@@ -170,18 +140,9 @@ export function UsageRow({
               </span>
             ) : null}
           </>
-        ) : tightest ? (
-          <span className="ml-auto">
-            <UsageMetric
-              section={tightest}
-              label={tightest.label}
-              display={display}
-              showBar={false}
-            />
-          </span>
-        ) : reset ? (
-          <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
-        ) : null}
+        ) : (
+          <RowUsageSummary p={p} display={display} now={now} />
+        )}
       </div>
       {state.detail ? (
         <span className="pl-[30px] text-[11px] text-muted-foreground">{state.detail}</span>
@@ -189,10 +150,10 @@ export function UsageRow({
       {hasUsage && mode === 'verbose' ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
           {sections.map((section) => (
-            <UsageMetric
+            <DetailMetric
               key={section.label}
               section={section}
-              label={shortLabel(p, section)}
+              label={shortUsageLabel(p, section)}
               display={display}
             />
           ))}
@@ -238,19 +199,20 @@ export function UsageRosterPanel({
       usedSections(provider, t).map((section) => section.window.resetsAt)
     )
   )
+  // Why primary-only: a spent Fable/MCP window must not push a healthy provider to the top.
   const sorted = [...providers].sort(
-    (a, b) => providerMaxUsed(usedSections(b, t)) - providerMaxUsed(usedSections(a, t))
+    (a, b) => providerPrimaryMaxUsed(b, t) - providerPrimaryMaxUsed(a, t)
   )
 
   return (
-    <div className="w-[360px] text-xs">
-      <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
-        <span className="text-[13px] font-semibold text-foreground">
-          {t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
-        </span>
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <span className="text-[11px]">
-            {t('auto.components.status.bar.UsageRosterPanel.allAgents', 'all agents')}
+    <div className="@container w-full text-xs">
+      <div className="flex items-center justify-between gap-2 pb-2 pl-3.5 pr-[30px] pt-3">
+        <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+          <span className="text-[13px] font-semibold text-foreground">
+            {t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
+          </span>
+          <span className="truncate text-[11px]">
+            · {t('auto.components.status.bar.UsageRosterPanel.allAgents', 'all agents')}
           </span>
           <DropdownMenuItem
             onSelect={(event) => {
@@ -263,6 +225,7 @@ export function UsageRosterPanel({
             <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
           </DropdownMenuItem>
         </div>
+        <UsageDisplayToggle asMenuItem />
       </div>
       {/* Keep the density picker in the popover so both usage modes are discoverable. */}
       <div className="px-3.5 pb-2.5">

@@ -4068,7 +4068,6 @@
             "c8857b40f7": "使用状況データを更新する",
             "75ded02687": "アカウントを管理…",
             "ff0fbe9311": "アクティブ",
-            "7657e3db9c": "Codex アカウント",
             "38b5647724": "Codex 使用ランタイム",
             "ba55303942": "Codex の詳細とアカウント切り替えを開く",
             "c35af53b73": "サインイン",
@@ -4076,7 +4075,6 @@
             "5c938d39ac": "週",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude アカウント",
             "11e2354daf": "Claude 使用ランタイム",
             "3dd7ddfae1": "Claude の詳細とアカウント切り替えを開く",
             "59c6e7b4e0": "表示されているセッションが再開されます。他のものは、ワークツリーがアクティブになると再起動します。",
@@ -4335,7 +4333,8 @@
             "compact": "コンパクト",
             "footerDetailAria": "使用量フッターの詳細",
             "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
-            "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要"
+            "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要",
+            "notChecked": "未確認"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}}を更新中",
@@ -4509,12 +4508,17 @@
           "AccountSwitchList": {
             "used": "使用済み",
             "left": "残り",
-            "reset": "リセット"
+            "reset": "リセット",
+            "accounts": "アカウント"
           },
           "InlineUsageBars": {
             "now": "今",
             "resetsNow": "今リセット",
             "resetsIn": "{{duration}}後にリセット"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "残りの使用量を表示",
+            "showUsed": "使用済みの使用量を表示"
           }
         }
       },

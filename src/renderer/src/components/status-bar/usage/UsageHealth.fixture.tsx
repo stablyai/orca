@@ -1,0 +1,248 @@
+import { defineFixture } from '../../../component-fixtures/component-fixture'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/cursor-usage-buckets'
+import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { AccountSwitchList } from '../accounts/AccountSwitchList'
+import { AccountSwitchRowItem } from '../accounts/AccountSwitchRowItem'
+import { AccountUsageGauge, AccountUsageNotChecked } from '../accounts/AccountUsageGauge'
+import { ProviderDetailsMenu } from './ProviderDetailsMenu'
+import { ProviderIdentityCard } from '../accounts/ProviderIdentityCard'
+import { ProviderSegment } from './StatusBarProviderSegment'
+import { UsageRosterPanel } from './UsageRosterPanel'
+import { useAppStore } from '../../../store'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+
+const NOW = Date.now()
+const MIN = 60_000
+const HOUR = 60 * MIN
+const DAY = 24 * HOUR
+
+type Preset = { s5: number; wk: number; fable: number }
+const PRESETS = {
+  healthy: { s5: 12, wk: 33, fable: 0 },
+  low: { s5: 86, wk: 72, fable: 41 },
+  full: { s5: 40, wk: 100, fable: 100 },
+  fable: { s5: 12, wk: 33, fable: 100 }
+} satisfies Record<string, Preset>
+
+function win(usedPercent: number, windowMinutes: number, resetsInMs: number): RateLimitWindow {
+  return {
+    usedPercent,
+    windowMinutes,
+    resetsAt: NOW + resetsInMs + 5_000,
+    resetDescription: null
+  }
+}
+
+function base(provider: ProviderRateLimits['provider']): ProviderRateLimits {
+  return {
+    provider,
+    session: null,
+    weekly: null,
+    updatedAt: NOW - 30_000,
+    error: null,
+    status: 'ok'
+  }
+}
+
+function claudeFor(preset: Preset): ProviderRateLimits {
+  return {
+    ...base('claude'),
+    planType: 'max',
+    session: win(preset.s5, 300, 3 * HOUR + 35 * MIN),
+    weekly: win(preset.wk, 10_080, 4 * DAY + 23 * HOUR),
+    fableWeekly: win(preset.fable, 10_080, 4 * DAY + 23 * HOUR)
+  }
+}
+
+function roster(preset: Preset): ProviderRateLimits[] {
+  return [
+    {
+      ...base('cursor'),
+      planType: 'free',
+      buckets: [{ ...win(64, 43_200, 12 * DAY), name: CURSOR_MODELS_BUCKET_NAME }]
+    },
+    { ...base('grok'), weekly: win(39, 10_080, 6 * DAY + 11 * HOUR) },
+    {
+      ...base('codex'),
+      planType: 'pro',
+      session: win(18, 300, 2 * HOUR),
+      weekly: win(92, 10_080, 6 * DAY + 11 * HOUR)
+    },
+    claudeFor(preset),
+    { ...base('antigravity'), status: 'unavailable' },
+    { ...base('opencode-go'), session: win(0, 300, 4 * HOUR + 58 * MIN) }
+  ]
+}
+
+const noop = (): void => {}
+
+// Why read the store: the header toggle flips the persisted setting, like the real status bar.
+function useFixtureDisplay(): UsagePercentageDisplay {
+  return normalizeUsagePercentageDisplay(useAppStore((s) => s.usagePercentageDisplay))
+}
+
+function RosterHarness({
+  providers,
+  mode,
+  width
+}: {
+  providers: ProviderRateLimits[]
+  mode: StatusBarUsageMode
+  width: number
+}): React.JSX.Element {
+  const display = useFixtureDisplay()
+  return (
+    <div className="flex h-[520px] flex-col gap-3 bg-background p-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap rounded border border-border px-2 py-1 text-xs">
+        {providers
+          .filter((p) => p.status !== 'unavailable')
+          .map((p) => (
+            <ProviderSegment key={p.provider} p={p} compact={false} display={display} mode={mode} />
+          ))}
+      </div>
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>Usage</DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          variant="picker"
+          className="w-[440px] max-w-[calc(100vw-1rem)]"
+          style={{ maxWidth: width - 24 }}
+        >
+          <UsageRosterPanel
+            providers={providers}
+            display={display}
+            statusBarUsageMode={mode}
+            onStatusBarUsageModeChange={noop}
+            isRefreshing={false}
+            onRefresh={noop}
+            onOpenProvider={noop}
+            onSignIn={noop}
+            canSignIn={() => false}
+            onManageAccounts={noop}
+            onUsageDetails={noop}
+            renderRow={(p, row) => (
+              <ProviderDetailsMenu
+                provider={p}
+                compact={false}
+                iconOnly={false}
+                asSubmenu
+                triggerContent={row}
+                ariaLabel="Open usage details"
+              />
+            )}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}
+
+function rosterFixture(
+  preset: Preset,
+  display: UsagePercentageDisplay,
+  mode: StatusBarUsageMode = 'verbose',
+  width = 480
+) {
+  const providers = roster(preset)
+  return defineFixture({
+    width,
+    store: { usagePercentageDisplay: display, statusBarUsageMode: mode },
+    render: () => <RosterHarness providers={providers} mode={mode} width={width} />
+  })
+}
+
+const OTHER_ACCOUNT: ProviderRateLimits = {
+  ...base('claude'),
+  session: win(16, 300, 3 * HOUR + 34 * MIN),
+  weekly: win(100, 10_080, 3 * DAY + 11 * HOUR),
+  fableWeekly: win(6, 10_080, 3 * DAY + 11 * HOUR)
+}
+
+function cardFixture(preset: Preset, display: UsagePercentageDisplay) {
+  const claude = claudeFor(preset)
+  const accounts: {
+    label: string
+    active?: boolean
+    usage: 'none' | 'unchecked' | ProviderRateLimits
+  }[] = [
+    { label: 'System default', usage: 'none' },
+    { label: 'alpha@example.com', active: true, usage: claude },
+    { label: 'bravo@example.com', usage: 'unchecked' },
+    { label: 'charlie@example.com', usage: OTHER_ACCOUNT },
+    { label: 'delta@example.com', usage: 'unchecked' }
+  ]
+  return defineFixture({
+    width: 480,
+    store: { usagePercentageDisplay: display },
+    render: () => (
+      <div className="h-[640px] bg-background p-3">
+        <DropdownMenu defaultOpen modal={false}>
+          <DropdownMenuTrigger>Claude</DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[440px] max-w-[calc(100vw-1rem)]">
+            <div className="p-2">
+              <ProviderIdentityCard
+                p={claude}
+                accountLabel="alpha@example.com"
+                usagePercentageDisplay={display}
+                inMenu
+              />
+            </div>
+            <AccountSwitchList heading="Accounts">
+              {accounts.map((account) => (
+                <AccountSwitchRowItem
+                  key={account.label}
+                  label={account.label}
+                  active={account.active === true}
+                  disabled={account.active === true}
+                >
+                  {account.usage === 'none' ? null : account.usage === 'unchecked' ? (
+                    <AccountUsageNotChecked />
+                  ) : (
+                    <AccountUsageGauge limits={account.usage} isFetching={false} />
+                  )}
+                </AccountSwitchRowItem>
+              ))}
+            </AccountSwitchList>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )
+  })
+}
+
+export const rosterHealthyUsed = rosterFixture(PRESETS.healthy, 'used')
+export const rosterHealthyLeft = rosterFixture(PRESETS.healthy, 'remaining')
+export const rosterLowUsed = rosterFixture(PRESETS.low, 'used')
+export const rosterLowLeft = rosterFixture(PRESETS.low, 'remaining')
+export const rosterFullUsed = rosterFixture(PRESETS.full, 'used')
+export const rosterFullLeft = rosterFixture(PRESETS.full, 'remaining')
+export const rosterFableUsed = rosterFixture(PRESETS.fable, 'used')
+export const rosterFableLeft = rosterFixture(PRESETS.fable, 'remaining')
+export const rosterLowCompact = rosterFixture(PRESETS.low, 'used', 'compact')
+export const rosterNarrow300 = rosterFixture(PRESETS.low, 'used', 'compact', 324)
+
+export const cardHealthyUsed = cardFixture(PRESETS.healthy, 'used')
+export const cardHealthyLeft = cardFixture(PRESETS.healthy, 'remaining')
+export const cardLowUsed = cardFixture(PRESETS.low, 'used')
+export const cardLowLeft = cardFixture(PRESETS.low, 'remaining')
+export const cardFullUsed = cardFixture(PRESETS.full, 'used')
+export const cardFullLeft = cardFixture(PRESETS.full, 'remaining')
+export const cardFableUsed = cardFixture(PRESETS.fable, 'used')
+export const cardFableLeft = cardFixture(PRESETS.fable, 'remaining')
+
+export const rosterToggleFocused = defineFixture({
+  ...rosterFixture(PRESETS.low, 'used'),
+  interact: (frame) => {
+    const toggle = frame.ownerDocument.querySelector<HTMLElement>('[data-usage-display-toggle]')
+    toggle?.focus()
+    // Why Enter: proves the keyboard path flips the setting and the menu stays open.
+    toggle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  }
+})

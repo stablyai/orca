@@ -8,11 +8,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useAppStore } from '../../../store/index'
+import { useAppStore } from '../../../store'
 import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { ProviderPanel } from './provider-usage-panel'
 import { ProviderIdentityCard } from '../accounts/ProviderIdentityCard'
+import { UsageDisplayToggle } from './usage-meter'
 import { ProviderLetterBadge, ProviderSegment } from './StatusBarProviderSegment'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../composition/status-bar-context-menu-policy'
 
@@ -73,9 +74,14 @@ export function ProviderDetailsMenu({
               accountLabel={accountLabel}
               footer={panelFooter}
               usagePercentageDisplay={usagePercentageDisplay}
+              inMenu
             />
           ) : (
-            <ProviderPanel p={provider} usagePercentageDisplay={usagePercentageDisplay} />
+            <ProviderPanel
+              p={provider}
+              usagePercentageDisplay={usagePercentageDisplay}
+              headerAction={<UsageDisplayToggle asMenuItem />}
+            />
           )}
         </div>
       ) : null}
@@ -99,7 +105,7 @@ export function ProviderDetailsMenu({
           {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
           collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
           scrollable
-          className={`${variant === 'account' ? 'w-[400px]' : 'w-[300px]'} max-w-[calc(100vw-1rem)]`}
+          className={`${variant === 'account' ? 'w-[440px]' : 'w-[300px]'} max-w-[calc(100vw-1rem)]`}
         >
           {panelBody}
         </DropdownMenuSubContent>
@@ -129,7 +135,7 @@ export function ProviderDetailsMenu({
         side="top"
         align="start"
         sideOffset={8}
-        className={`${variant === 'account' ? 'w-[400px]' : 'w-[260px]'} max-w-[calc(100vw-1rem)]`}
+        className={`${variant === 'account' ? 'w-[440px]' : 'w-[260px]'} max-w-[calc(100vw-1rem)]`}
         onPointerDownOutside={menuFocusHandoff.onPointerDownOutside}
         onCloseAutoFocus={menuFocusHandoff.onCloseAutoFocus}
       >

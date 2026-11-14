@@ -11,9 +11,12 @@ import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-per
 
 export function AccountSwitchList({
   heading,
+  showResetColumn = false,
   children
 }: {
   heading: string
+  /** Only lists that render per-window rows with resets (Antigravity) label a Reset column. */
+  showResetColumn?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -26,14 +29,18 @@ export function AccountSwitchList({
         <span className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate">{heading}</span>
           <span className="flex shrink-0 items-end gap-1 text-right">
-            <span className="min-w-8 whitespace-nowrap">
+            <span
+              className={showResetColumn ? 'min-w-8 whitespace-nowrap' : 'w-9 whitespace-nowrap'}
+            >
               {display === 'used'
                 ? t('auto.components.status.bar.AccountSwitchList.used', 'Used')
                 : t('auto.components.status.bar.AccountSwitchList.left', 'Left')}
             </span>
-            <span className="w-11 shrink-0 whitespace-normal break-all">
-              {t('auto.components.status.bar.AccountSwitchList.reset', 'Reset')}
-            </span>
+            {showResetColumn ? (
+              <span className="w-11 shrink-0 whitespace-normal break-all">
+                {t('auto.components.status.bar.AccountSwitchList.reset', 'Reset')}
+              </span>
+            ) : null}
           </span>
         </span>
       </DropdownMenuLabel>

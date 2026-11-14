@@ -4263,7 +4263,6 @@
             "c8857b40f7": "刷新使用数据",
             "75ded02687": "管理账户…",
             "ff0fbe9311": "当前",
-            "7657e3db9c": "Codex 账户",
             "38b5647724": "Codex 使用量运行时",
             "ba55303942": "打开 Codex 详情和账户切换器",
             "c35af53b73": "登录",
@@ -4271,7 +4270,6 @@
             "5c938d39ac": "周",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
             "59c6e7b4e0": "可见会话将立即重启，其他会话会在其工作树变为活动状态时重启",
@@ -4541,7 +4539,8 @@
             "compact": "精简",
             "footerDetailAria": "使用情况页脚详情",
             "detailedTooltip": "完整使用情况，包含条形图、标签和百分比",
-            "compactTooltip": "精简使用情况：每个提供方显示一项汇总"
+            "compactTooltip": "精简使用情况：每个提供方显示一项汇总",
+            "notChecked": "未检查"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
@@ -4716,12 +4715,17 @@
           "AccountSwitchList": {
             "used": "已用",
             "left": "剩余",
-            "reset": "重置"
+            "reset": "重置",
+            "accounts": "账户"
           },
           "InlineUsageBars": {
             "now": "现在",
             "resetsNow": "现在重置",
             "resetsIn": "{{duration}}后重置"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "显示剩余用量",
+            "showUsed": "显示已用用量"
           }
         }
       },

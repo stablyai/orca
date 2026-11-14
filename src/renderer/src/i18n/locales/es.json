@@ -4146,7 +4146,6 @@
             "c8857b40f7": "Actualizar datos de uso",
             "75ded02687": "Administrar cuentas…",
             "ff0fbe9311": "Activo",
-            "7657e3db9c": "Cuenta del Codex",
             "38b5647724": "Uso de Codex",
             "ba55303942": "Abrir detalles de Codex y cambiar de cuenta",
             "c35af53b73": "Iniciar sesión",
@@ -4154,7 +4153,6 @@
             "5c938d39ac": "semana",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Cuenta de Claude",
             "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
             "59c6e7b4e0": "Las sesiones visibles se reinician ahora. Las demás se reinician cuando su worktree se activa.",
@@ -4425,7 +4423,8 @@
             "compact": "Compact",
             "footerDetailAria": "Usage footer detail",
             "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
-            "compactTooltip": "Uso condensado: un resumen por proveedor"
+            "compactTooltip": "Uso condensado: un resumen por proveedor",
+            "notChecked": "Sin comprobar"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -4642,12 +4641,17 @@
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
-            "reset": "Restablecimiento"
+            "reset": "Restablecimiento",
+            "accounts": "Cuentas"
           },
           "InlineUsageBars": {
             "now": "ahora",
             "resetsNow": "se restablece ahora",
             "resetsIn": "se restablece en {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Mostrar uso restante",
+            "showUsed": "Mostrar uso consumido"
           }
         }
       },

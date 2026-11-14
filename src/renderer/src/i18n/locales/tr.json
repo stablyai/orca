@@ -4604,7 +4604,6 @@
             "c8857b40f7": "Kullanım verilerini yenile",
             "75ded02687": "Hesapları Yönet…",
             "ff0fbe9311": "Etkin",
-            "7657e3db9c": "Codex Hesabı",
             "38b5647724": "Codex kullanım çalışma zamanı",
             "ba55303942": "Codex ayrıntılarını ve hesap değiştiriciyi aç",
             "c35af53b73": "Oturum aç",
@@ -4612,7 +4611,6 @@
             "5c938d39ac": "hf",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
             "59c6e7b4e0": "Görünür oturumlar şimdi yeniden başlar. Diğerleri, worktree'leri etkin hale geldiğinde yeniden başlar.",
@@ -4901,7 +4899,8 @@
             "compact": "Kompakt",
             "detailedTooltip": "Çubuklar, etiketler ve yüzdelerle tam kullanım",
             "compactTooltip": "Özet kullanım: sağlayıcı başına tek özet",
-            "footerDetailAria": "Kullanım altbilgi ayrıntısı"
+            "footerDetailAria": "Kullanım altbilgi ayrıntısı",
+            "notChecked": "Kontrol edilmedi"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} güncelleniyor",
@@ -5091,12 +5090,17 @@
           "AccountSwitchList": {
             "used": "Kullanılan",
             "left": "Kalan",
-            "reset": "Sıfırlanma"
+            "reset": "Sıfırlanma",
+            "accounts": "Hesaplar"
           },
           "InlineUsageBars": {
             "now": "şimdi",
             "resetsNow": "şimdi sıfırlanır",
             "resetsIn": "{{duration}} içinde sıfırlanır"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Kalan kullanımı göster",
+            "showUsed": "Kullanılan miktarı göster"
           }
         }
       },
