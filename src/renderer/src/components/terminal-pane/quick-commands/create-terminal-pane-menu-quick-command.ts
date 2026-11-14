@@ -10,18 +10,29 @@ export function createTerminalPaneMenuQuickCommand({
   tabId,
   worktreeId,
   groupId,
-  resolveMenuPane
+  resolveMenuPane,
+  resolveArguments
 }: Pick<
   UseTerminalPaneContextMenuDeps,
   'paneTransportsRef' | 'tabId' | 'worktreeId' | 'groupId'
-> & { resolveMenuPane: () => ManagedPane | null }) {
-  const onQuickCommand = (command: TerminalQuickCommand, historyId: string): void => {
+> & {
+  resolveMenuPane: () => ManagedPane | null
+  resolveArguments: (command: TerminalQuickCommand) => Promise<TerminalQuickCommand | null>
+}) {
+  const onQuickCommand = async (
+    savedCommand: TerminalQuickCommand,
+    historyId: string
+  ): Promise<void> => {
+    // Why: resolve the pane before awaiting; the argument prompt closes the menu that pins it.
+    const pane = resolveMenuPane()
+    const command = await resolveArguments(savedCommand)
+    if (!command) {
+      return
+    }
     if (isTerminalAgentQuickCommand(command)) {
       runQuickCommandInNewTab({ command, worktreeId, groupId, historyId })
       return
     }
-
-    const pane = resolveMenuPane()
     if (!pane) {
       return
     }

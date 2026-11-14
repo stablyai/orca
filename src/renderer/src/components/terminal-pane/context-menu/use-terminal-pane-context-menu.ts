@@ -14,6 +14,7 @@ import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-
 import { useTerminalPaneSplitActions } from '../layout/split/use-terminal-pane-split-actions'
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
 import { resetTerminalInputModes } from '../input/terminal-input-mode-reset'
+import { useQuickCommandArgumentPrompt } from '@/components/terminal-quick-commands/use-quick-command-argument-prompt'
 import { focusPaneIfFocusUnclaimed } from '@/lib/pane-manager/pane-focus/pane-overlay-focus'
 
 type TerminalMenuState = {
@@ -163,12 +164,14 @@ export function useTerminalPaneContextMenu({
   const { onForkAgentSession, onContinueAgentSessionInNewSession, onCopyAgentSessionContext } =
     createTerminalPaneMenuAgentSessionActions({ agentSessionContext, resolveMenuPane })
 
+  const resolveArguments = useQuickCommandArgumentPrompt()
   const { onQuickCommand } = createTerminalPaneMenuQuickCommand({
     paneTransportsRef,
     tabId,
     worktreeId,
     groupId,
-    resolveMenuPane
+    resolveMenuPane,
+    resolveArguments
   })
 
   const onToggleExpand = (): void => {

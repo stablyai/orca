@@ -6,9 +6,14 @@ import type { LucideIcon } from 'lucide-react'
 export type ConfirmationDialogField = {
   id: string
   label: string
-  type?: 'text' | 'password'
+  type?: 'text' | 'password' | 'select'
   autoComplete?: string
+  /** Choices for `type: 'select'`. */
+  options?: string[]
   defaultValue?: string
+  placeholder?: string
+  /** Confirm stays disabled until the trimmed value is non-empty. */
+  required?: boolean
 }
 
 export type ConfirmationDialogOptions = {
