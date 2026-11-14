@@ -9,11 +9,15 @@ export const PairingCreateOfferParamsSchema = z
     address: z.string().min(1).max(512).optional(),
     relay: z.boolean().optional(),
     grantDesktopControl: z.boolean().optional(),
-    rotate: z.boolean().optional()
+    rotate: z.boolean().optional(),
+    preserveBind: z.boolean().optional()
   })
   .strict()
   .refine((params) => params.scope === 'mobile' || params.relay !== true, {
     message: 'relay applies only to mobile pairing'
+  })
+  .refine((params) => !params.preserveBind || !params.relay, {
+    message: 'preserveBind cannot be combined with relay'
   })
   .refine((params) => params.scope === 'runtime' || params.grantDesktopControl !== true, {
     message: 'desktop control can be granted only to a runtime client'

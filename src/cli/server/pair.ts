@@ -51,7 +51,8 @@ export const PAIR_HANDLERS: Record<string, CommandHandler> = {
       address: getOptionalStringFlag(flags, 'address'),
       relay: flags.get('relay') === true,
       grantDesktopControl: flags.get('grant-desktop-control') === true,
-      rotate: flags.get('rotate') === true
+      rotate: flags.get('rotate') === true,
+      ...(flags.get('preserve-bind') === true ? { preserveBind: true } : {})
     }
     const response = await client.call<PairingCreateOfferResult>(
       PAIRING_CREATE_OFFER_METHOD,

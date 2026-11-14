@@ -150,6 +150,28 @@ embedded in pairing links. `--mobile-pairing` needs all interfaces, so use it wi
 orca-ide serve --bind 127.0.0.1 --pairing-address 127.0.0.1
 ```
 
+For an already running server pinned to loopback behind an authenticated HTTPS reverse proxy,
+create a new access link without changing its listener:
+
+```bash
+orca pair --preserve-bind --address wss://orca.example.com
+# A separate mobile-scoped offer for Orca Mobile:
+orca pair --mobile --preserve-bind --address wss://orca.example.com
+```
+
+Run these commands as the server's own user. `--preserve-bind` requires an explicitly pinned
+loopback listener and an HTTPS/WSS address, and cannot be combined with `--relay`. It keeps
+existing connections online and records local-reach grants, so pairing does not opt a future
+unpinned startup into network exposure. Existing network offers are kept separate. Treat each
+link as a credential; pair each client separately and revoke it under **Shared Server Access**.
+
+The proxy must already authenticate the intended users, protect WebSocket upgrades and its
+origin, and forward only to the loopback listener. This option does not configure or verify
+those protections. Test anonymous denial and each intended client, including Orca Mobile's
+actual compatibility with the proxy's login flow. A working browser does not prove mobile-app
+compatibility. Older runtimes reject this option; update the CLI and server together during a
+maintenance window. Do not restart a busy server merely to obtain a pairing link.
+
 For example:
 
 ```bash
