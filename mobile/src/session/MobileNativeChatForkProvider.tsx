@@ -6,6 +6,7 @@ import { MobileNativeChatForkedFromContext } from './native-chat/transcript/mobi
 import { forkMobileStructuredChat } from './mobile-structured-chat-fork'
 import {
   forkMobileStructuredChatIntoWorktree,
+  mobileSubagentForkAvailable,
   type MobileWorktreeForkMode
 } from './mobile-structured-chat-worktree-fork'
 import { useMobileWorktreeForkRequest } from './native-chat/mobile-native-chat-worktree-fork-requests'
@@ -113,10 +114,15 @@ export function MobileNativeChatForkProvider({
   })
   const { open: openForkSheet } = forkSheet
   const forkContext = useMemo(() => ({ ...fork, openSheet: openForkSheet }), [fork, openForkSheet])
-  // The header's and tab sheet's fork items open the sheet at their own preset.
+  // The header's and tab sheet's fork items open the sheet at their own preset, never a weaker one.
   const openLatestForkSheet = useCallback(
     (mode: MobileWorktreeForkMode): boolean => {
-      const message = fork.latestForkable()
+      const honoured =
+        fork.worktreeForkOffered() &&
+        (mode !== 'subagent' ||
+          (latestController.current.activeSessionTab?.type !== 'terminal' &&
+            mobileSubagentForkAvailable(fork.hostCapabilities())))
+      const message = honoured ? fork.latestForkable() : undefined
       if (message) {
         openForkSheet(message, mode)
       }
