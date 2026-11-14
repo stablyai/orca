@@ -47,7 +47,7 @@ it('consumes the shim marker before replacing a lifecycle command with root Elec
     throw replaced
   })
   vi.resetModules()
-  const { reenterPackagedElectron } = await import('./packaged-cli-interpreter')
+  const { reenterPackagedElectron } = await import('./packaged-cli-interpreter.js')
   expect(process.env.ORCA_CLI_ELECTRON_EXECUTABLE).toBeUndefined()
   expect(reenterPackagedElectron).toThrow(replaced)
   expect(invocation).toMatchObject({
@@ -69,6 +69,6 @@ it('reports an unavailable app before attempting native process replacement', as
     throw new Error('Native replacement attempted')
   })
   vi.resetModules()
-  const { reenterPackagedElectron } = await import('./packaged-cli-interpreter')
+  const { reenterPackagedElectron } = await import('./packaged-cli-interpreter.js')
   expect(reenterPackagedElectron).toThrow('The installed Orca app is unavailable')
 })
