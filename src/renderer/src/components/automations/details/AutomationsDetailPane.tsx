@@ -1,7 +1,4 @@
 import React from 'react'
-import { ArrowLeft } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type {
   ExternalAutomationAction,
@@ -11,7 +8,8 @@ import type {
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { AutomationDetail } from './AutomationDetail'
-import { AutomationRunHistory } from '../runs/AutomationRunHistory'
+import { AutomationDetailActions } from './AutomationDetailActions'
+import { AutomationRunHistory, formatAutomationRunCountSummary } from '../runs/AutomationRunHistory'
 import { ExternalAutomationManagers } from '../external/ExternalAutomationManagers'
 import type { ExternalAutomationListEntry } from '../external/external-automation-list-entries'
 import type { ExternalAutomationScope } from '../external/external-automation-scope-client'
@@ -19,20 +17,19 @@ import type { AutomationActionNotice } from '../hosts/automation-row-action-disp
 import type { AutomationHostRecoveryAction } from '../hosts/automation-host-status-descriptors'
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import type { AutomationTargetAvailability } from '../hosts/automation-target-availability-types'
-import type { AutomationPaneTab } from '../automation-page-state'
-import {
-  getAutomationDetailNextTab,
-  shouldHandleAutomationDetailEscapeKey,
-  shouldHandleAutomationDetailTabArrowKey
-} from './automation-detail-tab-navigation'
+import type { AutomationPaneTab, AutomationRunPageOrigin } from '../automation-page-state'
+import { AutomationsPageFrame, AutomationsPageTitle } from '../AutomationsPageFrame'
 import { useTranslate } from '@/i18n/use-translate'
 
 type AutomationsDetailPaneProps = {
+  /** Breadcrumb for the current sub-page, built by the page so every path agrees. */
+  nav: React.ReactNode
   selected: Automation | null
   selectedExternal: ExternalAutomationListEntry | null
   selectedRuns: AutomationRun[]
   /** Set when the selected automation's history read failed; its runs are unknown. */
   selectedRunsNotice: AutomationActionNotice | null
+  /** 'runs' shows the automation's full run history as its own page. */
   activePaneTab: AutomationPaneTab
   relativeNow: number
   externalActionKey: string | null
@@ -43,8 +40,8 @@ type AutomationsDetailPaneProps = {
   selectedHostEntry: AutomationHostCatalogEntry | null
   hostLabelById: ReadonlyMap<string, string>
   selectedRunNowAvailability: AutomationTargetAvailability | null
+  isRunNowPending: boolean
   worktreeMap: ReadonlyMap<string, Worktree>
-  onActivePaneTabChange: (tab: AutomationPaneTab) => void
   requestExternalAction: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
@@ -57,12 +54,13 @@ type AutomationsDetailPaneProps = {
   isMigrating?: boolean
   toggleAutomation: (automation: Automation) => void
   requestDeleteAutomation: (automation: Automation) => void
-  openAutomationRunPage: (run: AutomationRun) => void
-  onBackToList: () => void
+  openAutomationRunPage: (run: AutomationRun, origin: AutomationRunPageOrigin) => void
+  showAllRuns: () => void
   recoverSelectedRuns: (action: AutomationHostRecoveryAction) => void
 }
 
 export function AutomationsDetailPane({
+  nav,
   selected,
   selectedExternal,
   selectedRuns,
@@ -76,8 +74,8 @@ export function AutomationsDetailPane({
   selectedHostEntry,
   hostLabelById,
   selectedRunNowAvailability,
+  isRunNowPending,
   worktreeMap,
-  onActivePaneTabChange,
   requestExternalAction,
   runNow,
   openEditDialog,
@@ -86,49 +84,18 @@ export function AutomationsDetailPane({
   toggleAutomation,
   requestDeleteAutomation,
   openAutomationRunPage,
-  onBackToList,
+  showAllRuns,
   recoverSelectedRuns
 }: AutomationsDetailPaneProps): React.JSX.Element {
   const t = useTranslate()
-  React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (shouldHandleAutomationDetailEscapeKey(event)) {
-        event.preventDefault()
-        onBackToList()
-        return
-      }
 
-      if (selectedExternal || !selected) {
-        return
-      }
-
-      if (shouldHandleAutomationDetailTabArrowKey(event)) {
-        const nextTab = getAutomationDetailNextTab({
-          currentTab: activePaneTab,
-          key: event.key as 'ArrowLeft' | 'ArrowRight',
-          canAccessRuns: Boolean(selected)
-        })
-        if (nextTab && nextTab !== activePaneTab) {
-          event.preventDefault()
-          onActivePaneTabChange(nextTab)
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activePaneTab, onActivePaneTabChange, onBackToList, selected, selectedExternal])
-
-  return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {selectedExternal ? (
-        <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-5">
-          <div className="mb-3">
-            <Button type="button" variant="ghost" size="sm" onClick={onBackToList}>
-              <ArrowLeft className="size-4" />
-              {t('auto.components.automations.AutomationsPage.backToList', 'All automations')}
-            </Button>
-          </div>
+  if (selectedExternal) {
+    return (
+      <AutomationsPageFrame nav={nav}>
+        <div className="flex flex-col gap-4 pt-5">
+          <AutomationsPageTitle title={selectedExternal.job.name}>
+            {selectedExternal.job.name}
+          </AutomationsPageTitle>
           <ExternalAutomationManagers
             managers={[
               {
@@ -146,85 +113,73 @@ export function AutomationsDetailPane({
             onAction={requestExternalAction}
           />
         </div>
-      ) : (
-        <Tabs
-          value={activePaneTab}
-          onValueChange={(value) => onActivePaneTabChange(value as AutomationPaneTab)}
-          className="min-h-0 flex-1 gap-0"
-        >
-          <div
-            className="flex shrink-0 items-center gap-2 border-b border-border/50 px-5 py-2"
-            data-contextual-tour-target="automations-runs"
-          >
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={onBackToList}
-              aria-label={t(
-                'auto.components.automations.AutomationsPage.backToList',
-                'All automations'
-              )}
-            >
-              <ArrowLeft className="size-4" />
-            </Button>
-            <TabsList variant="line" className="h-8">
-              <TabsTrigger value="overview">
-                {t('auto.components.automations.AutomationsPage.bb1b2cd31e', 'Overview')}
-              </TabsTrigger>
-              <TabsTrigger value="runs" disabled={!selected}>
-                {t('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}{' '}
-                {selectedRunsNotice ? null : (
-                  <span className="text-xs text-muted-foreground">{selectedRuns.length}</span>
-                )}
-              </TabsTrigger>
-            </TabsList>
-          </div>
+      </AutomationsPageFrame>
+    )
+  }
 
-          <TabsContent value="overview" className="scrollbar-sleek min-h-0 overflow-auto p-5">
-            <AutomationDetail
-              automation={selected}
-              runs={selectedRuns}
-              projectName={selectedRepoDisplayName}
-              projectDefaultBaseRef={selectedRepoDefaultBaseRef}
-              workspaceName={selectedWorkspaceName}
-              hostEntry={selectedHostEntry}
-              hostLabelById={hostLabelById}
-              runNowAvailability={selectedRunNowAvailability}
-              now={relativeNow}
-              onRunNow={(automation) => void runNow(automation)}
-              onEdit={(automation) => void openEditDialog(automation)}
-              onMigrate={migrateAutomation}
-              isMigrating={isMigrating}
-              onToggle={(automation) => void toggleAutomation(automation)}
-              onDelete={requestDeleteAutomation}
-            />
-          </TabsContent>
+  if (selected && activePaneTab === 'runs') {
+    return (
+      <AutomationsPageFrame nav={nav} bodyScroll="content">
+        <div className="flex shrink-0 flex-col gap-1 pb-4 pt-5">
+          <AutomationsPageTitle>
+            {t('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}
+          </AutomationsPageTitle>
+          {/* A failed read knows no counts; "0 runs" would answer a question nobody asked the host. */}
+          {selectedRunsNotice ? null : (
+            <p className="text-sm text-muted-foreground">
+              {formatAutomationRunCountSummary(selectedRuns, t)}
+            </p>
+          )}
+        </div>
+        <AutomationRunHistory
+          runs={selectedRuns}
+          automationId={selected.id}
+          worktreeMap={worktreeMap}
+          notice={selectedRunsNotice}
+          onRecoverHistory={recoverSelectedRuns}
+          onOpenRun={(run) => openAutomationRunPage(run, 'automationRuns')}
+        />
+      </AutomationsPageFrame>
+    )
+  }
 
-          <TabsContent value="runs" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {/* The history owns the scrolling, so the padding rides a wrapper it can size against. */}
-            <div className="flex min-h-0 flex-1 flex-col p-5">
-              {selected ? (
-                <AutomationRunHistory
-                  runs={selectedRuns}
-                  automationId={selected.id}
-                  worktreeMap={worktreeMap}
-                  notice={selectedRunsNotice}
-                  onRecoverHistory={recoverSelectedRuns}
-                  onOpenRun={openAutomationRunPage}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  {t(
-                    'auto.components.automations.AutomationsPage.c3a28c9793',
-                    'Select an automation to view runs.'
-                  )}
-                </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-      )}
-    </section>
+  return (
+    <AutomationsPageFrame
+      nav={nav}
+      actions={
+        selected
+          ? ({ compact }) => (
+              <AutomationDetailActions
+                automation={selected}
+                compact={compact}
+                runNowAvailability={selectedRunNowAvailability}
+                isRunNowPending={isRunNowPending}
+                onRunNow={runNow}
+                onEdit={openEditDialog}
+                onToggle={toggleAutomation}
+                onDelete={requestDeleteAutomation}
+              />
+            )
+          : undefined
+      }
+    >
+      <AutomationDetail
+        automation={selected}
+        runs={selectedRuns}
+        runsNotice={selectedRunsNotice}
+        onRecoverHistory={recoverSelectedRuns}
+        onOpenRun={(run) => openAutomationRunPage(run, 'automation')}
+        onShowAllRuns={showAllRuns}
+        projectName={selectedRepoDisplayName}
+        projectDefaultBaseRef={selectedRepoDefaultBaseRef}
+        workspaceName={selectedWorkspaceName}
+        hostEntry={selectedHostEntry}
+        hostLabelById={hostLabelById}
+        runNowAvailability={selectedRunNowAvailability}
+        now={relativeNow}
+        onMigrate={migrateAutomation}
+        isMigrating={isMigrating}
+      />
+    </AutomationsPageFrame>
   )
 }

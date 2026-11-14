@@ -24,7 +24,11 @@ export function useNativeChatUsageLimitAutoContinue(
   target: RuntimeClientTarget,
   sessionId: string,
   cut: NativeChatUsageLimitCut | null
-): NativeChatUsageLimitAutoContinueState | null {
+): {
+  auto: NativeChatUsageLimitAutoContinueState | null
+  /** When the host lets Continue apply: earlier than the cut's reset once the chat moved accounts. */
+  continueAt: number | undefined
+} {
   const capability = useStructuredAgentSessionHostCapabilityState(
     target,
     AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY
@@ -101,7 +105,7 @@ export function useNativeChatUsageLimitAutoContinue(
       })
       .finally(() => setCancelling(false))
   }, [cancelling, readCutState, target, sessionId, turnItemId, resetsAt])
-  return useMemo<NativeChatUsageLimitAutoContinueState | null>(() => {
+  const auto = useMemo<NativeChatUsageLimitAutoContinueState | null>(() => {
     const kind =
       capability === 'supported'
         ? nativeChatUsageLimitAutoContinueKind(cutState, {
@@ -116,4 +120,14 @@ export function useNativeChatUsageLimitAutoContinue(
       ? { kind, resetsAt: continueAt, cancelDisabled: cancelling, cancel }
       : { kind }
   }, [capability, continueAt, cutState, schedulable, target.kind, cancelling, cancel])
+  return useMemo(
+    () => ({
+      auto,
+      continueAt:
+        resetsAt === undefined || continueAt === undefined
+          ? resetsAt
+          : Math.min(resetsAt, continueAt)
+    }),
+    [auto, resetsAt, continueAt]
+  )
 }

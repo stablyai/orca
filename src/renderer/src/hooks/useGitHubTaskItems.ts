@@ -1,8 +1,8 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { projectViewSourceScope } from '@/store/github/cache/cache-identity'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { GitHubProjectTable } from '../../../shared/github/project-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
+import type { GitHubProjectTable } from '../../../shared/github/projects/project-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { recomputeOn } from '@/lib/recompute-on'
 

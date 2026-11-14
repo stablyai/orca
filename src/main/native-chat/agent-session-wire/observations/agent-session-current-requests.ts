@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionCurrentRequestsMarker,
@@ -19,25 +20,27 @@ type Projection = {
   items: AgentJournalRenderItem[]
   json?: string
 }
-const projections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, Projection>()
+type RequestJournal = Pick<StructuredAgentSessionCurrentWorkJournal, 'cursor'>
+const projections = new WeakMap<RequestJournal, Projection>()
 // Even six escaped bytes per UTF-16 unit leave room for the RPC and phone envelopes.
 const REQUEST_PIECE_UNITS = 24 * 1024
 
 export function currentRequestsProjection(
-  journal: StructuredAgentSessionCurrentWorkJournal,
+  journal: RequestJournal,
   sessionId: string,
-  work: { actionablePrompts: () => AgentJournalRenderItem[]; viewKey: () => string }
+  work: { actionablePrompts: () => AgentJournalRenderItem[]; viewKey: () => string },
+  cursor = journal.cursor()
 ): Projection {
   const items = work.actionablePrompts()
-  const epoch = journal.cursor().epoch
+  const epoch = cursor.epoch
   const previous = projections.get(journal)
   const identity = previous?.identity ?? randomUUID()
   const owner = `${identity}:${work.viewKey()}`
   if (
-    previous?.items === items &&
-    previous.marker.epoch === epoch &&
+    previous?.marker.epoch === epoch &&
     previous.marker.owner === owner &&
-    previous.marker.sessionId === sessionId
+    previous.marker.sessionId === sessionId &&
+    (previous.items === items || isDeepStrictEqual(previous.items, items))
   ) {
     return previous
   }

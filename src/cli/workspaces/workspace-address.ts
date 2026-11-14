@@ -4,7 +4,7 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { CrossStoreParentRef } from '../../shared/worktree/lineage-types'
 import { LOCAL_ENVIRONMENT } from '../hosts/local-environment-selector'
 import type { RuntimeClient } from '../runtime/client'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 
 /** Which Orca answered: `local`, a saved environment, or a one-off pairing-code connection (id null). */
 export type WorkspaceEnvironment = { id: string | null; name: string | null }

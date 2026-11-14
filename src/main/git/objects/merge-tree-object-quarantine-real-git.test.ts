@@ -10,8 +10,8 @@ import {
 import {
   __resetPRConflictSummaryCachesForTests,
   getPRConflictSummary
-} from '../../github/conflict-summary'
-import { __resetPRConflictSummaryDerivationCachesForTests } from '../../github/conflict-summary-cache'
+} from '../../github/pull-requests/conflicts/conflict-summary'
+import { __resetPRConflictSummaryDerivationCachesForTests } from '../../github/pull-requests/conflicts/conflict-summary-cache'
 import { getLocalGitCapabilityCache } from '../command-runner/host-routing/git-capability-state'
 
 import { deleteBranchAfterWorktreeRemoval } from '../worktrees/removal/worktree-branch-removal'

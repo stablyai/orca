@@ -12,7 +12,7 @@ import {
 } from '../../sidebar/comment-markdown-sanitize'
 import { remarkUnknownHtmlAsText } from '../../sidebar/comment-markdown-unknown-html-as-text'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { commentMarkdownRemarkPlugins } from '../../sidebar/comment-markdown-remark-plugins'
 import { remarkChatMath } from '../../sidebar/chat-markdown-math'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'

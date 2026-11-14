@@ -9,7 +9,7 @@ import {
   InboxParams,
   TaskCreateParams,
   TaskListParams
-} from '../../../../../../shared/rpc-contract/orchestration-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { TaskUpdateParams } from './task-update-params'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [

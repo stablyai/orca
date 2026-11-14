@@ -3,7 +3,7 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { compareAppVersions } from '../../../shared/app-version'
 import { AcpAgentError } from '../transport/acp-errors'
@@ -32,7 +32,7 @@ export async function applyAcpMessageOptions(
     if (
       value === undefined ||
       session.options.appliedInput.get(key) === value ||
-      (key === 'model' && session.options.matchesNativeRestoredModel(value)) ||
+      session.options.matchesNativeRestoredOption(key, value) ||
       (key === 'effort' && !session.options.offersEffort(value))
     ) {
       continue

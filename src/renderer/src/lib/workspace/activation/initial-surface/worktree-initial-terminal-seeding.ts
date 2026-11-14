@@ -1,10 +1,8 @@
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../../../../shared/worktree/launch-types'
+} from '../../../../../../shared/worktree/creation/launch-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
@@ -15,7 +13,7 @@ import { agentKindToTuiAgent } from '../../../../../../shared/agent-kind'
 import { useAppStore } from '@/store/index'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/workspace/creation/setup/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace/ownership/workspace-terminal-host-authority'
-import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-cache'
+import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
@@ -72,32 +70,6 @@ export function reseedGatedEmptyWorkspace(
       ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
     }
   )
-}
-
-export function ensureFolderWorkspaceInitialTerminal(
-  folderWorkspace: FolderWorkspace,
-  startup?: WorktreeStartupPayload,
-  providesInitialSurface?: boolean,
-  opts?: Pick<InitialTerminalOptions, 'seedUserDefaultSurface'>
-): string | null {
-  if (providesInitialSurface === true && startup === undefined) {
-    return null
-  }
-  const state = useAppStore.getState()
-  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
-  const primaryTabId = ensureWorktreeHasInitialTerminal(
-    state,
-    workspaceKey,
-    startup,
-    undefined,
-    undefined,
-    undefined,
-    {
-      reseedEmptiedWorkspace: providesInitialSurface !== true,
-      ...opts
-    }
-  )
-  return primaryTabId
 }
 
 export function ensureWorktreeHasInitialTerminal(

@@ -3,7 +3,7 @@ import { CSV_MAX_COLUMN_WIDTH, CSV_MIN_COLUMN_WIDTH } from './csv-column-width-l
 import {
   readFileViewPreference,
   writeFileViewPreference
-} from '../../../file-view-preference-storage'
+} from '../../../view-mode/file-view-preference-storage'
 import type { CsvTableMutation } from '../../document/csv-text-document'
 
 export const CSV_COLUMN_WIDTHS_STORAGE_KEY = 'orca.csv.column-widths.v1'

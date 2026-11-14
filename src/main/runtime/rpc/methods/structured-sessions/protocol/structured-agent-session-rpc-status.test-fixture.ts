@@ -1,64 +1,68 @@
-import type { AgentSessionJournal } from '../../../../../native-chat/agent-session-journal/journal-store'
+import type { AgentJournalItemBody } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach } from 'vitest'
+import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { createTrackedJournalOpener } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { indexedStatusFeedSession } from '../../../../../native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session.test-fixture'
 import { StructuredAgentSessionStatusFeed } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 export const STATUS_SESSION = 'session-status'
-export const STATUS_ITEMS: ReturnType<AgentSessionJournal['snapshot']>['items'] = [
-  {
-    itemId: 'user-1',
-    sequence: 1,
-    revision: 1,
-    observedAt: 1,
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] }
-  },
-  {
-    itemId: 'turn-1',
-    sequence: 2,
-    revision: 1,
-    observedAt: 2,
-    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } }
-  }
-]
+const journals = createTrackedJournalOpener()
+let root: string | undefined
+let feed: StructuredAgentSessionStatusFeed | undefined
 
-/** One indexed session over a journal that reads back fixed items; the projection is real. */
-export const statusFeed = () =>
-  new StructuredAgentSessionStatusFeed({
+export async function prepareStatusFeed(): Promise<void> {
+  if (feed) {
+    return
+  }
+  let now = 1
+  root = await mkdtemp(join(tmpdir(), 'orca-rpc-status-'))
+  const journal = await journals.open({
+    stateDirectory: root,
+    now: () => now,
+    identity: {
+      sessionId: STATUS_SESSION,
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'codex',
+      providerHandle: codexProviderHandle('native-status')
+    }
+  })
+  const bodies: AgentJournalItemBody[] = [
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] },
+    { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } }
+  ]
+  for (const [ordinal, body] of bodies.entries()) {
+    now = ordinal + 1
+    await journal.appendItem(
+      { provider: 'codex', threadId: 'native-status', turnId: 'turn-1', ordinal },
+      body,
+      { fence: 0, turnScope: { kind: 'thread' } }
+    )
+  }
+  feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
-    sessions: new Map([
-      [
-        STATUS_SESSION,
-        {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
-          journal: {
-            cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
-            lastActivityAt: () => 2,
-            context: { floor: () => null },
-            stopMarks: { latest: () => null, revision: () => 0 },
-            snapshot: () => ({ items: STATUS_ITEMS, submissions: [] }),
-            statusRead: () => ({ items: STATUS_ITEMS, submissions: [] }),
-            inputOrder: {
-              inputCount: () => 0,
-              inputOrdinal: () => Infinity,
-              recoverableSubmissions: () => []
-            },
-            item: ((itemId) =>
-              STATUS_ITEMS.find((item) => item.itemId === itemId) ??
-              null) satisfies AgentSessionJournal['item'],
-            itemFence: () => undefined,
-            runningTurn: () => null
-          } as unknown as AgentSessionJournal,
-          params: {
-            location: {
-              executionHostId: 'local',
-              wslDistro: null,
-              workspaceId: 'workspace-1',
-              workspaceKind: 'git-worktree' as const
-            },
-            provider: 'codex' as const
-          }
-        }
-      ]
-    ]),
+    sessions: new Map([[STATUS_SESSION, indexedStatusFeedSession({ journal })]]),
     getConversation: () => null,
     now: () => 1_000
   })
+  await feed.publish(STATUS_SESSION, journal, { replay: true })
+}
+afterEach(async () => {
+  if (root) {
+    await journals.closeAll()
+    await rm(root, { recursive: true, force: true })
+    root = undefined
+    feed = undefined
+  }
+})
+
+export const statusFeed = () => {
+  if (!feed) {
+    throw new Error('status fixture was not prepared')
+  }
+  return feed
+}

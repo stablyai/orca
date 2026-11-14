@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { TerminalAdoptOrphans } from '../../../../../shared/rpc-contract/terminal-orphan-params'
+import { TerminalAdoptOrphans } from '../../../../../shared/rpc-contract/terminal/terminal-orphan-params'
 
 export const TERMINAL_ORPHAN_METHODS = [
   defineMethod({

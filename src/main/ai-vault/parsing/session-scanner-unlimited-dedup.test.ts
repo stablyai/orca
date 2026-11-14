@@ -23,7 +23,6 @@ vi.mock('../parse-cache/session-scanner-parse-cache', () => ({
 }))
 
 import { scanAiVaultSessions } from '../session-scanner'
-import { ScannedSessionCollection } from './session-root-dedup'
 
 function candidates() {
   return fixture.sessions.map((session) => ({
@@ -79,40 +78,4 @@ it('capped scans still fill the unique-session budget', async () => {
   const result = await scan(false, 10)
   expect(result.sessions).toHaveLength(10)
   expect(new Set(result.sessions.map((row) => row.sessionId)).size).toBe(10)
-})
-
-it('retains only canonical rows during duplicate-heavy load-all scans', () => {
-  const collection = new ScannedSessionCollection()
-  for (let index = 0; index < 10000; index++) {
-    const row = session(index % 100)
-    collection.add({
-      ...row,
-      codexHome: '/custom',
-      filePath: `/custom/rollout-${index % 100}.jsonl`
-    })
-    expect(collection.size).toBeLessThanOrEqual(100)
-  }
-  for (let index = 0; index < 100; index++) {
-    collection.add(session(index))
-  }
-  expect(collection.size).toBe(100)
-  expect([...collection.values()].every((row) => row.codexHome === null)).toBe(true)
-})
-
-it('admits rows sharing one session id across rollout names without rescanning', () => {
-  const count = 4000
-  let pathReads = 0
-  const collection = new ScannedSessionCollection()
-  for (let index = 0; index < count; index++) {
-    const row = { ...session(index), sessionId: 'shared' }
-    collection.add({
-      ...row,
-      get filePath() {
-        pathReads++
-        return row.filePath
-      }
-    })
-  }
-  expect(collection.size).toBe(count)
-  expect(pathReads).toBeLessThanOrEqual(count * 4)
 })

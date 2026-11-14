@@ -4,8 +4,8 @@ import { parseAskFromStatus } from '../../native-chat/input/native-chat-ask'
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys
-} from '../../native-chat/input/native-chat-ask-answer'
-import { parseNativeChatApprovalEnvelope } from '../../native-chat/input/native-chat-approval-envelope'
+} from '../../native-chat/input/questions/native-chat-ask-answer'
+import { parseNativeChatApprovalEnvelope } from '../../native-chat/input/approvals/native-chat-approval-envelope'
 import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer

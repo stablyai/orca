@@ -1,8 +1,8 @@
 // A chat's listings belong to the account it runs on: its running agent's, else the one its next
 // start launches under, else the record's. A chat moves accounts when the selection changes.
 
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentModelCatalogRecord } from './agent-model-catalog-workspace'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 

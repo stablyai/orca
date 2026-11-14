@@ -2,8 +2,11 @@ import {
   throwIfAiVaultScanCancelled,
   waitForAiVaultScan
 } from '../../scan-lifecycle/ai-vault-scan-cancellation'
-import { wslGatedReaddir, wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+import {
+  wslGatedReaddir,
+  wslGatedReadFile
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'

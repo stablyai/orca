@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildCachedPaneReplayEnvelope } from '../../../../../wsl-guest/agent-hook-cached-pane-status'
+import { buildCachedPaneReplayEnvelope } from '../../../../../wsl-guest/agent-hooks/status/agent-hook-cached-pane-status'
 import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-listener/listener-event'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { PANE } from '../server.test-fixtures'

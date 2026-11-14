@@ -3,6 +3,7 @@ import { parseAgentJournalItemKey } from '../../../src/shared/agent-session/jour
 import type { AgentJournalMessageItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReplacementItem } from '../../../src/main/native-chat/agent-session-journal/context-epochs/journal-epoch-replacement'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
+import { readTestJournalItems } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 
 // What a user does next with a chat a released build wrote: edit a card it queued (the first write,
 // over a key the old rows hold), send, and rewind to before that send, which saves every kept message
@@ -12,13 +13,7 @@ const FENCE = 1
 
 export type ContinuedJournal = Pick<
   AgentSessionJournal,
-  | 'queuedMessages'
-  | 'appendSubmission'
-  | 'resolveDispatch'
-  | 'replaceEpochItems'
-  | 'snapshot'
-  | 'itemBody'
-  | 'itemProvenance'
+  'queuedMessages' | 'appendSubmission' | 'resolveDispatch' | 'write' | 'reads'
 >
 
 const message = (text: string): AgentJournalMessageItem => ({
@@ -29,7 +24,7 @@ const message = (text: string): AgentJournalMessageItem => ({
 
 /** The first write: an edit of a card the release queued and still holds. */
 export async function editReleasedCard(journal: ContinuedJournal): Promise<void> {
-  const card = journal.queuedMessages.list().find((entry) => entry.messageId === 'card-2')
+  const card = (await journal.queuedMessages.list()).find((entry) => entry.messageId === 'card-2')
   if (!card) {
     throw new Error('the release queued no card-2')
   }
@@ -66,29 +61,32 @@ export async function rewindReleasedChat(
   journal: ContinuedJournal,
   keptItemIds: ReadonlySet<string>
 ): Promise<void> {
-  const kept = journal
-    .snapshot()
-    .items.filter((item) => keptItemIds.has(item.itemId))
-    .map(({ itemId, observedAt, turnScope, ...linkage }): JournalReplacementItem => {
-      const body = journal.itemBody(itemId)
-      const identity = parseAgentJournalItemKey(itemId)
-      if (!body || !identity) {
-        throw new Error(`no kept item ${itemId}`)
-      }
-      const { ownerFence, executionOwner, ...echo } = journal.itemProvenance(itemId)
-      return {
-        identity,
-        ...echo,
-        body,
-        observedAt,
-        ...(turnScope ? { turnScope } : {}),
-        ownerFence: ownerFence ?? 0,
-        ...(executionOwner === undefined ? {} : { executionOwner }),
-        ...agentJournalLinkageFields(linkage)
-      }
-    })
+  const kept = await Promise.all(
+    (await readTestJournalItems(journal))
+      .filter((item) => keptItemIds.has(item.itemId))
+      .map(
+        async ({ itemId, observedAt, turnScope, ...linkage }): Promise<JournalReplacementItem> => {
+          const body = await journal.reads.itemBody(itemId)
+          const identity = parseAgentJournalItemKey(itemId)
+          if (!body || !identity) {
+            throw new Error(`no kept item ${itemId}`)
+          }
+          const { ownerFence, executionOwner, ...echo } = await journal.reads.itemProvenance(itemId)
+          return {
+            identity,
+            ...echo,
+            body,
+            observedAt,
+            ...(turnScope ? { turnScope } : {}),
+            ownerFence: ownerFence ?? 0,
+            ...(executionOwner === undefined ? {} : { executionOwner }),
+            ...agentJournalLinkageFields(linkage)
+          }
+        }
+      )
+  )
   if (kept.length !== keptItemIds.size) {
     throw new Error('a kept item is missing from the chat')
   }
-  await journal.replaceEpochItems('handle_forked', FENCE, kept)
+  await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: FENCE, items: kept })
 }

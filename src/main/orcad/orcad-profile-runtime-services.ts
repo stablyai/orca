@@ -2,7 +2,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { OrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
-import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
+import type { BackendServiceCleanup as OrcadRuntimeCleanup } from '../backend/service-composition'
 
 export async function installOrcadProfileRuntimeServices({
   userDataPath,
@@ -21,11 +21,12 @@ export async function installOrcadProfileRuntimeServices({
   startOrcadUsageHistory(userDataPath, store, runtime.usageHistory, registerCleanup)
 
   // Restore the profile's account selection before admitting launches.
-  const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
+  const { restoreOrcadHostAccountLaunchEnv } =
+    await import('./account-launch/orcad-host-account-launch-env-store')
   restoreOrcadHostAccountLaunchEnv(runtime, userDataPath)
   featureReadiness.open('accounts')
 
-  const { installOrcadSessionSearchService } = await import('./orcad-session-search')
+  const { installOrcadSessionSearchService } = await import('./host-runtime/orcad-session-search')
   const sessionSearch = await installOrcadSessionSearchService({
     userDataPath,
     getSettings: () => store.getSettings()

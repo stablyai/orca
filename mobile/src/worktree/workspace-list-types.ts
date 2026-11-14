@@ -63,6 +63,7 @@ export type SectionRepo = ProjectSectionRepo & {
   repoIcon?: unknown
   projectGroupId?: string | null
   projectGroupOrder?: number
+  hiddenAt?: number
 }
 
 // Pending creations name only their project; null belongs under the list’s own header.

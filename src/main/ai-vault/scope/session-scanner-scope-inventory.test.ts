@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import * as transcriptFs from '../../native-chat/wsl-transcript-fs-access'
+import * as transcriptFs from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 
 import { aiVaultScanWork, trackAiVaultScanProgress } from '../scan-lifecycle/ai-vault-scan-progress'
 

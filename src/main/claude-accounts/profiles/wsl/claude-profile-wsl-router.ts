@@ -262,10 +262,11 @@ async function writePointer(distro: string, pointer: string, home: string): Prom
   if (current === home) {
     return
   }
+  // wsl.exe --exec rejects an empty argument (E_INVALIDARG), and System default writes ''; pass content on stdin.
   await runGuest(distro, {
-    script:
-      'umask 077; mkdir -p -- "${1%/*}" && printf %s "$2" > "$1.tmp" && mv -f -- "$1.tmp" "$1"',
-    args: [pointer, home],
+    script: 'umask 077; mkdir -p -- "${1%/*}" && cat > "$1.tmp" && mv -f -- "$1.tmp" "$1"',
+    args: [pointer],
+    input: home,
     loginPath: 'none'
   })
 }

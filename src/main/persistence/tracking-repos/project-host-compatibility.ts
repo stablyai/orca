@@ -4,6 +4,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { carryProjectStateThroughIdentityChange } from '../../../shared/project-identity-succession'
+import { markWorktreeRouteInputsChanged } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 export function projectHostSetupCompatibilityStateEqual(
   state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
@@ -106,4 +107,15 @@ export function makeProjectHostSetupId(
     candidate = `${baseId}::${suffix}`
   }
   return candidate
+}
+
+/** Project membership decides each repo's Git runtime, so applying it changes catalog routes. */
+export function applyProjectHostSetupCompatibilityState(
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
+  repos: readonly Repo[]
+): void {
+  const merged = mergeProjectHostSetupCompatibilityState(state, repos)
+  state.projects = merged.projects
+  state.projectHostSetups = merged.projectHostSetups
+  markWorktreeRouteInputsChanged()
 }

@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { WorktreeAtRiskLocalFiles } from '../../../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../shared/worktree/removal/at-risk-local-files'
 
 /** ".env, local/ +2", or null when the check found no names to show. */
 export function formatAtRiskLocalFileNames(

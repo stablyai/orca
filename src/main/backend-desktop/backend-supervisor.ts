@@ -14,7 +14,7 @@ import {
   resolveWorkerThreadEntryPath
 } from '../worker-threads/worker-thread-entry-path'
 import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
-import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/orcad-stop-deadlines'
+import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/host-lifecycle/managed-stop/orcad-stop-deadlines'
 import {
   createBackendDesktopCapabilities,
   trustsBackendRenderer,

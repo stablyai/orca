@@ -1,6 +1,6 @@
-import { SessionReadTerminalScrollbackParams } from '../../../../../shared/rpc-contract/session-terminal-scrollback-params'
+import { SessionReadTerminalScrollbackParams } from '../../../../../shared/rpc-contract/session-tabs/session-terminal-scrollback-params'
 import { defineMethod } from '../../core'
-import { servesWslMovedPaneHistory } from '../../../../orcad/orcad-migration-wsl-destination'
+import { servesWslMovedPaneHistory } from '../../../../orcad/migration/orcad-migration-wsl-destination'
 
 // Defined statically so the params catalog types it; registration is gated per host below.
 export const SESSION_TERMINAL_SCROLLBACK_METHODS = [

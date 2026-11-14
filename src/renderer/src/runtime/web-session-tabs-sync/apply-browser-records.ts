@@ -1,4 +1,9 @@
+import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type { applyTerminalRecordUpdates } from './apply-terminal-records'
+import {
+  preserveBrowserPageLoadingOwner,
+  revokeBrowserPageLoadingOwner
+} from '@/lib/browser/browser-page-loading-ownership'
 import {
   browserCertificateFailureEqual,
   optionalRuntimeBrowserPlacementsEqual,
@@ -49,6 +54,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         if (nextBrowserPageIds.has(page.id)) {
           continue
         }
+        revokeBrowserPageLoadingOwner(page)
         if (nextBrowserCertificateFailuresByPageId[page.id]) {
           nextBrowserCertificateFailuresByPageId =
             nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
@@ -69,6 +75,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
                   batchContext
                 )
               : nextRemoteBrowserPageHandlesByPageId
+          annotateBrowserPageHandles(nextRemoteBrowserPageHandlesByPageId, [page.id])
           delete nextRemoteBrowserPageHandlesByPageId[page.id]
         }
       }
@@ -77,11 +84,21 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
 
   for (const {
     page,
+    previousPage,
+    preservesLoading,
     certificateFailure,
     remotePageId,
     browserProfileId,
-    placement
+    placement,
+    initializationPresentation
   } of mirroredBrowserTabs) {
+    if (previousPage) {
+      if (preservesLoading) {
+        preserveBrowserPageLoadingOwner(previousPage, page)
+      } else {
+        revokeBrowserPageLoadingOwner(previousPage)
+      }
+    }
     const current = nextBrowserPagesByWorkspace[page.workspaceId] ?? []
     if (!sameBrowserPages(current, [page])) {
       nextBrowserPagesByWorkspace =
@@ -95,6 +112,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
       currentHandle?.environmentId !== environmentId ||
       currentHandle.remotePageId !== remotePageId ||
       currentHandle.browserProfileId !== browserProfileId ||
+      currentHandle.initializationPresentation !== initializationPresentation ||
       // A host snapshot is the adoption boundary for a staged handle.
       currentHandle.staged === true ||
       // Restored markers are spent when the host republishes the page.
@@ -105,9 +123,11 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
           ? writableWebSessionTabsRecord(state, 'remoteBrowserPageHandlesByPageId', batchContext)
           : nextRemoteBrowserPageHandlesByPageId
+      annotateBrowserPageHandles(nextRemoteBrowserPageHandlesByPageId, [page.id])
       nextRemoteBrowserPageHandlesByPageId[page.id] = {
         environmentId,
         remotePageId,
+        ...(initializationPresentation ? { initializationPresentation } : {}),
         ...(browserProfileId ? { browserProfileId } : {}),
         ...(placement ? { placement } : {})
       }

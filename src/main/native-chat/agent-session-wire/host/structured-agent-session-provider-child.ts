@@ -2,7 +2,7 @@
 
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type {
   StructuredAgentSessionEndedChild,
@@ -12,6 +12,7 @@ import type {
 } from './structured-agent-session-host-types'
 
 type ChildBearer = Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedChild'> & {
+  workChanged?: () => void
   journal: Pick<AgentSessionJournal, 'cursor'>
 }
 
@@ -32,6 +33,7 @@ export function indexProviderChild(
     session.child?.catalogSource?.release?.()
   }
   session.child = child
+  session.workChanged?.()
 }
 
 export function markProviderChildStarted(
@@ -41,6 +43,7 @@ export function markProviderChildStarted(
   const child = matchingChild(session, identity)
   if (child) {
     child.phase = 'ready'
+    session.workChanged?.()
   }
   return child !== null
 }
@@ -84,6 +87,7 @@ export function endProviderChild(
     return false
   }
   session.child = null
+  session.workChanged?.()
   return true
 }
 
@@ -104,6 +108,7 @@ export function recordProviderChildEnd(
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),
     endedAt: ended.endedAt ?? session.journal.cursor()
   }
+  session.workChanged?.()
   return true
 }
 

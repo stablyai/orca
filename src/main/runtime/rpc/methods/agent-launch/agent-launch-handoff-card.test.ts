@@ -1,11 +1,13 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 /** An agent's own `orca agent launch` leaves one card in its chat; nothing else does, and the card never gates the launch. */
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
-import { HOST_TEST_NOW } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
+import { HOST_TEST_NOW } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcContext } from '../../core'
 import { LOCAL_CLI_RPC_CALLER } from '../../callers/rpc-caller-identity'
@@ -106,13 +108,23 @@ function nextOperationId(): string {
 }
 
 async function cards() {
-  return (await rig.host.journalSnapshot(CALLER)).items.filter(
+  return (await readTestHostJournal(rig.host, CALLER)).items.filter(
     (item) => item.body.kind === 'agent-handoff'
   )
 }
 
 it('records one card per launch operation, linking the new chat, and none on replay', async () => {
-  const append = vi.spyOn(rig.host, 'appendAgentStart')
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const appended = Promise.withResolvers<void>()
+  const appendAgentStart = rig.host.appendAgentStart
+  const append = vi.spyOn(rig.host, 'appendAgentStart').mockImplementation(async (...args) => {
+    entered.resolve()
+    await release.promise
+    const result = appendAgentStart(...args)
+    void result.then(appended.resolve, appended.reject)
+    return result
+  })
   const operationId = nextOperationId()
   const create = { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
 
@@ -121,7 +133,11 @@ it('records one card per launch operation, linking the new chat, and none on rep
     AGENT_CLI,
     { operationId }
   )
-  await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+  await entered.promise
+  expect(await cards()).toEqual([])
+  release.resolve()
+  await appended.promise
+  expect(await cards()).toHaveLength(1)
   const replayed = await launch(
     { target: create, prompt: { text: TASK, delivery: 'submit' } },
     AGENT_CLI,

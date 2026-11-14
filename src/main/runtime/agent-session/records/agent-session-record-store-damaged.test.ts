@@ -1,5 +1,5 @@
 import { listStructuredProviderSessionOwnership } from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
-import { findConflictingStructuredAdoption } from '../../../native-chat/structured-agent-session-history-adoption'
+import { findConflictingStructuredAdoption } from '../../../native-chat/conversation-adoption/structured-agent-session-history-adoption'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,8 +9,8 @@ import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 import {

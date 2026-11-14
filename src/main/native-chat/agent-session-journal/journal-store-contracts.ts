@@ -1,14 +1,16 @@
-import type { JournalRow } from './durable-rows/journal-row-schema'
-import type Database from '../../sqlite/sync-database'
+import type { JournalOpenRecoveryResult } from './journal-sql-open-command'
 import type { JournalItemEcho } from './projection/journal-item-echo'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemBody,
+  AgentJournalResolution,
+  AgentJournalRenderItem,
   AgentJournalMessageItem,
   AgentJournalProducerLinkage,
   AgentJournalResetReason,
-  AgentJournalRowAttribution
+  AgentJournalRowAttribution,
+  AgentJournalTurnItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentJournalCursor,
@@ -17,27 +19,63 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
-import type { JournalHostDatabase } from './database/journal-host-database'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
+import type { JournalTransactionalDatabase } from './database/journal-host-database'
+import type { JournalSqlDatabase } from './database/journal-sql-database'
 import type { JournalLifecycleMutationInput } from './writing/journal-lifecycle-mutation'
 import type { JournalRowsRead } from './replay/journal-read-row'
 import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalOperationReceipt, JournalRowWriter } from './writing/journal-row-writer'
-import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import type { JournalAttachmentClaim } from './submissions/journal-submission-hook'
-import type { JournalWriteBody } from './writing/journal-write-queue'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
+import type Database from '../../sqlite/sync-database'
+import type { JournalStopEvent } from './durable-rows/journal-row-schema'
+import type { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
+import type { StaleStructuredAgentSessionStateInput } from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'
+import type { StructuredAgentSessionExitSettlement } from '../agent-session-wire/termination/structured-agent-session-leftover-settlement'
+
+export type JournalStaleSettlementInput = Omit<StaleStructuredAgentSessionStateInput, 'journal'>
+
+export type JournalDeadGenerationSettlementInput = Omit<
+  JournalStaleSettlementInput,
+  'acquisitionGeneration'
+> & {
+  exit?: StructuredAgentSessionExitSettlement
+  continuingInputs: readonly string[]
+  finalizingInputs: readonly { clientMessageId: string; settlementOwner?: true }[]
+}
+
+/** Running root turns under `fence` other than `liveTurnId` are over; selected at the write. */
+export type JournalUnheldTurnsSettlementInput = {
+  sessionId: string
+  fence: number
+  generation: string
+  liveTurnId: string | null
+}
+
+export type JournalStartFailureSettlementInput = AgentJournalDispatchRejection & {
+  startKey: string
+  clientMessageId: string | null
+  fence: number
+}
+
+export type JournalPromptMutationInput = {
+  itemId: string
+  expectedRevision: number
+  kind?: 'approval' | 'question'
+  resolution: AgentJournalResolution
+  options: JournalItemAppendOptions
+}
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
-  database: JournalHostDatabase
+  database: JournalSqlDatabase
   now?: () => number
   mintEpoch?: () => string
+  recover?: { fence: number }
+  onRecoveryFailure?: (failure: JournalOpenRecoveryResult['failures'][number]) => void
   /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
   withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
-  /** Runs in every write's transaction with the rows, the commit clock and each item's prior body;
-   *  must not throw. */
-  captureCommittedRows?: JournalCommittedRowsCapture
 }
 
 export type JournalReadSince =
@@ -73,15 +111,14 @@ export type JournalAppendResult = {
   revision: number
 }
 
-export type JournalCommittedRowsCapture = (
-  db: Database.Database,
-  sessionId: string,
-  rows: readonly JournalRow[],
-  committedAt: number,
-  previous: (itemId: string) => AgentJournalItemBody | undefined
-) => void
+export type JournalLateDispatchInput =
+  | Extract<ResolveDispatchInput, { state: 'accepted' | 'unknown' }>
+  | (Extract<ResolveDispatchInput, { state: 'rejected' }> & { unrun?: true })
 
 export type JournalItemAppendOptions = AgentJournalRowAttribution & {
+  /** Resolve the provider's stopped turn at the write position, falling back to turnScope. */
+  onlyBetweenTurns?: true
+  stoppedTurnId?: string
   echoOf?: JournalItemEcho['echoOf']
   fence: number
   /** Provider execution provenance; host bookkeeping omits it to retain the item's owner. */
@@ -97,7 +134,8 @@ export type JournalItemLinkageVisitor = (
   itemId: string,
   sequence: number,
   body: AgentJournalItemBody,
-  attribution: AgentJournalProducerLinkage & { turnScope?: AgentJournalTurnScope }
+  attribution: AgentJournalProducerLinkage & { turnScope?: AgentJournalTurnScope },
+  item: AgentJournalRenderItem
 ) => void
 
 export type JournalLifecycleBatchInput = {
@@ -152,10 +190,6 @@ export type JournalSubmissionInput = {
 export type JournalSubmissionConsume = {
   messageId: string
   expect: 'waiting' | 'returned'
-  /** Automatic drain honors pauses in the consume transaction; Send now omits this. */
-  yieldsToPause?: true
-  /** Transient selection for mail joining active work; never persisted. */
-  steer?: boolean
   /** Re-asked in the handover transaction: an agent's message can stop being owed while it waits. */
   owed?: () => QueuedMessageOwed
 }
@@ -166,10 +200,32 @@ export type JournalItemAppendInput = {
   options: JournalItemAppendOptions
 }
 
+export type JournalShutdownCutInput = {
+  identity: AgentJournalItemIdentity
+  body: Extract<AgentJournalItemBody, { kind: 'status' }>
+  turnItemId: string
+  fence: number
+}
+
+export type JournalCommandOpenInput = Pick<
+  Extract<ResolveDispatchInput, { state: 'pending' }>,
+  'clientMessageId' | 'fence' | 'turnScope'
+> & { submittedAt: number }
+
+export type JournalHandoverInput = Pick<
+  Extract<ResolveDispatchInput, { state: 'pending' }>,
+  'clientMessageId' | 'fence' | 'turnScope'
+> & { body: AgentJournalMessageItem }
+
+export type JournalCommandSettlementInput = {
+  dispatch: Extract<ResolveDispatchInput, { state: 'rejected' | 'unknown' }>
+  failureBody?: Extract<AgentJournalItemBody, { kind: 'status' }>
+}
+
 export type JournalQueuedMessagesDeps = {
   sessionId: string
   serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
-  database: () => JournalHostDatabase
+  database: () => JournalTransactionalDatabase
   readOnly: () => boolean
   state: () => JournalReducerState
   /** Fallback pause boundary when this handle could not write its reopen mark. */
@@ -178,4 +234,36 @@ export type JournalQueuedMessagesDeps = {
   /** Notify after legacy deletion that appends no row. */
   committed: () => void
   claimAttachments: JournalAttachmentClaim
+  /** The SQL writer receives the host's edit holds as data; otherwise this handle's leases. */
+  editHeld?: (messageId: string) => boolean
 }
+
+export type JournalStopAcceptanceInput = {
+  event: Omit<JournalStopEvent, 'at'>
+  fence: number
+  /** Read the live turn when the event is written. */
+  liveTurnId: () => string | null
+}
+
+export type JournalStopAcceptance = {
+  mark: AgentJournalCursor
+  withdrawn: string[]
+  /** Explicitly named turn, otherwise the turn live at write time. */
+  turnId: string | null
+}
+
+export type JournalCommandOpenResult = {
+  turn: ReturnType<typeof structuredAgentSessionCommandTurn>
+  running: AgentJournalTurnItem
+}
+
+export type JournalAttachmentClaim = (
+  db: Database.Database,
+  body: AgentJournalMessageItem,
+  required: boolean,
+  previous?: AgentJournalMessageItem,
+  goalId?: string
+) => (() => void) | void
+
+export type JournalWriteResult<T> = T extends PromiseLike<unknown> ? never : T
+export type JournalWriteBody<T> = () => JournalWriteResult<T>

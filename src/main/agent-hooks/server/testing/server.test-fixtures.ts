@@ -1,3 +1,4 @@
+import './memory-agent-identity-store.test-fixture'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createProgramStatusProjector } from '../../../../shared/program-status/agent-status-projector'
 import type { AgentHookServer } from '../agent-hook-server'

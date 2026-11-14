@@ -23,7 +23,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId, getRepoMainWorktreeId } from '../../../../shared/worktree/id'
-import { computeOrcadMigrationManifestSha256 } from '../../../orcad/orcad-migration-manifest-digest'
+import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 import { hasDormantState } from '../../migrating-orcad-catalog/source/dormancy/orcad-migration-dormant-state'
 import {
   rewriteOrcadMigrationPayloadPaths,

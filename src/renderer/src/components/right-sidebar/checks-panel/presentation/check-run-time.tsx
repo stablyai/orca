@@ -7,7 +7,7 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { formatUiNarrowDuration, formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
 import { formatCheckTimestamp } from '@/components/github/pr-check-presentation'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS

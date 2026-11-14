@@ -1,7 +1,6 @@
 /**
  * `git rev-parse --git-path <relative>` for a per-worktree file, read from the worktree's own `.git`
- * instead of running Git: the setup runner needs it synchronously, and a synchronous Git in a WSL
- * project would be a synchronous wsl.exe on the main thread. Null when the link isn't one this can
+ * instead of starting Git in a WSL project. Null when the link isn't one this can
  * read, so the caller falls back to Git.
  */
 import { readFileSync, statSync } from 'node:fs'

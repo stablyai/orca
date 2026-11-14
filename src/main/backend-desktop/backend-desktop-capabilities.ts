@@ -11,7 +11,7 @@ import { openCodeUsageAccountRoots } from '../opencode-usage/opencode-usage-acco
 import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
-import { isRendererDocumentNavigation } from '../window/renderer-document-navigation'
+import { isRendererDocumentNavigation } from '../window/security/renderer-document-navigation'
 import { BACKEND_CONNECTION_CHANGED } from '../../shared/backend-service-contract'
 
 export function trustsBackendRenderer(contents: WebContents): boolean {

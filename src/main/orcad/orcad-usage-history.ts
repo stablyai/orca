@@ -8,7 +8,7 @@ import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktr
 import { loadKnownUsageWorktreesByRepo } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { openCodeUsageAccountRoots } from '../opencode-usage/opencode-usage-account-roots'
 import type { UsageProviderFacade } from '../usage/usage-provider-facade'
-import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
+import type { BackendServiceCleanup as OrcadRuntimeCleanup } from '../backend/service-composition'
 
 export function startOrcadUsageHistory(
   userDataPath: string,

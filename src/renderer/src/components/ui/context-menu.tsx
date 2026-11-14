@@ -10,6 +10,19 @@ import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
 import { useMenuPointerHighlight } from './menu-pointer-highlight'
 import { MENU_SURFACE_CLASS } from './menu-surface'
+import {
+  MENU_ITEM_INDICATOR_CLASS,
+  MENU_LABEL_CLASS,
+  MENU_SHORTCUT_CLASS,
+  MENU_SUB_TRIGGER_CHEVRON_CLASS,
+  MenuDensityProvider,
+  menuIndicatorItemVariants,
+  menuItemVariants,
+  menuSeparatorVariants,
+  menuSubTriggerVariants,
+  useMenuDensity,
+  type MenuDensity
+} from './menu-item'
 
 function ContextMenu({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" modal={false} {...props} />
@@ -35,22 +48,22 @@ function ContextMenuSubTrigger({
   className,
   inset,
   children,
+  density,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubTrigger> & {
   inset?: boolean
+  density?: MenuDensity
 }) {
+  const rowDensity = useMenuDensity(density)
   return (
     <ContextMenuPrimitive.SubTrigger
       data-slot="context-menu-sub-trigger"
       data-inset={inset}
-      className={cn(
-        "flex cursor-default items-center gap-2 rounded-md px-2.5 py-[5px] text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[inset]:pl-8 data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[15px] [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:stroke-[1.5]",
-        className
-      )}
+      className={cn(menuSubTriggerVariants({ density: rowDensity, menu: 'context' }), className)}
       {...props}
     >
       {children}
-      <ChevronRightIcon className="ml-auto size-3.5 text-current opacity-70" />
+      <ChevronRightIcon className={MENU_SUB_TRIGGER_CHEVRON_CLASS} />
     </ContextMenuPrimitive.SubTrigger>
   )
 }
@@ -71,31 +84,38 @@ function ContextMenuSubContent({
   animation,
   style,
   alignOffset = -5,
+  density,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent> &
-  VariantProps<typeof contentAnimationVariants>) {
+  VariantProps<typeof contentAnimationVariants> & {
+    /** Defaults to the parent menu's density. */
+    density?: MenuDensity
+  }) {
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
+  const subDensity = useMenuDensity(density)
   return (
     <ContextMenuPrimitive.Portal>
       <OverlayFocusScope value={scope}>
-        <ContextMenuPrimitive.SubContent
-          data-slot="context-menu-sub-content"
-          // Level the first submenu row with its trigger (border + padding).
-          alignOffset={alignOffset}
-          className={cn(
-            'z-[70] min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-hidden',
-            MENU_SURFACE_CLASS,
-            contentAnimationVariants({ animation }),
-            className
-          )}
-          // Portal submenus outside the scrollable parent to prevent overflow clipping.
-          style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          {...props}
-          {...pointerHighlight}
-          ref={focusScopeRef}
-          onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-        />
+        <MenuDensityProvider value={subDensity}>
+          <ContextMenuPrimitive.SubContent
+            data-slot="context-menu-sub-content"
+            // Level the first submenu row with its trigger (border + padding).
+            alignOffset={alignOffset}
+            className={cn(
+              'z-[70] min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-hidden',
+              MENU_SURFACE_CLASS,
+              contentAnimationVariants({ animation }),
+              className
+            )}
+            // Portal submenus outside the scrollable parent to prevent overflow clipping.
+            style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            {...props}
+            {...pointerHighlight}
+            ref={focusScopeRef}
+            onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+          />
+        </MenuDensityProvider>
       </OverlayFocusScope>
     </ContextMenuPrimitive.Portal>
   )
@@ -105,30 +125,36 @@ function ContextMenuContent({
   className,
   animation,
   style,
+  density = 'default',
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> &
-  VariantProps<typeof contentAnimationVariants>) {
+  VariantProps<typeof contentAnimationVariants> & {
+    /** Row density for every row in this menu; a row's own `density` overrides it. */
+    density?: MenuDensity
+  }) {
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   return (
     <ContextMenuPrimitive.Portal>
       <OverlayFocusScope value={scope}>
-        <ContextMenuPrimitive.Content
-          data-slot="context-menu-content"
-          className={cn(
-            'z-[70] max-h-(--radix-context-menu-content-available-height) min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',
-            MENU_SURFACE_CLASS,
-            contentAnimationVariants({ animation }),
-            className
-          )}
-          // Disable native dragging so overlapping titlebar regions cannot intercept menu clicks.
-          style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          {...props}
-          onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
-          {...pointerHighlight}
-          ref={focusScopeRef}
-          onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-        />
+        <MenuDensityProvider value={density}>
+          <ContextMenuPrimitive.Content
+            data-slot="context-menu-content"
+            className={cn(
+              'z-[70] max-h-(--radix-context-menu-content-available-height) min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',
+              MENU_SURFACE_CLASS,
+              contentAnimationVariants({ animation }),
+              className
+            )}
+            // Disable native dragging so overlapping titlebar regions cannot intercept menu clicks.
+            style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            {...props}
+            onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
+            {...pointerHighlight}
+            ref={focusScopeRef}
+            onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+          />
+        </MenuDensityProvider>
       </OverlayFocusScope>
     </ContextMenuPrimitive.Portal>
   )
@@ -138,22 +164,22 @@ function ContextMenuItem({
   className,
   inset,
   variant = 'default',
+  density,
   onPointerMove,
   onPointerLeave,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Item> & {
   inset?: boolean
   variant?: 'default' | 'destructive'
+  density?: MenuDensity
 }) {
+  const rowDensity = useMenuDensity(density)
   return (
     <ContextMenuPrimitive.Item
       data-slot="context-menu-item"
       data-inset={inset}
       data-variant={variant}
-      className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md px-2.5 py-[5px] text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[inset]:pl-8 data-[variant=destructive]:text-[color-mix(in_srgb,var(--destructive)_78%,black)] dark:data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[15px] [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:stroke-[1.5] data-[variant=destructive]:*:[svg]:text-current!",
-        className
-      )}
+      className={cn(menuItemVariants({ density: rowDensity, menu: 'context' }), className)}
       onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}
       onPointerLeave={keepFocusWhileMenuCloses(onPointerLeave)}
       {...props}
@@ -164,18 +190,19 @@ function ContextMenuItem({
 function ContextMenuRadioItem({
   className,
   children,
+  density,
   ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.RadioItem>) {
+}: React.ComponentProps<typeof ContextMenuPrimitive.RadioItem> & {
+  density?: MenuDensity
+}) {
+  const rowDensity = useMenuDensity(density)
   return (
     <ContextMenuPrimitive.RadioItem
       data-slot="context-menu-radio-item"
-      className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md py-[5px] pr-2.5 pl-8 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        className
-      )}
+      className={cn(menuIndicatorItemVariants({ density: rowDensity }), className)}
       {...props}
     >
-      <span className="pointer-events-none absolute left-2.5 flex size-3.5 items-center justify-center">
+      <span className={MENU_ITEM_INDICATOR_CLASS}>
         <ContextMenuPrimitive.ItemIndicator>
           <CircleIcon className="size-2 fill-current" />
         </ContextMenuPrimitive.ItemIndicator>
@@ -196,10 +223,7 @@ function ContextMenuLabel({
     <ContextMenuPrimitive.Label
       data-slot="context-menu-label"
       data-inset={inset}
-      className={cn(
-        'px-2.5 pt-[5px] pb-[3px] text-2xs font-semibold text-muted-foreground data-[inset]:pl-8',
-        className
-      )}
+      className={cn(MENU_LABEL_CLASS, className)}
       {...props}
     />
   )
@@ -207,12 +231,16 @@ function ContextMenuLabel({
 
 function ContextMenuSeparator({
   className,
+  density,
   ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.Separator>) {
+}: React.ComponentProps<typeof ContextMenuPrimitive.Separator> & {
+  density?: MenuDensity
+}) {
+  const rowDensity = useMenuDensity(density)
   return (
     <ContextMenuPrimitive.Separator
       data-slot="context-menu-separator"
-      className={cn('-mx-[6px] my-[6px] h-px bg-black/7 dark:bg-white/10', className)}
+      className={cn(menuSeparatorVariants({ density: rowDensity }), className)}
       {...props}
     />
   )
@@ -222,10 +250,7 @@ function ContextMenuShortcut({ className, ...props }: React.ComponentProps<'span
   return (
     <span
       data-slot="context-menu-shortcut"
-      className={cn(
-        'ml-auto shrink-0 whitespace-nowrap pl-4 tracking-normal text-muted-foreground',
-        className
-      )}
+      className={cn(MENU_SHORTCUT_CLASS, className)}
       {...props}
     />
   )

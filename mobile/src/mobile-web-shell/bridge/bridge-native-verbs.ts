@@ -21,7 +21,7 @@ import { imageParamsSchema, imageResultSchema } from './bridge-image-verbs'
 import { BRIDGE_SPEECH_VERB, speechParamsSchema, speechResultSchema } from './bridge-speech-verbs'
 import { BRIDGE_STORE_VERB, storeParamsSchema, storeResultSchema } from './bridge-store-verb'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
-import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/mobile-file-media'
+import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/media/mobile-file-media'
 
 // Fence native-prefixed requests on-device; desktop allowlist refusal alone would hide leaked forwarding and depend on desktop version.
 // Native replies use existing frames/in-flight caps without runtime _meta; adding a verb needs a table row and handler, never a new frame kind.

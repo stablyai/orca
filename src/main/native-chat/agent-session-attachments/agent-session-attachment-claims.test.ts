@@ -4,17 +4,15 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import {
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase
-} from '../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { openTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { isAgentSessionAttachmentExpiredError } from './agent-session-attachment-claims'
 import {
   agentSessionAttachmentReferences,
   agentSessionAttachmentStoreRoot
 } from './agent-session-attachment-references'
-import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const UPLOAD_A = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
 const UPLOAD_B = '7c2d9e10-3f4a-4b5c-8d6e-2f1a0b9c8d02'
@@ -85,22 +83,13 @@ describe('claims written with the message', () => {
     return join(storeRoot, uploadId, name)
   }
 
-  function claims(): { upload_id: string; session_id: string }[] {
-    return openTestJournalHostDatabase(stateDirectory)
-      .db.prepare(
-        'SELECT upload_id, session_id FROM agent_session_attachment_claims ORDER BY session_id'
-      )
-      .all()
-      .flatMap((row) =>
-        typeof row === 'object' &&
-        row !== null &&
-        'upload_id' in row &&
-        'session_id' in row &&
-        typeof row.upload_id === 'string' &&
-        typeof row.session_id === 'string'
-          ? [{ upload_id: row.upload_id, session_id: row.session_id }]
-          : []
-      )
+  async function claims(): Promise<{ uploadId: string; sessionId: string }[]> {
+    const database = await openTestAgentSessionDatabase(stateDirectory)
+    const result = await database.readers.database({ kind: 'attachment-claims', after: 0 })
+    if (result.kind !== 'attachment-claims') {
+      throw new Error('expected attachment claims')
+    }
+    return result.claims.map(({ uploadId, sessionId }) => ({ uploadId, sessionId }))
   }
 
   function clientSend(journal: AgentSessionJournal, id: string, body: AgentJournalMessageItem) {
@@ -135,8 +124,8 @@ describe('claims written with the message', () => {
       )
     ).catch((caught: unknown) => caught)
     expect(isAgentSessionAttachmentExpiredError(error)).toBe(true)
-    expect(journal.submission('send-1')).toBeUndefined()
-    expect(claims()).toEqual([])
+    expect(await journal.reads.submission('send-1')).toBeUndefined()
+    expect(await claims()).toEqual([])
   })
 
   it("refuses a gone upload and keeps a waiting card's attachment claim across clear", async () => {
@@ -150,7 +139,7 @@ describe('claims written with the message', () => {
       })
       .catch((caught: unknown) => caught)
     expect(isAgentSessionAttachmentExpiredError(refused)).toBe(true)
-    expect(journal.queuedMessages.list()).toHaveLength(0)
+    expect(await journal.queuedMessages.list()).toHaveLength(0)
 
     const path = await storeUpload(UPLOAD_A, 'notes.txt')
     const body = message({ type: 'text', text: `read @${path}` })
@@ -159,13 +148,13 @@ describe('claims written with the message', () => {
       body,
       requireAttachments: true
     })
-    await journal.context.clear(
-      { operationId: 'clear', afterFence: 0, clearedAt: 1000 },
-      { write: () => {}, committed: () => {} }
-    )
+    await journal.write({
+      kind: 'context-clear',
+      boundary: { operationId: 'clear', afterFence: 0, clearedAt: 1000 }
+    })
     await journals.closeAll()
     const reopened = await open()
-    expect(reopened.queuedMessages.get('draft-1')).toMatchObject({ body, state: 'waiting' })
-    expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
+    expect(await reopened.queuedMessages.get('draft-1')).toMatchObject({ body, state: 'waiting' })
+    expect(await claims()).toEqual([{ uploadId: UPLOAD_A, sessionId: IDENTITY.sessionId }])
   })
 })

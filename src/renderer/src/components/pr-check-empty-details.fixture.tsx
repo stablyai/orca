@@ -4,7 +4,7 @@ import { ChecksCompactHeader } from './pull-request-page/checks/toolbar'
 import { ChecksTabCompactHeader } from './github-item-dialog/inspect-pull-request/checks-tab-header'
 import { getChecksTabSummaryPresentation } from './github-item-dialog/inspect-pull-request/checks-tab-summary'
 import { getOverallCheckCounts, getChecksSummaryLabel } from './pr-check-counts'
-import { acceptPRCheckObservation } from '../../../shared/github/complete-pr-check-owner'
+import { acceptPRCheckObservation } from '../../../shared/github/checks/complete-pr-check-owner'
 import { Button } from './ui/button'
 
 const owner = acceptPRCheckObservation(

@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionCloseWork } from '../../../../../native-chat/agent-session-wire/termination/structured-agent-session-close-work'
 /** Use live/unverifiable/exited evidence like SSH: loss of host-generation contact never proves death, including a structured host not yet installed. */
 
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -68,7 +69,7 @@ export async function stopStructuredWorker(
   identity: StructuredWorkerIdentity,
   runtime?: StructuredSessionSurfaceRuntime &
     Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>,
-  admitClose?: () => boolean
+  admitClose?: (work: StructuredAgentSessionCloseWork) => boolean
 ): Promise<StructuredWorkerStopOutcome> {
   const closed = new Set<string>()
   // Any close this stop issued, so a later session's failure cannot erase an earlier close.

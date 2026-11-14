@@ -60,7 +60,7 @@ export function platformsByRepoId(
 export async function scanResolvedWorktreeRepos(
   store: RuntimeStore | null,
   rowDeps: () => RepoWorktreeRowDeps,
-  scanCacheEntry: (scanScopeKey: string) => object | undefined
+  scanCacheEntry: (repo: Repo) => object | undefined
 ): Promise<ResolvedWorktreeRepoScans> {
   const scans: ResolvedWorktreeRepoScans = new Map()
   if (!store) {
@@ -79,8 +79,8 @@ export async function scanResolvedWorktreeRepos(
         projectRuntimeByRepoId,
         repoOwners.rowsFor(repo.id).length
       )
-      // The key listRepoWorktreesForResolution caches under.
-      const gitRun = scanCacheEntry(`${repo.id}\0${getRepoExecutionHostId(repo)}`) ?? null
+      // The owner observation the scan answered from; verification never mints a new one.
+      const gitRun = scanCacheEntry(repo) ?? null
       scans.set(resolvedWorktreeRepoScanKey(repo), { ...scan, gitRun })
     })
   )

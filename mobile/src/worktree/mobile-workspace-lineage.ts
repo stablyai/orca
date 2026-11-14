@@ -9,14 +9,14 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
-import { resolveLineageParentsByPolicy } from '../../../src/shared/worktree/workspace-lineage-graph'
+import { resolveLineageParentsByPolicy } from '../../../src/shared/worktree/lineage/workspace-lineage-graph'
 import type { WorkspaceLineageEdge } from '../../../src/shared/worktree/lineage-types'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   buildCrossStoreLineageViewOfRows,
   OWN_LINEAGE_STORE_KEY,
   type CrossStoreLineageView
-} from '../../../src/shared/worktree/cross-store-lineage-resolution'
+} from '../../../src/shared/worktree/lineage/cross-store-lineage-resolution'
 import {
   NO_WORKTREE_HOST_CONTEXT,
   type WorktreeHostContextOf

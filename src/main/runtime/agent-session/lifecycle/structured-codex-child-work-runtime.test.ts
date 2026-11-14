@@ -9,19 +9,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionStatusSink } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
-
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../structured-agent-session-runtime'
-
-import '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import '../../orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../records/agent-session-record-store-test-harness'
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
-
 import { makeStructuredAgentStatusSubject } from '../../../../shared/agent-status/contracts/agent-status-subject'
 
 import { AgentSessionRecoveryCapsule } from '../records/agent-session-recovery-capsule'

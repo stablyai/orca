@@ -1,7 +1,7 @@
 import { WSL_GIT_READ_ENVIRONMENT_WAIT_MS } from '../../command-runner/host-routing/wsl-git-read-environment'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 export type RetargetDivergenceOptions = {
   wslDistro?: string
