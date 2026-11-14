@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
@@ -40,7 +40,7 @@ export function useNativeChatForkWindowState(
   preset: NativeChatForkWindowPreset
 ) {
   const sourceHostId = getRuntimeTargetHostId(source.target)
-  const start = nativeChatForkWindowStart(preset, source.newWorktreeOffered)
+  const [start] = useState(() => nativeChatForkWindowStart(preset, source.newWorktreeOffered))
   const [plan] = useState(() => nativeChatWorktreeForkPlan(source.worktreeId))
   const [hostPick, setHostPick] = useState<ExecutionHostId>(sourceHostId)
   const [agentPick, setAgentPick] = useState<TuiAgent | null>(null)
@@ -85,7 +85,18 @@ export function useNativeChatForkWindowState(
     importCapability: AI_VAULT_CHAT_FORK_IMPORT_CAPABILITY
   })
   const host =
-    hostChoices.find((choice) => choice.id === hostPick && !choice.disabled) ?? hostChoices[0]
+    hostChoices.find((choice) => choice.id === hostPick && !choice.disabled) ??
+    hostChoices.find((choice) => !choice.disabled) ??
+    hostChoices[0]
+  // A picked host that went offline (or can't take this fork) hands its place to the fallback.
+  useEffect(() => {
+    if (host.id !== hostPick) {
+      setHostPick(host.id)
+      setWorkspacePick(
+        host.id === sourceHostId ? start.workspace : { kind: 'existing', worktreeId: '' }
+      )
+    }
+  }, [host.id, hostPick, sourceHostId, start.workspace])
   // An exact copy this host can't export stays here; picking another agent opens the other hosts.
   const otherHostsNeedAnotherAgent =
     hostChoices.length === 1 &&
@@ -118,6 +129,7 @@ export function useNativeChatForkWindowState(
   const slug = slugifyForWorkspaceName(name)
   // At a usage limit the default agent is only known once detection answers; Enter waits for it.
   const ready =
+    !host.disabled &&
     !(detecting && source.usageLimited) &&
     (workspace.kind !== 'existing' || existingId !== null) &&
     (workspace.kind !== 'new-worktree' || slug.length > 0) &&
@@ -146,7 +158,7 @@ export function useNativeChatForkWindowState(
     selectHost: (hostId: string) => {
       const picked = hostChoices.find((choice) => choice.id === hostId)
       // Re-picking the current host keeps the workspace already chosen there.
-      if (picked && picked.id !== host.id) {
+      if (picked && !picked.disabled && picked.id !== hostPick) {
         setHostPick(picked.id)
         setWorkspacePick(
           picked.id === sourceHostId ? start.workspace : { kind: 'existing', worktreeId: '' }

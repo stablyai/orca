@@ -79,6 +79,18 @@ describe('nativeChatForkHostChoices', () => {
     ).toEqual([{ id: 'runtime:new', label: 'Studio', disabled: false }])
   })
 
+  it('blocks an offline source host', () => {
+    expect(
+      nativeChatForkHostChoices({
+        sourceHostId: 'runtime:off',
+        hosts,
+        copiesHistory: true,
+        sourceCanExport: false,
+        importCapability: IMPORT
+      })
+    ).toEqual([{ id: 'runtime:off', label: 'Server', disabled: true, blocked: 'offline' }])
+  })
+
   it('lets a recap go to any connected host', () => {
     const choices = nativeChatForkHostChoices({
       sourceHostId: 'local',

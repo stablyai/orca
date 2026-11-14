@@ -77,11 +77,10 @@ export function nativeChatForkHostChoices(input: {
   importCapability: string
 }): NativeChatForkHostChoice[] {
   const source = input.hosts.find((host) => host.id === input.sourceHostId)
-  const first: NativeChatForkHostChoice = {
-    id: input.sourceHostId,
-    label: source?.label ?? input.sourceHostId,
-    disabled: false
-  }
+  const label = source?.label ?? input.sourceHostId
+  const first: NativeChatForkHostChoice = source?.capabilities
+    ? { id: input.sourceHostId, label, disabled: false }
+    : { id: input.sourceHostId, label, disabled: true, blocked: 'offline' }
   if (input.copiesHistory && !input.sourceCanExport) {
     return [first]
   }
