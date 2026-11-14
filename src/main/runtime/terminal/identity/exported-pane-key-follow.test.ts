@@ -101,7 +101,7 @@ describe('agent status of a terminal re-homed after a restart', () => {
     hookFromOldShell('working')
     const runtime = await relaunch([listedSurvivor(OLD_PANE_KEY)])
 
-    showSurvivorInNewTab(runtime)
+    await showSurvivorInNewTab(runtime)
 
     expect(statesOn(NEW_PANE_KEY)).toEqual(['working'])
     hookFromOldShell('done')
@@ -113,7 +113,7 @@ describe('agent status of a terminal re-homed after a restart', () => {
     hookFromOldShell('working')
     const listed = [listedSurvivor(OLD_PANE_KEY)]
     const runtime = await relaunch(listed)
-    showSurvivorInNewTab(runtime)
+    await showSurvivorInNewTab(runtime)
     listed.push({ ...listedSurvivor(OLD_PANE_KEY), id: OTHER })
 
     await runtime.listTerminals()
@@ -127,7 +127,7 @@ describe('agent status of a terminal re-homed after a restart', () => {
   it('brings the row back when the terminal is shown in its exported pane again', async () => {
     hookFromOldShell('working')
     const runtime = await relaunch([listedSurvivor(OLD_PANE_KEY)])
-    showSurvivorInNewTab(runtime)
+    await showSurvivorInNewTab(runtime)
 
     await showSurvivorIn(runtime, OLD_TAB, OLD_LEAF)
 
