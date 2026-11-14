@@ -25,11 +25,13 @@ vi.mock('./worktree-removal-safety', async (importOriginal) => ({
   isWorktreePathMissing: missing
 }))
 import { cleanupLocalOrphanedWorktreeDirectory } from './local-orphaned-worktree-cleanup'
-beforeEach(async () => {
+const actualSafety = await vi.importActual<typeof WorktreeRemovalSafety>(
+  './worktree-removal-safety'
+)
+beforeEach(() => {
   resetWslAutomountRootsForTests()
-  const actual = await vi.importActual<typeof WorktreeRemovalSafety>('./worktree-removal-safety')
   prove.mockReset().mockResolvedValue(true)
-  missing.mockReset().mockImplementation(actual.isWorktreePathMissing)
+  missing.mockReset().mockImplementation(actualSafety.isWorktreePathMissing)
   runProcessMock.mockReset().mockResolvedValue({
     code: 1,
     signal: null,
@@ -70,14 +72,13 @@ it.each(['proof', 'watcher', 'delete', 'success', 'epoch'] as const)(
         }
       })
       if (phase === 'epoch') {
-        const actual = await vi.importActual<typeof WorktreeRemovalSafety>(
-          './worktree-removal-safety'
+        missing.mockImplementationOnce(
+          async (...args: Parameters<typeof WorktreeRemovalSafety.isWorktreePathMissing>) => {
+            const absent = await actualSafety.isWorktreePathMissing(...args)
+            resetWslAutomountRootsForTests()
+            return absent
+          }
         )
-        missing.mockImplementationOnce(async (...args) => {
-          const absent = await actual.isWorktreePathMissing(...args)
-          resetWslAutomountRootsForTests()
-          return absent
-        })
       }
       const pending = cleanupLocalOrphanedWorktreeDirectory(
         'C:/repo',
