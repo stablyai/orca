@@ -16,6 +16,8 @@ export type PRRefreshOutcomeObserver = (
   aliases: readonly GitHubPRRefreshAlias[]
 ) => void
 
+import { projectPRPolicyOutcome } from '../../client/lookup/pr-quiet-policy-evidence'
+
 const DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
 export class PRRefreshEventPublisher {
@@ -35,6 +37,7 @@ export class PRRefreshEventPublisher {
     outcome: PRRefreshOutcome,
     aliases: readonly GitHubPRRefreshAlias[] = []
   ): void {
+    projectPRPolicyOutcome(candidate, outcome)
     for (const observer of this.observers) {
       try {
         observer(candidate, outcome, aliases)

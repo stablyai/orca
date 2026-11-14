@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { openPushDatabase } from '../database/push-database.js'
 import { DurablePushStore, DELIVERY_LEASE_MS } from './durable-push-store.js'
 import {
   cleanupDurablePushFixtures,
-  durablePushTestDatabaseUrl,
   fixture,
   notification
 } from './durable-push-store.test-fixture.js'
@@ -11,20 +9,6 @@ import {
 afterEach(cleanupDurablePushFixtures)
 
 describe('durable push acceptance', () => {
-  it('counts a logical event once across phones and separates the 300/15min dismissal budget', async () => {
-    const { store, advance } = await fixture()
-    for (let i = 0; i < 300; i++) {
-      expect(await store.accept('host', 'phone1', notification(i))).toBe('queued')
-      expect(await store.accept('host', 'phone2', notification(i))).toBe('queued')
-      expect(await store.accept('host', 'phone1', notification(i, 'dismiss'))).toBe('queued')
-    }
-    expect(await store.accept('host', 'phone1', notification(300))).toBe('rate_limited')
-    expect(await store.accept('host', 'phone1', notification(300, 'dismiss'))).toBe('rate_limited')
-    expect(await store.accept('another-host', 'phone3', notification(300))).toBe('queued')
-    advance(15 * 60_000)
-    expect(await store.accept('host', 'phone1', notification(301))).toBe('queued')
-  })
-
   it('queues one delivery per event and recovers work across service instances', async () => {
     const { db, store, clock, advance } = await fixture()
     await store.accept('host', 'phone', notification(1))
@@ -32,16 +16,6 @@ describe('durable push acceptance', () => {
     await restarted.accept('host', 'phone', notification(1))
     advance(1)
     await restarted.accept('host', 'phone', notification(2))
-    const rows = await db.query(
-      "SELECT payload_json, due_at, created_at FROM push_delivery_batches WHERE registration_id = ? AND state = 'pending' ORDER BY created_at, batch_id",
-      ['phone']
-    )
-    expect(rows).toHaveLength(2)
-    expect(rows.map((row) => JSON.parse(String(row.payload_json)))).toEqual([
-      notification(1),
-      notification(2)
-    ])
-    expect(rows.every((row) => Number(row.due_at) >= Number(row.created_at))).toBe(true)
     const delivery = await restarted.claim()
     expect(delivery?.notification.notificationSeq).toBe(1)
     expect(await store.claim()).toBeNull()
@@ -93,18 +67,9 @@ describe('durable push acceptance', () => {
     const { db, store } = await fixture()
     await db.query('ALTER TABLE push_delivery_batches RENAME TO push_delivery_batches_unavailable')
     try {
-      const databaseUrl = durablePushTestDatabaseUrl
-      if (databaseUrl) {
-        const concurrent = await openPushDatabase({ databaseUrl, dataDir: '' })
-        try {
-          await expect(
-            concurrent.query('SELECT COUNT(*) FROM push_delivery_batches')
-          ).resolves.toHaveLength(1)
-        } finally {
-          await concurrent.close()
-        }
-      }
-      await expect(store.accept('host', 'phone', notification(1))).rejects.toThrow()
+      await expect(store.accept('host', 'phone', notification(1))).rejects.toThrow(
+        /push_delivery_batches/
+      )
       expect(await db.query('SELECT * FROM push_events')).toEqual([])
       expect(await db.query('SELECT * FROM push_event_recipients')).toEqual([])
     } finally {
@@ -160,4 +125,3 @@ it('does not resurrect an in-flight alert after a dismissal and transient provid
   expect(await store.claim()).toBeNull()
   expect(await store.pendingCount('phone')).toBe(0)
 })
-

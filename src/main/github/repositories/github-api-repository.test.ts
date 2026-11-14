@@ -34,7 +34,8 @@ vi.mock('./github-enterprise-repository', async (importOriginal) => ({
 }))
 
 vi.mock('../../git/remotes/remote-name-listing', () => ({
-  shouldProbeGitRemote: shouldProbeGitRemoteMock
+  shouldProbeGitRemote: shouldProbeGitRemoteMock,
+  listCachedRemoteNames: async () => null
 }))
 import {
   _resetOriginGitHubApiRepositoryCache,

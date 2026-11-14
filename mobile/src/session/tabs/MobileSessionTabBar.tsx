@@ -10,14 +10,14 @@ import Animated, {
   withSequence,
   withTiming
 } from 'react-native-reanimated'
-import { triggerMediumImpact, triggerSelection } from '../../platform/haptics'
+import { triggerMediumImpact, triggerSelection } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { AgentStateDot } from '../../components/AgentStateDot'
 import { ArrivalFade } from '../../components/ArrivalFade'
 import { useDrawerReducedMotion } from '../../components/bottom-drawer/bottom-drawer-constants'
 import { SHEET_CURVE } from '../../components/sheet-motion-values'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
-import { useKeyboardPersistingTaps } from '../../platform/keyboard-persisting-taps'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
+import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { useNow } from '../../hooks/use-now'
 import { agentStateLabel, type AgentDotState } from '../../worktree/agent-row-display'
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'

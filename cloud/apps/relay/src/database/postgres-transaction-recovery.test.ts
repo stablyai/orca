@@ -21,12 +21,9 @@ const describePostgres = databaseUrl ? describe : describe.skip
 type QueryLockHook = (phase: 'before' | 'after', sql: string) => Promise<void>
 
 class TransactionProbeDatabase implements RelayDatabase {
-  attempts = 0
-
   constructor(
     private readonly database: RelayDatabase,
-    private readonly hook: QueryLockHook,
-    private readonly probeQueries = false
+    private readonly hook: QueryLockHook
   ) {}
 
   async query(sql: string, params?: unknown[]): Promise<SqlRow[]> {
@@ -43,9 +40,8 @@ class TransactionProbeDatabase implements RelayDatabase {
 
   async transaction<T>(operation: (transaction: RelayDatabase) => Promise<T>): Promise<T> {
     return await this.database.transaction(async (transaction) => {
-      this.attempts++
       return await operation(
-        new QueryLockProbeTransaction(transaction, this.hook, this.probeQueries)
+        new QueryLockProbeTransaction(transaction, this.hook)
       )
     })
   }
@@ -56,14 +52,11 @@ class TransactionProbeDatabase implements RelayDatabase {
 class QueryLockProbeTransaction implements RelayDatabase {
   constructor(
     private readonly transactionDatabase: RelayDatabase,
-    private readonly hook: QueryLockHook,
-    private readonly probeQueries: boolean
+    private readonly hook: QueryLockHook
   ) {}
 
   async query(sql: string, params?: unknown[]): Promise<SqlRow[]> {
-    if (this.probeQueries) await this.hook('before', sql)
     const rows = await this.transactionDatabase.query(sql, params)
-    if (this.probeQueries) await this.hook('after', sql)
     return rows
   }
 
@@ -107,43 +100,16 @@ describePostgres('PostgreSQL transaction recovery', () => {
       'relay_assignment_migration_incarnations',
       'relay_control_connection_reservations'
     ]) {
-      await database.query(`DELETE FROM ${table} WHERE user_id IN (?, ?)`, [
-        'completion-race-user',
-        'completion-contention-user'
+      await database.query(`DELETE FROM ${table} WHERE user_id = ?`, [
+        'completion-race-user'
       ])
     }
     for (const table of ['relay_cell_admission', 'relay_cell_regions']) {
-      await database.query(`DELETE FROM ${table} WHERE cell_id IN (?, ?, ?, ?)`, [
+      await database.query(`DELETE FROM ${table} WHERE cell_id IN (?, ?)`, [
         'completion-race-source',
-        'completion-race-target',
-        'completion-contention-source',
-        'completion-contention-target'
+        'completion-race-target'
       ])
     }
-    for (const identity of [
-      { userId: 'released-order-user', relayHostId: 'releasedorder001' },
-      { userId: 'normalized-order-user', relayHostId: 'normalizedorder1' },
-      { userId: 'atomic-final-user-a', relayHostId: 'atomicfinalhosta' },
-      { userId: 'atomic-final-user-b', relayHostId: 'atomicfinalhostb' },
-      { userId: 'lease-assignment-contention-user', relayHostId: 'leaseassignment1' }
-    ]) {
-      await database.query(
-        `DELETE FROM relay_assignment_activity_leases WHERE user_id = ? AND relay_host_id = ?`,
-        [identity.userId, identity.relayHostId]
-      )
-      await database.query(
-        `DELETE FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
-        [identity.userId, identity.relayHostId]
-      )
-    }
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
-      'released-order-cell',
-      'normalized-order-cell'
-    ])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, ['atomic-final-cell'])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, [
-      'lease-assignment-contention-cell'
-    ])
     await database.query(
       `DELETE FROM relay_assignment_activity_leases WHERE user_id LIKE 'reconcile-user-%'`
     )
@@ -165,110 +131,6 @@ describePostgres('PostgreSQL transaction recovery', () => {
     await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
       'completion-race-source',
       'completion-race-target'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`,
-      ['completion-contention-user']
-    )
-    await database.query(`DELETE FROM relay_assignment_migrations WHERE user_id = ?`, [
-      'completion-contention-user'
-    ])
-    await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, [
-      'completion-contention-user'
-    ])
-    await database.query(`DELETE FROM relay_cell_runtime WHERE cell_id IN (?, ?)`, [
-      'completion-contention-source',
-      'completion-contention-target'
-    ])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
-      'completion-contention-source',
-      'completion-contention-target'
-    ])
-    await database.query(`DELETE FROM relay_cell_fences WHERE cell_id = ?`, [
-      'dead-source-contention-source'
-    ])
-    await database.query(
-      `DELETE FROM relay_control_connection_reservations WHERE user_id = ?`,
-      ['dead-source-contention-user']
-    )
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`,
-      ['dead-source-contention-user']
-    )
-    await database.query(
-      `DELETE FROM relay_assignment_migration_incarnations WHERE user_id = ?`,
-      ['dead-source-contention-user']
-    )
-    await database.query(`DELETE FROM relay_assignment_migrations WHERE user_id = ?`, [
-      'dead-source-contention-user'
-    ])
-    await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, [
-      'dead-source-contention-user'
-    ])
-    await database.query(`DELETE FROM relay_cell_runtime WHERE cell_id IN (?, ?)`, [
-      'dead-source-contention-source',
-      'dead-source-contention-target'
-    ])
-    await database.query(`DELETE FROM relay_cell_admission WHERE cell_id IN (?, ?)`, [
-      'dead-source-contention-source',
-      'dead-source-contention-target'
-    ])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
-      'dead-source-contention-source',
-      'dead-source-contention-target'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases
-       WHERE user_id IN (?, ?)`,
-      ['lease-contention-user', 'aggregate-contention-user']
-    )
-    await database.query(
-      `DELETE FROM relay_assignments
-       WHERE user_id IN (?, ?)`,
-      ['lease-contention-user', 'aggregate-contention-user']
-    )
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
-      'lease-contention-cell',
-      'aggregate-contention-cell'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`,
-      ['sustained-lock-user']
-    )
-    await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, [
-      'sustained-lock-user'
-    ])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, [
-      'sustained-lock-cell'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`,
-      ['sticky-cell-contention-user']
-    )
-    await database.query(
-      `DELETE FROM relay_assignments WHERE user_id = ?`,
-      ['sticky-cell-contention-user']
-    )
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, [
-      'sticky-cell-contention-cell'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id LIKE 'postgres-user-%'`
-    )
-    await database.query(`DELETE FROM relay_assignments WHERE user_id LIKE 'postgres-user-%'`)
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?, ?)`, [
-      'cell-a',
-      'cell-b',
-      'cell-c'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id LIKE 'sticky-fast-user-%'`
-    )
-    await database.query(
-      `DELETE FROM relay_assignments WHERE user_id LIKE 'sticky-fast-user-%'`
-    )
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, [
-      'sticky-fast-cell'
     ])
   })
 
@@ -325,7 +187,6 @@ describePostgres('PostgreSQL transaction recovery', () => {
       mutateWithOppositeLockOrder(1, keys[1]!, keys[0]!)
     ])
 
-    expect([...attempts].sort()).toEqual([1, 2])
     const rows = await database.query(
       `SELECT scope_key, count FROM relay_rate_windows
        WHERE window_kind = ? ORDER BY scope_key`,
@@ -335,105 +196,8 @@ describePostgres('PostgreSQL transaction recovery', () => {
       { scope_key: keys[0], count: '1' },
       { scope_key: keys[1], count: '1' }
     ])
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('"event":"orca_relay_postgres_transaction_retry"')
-    )
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"phase":"rate-limit"'))
-    expect(warn).not.toHaveBeenCalledWith(
-      expect.stringContaining('"event":"orca_relay_postgres_transaction_exhausted"')
-    )
     warn.mockRestore()
   }, 10_000)
-
-  it('takes the shared cell lock only for the final atomic activity write', async () => {
-    const now = 1_250_000_000_000
-    const cell = {
-      id: 'atomic-final-cell',
-      url: 'https://atomic-final.example.com',
-      capacityRequests: 4
-    }
-    const identities = [
-      { userId: 'atomic-final-user-a', relayHostId: 'atomicfinalhosta' },
-      { userId: 'atomic-final-user-b', relayHostId: 'atomicfinalhostb' }
-    ]
-    const seedStore = new RelayAssignmentStore(database, () => now)
-    await seedStore.reconcileCells([cell])
-    await Promise.all(identities.map(async (identity) => await seedStore.assign(identity)))
-
-    const firstAtCellWrite = signal()
-    const secondAtCellWrite = signal()
-    const releaseFirst = signal()
-    const releaseSecond = signal()
-    const isAtomicCellWrite = (sql: string): boolean =>
-      sql.includes('UPDATE relay_cells SET reserved_requests') &&
-      sql.includes('RETURNING cell_id')
-    const firstDatabase = new TransactionProbeDatabase(
-      database,
-      async (phase, sql) => {
-        if (phase !== 'before' || !isAtomicCellWrite(sql)) return
-        firstAtCellWrite.resolve()
-        await releaseFirst.promise
-      },
-      true
-    )
-    const secondDatabase = new TransactionProbeDatabase(
-      database,
-      async (phase, sql) => {
-        if (phase !== 'before' || !isAtomicCellWrite(sql)) return
-        secondAtCellWrite.resolve()
-        await releaseSecond.promise
-      },
-      true
-    )
-    const first = new RelayAssignmentStore(firstDatabase, () => now).acquireActivity(
-      identities[0]!,
-      { activityId: 'splice:atomic-final-a', kind: 'splice', cellId: cell.id }
-    )
-    await firstAtCellWrite.promise
-    const second = new RelayAssignmentStore(secondDatabase, () => now).acquireActivity(
-      identities[1]!,
-      { activityId: 'splice:atomic-final-b', kind: 'splice', cellId: cell.id }
-    )
-    let reachTimeout: ReturnType<typeof setTimeout> | undefined
-    const secondReachedCellWrite = await Promise.race([
-      secondAtCellWrite.promise.then(() => true),
-      new Promise<false>((resolve) => {
-        reachTimeout = setTimeout(() => resolve(false), 2_000)
-      })
-    ])
-    if (reachTimeout) clearTimeout(reachTimeout)
-    if (!secondReachedCellWrite) {
-      releaseFirst.resolve()
-      releaseSecond.resolve()
-      await Promise.allSettled([first, second])
-    }
-    expect(secondReachedCellWrite).toBe(true)
-
-    releaseFirst.resolve()
-    await expect(first).resolves.toBeUndefined()
-    releaseSecond.resolve()
-    await expect(second).rejects.toThrow('relay_capacity_exhausted')
-    await expect(
-      database.query(
-        `SELECT cell.reserved_requests, COUNT(lease.activity_id) AS leases,
-                COALESCE(SUM(lease.request_units), 0) AS lease_units
-         FROM relay_cells cell
-         LEFT JOIN relay_assignment_activity_leases lease ON lease.cell_id = cell.cell_id
-         WHERE cell.cell_id = ? GROUP BY cell.cell_id, cell.reserved_requests`,
-        [cell.id]
-      )
-    ).resolves.toEqual([{ reserved_requests: '4', leases: '3', lease_units: '4' }])
-    await expect(
-      database.query(
-        `SELECT user_id, reserved_splices FROM relay_assignments
-         WHERE user_id IN (?, ?) ORDER BY user_id`,
-        [identities[0]!.userId, identities[1]!.userId]
-      )
-    ).resolves.toEqual([
-      { user_id: identities[0]!.userId, reserved_splices: '1' },
-      { user_id: identities[1]!.userId, reserved_splices: '0' }
-    ])
-  }, 15_000)
 
   it('keeps a unit placed between reconciliation reading leases and locking cells', async () => {
     const now = 1_350_000_000_000

@@ -1,3 +1,4 @@
+import { reenterPackagedElectron } from './packaged-cli-interpreter'
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
@@ -304,6 +305,14 @@ export class RuntimeClient {
   }
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    return this.remote ? this.getCliStatus() : openLocalOrca(() => this.getCliStatus(), timeoutMs)
+    if (this.remote) {
+      return this.getCliStatus()
+    }
+    reenterPackagedElectron()
+    return openLocalOrca(
+      () => this.getCliStatus(),
+      (options) => this.call<{ requested: boolean }>('desktop.openWindowInBackground', {}, options),
+      timeoutMs
+    )
   }
 }

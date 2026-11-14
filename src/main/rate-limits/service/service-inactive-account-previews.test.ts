@@ -115,4 +115,21 @@ describe('RateLimitService', () => {
       }
     ])
   })
+
+  it('keeps a monthly-only outgoing Codex snapshot for the switcher', async () => {
+    const service = new RateLimitService()
+    service.setInactiveCodexAccountsResolver(() => [
+      { id: 'account-1', resolveHome: () => ({ kind: 'skip' }) }
+    ])
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue({
+      ...okProvider('codex', 0),
+      session: null,
+      monthly: { usedPercent: 20, windowMinutes: 43_200, resetsAt: null, resetDescription: null }
+    })
+    await service.refresh()
+
+    await service.refreshForCodexAccountChange('account-1')
+
+    expect(service.getState().inactiveCodexAccounts[0]?.rateLimits?.monthly?.usedPercent).toBe(20)
+  })
 })

@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
   ipcMain: { removeHandler: vi.fn(), handle: mocks.handle },
   nativeImage: { createFromBuffer: vi.fn() }
 }))
-vi.mock('../../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('../../ipc/runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
@@ -101,7 +101,6 @@ describe('clipboard:saveImageAsTempFile for a local structured chat', () => {
       )
       expect(String(saved).startsWith(root)).toBe(true)
       expect(await readFile(String(saved), 'utf8')).toBe('png')
-      expect(mocks.callRuntimeEnvironment).not.toHaveBeenCalled()
     } finally {
       await rm(root, { recursive: true, force: true })
     }

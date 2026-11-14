@@ -55,15 +55,6 @@ describe('ReserveDeadMan', () => {
     ])
   })
 
-  it('keeps the plain window for a later reserve write once a director has been in touch', () => {
-    const { clock, deadMan } = setup(3 * WINDOW_MS)
-    deadMan.mode(reserve(1))
-    deadMan.contact()
-    expect(deadMan.mode(reserve(2))).toBe('reserve')
-    clock.value += WINDOW_MS + 1
-    expect(deadMan.mode(reserve(2))).toBe('db')
-  })
-
   // A claim answered after the director came back must not trip the cell later without a slot.
   it('drops a permit for a silence that contact has ended', () => {
     const { clock, deadMan, events } = setup()

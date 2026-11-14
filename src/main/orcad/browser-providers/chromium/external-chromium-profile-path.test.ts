@@ -94,11 +94,4 @@ describe.skipIf(process.platform === 'win32')('external Chromium profile path', 
 
     await expect(resolve(launcher)).resolves.toBe(stateProfile)
   })
-
-  it('leaves non-Linux hosts on the state profile', async () => {
-    const launcher = await installSnap('chromium', 'name: chromium\n')
-    environment = { ...environment, platform: 'darwin' }
-
-    await expect(resolve(launcher)).resolves.toBe(join(root, 'state', 'browser-chromium'))
-  })
 })

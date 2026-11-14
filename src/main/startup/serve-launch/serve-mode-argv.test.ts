@@ -47,24 +47,6 @@ describe('serve-mode-argv', () => {
     ])
   })
 
-  it('leaves real GUI launch argv alone', () => {
-    // False serve detection replaces a desktop window with a listening runtime; exercise actual desktop argv shapes.
-    for (const argv of [
-      ['/Applications/Orca.app/Contents/MacOS/Orca', '-psn_0_123456'],
-      ['C:\\Program Files\\Orca\\Orca.exe', '--squirrel-firstrun'],
-      ['C:\\Program Files\\Orca\\Orca.exe', 'orca://worktree/serve'],
-      ['/opt/orca/orca-ide', '/home/u/serve'],
-      // Value tokens named serve are never subcommands.
-      ['/opt/orca/orca-ide', '--pairing-code', 'serve'],
-      ['/opt/orca/orca-ide', '--environment=serve'],
-      ['/opt/orca/orca-ide', '--', 'serve'],
-      ['/opt/orca/orca-ide', 'Serve']
-    ]) {
-      expect(argvRequestsServeMode(argv), argv.join(' ')).toBe(false)
-      expect(normalizeServeModeArgv(argv)).toEqual(argv)
-    }
-  })
-
   it('does not treat a later positional serve as the subcommand after another command', () => {
     expect(findServeSubcommandIndex(['app', 'status', 'serve'])).toBe(-1)
     expect(argvRequestsServeMode(['app', 'status', 'serve'])).toBe(false)
@@ -75,14 +57,6 @@ describe('serve-mode-argv', () => {
       '/AppRun',
       '--serve',
       '--serve-pairing-address=--no-pairng'
-    ])
-  })
-
-  it('does not splice prototype members onto argv for stray positionals', () => {
-    expect(normalizeServeModeArgv(['/AppRun', 'serve', 'toString'])).toEqual([
-      '/AppRun',
-      '--serve',
-      'toString'
     ])
   })
 

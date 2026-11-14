@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { removeThroughOwningService } from '../../ipc/runtime-environments/runtime-environment-host-service-ops'
+import { removeThroughOwningService } from '../../ipc/runtime-environments/connectivity/runtime-environment-host-service-ops'
 import { WslHostService } from './wsl-host-service'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import { setWslHostService } from './wsl-host-service-instance'
@@ -49,7 +49,6 @@ describe('WslHostService Remove as a user action', () => {
     try {
       await service.add({ distro: 'Ubuntu' })
       const [environment] = listEnvironments(userDataPath)
-      expect(environment).toBeDefined()
       await removeThroughOwningService(environment!)
       expect(heard).toEqual([{ kind: 'removed', distro: 'Ubuntu' }])
     } finally {

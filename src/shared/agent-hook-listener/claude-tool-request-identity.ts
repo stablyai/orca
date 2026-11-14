@@ -5,7 +5,7 @@ import { deriveToolInputPreview, readString } from './tool-input-preview'
 import { readClaudeBatchSettledRequests } from './claude-settled-permission-requests'
 import { extractPromptText } from './prompt-fields'
 import { hasExplicitUserPrompt } from './provider-event-routing'
-import { CLAUDE_NEW_SESSION_START_SOURCES } from './providers/claude-session-start-sources'
+import { CLAUDE_NEW_SESSION_START_SOURCES } from './providers/claude/lifecycle/claude-session-start-sources'
 
 /** The fields that tie a Claude PermissionRequest to the PreToolUse it is asking about. */
 export type ClaudeToolRequestFields = {

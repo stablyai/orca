@@ -5,7 +5,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host
 import {
   ReadVisualParams,
   type AgentSessionReadVisualResult
-} from '../../../../../../shared/rpc-contract/agent-session-visual-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/agent-session-visual-params'
 import { nativeChatScratchFolderFor } from '../../../../../native-chat/conversation-files/native-chat-scratch-folder'
 import { getProfileUserDataPath } from '../../../../../orca-profiles/profile-storage-paths'
 import { readNativeChatVisualFile } from '../../../../../native-chat/conversation-files/native-chat-visual-file-read'

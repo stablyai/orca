@@ -13,7 +13,7 @@ import {
   isStrandedWorkspaceSleepRecord,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 type BackgroundSleepingAgentWakeDispatcherOptions = {

@@ -5,7 +5,7 @@ import {
   getMobileSessionTabTitle,
   getMobileTerminalTabHostAgentIdentity,
   resolveMobileTerminalTabAgentId
-} from '../../terminal/session/mobile-terminal-tab-agent'
+} from './mobile-terminal-tab-agent'
 import {
   agentDotState,
   agentRowTimeAt,

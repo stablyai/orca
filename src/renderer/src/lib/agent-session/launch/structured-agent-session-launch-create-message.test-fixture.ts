@@ -7,7 +7,7 @@ import {
   CreateIntentParams,
   SetOptionParams,
   SendParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-params'
+} from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { HostCreateSupport } from './structured-agent-session-host-admission'
 import { useAppStore } from '../../../store/index'

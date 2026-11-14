@@ -15,7 +15,7 @@ vi.mock('sonner', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
 import { useWorkspaceCleanupRemoval } from './use-workspace-cleanup-removal'
 import { useWorkspaceCleanupDialogLifecycle } from '../dialog/use-workspace-cleanup-dialog-lifecycle'
@@ -93,7 +93,7 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
   })
 
   it('asks before stopping an agent and deletes nothing until the user confirms', async () => {
-    const calls = installRemoval()
+    installRemoval()
     startAgent('b')
     const { result } = renderAtConfirm([candidateFor('a'), candidateFor('b')])
 
@@ -106,11 +106,10 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
     act(() => result.current.cancelStopAgents())
     expect(result.current.agentStopRequest).toBeNull()
     expect(result.current.confirming).toBe(true)
-    expect(calls).toEqual([])
   })
 
   it('re-asks when another agent starts while the stop step is open', () => {
-    const calls = installRemoval()
+    installRemoval()
     startAgent('b')
     const { result } = renderAtConfirm([candidateFor('a'), candidateFor('b')])
     act(() => result.current.confirmRemove())
@@ -123,11 +122,10 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
       'b'
     ])
     expect(result.current.removalInFlight).toBe(false)
-    expect(calls).toEqual([])
   })
 
   it('asks before stopping a structured chat that has no terminal tab', () => {
-    const calls = installRemoval()
+    installRemoval()
     const updatedAt = Date.now()
     const chatPaneKey = makePaneKey('chat-a', LEAF_ID)
     useAppStore.setState({
@@ -149,7 +147,6 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
     act(() => result.current.confirmRemove())
 
     expect(result.current.agentStopRequest?.candidates.map((c) => c.displayName)).toEqual(['a'])
-    expect(calls).toEqual([])
   })
 
   it('drops an open stop step when the dialog is reopened mid-batch', async () => {

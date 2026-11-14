@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react'
@@ -17,7 +17,7 @@ import {
 import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
-import { getCyclicProjectedWorktreeLineageIds } from '../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import {
   clampWorktreeParentPickerIndex,
   filterWorktreeParentCandidates
@@ -30,7 +30,7 @@ import {
 import {
   getLineageChildrenByParentId,
   getLineageChildWorktree
-} from '@/components/right-sidebar/folder-workspace-attached-worktrees'
+} from '@/components/right-sidebar/folder-workspaces/folder-workspace-attached-worktrees'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 import {
   sharesWorktreeLineageBoundary,

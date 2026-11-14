@@ -1,3 +1,4 @@
+import type { BrowserClientPageExecutionHostGrant } from './browser-host-client-page-creation'
 import type { BrowserHostLease } from '../leases/browser-host-lease-records'
 import type { BrowserHostPagePlacementRegistry } from '../reconciliation/browser-host-page-placement'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
@@ -22,4 +23,15 @@ export function placeBrowserHostClientPage(options: {
     browserHostClientId: lease.browserHostClientId,
     browserHostGeneration: lease.browserHostGeneration
   })
+}
+
+export function selectPageExecutionHostKey(
+  id: string,
+  grants: Map<string, BrowserClientPageExecutionHostGrant>,
+  placements: BrowserHostPagePlacementRegistry
+): string | undefined {
+  const grant = grants.get(id)
+  return grant && placements.getPlacement(id) === grant.placement
+    ? grant.executionHostKey
+    : undefined
 }

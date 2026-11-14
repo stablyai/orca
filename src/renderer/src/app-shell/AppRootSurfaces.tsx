@@ -52,7 +52,7 @@ const NonGitFolderDialog = lazy(
 const AddProjectFromFolderDialog = lazy(
   () => import('../components/sidebar/project-admission/dialog/AddProjectFromFolderDialog')
 )
-const DiagramViewerModal = lazy(() => import('../components/editor/DiagramViewerModal'))
+const DiagramViewerModal = lazy(() => import('../components/editor/diagrams/DiagramViewerModal'))
 const ProjectAddedDialog = lazy(
   () => import('../components/sidebar/project-admission/completion/ProjectAddedDialog')
 )

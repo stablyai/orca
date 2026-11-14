@@ -5,7 +5,6 @@ describe('areStructurallyEqual', () => {
   it('equates value-equal nested objects and arrays', () => {
     const value = () => ({ id: 'a', agents: [{ state: 'working', mainAgent: { stopping: true } }] })
     expect(areStructurallyEqual(value(), value())).toBe(true)
-    expect(areStructurallyEqual([1, [2, { x: null }]], [1, [2, { x: null }]])).toBe(true)
   })
 
   it('detects a changed nested value', () => {

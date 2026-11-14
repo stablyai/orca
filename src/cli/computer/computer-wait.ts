@@ -1,6 +1,7 @@
 import type {
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
+  ComputerSnapshotData,
   ComputerSnapshotResult,
   ComputerWindowListWindow
 } from '../../shared/computer-use-runtime-types'
@@ -58,7 +59,7 @@ export async function waitForComputerSnapshot(
         { ...params, noScreenshot: true },
         { timeoutMs: readTimeoutMs }
       ),
-    check: (result) => snapshotMiss(condition, result.snapshot.treeText)
+    check: (result) => snapshotMiss(condition, result.snapshot)
   })
   const { snapshot } = response.result
   return {
@@ -99,9 +100,12 @@ export async function waitForComputerWindowTitle(
   }
 }
 
-function snapshotMiss(condition: ComputerTreeWaitCondition, treeText: string): string | null {
+function snapshotMiss(
+  condition: ComputerTreeWaitCondition,
+  snapshot: ComputerSnapshotData
+): string | null {
   const matches = computerTreeElementsMatching(
-    parseComputerTreeText(treeText).elements,
+    parseComputerTreeText(snapshot.treeText).elements,
     condition.value
   )
   if (matches.length === 0) {
@@ -110,7 +114,11 @@ function snapshotMiss(condition: ComputerTreeWaitCondition, treeText: string): s
   if (condition.kind === 'text') {
     return null
   }
-  const disabled = matches.filter(isComputerTreeElementDisabled)
+  const disabledIndexes =
+    snapshot.disabledElementIndexes && new Set(snapshot.disabledElementIndexes)
+  const disabled = matches.filter((element) =>
+    isComputerTreeElementDisabled(element, disabledIndexes)
+  )
   if (disabled.length === 0) {
     return null
   }

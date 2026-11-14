@@ -2,7 +2,7 @@ import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
-import { OPENAI_SPEECH_KEY_MAX_LENGTH } from '../../shared/rpc-contract/speech-params'
+import { OPENAI_SPEECH_KEY_MAX_LENGTH } from '../../shared/rpc-contract/speech/speech-params'
 
 type OpenAiSpeechKeyStatus = { configured: boolean; protection: string | null }
 

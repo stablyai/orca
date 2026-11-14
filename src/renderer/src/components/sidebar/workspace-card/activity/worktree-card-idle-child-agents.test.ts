@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { buildCollapsedChildAgentSignalStates } from './worktree-card-idle-child-agents'
 
 function row(paneKey: string, state: DashboardAgentRow['state']): DashboardAgentRow {
