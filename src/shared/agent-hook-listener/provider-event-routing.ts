@@ -30,6 +30,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'qwen-code':
     case 'qoder':
     case 'claude':
+    case 'loop':
       // SessionStart is idle but must clear previous-session tool/prompt caches (STA-3386).
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'codebuddy':
@@ -103,6 +104,7 @@ export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boo
     case 'codebuddy':
     case 'kimi':
     case 'muse':
+    case 'loop':
       return eventName === 'Stop' || eventName === 'StopFailure'
     case 'dsh':
     case 'zcode':
@@ -227,6 +229,9 @@ export function extractToolFields(
     // Why: ZCode's hook runner writes Claude's `tool_name`/`tool_input`/`tool_response` aliases.
     // falls through
     case 'zcode':
+    // loop's native reporter sends Claude's field names.
+    // falls through
+    case 'loop':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)

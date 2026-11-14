@@ -210,8 +210,9 @@ export function normalizeProviderEvent(input: {
       break
     }
     case 'qoder':
+    case 'loop':
       payload = normalizeCompatibleLifecycleEvent(
-        'qoder',
+        source,
         state,
         eventName,
         promptText,

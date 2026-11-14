@@ -153,6 +153,12 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.jcode_label', 'Jcode'),
       cmd: 'jcode',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'loop',
+      label: translate('auto.lib.agent.catalog.loop_label', 'loop'),
+      cmd: 'loop',
+      homepageUrl: 'https://github.com/notshekhar/loop'
     }
   ]
 }
