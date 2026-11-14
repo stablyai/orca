@@ -29,9 +29,8 @@ export function createAgentCatalogRowHost(): {
       }
       const atomic =
         element.isConnected && parent.isConnected && typeof parent.moveBefore === 'function'
-      const active = element.contains(document.activeElement)
-        ? (document.activeElement as HTMLElement)
-        : null
+      const focused = document.activeElement
+      const active = focused instanceof HTMLElement && element.contains(focused) ? focused : null
       const selection =
         active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement
           ? {

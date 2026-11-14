@@ -71,7 +71,7 @@ it('retains a focused unsaved command and selection across asynchronous membersh
   const save = vi.fn()
   const view = render(catalog(false, save))
   fireEvent.click(screen.getByRole('button', { name: 'Claude' }))
-  const input = screen.getByDisplayValue('claude') as HTMLInputElement
+  const input = screen.getByDisplayValue<HTMLInputElement>('claude')
   input.focus()
   fireEvent.change(input, { target: { value: '/custom/unsaved-claude' } })
   input.setSelectionRange(3, 9, 'backward')
@@ -109,7 +109,7 @@ it('keeps a pending save attached to the same editor when membership changes', a
   )
   const view = render(catalog(false, save))
   fireEvent.click(screen.getByRole('button', { name: 'Claude' }))
-  const input = screen.getByDisplayValue('claude') as HTMLInputElement
+  const input = screen.getByDisplayValue<HTMLInputElement>('claude')
   fireEvent.change(input, { target: { value: '/custom/claude' } })
   fireEvent.keyDown(input, { key: 'Enter' })
   await waitFor(() => expect(input.readOnly).toBe(true))
