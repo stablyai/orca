@@ -108,7 +108,7 @@ const PAGE_BYTES = 1024 * 1024
  * Restores a chat's frozen copied source once, as an open interprets it, and returns its current
  * domain records as bounded typed pages. The source never changes before its chat is ready, so
  * every read is its own short statement: no transaction may span the restore and pin the WAL.
- * Empty saved sessions retain their physical epoch without retirement proof.
+ * Returns null without transcript content; the reader separately preserves empty saved epochs.
  */
 export function prepareJournalDomainImport(
   db: Database.Database,
@@ -118,39 +118,8 @@ export function prepareJournalDomainImport(
     throw new Error('journal domain import reads its frozen source outside a transaction')
   }
   const loaded = restoreJournal(db, sessionId)
-  if (!loaded) {
+  if (!loaded || (!loaded.newer && !loaded.damage && loaded.state.lastSequence === 0)) {
     return null
-  }
-  if (!loaded.newer && !loaded.damage && loaded.state.lastSequence === 0) {
-    for (const table of ['journal_rows', 'queued_messages', 'journal_outcome_epochs']) {
-      if (
-        db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table) &&
-        db.prepare(`SELECT 1 FROM ${table} WHERE session_id=? LIMIT 1`).get(sessionId)
-      ) {
-        return null
-      }
-    }
-    return {
-      sessionId,
-      workspaceId: String(
-        db.prepare('SELECT workspace_id FROM journal_sessions WHERE session_id=?').get(sessionId)!
-          .workspace_id
-      ),
-      epoch: loaded.state.epoch,
-      head: {
-        lastSequence: 0,
-        highestFence: 0,
-        contextBoundary: 0,
-        lastActivityAt: 0,
-        derivedTurnItemId: null,
-        historyOrigin: null,
-        queueFailureBoundary: 0,
-        queuePauseMarks: { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
-      },
-      pages: (function* () {
-        yield* []
-      })()
-    }
   }
   failLoadOnUnloadableJournal(sessionId, loaded)
   const { state } = loaded

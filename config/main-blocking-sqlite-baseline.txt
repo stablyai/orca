@@ -113,7 +113,6 @@
 4 src/main/native-chat/agent-session-journal/journal-sql-history-items.ts
 24 src/main/native-chat/agent-session-journal/journal-sql-item-reads.ts
 10 src/main/native-chat/agent-session-journal/journal-sql-lifecycle-reads.ts
-4 src/main/native-chat/agent-session-journal/journal-sql-maintenance.ts
 5 src/main/native-chat/agent-session-journal/journal-sql-message-commit.ts
 12 src/main/native-chat/agent-session-journal/journal-sql-message-effects.ts
 13 src/main/native-chat/agent-session-journal/journal-sql-open-command.ts

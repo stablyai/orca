@@ -98,7 +98,10 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
             })
           original = openSource()
         }
-        const prepared = original ? prepareJournalDomainImport(original, operation.sessionId) : null
+        const prepared = original
+          ? (prepareJournalDomainImport(original, operation.sessionId) ??
+            prepareEmptyConversion(original, operation.sessionId))
+          : null
         if (prepared) {
           const { pages, ...header } = prepared
           conversions.set(id, pages)
@@ -153,3 +156,42 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
     })
   }
 })
+
+/** Preserve empty saved epochs independently of legacy-source retirement. */
+function prepareEmptyConversion(
+  source: Database.Database,
+  sessionId: string
+): JournalDomainImport | null {
+  const session = source
+    .prepare('SELECT workspace_id,epoch FROM journal_sessions WHERE session_id=?')
+    .get(sessionId)
+  if (!session) {
+    return null
+  }
+  for (const table of ['journal_rows', 'queued_messages', 'journal_outcome_epochs']) {
+    if (
+      source.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table) &&
+      source.prepare(`SELECT 1 FROM ${table} WHERE session_id=? LIMIT 1`).get(sessionId)
+    ) {
+      return null
+    }
+  }
+  return {
+    sessionId,
+    workspaceId: String(session.workspace_id),
+    epoch: String(session.epoch),
+    head: {
+      lastSequence: 0,
+      highestFence: 0,
+      contextBoundary: 0,
+      lastActivityAt: 0,
+      derivedTurnItemId: null,
+      historyOrigin: null,
+      queueFailureBoundary: 0,
+      queuePauseMarks: { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
+    },
+    pages: (function* () {
+      yield* []
+    })()
+  }
+}
