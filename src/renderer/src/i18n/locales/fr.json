@@ -20768,7 +20768,12 @@
           "bottom": "bas",
           "scrollback": "historique",
           "snap": "aligner",
-          "position": "position"
+          "position": "position",
+          "header": "en-tête",
+          "buttons": "boutons",
+          "split": "scindé",
+          "hover": "survol",
+          "hide": "masquer"
         }
       },
       "nativeChat": {
@@ -20810,6 +20815,13 @@
         "turnDiffsCopy": "Affiche sous la réponse les fichiers modifiés à chaque tour, avec les nombres de lignes.",
         "turnDiffsSearchChangedFiles": "fichiers modifiés",
         "turnDiffsSearchEdits": "modifications"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "Boutons de l'en-tête du volet",
+        "headerButtonsDescription": "Affiche les boutons de discussion, de division et de fermeture du volet actif tant que le volet est actif, ou seulement au survol ou quand l'un d'eux a le focus clavier.",
+        "headerButtonsHelper": "Survolez le coin supérieur droit d'un volet pour faire apparaître les boutons masqués.",
+        "headerButtonsAlways": "Volet actif ou survolé",
+        "headerButtonsOnHover": "Au survol ou au focus clavier"
       },
       "voice": {
         "dictationLanguage": {

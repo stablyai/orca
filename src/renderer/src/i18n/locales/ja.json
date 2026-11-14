@@ -19913,7 +19913,12 @@
           "bottom": "一番下",
           "scrollback": "スクロールバック",
           "snap": "スナップ",
-          "position": "位置"
+          "position": "位置",
+          "header": "ヘッダー",
+          "buttons": "ボタン",
+          "split": "分割",
+          "hover": "ホバー",
+          "hide": "非表示"
         }
       },
       "nativeChat": {
@@ -19956,6 +19961,13 @@
         "turnDiffsCopy": "各ターンで変更したファイルを行数とともに応答の下に表示します。",
         "turnDiffsSearchChangedFiles": "変更されたファイル",
         "turnDiffsSearchEdits": "編集"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "ペインヘッダーのボタン",
+        "headerButtonsDescription": "アクティブなペインのチャット、分割、閉じるボタンを、ペインがアクティブな間は表示するか、ポインターを重ねている間またはキーボードでフォーカスしている間だけ表示するかを選びます。",
+        "headerButtonsHelper": "ペインの右上隅にポインターを重ねると、隠れているボタンが表示されます。",
+        "headerButtonsAlways": "アクティブ時またはホバー時",
+        "headerButtonsOnHover": "ホバー時またはキーボードフォーカス時"
       },
       "voice": {
         "dictationLanguage": {

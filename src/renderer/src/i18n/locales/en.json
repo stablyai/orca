@@ -22008,7 +22008,12 @@
           "bottom": "bottom",
           "scrollback": "scrollback",
           "snap": "snap",
-          "position": "position"
+          "position": "position",
+          "header": "header",
+          "buttons": "buttons",
+          "split": "split",
+          "hover": "hover",
+          "hide": "hide"
         },
         "claudeCodeThemeSync": {
           "description": "Claude Code on this computer uses your terminal colors and follows theme changes live, including outside Orca. Turning this off restores your previous Claude Code theme. Picking a theme in Claude Code stops the sync.",
@@ -22065,6 +22070,13 @@
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
         "turnDiffsSearchChangedFiles": "changed files",
         "turnDiffsSearchEdits": "edits"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "Pane header buttons",
+        "headerButtonsDescription": "Show the active pane's chat, split, and close buttons whenever the pane is active, or only while the pointer is over them or one of them has keyboard focus.",
+        "headerButtonsHelper": "Hover over the top-right corner of a pane to reveal hidden buttons.",
+        "headerButtonsAlways": "When active or hovered",
+        "headerButtonsOnHover": "On hover or keyboard focus"
       },
       "voice": {
         "dictationLanguage": {

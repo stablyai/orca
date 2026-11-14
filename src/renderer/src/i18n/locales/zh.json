@@ -20234,7 +20234,12 @@
           "bottom": "底部",
           "scrollback": "回滚",
           "snap": "吸附",
-          "position": "位置"
+          "position": "位置",
+          "header": "标题栏",
+          "buttons": "按钮",
+          "split": "拆分",
+          "hover": "悬停",
+          "hide": "隐藏"
         }
       },
       "nativeChat": {
@@ -20276,6 +20281,13 @@
         "markNewMessagesTitle": "返回聊天时标记新消息",
         "markNewMessagesCopy": "返回聊天时，在你离开期间收到的内容上方显示“新消息”分隔线；如果你之前在看最新消息，会滚动到该处。",
         "markNewMessagesSearchUnread": "未读"
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "窗格标题栏按钮",
+        "headerButtonsDescription": "让活动窗格的聊天、拆分和关闭按钮在窗格处于活动状态时显示，或仅在指针悬停或获得键盘焦点时显示。",
+        "headerButtonsHelper": "将指针悬停在窗格右上角即可显示隐藏的按钮。",
+        "headerButtonsAlways": "活动或悬停时",
+        "headerButtonsOnHover": "悬停或键盘聚焦时"
       },
       "voice": {
         "dictationLanguage": {

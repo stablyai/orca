@@ -20460,8 +20460,20 @@
           "bottom": "final",
           "scrollback": "historial",
           "snap": "ajustar",
-          "position": "posición"
+          "position": "posición",
+          "header": "encabezado",
+          "buttons": "botones",
+          "split": "dividir",
+          "hover": "pasar el cursor",
+          "hide": "ocultar"
         }
+      },
+      "TerminalPaneAppearance": {
+        "headerButtons": "Botones del encabezado del panel",
+        "headerButtonsDescription": "Muestra los botones de chat, dividir y cerrar del panel activo mientras el panel está activo, o solo al pasar el cursor sobre ellos o cuando uno tiene el foco del teclado.",
+        "headerButtonsHelper": "Pasa el cursor por la esquina superior derecha de un panel para mostrar los botones ocultos.",
+        "headerButtonsAlways": "Al estar activo o al pasar el cursor",
+        "headerButtonsOnHover": "Al pasar el cursor o con el foco del teclado"
       },
       "voice": {
         "dictationLanguage": {

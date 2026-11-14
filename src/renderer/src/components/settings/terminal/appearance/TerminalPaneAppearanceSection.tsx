@@ -1,5 +1,9 @@
 import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../../../../../../shared/constants'
-import { NumberField } from '../../form-controls/SettingsFormControls'
+import {
+  NumberField,
+  SettingsRow,
+  SettingsSegmentedControl
+} from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
 import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal/appearance/terminal-theme'
@@ -82,6 +86,51 @@ export function TerminalPaneAppearanceSection({
             updateSettings({
               terminalDividerThicknessPx: clampNumber(value, 1, 32)
             })
+          }
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        title={t('components.settings.TerminalPaneAppearance.headerButtons', 'Pane header buttons')}
+        description={t(
+          'components.settings.TerminalPaneAppearance.headerButtonsDescription',
+          "Show the active pane's chat, split, and close buttons whenever the pane is active, or only while the pointer is over them or one of them has keyboard focus."
+        )}
+        keywords={['pane', 'header', 'buttons', 'split', 'close', 'hover', 'hide']}
+      >
+        <SettingsRow
+          label={t(
+            'components.settings.TerminalPaneAppearance.headerButtons',
+            'Pane header buttons'
+          )}
+          description={t(
+            'components.settings.TerminalPaneAppearance.headerButtonsHelper',
+            'Hover over the top-right corner of a pane to reveal hidden buttons.'
+          )}
+          control={
+            <SettingsSegmentedControl
+              ariaLabel={t(
+                'components.settings.TerminalPaneAppearance.headerButtons',
+                'Pane header buttons'
+              )}
+              value={settings.terminalPaneHeaderButtons === 'hover' ? 'hover' : 'always'}
+              onChange={(option) => updateSettings({ terminalPaneHeaderButtons: option })}
+              options={[
+                {
+                  value: 'always',
+                  label: t(
+                    'components.settings.TerminalPaneAppearance.headerButtonsAlways',
+                    'When active or hovered'
+                  )
+                },
+                {
+                  value: 'hover',
+                  label: t(
+                    'components.settings.TerminalPaneAppearance.headerButtonsOnHover',
+                    'On hover or keyboard focus'
+                  )
+                }
+              ]}
+            />
           }
         />
       </SearchableSetting>

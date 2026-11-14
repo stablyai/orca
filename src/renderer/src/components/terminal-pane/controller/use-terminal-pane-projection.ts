@@ -6,6 +6,8 @@ import { agentLaunchPaneOutcomeForLeaf } from '../launch-outcome/agent-launch-pa
 import { terminalErrorForPane } from '../errors/terminal-error-accumulation'
 
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
+import { useAppStore } from '@/store'
+import { resolvePaneHeaderButtonsOnHover } from '../titles/terminal-pane-header-buttons-mode'
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
@@ -55,6 +57,11 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     shouldMeasureHiddenStartup,
     systemPrefersDark
   })
+  const activeContextualTourId = useAppStore((state) => state.activeContextualTourId)
+  const paneHeaderButtonsOnHover = resolvePaneHeaderButtonsOnHover(
+    settings?.terminalPaneHeaderButtons,
+    activeContextualTourId
+  )
   const activePane = terminalManager?.getActivePane()
   const managedPanes = terminalManager?.getPanes() ?? []
   const activePaneRuntimeEnvironmentId = activePane
@@ -121,6 +128,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     terminalBackground,
     titleUsesLightSurface,
     paneTitleBackground,
+    paneHeaderButtonsOnHover,
     terminalContentVisible,
     hiddenStartupStyle,
     terminalContainerStyle,
