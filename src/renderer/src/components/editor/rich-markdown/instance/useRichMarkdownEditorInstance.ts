@@ -5,8 +5,10 @@ import {
   createRichMarkdownEditorConfig,
   type EditorConfigParams
 } from './rich-markdown-editor-config'
+import { useRichMarkdownAppMenuSelection } from './use-rich-markdown-app-menu-selection'
 
 export function useRichMarkdownEditorInstance(params: EditorConfigParams): Editor | null {
+  useRichMarkdownAppMenuSelection(params.rootRef, params.editorRef)
   const extensions = useMemo(
     () =>
       createRichMarkdownExtensions({
