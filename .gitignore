@@ -25,6 +25,7 @@ out/
 release/
 !config/scripts/release/
 !src/main/runtime/orchestration/terminal-authority/release/
+!src/main/runtime/rpc/methods/orchestration/worker/release/
 native/**/.build/
 native/windows-cli-launcher/target/
 native/windows-agent-hook/target/

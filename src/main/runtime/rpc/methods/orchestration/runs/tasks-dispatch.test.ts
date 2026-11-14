@@ -70,27 +70,51 @@ describe('orchestration RPC methods', () => {
 
     it('commits authenticated process authority on a manual dispatch', async () => {
       setup()
-      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
-        runtimeId: runtime.getRuntimeId(),
-        terminalHandle: 'term_a',
-        ptyId: 'pty_a',
-        worktreeId: 'repo::worktree',
-        paneKey: 'tab_w:leaf_w',
-        processIncarnation: 'runtime_test:term_a:1',
-        launchTokenHash: 'launch-token-hash',
-        hostScope: { kind: 'local', hostId: 'local' }
-      })
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
+        handle === 'term_a'
+          ? {
+              runtimeId: runtime.getRuntimeId(),
+              terminalHandle: 'term_a',
+              ptyId: 'pty_a',
+              worktreeId: 'repo::worktree',
+              paneKey: 'tab_w:leaf_w',
+              processIncarnation: 'runtime_test:term_a:1',
+              launchTokenHash: 'launch-token-hash',
+              hostScope: { kind: 'local', hostId: 'local' }
+            }
+          : null
+      )
       const task = db.createTask({ spec: 'work' })
 
-      const result = (await call('orchestration.dispatch', {
+      const result: unknown = await call('orchestration.dispatch', {
         task: task.id,
+        from: 'term_coord',
         to: 'term_a'
-      })) as { dispatch: { id: string } }
+      })
+      if (
+        !result ||
+        typeof result !== 'object' ||
+        !('dispatch' in result) ||
+        !result.dispatch ||
+        typeof result.dispatch !== 'object' ||
+        !('id' in result.dispatch) ||
+        typeof result.dispatch.id !== 'string'
+      ) {
+        throw new Error('Expected a dispatch result with an id')
+      }
 
       expect(db.getDispatchContextById(result.dispatch.id)).toMatchObject({
         assignee_pane_key: 'tab_w:leaf_w',
         process_incarnation: 'runtime_test:term_a:1',
+        creator_handle: 'term_coord',
+        creator_pane_key: coordinatorPaneKey,
+        creator_orca_session_id: null,
         launch_token_hash: 'launch-token-hash'
+      })
+      expect(
+        await call('orchestration.workerShow', { dispatch: result.dispatch.id })
+      ).toMatchObject({
+        dispatch: { creatorOrcaSessionId: null, assigneeOrcaSessionId: null }
       })
     })
 
