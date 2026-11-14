@@ -69,7 +69,14 @@ export function startPaneThroughMainThenAttach(
     return Promise.resolve(null)
   }
   return new Promise((resolve) => {
-    const settleNull = (): void => resolve(null)
+    // Why a session flag: from this dispatch until main publishes a start status (or today() spawns)
+    // no pending spawn or status exists yet, and ownership holds must not read that window as idle.
+    session.mainPaneStartRequestInFlight = true
+    const settle = (value: string | null | Promise<string | null>): void => {
+      session.mainPaneStartRequestInFlight = false
+      resolve(value)
+    }
+    const settleNull = (): void => settle(null)
     session.waitTeardowns.push(settleNull)
     const sent = startPaneThroughMain(session, {
       attach: () => {
@@ -79,16 +86,16 @@ export function startPaneThroughMainThenAttach(
           session.resetFreshSpawnFollowOutput()
           startDeferredSessionReattach(session, ptyId, { afterMainStart: true })
         }
-        resolve(ptyId)
+        settle(ptyId)
       },
       today: () => {
         session.mainPaneStartHandedBack = true
-        resolve(today())
+        settle(today())
       },
       refused: settleNull
     })
     if (!sent) {
-      resolve(today())
+      settle(today())
     }
   })
 }
