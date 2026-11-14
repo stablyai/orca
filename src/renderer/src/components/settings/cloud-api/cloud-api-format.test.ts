@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { CLOUD_API_SCOPES } from '../../../../../shared/cloud-api/cloud-api-types'
 import { creatorName } from './CloudRoutineRow'
+import { isRoutineRunAgentSignInFailure } from '../../../../../shared/cloud-api/routine-run-sign-in'
 import { translate } from '@/i18n/i18n'
 import {
   cloudApiErrorCopy,
   describeRoutineRunError,
-  isRoutineRunAgentSignInFailure,
   routineRunErrorCopy,
   routineRunTone
 } from './cloud-api-copy'

@@ -12,9 +12,9 @@ import type {
 import {
   cloudApiErrorCopy,
   describeRoutineRunError,
-  isRoutineRunAgentSignInFailure,
   routineRunTriggerLabel
 } from './cloud-api-copy'
+import { isRoutineRunAgentSignInFailure } from '../../../../../shared/cloud-api/routine-run-sign-in'
 import { formatAbsoluteTime, formatRelativeFromNow, formatRunDuration } from './cloud-api-format'
 import { CloudApiErrorNotice, RoutineRunStatusPill } from './cloud-api-parts'
 import { isActiveRunStatus } from './routine-run-status'

@@ -7,6 +7,7 @@ import type {
   RoutineRunStatus,
   RoutineRunTrigger
 } from '../../../../../shared/cloud-api/cloud-api-types'
+import { isRoutineRunAgentSignInFailure } from '../../../../../shared/cloud-api/routine-run-sign-in'
 
 export function cloudApiErrorCopy(
   error: CloudApiErrorCode,
@@ -182,19 +183,6 @@ export function routineRunTriggerLabel(
  */
 export function routineRunErrorCopy(error: string, t: Translate = translate): string {
   return describeRoutineRunError(error, t).text
-}
-
-/**
- * Claude Code's own sign-in refusal, as a headless run reports it ("Not logged in · Please run
- * /login"): the routine's runner had no Claude credential for Orca Cloud.
- */
-const CLAUDE_NOT_SIGNED_IN = /not logged in|please run \/login|\brun \/login\b/i
-
-/** The agent exited because Claude isn't set up for Orca Cloud: say how to fix it, not the CLI's text. */
-export function isRoutineRunAgentSignInFailure(error: string, summary?: string | null): boolean {
-  const code = error.split(':', 1)[0]?.trim() ?? ''
-  const agentFailed = code.startsWith('agent_exit') || code === 'agent_failed'
-  return agentFailed && CLAUDE_NOT_SIGNED_IN.test(`${summary ?? ''} ${error}`)
 }
 
 /**

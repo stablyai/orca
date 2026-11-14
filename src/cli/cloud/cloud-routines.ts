@@ -10,6 +10,10 @@ import type {
   RoutineRunStatus
 } from '../../shared/cloud-api/cloud-api-routine-types'
 import { formatAutomationSchedule } from '../../shared/automations/scheduling/automation-schedules'
+import {
+  ROUTINE_RUN_CLAUDE_NOT_SET_UP,
+  isRoutineRunAgentSignInFailure
+} from '../../shared/cloud-api/routine-run-sign-in'
 import type { CloudApiClient } from './cloud-api-client'
 import { ago, formatElapsed, printCloudResult, table } from './cloud-format'
 import { cloudClient, type CloudHandlerDeps } from './cloud-operations'
@@ -39,8 +43,11 @@ export function routineRunStateLabel(status: string): string {
 }
 
 /** A failed run's error code in words (codes stay in --json). */
-export function routineRunErrorCopy(error: string | null): string {
+export function routineRunErrorCopy(error: string | null, summary?: string | null): string {
   const code = error ?? ''
+  if (isRoutineRunAgentSignInFailure(error, summary)) {
+    return ROUTINE_RUN_CLAUDE_NOT_SET_UP
+  }
   if (code.startsWith('start_failed')) {
     return "The workspace couldn't start. Nothing was charged."
   }
@@ -96,13 +103,16 @@ export function formatRoutineRun(value: {
   const { run } = value
   const lines = [
     `${value.routine.name}: ${routineRunStateLabel(run.status)} (${run.id})`,
-    ...(run.status === 'failed' ? [routineRunErrorCopy(run.error)] : []),
+    ...(run.status === 'failed' ? [routineRunErrorCopy(run.error, run.result?.summary)] : []),
     ...(run.status === 'timed_out' ? ['The run hit its time limit.'] : []),
     ...(run.durationMs !== null ? [`Took ${formatElapsed(run.durationMs)}`] : []),
     ...(run.result?.prUrl ? [`Pull request: ${run.result.prUrl}`] : []),
     ...(run.result?.commentUrl ? [`Comment: ${run.result.commentUrl}`] : []),
     ...(run.workspaceId ? [`Workspace: ${run.workspaceId}`] : []),
-    ...(run.result?.summary ? ['', run.result.summary] : [])
+    // Claude's raw "Please run /login" is replaced by the line above, not repeated.
+    ...(run.result?.summary && !isRoutineRunAgentSignInFailure(run.error, run.result.summary)
+      ? ['', run.result.summary]
+      : [])
   ]
   if (!FINISHED.has(run.status)) {
     lines.push('Add --wait to follow a run until it finishes.')
@@ -135,9 +145,13 @@ async function resolveRoutine(api: CloudApiClient, selector: string): Promise<Ro
 
 function runFinishedError(routine: Routine, run: RoutineRun): RuntimeClientError | null {
   if (run.status === 'failed') {
-    return new RuntimeClientError('cloud_routine_run_failed', routineRunErrorCopy(run.error), {
-      run
-    })
+    return new RuntimeClientError(
+      'cloud_routine_run_failed',
+      routineRunErrorCopy(run.error, run.result?.summary),
+      {
+        run
+      }
+    )
   }
   if (run.status === 'timed_out') {
     return new RuntimeClientError(
