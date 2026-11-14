@@ -7,6 +7,12 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
   agent: TuiAgent
   processName: string
 }[] = [
+  // The unofficial ZCode terminal client keeps Node's process name on Windows.
+  {
+    pattern: /(?:^|\/)node_modules\/zcode-app-cli\/(?:bin\/zcode\.js|vendor\/zcode\.cjs)$/,
+    agent: 'zcode',
+    processName: 'zcode-cli'
+  },
   // Cursor's versioned index.js is generic; only its install path distinguishes ordinary Node apps.
   {
     pattern: /(?:^|\/)cursor-agent\/versions\/[^/]+\/index\.js$/,
