@@ -16,4 +16,6 @@ export type TerminalWaiter = {
   abortCleanup: (() => void) | null
   /** Main-only launch-readiness wait: name-only titles require quiet output (TuiIdleEvaluationInput.launchReadiness). */
   launchReadiness?: boolean
+  /** Main-only: a recognized agent mid-turn settles it, as mail delivery treats one (`settlesForMidTurnInput`). */
+  acceptsMidTurnInput?: boolean
 }

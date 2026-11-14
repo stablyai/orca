@@ -2,6 +2,7 @@ import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared
 import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
+import type { WorkspaceHookOwner } from '../../../shared/workspace-hook-owner'
 import type { Repo } from '../../../shared/repo-types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
@@ -19,13 +20,18 @@ import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-se
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { hashOrcaHookTrustContent } from '../../workspace-hooks/created-worktree-setup-trust'
+import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'
 
-type RuntimeRepositoryHooksCommandsDeps = {
-  resolveRepo: (selector: string) => Promise<Repo>
+type RuntimeRepositoryHooksCommandsDeps<TRepo extends WorkspaceHookOwner> = {
+  resolveRepo: (selector: string) => Promise<TRepo>
+  readCreateSourceHooks: (
+    repo: TRepo,
+    source: SetupHooksCreateSource
+  ) => Promise<{ hooks: OrcaHooks | null } | undefined>
 }
 
-export class RuntimeRepositoryHooksCommands {
-  constructor(private readonly deps: RuntimeRepositoryHooksCommandsDeps) {}
+export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = Repo> {
+  constructor(private readonly deps: RuntimeRepositoryHooksCommandsDeps<TRepo>) {}
 
   async getRepoHooks(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
@@ -60,7 +66,10 @@ export class RuntimeRepositoryHooksCommands {
     }
   }
 
-  async checkRepoHooks(repoSelector: string, options: { background?: boolean } = {}) {
+  async checkRepoHooks(
+    repoSelector: string,
+    options: { background?: boolean; createSource?: SetupHooksCreateSource } = {}
+  ) {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (isFolderRepo(repo) && !isRepoOnCatalogHost(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
@@ -81,6 +90,17 @@ export class RuntimeRepositoryHooksCommands {
           blocked.state === 'stopped'
             ? ('wsl-distro-stopped' as const)
             : ('wsl-distro-unverifiable' as const)
+      }
+    }
+    if (options.createSource && !options.background) {
+      const created = await this.deps.readCreateSourceHooks(repo, options.createSource)
+      if (created) {
+        return {
+          status: 'ok' as const,
+          hasHooks: created.hooks !== null,
+          hooks: created.hooks,
+          mayNeedUpdate: false
+        }
       }
     }
     const has = hasHooksFile(repo.path)
@@ -121,7 +141,7 @@ function hookTrust(scriptContent: string): { contentHash: string; scriptContent:
 }
 
 function archiveTrust(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   sharedHooks: OrcaHooks | null
 ): { contentHash: string; scriptContent: string } | null {
   const localArchive = repo.hookSettings?.scripts.archive?.trim()

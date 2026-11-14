@@ -59,7 +59,7 @@ test('main lists the window’s git and folder workspaces and follows its metada
     if (!folder || !worktree) {
       throw new Error('Expected a seeded worktree and a folder workspace')
     }
-    return { worktreeId: worktree.id, folderKey: `local|folder:${folder.id}` }
+    return { worktreeId: worktree.id, folderKey: `local|folder:${folder.folderWorkspace.id}` }
   }, folderPath)
   const rowKey = `local|${worktreeId}`
 

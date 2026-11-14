@@ -14,13 +14,14 @@ protected files keeps working after its old executable is deleted.
 
 So a packaged macOS GUI app starts its daemon from a private copy that the updater never touches:
 
-- Each packaged macOS app ships a signed helper, `Contents/Helpers/Orca Terminal Host.app` (about
+- Each packaged macOS app ships a signed helper, `Contents/Helpers/Orca Agents.app` (about
   124 MiB): the pinned Node from `src/shared/node-runtime-pin.ts` as its main executable, the
-  daemon's `out/main` JS and that slice's node-pty. `config/scripts/macos-terminal-host-bundle.cjs`
+  daemon's `out/main` JS and that slice's node-pty.
+  `config/scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.cjs`
   builds and signs it in `afterPack`, boots it through one PTY round trip, and fails the build on any
   layout, Info.plist, OS floor, architecture or signature drift.
 - `macos-daemon-bundle.ts` keeps one copy per helper build, named by the helper's CDHash, at
-  `userData/daemon-host/macos/terminal-host-<cdhash>/app.noindex/Orca Terminal Host.app`. The helper
+  `userData/daemon-host/macos/terminal-host-<cdhash>/app.noindex/Orca Agents.app`. The helper
   is read from the bundle the running main process executes from, never the whole app. A present
   copy is reused as is. Otherwise the helper is cloned (APFS clone, regular copy otherwise) into a
   `.staging-<pid>-*` sibling, verified once with
@@ -54,6 +55,12 @@ TCC records grants against the designated requirement, which for Orca is the ide
 Signing the helper with the app's own identifier lets it inherit every existing grant, including Full
 Disk Access, which a user can only add by hand. A distinct identifier would be a new client: new
 folder prompts naming it, and a new Full Disk Access row for every user.
+
+The helper's bundle, executable and display name are `Orca Agents`; its identifier, signing team
+and designated requirement still match Orca.app. This names the existing terminal-agent process
+without changing its privacy client. Native chat providers still run under the GUI process. An
+adopted older daemon keeps its original name until it exits; the fork fallback and Windows names
+are unchanged.
 
 ## macOS floor
 
@@ -108,11 +115,26 @@ The helper declares no links, documents or types, has a lower `CFBundleVersion` 
 `.noindex` folder, which Spotlight skips, and Orca never registers them. Starting the daemon through
 launchd leaves no record, but another process running the copy's executable directly can make
 macOS register it, so retirement runs `lsregister -u` on the bundle before deleting it.
+Retirement recognizes both `Orca Agents.app` and the legacy `Orca Terminal Host.app` inside unused
+copies, so changing the current bundle name does not leave old LaunchServices registrations behind.
 
-The helper's main-executable UUID is Node's, shared by every official Node 24.21.0 binary of that
-architecture, so it is not unique to Orca. Local Network access still passed in the signed spike:
-macOS matched the client by its code signature, and the job's `AssociatedBundleIdentifiers` ties it
-to Orca. Do not register copies explicitly (`lsregister -f` or `LSRegisterURL`).
+Do not register copies explicitly (`lsregister -f` or `LSRegisterURL`).
+
+## Executable UUID
+
+Terminal processes' responsible process is the helper, and macOS Local Network privacy maps a
+responsible process to an app by its main executable's `LC_UUID` (TN3179). Stock Node's UUID is
+shared by every install of that Node build, so with it Orca's terminals and any other program on
+that Node shared Local Network decisions in both directions, and LAN access was blocked while System
+Settings showed Orca allowed (#21988).
+
+Local Network also caches one UUID per bundle id, and the helper shares `com.stablyai.orca` with
+the app. A helper UUID of its own keeps replacing the app's cached UUID and back: in testing it
+flip-flopped, blocked some terminal and app connections, and prompted again after an update. So
+packaging gives the helper exactly the main executable's UUID per CPU type (#41676: derived from
+the app id, the app's executable name and the CPU type), stable across releases.
+`verifyMacTerminalHost` and the release check fail if it drifts. The designated requirement is
+unchanged, so file-access grants are unaffected.
 
 ## Rollback
 

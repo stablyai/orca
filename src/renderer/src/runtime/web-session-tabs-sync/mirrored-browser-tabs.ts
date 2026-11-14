@@ -128,7 +128,13 @@ export function resolveMirroredBrowserPageContent(
   previousPresentation?: BrowserInitializationPresentation,
   stale = false,
   reconcile = false
-): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'faviconUrl'> {
+): {
+  content: Pick<
+    BrowserPage,
+    'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'faviconUrl'
+  >
+  preservesLoading: boolean
+} {
   const localAction = existingPage && hasBrowserPageInitializationAction(existingPage.id)
   if (
     existingPage &&
@@ -137,27 +143,33 @@ export function resolveMirroredBrowserPageContent(
       (!reconcile && clientHostsMirroredBrowserPage(tab) && !presentation && !previousPresentation))
   ) {
     return {
-      url: existingPage.url,
-      title: existingPage.title,
-      loading:
-        presentation?.disposition === 'pending'
-          ? true
-          : presentation
-            ? false
-            : existingPage.loading,
-      canGoBack: existingPage.canGoBack,
-      canGoForward: existingPage.canGoForward,
-      faviconUrl: existingPage.faviconUrl
+      preservesLoading: !presentation,
+      content: {
+        url: existingPage.url,
+        title: existingPage.title,
+        loading:
+          presentation?.disposition === 'pending'
+            ? true
+            : presentation
+              ? false
+              : existingPage.loading,
+        canGoBack: existingPage.canGoBack,
+        canGoForward: existingPage.canGoForward,
+        faviconUrl: existingPage.faviconUrl
+      }
     }
   }
   return {
-    url: tab.url,
-    title: resolveMirroredBrowserTitle(tab, existingPage),
-    loading: tab.loading,
-    canGoBack: tab.canGoBack,
-    canGoForward: tab.canGoForward,
-    // Old hosts omit the field; keep what this client already has.
-    faviconUrl: tab.faviconUrl === undefined ? (existingPage?.faviconUrl ?? null) : tab.faviconUrl
+    preservesLoading: false,
+    content: {
+      url: tab.url,
+      title: resolveMirroredBrowserTitle(tab, existingPage),
+      loading: tab.loading,
+      canGoBack: tab.canGoBack,
+      canGoForward: tab.canGoForward,
+      // Old hosts omit the field; keep what this client already has.
+      faviconUrl: tab.faviconUrl === undefined ? (existingPage?.faviconUrl ?? null) : tab.faviconUrl
+    }
   }
 }
 
@@ -210,7 +222,7 @@ export function buildMirroredBrowserTabs(
     const groupId = clientGroupId ?? hostGroupId
     const previousHandle = existing ? state.remoteBrowserPageHandlesByPageId[pageId] : undefined
     const presentation = browserInitializationPresentation(snapshot, tab, previousHandle)
-    const content = resolveMirroredBrowserPageContent(
+    const { content, preservesLoading } = resolveMirroredBrowserPageContent(
       tab,
       existing?.page,
       presentation,
@@ -270,6 +282,8 @@ export function buildMirroredBrowserTabs(
     return {
       workspace,
       page,
+      previousPage: existing?.page,
+      preservesLoading,
       certificateFailure: tab.certificateFailure ?? null,
       remotePageId: tab.browserPageId,
       initializationPresentation: presentation,

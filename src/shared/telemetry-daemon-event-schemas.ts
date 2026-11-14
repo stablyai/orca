@@ -20,8 +20,28 @@ import {
   DAEMON_CODE_IDENTITY_VALUES,
   DAEMON_PTY_CWD_CLASSES,
   DAEMON_SPAWNER_PATH_CLASSES,
-  DAEMON_TCC_ATTRIBUTION_VALUES
+  DAEMON_TCC_ATTRIBUTION_VALUES,
+  MAC_TCC_FOLDER_CLASSES
 } from './daemon-adoption-telemetry'
+import {
+  ELAPSED_BUCKETS,
+  FOLDER_FLAG_VALUES,
+  FORK_FALLBACK_VALUES,
+  FULL_DISK_ACCESS_VALUES,
+  GOOD_READ_COUNT_BUCKETS,
+  HELPER_AGE_BUCKETS,
+  HELPER_ORIGIN_VALUES,
+  ICLOUD_MANAGED_VALUES,
+  REQUIREMENT_FAILURE_VALUES,
+  SIGNATURE_CHECK_VALUES,
+  TCC_ASKED_VALUES,
+  TCC_AUTH_REASONS,
+  TCC_AUTH_VALUES,
+  TCC_LOG_ACCESS_VALUES,
+  TCC_SERVICE_VALUES,
+  VOLUME_TYPE_VALUES,
+  YES_NO_VALUES
+} from './daemon-tcc-denial-capture'
 import { errorClassSchema, settingsChangedKeySchema } from './telemetry-property-schemas'
 
 // Enum-only start-failure signals diagnose fleet outages without sending raw stderr (v1.4.129-rc.1).
@@ -51,7 +71,14 @@ export const remoteOutboundBudgetCloseSchema = z
 export const mainThreadHangDetectedSchema = z
   .object({
     unresponsive_ms: z.number().int().nonnegative(),
-    self_recovered: z.boolean()
+    self_recovered: z.boolean(),
+    native_top_frames: z.array(z.string().max(180)).max(24).optional(),
+    macos_build: z
+      .string()
+      .max(64)
+      .regex(/^macOS \d+(?:\.\d+){0,3} \([A-Za-z0-9]+\)$/)
+      .optional(),
+    menu_bar_icon: z.boolean().nullable().optional()
   })
   .strict()
 
@@ -92,6 +119,34 @@ export const daemonAsyncIoHealthSchema = z.discriminatedUnion('transition', [
 // Denied means proven app/daemon cwd-access divergence; readable is the TCC-folder-only control (#17696).
 export const daemonPtyCwdVerdictSchema = z
   .object({ cwd_class: z.enum(DAEMON_PTY_CWD_CLASSES), ...daemonOriginProps })
+  .strict()
+
+// macOS's own verdict at a confirmed denial, once per helper and folder class; raw lines stay in a local file.
+export const daemonPtyCwdDenialCaptureSchema = z
+  .object({
+    cwd_class: z.enum(MAC_TCC_FOLDER_CLASSES),
+    log_access: z.enum(TCC_LOG_ACCESS_VALUES),
+    tccd_asked: z.enum(TCC_ASKED_VALUES),
+    auth_value: z.enum(TCC_AUTH_VALUES),
+    auth_reason: z.enum(TCC_AUTH_REASONS),
+    service: z.enum(TCC_SERVICE_VALUES),
+    requirement_failure: z.enum(REQUIREMENT_FAILURE_VALUES),
+    kernel_deny: z.enum(YES_NO_VALUES),
+    live_signature: z.enum(SIGNATURE_CHECK_VALUES),
+    disk_copy_signature: z.enum(SIGNATURE_CHECK_VALUES),
+    helper_age_bucket: z.enum(HELPER_AGE_BUCKETS),
+    helper_origin: z.enum(HELPER_ORIGIN_VALUES),
+    good_reads_bucket: z.enum(GOOD_READ_COUNT_BUCKETS),
+    since_good_read_bucket: z.enum(ELAPSED_BUCKETS),
+    since_resume_bucket: z.enum(ELAPSED_BUCKETS),
+    since_unlock_bucket: z.enum(ELAPSED_BUCKETS),
+    since_user_active_bucket: z.enum(ELAPSED_BUCKETS),
+    full_disk_access: z.enum(FULL_DISK_ACCESS_VALUES),
+    fork_fallback: z.enum(FORK_FALLBACK_VALUES),
+    folder_dataless: z.enum(FOLDER_FLAG_VALUES),
+    folder_icloud: z.enum(ICLOUD_MANAGED_VALUES),
+    volume_type: z.enum(VOLUME_TYPE_VALUES)
+  })
   .strict()
 
 // Count notice exposure/action/restart outcome against daemon_pty_cwd_denied incidence (STA-7948).

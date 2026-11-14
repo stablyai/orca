@@ -149,7 +149,7 @@ export function ensureHistoryCoverage(database: JournalHostDatabase, source: Sou
   if (database.db.isTransaction) {
     initialize(database.db)
   } else {
-    database.transaction(initialize, true)
+    database.transaction(initialize)
   }
   return historyCoverage(database.db, source)!
 }

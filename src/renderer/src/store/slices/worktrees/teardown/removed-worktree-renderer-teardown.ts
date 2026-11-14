@@ -1,4 +1,4 @@
-import { retireRemovedWorktreeTerminalNotices } from '../../../terminals/terminal-notice-removal'
+import { retireRemovedWorktreeTerminalNotices } from '../../../terminals/retirement/terminal-notice-removal'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog/catalog-version'

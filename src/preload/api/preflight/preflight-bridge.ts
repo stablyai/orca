@@ -29,7 +29,11 @@ export const preflightApi = {
     linear: { connected: boolean }
   }> => ipcRenderer.invoke('preflight:check', args),
   detectAgents: (
-    args?: PreflightRuntimeContext & { enabledOnly?: boolean; wakeWslDistro?: boolean }
+    args?: PreflightRuntimeContext & {
+      enabledOnly?: boolean
+      wakeWslDistro?: boolean
+      userInitiated?: boolean
+    }
   ): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents', args),
   onWslDistroRunning: (callback: (distro: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, distro: string): void => callback(distro)
@@ -39,7 +43,11 @@ export const preflightApi = {
   zcodeInteractiveCapability: (): Promise<ZCodeInteractiveCapability> =>
     ipcRenderer.invoke('preflight:zcodeInteractiveCapability'),
   refreshAgents: (
-    args?: PreflightRuntimeContext & { enabledOnly?: boolean; wakeWslDistro?: boolean }
+    args?: PreflightRuntimeContext & {
+      enabledOnly?: boolean
+      wakeWslDistro?: boolean
+      userInitiated?: boolean
+    }
   ): Promise<RefreshAgentsResult> => ipcRenderer.invoke('preflight:refreshAgents', args),
   detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
     ipcRenderer.invoke('preflight:detectRemoteAgents', args),

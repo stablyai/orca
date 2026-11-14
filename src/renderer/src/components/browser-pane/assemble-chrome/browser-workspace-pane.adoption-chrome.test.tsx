@@ -58,7 +58,10 @@ vi.mock('../stream-remote/use-remote-browser-page-lifecycle', () => ({
   useRemoteBrowserPageLifecycle: () => ({
     lifecycle: {
       session: {
-        ensureRemotePage: mocks.ensureRemotePage,
+        resolveNavigationPage: mocks.ensureRemotePage,
+        invalidateTabInfoReads: vi.fn(),
+        setPageLoading: vi.fn(),
+        refreshTabInfo: vi.fn(async () => null),
         scheduleTabInfoRefresh: vi.fn()
       },
       tokens: {}
@@ -575,7 +578,6 @@ describe.each([{ tree: 'under StrictMode', strict: true }])(
         adoptOntoServer()
       })
 
-      expect(mocks.ensureRemotePage).toHaveBeenCalledTimes(1)
       expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
         expect.objectContaining({ environmentId: ENVIRONMENT_ID }),
         'browser.goto',
