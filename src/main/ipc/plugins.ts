@@ -14,6 +14,7 @@ import { handlePluginPanelStateRequest } from '../plugins/panels/panel-lifetime/
 import type { PluginService } from '../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
+import { registerPluginRemotePanelHandlers } from './plugin-remote-panel-ipc'
 import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
 import { registerPluginStatusBarHandlers } from './plugin-status-bar-ipc'
 import { registerPluginEditorSaveHookHandler } from './plugin-editor-save-hook-ipc'
@@ -144,7 +145,8 @@ export function registerPluginHandlers(
 
   bindPluginFrameGuests(pluginService)
   registerPluginFrameEntryHandlers(store, pluginService)
-  registerPluginPanelPushHandlers(pluginService)
+  const remotePanels = registerPluginRemotePanelHandlers(pluginService)
+  registerPluginPanelPushHandlers(pluginService, remotePanels)
   registerPluginStatusBarHandlers(pluginService)
   registerPluginEditorSaveHookHandler()
   registerPluginSettingsHandlers(pluginService)
@@ -159,6 +161,12 @@ export function registerPluginHandlers(
   ipcMain.handle(
     'plugins:panelAction',
     async (event, args: unknown): Promise<PluginHostCallOutcome> => {
+      // Why first: a call made while the panel runs on a paired host goes to that host. Routing
+      // after the refresh wait would run it here if the panel left the host meanwhile.
+      const forwarded = remotePanels.forward(event.sender.id, args)
+      if (forwarded) {
+        return forwarded
+      }
       await pluginService.whenReady()
       return pluginService.panels.execute(rendererPanelOwner(event.sender.id), args, {
         desktop: true,
