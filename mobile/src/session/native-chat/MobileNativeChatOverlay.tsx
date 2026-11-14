@@ -26,6 +26,7 @@ import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markd
 import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileNativeChatDisplayMessages } from './transcript/mobile-native-chat-display-clear'
 
 type Props = {
   controller: MobileNativeChatController
@@ -113,9 +114,18 @@ function MobileNativeChatOverlayContent({
   onOpenAccounts
 }: Props): React.JSX.Element {
   const session = controller.nativeChatSession
+  const display = useMobileNativeChatDisplayMessages(
+    session.displayIdentity ?? null,
+    session.messages,
+    {
+      text: controller.nativeChatStreamingText ?? null,
+      turnStartedAt: controller.nativeChatWorkingStartedAt
+    }
+  )
+  const displayMessages = display.messages
   const agent = controller.nativeChatAgent ?? ''
   const fullContent = useMobileNativeChatMessageDetail(
-    session.messages,
+    displayMessages,
     controller.nativeChatItemSource
   )
   const folded = useMobileNativeChatProjection(
@@ -130,7 +140,7 @@ function MobileNativeChatOverlayContent({
     controller.nativeChatShowsCiResultLines
   )
   const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
-  const streaming = controller.nativeChatStreamingText ?? null
+  const streaming = display.streaming
   const queued = controller.nativeChatQueued
   const composerTray = useMobileNativeChatComposerTray({
     queued: {
@@ -280,7 +290,7 @@ function MobileNativeChatOverlayContent({
                 <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
                   <MobileNativeChatNoticeContext.Provider value={noticeView}>
                     <MobileNativeChatView
-                      messages={session.messages}
+                      messages={displayMessages}
                       folded={folded}
                       status={session.status}
                       error={session.error}
@@ -327,7 +337,7 @@ function MobileNativeChatOverlayContent({
                       onRespondPermission={controller.handleNativeChatRespondPermission}
                       composerTray={composerTray}
                       onOpenFile={onOpenFile}
-                      hasMore={session.hasMore}
+                      hasMore={session.hasMore && display.canLoadEarlier}
                       olderPages={session.olderPages}
                       onLoadEarlier={session.loadEarlier}
                       onSend={images.sendNativeChat}

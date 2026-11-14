@@ -47,6 +47,7 @@ export function sessionTerminalGestureMountAdapters(
         input = useTerminalInput(
           mountFixture<Parameters<typeof useTerminalInput>[0]>({
             client,
+            sessionTabsRef: { current: [] },
             sendTerminalOrderedInput: terminalInputSend.request,
             connState: 'connected',
             activeHandle: HANDLE,

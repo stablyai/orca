@@ -18,6 +18,7 @@ import type { TerminalGestureInputQueue } from '../mobile-terminal-model'
 import type { TerminalRecord as Terminal } from '../inventory/mobile-terminal-records'
 import type { TerminalPointerInput } from '../../webview/terminal-webview-contract'
 import type { MobileSessionFileActionsModel } from '../../../files/session-documents/use-mobile-session-file-actions'
+import { prepareMobileTerminalChatDisplayClear } from '../tab-actions/mobile-terminal-chat-display-clear'
 
 export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {
   const {
@@ -242,6 +243,22 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     // Why: only a different client is stale; the WebView handle is rebuilt on re-render and a path cutover keeps the same host.
     const isCurrent = () => clientRef.current === client
     try {
+      const tab = scope.sessionTabsRef.current.find(
+        (entry) => entry.type === 'terminal' && entry.terminal === target.handle
+      )
+      const clearChatDisplay =
+        tab && scope.nativeChatController.isTabChatView(tab.id)
+          ? await prepareMobileTerminalChatDisplayClear({
+              client,
+              hostId: scope.hostId,
+              worktreeId: scope.worktreeId,
+              tab,
+              transcriptReadable: scope.nativeChatTranscriptIsLocalReadable
+            })
+          : null
+      if (!isCurrent()) {
+        return
+      }
       const response = await terminalBufferClear.request(
         client,
         { terminal: target.handle },
@@ -255,6 +272,10 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
           translate('session.useTerminalInput.clearFailed', "Couldn't clear terminal"),
           1500
         )
+        return
+      }
+      await clearChatDisplay?.()
+      if (!isCurrent()) {
         return
       }
       // Why: an unsubscribed tab draws a fresh snapshot when it next subscribes; subscribing it here would leak a background stream.

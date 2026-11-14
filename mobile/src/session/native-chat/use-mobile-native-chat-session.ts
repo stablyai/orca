@@ -35,6 +35,7 @@ import type { MobileNativeChatStatus } from './mobile-native-chat-session-status
 
 export type MobileNativeChatSession = {
   messages: NativeChatMessage[]
+  displayIdentity?: string
   status: MobileNativeChatStatus
   // Unsettled reads or passive resets may still hold another tab’s history; wait before interpreting empty messages as a seed/retirement boundary.
   transcriptLoading: boolean
@@ -162,10 +163,7 @@ export function useMobileNativeChatSession(args: {
     setError(undefined)
     setHasMore(cached?.hasMore ?? false)
     beforeOffsetRef.current = cached?.beforeOffset ?? null
-    if (!client || !agent || readingStore) {
-      return
-    }
-    if (!sessionId) {
+    if (!client || !agent || readingStore || !sessionId) {
       return
     }
 
@@ -328,6 +326,7 @@ export function useMobileNativeChatSession(args: {
   return {
     // Withhold rows until they belong to this identity; passive reset otherwise exposes previous-tab history for one commit.
     messages: visibleMessages,
+    displayIdentity: identity,
     status,
     // Rows left from an earlier visit or launch can't answer "is this ask still open?" until a read confirms them.
     transcriptLoading:
