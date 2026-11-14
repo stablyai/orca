@@ -42,7 +42,7 @@ it('shows the selected model when legacy answering-model metadata names another 
   expect(screen.getByRole('button', { name: 'Model Opus 5.5' }).textContent).toBe('Opus 5.5')
 })
 
-it('lets a queued switch be turned back before the reply finishes, leaving nothing to apply', () => {
+function queuedPickFixture() {
   const model: SessionOptionDescriptor = {
     id: 'model',
     label: 'Model',
@@ -62,7 +62,8 @@ it('lets a queued switch be turned back before the reply finishes, leaving nothi
     kind: { type: 'boolean', currentValue: false }
   }
   const writes: unknown[] = []
-  const surface = {
+  const surfaceFor = (sessionKey: string) => ({
+    sessionKey,
     getSnapshot: () => [model, fast],
     subscribe: () => () => {},
     setOption: async (id: string, value: unknown) => {
@@ -70,16 +71,22 @@ it('lets a queued switch be turned back before the reply finishes, leaving nothi
       return { snapshot: [model, fast] }
     },
     invokeAction: async () => ({ snapshot: [model, fast] })
-  }
-  const view = (isWorking: boolean) => (
+  })
+  const surfaces = { a: surfaceFor('a'), b: surfaceFor('b') }
+  const view = (isWorking: boolean, session: 'a' | 'b' = 'a') => (
     <TooltipProvider>
       <NativeChatSessionOptionPickers
         snapshot={[model, fast]}
         isWorking={isWorking}
-        surface={surface}
+        surface={surfaces[session]}
       />
     </TooltipProvider>
   )
+  return { writes, view }
+}
+
+it('lets a queued switch be turned back before the reply finishes, leaving nothing to apply', () => {
+  const { writes, view } = queuedPickFixture()
   const { rerender } = render(view(true))
   fireEvent.click(screen.getByRole('button', { name: /Model/ }))
   fireEvent.click(screen.getByRole('switch'))
@@ -87,5 +94,15 @@ it('lets a queued switch be turned back before the reply finishes, leaving nothi
   fireEvent.click(screen.getByRole('switch'))
   expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false')
   rerender(view(false))
+  expect(writes).toEqual([])
+})
+
+it('drops a pick queued for one session when the pane moves to another', () => {
+  const { writes, view } = queuedPickFixture()
+  const { rerender } = render(view(true))
+  fireEvent.click(screen.getByRole('button', { name: /Model/ }))
+  fireEvent.click(screen.getByRole('switch'))
+  rerender(view(true, 'b'))
+  rerender(view(false, 'b'))
   expect(writes).toEqual([])
 })

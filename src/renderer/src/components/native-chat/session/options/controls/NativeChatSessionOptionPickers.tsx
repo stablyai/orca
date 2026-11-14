@@ -368,6 +368,8 @@ function NativeChatSessionOptionPickersInner({
   return (
     <div className="flex min-w-0 items-center text-chat-foreground-faint">
       <SessionOptionPopover
+        // A terminal pane keeps its composer across sessions; picks queued for one never reach the next.
+        key={surface.sessionKey}
         demandModelCatalog={surface.demandModelCatalog}
         model={model}
         options={options}
