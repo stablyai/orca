@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import type { NativeChatReviewMenu } from '../../../../../../../shared/native-chat/input/native-chat-review-menu'
@@ -9,6 +10,7 @@ export function ReviewPicker({
   menu: NativeChatReviewMenu
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const state = useSyncExternalStore(menu.subscribe, menu.getSnapshot)
   const submit = (run: Promise<boolean>) => {
     void run.then((accepted) => {
@@ -21,7 +23,7 @@ export function ReviewPicker({
     <>
       {state.page !== 'review' && (
         <Button variant="ghost" size="xs" onClick={menu.back}>
-          Back
+          {t('common.back', 'Back')}
         </Button>
       )}
       <NativeChatModelCombobox
@@ -35,12 +37,12 @@ export function ReviewPicker({
         review={{
           label:
             state.page === 'custom'
-              ? 'Enter review instructions'
+              ? t('nativeChat.review.instructions', 'Enter review instructions')
               : state.page === 'baseBranch'
-                ? 'Search branches…'
+                ? t('nativeChat.review.searchBranches', 'Search branches…')
                 : state.page === 'commit'
-                  ? 'Search commits…'
-                  : 'Review changes',
+                  ? t('nativeChat.review.searchCommits', 'Search commits…')
+                  : t('nativeChat.review.title', 'Review changes'),
           ...(state.page === 'custom'
             ? { onSubmit: (text: string) => submit(menu.submit(text)) }
             : {})

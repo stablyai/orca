@@ -18651,7 +18651,9 @@
         "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요.",
         "modelUnavailableUpdate": "{{agent}}에서 {{detail}}을(를) 사용할 수 없습니다. 다시 시작한 후에도 사용하려면 {{agent}}을(를) {{minimumVersion}} 이상으로 업데이트하거나 다른 모델을 선택하고 다시 보내세요.",
         "modelNotSelected": "{{agent}}에 선택된 모델이 없습니다. 모델 선택과 {{agent}} 로그인을 확인한 후 다시 보내세요.",
-        "pluginInputRequired": "\"{{plugin}}\" 플러그인이 터미널 창에서 입력을 기다리고 있어 {{agent}}이(가) 중지되었습니다. 채팅 세션에서 플러그인을 비활성화하거나 {{agent}} 터미널에서 작업을 실행하세요."
+        "pluginInputRequired": "\"{{plugin}}\" 플러그인이 터미널 창에서 입력을 기다리고 있어 {{agent}}이(가) 중지되었습니다. 채팅 세션에서 플러그인을 비활성화하거나 {{agent}} 터미널에서 작업을 실행하세요.",
+        "reviewFailed": "Codex가 검토를 실행하지 못했습니다. /review를 다시 시도하세요.",
+        "reviewSettingsUnsupported": "다른 모델로 검토하려면 Codex를 업데이트하거나 {{detail}}로 다시 전환하세요."
       },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
@@ -21358,7 +21360,8 @@
   "common": {
     "retry": "다시 시도",
     "cancel": "취소",
-    "delete": "삭제"
+    "delete": "삭제",
+    "back": "뒤로"
   },
   "fileExplorer": {
     "root": {
@@ -22585,6 +22588,20 @@
   "nativeChat": {
     "math": {
       "scrollDisplayEquation": "수식 블록 스크롤"
+    },
+    "review": {
+      "baseBranch": "기준 브랜치와 비교",
+      "uncommittedChanges": "커밋하지 않은 변경 사항 검토",
+      "commit": "커밋 검토",
+      "custom": "사용자 지정 검토 지침",
+      "loadFailed": "Codex가 검토 대상을 불러오지 못했습니다. /review를 다시 시도하세요.",
+      "instructions": "검토 지침 입력",
+      "searchBranches": "브랜치 검색…",
+      "searchCommits": "커밋 검색…",
+      "title": "변경 사항 검토",
+      "back": "검토 대상으로 돌아가기",
+      "run": "실행",
+      "done": "완료"
     }
   },
   "runtime": {

@@ -2200,7 +2200,9 @@
       "waitForBackgroundTasks": "백그라운드 작업이 끝날 때까지 기다리세요.",
       "waitForStart": "에이전트가 시작을 마칠 때까지 기다리세요.",
       "writeFailed": "Orca가 이 메시지를 에이전트에 전달하지 못해 전송되지 않았습니다.",
-      "pluginInputRequired": "\"{{plugin}}\" 플러그인이 터미널 창에서 입력을 기다리고 있어 {{agent}}이(가) 중지되었습니다. 채팅 세션에서 플러그인을 비활성화하거나 {{agent}} 터미널에서 작업을 실행하세요."
+      "pluginInputRequired": "\"{{plugin}}\" 플러그인이 터미널 창에서 입력을 기다리고 있어 {{agent}}이(가) 중지되었습니다. 채팅 세션에서 플러그인을 비활성화하거나 {{agent}} 터미널에서 작업을 실행하세요.",
+      "reviewFailed": "Codex가 검토를 실행하지 못했습니다. /review를 다시 시도하세요.",
+      "reviewSettingsUnsupported": "다른 모델로 검토하려면 Codex를 업데이트하거나 {{detail}}로 다시 전환하세요."
     },
     "fileReader": {
       "copyReviewNotes": "리뷰 메모 복사",
@@ -4225,6 +4227,22 @@
           }
         }
       }
+    }
+  },
+  "nativeChat": {
+    "review": {
+      "baseBranch": "기준 브랜치와 비교",
+      "uncommittedChanges": "커밋하지 않은 변경 사항 검토",
+      "commit": "커밋 검토",
+      "custom": "사용자 지정 검토 지침",
+      "loadFailed": "Codex가 검토 대상을 불러오지 못했습니다. /review를 다시 시도하세요.",
+      "instructions": "검토 지침 입력",
+      "searchBranches": "브랜치 검색…",
+      "searchCommits": "커밋 검색…",
+      "title": "변경 사항 검토",
+      "back": "검토 대상으로 돌아가기",
+      "run": "실행",
+      "done": "완료"
     }
   }
 }

@@ -18654,7 +18654,9 @@
         "commandAfterAnswer": "Agent の質問または承認に回答してから、/{{command}} を実行してください。",
         "modelUnavailableUpdate": "{{agent}} は {{detail}} を使用できませんでした。再起動後も使い続けるには {{agent}} を {{minimumVersion}} 以降に更新するか、別のモデルを選んで再送信してください。",
         "modelNotSelected": "{{agent}} のモデルが選択されていません。モデルの選択と {{agent}} へのサインインを確認してから再送信してください。",
-        "pluginInputRequired": "{{agent}} は「{{plugin}}」プラグインがターミナルペインで入力を待っているため停止しました。チャットセッションでプラグインを無効にするか、{{agent}} のターミナルでタスクを実行してください。"
+        "pluginInputRequired": "{{agent}} は「{{plugin}}」プラグインがターミナルペインで入力を待っているため停止しました。チャットセッションでプラグインを無効にするか、{{agent}} のターミナルでタスクを実行してください。",
+        "reviewFailed": "Codexはレビューを実行できませんでした。/reviewをもう一度試してください。",
+        "reviewSettingsUnsupported": "別のモデルでレビューするにはCodexを更新するか、{{detail}}に戻してください。"
       },
       "writeNotice": {
         "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",
@@ -21366,7 +21368,8 @@
   "common": {
     "retry": "再試行",
     "cancel": "キャンセル",
-    "delete": "削除"
+    "delete": "削除",
+    "back": "戻る"
   },
   "fileExplorer": {
     "root": {
@@ -22593,6 +22596,20 @@
   "nativeChat": {
     "math": {
       "scrollDisplayEquation": "数式ブロックをスクロール"
+    },
+    "review": {
+      "baseBranch": "ベースブランチと比較する",
+      "uncommittedChanges": "未コミットの変更をレビューする",
+      "commit": "コミットをレビューする",
+      "custom": "カスタムレビュー指示",
+      "loadFailed": "Codexはレビュー対象を読み込めませんでした。/reviewをもう一度試してください。",
+      "instructions": "レビューの指示を入力",
+      "searchBranches": "ブランチを検索…",
+      "searchCommits": "コミットを検索…",
+      "title": "変更をレビュー",
+      "back": "レビュー対象に戻る",
+      "run": "実行",
+      "done": "完了"
     }
   },
   "runtime": {

@@ -19340,7 +19340,9 @@
         "commandAfterAnswer": "Die Frage oder Genehmigungsanfrage des Agenten beantworten und anschließend /{{command}} ausführen.",
         "pluginInputRequired": "{{agent}} wurde angehalten, weil das Plugin „{{plugin}}“ in einem Terminalbereich auf eine Eingabe wartet. Deaktiviere das Plugin für Chatsitzungen oder führe die Aufgabe in einem {{agent}}-Terminal aus.",
         "modelUnavailableUpdate": "{{agent}} konnte {{detail}} nicht verwenden. Aktualisiere {{agent}} auf {{minimumVersion}} oder neuer, um es nach einem Neustart beizubehalten, oder wähle ein anderes Modell und sende erneut.",
-        "modelNotSelected": "Für {{agent}} ist kein Modell ausgewählt. Prüfe die Modellauswahl und die Anmeldung bei {{agent}} und sende erneut."
+        "modelNotSelected": "Für {{agent}} ist kein Modell ausgewählt. Prüfe die Modellauswahl und die Anmeldung bei {{agent}} und sende erneut.",
+        "reviewFailed": "Codex konnte die Prüfung nicht ausführen. Versuche /review erneut.",
+        "reviewSettingsUnsupported": "Aktualisiere Codex, um mit einem anderen Modell zu prüfen, oder wechsle zurück zu {{detail}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "Der Verlauf dieses Chats konnte nicht geladen werden.",
@@ -21669,7 +21671,8 @@
   "common": {
     "retry": "Erneut versuchen",
     "cancel": "Abbrechen",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "back": "Zurück"
   },
   "terminal": {
     "sessionSaveFailure": {
@@ -22752,6 +22755,20 @@
   "nativeChat": {
     "math": {
       "scrollDisplayEquation": "Abgesetzte Gleichung scrollen"
+    },
+    "review": {
+      "baseBranch": "Mit einem Basisbranch vergleichen",
+      "uncommittedChanges": "Nicht committete Änderungen prüfen",
+      "commit": "Einen Commit prüfen",
+      "custom": "Eigene Prüfanweisungen",
+      "loadFailed": "Codex konnte die Prüfziele nicht laden. Versuche /review erneut.",
+      "instructions": "Prüfanweisungen eingeben",
+      "searchBranches": "Branches suchen…",
+      "searchCommits": "Commits suchen…",
+      "title": "Änderungen prüfen",
+      "back": "Zurück zu den Prüfzielen",
+      "run": "Ausführen",
+      "done": "Fertig"
     }
   },
   "quitAndStopAllSessions": {

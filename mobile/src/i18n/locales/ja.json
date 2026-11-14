@@ -2200,7 +2200,9 @@
       "waitForBackgroundTasks": "バックグラウンドタスクが終わるまでお待ちください。",
       "waitForStart": "Agent の起動が終わるまでお待ちください。",
       "writeFailed": "Orca はこのメッセージを Agent に渡せなかったため、送信されませんでした。",
-      "pluginInputRequired": "{{agent}} は「{{plugin}}」プラグインがターミナルペインで入力を待っているため停止しました。チャットセッションでプラグインを無効にするか、{{agent}} のターミナルでタスクを実行してください。"
+      "pluginInputRequired": "{{agent}} は「{{plugin}}」プラグインがターミナルペインで入力を待っているため停止しました。チャットセッションでプラグインを無効にするか、{{agent}} のターミナルでタスクを実行してください。",
+      "reviewFailed": "Codexはレビューを実行できませんでした。/reviewをもう一度試してください。",
+      "reviewSettingsUnsupported": "別のモデルでレビューするにはCodexを更新するか、{{detail}}に戻してください。"
     },
     "fileReader": {
       "copyReviewNotes": "レビューメモをコピー",
@@ -4225,6 +4227,22 @@
           }
         }
       }
+    }
+  },
+  "nativeChat": {
+    "review": {
+      "baseBranch": "ベースブランチと比較する",
+      "uncommittedChanges": "未コミットの変更をレビューする",
+      "commit": "コミットをレビューする",
+      "custom": "カスタムレビュー指示",
+      "loadFailed": "Codexはレビュー対象を読み込めませんでした。/reviewをもう一度試してください。",
+      "instructions": "レビューの指示を入力",
+      "searchBranches": "ブランチを検索…",
+      "searchCommits": "コミットを検索…",
+      "title": "変更をレビュー",
+      "back": "レビュー対象に戻る",
+      "run": "実行",
+      "done": "完了"
     }
   }
 }

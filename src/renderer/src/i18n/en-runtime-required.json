@@ -1815,6 +1815,8 @@
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
         "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
         "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
+        "reviewFailed": "Codex couldn't run the review. Try /review again.",
+        "reviewSettingsUnsupported": "Update Codex to review with a different model, or switch back to {{detail}}.",
         "runCommandAgain": "Run /{{command}} again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
@@ -2304,6 +2306,13 @@
     "toggleFullScreen": "Toggle Full Screen",
     "unhide": "Show All",
     "zoom": "Zoom"
+  },
+  "nativeChat": {
+    "review": {
+      "back": "Back to review targets",
+      "done": "Done",
+      "run": "Run"
+    }
   },
   "pet": {
     "defaultLabels": {

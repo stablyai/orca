@@ -20530,7 +20530,9 @@
         "agentNotSignedIn": "Sign in to {{agent}}.",
         "thenSendAgain": "Then send your message again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
-        "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}."
+        "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}.",
+        "reviewFailed": "Codex couldn't run the review. Try /review again.",
+        "reviewSettingsUnsupported": "Update Codex to review with a different model, or switch back to {{detail}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -23416,7 +23418,8 @@
     "cancel": "Cancel",
     "unassigned": "Unassigned",
     "copy": "Copy",
-    "delete": "Delete"
+    "delete": "Delete",
+    "back": "Back"
   },
   "terminal": {
     "sessionSaveFailure": {
@@ -24600,6 +24603,20 @@
   "nativeChat": {
     "math": {
       "scrollDisplayEquation": "Scroll display equation"
+    },
+    "review": {
+      "baseBranch": "Review against a base branch",
+      "uncommittedChanges": "Review uncommitted changes",
+      "commit": "Review a commit",
+      "custom": "Custom review instructions",
+      "loadFailed": "Codex could not load review targets. Try /review again.",
+      "instructions": "Enter review instructions",
+      "searchBranches": "Search branches…",
+      "searchCommits": "Search commits…",
+      "title": "Review changes",
+      "back": "Back to review targets",
+      "run": "Run",
+      "done": "Done"
     }
   },
   "quitAndStopAllSessions": {

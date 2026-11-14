@@ -2204,7 +2204,9 @@
       "waitForBackgroundTasks": "Arka plan görevlerinin tamamlanmasını bekleyin.",
       "waitForStart": "Ajanın başlatılmasının tamamlanmasını bekleyin.",
       "writeFailed": "Orca bu mesajı ajana iletemediği için mesaj gönderilmedi.",
-      "pluginInputRequired": "{{agent}} durdu çünkü \"{{plugin}}\" eklentisi bir terminal bölmesinde girdi bekliyor. Sohbet oturumları için eklentiyi devre dışı bırakın veya görevi bir {{agent}} terminalinde çalıştırın."
+      "pluginInputRequired": "{{agent}} durdu çünkü \"{{plugin}}\" eklentisi bir terminal bölmesinde girdi bekliyor. Sohbet oturumları için eklentiyi devre dışı bırakın veya görevi bir {{agent}} terminalinde çalıştırın.",
+      "reviewFailed": "Codex incelemeyi çalıştıramadı. /review komutunu yeniden deneyin.",
+      "reviewSettingsUnsupported": "Farklı bir modelle incelemek için Codex’i güncelleyin veya {{detail}} modeline geri dönün."
     },
     "fileReader": {
       "copyReviewNotes": "İnceleme notlarını kopyala",
@@ -4229,6 +4231,22 @@
           }
         }
       }
+    }
+  },
+  "nativeChat": {
+    "review": {
+      "baseBranch": "Temel dalla karşılaştır",
+      "uncommittedChanges": "Commit edilmemiş değişiklikleri incele",
+      "commit": "Bir commit incele",
+      "custom": "Özel inceleme talimatları",
+      "loadFailed": "Codex inceleme hedeflerini yükleyemedi. /review komutunu yeniden deneyin.",
+      "instructions": "İnceleme talimatlarını girin",
+      "searchBranches": "Dallarda ara…",
+      "searchCommits": "Commit ara…",
+      "title": "Değişiklikleri incele",
+      "back": "İnceleme hedeflerine dön",
+      "run": "Çalıştır",
+      "done": "Bitti"
     }
   }
 }

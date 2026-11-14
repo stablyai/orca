@@ -22,13 +22,13 @@ export function useNativeChatSendClassification(
   )
 }
 
-export function useNativeChatPickedSkillOrigin(origin: { current: string | null }) {
+export function useNativeChatPickedSkillOrigin(originRef: RefObject<string | null>) {
   const clearSkillOrigin = useCallback(() => {
-    origin.current = null
-  }, [origin])
+    originRef.current = null
+  }, [originRef])
   const isPickedSkill = useCallback(
-    (value: string) => origin.current === (value.split(/\s/, 1)[0] ?? ''),
-    [origin]
+    (value: string) => originRef.current === (value.split(/\s/, 1)[0] ?? ''),
+    [originRef]
   )
   return { clearSkillOrigin, isPickedSkill }
 }

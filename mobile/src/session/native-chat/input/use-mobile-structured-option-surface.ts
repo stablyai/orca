@@ -1,3 +1,4 @@
+import { translate } from '../../../i18n/mobile-i18n'
 import * as z from 'zod'
 import {
   createNativeChatReviewMenu,
@@ -66,6 +67,19 @@ export function useMobileStructuredOptionSurface(args: {
           }
         }
         const menu = createNativeChatReviewMenu({
+          copy: {
+            baseBranch: translate('nativeChat.review.baseBranch', 'Review against a base branch'),
+            uncommittedChanges: translate(
+              'nativeChat.review.uncommittedChanges',
+              'Review uncommitted changes'
+            ),
+            commit: translate('nativeChat.review.commit', 'Review a commit'),
+            custom: translate('nativeChat.review.custom', 'Custom review instructions'),
+            loadFailed: translate(
+              'nativeChat.review.loadFailed',
+              'Codex could not load review targets. Try /review again.'
+            )
+          },
           hasGit,
           branches: () => (folderBranches ? Promise.resolve(folderBranches) : branches()),
           commits: async () =>

@@ -16,6 +16,13 @@ type ReviewMenuSnapshot = {
 /** Menu data is local to one opening; every git query runs on the chat's host. */
 export function createNativeChatReviewMenu(input: {
   hasGit: boolean
+  copy?: {
+    baseBranch: string
+    uncommittedChanges: string
+    commit: string
+    custom: string
+    loadFailed: string
+  }
   branches: () => Promise<string[]>
   commits: () => Promise<{ id: string; subject: string }[]>
   run: NativeChatReviewRun
@@ -24,12 +31,15 @@ export function createNativeChatReviewMenu(input: {
   const root: SessionOptionSelectChoice[] = [
     ...(input.hasGit
       ? [
-          { value: 'baseBranch', label: 'Review against a base branch' },
-          { value: 'uncommittedChanges', label: 'Review uncommitted changes' },
-          { value: 'commit', label: 'Review a commit' }
+          { value: 'baseBranch', label: input.copy?.baseBranch ?? 'Review against a base branch' },
+          {
+            value: 'uncommittedChanges',
+            label: input.copy?.uncommittedChanges ?? 'Review uncommitted changes'
+          },
+          { value: 'commit', label: input.copy?.commit ?? 'Review a commit' }
         ]
       : []),
-    { value: 'custom', label: 'Custom review instructions' }
+    { value: 'custom', label: input.copy?.custom ?? 'Custom review instructions' }
   ]
   let snapshot: ReviewMenuSnapshot = { page: 'review', choices: root, busy: false }
   const listeners = new Set<() => void>()
@@ -104,7 +114,9 @@ export function createNativeChatReviewMenu(input: {
         }
       } catch {
         if (snapshot === loading) {
-          input.onError('Codex could not load review targets. Try /review again.')
+          input.onError(
+            input.copy?.loadFailed ?? 'Codex could not load review targets. Try /review again.'
+          )
           publish({ page: 'review', choices: root, busy: false })
         }
       }

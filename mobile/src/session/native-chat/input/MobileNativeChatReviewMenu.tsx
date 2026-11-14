@@ -1,3 +1,4 @@
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { FlatList, View } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
@@ -27,6 +28,7 @@ function ReviewPage({
   onClose: () => void
 }): React.JSX.Element {
   const state = useSyncExternalStore(menu.subscribe, menu.getSnapshot)
+  const t = useMobileTranslation()
   const [query, setQuery] = useState('')
   const choices = useMemo(() => {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -47,9 +49,12 @@ function ReviewPage({
     <View style={styles.sheet}>
       <View style={styles.header}>
         <SheetHeader
-          title="Review changes"
+          title={t('nativeChat.review.title', 'Review changes')}
           trailing={{
-            label: state.page === 'custom' ? 'Run' : 'Done',
+            label:
+              state.page === 'custom'
+                ? t('nativeChat.review.run', 'Run')
+                : t('nativeChat.review.done', 'Done'),
             onPress: () => (state.page === 'custom' ? submit(menu.submit(query)) : onClose())
           }}
         />
@@ -57,7 +62,7 @@ function ReviewPage({
           <View style={styles.back}>
             <NavBarButton
               icon={ChevronLeft}
-              accessibilityLabel="Back to review targets"
+              accessibilityLabel={t('nativeChat.review.back', 'Back to review targets')}
               onPress={menu.back}
             />
           </View>
@@ -70,10 +75,10 @@ function ReviewPage({
           editable={!state.busy}
           placeholder={
             state.page === 'custom'
-              ? 'Enter review instructions'
+              ? t('nativeChat.review.instructions', 'Enter review instructions')
               : state.page === 'baseBranch'
-                ? 'Search branches…'
-                : 'Search commits…'
+                ? t('nativeChat.review.searchBranches', 'Search branches…')
+                : t('nativeChat.review.searchCommits', 'Search commits…')
           }
           returnKeyType={state.page === 'custom' ? 'send' : 'search'}
           onSubmitEditing={() => {

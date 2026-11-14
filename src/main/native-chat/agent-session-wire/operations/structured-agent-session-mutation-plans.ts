@@ -1,4 +1,3 @@
-import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionReviewTarget } from '../../../../shared/agent-session/agent-session-review-target'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
@@ -22,6 +21,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-wire'
 import {
   agentSessionConversationCommandFields,
+  type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session/agent-session-conversation-command'
 import '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'

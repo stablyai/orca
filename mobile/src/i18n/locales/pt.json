@@ -2640,7 +2640,9 @@
       "waitForStart": "Aguarde o agente terminar de iniciar.",
       "writeFailed": "O Orca não conseguiu repassar esta mensagem ao agente, por isso ela não foi enviada.",
       "pluginInputRequired": "{{agent}} parou porque o plugin \"{{plugin}}\" está aguardando uma entrada em um painel de terminal. Desative o plugin para sessões de chat ou execute a tarefa em um terminal {{agent}}.",
-      "unconfirmed": "Não foi possível confirmar se isto foi enviado. Não foi reenviado."
+      "unconfirmed": "Não foi possível confirmar se isto foi enviado. Não foi reenviado.",
+      "reviewFailed": "O Codex não conseguiu realizar a revisão. Tente /review novamente.",
+      "reviewSettingsUnsupported": "Atualize o Codex para revisar com outro modelo ou volte para {{detail}}."
     },
     "fileReader": {
       "copyReviewNotes": "Copiar notas de revisão",
@@ -4917,6 +4919,22 @@
           }
         }
       }
+    }
+  },
+  "nativeChat": {
+    "review": {
+      "baseBranch": "Comparar com uma branch base",
+      "uncommittedChanges": "Revisar alterações sem commit",
+      "commit": "Revisar um commit",
+      "custom": "Instruções de revisão personalizadas",
+      "loadFailed": "O Codex não conseguiu carregar os alvos da revisão. Tente /review novamente.",
+      "instructions": "Digite as instruções de revisão",
+      "searchBranches": "Buscar branches…",
+      "searchCommits": "Buscar commits…",
+      "title": "Revisar alterações",
+      "back": "Voltar aos alvos da revisão",
+      "run": "Executar",
+      "done": "Concluído"
     }
   }
 }

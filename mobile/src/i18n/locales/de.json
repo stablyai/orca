@@ -2204,7 +2204,9 @@
       "waitForBackgroundTasks": "Warten, bis die Hintergrundaufgaben abgeschlossen sind.",
       "waitForStart": "Warten, bis der Agent vollständig gestartet ist.",
       "writeFailed": "Orca konnte diese Nachricht nicht an den Agenten übergeben, daher wurde sie nicht gesendet.",
-      "pluginInputRequired": "{{agent}} wurde angehalten, weil das Plugin „{{plugin}}“ in einem Terminalbereich auf eine Eingabe wartet. Deaktiviere das Plugin für Chatsitzungen oder führe die Aufgabe in einem {{agent}}-Terminal aus."
+      "pluginInputRequired": "{{agent}} wurde angehalten, weil das Plugin „{{plugin}}“ in einem Terminalbereich auf eine Eingabe wartet. Deaktiviere das Plugin für Chatsitzungen oder führe die Aufgabe in einem {{agent}}-Terminal aus.",
+      "reviewFailed": "Codex konnte die Prüfung nicht ausführen. Versuche /review erneut.",
+      "reviewSettingsUnsupported": "Aktualisiere Codex, um mit einem anderen Modell zu prüfen, oder wechsle zurück zu {{detail}}."
     },
     "fileReader": {
       "copyReviewNotes": "Review-Notizen kopieren",
@@ -4229,6 +4231,22 @@
           }
         }
       }
+    }
+  },
+  "nativeChat": {
+    "review": {
+      "baseBranch": "Mit einem Basisbranch vergleichen",
+      "uncommittedChanges": "Nicht committete Änderungen prüfen",
+      "commit": "Einen Commit prüfen",
+      "custom": "Eigene Prüfanweisungen",
+      "loadFailed": "Codex konnte die Prüfziele nicht laden. Versuche /review erneut.",
+      "instructions": "Prüfanweisungen eingeben",
+      "searchBranches": "Branches suchen…",
+      "searchCommits": "Commits suchen…",
+      "title": "Änderungen prüfen",
+      "back": "Zurück zu den Prüfzielen",
+      "run": "Ausführen",
+      "done": "Fertig"
     }
   }
 }

@@ -19317,7 +19317,9 @@
         "commandAfterAnswer": "Ajanın sorusuna veya onay isteğine yanıt verin, ardından /{{command}} komutunu çalıştırın.",
         "modelUnavailableUpdate": "{{agent}}, {{detail}} modelini kullanamadı. Yeniden başlatmadan sonra korumak için {{agent}} uygulamasını {{minimumVersion}} veya üzerine güncelleyin ya da başka bir model seçip yeniden gönderin.",
         "modelNotSelected": "{{agent}} için seçili bir model yok. Model seçimini ve {{agent}} oturumunu kontrol edip yeniden gönderin.",
-        "pluginInputRequired": "{{agent}} durdu çünkü \"{{plugin}}\" eklentisi bir terminal bölmesinde girdi bekliyor. Sohbet oturumları için eklentiyi devre dışı bırakın veya görevi bir {{agent}} terminalinde çalıştırın."
+        "pluginInputRequired": "{{agent}} durdu çünkü \"{{plugin}}\" eklentisi bir terminal bölmesinde girdi bekliyor. Sohbet oturumları için eklentiyi devre dışı bırakın veya görevi bir {{agent}} terminalinde çalıştırın.",
+        "reviewFailed": "Codex incelemeyi çalıştıramadı. /review komutunu yeniden deneyin.",
+        "reviewSettingsUnsupported": "Farklı bir modelle incelemek için Codex’i güncelleyin veya {{detail}} modeline geri dönün."
       },
       "writeNotice": {
         "notDoneReadHistory": "Bu sohbetin geçmişi yüklenemedi.",
@@ -21639,7 +21641,8 @@
   "common": {
     "retry": "Yeniden dene",
     "cancel": "İptal",
-    "delete": "Sil"
+    "delete": "Sil",
+    "back": "Geri"
   },
   "terminal": {
     "sessionSaveFailure": {
@@ -22565,6 +22568,20 @@
   "nativeChat": {
     "math": {
       "scrollDisplayEquation": "Denklemi kaydır"
+    },
+    "review": {
+      "baseBranch": "Temel dalla karşılaştır",
+      "uncommittedChanges": "Commit edilmemiş değişiklikleri incele",
+      "commit": "Bir commit incele",
+      "custom": "Özel inceleme talimatları",
+      "loadFailed": "Codex inceleme hedeflerini yükleyemedi. /review komutunu yeniden deneyin.",
+      "instructions": "İnceleme talimatlarını girin",
+      "searchBranches": "Dallarda ara…",
+      "searchCommits": "Commit ara…",
+      "title": "Değişiklikleri incele",
+      "back": "İnceleme hedeflerine dön",
+      "run": "Çalıştır",
+      "done": "Bitti"
     }
   },
   "quitAndStopAllSessions": {

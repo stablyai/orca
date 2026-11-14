@@ -1,5 +1,4 @@
-import { ListGroup } from '../../../components/list/ListGroup'
-import { SectionHeader } from '../../../components/list/ListGroup'
+import { ListGroup, SectionHeader } from '../../../components/list/ListGroup'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   isReadOnlySessionOptionValue,

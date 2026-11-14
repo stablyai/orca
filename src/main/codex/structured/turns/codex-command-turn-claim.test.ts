@@ -18,8 +18,10 @@ import type {
   StructuredAgentSessionSinkAdmission
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionRevisionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
-import { createCodexHistoryTranslator } from '../journal/codex-structured-journal-translation'
-import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
+import {
+  createCodexHistoryTranslator,
+  createCodexJournalTranslator
+} from '../journal/codex-structured-journal-translation'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 
 const SESSION = 'session-1'

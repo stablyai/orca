@@ -2739,7 +2739,9 @@
       "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
       "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
       "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
-      "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent."
+      "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
+      "reviewFailed": "Codex couldn't run the review. Try /review again.",
+      "reviewSettingsUnsupported": "Update Codex to review with a different model, or switch back to {{detail}}."
     },
     "writeNotice": {
       "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -4992,6 +4994,22 @@
     "activity": {
       "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
       "failed": "Couldn’t update the agent list."
+    }
+  },
+  "nativeChat": {
+    "review": {
+      "baseBranch": "Review against a base branch",
+      "uncommittedChanges": "Review uncommitted changes",
+      "commit": "Review a commit",
+      "custom": "Custom review instructions",
+      "loadFailed": "Codex could not load review targets. Try /review again.",
+      "instructions": "Enter review instructions",
+      "searchBranches": "Search branches…",
+      "searchCommits": "Search commits…",
+      "title": "Review changes",
+      "back": "Back to review targets",
+      "run": "Run",
+      "done": "Done"
     }
   }
 }

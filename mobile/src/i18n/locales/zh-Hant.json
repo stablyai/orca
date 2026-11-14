@@ -2200,7 +2200,9 @@
       "waitForBackgroundTasks": "請等待背景任務完成。",
       "waitForStart": "請等待代理程式完成啟動。",
       "writeFailed": "Orca 無法將此訊息交給代理程式，因此訊息未傳送。",
-      "pluginInputRequired": "{{agent}} 已停止，因為「{{plugin}}」外掛正在終端機窗格中等待輸入。請在聊天工作階段中停用此外掛，或在 {{agent}} 終端機中執行任務。"
+      "pluginInputRequired": "{{agent}} 已停止，因為「{{plugin}}」外掛正在終端機窗格中等待輸入。請在聊天工作階段中停用此外掛，或在 {{agent}} 終端機中執行任務。",
+      "reviewFailed": "Codex 無法執行審查。請重試 /review。",
+      "reviewSettingsUnsupported": "請更新 Codex 以使用其他模型審查，或切換回 {{detail}}。"
     },
     "fileReader": {
       "copyReviewNotes": "複製審查備註",
@@ -4225,6 +4227,22 @@
           }
         }
       }
+    }
+  },
+  "nativeChat": {
+    "review": {
+      "baseBranch": "與基礎分支比較",
+      "uncommittedChanges": "審查未提交的變更",
+      "commit": "審查一個提交",
+      "custom": "自訂審查指令",
+      "loadFailed": "Codex 無法載入審查目標。請重試 /review。",
+      "instructions": "輸入審查指令",
+      "searchBranches": "搜尋分支…",
+      "searchCommits": "搜尋提交…",
+      "title": "審查變更",
+      "back": "返回審查目標",
+      "run": "執行",
+      "done": "完成"
     }
   }
 }
