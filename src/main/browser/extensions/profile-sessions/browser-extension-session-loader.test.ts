@@ -250,6 +250,10 @@ describe('deleted profile action state', () => {
 
     if (failedUnload) {
       mocks.loaded.set(ID, { id: ID })
+      getBrowserExtensionProfileStateStore().update(profileId, ID, (state) => ({
+        ...state,
+        workerSignature: 'left-behind'
+      }))
       const unload = vi
         .spyOn(mocks.session.extensions, 'removeExtension')
         .mockImplementationOnce(() => {
@@ -259,6 +263,7 @@ describe('deleted profile action state', () => {
         await expect(loader.detachBrowserExtensionsFromProfileSession(profile)).rejects.toThrow(
           'native unload failed'
         )
+        expect(getBrowserExtensionProfileStateStore().readProfile(profileId)).toEqual({})
       } finally {
         unload.mockRestore()
         mocks.loaded.delete(ID)

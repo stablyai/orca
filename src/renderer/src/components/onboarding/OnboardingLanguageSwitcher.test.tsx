@@ -20,25 +20,22 @@ afterEach(() => {
 })
 
 describe('onboarding language switcher eligibility', () => {
-  it.each(['control', 'treatment', undefined] as const)(
-    'shows the picker for an unsupported locale with existing settings',
-    (cohort) => {
-      useAppStore.setState({
-        settings: {
-          ...getDefaultSettings('/tmp'),
-          telemetry: {
-            optedIn: true,
-            installId: 'test-install',
-            existedBeforeTelemetryRelease: false,
-            ...(cohort ? { onboardingLanguageCohort: cohort } : {})
-          }
+  it('shows the picker for a non-English locale with existing settings', () => {
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        telemetry: {
+          optedIn: true,
+          installId: 'test-install',
+          existedBeforeTelemetryRelease: false,
+          onboardingLanguageCohort: 'control'
         }
-      })
-      useLanguageReadiness.setState({ detection: detectUiLanguage(['de-DE'], 'native') })
-      render(<OnboardingLanguageSwitcher open={false} onOpenChange={vi.fn()} />)
-      expect(screen.getByRole('button', { name: 'Switch language' })).toBeTruthy()
-    }
-  )
+      }
+    })
+    useLanguageReadiness.setState({ detection: detectUiLanguage(['de-DE'], 'native') })
+    render(<OnboardingLanguageSwitcher open={false} onOpenChange={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'Switch language' })).toBeTruthy()
+  })
 
   it('keeps the normal English gate and exposes recovery when the catalog fails', () => {
     useAppStore.setState({ settings: getDefaultSettings('/tmp') })

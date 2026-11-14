@@ -9,6 +9,7 @@ import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import {
   FolderWorkspaceHookCreateShape,
+  FolderWorkspaceDelete,
   assertFolderWorkspaceStartup
 } from '../../../shared/rpc-contract/workspaces/folder-workspace-params'
 
@@ -196,6 +197,8 @@ export const FolderWorkspaceUpdateArgs = z.object({
 export const FolderWorkspaceSelectorArgs = z.object({
   folderWorkspaceId: z.string().min(1)
 })
+
+export const FolderWorkspaceDeleteArgs = FolderWorkspaceDelete
 
 export const FolderWorkspacePathStatusArgs = z.discriminatedUnion('scope', [
   z.object({

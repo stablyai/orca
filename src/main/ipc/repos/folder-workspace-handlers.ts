@@ -12,7 +12,7 @@ import { notifyReposChanged } from './repos-changed-notification'
 import {
   FolderWorkspaceCreateArgs,
   FolderWorkspacePathStatusArgs,
-  FolderWorkspaceSelectorArgs,
+  FolderWorkspaceDeleteArgs,
   FolderWorkspaceUpdateArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
@@ -99,11 +99,11 @@ export function registerFolderWorkspaceHandlers(
 
   ipcMain.handle('folderWorkspaces:delete', async (_event, rawArgs: unknown): Promise<boolean> => {
     const args = parseProjectGroupIpcArgs(
-      FolderWorkspaceSelectorArgs,
+      FolderWorkspaceDeleteArgs,
       rawArgs,
       'invalid_folder_workspace_delete_args'
     )
     // Runtime owns teardown of PTYs, browsers and sessions, plus success notifications.
-    return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId)).deleted
+    return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId, args)).deleted
   })
 }

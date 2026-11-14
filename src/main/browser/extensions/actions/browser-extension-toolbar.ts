@@ -107,7 +107,7 @@ function openPopupForPage(
     openTab: (rawUrl) => {
       const resolved = resolveBrowserExtensionRequestedUrl(rawUrl, extension.id)
       if (resolved && (resolved.kind !== 'extension' || resolved.extensionId === extension.id)) {
-        void openBrowserExtensionTab(page.profileId, resolved.url, true).catch(() => {})
+        void openBrowserExtensionTab(page.profileId, resolved.url, { active: true }).catch(() => {})
       }
     }
   })

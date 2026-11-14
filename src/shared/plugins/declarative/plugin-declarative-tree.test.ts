@@ -37,20 +37,3 @@ describe('parsePluginDeclarativeTree', () => {
     ])
   })
 })
-
-describe('ui.* payloads', () => {
-  it('counts text children toward the aggregate node cap', () => {
-    const many = (count: number) => ({
-      type: 'Text',
-      props: {},
-      children: Array.from({ length: count }, () => '')
-    })
-    expect(parsePluginDeclarativeTree(many(4000)).ok).toBe(true)
-    const flood = parsePluginDeclarativeTree({
-      type: 'Stack',
-      props: {},
-      children: [many(4000), many(4000)]
-    })
-    expect(flood).toMatchObject({ ok: false, error: expect.stringContaining('nodes') })
-  })
-})

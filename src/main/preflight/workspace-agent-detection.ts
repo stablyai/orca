@@ -157,7 +157,8 @@ export async function assertAgentDetectionHostRunning(host: AgentDetectionHost):
 
 export async function refreshAgentsOnHost(
   host: AgentDetectionHost,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  userInitiated = false
 ): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
@@ -169,7 +170,7 @@ export async function refreshAgentsOnHost(
         ? refreshShellPathAndDetectAgents(host.context, options)
         : refreshShellPathAndDetectAgents(host.context)
     const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
-    notifyAgentsRefreshedOnHost()
+    notifyAgentsRefreshedOnHost(userInitiated && !wsl)
     return result
   }
   return wsl ? refresh() : refreshAtRestCommandContext(refresh)

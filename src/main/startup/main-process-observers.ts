@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
+import { recordWakeSignal } from '../power/wake-signal-clock'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
@@ -30,12 +31,29 @@ import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 
 const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
 
+function feedWakeSignalClock(): () => void {
+  const onResume = (): void => recordWakeSignal('resume')
+  const onUnlock = (): void => recordWakeSignal('unlock-screen')
+  const onUserActive = (): void => recordWakeSignal('user-did-become-active')
+  powerMonitor.on('resume', onResume)
+  powerMonitor.on('unlock-screen', onUnlock)
+  powerMonitor.on('user-did-become-active', onUserActive)
+  return () => {
+    powerMonitor.off('resume', onResume)
+    powerMonitor.off('unlock-screen', onUnlock)
+    powerMonitor.off('user-did-become-active', onUserActive)
+  }
+}
+
 export function initializeMainProcessObservers(): void {
   const store = state.store
   if (!store) {
     throw new Error('Store must be initialized before observers')
   }
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
+  if (process.platform === 'darwin') {
+    state.unsubscribeWakeSignalClock = feedWakeSignalClock()
+  }
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
     listTargets: listCapableSharedControlSockets,

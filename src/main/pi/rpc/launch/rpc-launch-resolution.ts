@@ -76,6 +76,7 @@ export function resolvePiRpcCommand(
 
 export function checkPiRpcVersion(
   launch: {
+    operation?: StructuredAgentResolutionOperation
     command: string
     prefixArgs?: readonly string[]
     cwd: string
@@ -84,7 +85,13 @@ export function checkPiRpcVersion(
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
   return checkAgentCliVersion(
-    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
+    {
+      program: launch.command,
+      prefixArgs: launch.prefixArgs,
+      cwd: launch.cwd,
+      env: launch.env,
+      operation: launch.operation
+    },
     PI_RPC_MINIMUM_VERSIONS,
     read
   )

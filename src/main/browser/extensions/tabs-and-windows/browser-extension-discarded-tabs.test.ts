@@ -46,7 +46,9 @@ vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
     getWebContentsIdByTabId: () =>
       new Map([...mocks.pageByGuest].map(([id, pageId]) => [pageId, id])),
     getTabIdForWebContentsId: (id: number) => mocks.pageByGuest.get(id) ?? null,
-    getWorktreeIdForTab: () => undefined
+    getWorktreeIdForTab: () => undefined,
+    isAgentLeadingGuest: () => false,
+    findAgentPageInSession: () => null
   }
 }))
 vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({}))

@@ -34,6 +34,10 @@ import {
   listBrowserExtensionDiscardedTabs,
   type BrowserExtensionDiscardedTabEntry
 } from '../tabs-and-windows/browser-extension-discarded-tab-model'
+import {
+  findBrowserExtensionCallerAgentPage,
+  placeBrowserExtensionCallerTab
+} from '../tabs-and-windows/browser-extension-agent-caller'
 import { captureVisibleTabMethod } from './tabs-capture'
 import { tabsPageMethods } from './tabs-page-methods'
 import {
@@ -85,7 +89,7 @@ async function createTab(
   const tabId = await openBrowserExtensionTab(
     caller.browserProfileId,
     url,
-    active,
+    placeBrowserExtensionCallerTab(caller, active),
     caller.execution?.controller.signal
   )
   return describeBrowserExtensionTab(caller.extension, requireCallerTab(caller, tabId))
@@ -134,6 +138,17 @@ function queryTabs(
     .sort((a, b) => a.windowId - b.windowId || a.index - b.index)
 }
 
+/** Highlighting is activating in a one-tab selection (Chrome); an agent's call never switches tabs. */
+function mayActivateTab(
+  caller: BrowserExtensionCaller,
+  properties: z.infer<typeof updatePropertiesSchema>
+): boolean {
+  return (
+    Boolean(properties.active || properties.highlighted) &&
+    !findBrowserExtensionCallerAgentPage(caller)
+  )
+}
+
 /** Activation shows the page, which loads it (onReplaced follows); a URL needs a loaded page. */
 async function updateDiscardedTab(
   caller: BrowserExtensionCaller,
@@ -143,7 +158,7 @@ async function updateDiscardedTab(
   if (properties.url !== undefined) {
     throw new BrowserExtensionApiError(`Cannot navigate tab ${entry.tab.tabId} until it loads`)
   }
-  if (properties.active || properties.highlighted) {
+  if (mayActivateTab(caller, properties)) {
     await activateBrowserExtensionDiscardedTab(entry)
   }
   const current = findBrowserExtensionDiscardedTab(caller.session, entry.tab.tabId)
@@ -234,8 +249,7 @@ export function registerTabsNamespace(): void {
           if (properties.muted !== undefined) {
             entry.contents.setAudioMuted(properties.muted)
           }
-          // Chrome: highlighting a tab in a one-tab selection model is activating it.
-          if (properties.active || properties.highlighted) {
+          if (mayActivateTab(caller, properties)) {
             await activateBrowserExtensionTab(entry)
           }
           return describeBrowserExtensionTab(caller.extension, requireCallerTab(caller, id))

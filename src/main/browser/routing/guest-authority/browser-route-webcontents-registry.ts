@@ -76,6 +76,7 @@ export class BrowserRouteWebContentsRegistry {
           this.dependencies.getPartitionForSession(routeSession),
         reportBlockedPopup: (blocked) => this.dependencies.reportBlockedPopup?.(blocked),
         openNewTabPopup: this.dependencies.openNewTabPopup,
+        releaseAgentLead: this.dependencies.releaseAgentLead,
         isPopupNavigationAllowed: (url) => this.navigationAllowed(state, url, false)
       })
     } catch {

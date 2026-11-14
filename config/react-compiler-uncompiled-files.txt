@@ -33,6 +33,8 @@ src/renderer/src/components/native-chat/tools/runs/use-native-chat-tool-run-wind
 src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorerVirtualRows.tsx
 src/renderer/src/components/right-sidebar/file-explorer/tree/FileExplorerFilesTreePane.tsx
 src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx
+src/renderer/src/components/automations/authoring/WorkspaceCombobox.tsx
+src/renderer/src/components/skills/installation/SkillInstallWorkspaceCombobox.tsx
 
 # The workbench subtree relies on the shell re-rendering on every app render.
 src/renderer/src/app-shell/AppWorkspaceShell.tsx

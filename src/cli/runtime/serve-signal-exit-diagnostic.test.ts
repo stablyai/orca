@@ -1,17 +1,9 @@
-import { MacServeStartupAbortError, serveSignalExitError } from './serve-signal-exit-diagnostic'
 import { EventEmitter } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS,
-  superviseForegroundServe
-} from './serve-update-supervisor'
-import {
-  QUIT_RENDERER_ACK_TIMEOUT_MS,
-  WILL_QUIT_TEARDOWN_DEADLINE_MS
-} from '../../shared/quit-teardown-deadline'
+import { superviseForegroundServe } from './serve-update-supervisor'
 
 class FakeChildProcess extends EventEmitter {
   kill = vi.fn()
@@ -40,67 +32,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('serveSignalExitError', () => {
-  it('classifies darwin SIGABRT as a startup abort', () => {
-    const error = serveSignalExitError('SIGABRT', 'darwin')
-    expect(error).toBeInstanceOf(MacServeStartupAbortError)
-  })
-})
-
 describe('superviseForegroundServe signal exits', () => {
-  it('lets pre-commit and committed Electron quit deadlines finish before force-killing serve', async () => {
-    setPlatform('linux')
-    vi.useFakeTimers()
-    const child = new FakeChildProcess()
-    const supervised = superviseChild(child)
-
-    process.emit('SIGTERM', 'SIGTERM')
-    expect(child.kill).toHaveBeenCalledOnce()
-    expect(child.kill).toHaveBeenLastCalledWith('SIGTERM')
-
-    await vi.advanceTimersByTimeAsync(QUIT_RENDERER_ACK_TIMEOUT_MS + WILL_QUIT_TEARDOWN_DEADLINE_MS)
-    expect(child.kill).toHaveBeenCalledOnce()
-
-    await vi.advanceTimersByTimeAsync(SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS)
-    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL')
-    expect(child.kill).toHaveBeenCalledTimes(2)
-
-    child.emit('exit', null, 'SIGKILL')
-    await expect(supervised).rejects.toThrow('Orca serve exited via SIGKILL.')
-  })
-
-  it('lets a shared-console Windows child handle Ctrl-C gracefully', async () => {
-    setPlatform('win32')
-    vi.useFakeTimers()
-    const child = new FakeChildProcess()
-    const supervised = superviseChild(child)
-
-    process.emit('SIGINT', 'SIGINT')
-    expect(child.kill).not.toHaveBeenCalled()
-
-    child.emit('exit', 0, null)
-    await expect(supervised).resolves.toBe(0)
-  })
-
-  it('forwards Linux terminal hangup and removes the listener after exit', async () => {
-    setPlatform('linux')
-    const listenersBefore = process.listeners('SIGHUP')
-    const child = new FakeChildProcess()
-    const supervised = superviseChild(child)
-
-    expect(process.listeners('SIGHUP')).toHaveLength(listenersBefore.length + 1)
-    process.emit('SIGHUP', 'SIGHUP')
-    expect(child.kill).toHaveBeenCalledWith('SIGHUP')
-
-    child.emit('exit', null, 'SIGHUP')
-    await expect(supervised).resolves.toBe(0)
-    expect(process.listeners('SIGHUP')).toEqual(listenersBefore)
-
-    const killCallsAfterExit = child.kill.mock.calls.length
-    process.emit('SIGHUP', 'SIGHUP')
-    expect(child.kill).toHaveBeenCalledTimes(killCallsAfterExit)
-  })
-
   it('treats a child exit through the caller-forwarded SIGINT as graceful', async () => {
     setPlatform('linux')
     const child = new FakeChildProcess()

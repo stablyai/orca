@@ -267,7 +267,7 @@ export function openBrowserExtensionOptions(
       if (!extension) {
         throw new Error('The extension could not be loaded')
       }
-      await openBrowserExtensionOptionsPage(browserProfileId, extension)
+      await openBrowserExtensionOptionsPage(browserProfileId, extension, { active: true })
     })
   })
 }

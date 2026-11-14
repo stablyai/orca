@@ -4,6 +4,7 @@ import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import type {
   ComputerActionMetadata,
   ComputerActionResult,
+  ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerSnapshotResult
@@ -106,6 +107,12 @@ export function formatListApps(result: ComputerListAppsResult): string {
       return `${app.name}  pid:${app.pid}${bundle}`
     })
     .join('\n')
+}
+
+export function formatLaunchApp(result: ComputerLaunchAppResult): string {
+  const verb = result.launched ? 'Launched' : 'Already running:'
+  const place = result.delivery === 'foreground' ? 'in the foreground' : 'in the background'
+  return `${verb} ${result.app.name} pid:${result.app.pid} ${place}`
 }
 
 export function formatListWindows(result: ComputerListWindowsResult): string {

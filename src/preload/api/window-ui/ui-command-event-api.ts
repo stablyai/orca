@@ -240,6 +240,7 @@ export type UiCommandEventApi = {
       sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
       newLeafId?: string
+      activate?: false
     }) => void
   ) => () => void
   onRenameTerminal: (

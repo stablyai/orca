@@ -156,18 +156,91 @@ class GeometryReader:
         finally:
             Atspi.set_timeout(ATSPI_METHOD_TIMEOUT_MS, ATSPI_STARTUP_TIMEOUT_MS)
 
-    def rect(self, node):
-        return screen_rect(node, self.read)
-
 
 def screen_rect(node, read=attempt):
+    return extents_rect(node, Atspi.CoordType.SCREEN, read)
+
+
+def extents_rect(node, coord_type, read=attempt):
     component = read(node.get_component_iface)
     if component is None:
         return None
-    rect = read(lambda: Atspi.Component.get_extents(component, Atspi.CoordType.SCREEN))
+    rect = read(lambda: Atspi.Component.get_extents(component, coord_type))
     if rect is None or rect.width <= 0 or rect.height <= 0:
         return None
     return Rect(float(rect.x), float(rect.y), float(rect.width), float(rect.height))
+
+
+UNREAD = object()
+
+
+class Placement:
+    """Screen and window-relative rectangles for one window's nodes.
+
+    GTK 4 reports SCREEN extents of [0, 0, w, h] for nearly every node, so its rectangles come from WINDOW
+    extents plus the X11 client origin (agent-desktop probes/linux/FINDINGS.md L23-37).
+    """
+
+    def __init__(self, app, window):
+        self.app, self.window = app, window
+        self.base = self._origin = UNREAD
+        self.window_coords = toolkit_kind(app) == "gtk4"
+
+    @property
+    def origin(self):
+        if self._origin is UNREAD:
+            self._origin = (gtk4_client_origin(self.app, self.window)
+                            if self.window_coords and not wayland_session() else None)
+        return self._origin
+
+    def screen(self, node, read=attempt):
+        if not self.window_coords:
+            return screen_rect(node, read)
+        rect = extents_rect(node, Atspi.CoordType.WINDOW, read) if self.origin is not None else None
+        return None if rect is None else Rect(rect.x + self.origin[0], rect.y + self.origin[1], rect.width, rect.height)
+
+    def bounds(self):
+        if self.window_coords and wayland_session():
+            # Why: Wayland capture finds the window through the compositor and only checks its size.
+            return screen_rect(self.window)
+        return self.screen(self.window)
+
+    def frame(self, node, read=attempt):
+        coord_type = Atspi.CoordType.WINDOW if self.window_coords else Atspi.CoordType.SCREEN
+        if self.base is UNREAD:
+            self.base = extents_rect(self.window, coord_type, read)
+        rect = self.base if node is self.window else extents_rect(node, coord_type, read)
+        if rect is None or self.base is None:
+            return None
+        return Rect(rect.x - self.base.x, rect.y - self.base.y, rect.width, rect.height)
+
+
+# Why per operation: list-windows places every window of an app, and each lookup is a subprocess.
+_x11_windows_by_pid = {}
+
+
+def gtk4_client_origin(app, window):
+    xdotool = shutil.which("xdotool")
+    if not xdotool:
+        return None
+    pid = pid_of(app)
+    if pid not in _x11_windows_by_pid:
+        ids = x11_window_ids(app, xdotool) or []
+        _x11_windows_by_pid[pid] = [(value, x11_window_name(xdotool, value) if len(ids) > 1 else None) for value in ids]
+    windows = _x11_windows_by_pid[pid]
+    if len(windows) > 1:
+        title = name_of(window)
+        windows = [item for item in windows if item[1] == title]
+    return x11_client_origin(int(windows[0][0])) if len(windows) == 1 else None
+
+
+def x11_window_name(xdotool, window_id):
+    try:
+        result = subprocess.run([xdotool, "getwindowname", window_id], check=False, capture_output=True,
+                                text=True, timeout=2)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout.rstrip("\n") if result.returncode == 0 else None
 
 
 def desktop_apps():
@@ -323,36 +396,91 @@ def restore_pointer_window(app, window):
     restore_window(app, window)
     if not wait_window_focused(window):
         raise RuntimeError("window_not_focused: window restoration did not focus the target window; no pointer input was sent")
-    return screen_rect(window)
+
+
+X11_WINDOW = ctypes.c_ulong
+X11_ERROR_HANDLER = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
+# Why kept: Xlib's default handler exits the process on a BadWindow from a window that closed mid-read.
+_ignore_x11_errors = X11_ERROR_HANDLER(lambda _display, _event: 0)
+
+
+@contextmanager
+def x11_display():
+    """libX11 and an open display, or (None, None) when no X11 display answers."""
+    try:
+        x = ctypes.CDLL("libX11.so.6")
+    except OSError:
+        yield None, None
+        return
+    pointer, window, integer = ctypes.c_void_p, X11_WINDOW, ctypes.c_int
+    for name, result, args in (
+        ("XOpenDisplay", pointer, [ctypes.c_char_p]),
+        ("XCloseDisplay", integer, [pointer]),
+        ("XSetErrorHandler", X11_ERROR_HANDLER, [X11_ERROR_HANDLER]),
+        ("XDefaultRootWindow", window, [pointer]),
+        ("XQueryPointer", integer, [pointer, window, ctypes.POINTER(window), ctypes.POINTER(window),
+                                    *[ctypes.POINTER(integer)] * 4, ctypes.POINTER(ctypes.c_uint)]),
+        ("XTranslateCoordinates", integer, [pointer, window, window, integer, integer, ctypes.POINTER(integer),
+                                            ctypes.POINTER(integer), ctypes.POINTER(window)]),
+        ("XInternAtom", ctypes.c_ulong, [pointer, ctypes.c_char_p, integer]),
+        ("XGetWindowProperty", integer, [pointer, window, ctypes.c_ulong, ctypes.c_long, ctypes.c_long, integer,
+                                         ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(integer),
+                                         ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong),
+                                         ctypes.POINTER(ctypes.POINTER(ctypes.c_long))]),
+        ("XFree", integer, [pointer]),
+    ):
+        fn = getattr(x, name)
+        fn.restype, fn.argtypes = result, args
+    display = x.XOpenDisplay(None)
+    if not display:
+        yield None, None
+        return
+    previous = x.XSetErrorHandler(_ignore_x11_errors)
+    try:
+        yield x, display
+    finally:
+        x.XCloseDisplay(display)
+        x.XSetErrorHandler(previous)
 
 
 def x11_pointer_state():
     """The X11 pointer's root position (None off the default screen) and modifier mask, or None with no X11 display."""
-    try:
-        x = ctypes.CDLL("libX11.so.6")
-    except OSError:
-        return None
-    pointer, window, integer = ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int
-    x.XOpenDisplay.restype, x.XOpenDisplay.argtypes = pointer, [ctypes.c_char_p]
-    x.XDefaultRootWindow.restype, x.XDefaultRootWindow.argtypes = window, [pointer]
-    x.XQueryPointer.restype = integer
-    x.XQueryPointer.argtypes = [pointer, window, ctypes.POINTER(window), ctypes.POINTER(window),
-                                *[ctypes.POINTER(integer)] * 4, ctypes.POINTER(ctypes.c_uint)]
-    x.XCloseDisplay.argtypes = [pointer]
-    display = x.XOpenDisplay(None)
-    if not display:
-        return None
-    try:
-        root, child = window(), window()
-        root_x, root_y, window_x, window_y, mask = integer(), integer(), integer(), integer(), ctypes.c_uint()
+    with x11_display() as (x, display):
+        if display is None:
+            return None
+        root, child = X11_WINDOW(), X11_WINDOW()
+        root_x, root_y, window_x, window_y = (ctypes.c_int() for _ in range(4))
+        mask = ctypes.c_uint()
         # Why keep the mask on False: that only means the pointer is on another screen; the modifiers are still valid.
         if not x.XQueryPointer(display, x.XDefaultRootWindow(display), ctypes.byref(root), ctypes.byref(child),
                                ctypes.byref(root_x), ctypes.byref(root_y), ctypes.byref(window_x),
                                ctypes.byref(window_y), ctypes.byref(mask)):
             return None, None, mask.value
         return root_x.value, root_y.value, mask.value
-    finally:
-        x.XCloseDisplay(display)
+
+
+def x11_client_origin(window_id):
+    """Where the visible area of an X11 client window starts on the root: its origin plus its client-side shadow."""
+    with x11_display() as (x, display):
+        if display is None:
+            return None
+        root_x, root_y, child = ctypes.c_int(), ctypes.c_int(), X11_WINDOW()
+        if not x.XTranslateCoordinates(display, window_id, x.XDefaultRootWindow(display), 0, 0,
+                                       ctypes.byref(root_x), ctypes.byref(root_y), ctypes.byref(child)):
+            return None
+        shadow = (0, 0)
+        atom = x.XInternAtom(display, b"_GTK_FRAME_EXTENTS", 1)
+        actual_type, actual_format = ctypes.c_ulong(), ctypes.c_int()
+        count, remaining, data = ctypes.c_ulong(), ctypes.c_ulong(), ctypes.POINTER(ctypes.c_long)()
+        if atom and x.XGetWindowProperty(display, window_id, atom, 0, 4, 0, 6, ctypes.byref(actual_type),
+                                         ctypes.byref(actual_format), ctypes.byref(count), ctypes.byref(remaining),
+                                         ctypes.byref(data)) == 0 and data:
+            try:
+                if actual_format.value == 32 and count.value == 4:
+                    shadow = (int(data[0]), int(data[2]))  # left, right, top, bottom
+            finally:
+                x.XFree(data)
+        return root_x.value + shadow[0], root_y.value + shadow[1]
 
 
 @contextmanager
@@ -1293,7 +1421,9 @@ def app_json(app):
 
 
 def window_json(app, index, window):
-    bounds = screen_rect(window)
+    bounds = Placement(app, window).bounds()
+    # Why the SCREEN fallback: a GTK 4 window with no known origin still has a true size, just no position.
+    size = bounds or screen_rect(window)
     showing = has_state(window, Atspi.StateType.SHOWING)
     return {
         "index": index,
@@ -1302,8 +1432,8 @@ def window_json(app, index, window):
         "title": name_of(window),
         "x": round(bounds.x) if bounds else None,
         "y": round(bounds.y) if bounds else None,
-        "width": max(0, round(bounds.width if bounds else 0)),
-        "height": max(0, round(bounds.height if bounds else 0)),
+        "width": max(0, round(size.width if size else 0)),
+        "height": max(0, round(size.height if size else 0)),
         "isMinimized": not showing,
         "isOffscreen": not showing,
         "screenIndex": None,
@@ -1317,7 +1447,8 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
     if restore:
         restore_window(app, window)
         window_index, window = choose_window(app, window_id, window_index)
-    bounds = screen_rect(window)
+    placement = Placement(app, window)
+    bounds = placement.bounds()
     tree_root, root_path = window, [window_index]
     if root is not None:
         tree_root = find_element(app, root)
@@ -1336,12 +1467,13 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
     app_info = app_json(app)
     window_title = name_of(window)
     screenshot = capture_png(bounds, app, window) if include_screenshot else None
+    if include_screenshot and bounds is None and placement.window_coords:
+        screenshot = screenshot_failure("GTK 4 screenshot skipped: Orca can't tell where this window sits on screen; "
+                                        "use --no-screenshot and trust the tree")
     geometry = GeometryReader()
     for item in records:
         node = geometry_nodes[id(item)]
-        rect = bounds if node is window else geometry.rect(node)
-        if rect is not None and bounds is not None:
-            rect = Rect(rect.x - bounds.x, rect.y - bounds.y, rect.width, rect.height)
+        rect = placement.frame(node, geometry.read)
         item["frame"] = rect.to_json() if rect else None
     return {
         "snapshotId": str(uuid.uuid4()),
@@ -1401,7 +1533,7 @@ def handshake_response():
                 "pressKey": True,
                 "hotkey": has_hotkey,
                 "pasteText": has_clipboard,
-                "scroll": not is_wayland,
+                "scroll": True,
                 "drag": not is_wayland,
                 "setValue": True,
                 "performAction": True,
@@ -1424,10 +1556,11 @@ def all_nodes(root):
     result = []
 
     def walk(node):
-        if len(result) >= MAX_NODES:
-            return
         result.append(node)
         for _, child in children(node):
+            # Why check before each child: every lookup is an AT-SPI round trip, and a list can hold thousands.
+            if len(result) >= MAX_NODES:
+                return
             walk(child)
 
     walk(root)
@@ -1556,8 +1689,12 @@ def activate_focused_entry(app, window):
             "verification": {"state": "unverified", "reason": "accessibility_action_unasserted"}}
 
 
-def screen_point(window_rect, saved_element=None, x=None, y=None, node=None):
-    rect = screen_rect(node) if node is not None else None
+def screen_point(placed, saved_element=None, x=None, y=None, node=None):
+    if placed.window_coords and placed.origin is None:
+        raise RuntimeError("unsupported capability: Orca can't tell where this GTK 4 window sits on screen, so "
+                           "pointer input would miss; nothing was sent. Use an element's accessibility action or set-value")
+    window_rect = placed.screen(placed.window)
+    rect = placed.screen(node) if node is not None else None
     if rect is not None:
         return rect.x + rect.width / 2, rect.y + rect.height / 2
     if saved_element is not None:
@@ -1567,8 +1704,9 @@ def screen_point(window_rect, saved_element=None, x=None, y=None, node=None):
     return window_rect.x + float(x), window_rect.y + float(y)
 
 
-def window_point(window_rect, saved_element=None, x=None, y=None, node=None):
-    point = screen_point(window_rect, saved_element, x, y, node)
+def window_point(placed, saved_element=None, x=None, y=None, node=None):
+    point = screen_point(placed, saved_element, x, y, node)
+    window_rect = placed.screen(placed.window)
     if (window_rect is None or not window_rect.x <= point[0] < window_rect.x + window_rect.width
             or not window_rect.y <= point[1] < window_rect.y + window_rect.height):
         raise RuntimeError("coordinate action target lies outside the target window, so the pointer would land on "
@@ -1694,6 +1832,241 @@ def drag_between(start, end):
             time.sleep(0.02)
     finally:
         Atspi.generate_mouse_event(round(x), round(y), "b1r")
+
+
+SCROLL_DIRECTIONS = {"up": ("vertical", -1), "down": ("vertical", 1), "left": ("horizontal", -1), "right": ("horizontal", 1)}
+DOCUMENT_ROLES = {"document web", "document frame", "scroll pane"}
+MAX_SCROLL_BAR_SIBLINGS = 8
+MAX_SCROLL_TO_PAGES = 10
+SCROLL_SETTLE_SECONDS = 1
+
+
+def scroll_direction(raw):
+    direction = str(raw or "").strip().lower()
+    if not direction:
+        raise RuntimeError("direction is required")
+    if direction not in SCROLL_DIRECTIONS:
+        raise RuntimeError(f"unsupported scroll direction: {direction}")
+    return SCROLL_DIRECTIONS[direction]
+
+
+def scroll_without_pointer(window, node, placed, x, y, direction, pages):
+    """Scroll through scroll bar values or Component.ScrollTo, which move no pointer and raise no window
+    (agent-desktop actions/scroll/scroll_bus.rs; FINDINGS L4-22)."""
+    axis, sign = scroll_direction(direction)
+    pages = require_positive_number(1 if pages is None else pages, "pages")
+    if node is None and x is not None and y is not None:
+        node = node_at(window, placed, float(x), float(y), [MAX_NODES])
+    at_limit, budget = None, [MAX_NODES]
+    # Why innermost first: like a wheel, the nearest view that can move takes the scroll, and one at its end hands it out.
+    for container in ancestors_to(node, window):
+        bar = scroll_bar(container, axis)
+        if bar is not None:
+            action = write_scroll_bar(container, bar, axis, sign, pages)
+        elif float(pages).is_integer():
+            action = scroll_to_pages(container, placed, axis, sign, int(pages), budget)
+        else:
+            continue
+        if action is not None and action["verification"].get("reason") != "suspected_noop":
+            return action
+        at_limit = at_limit or action
+    return at_limit
+
+
+def ancestors_to(node, window):
+    found, current = [], node
+    for _ in range(MAX_DEPTH):
+        if current is None:
+            break
+        found.append(current)
+        if current is window or current == window:
+            break
+        current = attempt(lambda current=current: current.get_parent())
+    return found
+
+
+def node_at(window, placed, x, y, budget):
+    """The deepest node whose window-relative frame holds the point, preferring later (topmost) siblings."""
+    node = window
+    for _ in range(MAX_DEPTH):
+        hit = None
+        count = int(attempt(lambda node=node: node.get_child_count(), 0) or 0)
+        for index in range(count - 1, -1, -1):
+            budget[0] -= 1
+            if budget[0] < 0:
+                return node
+            child = attempt(lambda node=node, index=index: node.get_child_at_index(index))
+            frame = placed.frame(child) if child is not None else None
+            if frame is not None and frame.x <= x < frame.x + frame.width and frame.y <= y < frame.y + frame.height:
+                hit = child
+                break
+        if hit is None:
+            return node
+        node = hit
+    return node
+
+
+def scroll_bar(container, axis):
+    vertical, horizontal = (getattr(Atspi.StateType, name, None) for name in ("VERTICAL", "HORIZONTAL"))
+    # Why capped: scroll bars sit beside one viewport child, and reading every row of a big list costs the app memory.
+    if int(attempt(lambda: container.get_child_count(), 0) or 0) > MAX_SCROLL_BAR_SIBLINGS:
+        return None
+    for _, child in children(container):
+        if role_of(child).lower() != "scroll bar":
+            continue
+        if vertical is not None and has_state(child, vertical):
+            matches = axis == "vertical"
+        elif horizontal is not None and has_state(child, horizontal):
+            matches = axis == "horizontal"
+        else:
+            rect = screen_rect(child)
+            matches = rect is not None and (rect.height > rect.width) == (axis == "vertical")
+        value = attempt(lambda child=child: child.get_value_iface()) if matches else None
+        if value is None:
+            continue
+        low, high, current = (attempt(lambda read=read: read(value)) for read in (
+            Atspi.Value.get_minimum_value, Atspi.Value.get_maximum_value, Atspi.Value.get_current_value))
+        if None not in (low, high, current) and high > low:
+            return value, float(low), float(high), float(current)
+    return None
+
+
+def write_scroll_bar(container, bar, axis, sign, pages):
+    value, low, high, current = bar
+    viewport = screen_rect(container)
+    if viewport is None:
+        return None
+    # Why the viewport length: toolkit adjustments count pixels, so one page is one viewport (scroll_plan.rs).
+    page = viewport.height if axis == "vertical" else viewport.width
+    wanted = min(high, max(low, current + sign * pages * page))
+    action = {"path": "accessibility", "actionName": "scrollBarValue", "fallbackReason": None}
+    if abs(wanted - current) < 0.5:
+        action["verification"] = {"state": "unverified", "reason": "suspected_noop"}
+        return action
+    if not attempt(lambda: Atspi.Value.set_current_value(value, wanted), False):
+        return None
+    readback = attempt(lambda: Atspi.Value.get_current_value(value))
+    action["verification"] = ({"state": "verified", "property": "value"}
+                              if readback is not None and abs(float(readback) - wanted) < 0.5
+                              else {"state": "unverified", "reason": "value_mismatch"})
+    return action
+
+
+def scroll_to_pages(container, placed, axis, sign, pages, budget):
+    edges = {("vertical", 1): "TOP_EDGE", ("vertical", -1): "BOTTOM_EDGE",
+             ("horizontal", 1): "LEFT_EDGE", ("horizontal", -1): "RIGHT_EDGE"}
+    scroll_type = getattr(getattr(Atspi, "ScrollType", None), edges[(axis, sign)], None)
+    if scroll_type is None:
+        return None
+    moved = accepted = 0
+    at_end = False
+    for _ in range(min(pages, MAX_SCROLL_TO_PAGES)):
+        viewport = placed.frame(container)
+        if viewport is None:
+            break
+        start, length = (viewport.y, viewport.height) if axis == "vertical" else (viewport.x, viewport.width)
+        item = item_past_edge(container, placed, axis, sign, start, start + length, MAX_DEPTH, budget)
+        at_end = item is None and budget[0] >= 0
+        component = attempt(lambda: item.get_component_iface()) if item is not None else None
+        before = placed.frame(item) if component is not None else None
+        if before is None or not attempt(lambda: Atspi.Component.scroll_to(component, scroll_type), False):
+            break
+        accepted += 1
+        if not wait_item_moved(item, placed, axis, before):
+            break
+        moved += 1
+    if not accepted:
+        # Why only documents: a document with nothing past its edge is at its end, while other nodes may not scroll.
+        if at_end and role_of(container).lower() in DOCUMENT_ROLES:
+            return {"path": "accessibility", "actionName": "scrollTo", "fallbackReason": None,
+                    "verification": {"state": "unverified", "reason": "suspected_noop"}}
+        return None
+    # Why an action after any page: once the document moved, falling back to the pointer would scroll it twice.
+    verification = ({"state": "unverified", "reason": "accessibility_action_unasserted"} if moved
+                    else {"state": "unverified", "reason": "suspected_noop"})
+    return {"path": "accessibility", "actionName": "scrollTo", "fallbackReason": None, "verification": verification}
+
+
+def item_past_edge(node, placed, axis, sign, viewport_start, viewport_end, depth, budget):
+    """The item that should lead the next page: the first one cut by or beyond the viewport edge we scroll toward."""
+    if depth <= 0:
+        return None
+    edge = viewport_end if sign > 0 else viewport_start
+    count = int(attempt(lambda: node.get_child_count(), 0) or 0)
+    for index in (range(count) if sign > 0 else range(count - 1, -1, -1)):
+        # Why a shared budget: each child is an AT-SPI round trip, and a document can hold thousands.
+        budget[0] -= 1
+        if budget[0] < 0:
+            return None
+        child = attempt(lambda index=index: node.get_child_at_index(index))
+        frame = placed.frame(child) if child is not None else None
+        if frame is None:
+            continue
+        start, end = (frame.y, frame.y + frame.height) if axis == "vertical" else (frame.x, frame.x + frame.width)
+        if (start >= edge - 1) if sign > 0 else (end <= edge + 1):
+            return child
+        if start < edge < end:
+            inner = item_past_edge(child, placed, axis, sign, viewport_start, viewport_end, depth - 1, budget)
+            # Why the cut item itself: its hidden part leads the next page, unless it already fills the viewport.
+            leads = start > viewport_start + 1 if sign > 0 else end < viewport_end - 1
+            if inner is not None or leads:
+                return inner if inner is not None else child
+    return None
+
+
+def wait_item_moved(item, placed, axis, before):
+    """Wait until ScrollTo moved the item, so the next page is planned from settled geometry."""
+    deadline = time.monotonic() + SCROLL_SETTLE_SECONDS
+    was = before.y if axis == "vertical" else before.x
+    while True:
+        frame = placed.frame(item)
+        now = None if frame is None else frame.y if axis == "vertical" else frame.x
+        if now is not None and abs(now - was) > 1:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+
+
+def select_in_parent(app, node):
+    """Select a row through its container's Selection, proving the index names this row first (select_index.rs)."""
+    parent = attempt(lambda: node.get_parent()) if node is not None else None
+    selection = attempt(lambda: parent.get_selection_iface()) if parent is not None else None
+    index = attempt(lambda: node.get_index_in_parent()) if selection is not None else None
+    if index is None or index < 0 or not selection_indices_proven(app, parent, selection):
+        return None
+    if attempt(lambda: parent.get_child_at_index(index)) != node:
+        raise RuntimeError("stale element: the selection index no longer names this element; run get-app-state again and use a fresh element index")
+    multiselectable = getattr(Atspi.StateType, "MULTISELECTABLE", None)
+    # Why clear first: a plain click replaces the selection, while SelectChild adds to a multi-select list's.
+    if (multiselectable is not None and has_state(parent, multiselectable)
+            and not attempt(lambda: Atspi.Selection.clear_selection(selection), False)):
+        return None
+    if not attempt(lambda: Atspi.Selection.select_child(selection, index), False):
+        return None
+    attempt(lambda: node.clear_cache())
+    verified = has_state(node, Atspi.StateType.SELECTED)
+    return {"path": "accessibility", "actionName": "selectChild", "fallbackReason": None,
+            "verification": {"state": "verified", "property": "selection"} if verified
+            else {"state": "unverified", "reason": "accessibility_action_unasserted"}}
+
+
+def selection_indices_proven(app, parent, selection):
+    # Why: GTK 4 Selection counts item widgets, which can differ from its accessible children (select_index.rs).
+    if toolkit_kind(app) in {"gtk3", "qt", "chromium", "gecko"}:
+        return True
+    count = int(attempt(lambda: parent.get_child_count(), 0) or 0)
+
+    def answer(index):
+        try:
+            Atspi.Selection.is_child_selected(selection, index)
+            return "answered"
+        except Exception as error:
+            # Why only InvalidArgs: a timeout or lost connection proves nothing about the index space.
+            return "refused" if "InvalidArgs" in str(error) else "unknown"
+
+    # Why counted: the index spaces match exactly when the last child answers and the one past it is refused.
+    return count > 0 and answer(count - 1) == "answered" and answer(count) == "refused"
 
 
 def is_enter_key(raw):
@@ -2125,6 +2498,7 @@ def set_value(node, value):
 
 
 def run_operation(operation):
+    _x11_windows_by_pid.clear()
     tool = operation.get("tool")
     include_screenshot = not bool(operation.get("noScreenshot"))
     if tool == "handshake":
@@ -2154,11 +2528,11 @@ def run_operation(operation):
     action = None
 
     def pointer_input(what, hint, points, send):
-        points(screen_rect(window))  # Why first: a stale or off-window target is not a reason to ask for a raise.
+        points(Placement(app, window))  # Why first: a stale or off-window target is not a reason to ask for a raise.
         require_pointer_route(operation, what, hint)
-        restored = restore_pointer_window(app, window)
+        restore_pointer_window(app, window)
         with pointer_put_back():
-            send(*points(restored))
+            send(*points(Placement(app, window)))
 
     if tool == "click":
         preferred = preferred_action(node)
@@ -2168,7 +2542,8 @@ def run_operation(operation):
             else 1
         )
         has_modifiers = bool(str(operation.get("modifiers") or "").strip())
-        semantic = not has_modifiers and operation.get("mouse_button", "left") == "left" and click_count <= 1 and preferred is not None
+        simple = not has_modifiers and operation.get("mouse_button", "left") == "left" and click_count <= 1
+        semantic = simple and preferred is not None
         if semantic:
             names = action_names(node)
             name = (names[preferred] if preferred < len(names) else "") or "action"
@@ -2176,9 +2551,11 @@ def run_operation(operation):
         if semantic and perform_action(node, preferred):
             action = {"path": "accessibility", "actionName": name, "fallbackReason": None}
         else:
+            action = select_in_parent(app, node) if simple else None
+        if action is None:
             pointer_input(
                 "this click", "Click an element by --element-index that has an accessibility action, or use set-value.",
-                lambda bounds: [window_point(bounds, saved, operation.get("x"), operation.get("y"), node)],
+                lambda placed: [window_point(placed, saved, operation.get("x"), operation.get("y"), node)],
                 lambda point: click_at(*point, operation.get("mouse_button", "left"), click_count, operation.get("modifiers")),
             )
             action = {"path": "synthetic", "actionName": None, "fallbackReason": "actionUnsupported"}
@@ -2196,20 +2573,23 @@ def run_operation(operation):
             raise RuntimeError(f'{operation.get("action", "")} is not a valid secondary action')
         action = {"path": "accessibility", "actionName": label, "fallbackReason": None}
     elif tool == "scroll":
-        pointer_input(
-            "scrolling", "",
-            lambda bounds: [window_point(bounds, saved, operation.get("x"), operation.get("y"), node)],
-            lambda point: scroll_at(*point, operation.get("direction"), operation.get("pages")),
-        )
-        action = {"path": "synthetic", "actionName": "scroll", "fallbackReason": None}
+        action = scroll_without_pointer(window, node, Placement(app, window), operation.get("x"), operation.get("y"),
+                                        operation.get("direction"), operation.get("pages"))
+        if action is None:
+            pointer_input(
+                "scrolling", "This view exposes no scroll bar or scrollable document to scroll in the background.",
+                lambda placed: [window_point(placed, saved, operation.get("x"), operation.get("y"), node)],
+                lambda point: scroll_at(*point, operation.get("direction"), operation.get("pages")),
+            )
+            action = {"path": "synthetic", "actionName": "scroll", "fallbackReason": None}
     elif tool == "drag":
         from_node = find_element(app, operation.get("fromElement"))
         to_node = find_element(app, operation.get("toElement"))
         pointer_input(
             "dragging", "",
-            lambda bounds: [
-                window_point(bounds, operation.get("fromElement"), operation.get("from_x"), operation.get("from_y"), from_node),
-                window_point(bounds, operation.get("toElement"), operation.get("to_x"), operation.get("to_y"), to_node),
+            lambda placed: [
+                window_point(placed, operation.get("fromElement"), operation.get("from_x"), operation.get("from_y"), from_node),
+                window_point(placed, operation.get("toElement"), operation.get("to_x"), operation.get("to_y"), to_node),
             ],
             drag_between,
         )

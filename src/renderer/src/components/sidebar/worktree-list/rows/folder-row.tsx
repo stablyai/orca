@@ -171,6 +171,7 @@ export function renderFolderWorkspaceOption(args: {
           hostContextLabel={row.hostContextLabel}
           lineageChildCount={row.lineageChildCount}
           lineageChildWorktreeIds={row.lineageChildWorktreeIds}
+          lineageDescendantIdentities={row.lineageDescendantIdentities}
           lineageCollapsed={row.lineageCollapsed}
           lineageChildren={lineage?.children}
           lineageChildrenStyle={

@@ -158,6 +158,7 @@ export const uiTerminalAndSessionTabsApi = {
       sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
       newLeafId?: string
+      activate?: false
     }) => void
   ): (() => void) => {
     const listener = (
@@ -171,6 +172,7 @@ export const uiTerminalAndSessionTabsApi = {
         sourceLeafId?: string
         telemetrySource?: TerminalPaneSplitSource
         newLeafId?: string
+        activate?: false
       }
     ) => callback(data)
     ipcRenderer.on('ui:splitTerminal', listener)

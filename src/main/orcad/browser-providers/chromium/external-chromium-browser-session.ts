@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { chmod, mkdir, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { BrowserError } from '../../../browser/browser-error'
@@ -17,6 +17,7 @@ import {
 } from '../../../browser/agent-browser/observation/agent-browser-screenshot-arguments'
 import { runProcess } from '@orca/process-host'
 import { resolveExternalChromiumProfilePath } from './external-chromium-profile-path'
+import { externalChromiumAgentBrowserEnvironment } from './external-chromium-agent-browser-environment'
 
 const COMMAND_TIMEOUT_MS = 90_000
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024
@@ -73,26 +74,6 @@ function classifyAgentBrowserError(message: string): string {
   return 'browser_error'
 }
 
-// No idle timeout: this daemon owns the user’s remote Chromium and all its live tabs.
-// agent-browser 0.33+ reads an unset timeout as one hour, so only "0" keeps it unbounded.
-export function externalChromiumAgentBrowserEnvironment(options: {
-  inheritedEnv: NodeJS.ProcessEnv
-  executablePath: string
-  profilePath: string
-  sessionName: string
-  browserArgs?: readonly string[]
-}): NodeJS.ProcessEnv {
-  return {
-    ...options.inheritedEnv,
-    AGENT_BROWSER_IDLE_TIMEOUT_MS:
-      options.inheritedEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS?.trim() || '0',
-    AGENT_BROWSER_EXECUTABLE_PATH: options.executablePath,
-    AGENT_BROWSER_PROFILE: options.profilePath,
-    AGENT_BROWSER_SESSION: options.sessionName,
-    AGENT_BROWSER_ARGS: options.browserArgs?.join('\n') ?? ''
-  }
-}
-
 // A profile held by another Chromium also fails ProcessSingleton; only an access failure means unwritable.
 function unwritableProfileLockLine(message: string): string | undefined {
   return message
@@ -105,6 +86,7 @@ export class ExternalChromiumBrowserSession {
   private readonly identity: string
   private readonly sessionName: string
   private profilePathResolution: Promise<string> | null = null
+  private configPathWrite: Promise<string> | null = null
 
   constructor(
     private readonly agentBrowserPath: string,
@@ -125,6 +107,26 @@ export class ExternalChromiumBrowserSession {
       this.identity
     )
     return this.profilePathResolution
+  }
+
+  // Empty, so agent-browser's defaults (headless, no extensions) apply instead of a user's config.
+  private configPath(): Promise<string> {
+    if (!this.configPathWrite) {
+      const write = (async () => {
+        const path = join(this.statePath, 'agent-browser-config.json')
+        await mkdir(this.statePath, { recursive: true, mode: 0o700 })
+        await writeFile(path, '{}\n', { mode: 0o600 })
+        return path
+      })()
+      // A failed write retries on the next command instead of failing every later one.
+      write.catch(() => {
+        if (this.configPathWrite === write) {
+          this.configPathWrite = null
+        }
+      })
+      this.configPathWrite = write
+    }
+    return this.configPathWrite
   }
 
   async start(signal?: AbortSignal): Promise<string> {
@@ -267,7 +269,10 @@ export class ExternalChromiumBrowserSession {
     signal?.throwIfAborted()
     const profilePath = await this.profilePath()
     signal?.throwIfAborted()
-    const args = ['--session', this.sessionName, '--profile', profilePath]
+    const configPath = await this.configPath()
+    signal?.throwIfAborted()
+    // Pinned per command so a daemon started headed by an older environment relaunches headless.
+    const args = ['--session', this.sessionName, '--profile', profilePath, '--headed', 'false']
     if (this.launch.browserArgs?.length) {
       args.push('--args', this.launch.browserArgs.join('\n'))
     }
@@ -277,6 +282,7 @@ export class ExternalChromiumBrowserSession {
       executablePath: this.launch.executablePath,
       profilePath,
       sessionName: this.sessionName,
+      configPath,
       browserArgs: this.launch.browserArgs
     })
     const result = await runProcess({
