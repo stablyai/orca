@@ -103,6 +103,28 @@ describe('DiffNotesSendMenu batch button', () => {
     expect(prompt).not.toContain('Null check in B')
   })
 
+  it('drops the opened send when its last note goes away', () => {
+    const view = renderFileMenu([A, B])
+    openMenu(screen.getByRole('button', { name: 'Send 1 note to an agent' }))
+    expect(notesSendTestStore.getState().agentSendPopoverTargetMode).not.toBeNull()
+
+    view.rerender(
+      <TooltipProvider>
+        <DiffNotesSendMenu
+          owner={OWNER}
+          worktreeId={WT}
+          groupId={WT}
+          comments={[B]}
+          filePath="src/a.ts"
+          showFileScope
+          batch={{ size: 'sm' }}
+        />
+      </TooltipProvider>
+    )
+
+    expect(notesSendTestStore.getState().agentSendPopoverTargetMode).toBeNull()
+  })
+
   it("shows Sending… while this file's notes are held, without sending the other files", () => {
     holdNotesForSend([diffCommentSendKey(OWNER, A)], new Promise(() => undefined))
     renderFileMenu([A, B])

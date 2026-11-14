@@ -206,6 +206,14 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
     [targetModeId]
   )
 
+  const batchHidden = Boolean(batchTrigger) && (!owner || requestedExisting === 0)
+  useEffect(() => {
+    // A send primed before the last note went away must not stay pickable from the sidebar.
+    if (batchHidden) {
+      useAppStore.getState().closeAgentSendPopoverTargetMode(targetModeId)
+    }
+  }, [batchHidden, targetModeId])
+
   useEffect(() => {
     if (openRequestNonce == null) {
       return
@@ -226,7 +234,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   ])
 
   // Unknown owner: whether the notes are held cannot be told yet, so show nothing.
-  if (batchTrigger && (!owner || requestedExisting === 0)) {
+  if (batchHidden) {
     return null
   }
 
