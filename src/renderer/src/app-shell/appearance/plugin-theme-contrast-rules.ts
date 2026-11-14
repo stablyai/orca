@@ -119,6 +119,11 @@ const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
     ['--chat-inline-code', '--chat-user-message']
   ].map((under) => chatPair('--chat-selection', '--chat-selection-foreground', undefined, under)),
   { ...textPair('--editor-surface', '--text-link'), drop: ['--text-link'] },
+  {
+    ...textPair('--editor-selection', '--foreground'),
+    drop: ['--editor-selection'],
+    over: '--editor-surface'
+  },
   chatPair('--chat-user-message', '--chat-link', ['--chat-user-message']),
   ...GIT_DECORATIONS.map((status): ContrastRule => ({
     surface: '--sidebar',
