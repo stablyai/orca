@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VerifiedCodexResumeSource } from '../../codex/history/resume/codex-session-resume-preparation'
-import {
-  CODEX_DAEMON_OVERRIDE_MARKER,
-  codexDaemonSocketPathExceedsLimit
-} from '../../codex/configuration/shared-server/codex-daemon-socket-path-guard'
+import { CODEX_DAEMON_OVERRIDE_MARKER } from '../../codex/configuration/shared-server/codex-daemon-socket-path-guard'
 
 const mocks = vi.hoisted(() => ({
   hooksEnabled: false,
@@ -101,9 +98,12 @@ describe('Codex session resume daemon socket guard', () => {
     })
   }
 
-  it('guards the resumed account home when hook repair fails before mirroring config', async () => {
-    expect(codexDaemonSocketPathExceedsLimit(accountHome)).toBe(true)
-    writeFileSync(join(accountHome, 'config.toml'), 'model = "gpt-5"\n', 'utf-8')
+  it('cleans the old override from a resumed home even when hook repair fails', async () => {
+    writeFileSync(
+      join(accountHome, 'config.toml'),
+      `model = "gpt-5"\n\n[features]\ndaemon_auto_start = false ${CODEX_DAEMON_OVERRIDE_MARKER}\n`,
+      'utf-8'
+    )
     mocks.hooksEnabled = true
     mocks.installForLaunchPrep.mockRejectedValue(new Error('Could not parse Codex hooks.json'))
 
@@ -111,12 +111,10 @@ describe('Codex session resume daemon socket guard', () => {
 
     expect(preparation).toMatchObject({ outcome: 'resume', codexHomePath: accountHome })
     const config = readFileSync(join(accountHome, 'config.toml'), 'utf-8')
-    expect(config).toContain('model = "gpt-5"')
-    expect(config).toContain(`daemon_auto_start = false ${CODEX_DAEMON_OVERRIDE_MARKER}`)
+    expect(config).toBe('model = "gpt-5"\n')
   })
 
   it('never writes the guard into the real Codex home a migrated resume runs in', async () => {
-    expect(codexDaemonSocketPathExceedsLimit(mocks.systemHomePath)).toBe(true)
     mocks.prepareLegacySharedCodexSessionResume.mockResolvedValue({ useRealCodexHome: true })
     mocks.hooksEnabled = true
 
