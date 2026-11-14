@@ -2,10 +2,9 @@ import { useId, useState } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import {
   isWorkerQuietMinutes,
-  MAX_WORKER_QUIET_MINUTES,
   resolveWorkerQuietMinutes
 } from '../../../../../shared/orchestration/workers/worker-quiet-settings'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { Input } from '../../ui/input'
 import { Button } from '../../ui/button'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
@@ -21,7 +20,6 @@ export function OrchestrationWorkerQuietSetting({
   updateSettings
 }: Props): React.JSX.Element {
   const t = useTranslate()
-  const intlLocale = useIntlLocale()
   const id = useId()
   const raw = settings.orchestrationQuietWorkerMinutes
   const minutes = resolveWorkerQuietMinutes(settings)
@@ -29,7 +27,8 @@ export function OrchestrationWorkerQuietSetting({
   const [draft, setDraft] = useState({ raw, value: String(minutes || 15) })
   const [invalid, setInvalid] = useState(false)
   if (!Object.is(draft.raw, raw)) {
-    setDraft({ raw, value: minutes > 0 ? String(minutes) : draft.value })
+    const draftMinutes = minutes || (isWorkerQuietMinutes(draft.raw) ? draft.raw : 0)
+    setDraft({ raw, value: draftMinutes > 0 ? String(draftMinutes) : draft.value })
     setInvalid(false)
   }
   const save = (value: number | null): void => {
@@ -49,6 +48,7 @@ export function OrchestrationWorkerQuietSetting({
   }
   return (
     <SettingsRow
+      alignTop
       labelId={id}
       label={getWorkerQuietTitle(t)}
       description={
@@ -73,15 +73,14 @@ export function OrchestrationWorkerQuietSetting({
             <span id={`${id}-error`} role="alert" className="block text-destructive">
               {t(
                 'auto.components.settings.OrchestrationPane.workerQuietInvalid',
-                'Enter a whole number of minutes between 1 and {{max}}.',
-                { max: MAX_WORKER_QUIET_MINUTES.toLocaleString(intlLocale) }
+                'Enter a whole number of minutes (1 or more).'
               )}
             </span>
           ) : null}
         </>
       }
       control={
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-col items-end gap-2">
           <SettingsSegmentedControl
             value={minutes ? 'after' : 'off'}
             ariaLabelledBy={id}
@@ -97,38 +96,40 @@ export function OrchestrationWorkerQuietSetting({
             ]}
             onChange={(value) => (value === 'off' ? save(0) : commit())}
           />
-          <Input
-            type="text"
-            inputMode="numeric"
-            aria-label={t(
-              'auto.components.settings.OrchestrationPane.workerQuietMinutes',
-              'Minutes'
-            )}
-            aria-invalid={invalid}
-            aria-describedby={invalid ? `${id}-error` : undefined}
-            value={draft.value}
-            onChange={(event) => {
-              setDraft({ raw, value: event.target.value })
-              setInvalid(false)
-            }}
-            onBlur={() => {
-              if (minutes > 0) {
-                commit()
-              }
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && minutes > 0) {
-                commit()
-              }
-            }}
-            className="w-24"
-          />
-          <span className="text-settings-detail text-muted-foreground">
-            {t('auto.components.settings.OrchestrationPane.workerQuietUnit', 'minutes')}
-          </span>
-          <Button variant="ghost" size="sm" disabled={!chosen} onClick={() => save(null)}>
-            {t('auto.components.settings.OrchestrationPane.workerQuietReset', 'Use default')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Input
+              type="text"
+              inputMode="numeric"
+              aria-label={t(
+                'auto.components.settings.OrchestrationPane.workerQuietMinutes',
+                'Minutes'
+              )}
+              aria-invalid={invalid}
+              aria-describedby={invalid ? `${id}-error` : undefined}
+              value={draft.value}
+              onChange={(event) => {
+                setDraft({ raw, value: event.target.value })
+                setInvalid(false)
+              }}
+              onBlur={() => {
+                if (minutes > 0) {
+                  commit()
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && minutes > 0) {
+                  commit()
+                }
+              }}
+              className="w-24"
+            />
+            <span className="text-settings-detail text-muted-foreground">
+              {t('auto.components.settings.OrchestrationPane.workerQuietUnit', 'minutes')}
+            </span>
+            <Button variant="ghost" size="sm" disabled={!chosen} onClick={() => save(null)}>
+              {t('auto.components.settings.OrchestrationPane.workerQuietReset', 'Use default')}
+            </Button>
+          </div>
         </div>
       }
     />

@@ -35,6 +35,12 @@ it('records inherited Off as a choice and resets only on the explicit default ac
   fireEvent.keyDown(input, { key: 'Enter' })
   expect(settings.orchestrationQuietWorkerMinutes).toBe(23)
   expect(document.activeElement).toBe(input)
+  fireEvent.change(input, { target: { value: 'invalid' } })
+  fireEvent.blur(input)
+  fireEvent.click(screen.getByRole('radio', { name: 'Off' }))
+  expect(settings.orchestrationQuietWorkerMinutes).toBe(0)
+  fireEvent.click(screen.getByRole('radio', { name: 'After' }))
+  expect(settings.orchestrationQuietWorkerMinutes).toBe(23)
   write.mockClear()
   for (const value of ['', '1.5', '-1', '0', '18764998448', '1e3']) {
     fireEvent.change(screen.getByRole('textbox', { name: 'Minutes' }), { target: { value } })
