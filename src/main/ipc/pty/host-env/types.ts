@@ -39,6 +39,8 @@ export type BuildPtyHostEnvOptions = {
 export type CodexHomeLaunchContext = {
   unavailableManagedHomePath?: string
   launchesCodex?: boolean
+  /** The launch's worktree; a pinned one runs its own account instead of the selection (#9496). */
+  worktreeId?: string
 }
 
 // Codex hook-trust preparation may await app-server I/O without blocking main (#16441).

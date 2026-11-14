@@ -22969,10 +22969,6 @@
       "copySignInLink": "代わりにサインインリンクをコピー",
       "signInLinkCopied": "サインインリンクをコピーしました。別のアカウントでサインインするには、プライベートウィンドウで開いてください。",
       "signInLinkCopyFailed": "リンクをコピーできませんでした。",
-      "worktreeAccount": {
-        "followSelection": "選択中のアカウントに従う",
-        "submenu": "Claude アカウント"
-      },
       "switchSessions": {
         "busy": "作業中",
         "idle": "アイドル",
@@ -23041,7 +23037,12 @@
         "failed": "サインインに失敗しました。もう一度お試しください。"
       }
     },
-    "remoteScopeAccountsAddHere": "{{value0}} によって管理されているアカウントを表示しています。新規アカウントはそこにサインインします。このデバイスのブラウザで完了します。"
+    "remoteScopeAccountsAddHere": "{{value0}} によって管理されているアカウントを表示しています。新規アカウントはそこにサインインします。このデバイスのブラウザで完了します。",
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude アカウント",
+      "codexSubmenu": "Codex アカウント",
+      "followSelection": "選択中のアカウントに従う"
+    }
   },
   "osDocumentOpen": {
     "failed": "ファイルを開けませんでした。"

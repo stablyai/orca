@@ -22880,10 +22880,6 @@
       "copySignInLink": "Copiar link de login",
       "signInLinkCopied": "Link de login copiado. Abra-o em uma janela privativa para entrar com outra conta.",
       "signInLinkCopyFailed": "Não foi possível copiar o link.",
-      "worktreeAccount": {
-        "followSelection": "Seguir a conta selecionada",
-        "submenu": "Conta do Claude"
-      },
       "switchSessions": {
         "title": "Conta alterada para {{account}}",
         "dontAskAgain": "Não perguntar novamente (reiniciar automaticamente)",
@@ -22972,7 +22968,12 @@
         "failed": "Falha no login. Tente novamente."
       }
     },
-    "remoteScopeAccountsAddHere": "Mostrando contas gerenciadas por {{value0}}. Novas contas são conectadas lá; você conclui no navegador deste dispositivo."
+    "remoteScopeAccountsAddHere": "Mostrando contas gerenciadas por {{value0}}. Novas contas são conectadas lá; você conclui no navegador deste dispositivo.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Conta do Claude",
+      "codexSubmenu": "Conta do Codex",
+      "followSelection": "Seguir a conta selecionada"
+    }
   },
   "fileSearch": {
     "failed": "A busca falhou. Tente novamente.",

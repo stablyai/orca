@@ -9,6 +9,8 @@ import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configurati
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
+import { workspacePinnedAccount } from '../../../../shared/worktree-account-pin-settings'
 import { hasCustomCodexHomeOverrideForLaunch } from '../../../codex/configuration/homes/codex-real-home-path'
 import { markCodexSessionBackfillMarkerPending } from '../../../codex/history/backfill/codex-session-backfill-marker'
 import { getCodexSessionBackfillDate } from '../../../codex/history/backfill/codex-session-backfill-scan-dates'
@@ -33,6 +35,25 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       : normalizeCodexRuntimeSelection(settings).host
   }
 
+  /** A worktree pinned to a host account (#9496), unless that account is gone or lives in WSL. */
+  private pinnedHostAccount(worktreeId: string | undefined): CodexManagedAccount | null {
+    const settings = this.store.getSettings()
+    const accountId = worktreeId
+      ? workspacePinnedAccount(settings, 'codex', { workspaceId: worktreeId, wslDistro: null })
+      : undefined
+    const account = settings.codexManagedAccounts.find((candidate) => candidate.id === accountId)
+    return account && !this.getWslManagedHomePath(account) ? account : null
+  }
+
+  /** Its own home or nothing: a pinned launch never falls back to another account. */
+  private pinnedHomePath(account: CodexManagedAccount): string {
+    const resolved = this.resolveSelfContainedManagedHome(account)
+    if (resolved.kind !== 'owned') {
+      throw new ManagedCodexHomeTemporarilyUnavailableError()
+    }
+    return resolved.homePath
+  }
+
   /** Prepare the launch home without waiting for background history bridging. */
   prepareForCodexLaunch(
     target?: CodexAccountSelectionTarget,
@@ -46,6 +67,18 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       this.finishWslLaunchPreparation(wslTarget, homePath)
       void this.prepareWslAccountHistory(wslTarget, homePath)
       return homePath
+    }
+    const pinned = this.pinnedHostAccount(options?.worktreeId)
+    if (pinned) {
+      // Why not prepareSelfContainedManagedHomeForLaunch: that one also syncs the selection's state.
+      const home = this.pinnedHomePath(pinned)
+      syncSystemCodexResourcesIntoManagedHome(home)
+      syncSystemConfigIntoManagedCodexHome({
+        runtimeHomePath: home,
+        systemHomePath: getSystemCodexHomePath()
+      })
+      this.startSelfContainedSessionBridgeForLaunch(home)
+      return home
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
@@ -86,7 +119,14 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   }
 
   /** Resolve the launch home without side effects for catalog reads; null means real ~/.codex. */
-  resolveHostCodexHomePathForLaunchReadOnly(launchEnv?: NodeJS.ProcessEnv): string | null {
+  resolveHostCodexHomePathForLaunchReadOnly(
+    launchEnv?: NodeJS.ProcessEnv,
+    worktreeId?: string
+  ): string | null {
+    const pinned = this.pinnedHostAccount(worktreeId)
+    if (pinned) {
+      return this.pinnedHomePath(pinned)
+    }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)

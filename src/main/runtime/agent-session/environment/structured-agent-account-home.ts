@@ -57,15 +57,23 @@ export type StructuredCodexAccountHomeDeps = {
   launchEnv: NodeJS.ProcessEnv
   /** Resolve create-prepared or side-effect-free read homes identically; null selects env/system defaults. Reads must not sync homes or clear selections. */
   resolveLaunchHome:
-    | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
+    | ((input: {
+        launchEnv: NodeJS.ProcessEnv
+        worktreeId?: string
+      }) => string | null | Promise<string | null>)
     | null
+  /** A worktree pinned to a Codex account resolves that account's home (#9496). */
+  worktreeId?: string
 }
 
 export async function resolveStructuredCodexAccountHomePath(
   deps: StructuredCodexAccountHomeDeps
 ): Promise<string> {
   // A create has no process yet, so the current selection is what it must follow.
-  const resolvedHome = await deps.resolveLaunchHome?.({ launchEnv: deps.launchEnv })
+  const resolvedHome = await deps.resolveLaunchHome?.({
+    launchEnv: deps.launchEnv,
+    ...(deps.worktreeId ? { worktreeId: deps.worktreeId } : {})
+  })
   const configuredHome = deps.launchEnv.CODEX_HOME
   return (
     resolvedHome?.trim() ||

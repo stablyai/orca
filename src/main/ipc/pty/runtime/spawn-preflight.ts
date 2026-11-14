@@ -166,6 +166,7 @@ export async function prepareRuntimePtySpawn(
     // The distro may stop after the hold read: a background start's prep must not wake it (E9).
     wslPassiveRestore: args.wslUserAct !== true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
+    ...(args.worktreeId ? { worktreeId: args.worktreeId } : {}),
     provider: ctx.provider,
     deps: ctx.deps
   })

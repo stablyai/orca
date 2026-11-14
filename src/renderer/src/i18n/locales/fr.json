@@ -22186,10 +22186,6 @@
       "copySignInLink": "Copier plutôt le lien de connexion",
       "signInLinkCopied": "Lien de connexion copié. Ouvrez-le dans une fenêtre privée pour vous connecter avec un autre compte.",
       "signInLinkCopyFailed": "Impossible de copier le lien.",
-      "worktreeAccount": {
-        "followSelection": "Suivre le compte sélectionné",
-        "submenu": "Compte Claude"
-      },
       "switchSessions": {
         "busy": "En activité",
         "idle": "Inactif",
@@ -22264,7 +22260,12 @@
         "failed": "Échec de la connexion. Réessayez."
       }
     },
-    "remoteScopeAccountsAddHere": "Affichage des comptes gérés par {{value0}}. Les nouveaux comptes s'y connectent ; vous terminez dans le navigateur de cet appareil."
+    "remoteScopeAccountsAddHere": "Affichage des comptes gérés par {{value0}}. Les nouveaux comptes s'y connectent ; vous terminez dans le navigateur de cet appareil.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Compte Claude",
+      "codexSubmenu": "Compte Codex",
+      "followSelection": "Suivre le compte sélectionné"
+    }
   },
   "osDocumentOpen": {
     "failed": "Échec de l'ouverture du fichier."

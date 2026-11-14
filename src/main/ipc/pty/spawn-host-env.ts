@@ -91,6 +91,8 @@ type PtySpawnHostEnvArgs = {
   /** A restore no user act asked for (#35813): its prep must not start a stopped WSL distro. */
   wslPassiveRestore?: boolean
   requestedAgentTeamsPath: string | undefined
+  /** A worktree pinned to a Codex account launches there instead of the selection (#9496). */
+  worktreeId?: string
   provider: IPtyProvider
   deps: PtySpawnCodexResumeDeps & {
     runtime?: OrcaRuntimeService
@@ -138,7 +140,10 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
   const baseEnv = deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch)
   const launchesCodex = args.launchAgent === 'codex'
   const selectLaunchCodexHome = async (): Promise<string | null> =>
-    (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null
+    (await deps.getSelectedCodexHomePath?.(target, baseEnv, {
+      launchesCodex,
+      worktreeId: args.worktreeId
+    })) ?? null
   let selectedCodexHomePath = !args.preAdopted
     ? getCompatibleSelectedCodexHomePath(
         target,
@@ -158,14 +163,18 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       resolveCurrent: async () =>
         getCompatibleSelectedCodexHomePath(
           target,
-          (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null
+          (await deps.getSelectedCodexHomePath?.(target, baseEnv, {
+            launchesCodex,
+            worktreeId: args.worktreeId
+          })) ?? null
         ),
       resolveAfterUnavailable: async (unavailableManagedHomePath) =>
         getCompatibleSelectedCodexHomePath(
           target,
           (await deps.getSelectedCodexHomePath?.(target, baseEnv, {
             unavailableManagedHomePath,
-            launchesCodex
+            launchesCodex,
+            worktreeId: args.worktreeId
           })) ?? null
         )
     })

@@ -1,18 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { isClaudeWorkspacePinned } from './worktree-account-pin-settings'
+import { workspacePinnedAccount } from './worktree-account-pin-settings'
 
-describe('isClaudeWorkspacePinned', () => {
-  const settings = { claudeAccountPinsByWorktree: { 'repo::wt-1': 'acct-a' } }
+describe('workspacePinnedAccount', () => {
+  const settings = {
+    claudeAccountPinsByWorktree: { 'repo::wt-1': 'claude-a' },
+    codexAccountPinsByWorktree: { 'repo::wt-1': 'codex-a' }
+  }
+  const host = (workspaceId: string) => ({ workspaceId, wslDistro: null })
 
-  it('pins host launches in a pinned workspace only', () => {
-    expect(isClaudeWorkspacePinned(settings, { workspaceId: 'repo::wt-1', wslDistro: null })).toBe(
-      true
-    )
-    expect(isClaudeWorkspacePinned(settings, { workspaceId: 'repo::wt-2', wslDistro: null })).toBe(
-      false
-    )
+  it("reads each agent's own pin for host launches only", () => {
+    expect(workspacePinnedAccount(settings, 'claude', host('repo::wt-1'))).toBe('claude-a')
+    expect(workspacePinnedAccount(settings, 'codex', host('repo::wt-1'))).toBe('codex-a')
+    expect(workspacePinnedAccount(settings, 'gemini', host('repo::wt-1'))).toBeUndefined()
+    expect(workspacePinnedAccount(settings, 'claude', host('repo::wt-2'))).toBeUndefined()
     expect(
-      isClaudeWorkspacePinned(settings, { workspaceId: 'repo::wt-1', wslDistro: 'Ubuntu' })
-    ).toBe(false)
+      workspacePinnedAccount(settings, 'claude', { workspaceId: 'repo::wt-1', wslDistro: 'Ubuntu' })
+    ).toBeUndefined()
   })
 })

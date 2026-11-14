@@ -22047,10 +22047,6 @@
       "copySignInLink": "Bunun yerine oturum açma bağlantısını kopyala",
       "signInLinkCopied": "Oturum açma bağlantısı kopyalandı. Farklı bir hesapla oturum açmak için bağlantıyı gizli pencerede açın.",
       "signInLinkCopyFailed": "Bağlantı kopyalanamadı.",
-      "worktreeAccount": {
-        "followSelection": "Seçili hesabı izle",
-        "submenu": "Claude hesabı"
-      },
       "switchSessions": {
         "title": "{{account}} hesabına geçildi",
         "dontAskAgain": "Bir daha sorma (otomatik yeniden başlat)",
@@ -22136,7 +22132,12 @@
         "failed": "Oturum açılamadı. Yeniden deneyin."
       }
     },
-    "remoteScopeAccountsAddHere": "{{value0}} tarafından yönetilen hesaplar gösteriliyor. Yeni hesaplar için oturum orada açılır; işlemi bu cihazın tarayıcısında tamamlarsınız."
+    "remoteScopeAccountsAddHere": "{{value0}} tarafından yönetilen hesaplar gösteriliyor. Yeni hesaplar için oturum orada açılır; işlemi bu cihazın tarayıcısında tamamlarsınız.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude hesabı",
+      "codexSubmenu": "Codex hesabı",
+      "followSelection": "Seçili hesabı izle"
+    }
   },
   "fileSearch": {
     "failed": "Arama başarısız oldu. Tekrar deneyin.",

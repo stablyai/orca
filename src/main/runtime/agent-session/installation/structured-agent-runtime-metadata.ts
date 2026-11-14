@@ -124,7 +124,8 @@ async function resolveCodexAccountHomePath(
   const codexHome = await resolveStructuredCodexAccountHomePath({
     launchEnv,
     resolveLaunchHome:
-      purpose === 'launch' ? services.prepareCodexLaunchHome : services.readCodexLaunchHome
+      purpose === 'launch' ? services.prepareCodexLaunchHome : services.readCodexLaunchHome,
+    ...(location?.wslDistro === null ? { worktreeId: location.workspaceId } : {})
   })
   if (purpose === 'launch' && workspacePath) {
     await applyStructuredCodexWorkspaceTrust({

@@ -21513,10 +21513,6 @@
       "copySignInLink": "대신 로그인 링크 복사",
       "signInLinkCopied": "로그인 링크를 복사했습니다. 다른 계정으로 로그인하려면 비공개 창에서 여세요.",
       "signInLinkCopyFailed": "링크를 복사할 수 없습니다.",
-      "worktreeAccount": {
-        "followSelection": "선택한 계정 따르기",
-        "submenu": "Claude 계정"
-      },
       "switchSessions": {
         "busy": "작업 중",
         "idle": "유휴",
@@ -21585,7 +21581,12 @@
         "failed": "로그인하지 못했습니다. 다시 시도하세요."
       }
     },
-    "remoteScopeAccountsAddHere": "{{value0}}에서 관리하는 계정을 표시합니다. 거기에 새 계정이 로그인됩니다. 이 기기의 브라우저에서 완료합니다."
+    "remoteScopeAccountsAddHere": "{{value0}}에서 관리하는 계정을 표시합니다. 거기에 새 계정이 로그인됩니다. 이 기기의 브라우저에서 완료합니다.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude 계정",
+      "codexSubmenu": "Codex 계정",
+      "followSelection": "선택한 계정 따르기"
+    }
   },
   "osDocumentOpen": {
     "failed": "파일을 열지 못했습니다."

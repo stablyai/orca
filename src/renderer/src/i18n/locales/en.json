@@ -23965,10 +23965,6 @@
       "copySignInLink": "Copy sign-in link instead",
       "signInLinkCopied": "Sign-in link copied. Open it in a private window to sign in with a different account.",
       "signInLinkCopyFailed": "Could not copy the link.",
-      "worktreeAccount": {
-        "followSelection": "Follow selected account",
-        "submenu": "Claude Account"
-      },
       "switchSessions": {
         "title": "Switched to {{account}}",
         "dontAskAgain": "Don't ask again (restart automatically)",
@@ -24064,6 +24060,11 @@
       "cancel": "Cancel",
       "save": "Save",
       "unsupportedHost": "Update Orca on {{host}} to change this setting there."
+    },
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude Account",
+      "codexSubmenu": "Codex Account",
+      "followSelection": "Follow selected account"
     }
   },
   "fileSearch": {

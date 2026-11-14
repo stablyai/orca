@@ -21584,10 +21584,6 @@
       "copySignInLink": "改為複製登入連結",
       "signInLinkCopied": "已複製登入連結。請在隱私視窗中開啟它以使用其他帳戶登入。",
       "signInLinkCopyFailed": "無法複製連結。",
-      "worktreeAccount": {
-        "followSelection": "跟隨所選帳號",
-        "submenu": "Claude 帳號"
-      },
       "switchSessions": {
         "title": "已切換至 {{account}}",
         "dontAskAgain": "不再詢問（自動重新啟動）",
@@ -21670,7 +21666,12 @@
         "failed": "登入失敗。請再試一次。"
       }
     },
-    "remoteScopeAccountsAddHere": "目前顯示由 {{value0}} 管理的帳戶。新帳戶會在該處登入；請在此裝置的瀏覽器中完成登入。"
+    "remoteScopeAccountsAddHere": "目前顯示由 {{value0}} 管理的帳戶。新帳戶會在該處登入；請在此裝置的瀏覽器中完成登入。",
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude 帳號",
+      "codexSubmenu": "Codex 帳號",
+      "followSelection": "跟隨所選帳號"
+    }
   },
   "fileSearch": {
     "failed": "搜尋失敗。再試一次。",
