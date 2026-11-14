@@ -816,6 +816,10 @@
       "saving": "Enregistrement…",
       "save": "Enregistrer le formateur",
       "710343e374": "Commande de formatage"
+    },
+    "groupHooks": {
+      "invalidSetup": "Le fichier est présent, mais Orca n'a pas trouvé de script de setup valide.",
+      "supportedKeys": "Définissez uniquement les clés prises en charge : `scripts` et `setup`."
     }
   },
   "menu": {

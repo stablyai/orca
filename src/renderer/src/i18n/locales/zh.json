@@ -599,6 +599,10 @@
       "include": "包含的 glob（每行一个）",
       "includeHelp": "匹配相对于工作区根目录的路径。没有匹配的 glob 时不会格式化。* 和 ** 会跳过以点开头的名称；请明确列出，例如 .github/**/*.yml。要使用此命令，请在通用 > 编辑器中启用“保存时格式化”。",
       "710343e374": "格式化程序命令"
+    },
+    "groupHooks": {
+      "invalidSetup": "文件存在，但 Orca 找不到有效的设置脚本。",
+      "supportedKeys": "只定义受支持的键：`scripts` 和 `setup`。"
     }
   },
   "menu": {
