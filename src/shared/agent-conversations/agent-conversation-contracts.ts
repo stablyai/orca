@@ -16,6 +16,9 @@ export type AgentConversationRow = {
   /** The conversation's Orca session ID (a chat's /clear root); null for a terminal agent the
    *  host has not named yet, which no command can address by ID. */
   orcaSessionId: string | null
+  /** An asleep WSL agent saved before Orca recorded its distro: its ID can't be found until it
+   *  wakes, so it has none here though Orca named it. */
+  savedWithoutDistro?: true
   kind: AgentConversationKind
   agent: string | null
   state: AgentListState
@@ -44,6 +47,8 @@ export type AgentShowResult = {
    *  a terminal agent with no open pane shows its saved `asleep` place. Read from the
    *  conversation's own status rows, so open places carry no title (`list` does). */
   places: AgentConversationRow[]
+  /** A sleeping WSL agent saved before Orca recorded its distro, so its place can't be found. */
+  savedWithoutDistro?: true
 }
 
 export type AgentReadTool = { name: string; state?: string }

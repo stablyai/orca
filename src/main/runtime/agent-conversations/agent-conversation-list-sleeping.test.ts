@@ -35,8 +35,7 @@ vi.mock('../../agent-hooks/server/agent-hook-server', async (load) => ({
 }))
 
 const { AgentHookServer } = await import('../../agent-hooks/server/agent-hook-server')
-const { agentConversationPlaces, listAgentConversations } =
-  await import('./agent-conversation-list')
+const { listAgentConversations } = await import('./agent-conversation-list')
 
 const WORKTREE = 'repo::/work/delta'
 const OTHER = 'repo::/work/echo'
@@ -55,7 +54,7 @@ class IdentityTestServer extends AgentHookServer {
     return this.identityClient
   }
 
-  moveStatusFile(path: string): void {
+  moveStatusFile(path: string | null): void {
     this.setStatusFilePath(path)
   }
 }
@@ -165,7 +164,14 @@ function runtime(
   }
   const host = {
     labels: 0,
+    namers: 0,
     saved: records,
+    orchestrationSenderNames: {
+      agentRowNamer: () => {
+        host.namers++
+        return () => null
+      }
+    },
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: listing reads only each worktree's id, labels and agent rows.
     getWorktreePs: async () => ps as unknown as RuntimeWorktreePsResult,
     readLocalSleepingAgentSessions: () => host.saved,
@@ -180,72 +186,6 @@ function runtime(
   }
   return host
 }
-
-it('lists and shows a terminal agent whose workspace is asleep, without waking it', async () => {
-  const { ids } = await sleptAgents(['session-a'])
-  const host = runtime({ [pane(0)]: record(0, 'session-a', 'DELTA done') })
-
-  const listed = await listAgentConversations(host, 10)
-  const shown = await agentConversationPlaces(host, { kind: 'terminal', orcaSessionId: ids[0]! })
-
-  const asleep = {
-    orcaSessionId: ids[0],
-    kind: 'terminal',
-    agent: 'claude',
-    state: 'asleep',
-    worktreeId: WORKTREE,
-    workspace: 'delta',
-    repo: 'repo',
-    paneKey: pane(0),
-    lastAssistantMessage: 'DELTA done'
-  }
-  expect(listed.agents).toEqual([expect.objectContaining(asleep)])
-  expect(shown).toEqual([expect.objectContaining(asleep)])
-  expect(await listAgentConversations(host, 10, { state: 'asleep' })).toMatchObject({
-    agents: [{ orcaSessionId: ids[0] }]
-  })
-  expect(await listAgentConversations(host, 10, { state: 'working' })).toMatchObject({
-    agents: []
-  })
-})
-
-it('keeps the tabs a wake has not reopened, and the woken row keeps its last reply', async () => {
-  const { ids } = await sleptAgents(['session-a', 'session-b'])
-  // Tab 0 woke and resumed with no new reply yet; tab 1 has not been opened since the wake.
-  const host = runtime(
-    {
-      [pane(0)]: { ...record(0, 'session-a', 'ECHO done'), origin: 'live' },
-      [pane(1)]: record(1, 'session-b', 'DELTA done')
-    },
-    [
-      {
-        paneKey: pane(0),
-        orcaSessionId: ids[0],
-        agentType: 'claude',
-        state: 'working',
-        lastAssistantMessage: null,
-        conversationName: 'echo',
-        updatedAt: 50
-      }
-    ]
-  )
-
-  const listed = await listAgentConversations(host, 10)
-
-  expect(listed.agents).toEqual([
-    expect.objectContaining({
-      orcaSessionId: ids[0],
-      state: 'working',
-      lastAssistantMessage: 'ECHO done'
-    }),
-    expect.objectContaining({
-      orcaSessionId: ids[1],
-      state: 'asleep',
-      paneKey: pane(1),
-      lastAssistantMessage: 'DELTA done'
-    })
-  ])
-})
 
 it.each([100, 1_000])(
   'asks the store once for %i sleeping agents across repeated lists, and again for a new store',
@@ -346,10 +286,13 @@ it.each([100, 1_000])(
     // Only the working row's own record was asked for, once; no asleep row was labelled.
     expect(server.identityClient.idsOfKeysKeys).toBe(1)
     expect(host.labels).toBe(0)
+    expect(host.namers).toBe(0)
 
     const asleep = await listAgentConversations(host, 10, { state: 'asleep' })
     expect(asleep.agents).toHaveLength(count - 1)
     expect(asleep.agents.every((row) => row.state === 'asleep')).toBe(true)
+    // One namer names every asleep row, however many there are.
+    expect(host.namers).toBe(1)
   }
 )
 
@@ -373,4 +316,117 @@ it('keeps the ids it knows when the store cannot answer a new saved agent', asyn
   }
   // The failure backoff holds every later list's question.
   expect(failed).toBe(1)
+})
+
+/** Holds the store's next `idsOfKeys` answer until released. */
+function holdKeyLookups(client: InProcessAgentIdentityClient) {
+  let release = () => {}
+  const released = new Promise<void>((resolve) => (release = resolve))
+  const answer = client.idsOfKeys.bind(client)
+  client.idsOfKeys = async (...args) => {
+    await released
+    return answer(...args)
+  }
+  return release
+}
+
+const idOf = async (host: ReturnType<typeof runtime>, tab: number) =>
+  (await listAgentConversations(host, 10)).agents.find((row) => row.paneKey === pane(tab))
+    ?.orcaSessionId
+
+it('shows an id the store committed after the last pane asking for it left', async () => {
+  const server = await started()
+  const host = runtime({ [pane(5)]: record(5, 'session-late', 'late reply') })
+  expect(await idOf(host, 5)).toBeNull()
+
+  // It reports, and its naming is sent; the pane sleeps before the store answers.
+  server.identityClient.hold = true
+  const event = normalizeHookPayload(
+    createHookListenerState(),
+    'claude',
+    buildBody(
+      {
+        hook_event_name: 'UserPromptSubmit',
+        session_id: 'session-late',
+        transcript_path: '/home/u/.claude/projects/p/session-late.jsonl',
+        prompt: 'task'
+      },
+      { paneKey: pane(5), tabId: 'tab-5' }
+    ),
+    'production'
+  )
+  server.ingestRemote(event!, null)
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(server.identityClient.identifyRequests).toBe(1)
+  server.dropStatusEntry(pane(5), { preserveResumeIdentity: false })
+  server.identityClient.release()
+  await new Promise((resolve) => setImmediate(resolve))
+  const linked = await server.terminalAgentIdsOfProviderSession('session-late')
+  const named = Array.isArray(linked) ? linked[0] : undefined
+
+  expect(named).toMatch(/^claude_/)
+  expect(await idOf(host, 5)).toBe(named)
+  expect(server.identityClient.idsOfKeysRequests).toBe(1)
+})
+
+it.each(['switches', 'clears', 'closes'] as const)(
+  'returns no id of a store whose authority ends while a list waits on it (it %s)',
+  async (end) => {
+    const { server, ids } = await sleptAgents(['session-a'])
+    const host = runtime(savedRecords(1))
+    expect(await idOf(host, 0)).toBe(ids[0])
+    host.saved = { ...host.saved, [pane(9)]: record(9, 'session-new', '') }
+    const release = holdKeyLookups(server.identityClient)
+
+    const listing = idOf(host, 0)
+    await new Promise((resolve) => setImmediate(resolve))
+    if (end === 'switches') {
+      server.moveStatusFile(join(directory(), 'status.json'))
+    } else if (end === 'clears') {
+      server.moveStatusFile(null)
+    } else {
+      server.stop()
+    }
+    release()
+
+    expect(await listing).toBeNull()
+  }
+)
+
+it('drops ids of saved agents that are gone, and asks again when one comes back', async () => {
+  const { server, ids } = await sleptAgents(['session-a'])
+  const host = runtime(savedRecords(100))
+  await listAgentConversations(host, 10)
+  expect(server.identityClient.idsOfKeysKeys).toBe(100)
+
+  host.saved = {}
+  for (const filter of [{}, { worktreeId: WORKTREE }, { state: 'working' as const }]) {
+    expect((await listAgentConversations(host, 10, filter)).agents).toEqual([])
+  }
+  host.saved = { [pane(0)]: record(0, 'session-a', 'DELTA done') }
+
+  expect(await idOf(host, 0)).toBe(ids[0])
+  expect(server.identityClient.idsOfKeysKeys).toBe(101)
+})
+
+it('keeps out an answer for a saved agent removed while it was asked', async () => {
+  const { server } = await sleptAgents(['session-a'])
+  const host = runtime(savedRecords(1))
+  await listAgentConversations(host, 10)
+  const late = record(9, 'session-late', '')
+  host.saved = { ...host.saved, [pane(9)]: late }
+  const release = holdKeyLookups(server.identityClient)
+  const listing = listAgentConversations(host, 10)
+  await new Promise((resolve) => setImmediate(resolve))
+
+  // The record goes; another list sees the map without it, then the old answer arrives.
+  const { [pane(9)]: _removed, ...rest } = host.saved
+  host.saved = rest
+  await listAgentConversations(host, 10)
+  release()
+  await listing
+  host.saved = { ...host.saved, [pane(9)]: late }
+  await listAgentConversations(host, 10)
+
+  expect(server.identityClient.idsOfKeysKeys).toBe(3)
 })

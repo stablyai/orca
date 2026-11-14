@@ -1,8 +1,13 @@
 import type {
   AgentConversationRow,
   AgentListResult,
-  AgentListState
+  AgentListState,
+  AgentShowResult
 } from '../../../shared/agent-conversations/agent-conversation-contracts'
+import {
+  SAVED_WITHOUT_DISTRO,
+  sleepingRecordSighting
+} from '../../agent-hooks/identity/sleeping-agent-records'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RuntimeWorktreePsResult } from '../../../shared/runtime-worktree-contracts'
 import { structuredAgentSessionIdFromTabId } from '../../../shared/agent-session/view/structured-agent-session-tab-id'
@@ -14,6 +19,8 @@ import { resolveLineageRunningSession } from '../orchestration/addressing/sessio
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { RuntimeOrchestrationSenderNames } from '../orchestration/mailbox/senders/runtime-orchestration-sender-names'
 import { connectionEvidenceHostId } from '../workspaces/process-listing/runtime-worktree-summary-paths'
 
 type ListFilter = { worktreeId?: string; state?: AgentListState }
@@ -24,7 +31,11 @@ type AgentPlaceRuntime = {
     hostId: ExecutionHostId
   ): { workspace: string; repo?: string } | null
   readLocalSleepingAgentSessions(): Readonly<Record<string, SleepingAgentSessionRecord>>
+  /** Names a saved pane as a live row is named: its saved tab's names, then its own title. */
+  orchestrationSenderNames: Pick<RuntimeOrchestrationSenderNames, 'agentRowNamer'>
 }
+
+type PaneNamer = ReturnType<RuntimeOrchestrationSenderNames['agentRowNamer']>
 
 /** Every agent in this host's workspaces: `worktree.ps` rows, then each terminal agent with no
  *  open pane from its saved sleeping record (asleep, or its tab not reopened since a wake), so
@@ -61,8 +72,7 @@ export async function listAgentConversations(
         )
       : []
   const records = [...borrowing.map(({ record }) => record), ...candidates]
-  const ids =
-    records.length > 0 ? await agentHookServer.sleepingTerminalAgentIds(saved, records) : []
+  const ids = await agentHookServer.sleepingTerminalAgentIds(saved, records)
   borrowing.forEach(({ row, record }, index) => {
     if (ids[index] === row.orcaSessionId) {
       row.lastAssistantMessage = record.lastAssistantMessage ?? null
@@ -70,13 +80,15 @@ export async function listAgentConversations(
   })
   const listed = new Set(list.agents.map((row) => row.orcaSessionId))
   const asleep: AgentConversationRow[] = []
+  // One namer per list: it resolves each workspace's saved tabs once.
+  const name = candidates.length > 0 ? runtime.orchestrationSenderNames.agentRowNamer() : null
   candidates.forEach((record, index) => {
     const orcaSessionId = ids[borrowing.length + index] ?? null
     if (orcaSessionId && listed.has(orcaSessionId)) {
       return
     }
     listed.add(orcaSessionId)
-    const place = sleepingPlace(runtime, record, orcaSessionId)
+    const place = sleepingPlace(runtime, record, orcaSessionId, name!)
     if (place) {
       asleep.push(place)
     }
@@ -90,13 +102,19 @@ export async function listAgentConversations(
 function sleepingPlace(
   runtime: AgentPlaceRuntime,
   record: SleepingAgentSessionRecord,
-  orcaSessionId: string | null
+  orcaSessionId: string | null,
+  name: PaneNamer
 ): AgentConversationRow | null {
   const hostId = connectionEvidenceHostId(record.connectionId ?? null)
   const label = runtime.getWorkspaceLabel(record.worktreeId, hostId)
+  const tabId = record.tabId ?? parsePaneKey(record.paneKey)?.tabId
+  // Visible, but its ID can't be found until it wakes and names its distro again.
+  const savedWithoutDistro =
+    !orcaSessionId && sleepingRecordSighting(record, process.platform === 'win32') === null
   return label
     ? {
         orcaSessionId,
+        ...(savedWithoutDistro ? { savedWithoutDistro } : {}),
         kind: 'terminal',
         agent: record.agent,
         state: 'asleep',
@@ -104,7 +122,19 @@ function sleepingPlace(
         ...label,
         hostId,
         paneKey: record.paneKey,
-        title: record.terminalTitle ?? null,
+        // A split pane takes only its own saved title, never a focused sibling's.
+        title:
+          (tabId &&
+            name({
+              paneKey: record.paneKey,
+              tabId,
+              worktreeId: record.worktreeId,
+              ptyId: undefined,
+              agentType: record.agent,
+              providerSessionId: record.providerSession.id
+            })) ||
+          record.terminalTitle ||
+          null,
         lastAssistantMessage: record.lastAssistantMessage ?? null,
         updatedAt: record.updatedAt
       }
@@ -158,18 +188,47 @@ export async function agentConversationPlaces(
   runtime: AgentPlaceRuntime,
   resolved: ResolvedAgentConversation
 ): Promise<AgentConversationRow[]> {
+  return (await conversationPlaces(runtime, resolved)).places
+}
+
+/** `agent show`: the places, and why a sleeping WSL agent saved without its distro has none. */
+export async function showAgentConversation(
+  runtime: AgentPlaceRuntime,
+  resolved: ResolvedAgentConversation
+): Promise<AgentShowResult> {
+  const { places, savedWithoutDistro } = await conversationPlaces(runtime, resolved)
+  return {
+    orcaSessionId: resolved.orcaSessionId,
+    kind: resolved.kind,
+    places,
+    ...(savedWithoutDistro ? { savedWithoutDistro } : {})
+  }
+}
+
+async function conversationPlaces(
+  runtime: AgentPlaceRuntime,
+  resolved: ResolvedAgentConversation
+): Promise<{ places: AgentConversationRow[]; savedWithoutDistro?: true }> {
   const places = await openPlaces(runtime, resolved)
   if (places.length > 0 || resolved.kind !== 'terminal') {
-    return places
+    return { places }
   }
   const sleeping = await agentHookServer.sleepingTerminalAgent(resolved.orcaSessionId, () =>
     runtime.readLocalSleepingAgentSessions()
   )
+  if (sleeping === SAVED_WITHOUT_DISTRO) {
+    return { places: [], savedWithoutDistro: true }
+  }
   const place =
-    sleeping && 'record' in sleeping
-      ? sleepingPlace(runtime, sleeping.record, resolved.orcaSessionId)
+    typeof sleeping === 'object' && sleeping && 'record' in sleeping
+      ? sleepingPlace(
+          runtime,
+          sleeping.record,
+          resolved.orcaSessionId,
+          runtime.orchestrationSenderNames.agentRowNamer()
+        )
       : null
-  return place ? [place] : []
+  return { places: place ? [place] : [] }
 }
 
 async function openPlaces(

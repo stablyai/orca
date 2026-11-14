@@ -2,20 +2,19 @@ import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import type { AgentIdentityDemand } from './agent-identity-demand'
 import type { AgentProviderKey } from './agent-provider-key'
 
-/** The saved records a cache answers for: kept while `source` is the same saved map. */
+/** The saved records a memo answers for, by the saved map's identity; held weakly. */
 export type SavedKeyPopulation = { source: object; keys: () => AgentProviderKey[] }
 
-/** Saved sleeping records' ids for one store authority, linking nothing. An answer lives while
- *  its key is in the saved records and the authority stands, whatever subset a caller asks
- *  about. An id is never relinked, and a miss becomes an id only when this host names the key,
- *  which `named` records, so neither is asked twice. New keys go in one question; a failed one
- *  leaves only its own keys unknown. */
+/** Saved sleeping records' ids for one store authority, linking nothing. Members are the keys
+ *  the current saved map names, whatever subset a caller asks about; an answer lives while its
+ *  key is a member and the authority stands. An id is never relinked, and a miss becomes an id
+ *  only when this host commits the key's link, which `linked` records even when no live pane
+ *  waits for it. New keys go in one question; a failed one leaves only its own keys unknown. */
 export class SavedAgentKeyIds {
   private authority = -1
+  private population: WeakRef<object> | null = null
+  private members = new Set<string>()
   private ids = new Map<string, OrcaSessionId | null>()
-  private population: object | null = null
-  /** Keys whose question is in flight, so a naming meanwhile is not lost to its older answer. */
-  private readonly asking = new Map<string, number>()
 
   constructor(
     private readonly demand: AgentIdentityDemand,
@@ -38,59 +37,59 @@ export class SavedAgentKeyIds {
     })
     if (missing.size > 0) {
       const asked = [...missing.keys()]
-      for (const keyString of asked) {
-        this.asking.set(keyString, (this.asking.get(keyString) ?? 0) + 1)
-      }
-      const answer = await this.demand
-        .lookup(`idsOfKeys\0${asked.join('\0')}`, (client, path) =>
-          client.idsOfKeys(path, [...missing.values()])
-        )
-        .finally(() => {
-          for (const keyString of asked) {
-            const count = (this.asking.get(keyString) ?? 1) - 1
-            if (count === 0) {
-              this.asking.delete(keyString)
-            } else {
-              this.asking.set(keyString, count)
-            }
-          }
-        })
-      if (answer && this.authority === authority && authority === this.demand.generation) {
+      const answer = await this.demand.lookup(`idsOfKeys\0${asked.join('\0')}`, (client, path) =>
+        client.idsOfKeys(path, [...missing.values()])
+      )
+      if (answer && this.current(authority)) {
         asked.forEach((keyString, index) => {
-          if (!this.ids.has(keyString)) {
+          // A key no longer saved, or linked meanwhile, keeps out an older answer.
+          if (this.members.has(keyString) && !this.ids.has(keyString)) {
             this.ids.set(keyString, answer[index] ?? null)
           }
         })
       }
     }
+    // The whole batch answers for one authority, cached members included.
     return strings.map((keyString) =>
-      this.authority === authority ? (this.ids.get(keyString) ?? null) : null
+      this.current(authority) ? (this.ids.get(keyString) ?? null) : null
     )
   }
 
-  /** This host named `keyString`: a saved key's miss, or one being asked, becomes its id. */
-  named(keyString: string, id: OrcaSessionId): void {
-    if (this.ids.has(keyString) || this.asking.has(keyString)) {
+  /** Brings membership to the current saved map; O(1) while it is the same map. */
+  sync(population: SavedKeyPopulation): void {
+    const authority = this.demand.authority()
+    if (authority !== this.authority) {
+      this.clear()
+      this.authority = authority
+    }
+    if (this.population?.deref() === population.source) {
+      return
+    }
+    this.population = new WeakRef(population.source)
+    this.members = new Set(population.keys().map(this.keyString))
+    for (const keyString of this.ids.keys()) {
+      if (!this.members.has(keyString)) {
+        this.ids.delete(keyString)
+      }
+    }
+  }
+
+  /** This store committed `keyString`'s link: a saved key's miss becomes its id. */
+  linked(keyString: string, id: OrcaSessionId, authority: number): void {
+    if (authority === this.authority && this.members.has(keyString)) {
       this.ids.set(keyString, id)
     }
   }
 
-  /** A new authority answers afresh; a changed saved map drops keys no record names now. */
-  private sync(population: SavedKeyPopulation): void {
-    const authority = this.demand.authority()
-    if (authority !== this.authority) {
-      this.authority = authority
-      this.ids = new Map()
-      this.population = null
-    }
-    if (population.source !== this.population) {
-      this.population = population.source
-      const current = new Set(population.keys().map(this.keyString))
-      for (const keyString of this.ids.keys()) {
-        if (!current.has(keyString)) {
-          this.ids.delete(keyString)
-        }
-      }
-    }
+  /** The authority ended or its owner closed: nothing it answered is kept. */
+  clear(): void {
+    this.authority = -1
+    this.population = null
+    this.members = new Set()
+    this.ids = new Map()
+  }
+
+  private current(authority: number): boolean {
+    return this.authority === authority && authority === this.demand.generation
   }
 }

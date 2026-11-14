@@ -13,7 +13,9 @@ import type { AgentProviderSessionMetadata } from '../../../shared/agent-session
 import type { AgentProviderKey } from '../identity/agent-provider-key'
 import {
   sleepingRecordIds,
-  sleepingRecordOfKey,
+  sleepingRecordNaming,
+  sleepingRecordSighting,
+  SAVED_WITHOUT_DISTRO,
   type SleepingAgentSighting
 } from '../identity/sleeping-agent-records'
 import {
@@ -209,14 +211,20 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     id: string,
     readSleeping: () => Readonly<Record<string, SleepingAgentSighting>>,
     known?: TerminalAgentTranscriptSource
-  ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> {
+  ): Promise<
+    | TerminalAgentTranscriptSource
+    | ReverseLookupUnavailable
+    | typeof SAVED_WITHOUT_DISTRO
+    | null
+    | undefined
+  > {
     const authority = this.agentIdentities.authority()
     const live = this.liveTranscriptSource(id, authority)
     if (live) {
       return live
     }
     const sleeping = await this.sleepingTerminalAgent(id, readSleeping, authority, known)
-    return sleeping && 'record' in sleeping
+    return typeof sleeping === 'object' && sleeping && 'record' in sleeping
       ? { key: sleeping.key, providerSession: sleeping.record.providerSession, authority }
       : sleeping
   }
@@ -239,7 +247,13 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     readSleeping: () => Readonly<Record<string, T>>,
     authority = this.agentIdentities.authority(),
     known?: TerminalAgentTranscriptSource
-  ): Promise<{ key: AgentProviderKey; record: T } | ReverseLookupUnavailable | null | undefined> {
+  ): Promise<
+    | { key: AgentProviderKey; record: T }
+    | ReverseLookupUnavailable
+    | typeof SAVED_WITHOUT_DISTRO
+    | null
+    | undefined
+  > {
     const linked =
       known?.authority === authority
         ? { key: known.key }
@@ -251,13 +265,14 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       return linked
     }
     const { key } = linked
-    const windows = process.platform === 'win32'
-    // Sleeping records carry no WSL distro, so one names a WSL agent's key only while its hooks
-    // still say so; a native Windows agent's record matches its full key like any other.
-    if (!key || (windows && key.wslDistro !== '')) {
+    if (!key) {
       return null
     }
-    const record = sleepingRecordOfKey(readSleeping(), key, windows)
+    // A record matches only by its full key, so a WSL agent's needs its saved distro.
+    const record = sleepingRecordNaming(readSleeping(), key, process.platform === 'win32')
+    if (record === SAVED_WITHOUT_DISTRO) {
+      return record
+    }
     return record ? { key, record } : null
   }
 
@@ -345,17 +360,8 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
           }
     }
     const sleeping = readSleeping()
-    // Sleeping records carry no WSL distro; a woken agent's own hook names it. A record from a
-    // foreign connection (a direct SSH relay) names no conversation on this host.
-    if (!sleeping || process.platform === 'win32') {
-      return null
-    }
-    return {
-      sighting: {
-        agent: sleeping.agent,
-        providerSession: sleeping.providerSession,
-        connectionId: sleeping.connectionId ?? null
-      }
-    }
+    // Qualified as its live row was: a record that no longer says which distro names none.
+    const sighting = sleeping && sleepingRecordSighting(sleeping, process.platform === 'win32')
+    return sighting ? { sighting } : null
   }
 }

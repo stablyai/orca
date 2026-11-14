@@ -10,8 +10,8 @@ import type {
   AgentShowResult
 } from '../../../../../shared/agent-conversations/agent-conversation-contracts'
 import {
-  agentConversationPlaces,
-  listAgentConversations
+  listAgentConversations,
+  showAgentConversation
 } from '../../../agent-conversations/agent-conversation-list'
 import { resolveAgentConversation } from '../../../agent-conversations/agent-conversation-address'
 import { readAgentConversation } from '../../../agent-conversations/agent-conversation-read'
@@ -33,14 +33,8 @@ export const AGENT_CONVERSATION_METHODS = [
     name: 'agent.show',
     permission: 'workspace',
     params: AgentShowParams,
-    handler: async (params, { runtime }): Promise<AgentShowResult> => {
-      const resolved = await resolveAgentConversation(runtime, params.id)
-      return {
-        orcaSessionId: resolved.orcaSessionId,
-        kind: resolved.kind,
-        places: await agentConversationPlaces(runtime, resolved)
-      }
-    }
+    handler: async (params, { runtime }): Promise<AgentShowResult> =>
+      showAgentConversation(runtime, await resolveAgentConversation(runtime, params.id))
   }),
   defineMethod({
     name: 'agent.read',

@@ -17,6 +17,7 @@ import {
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { hookConnectionWslDistro } from '../../../../shared/agent-session/lifecycle/saved-agent-summary'
 import type { CommandOf } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
@@ -76,6 +77,9 @@ export function resumeStatusFromHookRow(
     ...(providerSession ? { providerSession } : {}),
     // Why: the SSH host boundary keeps the id; a WSL relay tag is local transport.
     connectionId: isLocalHookConnectionId(row.connectionId) ? null : row.connectionId,
+    ...(hookConnectionWslDistro(row.connectionId) !== undefined
+      ? { wslDistro: hookConnectionWslDistro(row.connectionId) }
+      : {}),
     lastAssistantMessage: row.lastAssistantMessage,
     interrupted: row.interrupted,
     ...(row.mainAgent ? { mainAgent: row.mainAgent } : {}),

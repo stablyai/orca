@@ -1,4 +1,5 @@
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { hookConnectionWslDistro } from '../../../../shared/agent-session/lifecycle/saved-agent-summary'
 import { AgentHookAttributionDiagnostics } from '../../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import { pickHostTurnEnd } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -242,7 +243,10 @@ export function createAgentStatusEventApplicator(args: {
         tabId: ownerTabId,
         worktreeId: statusWorktreeId,
         terminalHandle: data.terminalHandle,
-        ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
+        ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {}),
+        ...(hookConnectionWslDistro(data.connectionId) !== undefined
+          ? { wslDistro: hookConnectionWslDistro(data.connectionId) }
+          : {})
       },
       metadata: normalizeAgentStatusMetadata(data, authorityRestartId)
     }

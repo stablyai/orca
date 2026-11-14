@@ -50,7 +50,13 @@ export class AgentIdentityDemand {
     private readonly onAnswer: (demand: KeyDemand, identity: RowAgentIdentity) => void,
     private readonly createClient: () => AgentIdentityClient,
     /** Runs as an authority ends, so rows carrying its answers ask the next one. */
-    private readonly onAuthorityEnded: () => void = () => {}
+    private readonly onAuthorityEnded: () => void = () => {},
+    /** Runs when this authority commits a key's id, whether or not anything still waits for it. */
+    private readonly onLinked: (
+      keyString: string,
+      id: OrcaSessionId,
+      authority: number
+    ) => void = () => {}
   ) {}
 
   /** Bumped when the store authority ends; an answer from an older one stamps nothing. */
@@ -274,6 +280,9 @@ export class AgentIdentityDemand {
       return
     }
     void client.identify(path, key).then((answer) => {
+      if (current() && answer?.id) {
+        this.onLinked(keyString, answer.id, generation)
+      }
       if (current() && answer) {
         this.settle(keyString, { key, id: answer.id, authority: generation })
       } else if (current()) {

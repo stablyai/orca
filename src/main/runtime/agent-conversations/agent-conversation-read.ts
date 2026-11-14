@@ -17,6 +17,7 @@ import {
 } from '../orchestration/workers/transcripts/worker-transcript-read'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { TerminalAgentTranscriptSource } from '../../agent-hooks/server/server-agent-identities'
+import { SAVED_WITHOUT_DISTRO } from '../../agent-hooks/identity/sleeping-agent-records'
 import { sameProviderKey } from '../../agent-hooks/identity/agent-provider-key'
 import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { needsWslHostTranslation } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
@@ -82,7 +83,13 @@ async function readTerminalTranscript(
 ): Promise<AgentReadResult> {
   const locate = (
     known?: TerminalAgentTranscriptSource
-  ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> =>
+  ): Promise<
+    | TerminalAgentTranscriptSource
+    | ReverseLookupUnavailable
+    | typeof SAVED_WITHOUT_DISTRO
+    | null
+    | undefined
+  > =>
     agentHookServer.terminalAgentTranscriptSource(
       orcaSessionId,
       () => ctx.runtime.readLocalSleepingAgentSessions(),
@@ -99,6 +106,12 @@ async function readTerminalTranscript(
     throw new AgentConversationRefusal(
       CODES.unavailable,
       `Orca can't look up agent ${orcaSessionId}'s saved transcript with this identity file in the current version. Open it with the newer Orca version that wrote the file, or read an agent that's open now from \`orca agent list\`.`
+    )
+  }
+  if (source === SAVED_WITHOUT_DISTRO) {
+    throw new AgentConversationRefusal(
+      CODES.noTranscript,
+      `Orca can't read agent ${orcaSessionId} while it's asleep: it was saved before Orca recorded which WSL distro it ran in. Open its tab to wake it, then read it again.`
     )
   }
   if (source === null || !canReadWorkerTranscript(source.key.agent)) {
@@ -140,6 +153,7 @@ async function readTerminalTranscript(
   if (
     isReverseLookupUnavailable(after) ||
     !after ||
+    after === SAVED_WITHOUT_DISTRO ||
     !sameProviderKey(after.key, key) ||
     after.providerSession.id !== providerSession.id ||
     after.providerSession.transcriptPath !== providerSession.transcriptPath

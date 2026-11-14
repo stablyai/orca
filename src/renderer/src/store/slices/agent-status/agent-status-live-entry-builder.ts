@@ -1,4 +1,5 @@
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { agentStatusEntryExecutionScope } from './agent-status-entry-execution-scope'
 import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { resolveAgentStatusLiveEntryTiming } from './agent-status-live-entry-timing'
@@ -237,13 +238,12 @@ export function buildAgentStatusLiveEntry(
       existing?.worktreeId ??
       findAgentPaneWorktreeId(state, paneKey) ??
       undefined,
-    ...(routing?.connectionId !== undefined
-      ? { connectionId: routing.connectionId }
-      : existing?.connectionId !== undefined
-        ? { connectionId: existing.connectionId }
-        : state.sleepingAgentSessionsByPaneKey[paneKey]?.connectionId !== undefined
-          ? { connectionId: state.sleepingAgentSessionsByPaneKey[paneKey].connectionId }
-          : {}),
+    ...agentStatusEntryExecutionScope(
+      routing,
+      existing,
+      state.sleepingAgentSessionsByPaneKey[paneKey],
+      identity.agentType
+    ),
     tabId: statusTabId,
     terminalTitle: effectiveTitle,
     stateHistory: history,

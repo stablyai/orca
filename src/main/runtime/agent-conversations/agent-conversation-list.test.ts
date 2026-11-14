@@ -41,7 +41,8 @@ it.each([750, 7_500])(
     const runtime = {
       getWorkspaceLabel: vi.fn(() => ({ workspace: 'Workspace', repo: 'repo' })),
       getWorktreePs: vi.fn(),
-      readLocalSleepingAgentSessions: () => ({})
+      readLocalSleepingAgentSessions: () => ({}),
+      orchestrationSenderNames: { agentRowNamer: () => () => null }
     }
 
     const places = await agentConversationPlaces(runtime, {

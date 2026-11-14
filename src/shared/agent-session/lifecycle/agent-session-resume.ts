@@ -81,6 +81,10 @@ export type SleepingAgentSessionRecord = {
    *  read the verdict through `agentMainAgentVerdict`. */
   mainAgent?: AgentMainAgentStatus
   connectionId?: string | null
+  /** The WSL distro the agent ran in, '' when it ran natively on this host; absent on records
+   *  saved before Orca kept it. A WSL hook relay's `connectionId` saves as null, so this is the
+   *  record's only distro. */
+  wslDistro?: string
   launchConfig?: SleepingAgentLaunchConfig
   /** Worktree-sleep/legacy records open fresh tabs on activation. quit/live records belong to restored panes; only their cold-restore path consumes them to avoid duplicating warm sessions (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'

@@ -136,11 +136,11 @@ it('reads a native Windows agent asleep by its own record, never a WSL record of
   const wsl = server.getStatusSnapshot()[0]?.orcaSessionId
   expect(wsl).not.toBe(native)
   server.dropStatusEntry(PANE, { preserveResumeIdentity: false })
-  // Sleeping records carry no distro: both look native.
-  const asleep = (path: string) => ({
+  const asleep = (path: string, wslDistro?: string) => ({
     agent: 'claude' as const,
     providerSession: { key: 'session_id' as const, id: 'session-x', transcriptPath: path },
-    connectionId: null
+    connectionId: null,
+    ...(wslDistro !== undefined ? { wslDistro } : {})
   })
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
   try {
@@ -152,8 +152,21 @@ it('reads a native Windows agent asleep by its own record, never a WSL record of
         key: { wslDistro: '' },
         providerSession: { transcriptPath: nativePath }
       })
-      expect(await server.terminalAgentTranscriptSource(wsl!, () => records)).toBeNull()
+      // A record saved before Orca kept its distro is never taken for the WSL conversation.
+      expect(await server.terminalAgentTranscriptSource(wsl!, () => records)).toBe(
+        'saved-without-distro'
+      )
     }
+    // Saved with its distro, each conversation reads its own record.
+    const saved = { native: asleep(nativePath, ''), guest: asleep(guestPath, 'Ubuntu') }
+    expect(await server.terminalAgentTranscriptSource(wsl!, () => saved)).toMatchObject({
+      key: { wslDistro: 'Ubuntu' },
+      providerSession: { transcriptPath: guestPath }
+    })
+    expect(await server.terminalAgentTranscriptSource(native!, () => saved)).toMatchObject({
+      key: { wslDistro: '' },
+      providerSession: { transcriptPath: nativePath }
+    })
   } finally {
     Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   }

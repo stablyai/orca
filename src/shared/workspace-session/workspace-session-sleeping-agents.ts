@@ -102,6 +102,7 @@ export const sleepingAgentSessionRecordSchema = z
     // A malformed value drops the field, never the record.
     mainAgent: z.unknown().transform(normalizeMainAgentStatusField).optional(),
     connectionId: z.string().nullable().optional(),
+    wslDistro: z.string().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
     restoreOnTabOpenOnly: z.boolean().optional()

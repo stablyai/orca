@@ -1,13 +1,18 @@
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../../../shared/wsl-paths'
+import { WSL_HOOK_RELAY_CONNECTION_PREFIX } from '../../../shared/wsl-hook-relay-contract'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
-import { agentProviderKeyOf } from './pane-agent-identities'
+import { agentProviderKeyOf, type ProviderSessionSighting } from './pane-agent-identities'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import type { SavedKeyPopulation } from './saved-agent-key-ids'
 
+/** A sleeping agent whose saved record can't say which WSL distro it ran in, so it can't be
+ *  found by its full key until it wakes. */
+export const SAVED_WITHOUT_DISTRO = 'saved-without-distro'
+
 export type SleepingAgentSighting = Pick<
   SleepingAgentSessionRecord,
-  'agent' | 'providerSession' | 'connectionId'
+  'agent' | 'providerSession' | 'connectionId' | 'wslDistro'
 >
 
 type SleepingByProviderSession = Map<string, [paneKey: string, record: SleepingAgentSighting][]>
@@ -41,19 +46,49 @@ function isGuestTranscriptPath(path: string | undefined): boolean {
   )
 }
 
-/** The conversation a saved sleeping record names. On Windows a distro-less record with a guest
- *  path names no key: its WSL distro is unknown, and it is not a native agent's. */
+/** The WSL distro a saved record's agent ran in: the one it saved, else, for a record saved
+ *  before Orca kept it, the distro its WSL UNC transcript path names. '' for a native agent;
+ *  undefined when the record can't say, which on Windows is any other guest path. */
+function sleepingRecordDistro(record: SleepingAgentSighting, windows: boolean): string | undefined {
+  if (record.wslDistro !== undefined) {
+    return record.wslDistro
+  }
+  const path = record.providerSession.transcriptPath
+  const unc = path ? parseWslUncPath(path) : null
+  if (unc) {
+    return unc.distro
+  }
+  return windows && isGuestTranscriptPath(path) ? undefined : ''
+}
+
+/** The provider conversation a saved record names, qualified by where it ran, as its live
+ *  hook row would name it; null when the record no longer says which WSL distro that was. */
+export function sleepingRecordSighting(
+  record: SleepingAgentSighting,
+  windows: boolean
+): ProviderSessionSighting | null {
+  const connectionId = record.connectionId ?? null
+  // A record from a foreign connection (a direct SSH relay) keeps it, and names no key here.
+  if (connectionId !== null) {
+    return { agent: record.agent, providerSession: record.providerSession, connectionId }
+  }
+  const distro = sleepingRecordDistro(record, windows)
+  return distro === undefined
+    ? null
+    : {
+        agent: record.agent,
+        providerSession: record.providerSession,
+        connectionId: distro ? `${WSL_HOOK_RELAY_CONNECTION_PREFIX}${distro}` : null
+      }
+}
+
+/** The conversation a saved sleeping record names, by its full provider key. */
 export function sleepingRecordKey(
   record: SleepingAgentSighting,
   windows: boolean
 ): AgentProviderKey | null {
-  return windows && isGuestTranscriptPath(record.providerSession.transcriptPath)
-    ? null
-    : agentProviderKeyOf({
-        agent: record.agent,
-        providerSession: record.providerSession,
-        connectionId: record.connectionId ?? null
-      })
+  const sighting = sleepingRecordSighting(record, windows)
+  return sighting ? agentProviderKeyOf(sighting) : null
 }
 
 /** Each of `records`' ids through `idsOfKeys`, in order; null for one naming no key. Answers
@@ -69,21 +104,17 @@ export async function sleepingRecordIds(
 ): Promise<(OrcaSessionId | null)[]> {
   const keys = records.map((record) => sleepingRecordKey(record, windows))
   const asked = keys.filter((key): key is AgentProviderKey => key !== null)
-  const ids =
-    asked.length > 0
-      ? await idsOfKeys(asked, {
-          source: saved,
-          keys: () =>
-            Object.values(saved).flatMap((record) => sleepingRecordKey(record, windows) ?? [])
-        })
-      : []
+  // Asked even for no keys, so a changed or emptied saved map reaches the memo.
+  const ids = await idsOfKeys(asked, {
+    source: saved,
+    keys: () => Object.values(saved).flatMap((record) => sleepingRecordKey(record, windows) ?? [])
+  })
   let next = 0
   return keys.map((key) => (key ? (ids[next++] ?? null) : null))
 }
 
 /** The saved sleeping record naming `key`'s conversation, found through its provider session id
- *  and its full key. On Windows a distro-less WSL record of the same provider conversation also
- *  reads as native, so a native key never takes one with a guest path. */
+ *  and its full key, distro included: native and WSL agents may share a provider session id. */
 export function sleepingRecordOfKey<T extends SleepingAgentSighting>(
   records: Readonly<Record<string, T>>,
   key: AgentProviderKey,
@@ -100,4 +131,38 @@ export function sleepingRecordOfKey<T extends SleepingAgentSighting>(
     }
   }
   return null
+}
+
+/** A saved record of `key`'s provider conversation that can't name it because it doesn't say
+ *  which WSL distro it ran in (saved before Orca kept one); null when there is none. */
+export function sleepingRecordWithoutDistro<T extends SleepingAgentSighting>(
+  records: Readonly<Record<string, T>>,
+  key: AgentProviderKey,
+  windows: boolean
+): T | null {
+  for (const [paneKey, record] of sleepingByProviderSession(records).get(key.providerSessionId) ??
+    []) {
+    if (
+      records[paneKey] === record &&
+      record.agent === key.agent &&
+      (record.connectionId ?? null) === null &&
+      sleepingRecordSighting(record, windows) === null
+    ) {
+      return records[paneKey]!
+    }
+  }
+  return null
+}
+
+/** The saved record naming `key`, or `SAVED_WITHOUT_DISTRO` when one of its conversation exists
+ *  but can't say which WSL distro it ran in; null when nothing saved names it. */
+export function sleepingRecordNaming<T extends SleepingAgentSighting>(
+  records: Readonly<Record<string, T>>,
+  key: AgentProviderKey,
+  windows: boolean
+): T | typeof SAVED_WITHOUT_DISTRO | null {
+  return (
+    sleepingRecordOfKey(records, key, windows) ??
+    (sleepingRecordWithoutDistro(records, key, windows) ? SAVED_WITHOUT_DISTRO : null)
+  )
 }

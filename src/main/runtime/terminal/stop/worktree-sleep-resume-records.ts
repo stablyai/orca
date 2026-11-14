@@ -8,6 +8,10 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/cont
 import type { AgentProcessVerdict } from '../../../../shared/agent-status/process/agent-process-presence'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import {
+  hookConnectionWslDistro,
+  withSavedSummary
+} from '../../../../shared/agent-session/lifecycle/saved-agent-summary'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 import { launchStatement, type PtyLaunchFacts } from '../launch/launch-evidence'
@@ -91,6 +95,10 @@ export async function captureWorktreeSleepResumeRecords(args: {
         restoreOnTabOpenOnly: true,
         // Why: the SSH host boundary keeps the id off another machine; a WSL relay tag is local transport.
         connectionId: isLocalHookConnectionId(row.connectionId) ? null : row.connectionId,
+        // The relay tag saves as null, so the record keeps the distro the conversation ran in.
+        ...withWslDistro(hookConnectionWslDistro(row.connectionId)),
+        // What the conversation said last, for display; the resume itself waits for the tab.
+        ...(row.lastAssistantMessage ? { lastAssistantMessage: row.lastAssistantMessage } : {}),
         ...(launchConfig ? { launchConfig } : {})
       })
     }
@@ -131,7 +139,7 @@ export function applyWorktreeSleepResumeRecords(
         agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
           ? { launchConfig: previous.launchConfig }
           : {}
-      next[record.paneKey] = { ...record, ...keptLaunchConfig }
+      next[record.paneKey] = withSavedSummary({ ...record, ...keptLaunchConfig }, previous)
       changed = true
     }
   }
@@ -187,4 +195,8 @@ export function dropStrandedSleepRecord(
   }
   const { [paneKey]: _dropped, ...rest } = session.sleepingAgentSessionsByPaneKey ?? {}
   return { ...session, sleepingAgentSessionsByPaneKey: rest }
+}
+
+function withWslDistro(wslDistro: string | undefined): { wslDistro?: string } {
+  return wslDistro === undefined ? {} : { wslDistro }
 }

@@ -106,9 +106,12 @@ async function callAgentMethod<TResult>(client: RuntimeClient, method: string, p
   })
 }
 
-function address(row: { orcaSessionId: string | null }): string {
-  return row.orcaSessionId
-    ? `${ORCA_SESSION_ADDRESS_PREFIX}${row.orcaSessionId}`
+function address(row: { orcaSessionId: string | null; savedWithoutDistro?: true }): string {
+  if (row.orcaSessionId) {
+    return `${ORCA_SESSION_ADDRESS_PREFIX}${row.orcaSessionId}`
+  }
+  return row.savedWithoutDistro
+    ? 'unknown while asleep (saved before Orca recorded which WSL distro it ran in; open its tab to wake it)'
     : 'none yet (Orca names a terminal agent after its first report)'
 }
 
@@ -138,7 +141,9 @@ function formatAgentList(result: WithAnnotatedHostScope<AgentListResult>): strin
 function formatAgentShow(result: AgentShowResult): string {
   const id = `${ORCA_SESSION_ADDRESS_PREFIX}${result.orcaSessionId}`
   if (result.places.length === 0) {
-    return `Agent ${id} (${result.kind}) isn't open in any workspace right now.`
+    return result.savedWithoutDistro
+      ? `Agent ${id} (${result.kind}) is asleep, but it was saved before Orca recorded which WSL distro it ran in, so Orca can't find its tab by its ID. Open its tab to wake it.`
+      : `Agent ${id} (${result.kind}) isn't open in any workspace right now.`
   }
   return result.places.map(formatAgentRow).join('\n\n')
 }

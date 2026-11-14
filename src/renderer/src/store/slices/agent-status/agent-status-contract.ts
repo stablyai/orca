@@ -99,6 +99,8 @@ export type AgentStatusRouting = {
   worktreeId?: string
   terminalHandle?: string
   connectionId?: string | null
+  /** The distro a WSL relay row's `connectionId` named before it was recorded as local. */
+  wslDistro?: string
 }
 
 export type AgentStatusMetadata = {

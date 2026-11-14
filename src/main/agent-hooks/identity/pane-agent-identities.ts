@@ -111,7 +111,11 @@ export class PaneAgentIdentities {
       databasePath,
       (demand, identity) => this.publish(demand, identity),
       createClient,
-      () => this.invalidateSettled()
+      () => {
+        this.savedIds.clear()
+        this.invalidateSettled()
+      },
+      (keyString, id, authority) => this.savedIds.linked(keyString, id, authority)
     )
     this.savedIds = new SavedAgentKeyIds(this.demand, (key) => this.keyString(key))
   }
@@ -298,9 +302,6 @@ export class PaneAgentIdentities {
   /** Hands every current place still pending on the answered key to the hook server. An
    *  observer's failure is not the store's: the answer stays committed. */
   private publish(demand: KeyDemand, identity: RowAgentIdentity): void {
-    if (identity.id) {
-      this.savedIds.named(this.keyString(demand.key), identity.id)
-    }
     const settled: SettledAgentIdentityPlace[] = []
     for (const place of demand.places) {
       const indexed = this.places.get(place)

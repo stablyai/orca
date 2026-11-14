@@ -243,6 +243,7 @@ const SLEEPING = {
   interrupted: resumeRecord('interrupted'),
   mainAgent: resumeRecord('mainAgent'),
   connectionId: resumeRecord('connectionId'),
+  wslDistro: resumeRecord('wslDistro'),
   launchConfig: resumeRecord('launchConfig'),
   origin: resumeRecord('origin'),
   restoreOnTabOpenOnly: resumeRecord('restoreOnTabOpenOnly')
