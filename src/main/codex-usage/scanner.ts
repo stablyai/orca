@@ -71,7 +71,9 @@ export async function scanCodexUsageFiles(
       previous.ctimeMs === fileInfo.ctimeMs &&
       previous.physicalFileId === fileInfo.physicalFileId &&
       Array.isArray(previous.ownedEventKeys) &&
-      typeof previous.hasDeferredClaims === 'boolean'
+      typeof previous.hasDeferredClaims === 'boolean' &&
+      Array.isArray(previous.sessions) &&
+      Array.isArray(previous.dailyAggregates)
     if (canReuse) {
       reusedByPath.set(filePath, previous)
     } else {
