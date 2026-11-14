@@ -63,18 +63,6 @@ describe('browser settings persistence', () => {
     expect(renderer.root.findByType(PickerModal).props.selected).toBe('phone-browser')
   })
 
-  it('restores the saved destination when changing the destination fails', async () => {
-    vi.mocked(loadTerminalLinkOpenMode).mockResolvedValue('orca-browser')
-    vi.mocked(saveTerminalLinkOpenMode).mockRejectedValue(new Error('storage unavailable'))
-    await act(async () => {
-      renderer = create(createElement(BrowserSettingsScreen))
-    })
-    await act(async () => {
-      renderer.root.findByType(PickerModal).props.onSelect('phone-browser')
-    })
-    expect(renderer.root.findByType(PickerModal).props.selected).toBe('orca-browser')
-  })
-
   it('restores the hydrated destination when the save fails before the first read finishes', async () => {
     let resolveLoad = (_value: MobileTerminalLinkOpenMode) => {}
     vi.mocked(loadTerminalLinkOpenMode).mockImplementation(

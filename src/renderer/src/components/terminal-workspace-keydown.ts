@@ -9,12 +9,12 @@ import {
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/components/floating-terminal/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab
-} from '@/components/floating-terminal/floating-workspace-tab-creation'
+} from '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   ensureClientCreationActionAllowed,

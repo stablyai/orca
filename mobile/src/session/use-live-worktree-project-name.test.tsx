@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+import {
+  createFakeRpcClient,
+  type FakeRpcClient
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import {
   useLiveWorktreeName,
   type LiveWorktreeName

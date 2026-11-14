@@ -17,11 +17,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { FooterKey } from '@/components/worktree-jump/worktree-jump-palette-primitives'
+import { FooterKey } from '@/components/worktree-jump/rows/worktree-jump-palette-row-content'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { requestBrowserFocus } from '../host-guest/browser-focus'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { startOfLocalDay } from '../../../../../shared/automations/scheduling/automation-cron-occurrence'

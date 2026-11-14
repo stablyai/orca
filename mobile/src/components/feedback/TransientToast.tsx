@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { AccessibilityInfo, Text, View } from 'react-native'
-import { mobileSessionReviewCommentStyles } from '../../source-control/review/review-notes/mobile-session-review-comment-styles'
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react'
+import { AccessibilityInfo, Animated, Text, View } from 'react-native'
+import { transientToastStyles } from './transient-toast-styles'
 import { spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -32,9 +32,20 @@ export function TransientToast({
     <View
       accessibilityLiveRegion="polite"
       pointerEvents="none"
-      style={[mobileSessionReviewCommentStyles.toast, { bottom: bottomInset + spacing.lg }]}
+      style={[transientToastStyles.toast, { bottom: bottomInset + spacing.lg }]}
     >
-      {message ? <Text style={mobileSessionReviewCommentStyles.toastText}>{message}</Text> : null}
+      {message ? <Text style={transientToastStyles.toastText}>{message}</Text> : null}
     </View>
   )
+}
+
+export function renderAnimatedToast(
+  message: string | null,
+  animatedStyle: ComponentProps<typeof Animated.View>['style']
+) {
+  return message ? (
+    <Animated.View pointerEvents="none" style={[transientToastStyles.toast, animatedStyle]}>
+      <Text style={transientToastStyles.toastText}>{message}</Text>
+    </Animated.View>
+  ) : null
 }
