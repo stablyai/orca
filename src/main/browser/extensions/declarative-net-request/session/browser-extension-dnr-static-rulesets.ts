@@ -1,3 +1,7 @@
+import {
+  getBrowserExtensionPackageRevision,
+  type BrowserExtensionPackageRevision
+} from '../../installation/browser-extension-package-revisions'
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
 import {
@@ -133,6 +137,7 @@ type CacheEntry = { built: Promise<DnrBuiltRuleset | null>; users: number }
 
 // Why shared: profiles that run the same extension version index each ruleset once.
 const cache = new Map<string, CacheEntry>()
+const revisionCache = new WeakMap<BrowserExtensionPackageRevision, Map<string, CacheEntry>>()
 
 function cacheKey(
   extension: Pick<Electron.Extension, 'path' | 'version'>,
@@ -146,15 +151,29 @@ export function acquireDnrStaticRuleset(
   extension: Pick<Electron.Extension, 'id' | 'path' | 'version'>,
   ruleset: DnrManifestRuleset
 ): Promise<DnrBuiltRuleset | null> {
-  const key = cacheKey(extension, ruleset.id)
-  let entry = cache.get(key)
+  const revision = getBrowserExtensionPackageRevision(extension.path)
+  let entries = cache
+  let key = cacheKey(extension, ruleset.id)
+  if (revision) {
+    let byRuleset = revisionCache.get(revision)
+    if (!byRuleset) {
+      byRuleset = new Map()
+      revisionCache.set(revision, byRuleset)
+    }
+    entries = byRuleset
+    key = ruleset.id
+  }
+  let entry = entries.get(key)
   if (!entry) {
-    const built = loadStaticRuleset(extension, ruleset).catch((error: unknown) => {
+    const built = loadStaticRuleset(
+      revision ? { id: extension.id, path: revision.directory } : extension,
+      ruleset
+    ).catch((error: unknown) => {
       console.warn(`[browser-extensions] Could not load ruleset ${ruleset.id}:`, error)
       return null
     })
     entry = { built, users: 0 }
-    cache.set(key, entry)
+    entries.set(key, entry)
   }
   entry.users++
   return entry.built
@@ -164,6 +183,9 @@ export function releaseDnrStaticRuleset(
   extension: Pick<Electron.Extension, 'path' | 'version'>,
   rulesetId: string
 ): void {
+  if (getBrowserExtensionPackageRevision(extension.path)) {
+    return
+  }
   const key = cacheKey(extension, rulesetId)
   const entry = cache.get(key)
   if (entry && --entry.users <= 0) {

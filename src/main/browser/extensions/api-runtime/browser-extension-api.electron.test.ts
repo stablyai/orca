@@ -324,6 +324,11 @@ describe('browser extension APIs in a real Electron session', () => {
         return Boolean(status.worker && status.page)
       })
       .toBe(true)
+      .catch((error: unknown) => {
+        throw new Error(`Extension startup status: ${JSON.stringify(readStatus())}\n${stderr}`, {
+          cause: error
+        })
+      })
     const status = readStatus()
     expect(status.added).toEqual({ ok: true })
 

@@ -1,4 +1,9 @@
 import { app, session } from 'electron'
+import {
+  forgetBrowserSessionProfileIdentities,
+  getBrowserSessionProfileIdentity,
+  rememberBrowserSessionProfileIdentity
+} from './browser-session-profile-identity'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import '../../../../shared/constants'
@@ -18,9 +23,9 @@ import {
 } from '../../cookies/staging/browser-session-cookie-staging'
 import {
   BROWSER_SESSION_META_FILE_NAME,
+  BrowserSessionExtensionLists,
   forgetBrowserSessionProfileMeta,
-  loadBrowserSessionMeta,
-  persistBrowserSessionMeta
+  loadBrowserSessionMeta
 } from './browser-session-meta-store'
 import type { BrowserSessionMeta } from './browser-session-meta-store'
 import { installBrowserSessionPartitionPolicies } from '../partition-policies/browser-session-partition-policies'
@@ -50,6 +55,9 @@ export type BrowserSessionRegistryProfileOptions = {
 // This registry supplies the partition allowlist used by will-attach-webview.
 
 class BrowserSessionRegistry {
+  private readonly extensionIdLists = new BrowserSessionExtensionLists(() =>
+    this.loadPersistedMeta()
+  )
   private readonly profiles = new Map<string, BrowserSessionProfile>()
   private activeOrcaProfileId = DEFAULT_LOCAL_ORCA_PROFILE_ID
   private metadataPathOverride: string | null = null
@@ -67,11 +75,13 @@ class BrowserSessionRegistry {
     this.metadataPathOverride = join(options.profileDirectory, BROWSER_SESSION_META_FILE_NAME)
     this.defaultPartition = getOrcaProfileBrowserDefaultPartition(options.orcaProfileId)
     this.profiles.clear()
+    forgetBrowserSessionProfileIdentities()
+    this.extensionIdLists.forget()
     this.resetDefaultProfile()
   }
 
   private resetDefaultProfile(): void {
-    const persisted = this.loadPersistedSource()
+    const persisted = this.loadPersistedMeta().defaultSource
     this.profiles.set('default', {
       id: 'default',
       scope: 'default',
@@ -87,16 +97,8 @@ class BrowserSessionRegistry {
     )
   }
 
-  private loadPersistedSource(): BrowserSessionProfile['source'] {
-    return this.loadPersistedMeta().defaultSource
-  }
-
   private persistMeta(updates: Partial<BrowserSessionMeta>): void {
-    persistBrowserSessionMeta(() => this.metadataPath, this.defaultPartition, updates)
-  }
-
-  private persistSource(source: BrowserSessionProfile['source']): void {
-    this.persistMeta({ defaultSource: source })
+    this.extensionIdLists.persist(() => this.metadataPath, this.defaultPartition, updates)
   }
 
   private persistProfiles(): void {
@@ -111,6 +113,7 @@ class BrowserSessionRegistry {
   // Restore profiles and their policies before any webview loads.
   initializeBrowserSessionsFromPersistedState(): void {
     const meta = this.loadPersistedMeta()
+    this.extensionIdLists.remember(meta)
     const migration = inspectRetiredBrowserSessionProfileUserAgentModes(
       meta.profiles,
       this.activeOrcaProfileId
@@ -146,11 +149,16 @@ class BrowserSessionRegistry {
     profile: BrowserSessionProfile,
     enabledExtensionIds = this.getEnabledExtensionIds(profile.id)
   ): void {
-    attachBrowserExtensionsToProfileSession(profile, enabledExtensionIds)
+    rememberBrowserSessionProfileIdentity(session.fromPartition(profile.partition), () =>
+      this.profiles.has(profile.id) ? profile.id : null
+    )
+    attachBrowserExtensionsToProfileSession(profile, enabledExtensionIds, () =>
+      this.getEnabledExtensionIds(profile.id)
+    )
   }
 
   getEnabledExtensionIds(profileId: string): string[] {
-    return this.loadPersistedMeta().enabledExtensionIdsByProfileId[profileId] ?? []
+    return this.extensionIdLists.read('enabledExtensionIdsByProfileId', profileId)
   }
 
   updateEnabledExtensionIds(update: ExtensionIdListUpdate): void {
@@ -158,7 +166,7 @@ class BrowserSessionRegistry {
   }
 
   getPinnedExtensionIds(profileId: string): string[] {
-    return this.loadPersistedMeta().pinnedExtensionIdsByProfileId[profileId] ?? []
+    return this.extensionIdLists.read('pinnedExtensionIdsByProfileId', profileId)
   }
 
   updatePinnedExtensionIds(update: ExtensionIdListUpdate): void {
@@ -198,11 +206,7 @@ class BrowserSessionRegistry {
   }
 
   /** Called after startup has materialized the known profile sessions. */
-  profileIdForSession(candidate: Electron.Session): string | null {
-    return (
-      this.listProfiles().find((p) => session.fromPartition(p.partition) === candidate)?.id ?? null
-    )
-  }
+  profileIdForSession = getBrowserSessionProfileIdentity
 
   isAllowedPartition(partition: string): boolean {
     return this.listProfiles().some((p) => p.partition === partition)
@@ -236,9 +240,7 @@ class BrowserSessionRegistry {
     }
   }
 
-  clearRoutePartitionPolicies(partition: string): void {
-    clearBrowserRoutePartitionPolicies(partition)
-  }
+  clearRoutePartitionPolicies = clearBrowserRoutePartitionPolicies
 
   async createProfile(
     scope: BrowserSessionProfileScope,
@@ -276,7 +278,7 @@ class BrowserSessionRegistry {
     const updated = { ...profile, source }
     this.profiles.set(profileId, updated)
     if (profileId === 'default') {
-      this.persistSource(source)
+      this.persistMeta({ defaultSource: source })
     } else {
       this.persistProfiles()
     }

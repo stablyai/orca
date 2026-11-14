@@ -32,6 +32,13 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
 }))
 vi.mock('../browser-extension-management', () => ({ removeBrowserExtension: vi.fn() }))
 vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
+  withBrowserExtensionProfileOperation: async (
+    _profile: string,
+    _id: string,
+    run: (session: Electron.Session) => Promise<unknown>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture operation callback does not use native session members.
+  ) => run({} as Electron.Session),
+  hasBrowserExtensionProfileDemand: () => true,
   getBrowserExtensionSessionForProfile: () => ({}),
   loadBrowserExtensionIntoProfile: () => state.load(),
   unloadBrowserExtensionEverywhere: vi.fn()

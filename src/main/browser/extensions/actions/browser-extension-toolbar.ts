@@ -1,5 +1,8 @@
+import { resolveActionIconDataUrl } from './browser-extension-action-icon'
+import { describeToolbarAction } from './browser-extension-toolbar-action'
 import { recordBrowserExtensionUsed } from '../../../telemetry/browser-extensions-banner'
 import { webContents } from 'electron'
+import { whenBrowserExtensionProfileLoaded } from '../profile-sessions/browser-extension-session-loader'
 import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import type { BrowserExtensionActionResult } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
@@ -15,20 +18,13 @@ import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
 } from '../api-runtime/browser-extension-api-host'
-import { resolveActionIconDataUrl } from './browser-extension-action-icon'
 import { grantBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
 import {
   getBrowserExtensionActionState,
   observeBrowserExtensionActionSession,
   onBrowserExtensionActionsChanged
 } from './browser-extension-action-registry'
-import {
-  browserExtensionColorToCss,
-  iconFromPathSpec,
-  manifestHasOptionsPage,
-  readManifestActionDefaults
-} from './browser-extension-action-state'
-import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
+import { iconFromPathSpec, readManifestActionDefaults } from './browser-extension-action-state'
 import { BrowserExtensionApiError } from '../api-runtime/browser-extension-namespace-registry'
 import {
   consumeBrowserExtensionPopupToggle,
@@ -70,35 +66,16 @@ function resolveToolbarPage(browserPageId: string): ToolbarPage | null {
   return contents && profileId ? { contents, session: contents.session, profileId } : null
 }
 
-async function describeToolbarAction(
-  page: ToolbarPage,
-  extension: Electron.Extension,
-  pinned: ReadonlySet<string>
-): Promise<BrowserExtensionToolbarAction> {
-  const installed = getBrowserExtensionInstallStore().get(extension.id)
-  const details = getBrowserExtensionActionState(page.profileId, extension).get(page.contents.id)
-  return {
-    extensionId: extension.id,
-    name: installed?.name ?? extension.name,
-    title: details.title,
-    iconDataUrl: await resolveActionIconDataUrl(extension.path, details.icon),
-    badgeText: details.badgeText,
-    badgeBackgroundColor: browserExtensionColorToCss(details.badgeBackgroundColor),
-    badgeTextColor: browserExtensionColorToCss(details.badgeTextColor),
-    enabled: details.enabled,
-    hasPopup: details.popup !== '',
-    pinned: pinned.has(extension.id),
-    hasOptionsPage: manifestHasOptionsPage(extension),
-    source: installed?.source ?? 'unpacked'
-  }
-}
-
 /** Every enabled extension's button for one page, pinned ones first in pin order. */
 export async function getBrowserExtensionToolbarState(
   browserPageId: string
 ): Promise<BrowserExtensionToolbarState | null> {
   const page = resolveToolbarPage(browserPageId)
   if (!page) {
+    return null
+  }
+  await whenBrowserExtensionProfileLoaded(page.profileId)
+  if (page.contents.isDestroyed()) {
     return null
   }
   observeBrowserExtensionActionSession(page.session)
@@ -123,6 +100,7 @@ function openPopupForPage(
 ): void {
   openBrowserExtensionPopup({
     session: page.session,
+    sourcePage: page.contents,
     profileId: page.profileId,
     extensionId: extension.id,
     popupPath,

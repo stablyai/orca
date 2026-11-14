@@ -1,9 +1,16 @@
+import { resumeBrowserExtensionAlarms, forgetBrowserExtensionAlarms } from '../api/alarms'
+import { forgetBrowserExtensionSessionValues } from '../api/storage-session'
+import { forgetBrowserExtensionNotifications } from '../api/notifications'
+import {
+  forgetBrowserExtensionAction,
+  observeBrowserExtensionActionSession
+} from '../actions/browser-extension-action-registry'
+import { isBrowserExtensionSuspension } from './browser-extension-worker-registration'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { observeBrowserExtensionCookieChanges } from '../api/cookies'
-import { observeBrowserExtensionActionSession } from '../actions/browser-extension-action-registry'
 import { revokeBrowserExtensionActiveTabInSession } from '../permissions/browser-extension-active-tab'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import { getActiveBrowserTabId } from '../tabs-and-windows/browser-extension-tab-model'
@@ -15,6 +22,7 @@ import { setBrowserSessionRequestDecider } from '../../sessions/requests/browser
 import { browserExtensionDnrRequestDecider } from '../declarative-net-request/session/browser-extension-dnr-requests'
 import {
   attachBrowserExtensionDnr,
+  getDnrSessionRuntime,
   whenBrowserExtensionDnrLoaded
 } from '../declarative-net-request/session/browser-extension-dnr-session'
 import { setBrowserExtensionSessionHooks } from './browser-extension-session-loader'
@@ -62,11 +70,19 @@ export function installBrowserExtensionSessionServices(): void {
       if (!servedSessions.has(sess)) {
         servedSessions.add(sess)
         sess.extensions.on('extension-unloaded', (_event, extension) => {
-          forgetBrowserExtensionContentScriptRestore(sess, extension.id)
+          forgetBrowserExtensionContentScriptRestore(
+            sess,
+            extension.id,
+            isBrowserExtensionSuspension(sess, extension)
+          )
           revokeBrowserExtensionActiveTabInSession(sess, extension.id)
+          if (!isBrowserExtensionSuspension(sess, extension)) {
+            forgetBrowserExtensionAlarms(sess, extension.id)
+          }
         })
       }
     },
+    activating: (sess, ready) => getDnrSessionRuntime(sess)?.holdForStartup(() => ready),
     uninstalled: (profileId, extensionIds) => {
       const removeIds = (byProfile: Record<string, string[]>) => ({
         ...byProfile,
@@ -86,6 +102,15 @@ export function installBrowserExtensionSessionServices(): void {
       }
     },
     detached: stopObservingBrowserExtensionWebRequests,
+    reset: async (sess, profileId, extensionId) => {
+      forgetBrowserExtensionAlarms(sess, extensionId)
+      forgetBrowserExtensionContentScriptRestore(sess, extensionId)
+      revokeBrowserExtensionActiveTabInSession(sess, extensionId)
+      getDnrSessionRuntime(sess)?.removeExtension(extensionId)
+      forgetBrowserExtensionAction(profileId, extensionId)
+      forgetBrowserExtensionNotifications(sess, extensionId)
+      await forgetBrowserExtensionSessionValues(sess, extensionId)
+    },
     loaded: async (sess, profileId, extension) => {
       await Promise.all([
         restoreBrowserExtensionContentScripts(
@@ -96,6 +121,7 @@ export function installBrowserExtensionSessionServices(): void {
         ),
         whenBrowserExtensionDnrLoaded(sess)
       ])
+      resumeBrowserExtensionAlarms(sess, extension.id)
     }
   })
 }

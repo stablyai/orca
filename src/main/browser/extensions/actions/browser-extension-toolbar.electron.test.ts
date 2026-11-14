@@ -5,8 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { build as buildVite } from 'vite'
-import { bundleBrowserExtensionWorkerShim } from '../../../../../config/build-plugins/sandboxed-script-bundles'
-import { BROWSER_EXTENSION_WORKER_SHIM_FILE } from '../../../../shared/browser/extensions/browser-extension-worker-api'
+import {
+  bundleBrowserExtensionContentScript,
+  bundleBrowserExtensionWorkerShim
+} from '../../../../../config/build-plugins/sandboxed-script-bundles'
+import {
+  BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
+  BROWSER_EXTENSION_WORKER_SHIM_FILE
+} from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import { resolveElectronProbeLaunch } from '../../electron-fixtures/electron-probe-display-launch'
 
 vi.setConfig({ expect: { poll: { timeout: 45_000, interval: 200 } } })
@@ -145,6 +151,10 @@ beforeAll(async () => {
     join(root, BROWSER_EXTENSION_WORKER_SHIM_FILE),
     (await bundleBrowserExtensionWorkerShim()).code
   )
+  writeFileSync(
+    join(root, BROWSER_EXTENSION_CONTENT_SCRIPT_FILE),
+    (await bundleBrowserExtensionContentScript()).code
+  )
 
   const electronBinary: unknown = createRequire(import.meta.url)('electron')
   if (typeof electronBinary !== 'string') {
@@ -194,6 +204,11 @@ describe('extension toolbar, action popup and tab activation in a real Electron 
         return status.done === true
       })
       .toBe(true)
+      .catch((error: unknown) => {
+        throw new Error(`Toolbar fixture status: ${JSON.stringify(readStatus())}\n${stderr}`, {
+          cause: error
+        })
+      })
     const status = readStatus()
     const page1 = status['page-1-tab']
     const page2 = status['page-2-tab']

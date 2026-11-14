@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('../../../extensions/profile-sessions/browser-extension-profile-demand', () => ({
+  retainBrowserExtensionPage: async () => {}
+}))
+
 const browserMocks = vi.hoisted(() => ({
   appGetPathMock: vi.fn(() => '/downloads'),
   shellOpenExternalMock: vi.fn(),

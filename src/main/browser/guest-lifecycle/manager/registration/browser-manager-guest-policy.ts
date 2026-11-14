@@ -1,3 +1,4 @@
+import { retainBrowserExtensionPage } from '../../../extensions/profile-sessions/browser-extension-profile-demand'
 import { installBrowserGuestMetadata } from '../../navigation/browser-guest-metadata'
 import { BROWSING_GUEST_POLICY } from './browser-guest-policy-profile'
 import type { BrowserGuestPolicy } from './browser-guest-policy-profile'
@@ -28,6 +29,9 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       this.attachWorkspaceDocGuestPolicies(guest, policy.host)
       return
     }
+    void retainBrowserExtensionPage(guest).catch((error: unknown) => {
+      console.warn('[browser-extensions] Could not prepare page extensions:', error)
+    })
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }

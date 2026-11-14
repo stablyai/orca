@@ -19,6 +19,14 @@ const STORAGE_CLEAR_TIMEOUT_MS = 5_000
 /** Extensions each session loaded this run; Chromium keeps their storage open until quit. */
 const storageOpenedBySession = new WeakMap<Electron.Session, Set<string>>()
 const storageAwaitingRestartBySession = new WeakMap<Electron.Session, Set<string>>()
+const maintenanceBySession = new WeakMap<
+  Electron.Session,
+  {
+    store: ReturnType<typeof getBrowserExtensionInstallStore>
+    revision: number
+    ready: Promise<ReadonlySet<string>>
+  }
+>()
 const sweepsBySession = new WeakMap<Electron.Session, Promise<unknown>>()
 
 export function noteBrowserExtensionStorageOpened(
@@ -59,6 +67,9 @@ async function markStorageAwaitingRestart(
   extensionId: string
 ): Promise<void> {
   const ids = storageAwaitingRestartBySession.get(sess) ?? new Set<string>()
+  if (!ids.has(extensionId)) {
+    maintenanceBySession.delete(sess)
+  }
   ids.add(extensionId)
   storageAwaitingRestartBySession.set(sess, ids)
   const folder = storageFolder(sess, extensionId)
@@ -70,7 +81,7 @@ async function markStorageAwaitingRestart(
 /**
  * Why through the extension's own API: Chromium keeps each extension's storage database open for
  * the rest of the run, so deleting its folder then would strand a reinstall's writes in unlinked
- * files. A hidden page of the still-loaded extension clears chrome.storage.local and .session.
+ * files. A hidden page clears local storage; execution retirement owns the session-area reset.
  * A folder this run never opened is deleted directly; one opened earlier is marked for the launch sweep.
  */
 async function clearExtensionStorage(sess: Electron.Session, extensionId: string): Promise<void> {
@@ -88,7 +99,7 @@ async function clearExtensionStorage(sess: Electron.Session, extensionId: string
     await runBrowserExtensionNativePage({
       session: sess,
       extensionId,
-      code: 'Promise.all([globalThis.chrome?.storage?.local?.clear(), globalThis.chrome?.storage?.session?.clear()])',
+      code: 'globalThis.chrome?.storage?.local?.clear()',
       timeoutMs: STORAGE_CLEAR_TIMEOUT_MS
     })
   } finally {
@@ -128,6 +139,36 @@ export async function clearBrowserExtensionProfileSessionData(
     ...entries.filter(isChromeExtensionId)
   ])
   await Promise.all([...ids].map((id) => clearBrowserExtensionSessionData(sess, id)))
+}
+
+/** Only an install/removal or newly discovered cleanup obligation invalidates the full sweep. */
+export function reconcileBrowserExtensionProfileData(
+  sess: Electron.Session,
+  profileId: string,
+  onUninstalled?: (ids: ReadonlySet<string>) => void
+): Promise<ReadonlySet<string>> {
+  const store = getBrowserExtensionInstallStore()
+  const previous = maintenanceBySession.get(sess)
+  if (previous?.store === store && previous.revision === store.maintenanceRevision) {
+    return previous.ready
+  }
+  const entry = {
+    store,
+    revision: store.maintenanceRevision,
+    ready: removeUninstalledBrowserExtensionData(
+      sess,
+      profileId,
+      new Set(store.list().map((item) => item.id)),
+      onUninstalled
+    )
+  }
+  maintenanceBySession.set(sess, entry)
+  void entry.ready.catch(() => {
+    if (maintenanceBySession.get(sess) === entry) {
+      maintenanceBySession.delete(sess)
+    }
+  })
+  return entry.ready
 }
 
 /**
@@ -175,14 +216,17 @@ async function removeUninstalledData(
   scope: RemovalScope
 ): Promise<ReadonlySet<string>> {
   const states = getBrowserExtensionProfileStateStore()
-  const previousIds = Object.keys(states.readProfile(profileId)).filter(isChromeExtensionId)
-  const allRemovals = getBrowserExtensionInstallStore().removalGenerations()
-  const removals = new Map(
-    [...allRemovals].filter(([id]) => !('extensionId' in scope) || id === scope.extensionId)
-  )
+  const store = getBrowserExtensionInstallStore()
+  const removals =
+    'extensionId' in scope
+      ? new Map([[scope.extensionId, store.removalGeneration(scope.extensionId)]])
+      : store.removalGenerations()
   const stale = new Set(
     [...removals]
-      .filter(([id, generation]) => states.read(profileId, id).removalGeneration !== generation)
+      .filter(
+        ([id, generation]) =>
+          generation > 0 && states.read(profileId, id).removalGeneration !== generation
+      )
       .map(([id]) => id)
   )
   const storagePath = sess.getStoragePath()
@@ -198,6 +242,7 @@ async function removeUninstalledData(
       )
     }
   } else {
+    const previousIds = Object.keys(states.readProfile(profileId)).filter(isChromeExtensionId)
     const retained = new Set([...scope.installedIds].filter((id) => !stale.has(id)))
     states.forgetExtensionsExcept(
       profileId,

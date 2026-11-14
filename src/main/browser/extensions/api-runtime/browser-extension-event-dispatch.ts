@@ -126,10 +126,13 @@ export function dispatchBrowserExtensionEvent(
 ): void {
   const permission = getBrowserExtensionNamespace(namespace)?.permission
   const key = eventKey(namespace, event)
-  for (const [sess, state] of sessions) {
-    if (target.session && target.session !== sess) {
-      continue
-    }
+  const selected = target.session ? sessions.get(target.session) : undefined
+  const recipients = target.session
+    ? selected
+      ? [[target.session, selected] as const]
+      : []
+    : sessions
+  for (const [sess, state] of recipients) {
     const extensionIds = new Set<string>()
     for (const context of state.workers.values()) {
       if (context.events.has(key)) {

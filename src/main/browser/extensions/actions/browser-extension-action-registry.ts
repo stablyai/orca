@@ -1,3 +1,4 @@
+import { isBrowserExtensionSuspension } from '../profile-sessions/browser-extension-worker-registration'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import { forgetActionIconCache } from './browser-extension-action-icon'
 import {
@@ -57,7 +58,9 @@ export function observeBrowserExtensionActionSession(sess: Electron.Session): vo
   sess.extensions.on('extension-ready', changed)
   sess.extensions.on('extension-unloaded', (_event, extension) => {
     const profileId = getBrowserExtensionProfileIdForSession(sess)
-    stateByProfileId.get(profileId ?? '')?.delete(extension.id)
+    if (!isBrowserExtensionSuspension(sess, extension)) {
+      stateByProfileId.get(profileId ?? '')?.delete(extension.id)
+    }
     forgetActionIconCache(extension.path)
     changed()
   })
@@ -84,6 +87,12 @@ export function getBrowserExtensionActionState(
 
 export function forgetBrowserExtensionActionProfile(profileId: string): void {
   stateByProfileId.delete(profileId)
+}
+
+export function forgetBrowserExtensionAction(profileId: string, extensionId: string): void {
+  if (stateByProfileId.get(profileId)?.delete(extensionId)) {
+    notifyBrowserExtensionActionsChanged(profileId)
+  }
 }
 
 /** A tab's action overrides end when it loads a new document or closes (Chrome semantics). */

@@ -87,6 +87,11 @@ const PRIVACY_SURFACE: BrowserExtensionSurfaceNamespace = {
 }
 
 export const BROWSER_EXTENSION_API_SURFACE: BrowserExtensionSurface = {
+  alarms: {
+    permission: 'alarms',
+    methods: { create: {}, get: {}, getAll: {}, clear: {}, clearAll: {} },
+    events: ['onAlarm']
+  },
   windows: {
     methods: {
       getAll: {},

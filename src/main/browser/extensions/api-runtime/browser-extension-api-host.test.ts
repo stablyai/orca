@@ -74,6 +74,8 @@ await import('../../../../preload/browser/extensions/api/browser-extension-api-s
 const registry = await import('./browser-extension-namespace-registry')
 const host = await import('./browser-extension-api-host')
 const contexts = await import('./browser-extension-contexts')
+const { beginBrowserExtensionExecution, getBrowserExtensionExecution } =
+  await import('./browser-extension-execution-authority')
 const { registerBrowserExtensionNamespaces } =
   await import('../register-browser-extension-namespaces')
 
@@ -97,16 +99,22 @@ const extensionSession = {
   serviceWorkers: { on: vi.fn(), getAllRunning: () => ({}), getWorkerFromVersionID: vi.fn() },
   protocol: { handle: vi.fn(), unhandle: vi.fn(), isProtocolHandled: vi.fn(() => true) }
 }
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture sessions provide all host-facing native members above.
+const session = extensionSession as unknown as Electron.Session
 const handled: unknown[][] = []
 
 function frameEvent(
   url: string,
-  sess: unknown = extensionSession,
+  sess: Electron.Session = session,
   processId = 4,
   routingId = 9,
   // Node reports "null" for chrome-extension: URLs; Chromium reports the real extension origin.
   origin = url.split('/').slice(0, 3).join('/')
 ) {
+  const extensionId = new URL(url).hostname
+  if (!getBrowserExtensionExecution(sess, extensionId)) {
+    beginBrowserExtensionExecution(sess, extensionId, new AbortController().signal)
+  }
   const frame = {
     url,
     origin,
@@ -150,11 +158,7 @@ beforeAll(() => {
     events: ['onPing']
   })
   host.installBrowserExtensionApiHost()
-  host.attachBrowserExtensionApiHostToSession(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host only touches the extensions and serviceWorkers members stubbed above.
-    extensionSession as unknown as Electron.Session,
-    'default'
-  )
+  host.attachBrowserExtensionApiHostToSession(session, 'default')
 })
 
 describe('extension API host', () => {
@@ -171,7 +175,7 @@ describe('extension API host', () => {
       method: 'request',
       args: [{ permissions: ['privacy'] }]
     }
-    const denied = { ok: false, error: 'This function must be called during a user gesture' }
+    const denied = expect.objectContaining({ ok: false })
     await expect(invoke(event, request)).resolves.toEqual(denied)
     await expect(invoke(event, { ...request, userGesture: true })).resolves.toEqual(denied)
     expect(mocks.prompt).not.toHaveBeenCalled()

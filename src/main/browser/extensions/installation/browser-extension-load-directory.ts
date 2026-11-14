@@ -1,7 +1,8 @@
+import { writeBrowserExtensionGeneratedFile } from './browser-extension-generated-files'
 import { createHash } from 'node:crypto'
-import { statSync } from 'node:fs'
-import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+import { readFile, stat } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
+import { browserExtensionPrivateResources } from './browser-extension-resource-privacy'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
@@ -12,13 +13,14 @@ import {
 } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import { buildBrowserExtensionBackgroundWrapper } from './browser-extension-background-wrapper'
 import { withOrcaContentScript } from './browser-extension-content-script-manifest'
-import {
-  withPrivateFilesHiddenFromWebAccessibleResources,
-  withStaticWebAccessibleResources
-} from './browser-extension-web-accessible-resources'
-import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
+import { withPrivateFilesHiddenFromWebAccessibleResources } from './browser-extension-web-accessible-resources'
 import { resolveInsideExtensionDirectory } from './browser-extension-manifest'
-import { getBrowserExtensionWorkerToken } from '../api-runtime/browser-extension-worker-api-host'
+import type { BrowserExtensionExecution } from '../api-runtime/browser-extension-execution-authority'
+import {
+  acquireBrowserExtensionPackageRevision,
+  getCurrentBrowserExtensionPackageRevision,
+  materializeBrowserExtensionExecution
+} from './browser-extension-package-revisions'
 import {
   readBrowserExtensionContentScript,
   readBrowserExtensionWorkerShim
@@ -37,6 +39,7 @@ export type PreparedBrowserExtensionDirectory = {
   /** Changes whenever the worker's scripts change; null means re-register on every load. */
   workerSignature: string | null
   hasWorker: boolean
+  release: () => Promise<void>
 }
 
 /** Chromium's id for a manifest key: the first 128 bits of SHA-256 over the key, as a–p. */
@@ -64,17 +67,6 @@ function parseManifest(text: string): Record<string, unknown> {
     throw new Error('manifest.json is not an object')
   }
   return Object.fromEntries(Object.entries(parsed))
-}
-
-// Why compare first: rewriting identical files would churn mtimes under a loaded extension.
-async function writeIfChanged(path: string, content: string): Promise<void> {
-  const current = await readFile(path, 'utf8').catch(() => null)
-  if (current === content) {
-    return
-  }
-  await mkdir(dirname(path), { recursive: true })
-  await writeFile(`${path}.orca-tmp`, content)
-  await rename(`${path}.orca-tmp`, path)
 }
 
 function requireInside(directory: string, relativePath: string): string {
@@ -154,130 +146,121 @@ export async function refuseOrcaFileCollisions(
   }
 }
 
-function fileIdentity(path: string): string | null {
-  try {
-    const stats = statSync(path, { bigint: true })
-    return `${stats.dev}:${stats.ino}`
-  } catch {
-    return null
+async function revisionFor(
+  extension: BrowserExtensionLoadSource,
+  extensionId: string,
+  refresh = false
+) {
+  const current = getCurrentBrowserExtensionPackageRevision(extension.path)
+  if (current && !refresh) {
+    return current
   }
-}
-
-/** True for a resource that is one of Orca's private files on disk, whatever its spelling. */
-function isPrivateFileOnDisk(directory: string): (resource: string) => boolean {
-  const privateIds = new Set(ORCA_PRIVATE_FILES.map((file) => fileIdentity(join(directory, file))))
-  privateIds.delete(null)
-  return (resource) => {
-    const target = resolveInsideExtensionDirectory(directory, resource)
-    return target !== null && privateIds.has(fileIdentity(target))
-  }
-}
-
-// Why skip Orca's own files: they appear only after the first load, and listing them would change
-// the manifest on the next launch and needlessly re-register the worker.
-async function listPackageFiles(directory: string): Promise<string[]> {
-  const entries = await readdir(directory, { recursive: true, withFileTypes: true })
-  return entries
-    .filter((entry) => entry.isFile() && !ORCA_GENERATED_FILE_NAMES.has(entry.name))
-    .map((entry) => relative(directory, join(entry.parentPath, entry.name)).split(sep).join('/'))
-}
-
-async function prepare(
-  extension: BrowserExtensionLoadSource
-): Promise<PreparedBrowserExtensionDirectory> {
-  const unpacked = extension.source === 'unpacked'
-  const directory = unpacked
-    ? getBrowserExtensionInstallStore().unpackedCopyDirectory(extension.path)
-    : extension.path
-  if (unpacked) {
-    await rm(directory, { recursive: true, force: true, maxRetries: 3 })
-    await cp(extension.path, directory, {
-      recursive: true,
-      dereference: true,
-      filter: (source) => basename(source) !== '.git'
-    })
-  }
-  const originalPath = join(directory, BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE)
-  const { originalText, original } = await readOriginalManifest(directory, extension.source)
-  if (unpacked) {
-    await refuseOrcaFileCollisions(directory, original)
+  const { original } = await readOriginalManifest(extension.path, extension.source)
+  if (extension.source === 'unpacked') {
+    await refuseOrcaFileCollisions(extension.path, original)
   }
   const key = manifestKey(original, extension)
-  const extensionId = chromeExtensionIdFromKey(key)
-  const packageFiles = await listPackageFiles(directory)
-  const staticResources = withStaticWebAccessibleResources({ ...original, key })
-  const wrapper = buildBrowserExtensionBackgroundWrapper(staticResources)
-  const withContentScript = withOrcaContentScript(wrapper?.manifest ?? staticResources)
-  await writeIfChanged(originalPath, originalText)
-  let workerScripts = ''
-  if (wrapper) {
-    const shim = readBrowserExtensionWorkerShim()
-    workerScripts = `${shim}\n${wrapper.wrapperSource}`
-    await writeIfChanged(join(directory, BROWSER_EXTENSION_WORKER_SHIM_FILE), shim)
-    await writeIfChanged(requireInside(directory, wrapper.wrapperPath), wrapper.wrapperSource)
-    await writeIfChanged(
-      join(directory, BROWSER_EXTENSION_WORKER_TOKEN_FILE),
-      JSON.stringify({ token: getBrowserExtensionWorkerToken(extensionId) })
-    )
+  if (chromeExtensionIdFromKey(key) !== extensionId) {
+    throw new Error('Extension id changed since it was added; remove it and add it again')
   }
-  if (withContentScript) {
-    await writeIfChanged(
-      join(directory, BROWSER_EXTENSION_CONTENT_SCRIPT_FILE),
-      readBrowserExtensionContentScript()
-    )
-  }
-  // Why after writing them: privacy is decided by the private files' identity on disk.
-  const manifestText = JSON.stringify(
-    withPrivateFilesHiddenFromWebAccessibleResources(
-      withContentScript ?? wrapper?.manifest ?? staticResources,
-      packageFiles,
-      isPrivateFileOnDisk(directory)
-    ),
-    null,
-    2
+  return acquireBrowserExtensionPackageRevision(
+    { id: extensionId, path: extension.path },
+    JSON.stringify({ ...original, key }),
+    ORCA_GENERATED_FILE_NAMES,
+    refresh
   )
-  await writeIfChanged(join(directory, 'manifest.json'), manifestText)
-  return {
-    directory,
-    extensionId,
-    hasWorker: wrapper !== null,
-    workerSignature: unpacked
-      ? null
-      : createHash('sha256').update(`${manifestText}\n${workerScripts}`).digest('hex')
-  }
 }
 
-const pending = new Map<string, Promise<PreparedBrowserExtensionDirectory>>()
-const copiedThisRun = new Map<string, PreparedBrowserExtensionDirectory>()
+export async function refreshBrowserExtensionPackage(
+  extension: BrowserExtensionLoadSource & { id: string }
+): Promise<void> {
+  await revisionFor(extension, extension.id, true)
+}
 
-/**
- * Store folders are re-checked on every load (an Orca update brings a new shim). An unpacked
- * folder is copied once per run, so a second profile never rewrites a copy another profile runs;
- * `refresh` (Settings › Reload) copies it again.
- */
+/** Original assets are immutable and shared; authority-bearing resources belong to this execution. */
 export async function prepareBrowserExtensionDirectory(
   extension: BrowserExtensionLoadSource,
+  execution: BrowserExtensionExecution,
   options: { refresh?: boolean } = {}
 ): Promise<PreparedBrowserExtensionDirectory> {
-  const key = resolve(extension.path)
-  const copied = copiedThisRun.get(key)
-  if (copied && !options.refresh) {
-    return copied
+  execution.controller.signal.throwIfAborted()
+  const revision = await revisionFor(extension, execution.extensionId, options.refresh)
+  if (revision.extensionId !== execution.extensionId) {
+    throw new Error('Extension id changed since it was added; remove it and add it again')
   }
-  let running = pending.get(key)
-  if (!running) {
-    running = prepare(extension)
-    pending.set(key, running)
-  }
+  const materialized = await materializeBrowserExtensionExecution(
+    revision,
+    execution.controller.signal
+  )
+  const directory = materialized.directory
   try {
-    const prepared = await running
-    if (extension.source === 'unpacked') {
-      copiedThisRun.set(key, prepared)
+    execution.controller.signal.throwIfAborted()
+    const originalText = revision.originalManifest
+    const staticResources = revision.manifest
+    const shimFile = `orca-extension-api-${execution.fileNonce}.js`
+    const tokenFile = `orca-extension-api-token-${execution.fileNonce}.json`
+    const wrapper = buildBrowserExtensionBackgroundWrapper(staticResources, {
+      shim: shimFile,
+      wrapper: `orca-background-${execution.fileNonce}.js`
+    })
+    const manifest =
+      withOrcaContentScript(wrapper?.manifest ?? staticResources, execution.contentScriptFile) ??
+      wrapper?.manifest ??
+      staticResources
+    await writeBrowserExtensionGeneratedFile(
+      join(directory, BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE),
+      originalText
+    )
+    if (wrapper) {
+      await writeBrowserExtensionGeneratedFile(
+        join(directory, shimFile),
+        readBrowserExtensionWorkerShim()
+          .replaceAll(BROWSER_EXTENSION_WORKER_TOKEN_FILE, tokenFile)
+          .replaceAll('ORCA_EXTENSION_OWN_PREFIX', execution.contentScriptFile)
+          .replaceAll('ORCA_EXTENSION_OWN_EXECUTION', execution.fileNonce)
+      )
+      await writeBrowserExtensionGeneratedFile(
+        requireInside(directory, wrapper.wrapperPath),
+        wrapper.wrapperSource
+      )
+      await writeBrowserExtensionGeneratedFile(
+        join(directory, tokenFile),
+        JSON.stringify({ token: execution.workerToken })
+      )
     }
-    return prepared
-  } finally {
-    if (pending.get(key) === running) {
-      pending.delete(key)
+    await writeBrowserExtensionGeneratedFile(
+      join(directory, execution.contentScriptFile),
+      `${readBrowserExtensionContentScript().replaceAll(
+        'ORCA_EXTENSION_CONTENT_BOOTSTRAP',
+        execution.bootstrap
+      )};\n({orcaPrefix:"initialized"});\n`
+    )
+    const privateResources = await browserExtensionPrivateResources(
+      directory,
+      manifest,
+      [BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE, tokenFile, execution.contentScriptFile],
+      execution.controller.signal
+    )
+    const manifestText = JSON.stringify(
+      withPrivateFilesHiddenFromWebAccessibleResources(manifest, revision.files, (resource) =>
+        privateResources.has(resource)
+      ),
+      null,
+      2
+    )
+    await writeBrowserExtensionGeneratedFile(join(directory, 'manifest.json'), manifestText)
+    execution.controller.signal.throwIfAborted()
+    execution.preparedDirectory = directory
+    execution.release = materialized.release
+    return {
+      directory,
+      extensionId: revision.extensionId,
+      hasWorker: wrapper !== null,
+      workerSignature: null,
+      release: materialized.release
     }
+  } catch (error) {
+    await materialized.release()
+    throw error
   }
 }

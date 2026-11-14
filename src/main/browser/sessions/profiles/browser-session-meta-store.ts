@@ -24,6 +24,48 @@ export type BrowserSessionMeta = {
 
 export const BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
 
+/** Extension reads share the registry's current metadata; cookie staging still merges from disk. */
+export class BrowserSessionExtensionLists {
+  private lists?: Pick<
+    BrowserSessionMeta,
+    'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
+  >
+
+  constructor(private readonly load: () => BrowserSessionMeta) {}
+
+  remember(meta: BrowserSessionMeta): void {
+    this.lists = {
+      enabledExtensionIdsByProfileId: meta.enabledExtensionIdsByProfileId,
+      pinnedExtensionIdsByProfileId: meta.pinnedExtensionIdsByProfileId
+    }
+  }
+
+  persist(
+    resolvePath: () => string,
+    partition: string,
+    updates: Partial<BrowserSessionMeta>
+  ): void {
+    const written = persistBrowserSessionMeta(resolvePath, partition, updates)
+    if (written) {
+      this.remember(written)
+    }
+  }
+
+  forget(): void {
+    this.lists = undefined
+  }
+
+  read(
+    key: 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId',
+    profileId: string
+  ): string[] {
+    if (!this.lists) {
+      this.remember(this.load())
+    }
+    return [...(this.lists![key][profileId] ?? [])]
+  }
+}
+
 function parseEnabledExtensionIds(value: unknown): Record<string, string[]> {
   const result: Record<string, string[]> = {}
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -91,14 +133,18 @@ export function persistBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string,
   updates: Partial<BrowserSessionMeta>
-): void {
+): BrowserSessionMeta | null {
   try {
     const existing = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
+    const next = { ...existing, ...updates }
     const tmpPath = `${resolveMetadataPath()}.tmp`
     mkdirSync(dirname(resolveMetadataPath()), { recursive: true })
-    writeFileSync(tmpPath, JSON.stringify({ ...existing, ...updates }))
+    writeFileSync(tmpPath, JSON.stringify(next))
     renameSync(tmpPath, resolveMetadataPath())
-  } catch {}
+    return next
+  } catch {
+    return null
+  }
 }
 
 /** Meta updates that forget a deleted profile: its staged cookie import and its enabled extensions. */

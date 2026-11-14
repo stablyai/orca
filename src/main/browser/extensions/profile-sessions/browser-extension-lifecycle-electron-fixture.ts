@@ -1,4 +1,4 @@
-import { app, BaseWindow, protocol, session } from 'electron'
+import { app, BaseWindow, BrowserWindow, protocol, session } from 'electron'
 import { renameSync, writeFileSync } from 'node:fs'
 import '../../../../shared/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
@@ -6,7 +6,7 @@ import { applyBackgroundActivationPolicy } from '../../../window/activation/fore
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../api-runtime/browser-extension-api-scheme'
-import { attachBrowserExtensionsToProfileSession } from './browser-extension-session-loader'
+import { retainBrowserExtensionPage } from './browser-extension-session-loader'
 import {
   addUnpackedBrowserExtension,
   reloadUnpackedBrowserExtension
@@ -93,19 +93,23 @@ function capture(message: string): void {
 async function run(): Promise<void> {
   await app.whenReady()
   initializeBrowserExtensionSupport({ enabled: true })
+  browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
   const profile = browserSessionRegistry.getDefaultProfile()
+  const enabled = browserSessionRegistry.getEnabledExtensionIds(profile.id)
+  extensionId = enabled[0] ?? ''
   session
     .fromPartition(ORCA_BROWSER_PARTITION)
     .serviceWorkers.on('console-message', (_event, details) => capture(details.message))
+  const page = new BrowserWindow({
+    show: false,
+    webPreferences: { partition: ORCA_BROWSER_PARTITION, sandbox: true, contextIsolation: true }
+  })
+  await retainBrowserExtensionPage(page.webContents)
+  await page.loadURL('about:blank')
   if (phase === 'install') {
-    attachBrowserExtensionsToProfileSession(profile, [])
     status.added = await addUnpackedBrowserExtension(profile.id, fixtureExtensionDirectory)
     writeStatus()
-    return
   }
-  const enabled = browserSessionRegistry.getEnabledExtensionIds(profile.id)
-  extensionId = enabled[0] ?? ''
-  attachBrowserExtensionsToProfileSession(profile, enabled)
 }
 
 void run().catch(fail)

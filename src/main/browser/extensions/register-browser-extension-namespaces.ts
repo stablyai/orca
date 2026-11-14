@@ -1,3 +1,5 @@
+import { registerStorageSessionNamespace } from './api/storage-session'
+import { registerAlarmsNamespace } from './api/alarms'
 import { registerActionNamespace } from './api/action'
 import { registerCommandsNamespace } from './api/commands'
 import { registerContextMenusNamespace } from './api/context-menus'
@@ -21,6 +23,7 @@ import { registerWindowsNamespace } from './api/windows'
 
 /** Every main-side namespace; each must also appear in src/preload/browser/extensions/api/browser-extension-api-surface.ts. */
 export function registerBrowserExtensionNamespaces(): void {
+  registerAlarmsNamespace()
   registerWindowsNamespace()
   registerTabsNamespace()
   registerWebNavigationNamespace()
@@ -38,6 +41,7 @@ export function registerBrowserExtensionNamespaces(): void {
   registerDownloadsNamespace()
   registerStorageRelayNamespace()
   registerStorageSyncNamespace()
+  registerStorageSessionNamespace()
   registerNativeMessagingNamespace()
   registerManagementNamespace()
   registerDeclarativeNetRequestNamespace()

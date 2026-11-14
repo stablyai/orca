@@ -14,7 +14,7 @@ import {
   readBrowserExtensionManifest
 } from './installation/browser-extension-manifest'
 import {
-  getBrowserExtensionSessionForProfile,
+  withBrowserExtensionProfileOperation,
   listBrowserExtensionSessions,
   loadBrowserExtensionFolderIntoProfile,
   loadBrowserExtensionIntoProfile,
@@ -27,6 +27,7 @@ import {
   getHeldBrowserExtensionUpdate
 } from './web-store/browser-extension-held-updates'
 import { browserExtensionIdForUnpackedFolder } from './installation/browser-extension-load-directory'
+import { forgetBrowserExtensionPackageRevision } from './installation/browser-extension-package-revisions'
 import {
   forgetBrowserExtensionLoadFailures,
   getBrowserExtensionLoadFailure
@@ -98,10 +99,10 @@ export function setBrowserExtensionEnabled(
       throw new Error('Browser profile not found')
     }
     if (!enabled) {
-      unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, false)
       )
+      await unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
       return
     }
     await withBrowserExtensionLock(extensionId, async () => {
@@ -109,10 +110,12 @@ export function setBrowserExtensionEnabled(
       if (!installed) {
         throw new Error('Extension is not installed')
       }
-      await loadBrowserExtensionIntoProfile(browserProfileId, installed)
-      browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-        withExtensionEnabled(byProfile, browserProfileId, extensionId, true)
-      )
+      await withBrowserExtensionProfileOperation(browserProfileId, extensionId, async () => {
+        await loadBrowserExtensionIntoProfile(browserProfileId, installed)
+        browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
+          withExtensionEnabled(byProfile, browserProfileId, extensionId, true)
+        )
+      })
     })
   })
 }
@@ -150,6 +153,7 @@ export function removeBrowserExtension(extensionId: string): Promise<BrowserExte
       forgetBrowserExtensionLoadFailures({ extensionId })
       forgetHeldBrowserExtensionUpdate(extensionId)
       await getBrowserExtensionInstallStore().remove(extensionId)
+      forgetBrowserExtensionPackageRevision(extensionId)
       notifyChromeWebStoreUninstalled(extensionId)
       notifyBrowserExtensionListChanged()
     })
@@ -206,51 +210,53 @@ export function addUnpackedBrowserExtension(
     const summary = await readBrowserExtensionManifest(directory)
     const extensionId = await browserExtensionIdForUnpackedFolder(directory)
     // Why the lock: a removal finishing mid-load would be undone by the save below.
-    await withBrowserExtensionLock(extensionId, async () => {
-      const store = getBrowserExtensionInstallStore()
-      // Why before loading: a refused folder must leave no loaded copy and no rewritten profile records.
-      const existing = store.get(extensionId)
-      if (existing?.source === 'webstore') {
-        throw new Error(`${existing.name} is already installed from the Chrome Web Store`)
-      }
-      const record: InstalledBrowserExtension = {
-        id: extensionId,
-        name: summary.name,
-        version: summary.version,
-        path: directory,
-        source: 'unpacked',
-        iconPath: summary.iconPath,
-        permissions: summary.permissions,
-        hostPermissions: summary.hostPermissions,
-        optionsPage: summary.optionsPage
-      }
-      // Native load emits extension-loaded; precedence must already be durable then.
-      if (!existing) {
-        store.save(record)
-      }
-      let loaded: Electron.Extension
-      try {
-        loaded = await loadBrowserExtensionFolderIntoProfile(
-          browserProfileId,
-          extensionId,
-          directory,
-          { refresh: existing === null }
-        )
-      } catch (error) {
-        if (!existing) {
-          unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
-          await store.remove(extensionId)
+    await withBrowserExtensionLock(extensionId, () =>
+      withBrowserExtensionProfileOperation(browserProfileId, extensionId, async () => {
+        const store = getBrowserExtensionInstallStore()
+        // Why before loading: a refused folder must leave no loaded copy and no rewritten profile records.
+        const existing = store.get(extensionId)
+        if (existing?.source === 'webstore') {
+          throw new Error(`${existing.name} is already installed from the Chrome Web Store`)
         }
-        throw error
-      }
-      store.save({ ...record, version: loaded.version })
-      browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-        withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
-      )
-      if (!existing) {
-        recordBrowserExtensionInstalled('unpacked')
-      }
-    })
+        const record: InstalledBrowserExtension = {
+          id: extensionId,
+          name: summary.name,
+          version: summary.version,
+          path: directory,
+          source: 'unpacked',
+          iconPath: summary.iconPath,
+          permissions: summary.permissions,
+          hostPermissions: summary.hostPermissions,
+          optionsPage: summary.optionsPage
+        }
+        // Native load emits extension-loaded; precedence must already be durable then.
+        if (!existing) {
+          store.save(record)
+        }
+        let loaded: Electron.Extension
+        try {
+          loaded = await loadBrowserExtensionFolderIntoProfile(
+            browserProfileId,
+            extensionId,
+            directory,
+            { refresh: existing === null }
+          )
+        } catch (error) {
+          if (!existing) {
+            await unloadBrowserExtensionFromProfile(browserProfileId, extensionId)
+            await store.remove(extensionId)
+          }
+          throw error
+        }
+        store.save({ ...record, version: loaded.version })
+        browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
+          withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
+        )
+        if (!existing) {
+          recordBrowserExtensionInstalled('unpacked')
+        }
+      })
+    )
     notifyBrowserExtensionListChanged()
   })
 }
@@ -260,11 +266,15 @@ export function openBrowserExtensionOptions(
   extensionId: string
 ): Promise<BrowserExtensionActionResult> {
   return settle(async () => {
-    const extension =
-      getBrowserExtensionSessionForProfile(browserProfileId)?.extensions.getExtension(extensionId)
-    if (!extension) {
+    if (!browserSessionRegistry.getEnabledExtensionIds(browserProfileId).includes(extensionId)) {
       throw new Error('Turn the extension on to open its options')
     }
-    await openBrowserExtensionOptionsPage(browserProfileId, extension, { active: true })
+    await withBrowserExtensionProfileOperation(browserProfileId, extensionId, async (session) => {
+      const extension = session.extensions.getExtension(extensionId)
+      if (!extension) {
+        throw new Error('The extension could not be loaded')
+      }
+      await openBrowserExtensionOptionsPage(browserProfileId, extension, { active: true })
+    })
   })
 }

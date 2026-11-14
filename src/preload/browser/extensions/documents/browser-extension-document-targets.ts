@@ -11,7 +11,7 @@ export const PRELOAD_FIRST_DISCARDED_TAB_ID = 1_000_000_000
 
 /**
  * Orca names documents itself in webNavigation and webRequest (Electron gives main no Chromium
- * document id), but Electron's native scripting and tabs.sendMessage resolve only Chromium's ids.
+ * document id), but Electron's native scripting resolves only Chromium's ids.
  * Side-effect-free probes resolve Orca's ids to native document ids before dispatch. Only proven
  * document pairs name executeScript results. It also answers calls to a
  * discarded tab, whose id only Orca knows, with Chrome's errors instead of Electron's "No tab".
@@ -20,7 +20,8 @@ export const PRELOAD_FIRST_DISCARDED_TAB_ID = 1_000_000_000
  */
 export function installBrowserExtensionDocumentTargets(
   bridge: BrowserExtensionMainWorldBridge,
-  firstDiscardedTabId: number
+  firstDiscardedTabId: number,
+  ownPrefix?: { file: string; execution: string }
 ): void {
   const isObject = (value: unknown): value is ApiObject =>
     value !== null && typeof value === 'object'
@@ -33,10 +34,19 @@ export function installBrowserExtensionDocumentTargets(
   }
   const scripting = isObject(chromeApi.scripting) ? chromeApi.scripting : null
   const nativeExecuteScript = scripting?.executeScript
-  const tabs = isObject(chromeApi.tabs) ? chromeApi.tabs : null
-  const nativeSendMessage = tabs?.sendMessage
-  const nativeMessages = isObject(runtime.onMessage) ? runtime.onMessage : null
-  const probeKey = 'orcaDocumentTargetProbe'
+  const prefixReady = ownPrefix
+    ? Promise.resolve(ownPrefix)
+    : bridge
+        .call('orcaDocumentTargets', 'prefix', [])
+        .then((reply) =>
+          reply.ok &&
+          isObject(reply.value) &&
+          typeof reply.value.file === 'string' &&
+          typeof reply.value.execution === 'string'
+            ? { file: reply.value.file, execution: reply.value.execution }
+            : null
+        )
+        .catch(() => null)
 
   /** frameId → Orca's documentId for the tab's current documents. */
   const framesOf = async (tabId: unknown): Promise<Map<number, string>> => {
@@ -81,79 +91,22 @@ export function installBrowserExtensionDocumentTargets(
   // Why these words: a discarded tab has no committed document and no frame to receive anything.
   const SCRIPT_ERROR =
     'Cannot access contents of url "". Extension manifest must request permission to access this host.'
-  const MESSAGE_ERROR = 'Could not establish connection. Receiving end does not exist.'
-
-  const messageDocument = async (tabId: number, frameId: number): Promise<string> => {
-    if (!tabs || !isCallable(nativeSendMessage) || !nativeMessages) {
-      throw new Error(MESSAGE_ERROR)
-    }
-    const add = nativeMessages.addListener
-    const remove = nativeMessages.removeListener
-    if (!isCallable(add) || !isCallable(remove)) {
-      throw new Error(MESSAGE_ERROR)
-    }
-    const token = crypto.randomUUID()
-    let documentId: string | undefined
-    const receive = (message: unknown, sender: unknown, respond: unknown): void => {
-      const probe = isObject(message) ? message[probeKey] : null
-      if (
-        isObject(probe) &&
-        probe.token === token &&
-        probe.response === true &&
-        isObject(sender) &&
-        sender.id === runtime.id &&
-        isObject(sender.tab) &&
-        sender.tab.id === tabId &&
-        sender.frameId === frameId &&
-        typeof sender.documentId === 'string'
-      ) {
-        documentId = sender.documentId
-        if (isCallable(respond)) {
-          respond(true)
-        }
-      }
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined
-    add.call(nativeMessages, receive)
-    try {
-      await Promise.race([
-        nativeSendMessage.call(tabs, tabId, { [probeKey]: { token } }, { frameId }),
-        new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => reject(new Error(MESSAGE_ERROR)), 2_500)
-        })
-      ])
-      if (!documentId) {
-        throw new Error(MESSAGE_ERROR)
-      }
-      return documentId
-    } finally {
-      clearTimeout(timer)
-      remove.call(nativeMessages, receive)
-    }
-  }
 
   const nativeDocuments = async (
     tabId: number,
-    requested: unknown[],
-    messaging: boolean
+    requested: unknown[]
   ): Promise<Map<string, string>> => {
     const frames = await framesOf(tabId)
     const selected = [...frames].filter(([, documentId]) => requested.includes(documentId))
     const resolved = new Map<number, string>()
     if (selected.length > 0 && scripting && isCallable(nativeExecuteScript)) {
-      const results: unknown = await Promise.resolve()
-        .then(() =>
-          nativeExecuteScript.call(scripting, {
-            target: { tabId, frameIds: selected.map(([frameId]) => frameId) },
-            func: () => undefined
-          })
-        )
-        .catch((error: unknown) => {
-          if (!messaging) {
-            throw error
-          }
-          return []
+      const results: unknown = await Promise.resolve().then(() =>
+        nativeExecuteScript.call(scripting, {
+          target: { tabId, frameIds: selected.map(([frameId]) => frameId) },
+          func: () => undefined
         })
+      )
+
       for (const result of Array.isArray(results) ? results : []) {
         if (
           isObject(result) &&
@@ -161,13 +114,6 @@ export function installBrowserExtensionDocumentTargets(
           typeof result.documentId === 'string'
         ) {
           resolved.set(result.frameId, result.documentId)
-        }
-      }
-    }
-    if (messaging) {
-      for (const [frameId] of selected) {
-        if (!resolved.has(frameId)) {
-          resolved.set(frameId, await messageDocument(tabId, frameId))
         }
       }
     }
@@ -183,59 +129,99 @@ export function installBrowserExtensionDocumentTargets(
     return nativeByOrca
   }
 
-  /** Null when the call goes to native untouched (and synchronously). */
-  const scriptingTarget = (args: unknown[]): Promise<Prepared> | null => {
+  const omitted = (value: unknown): boolean => value === undefined || value === null
+
+  /** Native validation remains authoritative for malformed requests and MAIN-world scripts. */
+  const scriptingTarget = (args: unknown[], prefix = false): Promise<Prepared> | null => {
     const injection = isObject(args[0]) ? args[0] : null
     const target = injection && isObject(injection.target) ? injection.target : null
     const documentIds = target && Array.isArray(target.documentIds) ? target.documentIds : null
     const tabId = target?.tabId
+    const files = injection?.files
+    const isolated = injection && (omitted(injection.world) || injection.world === 'ISOLATED')
+    const fileCall =
+      Array.isArray(files) &&
+      files.length > 0 &&
+      files.every((file) => typeof file === 'string') &&
+      omitted(injection!.func) &&
+      omitted(injection!.function) &&
+      omitted(injection!.args)
+    const functionCall =
+      injection &&
+      ((isCallable(injection.func) && omitted(injection.function)) ||
+        (isCallable(injection.function) && omitted(injection.func))) &&
+      omitted(injection.files) &&
+      (omitted(injection.args) || Array.isArray(injection.args))
+    const needsPrefix = prefix && isolated && (fileCall || functionCall)
     if (
       !injection ||
       !target ||
       typeof tabId !== 'number' ||
-      (!documentIds && tabId < firstDiscardedTabId)
+      (!needsPrefix && !documentIds && tabId < firstDiscardedTabId)
     ) {
       return null
     }
     return (async () => {
+      const documents = new Map<string, string>()
       const error = await discardedError(tabId, SCRIPT_ERROR)
-      if (error || !documentIds) {
-        return { args, documents: new Map(), error }
+      if (error) {
+        return { args, documents, error }
       }
-      const nativeByOrca = await nativeDocuments(tabId, documentIds, false)
-      const nativeIds = documentIds.map((id) =>
-        typeof id === 'string' ? (nativeByOrca.get(id) ?? id) : id
-      )
-      return {
-        args: [{ ...injection, target: { ...target, documentIds: nativeIds } }, ...args.slice(1)],
-        documents: new Map([...nativeByOrca].map(([orcaId, nativeId]) => [nativeId, orcaId]))
+      let nativeTarget = target
+      if (documentIds) {
+        const nativeByOrca = await nativeDocuments(tabId, documentIds)
+        nativeTarget = {
+          ...target,
+          documentIds: documentIds.map((id) =>
+            typeof id === 'string' ? (nativeByOrca.get(id) ?? id) : id
+          )
+        }
+        for (const [orcaId, nativeId] of nativeByOrca) {
+          documents.set(nativeId, orcaId)
+        }
       }
-    })()
-  }
-  const messageTarget = (args: unknown[]): Promise<Prepared> | null => {
-    const [tabId, , options] = args
-    const documentId = isObject(options) ? options.documentId : undefined
-    if (
-      typeof tabId !== 'number' ||
-      (typeof documentId !== 'string' && tabId < firstDiscardedTabId)
-    ) {
-      return null
-    }
-    return (async () => {
-      const error = await discardedError(tabId, MESSAGE_ERROR)
-      if (error || typeof documentId !== 'string' || !isObject(options)) {
-        return { args, documents: new Map(), error }
+      let nativeInjection: ApiObject = { ...injection, target: nativeTarget }
+      if (needsPrefix) {
+        const descriptor = await prefixReady
+        if (!descriptor) {
+          throw new Error('Extension context was unloaded')
+        }
+        if (fileCall) {
+          nativeInjection = { ...nativeInjection, files: [descriptor.file, ...files] }
+        } else if (scripting && isCallable(nativeExecuteScript)) {
+          const {
+            func: _func,
+            function: _function,
+            args: _args,
+            ...options
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The accepted native injection is the same object classified above; only executable fields are removed.
+          } = nativeInjection as ApiObject
+          const initialized: unknown = await nativeExecuteScript.call(scripting, {
+            ...options,
+            files: [descriptor.file]
+          })
+          const ids = (Array.isArray(initialized) ? initialized : []).flatMap((result) =>
+            isObject(result) &&
+            typeof result.documentId === 'string' &&
+            isObject(result.result) &&
+            result.result.orcaPrefix === 'initialized'
+              ? [result.documentId]
+              : []
+          )
+          const current = await bridge.call('orcaDocumentTargets', 'prefix', [descriptor.execution])
+          if (
+            !current.ok ||
+            !isObject(current.value) ||
+            current.value.execution !== descriptor.execution ||
+            ids.length === 0
+          ) {
+            throw new Error('Extension context was unloaded')
+          }
+          const { frameIds: _frames, allFrames: _all, ...exactTarget } = nativeTarget
+          nativeInjection = { ...nativeInjection, target: { ...exactTarget, documentIds: ids } }
+        }
       }
-      const nativeByOrca = await nativeDocuments(tabId, [documentId], true)
-      return {
-        args: [
-          tabId,
-          args[1],
-          { ...options, documentId: nativeByOrca.get(documentId) ?? documentId },
-          ...args.slice(3)
-        ],
-        documents: new Map()
-      }
+      return { args: [nativeInjection, ...args.slice(1)], documents }
     })()
   }
   const callWithLastError = (message: string, callback: ExtensionCallable): void => {
@@ -316,12 +302,9 @@ export function installBrowserExtensionDocumentTargets(
 
   for (const api of new Set([chromeApi, root.browser].filter(isObject))) {
     if (isObject(api.scripting)) {
-      wrap(api.scripting, 'executeScript', scriptingTarget, true)
+      wrap(api.scripting, 'executeScript', (args) => scriptingTarget(args, true), true)
       wrap(api.scripting, 'insertCSS', scriptingTarget, false)
       wrap(api.scripting, 'removeCSS', scriptingTarget, false)
-    }
-    if (isObject(api.tabs)) {
-      wrap(api.tabs, 'sendMessage', messageTarget, false)
     }
   }
 }

@@ -197,8 +197,7 @@ export function installBrowserExtensionStorageRelay(
     context === 'worker'
       ? {
           onChanged: makeEvent(''),
-          local: makeEvent('local'),
-          session: makeEvent('session')
+          local: makeEvent('local')
         }
       : null
   // Why `browser` too: it is a separate native global that WebExtension-style code reads first.
@@ -207,7 +206,7 @@ export function installBrowserExtensionStorageRelay(
     if (!isObject(storage)) {
       continue
     }
-    for (const areaName of ['local', 'session'] as const) {
+    for (const areaName of ['local'] as const) {
       const area = storage[areaName]
       if (!isObject(area) || wrapped.has(area)) {
         continue

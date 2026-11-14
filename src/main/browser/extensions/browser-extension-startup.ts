@@ -13,7 +13,8 @@ import {
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import {
   attachBrowserExtensionsToProfileSession,
-  detachBrowserExtensionsFromAllProfileSessions
+  detachBrowserExtensionsFromAllProfileSessions,
+  refreshBrowserExtensionPageDemand
 } from './profile-sessions/browser-extension-session-loader'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
@@ -72,13 +73,16 @@ export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
         for (const profile of browserSessionRegistry.listProfiles()) {
           attachBrowserExtensionsToProfileSession(
             profile,
-            browserSessionRegistry.getEnabledExtensionIds(profile.id)
+            browserSessionRegistry.getEnabledExtensionIds(profile.id),
+            () => browserSessionRegistry.getEnabledExtensionIds(profile.id)
           )
         }
         // Why: tabs already open were created before their session ran extensions.
         webContents.getAllWebContents().forEach(observeExtensionContents)
+        refreshBrowserExtensionPageDemand()
       } else {
         await detachBrowserExtensionsFromAllProfileSessions()
+        refreshBrowserExtensionPageDemand()
       }
       notifyBrowserExtensionListChanged()
       for (const profile of browserSessionRegistry.listProfiles()) {

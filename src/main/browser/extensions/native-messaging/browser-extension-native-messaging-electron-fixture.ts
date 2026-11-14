@@ -7,7 +7,7 @@ import { applyBackgroundActivationPolicy } from '../../../window/activation/fore
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../api-runtime/browser-extension-api-scheme'
-import { attachBrowserExtensionsToProfileSession } from '../profile-sessions/browser-extension-session-loader'
+import { retainBrowserExtensionPage } from '../profile-sessions/browser-extension-session-loader'
 import { addUnpackedBrowserExtension } from '../browser-extension-management'
 import { trackBrowserExtensionMainWindow } from '../tabs-and-windows/browser-extension-window-model'
 import { browserExtensionIdForUnpackedFolder } from '../installation/browser-extension-load-directory'
@@ -94,8 +94,8 @@ function writeManifest(name: string, path: string, extensionId: string): void {
 async function run(): Promise<void> {
   await app.whenReady()
   initializeBrowserExtensionSupport({ enabled: true })
+  browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
   const profile = browserSessionRegistry.getDefaultProfile()
-  attachBrowserExtensionsToProfileSession(profile, [])
   const extensionSession = session.fromPartition(ORCA_BROWSER_PARTITION)
   extensionSession.serviceWorkers.on('console-message', (_event, details) =>
     capture(details.message)
@@ -103,6 +103,12 @@ async function run(): Promise<void> {
   app.on('web-contents-created', (_event, contents) => {
     contents.on('console-message', (details) => capture(details.message))
   })
+  const page = new BrowserWindow({
+    show: false,
+    webPreferences: { partition: ORCA_BROWSER_PARTITION, sandbox: true, contextIsolation: true }
+  })
+  await retainBrowserExtensionPage(page.webContents)
+  await page.loadURL('about:blank')
   // Orca's main window, hidden; the worker opens the extension page as a popout of it.
   const host = new BrowserWindow({ show: false })
   trackBrowserExtensionMainWindow(host)

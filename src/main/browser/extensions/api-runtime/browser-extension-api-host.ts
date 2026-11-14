@@ -1,4 +1,10 @@
+import { endBrowserExtensionWorkerApiTasks } from './browser-extension-worker-api-tasks'
+import { handleBrowserExtensionContentRequest } from './browser-extension-content-api-host'
 import { ipcMain } from 'electron'
+import {
+  getBrowserExtensionExecution,
+  isBrowserExtensionExecutionLive
+} from './browser-extension-execution-authority'
 import {
   BROWSER_EXTENSION_INVOKE_CHANNEL,
   type BrowserExtensionInvokeResult
@@ -45,7 +51,8 @@ function resolveFrameCaller(event: Electron.IpcMainInvokeEvent): {
   const sess = event.sender.session
   const state = getHostSessionState(sess)
   const extension = state ? sess.extensions.getExtension(parsed.extensionId) : null
-  if (!extension || !state) {
+  const execution = getBrowserExtensionExecution(sess, parsed.extensionId)
+  if (!extension || !state || !execution || !isBrowserExtensionExecutionLive(execution)) {
     return null
   }
   return {
@@ -53,6 +60,7 @@ function resolveFrameCaller(event: Electron.IpcMainInvokeEvent): {
       extension,
       session: sess,
       browserProfileId: state.browserProfileId,
+      execution,
       webContents: event.sender,
       frame
     },
@@ -149,6 +157,7 @@ function listenToSession(sess: Electron.Session): void {
       for (const context of state.workers.values()) {
         const running = context.running
         if (running && (running.isDestroyed() || running.versionId === versionId)) {
+          endBrowserExtensionWorkerApiTasks(running)
           context.running = null
           detachWorkerEventStream(context)
         }
@@ -178,7 +187,9 @@ export function attachBrowserExtensionApiHostToSession(
   listenToSession(sess)
   sess.protocol.handle(BROWSER_EXTENSION_API_SCHEME, (request) =>
     getHostSessionState(sess) === state
-      ? handleBrowserExtensionWorkerRequest(sess, state, request)
+      ? new URL(request.url).hostname === 'cs'
+        ? handleBrowserExtensionContentRequest(sess, request)
+        : handleBrowserExtensionWorkerRequest(sess, state, request)
       : Promise.resolve(new Response(null, { status: 403 }))
   )
   sweepRunningWorkers(sess, state)

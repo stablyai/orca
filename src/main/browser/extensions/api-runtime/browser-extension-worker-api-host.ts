@@ -1,4 +1,5 @@
-import { randomBytes } from 'node:crypto'
+import { startBrowserExtensionWorkerApiTask } from './browser-extension-worker-api-tasks'
+import { browserExtensionWorkerAuthority } from './browser-extension-execution-authority'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
@@ -31,30 +32,8 @@ import { handleBrowserExtensionApiRequest } from './browser-extension-api-reques
  * readable only from that extension's own files, must match it.
  */
 
-const tokenByExtensionId = new Map<string, string>()
-const extensionIdByToken = new Map<string, string>()
-
-/** Per app run; written into the extension's Orca-owned folder, where only it can read the file. */
-export function getBrowserExtensionWorkerToken(extensionId: string): string {
-  let token = tokenByExtensionId.get(extensionId)
-  if (!token) {
-    token = randomBytes(32).toString('hex')
-    tokenByExtensionId.set(extensionId, token)
-    extensionIdByToken.set(token, extensionId)
-  }
-  return token
-}
-
 function refuse(status: number): Response {
   return new Response(null, { status })
-}
-
-function startTask(worker: Electron.ServiceWorkerMain | null): Electron.StartTask | null {
-  try {
-    return worker && !worker.isDestroyed() ? worker.startTask() : null
-  } catch {
-    return null
-  }
 }
 
 function openEventStream(context: WorkerContext, headers: HeadersInit): Response {
@@ -151,7 +130,8 @@ export async function handleBrowserExtensionWorkerRequest(
     body !== null && typeof body === 'object' && 'token' in body && typeof body.token === 'string'
       ? body.token
       : ''
-  if (extensionIdByToken.get(token) !== extension.id) {
+  const execution = browserExtensionWorkerAuthority(token, sess, extension.id)
+  if (!execution) {
     return refuse(403)
   }
   const origin = getChromeExtensionOrigin(extension.id)
@@ -168,13 +148,14 @@ export async function handleBrowserExtensionWorkerRequest(
     extension,
     session: sess,
     browserProfileId: state.browserProfileId,
+    execution,
     fromWorker: true
   }
   // Why: keep the worker alive only while a call is open, not forever.
-  const task = startTask(context.running)
+  const rawRequest =
+    body !== null && typeof body === 'object' && 'request' in body ? body.request : null
+  const task = startBrowserExtensionWorkerApiTask(context.running, rawRequest, execution)
   try {
-    const rawRequest =
-      body !== null && typeof body === 'object' && 'request' in body ? body.request : null
     const result = await handleBrowserExtensionApiRequest(caller, state, rawRequest, {
       kind: 'worker',
       context

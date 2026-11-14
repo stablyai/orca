@@ -1,14 +1,39 @@
 import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser-extension-profile-state-store'
 import type { PreparedBrowserExtensionDirectory } from '../installation/browser-extension-load-directory'
+import { retireBrowserExtensionExecution } from '../api-runtime/browser-extension-execution-authority'
+
+const cleanedNoWorker = new WeakMap<Electron.Session, Set<string>>()
+const suspensions = new WeakMap<Electron.Session, Set<string>>()
+
+export function isBrowserExtensionSuspension(
+  sess: Electron.Session,
+  extension: Electron.Extension
+): boolean {
+  return suspensions.get(sess)?.has(extension.path) ?? false
+}
 
 // Why: removing an extension makes Chromium unregister its worker, so its next load registers anew.
 const unregisteredWorkersBySession = new WeakMap<Electron.Session, Set<string>>()
 
 export function removeBrowserExtensionFromSession(
   sess: Electron.Session,
-  extensionId: string
+  extensionId: string,
+  reason: 'suspend' | 'reset' = 'reset'
 ): void {
+  const extension = sess.extensions.getExtension(extensionId)
+  if (reason === 'suspend' && extension) {
+    let paths = suspensions.get(sess)
+    if (!paths) {
+      paths = new Set()
+      suspensions.set(sess, paths)
+      sess.extensions.on('extension-unloaded', (_event, unloaded) => {
+        queueMicrotask(() => paths?.delete(unloaded.path))
+      })
+    }
+    paths.add(extension.path)
+  }
+  void retireBrowserExtensionExecution(sess, extensionId)
   sess.extensions.removeExtension(extensionId)
   const ids = unregisteredWorkersBySession.get(sess) ?? new Set<string>()
   ids.add(extensionId)
@@ -28,6 +53,14 @@ export async function refreshWorkerRegistration(
   const { extensionId, workerSignature } = prepared
   const states = getBrowserExtensionProfileStateStore()
   const unregistered = unregisteredWorkersBySession.get(sess)?.delete(extensionId) ?? false
+  const noWorkers = cleanedNoWorker.get(sess) ?? new Set<string>()
+  cleanedNoWorker.set(sess, noWorkers)
+  if (!prepared.hasWorker && noWorkers.has(extensionId)) {
+    return unregistered
+  }
+  if (prepared.hasWorker) {
+    noWorkers.delete(extensionId)
+  }
   if (workerSignature && states.read(profileId, extensionId).workerSignature === workerSignature) {
     return unregistered
   }
@@ -35,6 +68,9 @@ export async function refreshWorkerRegistration(
     origin: getChromeExtensionOrigin(extensionId),
     storages: ['serviceworkers']
   })
+  if (!prepared.hasWorker) {
+    noWorkers.add(extensionId)
+  }
   if (workerSignature) {
     states.update(profileId, extensionId, (state) => ({
       ...state,
@@ -42,29 +78,4 @@ export async function refreshWorkerRegistration(
     }))
   }
   return true
-}
-
-const WORKER_REGISTRATION_WAIT_MS = 10_000
-
-/**
- * loadExtension resolves before Chromium has registered the worker, and until it has, every start
- * fails ("Failed to start service worker."). The load waits so Orca's lifecycle events and
- * restored tabs start a worker that exists. Listen before loading: registration can finish first.
- */
-export function whenWorkerRegistered(sess: Electron.Session, extensionId: string): Promise<void> {
-  const scope = `${getChromeExtensionOrigin(extensionId)}/`
-  return new Promise((resolve) => {
-    const done = (): void => {
-      clearTimeout(timer)
-      sess.serviceWorkers.removeListener('registration-completed', onRegistered)
-      resolve()
-    }
-    const onRegistered = (_event: Electron.Event, details: { scope: string }): void => {
-      if (details.scope === scope) {
-        done()
-      }
-    }
-    const timer = setTimeout(done, WORKER_REGISTRATION_WAIT_MS)
-    sess.serviceWorkers.on('registration-completed', onRegistered)
-  })
 }

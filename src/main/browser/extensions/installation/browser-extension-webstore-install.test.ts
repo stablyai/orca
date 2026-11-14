@@ -45,6 +45,13 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   }
 }))
 vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
+  withBrowserExtensionProfileOperation: async (
+    _profile: string,
+    _id: string,
+    run: (session: Electron.Session) => Promise<unknown>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture operation callback does not use native session members.
+  ) => run({} as Electron.Session),
+  hasBrowserExtensionProfileDemand: () => true,
   getBrowserExtensionSessionForProfile: (profileId: string) =>
     profileId === 'default' ? {} : null,
   loadBrowserExtensionIntoProfile: (profileId: string, extension: InstalledBrowserExtension) =>

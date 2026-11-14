@@ -20,7 +20,10 @@ function runsInIsolatedWorld(entry: unknown): entry is ScriptEntry {
  * that entry's run_at. MAIN-world scripts have no extension APIs to fix. Null when no content
  * script runs there.
  */
-export function withOrcaContentScript(manifest: Manifest): Manifest | null {
+export function withOrcaContentScript(
+  manifest: Manifest,
+  prefix = BROWSER_EXTENSION_CONTENT_SCRIPT_FILE
+): Manifest | null {
   const entries = manifest.content_scripts
   if (!Array.isArray(entries) || !entries.some(runsInIsolatedWorld)) {
     return null
@@ -28,9 +31,7 @@ export function withOrcaContentScript(manifest: Manifest): Manifest | null {
   return {
     ...manifest,
     content_scripts: entries.map((entry: unknown) =>
-      runsInIsolatedWorld(entry)
-        ? { ...entry, js: [BROWSER_EXTENSION_CONTENT_SCRIPT_FILE, ...entry.js] }
-        : entry
+      runsInIsolatedWorld(entry) ? { ...entry, js: [prefix, ...entry.js] } : entry
     )
   }
 }

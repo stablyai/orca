@@ -64,6 +64,8 @@ const { BROWSER_EXTENSION_EVENT_CHANNEL, BROWSER_EXTENSION_INVOKE_CHANNEL } =
   await import('../../../../shared/browser/extensions/browser-extension-channels')
 const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const host = await import('../api-runtime/browser-extension-api-host')
+const { beginBrowserExtensionExecution } =
+  await import('../api-runtime/browser-extension-execution-authority')
 const { registerBrowserExtensionNamespaces } =
   await import('../register-browser-extension-namespaces')
 await import('./permissions')
@@ -197,6 +199,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   host.attachBrowserExtensionApiHostToSession(session, 'default')
+  for (const id of extensions.keys()) {
+    beginBrowserExtensionExecution(session, id, new AbortController().signal)
+  }
   mocks.prompt.mockReset()
 })
 

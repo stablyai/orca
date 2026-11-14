@@ -7,7 +7,6 @@ import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../api-runtime/browser-extension-api-scheme'
-import { attachBrowserExtensionsToProfileSession } from '../profile-sessions/browser-extension-session-loader'
 import { addUnpackedBrowserExtension } from '../browser-extension-management'
 import { recordActiveBrowserPage } from '../tabs-and-windows/browser-extension-tab-model'
 import { trackBrowserExtensionMainWindow } from '../tabs-and-windows/browser-extension-window-model'
@@ -100,8 +99,8 @@ async function waitFor<T>(read: () => T | null, timeoutMs = 15_000): Promise<T> 
 async function run(): Promise<void> {
   await app.whenReady()
   initializeBrowserExtensionSupport({ enabled: true })
+  browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
   const profile = browserSessionRegistry.getDefaultProfile()
-  attachBrowserExtensionsToProfileSession(profile, [])
   const extensionSession = session.fromPartition(ORCA_BROWSER_PARTITION)
   extensionSession.serviceWorkers.on('console-message', (_event, details) =>
     captureResult(details.message)

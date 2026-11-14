@@ -1,5 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { webcrypto } from 'node:crypto'
+import { installBrowserExtensionMessageTargets } from './browser-extension-message-targets'
 import { describe, expect, it, vi } from 'vitest'
 import {
   installBrowserExtensionDocumentTargets,
@@ -34,11 +35,13 @@ function navigatingDocumentTarget(navigateOnLookup = 1) {
       executeScript: async (injection: {
         target: { documentIds?: string[]; tabId: number }
         func?: () => unknown
+        files?: string[]
       }) => {
         if (injection.target.documentIds?.some((id) => id !== current)) {
           throw new Error('No matching document')
         }
-        const result = injection.func?.()
+        const result =
+          injection.files?.[0] === 'prefix.js' ? { orcaPrefix: 'initialized' } : injection.func?.()
         return [{ frameId: 0, documentId: current, result }]
       }
     },
@@ -75,7 +78,10 @@ function navigatingDocumentTarget(navigateOnLookup = 1) {
   }
   let lookups = 0
   const bridge = {
-    call: async () => {
+    call: async (_namespace: string, method: string) => {
+      if (method === 'prefix') {
+        return { ok: true as const, value: { file: 'prefix.js', execution: 'own' } }
+      }
       const value = [{ frameId: 0, documentId: current }]
       if (++lookups === navigateOnLookup) {
         current = 'new-document'
@@ -87,12 +93,15 @@ function navigatingDocumentTarget(navigateOnLookup = 1) {
     passesFilter: () => true
   }
   const realm = { chrome, crypto: webcrypto, setTimeout, clearTimeout }
-  runInNewContext(`(${installBrowserExtensionDocumentTargets.toString()})(bridge, first)`, {
-    ...realm,
-    globalThis: realm,
-    bridge,
-    first: PRELOAD_FIRST_DISCARDED_TAB_ID
-  })
+  runInNewContext(
+    `(${installBrowserExtensionMessageTargets.toString()})(bridge, first); (${installBrowserExtensionDocumentTargets.toString()})(bridge, first)`,
+    {
+      ...realm,
+      globalThis: realm,
+      bridge,
+      first: PRELOAD_FIRST_DISCARDED_TAB_ID
+    }
+  )
   return { chrome, delivered, listeners }
 }
 
@@ -100,7 +109,11 @@ function navigatingDocumentTarget(navigateOnLookup = 1) {
 function install(permissions: string[], nativeScripting = true) {
   const nativeListeners = new Set<NativeListener>()
   const executeScript = vi.fn(
-    async (injection: { target: Record<string, unknown>; func?: () => unknown }) => {
+    async (injection: {
+      target: Record<string, unknown>
+      func?: () => unknown
+      files?: string[]
+    }) => {
       const frameIds = Array.isArray(injection.target.frameIds)
         ? injection.target.frameIds
         : Array.isArray(injection.target.documentIds)
@@ -109,7 +122,7 @@ function install(permissions: string[], nativeScripting = true) {
       return frameIds.map((frameId: number) => ({
         frameId,
         documentId: frameId === 42 ? CHROMIUM_AD : CHROMIUM_TOP,
-        result: frameId
+        result: injection.files?.[0] === 'prefix.js' ? { orcaPrefix: 'initialized' } : frameId
       }))
     }
   )
@@ -154,6 +167,9 @@ function install(permissions: string[], nativeScripting = true) {
   const calls: unknown[][] = []
   const bridge = {
     call: async (namespace: string, method: string, args: unknown[]) => {
+      if (method === 'prefix') {
+        return { ok: true as const, value: { file: 'prefix.js', execution: 'own' } }
+      }
       // Main's tabs.get: a discarded tab, or (once replaced by its loaded guest) no tab.
       if (namespace === 'tabs' && method === 'get') {
         return args[0] === DISCARDED_TAB
@@ -208,13 +224,16 @@ function install(permissions: string[], nativeScripting = true) {
     Object,
     Array
   }
-  runInNewContext(`(${installBrowserExtensionDocumentTargets.toString()})(bridge, first)`, {
-    ...realm,
-    globalThis: realm,
-    bridge,
-    first: PRELOAD_FIRST_DISCARDED_TAB_ID,
-    Error
-  })
+  runInNewContext(
+    `(${installBrowserExtensionMessageTargets.toString()})(bridge, first); (${installBrowserExtensionDocumentTargets.toString()})(bridge, first)`,
+    {
+      ...realm,
+      globalThis: realm,
+      bridge,
+      first: PRELOAD_FIRST_DISCARDED_TAB_ID,
+      Error
+    }
+  )
   return { chrome, executeScript, insertCSS, sendMessage, calls, nativeListeners }
 }
 

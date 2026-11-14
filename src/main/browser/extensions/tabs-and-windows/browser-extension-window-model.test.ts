@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const emitted: { session: unknown; event: string }[] = []
-  return { emitted }
+  return { emitted, profileIds: new WeakMap<object, string>() }
 })
 
 vi.mock('electron', async () => {
@@ -11,10 +11,17 @@ vi.mock('electron', async () => {
   class FakeBrowserWindow extends Emitter {
     id = nextId++
     webContents = Object.assign(new Emitter(), {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned Electron fixture supplies the session identity and lifecycle methods this path uses.
+      session: undefined as unknown,
+      isDestroyed: () => false,
       setWindowOpenHandler: () => {},
       getURL: () => ''
     })
-    loadURL = async () => {}
+    constructor(options?: { webPreferences?: { session?: unknown } }) {
+      super()
+      this.webContents.session = options?.webPreferences?.session
+    }
+    loadURL = vi.fn(async () => {})
     isDestroyed = () => false
     isFocused = () => false
     isMinimized = () => false
@@ -22,7 +29,10 @@ vi.mock('electron', async () => {
     isMaximized = () => false
     isAlwaysOnTop = () => false
     getBounds = () => ({ x: 0, y: 0, width: 1, height: 1 })
-    close = () => this.emit('closed')
+    close = () => {
+      this.webContents.emit('destroyed')
+      this.emit('closed')
+    }
   }
   return { BrowserWindow: FakeBrowserWindow }
 })
@@ -34,13 +44,17 @@ vi.mock('../api-runtime/browser-extension-api-host', () => ({
   emitBrowserExtensionEvent: (target: { session?: unknown }, _ns: string, event: string) =>
     mocks.emitted.push({ session: target.session, event })
 }))
-vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => false }))
+vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
+vi.mock('../../sessions/profiles/browser-session-profile-identity', () => ({
+  getBrowserSessionProfileIdentity: (session: Electron.Session) => mocks.profileIds.get(session)
+}))
 vi.mock('../../guest-lifecycle/browser-main-window-readiness', () => ({
   watchBrowserMainWindowReadiness: () => {}
 }))
 
 const { BrowserWindow } = await import('electron')
 const model = await import('./browser-extension-window-model')
+const demand = await import('../profile-sessions/browser-extension-profile-demand')
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model compares sessions by identity only.
 const profileA = { name: 'a' } as unknown as Electron.Session
@@ -50,6 +64,40 @@ const profileB = { name: 'b' } as unknown as Electron.Session
 const focus = (window: Electron.BrowserWindow): boolean => window.emit('focus')
 
 describe("a profile's extension windows", () => {
+  it('retains execution for a windows.create page after its originating final tab closes', async () => {
+    const { EventEmitter } = await import('node:events')
+    const activate = vi.fn(async () => {})
+    const suspend = vi.fn(async () => {})
+    mocks.profileIds.set(profileA, 'owned-popout')
+    demand.attachBrowserExtensionProfileDemand('owned-popout', activate, suspend, () => [
+      'extension'
+    ])
+    const source = Object.assign(new EventEmitter(), {
+      session: profileA,
+      isDestroyed: () => false
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned Electron fixture supplies the session identity and lifecycle methods this path uses.
+    await demand.retainBrowserExtensionPage(source as unknown as Electron.WebContents)
+    const popout = model.createBrowserExtensionPopout(profileA, {
+      url: 'https://retained.test/',
+      type: 'popup',
+      presentation: 'unfocused'
+    })
+    try {
+      source.emit('destroyed')
+      expect(suspend).not.toHaveBeenCalled()
+      expect(activate).toHaveBeenCalledOnce()
+      await Promise.resolve()
+      expect(popout.loadURL).toHaveBeenCalledWith('https://retained.test/')
+    } finally {
+      popout.close()
+      demand.detachBrowserExtensionProfileDemand('owned-popout')
+      mocks.profileIds.delete(profileA)
+      mocks.emitted.splice(0)
+    }
+    expect(suspend).toHaveBeenCalledOnce()
+  })
+
   it("never include another profile's popout, in lookups or events", () => {
     const main = new BrowserWindow()
     model.trackBrowserExtensionMainWindow(main)

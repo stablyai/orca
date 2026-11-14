@@ -60,6 +60,7 @@ vi.mock('../../../browser-passwords/browser-password-vaults', () => ({
 }))
 
 import { browserSessionRegistry } from './browser-session-registry'
+import * as metaStore from './browser-session-meta-store'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
 import {
   deleteManagedBrowserProfile,
@@ -110,6 +111,42 @@ describe('BrowserSessionRegistry', () => {
       clearCache: vi.fn().mockResolvedValue(undefined)
     })
   })
+
+  it.each([750, 7500])(
+    'reads enabled and pinned lists without rereading %i profile metadata entries',
+    (count) => {
+      const enabled = Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [`profile-${index}`, ['vault']])
+      )
+      metaStore.persistBrowserSessionMeta(
+        () => join(profileDirectory, metaStore.BROWSER_SESSION_META_FILE_NAME),
+        'persist:orca-browser',
+        {
+          enabledExtensionIdsByProfileId: enabled,
+          pinnedExtensionIdsByProfileId: { 'profile-0': ['vault'] }
+        }
+      )
+      const load = vi.spyOn(metaStore, 'loadBrowserSessionMeta')
+      try {
+        browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
+        load.mockClear()
+        expect(browserSessionRegistry.getEnabledExtensionIds('profile-0')).toEqual(['vault'])
+        expect(browserSessionRegistry.getPinnedExtensionIds('profile-0')).toEqual(['vault'])
+        expect(browserSessionRegistry.getEnabledExtensionIds('absent')).toEqual([])
+        expect(load).not.toHaveBeenCalled()
+        browserSessionRegistry.updateEnabledExtensionIds((current) => ({
+          ...current,
+          'profile-0': ['replacement']
+        }))
+        load.mockClear()
+        expect(browserSessionRegistry.getEnabledExtensionIds('profile-0')).toEqual(['replacement'])
+        expect(browserSessionRegistry.getPinnedExtensionIds('profile-0')).toEqual(['vault'])
+        expect(load).not.toHaveBeenCalled()
+      } finally {
+        load.mockRestore()
+      }
+    }
+  )
 
   it('does not return a runtime profile until its proxy is ready', async () => {
     let finishWrite: (() => void) | undefined

@@ -74,6 +74,7 @@ export type BrowserExtensionPopupOptions = {
   extensionId: string
   /** Relative to the extension root, as manifest/action.setPopup give it. */
   popupPath: string
+  sourcePage?: Electron.WebContents
   anchor: BrowserExtensionAnchorRect
   /** Web links the popup opens with target=_blank go to a new Orca tab. */
   openTab: (url: string) => void
@@ -139,6 +140,13 @@ export function openBrowserExtensionPopup(options: BrowserExtensionPopupOptions)
   const contents = window.webContents
   recordBrowserSessionInput(contents)
   contents.on('will-prevent-unload', allowPageUnload)
+  const closeWithPage = (): void => {
+    if (!window.isDestroyed()) {
+      window.close()
+    }
+  }
+  options.sourcePage?.once('destroyed', closeWithPage)
+  window.once('closed', () => options.sourcePage?.removeListener('destroyed', closeWithPage))
 
   // Why measure in the page: preferred-size-changed only reports while the window paints, and its
   // height never drops below the viewport, so a hidden or late-rendering popup kept its first size.

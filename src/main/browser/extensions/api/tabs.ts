@@ -89,7 +89,8 @@ async function createTab(
   const tabId = await openBrowserExtensionTab(
     caller.browserProfileId,
     url,
-    placeBrowserExtensionCallerTab(caller, active)
+    placeBrowserExtensionCallerTab(caller, active),
+    caller.execution?.controller.signal
   )
   return describeBrowserExtensionTab(caller.extension, requireCallerTab(caller, tabId))
 }

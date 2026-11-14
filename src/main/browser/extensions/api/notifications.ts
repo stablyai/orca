@@ -1,3 +1,4 @@
+import { isBrowserExtensionSuspension } from '../profile-sessions/browser-extension-worker-registration'
 import { Notification, nativeImage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
@@ -14,7 +15,7 @@ import {
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
-import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
+import { dispatchBrowserExtensionNotificationInteraction } from './browser-extension-notification-interactions'
 
 const optionsSchema = z
   .object({
@@ -41,18 +42,27 @@ type Shown = {
 /** Session → extension → notification id. Held so click handlers survive GC. */
 const shownBySession = new WeakMap<Electron.Session, Map<string, Map<string, Shown>>>()
 
+export function forgetBrowserExtensionNotifications(
+  session: Electron.Session,
+  extensionId: string
+): void {
+  const shown = shownBySession.get(session)?.get(extensionId)
+  shownBySession.get(session)?.delete(extensionId)
+  for (const entry of shown?.values() ?? []) {
+    detach(entry)
+  }
+}
+
 function shownFor(caller: BrowserExtensionCaller): Map<string, Shown> {
   let byExtension = shownBySession.get(caller.session)
   if (!byExtension) {
     byExtension = new Map()
     shownBySession.set(caller.session, byExtension)
-    const owned = byExtension
     caller.session.extensions.on('extension-unloaded', (_event, extension) => {
-      const shown = owned.get(extension.id)
-      owned.delete(extension.id)
-      for (const entry of shown?.values() ?? []) {
-        detach(entry)
+      if (isBrowserExtensionSuspension(caller.session, extension)) {
+        return
       }
+      forgetBrowserExtensionNotifications(caller.session, extension.id)
     })
   }
   let shown = byExtension.get(caller.extension.id)
@@ -104,12 +114,23 @@ function detach(entry: Shown, closeNative = true): void {
   }
 }
 
+function interact(caller: BrowserExtensionCaller, event: string, args: unknown[]): void {
+  void dispatchBrowserExtensionNotificationInteraction(
+    caller.session,
+    caller.extension.id,
+    event,
+    args
+  ).catch((error: unknown) =>
+    console.warn('[browser-extensions] Notification delivery failed:', error)
+  )
+}
+
 function show(caller: BrowserExtensionCaller, id: string, entry: Shown): void {
-  // Why: background (test) launches must never put anything on the user's screen.
-  if (!Notification.isSupported() || isBackgroundLaunch()) {
+  if (!Notification.isSupported()) {
     return
   }
   const { options } = entry
+  const shown = shownFor(caller)
   const iconPath = resolveNotificationIconPath(caller.extension, options.iconUrl)
   const icon = iconPath ? nativeImage.createFromPath(iconPath) : undefined
   const notification = new Notification({
@@ -129,26 +150,30 @@ function show(caller: BrowserExtensionCaller, id: string, entry: Shown): void {
       : {})
   })
   notification.on('click', () => {
-    shownFor(caller).delete(id)
+    shown.delete(id)
     detach(entry, false)
-    noteBrowserExtensionUserGesture(caller.session, caller.extension.id)
-    emit(caller, 'onClicked', [id])
+    interact(caller, 'onClicked', [id])
   })
   notification.on('action', (details) => {
-    noteBrowserExtensionUserGesture(caller.session, caller.extension.id)
-    emit(caller, 'onButtonClicked', [id, details.actionIndex])
+    interact(caller, 'onButtonClicked', [id, details.actionIndex])
   })
   notification.on('close', (details) => {
-    shownFor(caller).delete(id)
-    emit(caller, 'onClosed', [id, details.reason !== 'timedOut'])
+    shown.delete(id)
+    detach(entry, false)
+    if (caller.session.extensions.getExtension(caller.extension.id)) {
+      emit(caller, 'onClosed', [id, details.reason !== 'timedOut'])
+    }
   })
   notification.once('failed', () => {
-    shownFor(caller).delete(id)
+    shown.delete(id)
     // Electron destroys the native notification after dispatching this failure.
     detach(entry, false)
   })
   entry.notification = notification
-  notification.show()
+  // Background copies retain callbacks without posting anything on the user's desktop.
+  if (!isBackgroundLaunch()) {
+    notification.show()
+  }
 }
 
 function create(caller: BrowserExtensionCaller, id: string, options: NotificationOptions): string {

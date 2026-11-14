@@ -237,3 +237,10 @@ export function readDnrRuleJson(value: unknown): DnrRuleSchemaResult {
     throw error
   }
 }
+
+export function readDnrRules(json: readonly unknown[]): DnrRule[] {
+  return json.flatMap((value) => {
+    const read = readDnrRuleJson(value)
+    return read.ok ? [read.rule] : []
+  })
+}

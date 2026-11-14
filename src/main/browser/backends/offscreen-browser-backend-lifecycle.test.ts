@@ -23,12 +23,17 @@ class MockDebugger extends EventEmitter {
 class MockWebContents extends EventEmitter {
   readonly id: number
   readonly debugger = new MockDebugger()
+  destroyed = false
   url = ''
   title = ''
 
   constructor(id: number) {
     super()
     this.id = id
+  }
+
+  isDestroyed(): boolean {
+    return this.destroyed
   }
 
   getURL(): string {
@@ -62,6 +67,7 @@ class MockBrowserWindow {
 
   destroy(): void {
     this.destroyed = true
+    this.webContents.destroyed = true
     this.webContents.emit('destroyed')
   }
 }
