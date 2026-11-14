@@ -5,6 +5,7 @@ import { TerminalHost } from '../../terminal-host/terminal-host'
 import type { TerminalHostOptions } from '../../terminal-host/terminal-host-options'
 import { TerminalSpawnGate } from '../terminal-spawn-gate'
 import type { TerminalSpawnAdmissionMode } from '../terminal-spawn-admission-mode'
+import type { HostPressureLevel } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 import { HostTerminalLedger } from '../host-terminal-ledger'
 
@@ -55,6 +56,56 @@ describe('TerminalSpawnGate', () => {
   afterEach(async () => {
     vi.useRealTimers()
     await host.dispose()
+  })
+
+  describe('pressure refresh', () => {
+    it('re-reads pressure after a wait so a recovered host admits an old caller at its deadline', async () => {
+      vi.useFakeTimers()
+      let level: HostPressureLevel = 'critical'
+      gate = new TerminalSpawnGate({
+        log,
+        mode: 'enforce',
+        now: () => Date.now(),
+        pressure: () => level,
+        refreshPressure: async () => {
+          level = 'ok'
+        }
+      })
+
+      const admitted = gate.admit({
+        clientId: 'old-client',
+        declaredIntent: null,
+        hasAgentSessionClaim: true,
+        hasHistorySeed: true,
+        deadlineAt: Date.now() + 1_000
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      await expect(admitted).resolves.toHaveProperty('commit')
+    })
+
+    it('does not hold a waiter past its deadline when the pressure re-read never settles', async () => {
+      vi.useFakeTimers()
+      gate = new TerminalSpawnGate({
+        log,
+        mode: 'enforce',
+        now: () => Date.now(),
+        pressure: () => 'critical',
+        refreshPressure: () => new Promise<void>(() => {})
+      })
+
+      const admitted = gate.admit({
+        clientId: 'old-client',
+        declaredIntent: null,
+        hasAgentSessionClaim: true,
+        hasHistorySeed: true,
+        deadlineAt: Date.now() + 1_000
+      })
+      const outcome = expect(admitted).rejects.toThrow('terminal_spawn_refused')
+      await vi.advanceTimersByTimeAsync(1_300)
+
+      await outcome
+    })
   })
 
   describe('host terminal cap', () => {

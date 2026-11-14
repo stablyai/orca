@@ -235,6 +235,20 @@ orca-ide serve --pairing-address 100.64.1.20
 
 This only stops Orca from turning the GPU off. Chromium may still render in software on Orca's own Xvfb, which has no GPU of its own; open `chrome://gpu` in a browser pane to check, and point `DISPLAY` at a GPU-backed X server if it reports software rendering. If you installed the server with `orca serve service install`, add the variable to the service unit yourself. If the server stops starting or browser panes crash with it set, unset it to go back to software rendering.
 
+### Process limits in containers
+
+A container or service can cap how many processes and threads it may create (the cgroup `pids.max`). When a server reaches that cap, new processes fail, and a terminal daemon that hits it can take every terminal down with it.
+
+On Linux, Orca watches the cap. When the host is at 90% of it or more, Orca stops starting terminals on its own (restoring tabs and running automations) and puts those panes to sleep instead. It starts them again once usage falls below 80%. Terminals you open yourself are not blocked. The daemon log (`logs/daemon.log` in the Orca data directory) records the limit once at startup (`cgroup-pids-limit`) and each time the level changes (`cgroup-pids-level`).
+
+If the limit is too low for how many terminals and agents you run, raise it where you set it:
+
+- Docker: `docker run --pids-limit=4096 …` (Compose: `pids_limit: 4096`)
+- Kubernetes: the kubelet's `podPidsLimit`
+- systemd: `TasksMax=` in the service unit
+
+There is nothing to configure in Orca. This does nothing on macOS or Windows, or when the limit is unset or `max`.
+
 ### Copies of a machine image
 
 Copies of a machine image share the server identity: the pairing key, the paired devices, and the installation id. Revoking a device on one copy leaves it working on the others, and the desktop app treats all copies as one server. Set `ORCA_INSTANCE_ID` per instance (for example the cloud-init instance id) in the environment that starts `orca serve`, or run `orca serve reset-identity` on each copy.

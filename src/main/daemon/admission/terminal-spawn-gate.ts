@@ -25,6 +25,7 @@ import type { LegacyRestoreDetails, LegacyRestoreRecords } from './legacy-restor
 import { admitRecordingLegacyRestore } from './legacy-restore-admission'
 import { TerminalSpawnWaiters } from './terminal-spawn-waiters'
 import { hostTerminalCapRefusal, TerminalSpawnHostShare } from './terminal-spawn-host-share'
+import { refreshPressureBounded } from './terminal-spawn-pressure-refresh'
 
 import type { TerminalSpawnAdmissionMode } from './terminal-spawn-admission-mode'
 
@@ -59,6 +60,8 @@ type TerminalSpawnGateOptions = {
   limits?: SpawnAdmissionLimits
   now?: () => number
   pressure?: () => HostPressureLevel
+  /** Awaited before a re-attempt so a waiter that sleeps to its deadline decides on a fresh reading. */
+  refreshPressure?: () => Promise<void>
   automaticWorkMode?: () => AutomaticWorkMode
   /** Runs synchronously before the first automatic fork is admitted. */
   armAutomaticWork?: () => void
@@ -132,6 +135,7 @@ export class TerminalSpawnGate {
     let attempt: ReturnType<TerminalSpawnGate['attempt']> = first
     while (attempt.kind === 'wait') {
       await this.waiters.waitForChange(attempt.untilMs, cancel?.signal)
+      await refreshPressureBounded(this.options.refreshPressure, cancel?.signal)
       const maximum = this.options.resolveMaximum?.() ?? this.host.maxTerminals
       attempt = this.attempt(facts, cancel, true, maximum)
     }
