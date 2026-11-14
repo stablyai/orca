@@ -57,6 +57,7 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   if (!existing) {
     return null
   }
+  const newPaneFirst = args.newPaneFirst ?? args.opts?.insertBefore
   const existingContainer = args.sourceContainer ?? existing.container
   const parent = existingContainer.parentElement
   if (!parent) {
@@ -72,7 +73,7 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
 
   wrapInSplit(existingContainer, newPane.container, isVertical, divider, {
     ratio: args.opts?.ratio,
-    newPaneFirst: args.newPaneFirst
+    newPaneFirst
   })
   if (activate) {
     args.setActivePaneId(newPane.id)
@@ -181,6 +182,7 @@ function openSplitPane(
       kind: 'split',
       parentLeafId,
       direction: args.direction,
+      ...(newPaneFirst ? { insertBefore: true } : {}),
       ...(args.opts?.ratio !== undefined ? { ratio: args.opts.ratio } : {})
     }
   })

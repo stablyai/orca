@@ -20,6 +20,7 @@ export type SplitPaneSource = { worktreeId: string; tabId: string; leafId: strin
 
 export type SplitPaneInMainOptions = {
   direction: 'horizontal' | 'vertical'
+  insertBefore?: boolean
   /** The caller's id for the new pane; main refuses one another pane holds. */
   newLeafId?: string
   cwd?: string
@@ -54,6 +55,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
         tabId: source.tabId,
         leafId: source.leafId,
         direction: opts.direction,
+        insertBefore: opts.insertBefore,
         newLeafId: opts.newLeafId
       }).catch((writeError: unknown) => {
         // The caller still hears why the start failed, not why showing it did.
@@ -125,7 +127,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       tabId: source.tabId,
       leafId,
       persistHostSessionBinding: true,
-      placement: runtimeSplitPlacement(source.leafId, opts.direction),
+      placement: runtimeSplitPlacement(source.leafId, opts.direction, opts.insertBefore),
       ...this.paneStartStatusArgs(
         opts.keepPaneOnStartFailure ? { keepPaneOnStartFailure: true } : {}
       )
@@ -154,7 +156,11 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       leafId,
       title: null,
       activate: opts.activate !== false,
-      split: { splitFromLeafId: source.leafId, direction: opts.direction }
+      split: {
+        splitFromLeafId: source.leafId,
+        direction: opts.direction,
+        insertBefore: opts.insertBefore
+      }
     })
     return {
       handle: this.issuePtyHandle(createdPty),

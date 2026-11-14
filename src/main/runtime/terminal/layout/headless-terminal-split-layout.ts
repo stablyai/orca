@@ -1,3 +1,4 @@
+import { terminalSplitSide } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-side'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
@@ -15,6 +16,7 @@ export function buildHeadlessTerminalSplitLayout(
     ptyId: string
     splitFromLeafId: string
     direction: 'horizontal' | 'vertical'
+    insertBefore?: boolean
   }
 ): TerminalLayoutSnapshot {
   // Remove an existing copy before replacing the leaf beside its source.
@@ -31,7 +33,7 @@ export function buildHeadlessTerminalSplitLayout(
       existingRoot,
       args.splitFromLeafId,
       args.leafId,
-      args.direction === 'vertical' ? 'right' : 'bottom'
+      terminalSplitSide(args.direction, args.insertBefore)
     ),
     activeLeafId: args.leafId,
     expandedLeafId: existing?.expandedLeafId ?? null,

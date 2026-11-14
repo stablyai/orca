@@ -1,3 +1,5 @@
+import { RpcDispatcher } from '../../rpc/dispatcher'
+import { TERMINAL_LIFECYCLE_METHODS } from '../../rpc/methods/terminal/terminal-lifecycle-methods'
 import { withRuntimePaneAdmission } from '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
@@ -264,6 +266,44 @@ function createHarness(
 }
 
 describe('remote runtime terminal split authority', () => {
+  it.each([
+    { direction: 'up', axis: 'horizontal', before: true, connectionId: null },
+    { direction: 'left', axis: 'vertical', before: true, connectionId: 'ssh-1' },
+    { direction: 'right', axis: 'vertical', before: false, connectionId: null }
+  ])(
+    'places an RPC $direction split in durable and paired layouts on $connectionId',
+    async ({ direction, axis, before, connectionId }) => {
+      const harness = createHarness(true, { connectionId })
+      const dispatcher = new RpcDispatcher({
+        runtime: harness.runtime,
+        methods: TERMINAL_LIFECYCLE_METHODS
+      })
+      const response = await dispatcher.dispatch({
+        id: 'split-direction',
+        authToken: 'token',
+        method: 'terminal.split',
+        params: { terminal: harness.handle, direction }
+      })
+      expect(response).toMatchObject({ ok: true })
+      if (!response.ok) {
+        throw new Error(response.error.message)
+      }
+      const { split } = response.result as { split: { leafId: string } }
+      const expectedRoot = {
+        type: 'split',
+        direction: axis,
+        first: { type: 'leaf', leafId: before ? split.leafId : SOURCE_LEAF_ID },
+        second: { type: 'leaf', leafId: before ? SOURCE_LEAF_ID : split.leafId }
+      }
+      expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root).toMatchObject(expectedRoot)
+      const tabs = harness.getSnapshot()!.tabs.filter((tab) => tab.type === 'terminal')
+      expect(tabs).toHaveLength(2)
+      for (const tab of tabs) {
+        expect(tab.parentLayout?.root).toMatchObject(expectedRoot)
+      }
+    }
+  )
+
   // STA-9417: offer splits despite lagging window graph; window refusal must retain the persisted split.
   it('splits a persisted tab the window has not listed, and still offers it to the window', async () => {
     const harness = createHarness()

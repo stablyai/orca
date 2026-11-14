@@ -96,6 +96,7 @@ export type RuntimeNotifier = {
       leafId?: string
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
+      splitInsertBefore?: boolean
       splitTelemetrySource?: TerminalPaneSplitSource
       focus?: boolean
       expectedProcessIdentity?: {
@@ -126,6 +127,7 @@ export type RuntimeNotifier = {
     paneRuntimeId: number,
     opts: {
       direction: 'horizontal' | 'vertical'
+      insertBefore?: boolean
       command?: string
       worktreeId?: string
       sourceLeafId?: string

@@ -20,6 +20,7 @@ const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
 export type TerminalSplitOptions = {
   direction?: 'horizontal' | 'vertical'
+  insertBefore?: boolean
   command?: string
   env?: Record<string, string>
   envToDelete?: string[]
@@ -93,7 +94,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       tabId: parentTabId,
       leafId,
       persistHostSessionBinding: true,
-      placement: runtimeSplitPlacement(parsedPaneKey.leafId, direction),
+      placement: runtimeSplitPlacement(parsedPaneKey.leafId, direction, opts.insertBefore),
       // Layout-owner build: views mounting the pane from main's frame attach, never spawn.
       ...this.paneStartStatusArgs({}),
       ...(sourceAuthority.persisted
@@ -151,6 +152,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         leafId,
         splitFromLeafId: parsedPaneKey.leafId,
         splitDirection: direction,
+        splitInsertBefore: opts.insertBefore,
         splitTelemetrySource: opts.telemetrySource
       })
     }
@@ -184,7 +186,11 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
           leafId,
           title: null,
           activate: opts.activate !== false,
-          split: { splitFromLeafId: parsedPaneKey.leafId, direction }
+          split: {
+            splitFromLeafId: parsedPaneKey.leafId,
+            direction,
+            insertBefore: opts.insertBefore
+          }
         })
       }
     } catch (error) {

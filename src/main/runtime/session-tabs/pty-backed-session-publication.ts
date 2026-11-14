@@ -49,7 +49,11 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       selectIfNoActiveTab?: boolean
       startupCwd?: string
       viewMode?: 'terminal' | 'chat'
-      split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
+      split?: {
+        splitFromLeafId: string
+        direction: 'horizontal' | 'vertical'
+        insertBefore?: boolean
+      }
       notify?: boolean
     }
   ): void {
