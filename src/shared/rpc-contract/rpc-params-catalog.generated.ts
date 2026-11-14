@@ -516,7 +516,7 @@ import {
   PluginsPanelActionParams
 } from './plugins/plugins-params'
 import {
-  PreflightAgentDetection,
+  PreflightAgentRefresh,
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities,
@@ -532,6 +532,7 @@ import {
 } from './projects/project-runtime-params'
 import {
   ProjectGroupCreate,
+  ProjectGroupHooksCheck,
   ProjectGroupImportNested,
   ProjectGroupMoveProject,
   ProjectGroupScanNested,
@@ -1064,6 +1065,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.send': ConnectorSend,
   'connector.start': ConnectorStart,
   'connector.watch': ConnectorWatch,
+  'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'diagnostics.memory': null,
@@ -1478,9 +1480,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':
     PreflightDetectRemoteWindowsTerminalCapabilities,
-  'preflight.refreshAgents': PreflightAgentDetection,
+  'preflight.refreshAgents': PreflightAgentRefresh,
   'project.list': null,
   'project.update': ProjectUpdate,
+  'projectGroup.checkHooks': ProjectGroupHooksCheck,
   'projectGroup.create': ProjectGroupCreate,
   'projectGroup.delete': ProjectGroupSelector,
   'projectGroup.importNested': ProjectGroupImportNested,

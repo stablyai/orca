@@ -27,7 +27,8 @@ async function gitExecFileAsyncBufferInSpan(
   args: string[],
   options: GitBufferExecOptions
 ): Promise<{ stdout: Buffer }> {
-  return withGitSpan({ args, cwd: options.cwd }, async (span) => {
+  const meta = { args, cwd: options.cwd, admissionTier: options.admissionTier }
+  return withGitSpan(meta, async (span) => {
     const checkoutRoutingReady = pendingWslGitPathPreparation(args, options)
     options = {
       ...options,

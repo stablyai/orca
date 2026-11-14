@@ -16,6 +16,7 @@ import type {
   WorkspaceCleanupReport,
   WorkspaceCleanupRun,
   WorkspaceCleanupRunRow,
+  WorkspaceCleanupRowDetails,
   WorkspaceCleanupRunTrigger,
   WorkspaceCleanupWorkspaceRef
 } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
@@ -24,7 +25,11 @@ import {
   type WorkspaceCleanupWorkspace
 } from './workspace-cleanup-run-evidence'
 import { decideWorkspaceCleanup, removeWorkspaceForCleanup } from './workspace-cleanup-removal-step'
-import { keptRunOutcome, summarizeWorkspaceCleanupRun } from './workspace-cleanup-run-summary'
+import {
+  keptRunOutcome,
+  summarizeWorkspaceCleanupRun,
+  workspaceCleanupRowDetails
+} from './workspace-cleanup-run-summary'
 import {
   appendWorkspaceCleanupRun,
   readWorkspaceCleanupRunHistory
@@ -39,7 +44,7 @@ const SETTINGS_DEBOUNCE_MS = 10 * 1000
 
 type DecidedWorkspace = {
   workspace: WorkspaceCleanupWorkspace
-  ref: WorkspaceCleanupWorkspaceRef & { sizeBytes?: number }
+  ref: WorkspaceCleanupWorkspaceRef & WorkspaceCleanupRowDetails & { sizeBytes?: number }
   evaluation: WorkspaceCleanupEvaluation
 }
 
@@ -54,6 +59,8 @@ export type WorkspaceCleanupRunnerDeps = {
 export class WorkspaceCleanupRunner {
   private readonly deps: WorkspaceCleanupRunnerDeps
   private current: Promise<WorkspaceCleanupRun> | null = null
+  // Every caller asking for the same rules while one evaluation runs shares it: reopened pages, several clients.
+  private readonly previews = new Map<string, Promise<WorkspaceCleanupPreview>>()
   private timer: ReturnType<typeof setTimeout> | null = null
   private nextRunAt: number | null = null
   private enabledRules = new Set<string>()
@@ -107,9 +114,28 @@ export class WorkspaceCleanupRunner {
   }
 
   /** What a run would do now, removing nothing; `rules` previews other global rules. */
-  async preview(rules?: WorkspaceCleanupRules): Promise<WorkspaceCleanupPreview> {
+  preview(rules?: WorkspaceCleanupRules): Promise<WorkspaceCleanupPreview> {
+    const effective = rules ?? this.globalRules()
+    const key = JSON.stringify(effective)
+    const shared = this.previews.get(key)
+    if (shared) {
+      return shared
+    }
+    const evaluation = this.evaluatePreview(effective)
+    this.previews.set(key, evaluation)
+    void evaluation
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.previews.get(key) === evaluation) {
+          this.previews.delete(key)
+        }
+      })
+    return evaluation
+  }
+
+  private async evaluatePreview(rules: WorkspaceCleanupRules): Promise<WorkspaceCleanupPreview> {
     const evaluatedAt = Date.now()
-    const decided = await this.evaluate(rules ?? this.globalRules(), evaluatedAt)
+    const decided = await this.evaluate(rules, evaluatedAt)
     return { evaluatedAt, rows: decided.map(({ ref, evaluation }) => ({ ...ref, evaluation })) }
   }
 
@@ -193,7 +219,11 @@ export class WorkspaceCleanupRunner {
       const sizeBytes = sizes.get(workspace.ref.worktreeId)
       decided.push({
         workspace,
-        ref: { ...workspace.ref, ...(sizeBytes !== undefined ? { sizeBytes } : {}) },
+        ref: {
+          ...workspace.ref,
+          ...workspaceCleanupRowDetails(workspace.input),
+          ...(sizeBytes !== undefined ? { sizeBytes } : {})
+        },
         evaluation: await decideWorkspaceCleanup(this.deps.runtime, workspace, now)
       })
     }

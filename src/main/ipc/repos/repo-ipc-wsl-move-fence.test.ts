@@ -79,6 +79,7 @@ describe('folderWorkspaces:update under a WSL move', () => {
       cutover('move-1', 'source-fenced', {}, { folderWorkspaceIds: [workspace.id] })
     )
     registerFolderWorkspaceHandlers(new BrowserWindow(), store, {
+      createFolderWorkspace: vi.fn(),
       deleteFolderWorkspace: vi.fn(async () => ({ deleted: true }))
     })
 

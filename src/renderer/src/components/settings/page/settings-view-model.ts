@@ -134,12 +134,12 @@ export function useSettingsNavigationActions(
 export type SettingsNavigationActions = ReturnType<typeof useSettingsNavigationActions>
 
 export function buildSettingsViewModel(
-  model: SettingsStoreModel,
-  navigation: SettingsNavigationModel,
+  model: Pick<SettingsStoreModel, 'repos' | 'settingsSearchQuery' | 'activeSectionId'>,
+  navigation: Pick<SettingsNavigationModel, 'visibleNavSections' | 'neededSectionIds'>,
   t: Translate = translate
 ) {
   const generalNavSections = navigation.visibleNavSections.filter(
-    (section) => !section.id.startsWith('repo-')
+    (section) => section.group !== 'repositories'
   )
   const generalNavGroupDefinitions = getSettingsNavGroupDefinitionsForSearch(
     navigation.visibleNavSections,
@@ -153,7 +153,7 @@ export function buildSettingsViewModel(
     }))
     .filter((group) => group.sections.length > 0 || group.id === 'setup')
   const repoNavSections = navigation.visibleNavSections
-    .filter((section) => section.id.startsWith('repo-'))
+    .filter((section) => section.group === 'repositories')
     .map((section) => {
       const repo = model.repos.find((entry) => entry.id === section.id.replace('repo-', ''))
       return {

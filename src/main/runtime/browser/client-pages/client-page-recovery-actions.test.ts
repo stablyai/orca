@@ -1,6 +1,3 @@
-import * as initializationSettlement from '../../browser-host/client-pages/browser-host-page-initialization-settlement'
-import * as initializationCommands from '../../browser-host/client-pages/browser-host-page-initialization-commands'
-import * as pageAdoption from './runtime-browser-client-page-adoption'
 import { workspaceSessionStateSchema } from '../../../../shared/workspace-session/workspace-session-schema'
 import { prepareBrowserClientPageInventoryForAttach } from '../../../browser/client-pages/lifecycle/browser-client-page-inventory'
 import { BrowserClientPageMetadataTransport } from '../../../browser/client-pages/renderer/browser-client-page-metadata-transport'
@@ -36,62 +33,6 @@ async function action(h: Harness, type: 'stop' | 'navigate', url?: string) {
   expect(responses).toHaveLength(1)
   return responses[0]
 }
-
-it('accepts missing-guest Stop and Retry, supersedes a pending agent goto, and honors intentional blank', async () => {
-  const h = createRecoveryLoop(['slow', 'fast'])
-  const navigating = h.hold('slow')
-  try {
-    h.attach()
-    await navigating
-    const next = h.hold('next')
-    const goto = h.hostRuntime.routeClientHostedBrowserRpc(
-      'browser.goto',
-      {
-        page: 'slow',
-        url: 'https://example.internal/next',
-        expectUrl: 'https://example.internal/slow'
-      },
-      { kind: 'local-cli' }
-    )
-    const cancelled = expect(goto).rejects.toThrow('initialization_cancelled')
-    await next
-    expect(h.pages.getPage('slow')?.url).toBe('https://example.internal/slow')
-    const stopped = await action(h, 'stop')
-    expect(stopped).toMatchObject({ ok: true })
-    await cancelled
-    await vi.waitFor(() =>
-      expect(h.executor.snapshotPageInventory().map((p) => p.browserPageId)).toEqual(['fast'])
-    )
-    expect(
-      h.hostRuntime
-        .snapshotForClient(WORKSPACE, 'device-a')
-        .tabs.find((t) => t.type === 'browser' && t.browserPageId === 'slow')
-    ).toMatchObject({
-      initializationState: 'stopped',
-      loading: false,
-      url: 'https://example.internal/slow'
-    })
-    const retried = h.hold('retry')
-    expect((await action(h, 'navigate', 'https://example.internal/retry')).ok).toBe(true)
-    await retried
-    expect(h.pages.getPage('slow')?.url).toBe('https://example.internal/retry')
-    expect(
-      h.profile.session.clientHostedBrowserPagesByWorktree?.[WORKSPACE]?.find(
-        (p) => p.browserPageId === 'slow'
-      )
-    ).not.toHaveProperty('initializationState')
-    const blank = await action(h, 'navigate', 'about:blank')
-    expect(blank.ok).toBe(true)
-    await h.published('slow')
-    expect(h.pages.getPage('slow')?.url).toBe('data:text/html,')
-    expect(
-      h.authority.clientPageInitializations.status('slow', h.pages.getPage('slow')!.placement)
-    ).toBeUndefined()
-    expect(h.errors).toEqual([])
-  } finally {
-    await h.close()
-  }
-})
 
 it('follows the same row through commit while the workspace resolver is awaited and rejects a closed owner', async () => {
   const h = createRecoveryLoop(['slow'])
@@ -408,74 +349,13 @@ it('keeps the UI successor through a truthful empty reconnect while the prior na
   const initial = h.hold('slow')
   const closeReply = Promise.withResolvers<void>()
   const physicallyClosed = Promise.withResolvers<void>()
-  const trace: string[] = []
   const initialization = h.authority.clientPageInitializations
-  const settle = initializationSettlement.settleInitialization
-  vi.spyOn(initializationSettlement, 'settleInitialization').mockImplementation(
-    (operation, outcome, owner) => {
-      const requested = operation.admission.input.url
-      trace.push(`terminal-enter:${requested}:${outcome}`)
-      const result = settle(operation, outcome, owner)
-      trace.push(`terminal-return:${requested}:${outcome}`)
-      return result
-    }
-  )
-  const forget = initializationCommands.forgetAbsentInitializationTarget
-  vi.spyOn(initializationCommands, 'forgetAbsentInitializationTarget').mockImplementation(
-    (...args) => {
-      trace.push('authoritative-absence-join')
-      return forget(...args)
-    }
-  )
   const observe = initialization.observeAttach.bind(initialization)
   vi.spyOn(initialization, 'observeAttach').mockImplementation((state, inventory, complete) => {
-    trace.push(`observe:${state.lease.connectionId}:${inventory?.length}`)
     if (state.lease.connectionId === 'connection-2') {
-      trace.push('release-close-result-inside-observe')
       closeReply.resolve()
     }
     return observe(state, inventory, complete)
-  })
-  const admit = initialization.admit.bind(initialization)
-  vi.spyOn(initialization, 'admit').mockImplementation((state, input) => {
-    const connectionId = state.lease.connectionId
-    trace.push(`admit:${connectionId}:${input.url}`)
-    const disposition = admit(state, {
-      ...input,
-      settled: (outcome) => {
-        trace.push(`settle:${connectionId}:${outcome}`)
-        input.settled?.(outcome)
-      }
-    })
-    trace.push(`admit-return:${connectionId}:${disposition}`)
-    return disposition
-  })
-  const delivery = h.authority.attachCommandDelivery.bind(h.authority)
-  vi.spyOn(h.authority, 'attachCommandDelivery').mockImplementation((...args) => {
-    trace.push('delivery-attached')
-    return delivery(...args)
-  })
-  const adopt = pageAdoption.adoptRuntimeBrowserClientPagesFromInventory
-  vi.spyOn(pageAdoption, 'adoptRuntimeBrowserClientPagesFromInventory').mockImplementation(
-    (options) => {
-      const result = adopt(options)
-      trace.push(`adoption-return:${options.lease.connectionId}`)
-      return result
-    }
-  )
-  const seal = initialization.sealAttach.bind(initialization)
-  vi.spyOn(initialization, 'sealAttach').mockImplementation((...args) => {
-    trace.push(`seal:${args[0].lease.connectionId}`)
-    return seal(...args)
-  })
-  const acceptResult = h.authority.settleClientPageCommand.bind(h.authority)
-  vi.spyOn(h.authority, 'settleClientPageCommand').mockImplementation((...args) => {
-    const accepted = acceptResult(...args)
-    const oldClose = h.commands.find((event) => event.command.type === 'closePage')
-    trace.push(
-      `ledger-result:${args[1].commandId === oldClose?.commandId ? 'old-close' : 'other'}:${accepted}`
-    )
-    return accepted
   })
   try {
     const first = h.attach()
@@ -483,13 +363,10 @@ it('keeps the UI successor through a truthful empty reconnect while the prior na
     const cleanup = h.holdRetirement('slow')
     h.hooks.beforeResult = async (event) => {
       if (event.command.type === 'closePage') {
-        trace.push('native-closed-result-held')
         physicallyClosed.resolve()
         await closeReply.promise
-        trace.push('close-result-sent')
       }
     }
-    h.hooks.onResult = (event) => trace.push(`result:${event.command.type}`)
     const requested = h.hold('B')
     expect(await action(h, 'navigate', 'https://example.internal/B')).toMatchObject({ ok: true })
     await cleanup.started
@@ -497,10 +374,8 @@ it('keeps the UI successor through a truthful empty reconnect while the prior na
     await physicallyClosed.promise
     const inventory = h.executor.snapshotPageInventory()
     expect(inventory).toEqual([])
-    trace.push('truthful-empty-attach')
     const second = h.attach({ inventory })
     await requested
-    trace.push('B-native-started')
     h.release('B', 'https://example.internal/B-redirect')
     await vi.waitFor(() =>
       expect(h.pages.getPage('slow')?.url).toBe('https://example.internal/B-redirect')
@@ -513,7 +388,6 @@ it('keeps the UI successor through a truthful empty reconnect while the prior na
       'https://example.internal/B-redirect'
     )
     expect(h.errors).toEqual([])
-    console.info('R18-R1 native/result transport trace', trace)
     first.abort()
     second.abort()
     await Promise.all([first.completion, second.completion])

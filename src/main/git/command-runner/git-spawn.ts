@@ -1,5 +1,6 @@
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
-import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
+import type { ChildProcess, SpawnOptions } from 'node:child_process'
+import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { startGitSpan } from '../../observability/instrumentation'
 import { createAbortError } from './process-capture/abort-error'
@@ -88,7 +89,7 @@ export async function withGitAdmission(
   }
   const resolved = resolveGitCommand(args, options)
   const spawnRouted = spawnChild ?? (() => spawnPreparedGitCommand(args, resolved, options))
-  const span = startGitSpan({ args, cwd: options.cwd })
+  const span = startGitSpan({ args, cwd: options.cwd, admissionTier: options.admissionTier })
   let grant: Awaited<ReturnType<typeof acquireGitAdmission>> | null = null
   try {
     grant = await acquireGitAdmission({
@@ -192,13 +193,16 @@ export function spawnPreparedGitCommand(
     executionContext: _context,
     ...spawnOptions
   } = options
-  const spawnStartedAt = performance.now()
-  const child = spawn(resolved.binary, resolved.args, {
-    ...spawnOptions,
-    env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
-    windowsHide: true,
-    cwd: resolved.cwd
-  })
-  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
-  return child
+  return spawnNativeProcess(
+    resolved.binary,
+    resolved.args,
+    {
+      ...spawnOptions,
+      env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
+      windowsHide: true,
+      cwd: resolved.cwd
+    },
+    undefined,
+    recordSubprocessSpawn
+  )
 }

@@ -29,12 +29,18 @@ import { requestBrowserExternalAppLaunch } from '../../prompts/browser-external-
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
     const gesture = trackBrowserGuestInputGesture(guest, {
-      onActivatingInput: () => this.creditPageInput(guest.id)
+      onActivatingInput: (byAgent) => {
+        this.creditPageInput(guest.id)
+        if (!byAgent) {
+          this.releaseAgentLead(guest.id)
+        }
+      }
     })
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Popups inherit ownership without replacing the primary guest registration.
       if (!isBrowserRouteGuestPopup(window.webContents.id)) {
         this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
+        this.inheritAgentLead(guest.id, window.webContents.id)
       }
     }
     guest.on('did-create-window', handleDidCreateWindow)
@@ -48,7 +54,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       // Only the desktop user's own click may bring a popup forward; agents and late opens wait.
       const showWhenAppActive = observed?.byAgent !== false
       const activateTab = disposition !== 'background-tab'
-      const agentOpened = observed?.byAgent !== false && this.isAgentUsingGuest(guest.id)
+      const agentOpened = observed?.byAgent !== false && this.isAgentLeadingGuest(guest.id)
       const browserTabId = this.resolvePopupOwnerContext(guest.id)?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
 
@@ -96,8 +102,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
               webPreferences: { ...options.webPreferences, session: guest.session }
             })
         }
-      } else if (externalUrl && !postBody) {
-        // Redact the Kagi bearer token before opening the OS browser.
+      } else if (externalUrl && !postBody && observed?.byAgent === false) {
+        // The OS browser takes the foreground, so only the desktop user's own click opens it. Redact Kagi's bearer token first.
         void shell.openExternal(redactKagiSessionToken(externalUrl))
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(externalUrl),
@@ -146,7 +152,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       guest.downloadURL(newTabUrl)
       return true
     }
-    const agentOpened = observed?.byAgent !== false && this.isAgentUsingGuest(guest.id)
+    const agentOpened = observed?.byAgent !== false && this.isAgentLeadingGuest(guest.id)
     if (
       this.openLinkInOrcaTab(
         ownerContext.browserTabId,
@@ -223,6 +229,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         return false
       }
       this.attachGuestPolicies(contents, owner)
+      this.inheritAgentLead(openerGuest.id, contents.id)
       return true
     })
     const opened = Boolean(options.webContents || options.nativeWindow)

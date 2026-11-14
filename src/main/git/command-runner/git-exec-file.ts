@@ -48,7 +48,7 @@ async function gitExecFileAsyncUnlocked(
 ): Promise<GitTextResult> {
   // Trace caller intent rather than the resolved binary so WSL and native commands group together.
   return withGitSpan(
-    { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
+    { args, cwd: options.cwd, admissionTier: options.admissionTier },
     async (span) => {
       if (options.onStderr && options.terminationBarrier) {
         throw new Error('onStderr is not supported with terminationBarrier.')
@@ -148,6 +148,9 @@ async function gitExecFileAsyncUnlocked(
           ) {
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
+            if (options.canStart?.() === false) {
+              throw createAbortError()
+            }
             const fallback = resolveGitCommand(args, effectiveOptions, true, true)
             result = await capture(fallback)
             // Why: matching failures can be normal Git control flow; only a successful login retry proves the direct environment was insufficient.
