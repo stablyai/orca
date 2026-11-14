@@ -43,7 +43,7 @@
 2 src/renderer/src/components/feature-wall/setup/integrations/use-feature-wall-task-source-presentation.ts
 2 src/renderer/src/components/feature-wall/setup/integrations/use-integration-connection-status.ts
 1 src/renderer/src/components/floating-terminal/use-floating-terminal-panel-controller.ts
-1 src/renderer/src/components/floating-terminal/use-floating-terminal-panel-store-state.ts
+1 src/renderer/src/components/floating-terminal/state/use-floating-terminal-panel-store-state.ts
 1 src/renderer/src/components/integrations/source-control/bitbucket-credentials-dialog.tsx
 1 src/renderer/src/components/integrations/source-control/bitbucket-integration-card.tsx
 3 src/renderer/src/components/integrations/source-control/cli-source-control-integration-cards.tsx
@@ -187,12 +187,12 @@
 2 src/renderer/src/components/use-new-linear-issue-projects.ts
 5 src/renderer/src/components/use-terminal-create-actions.ts
 3 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-controller.ts
-1 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-create-action.ts
-2 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-filter.ts
-3 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-quick-actions.ts
-2 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-store-state.ts
-4 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-task-url.ts
-1 src/renderer/src/components/worktree-jump/worktree-jump-palette-create-worktree.ts
+1 src/renderer/src/components/worktree-jump/workspaces/use-worktree-jump-palette-create-action.ts
+2 src/renderer/src/components/worktree-jump/results/use-worktree-jump-palette-filter.ts
+3 src/renderer/src/components/worktree-jump/workspaces/use-worktree-jump-palette-quick-actions.ts
+2 src/renderer/src/components/worktree-jump/state/use-worktree-jump-palette-store-state.ts
+4 src/renderer/src/components/worktree-jump/tasks/use-worktree-jump-palette-task-url.ts
+1 src/renderer/src/components/worktree-jump/workspaces/worktree-jump-palette-create-worktree.ts
 1 src/renderer/src/hooks/composer-state/composer-navigation-actions.ts
 1 src/renderer/src/hooks/composer-state/composer-source-state.ts
 1 src/renderer/src/hooks/composer-state/runtime-target-selection.ts
