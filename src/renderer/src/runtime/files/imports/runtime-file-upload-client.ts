@@ -53,7 +53,8 @@ export async function uploadRuntimeFileWithoutClobber(
         expectedSshConnectionGeneration,
         expectedExecutionHostId,
         expectedEnvironmentPairingRevision: session.expectedEnvironmentPairingRevision,
-        expectedEnvironmentRuntimeId: session.expectedEnvironmentRuntimeId
+        expectedEnvironmentRuntimeId: session.expectedEnvironmentRuntimeId,
+        writesChunksAtOffsets: session.writesChunksAtOffsets
       })
     } catch (error) {
       // Import results expose this text directly; remove Electron’s remote-method wrapper.

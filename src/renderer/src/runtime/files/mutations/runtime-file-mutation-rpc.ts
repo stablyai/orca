@@ -15,6 +15,7 @@ export type RuntimeFileImportSession = {
   expectedEnvironmentPairingRevision: number | undefined
   expectedEnvironmentConnectionGeneration: number
   expectedEnvironmentRuntimeId: string
+  writesChunksAtOffsets: boolean
   assertCurrent: () => void
 }
 
@@ -33,8 +34,8 @@ async function getRuntimeFileMutationStatus(
 export async function assertRuntimeFileMutationCapability(
   target: RuntimeFileMutationTarget,
   expectedEnvironmentPairingRevision: number | undefined
-): Promise<string> {
-  return (await getRuntimeFileMutationStatus(target, expectedEnvironmentPairingRevision)).runtimeId
+): Promise<RuntimeStatus> {
+  return getRuntimeFileMutationStatus(target, expectedEnvironmentPairingRevision)
 }
 
 /** Thrown before sending, so nothing reached either runtime and a re-probed retry is safe. */

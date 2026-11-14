@@ -43,4 +43,6 @@ export type RuntimeUploadFileStreamRequest = {
   relativePath: string
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
+  /** That runtime writes slices at their offsets, so main may keep several in flight. */
+  writesChunksAtOffsets?: boolean
 } & SshMutationExpectation
