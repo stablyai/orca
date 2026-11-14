@@ -60,7 +60,9 @@ const logFileResolvers = {
   kimi: () => null,
   muse: jsonlLog,
   jcode: jsonLog,
-  kiro: (filePath) => kiroTranscriptPathForMetadata(filePath) || null
+  kiro: (filePath) => kiroTranscriptPathForMetadata(filePath) || null,
+  // The session log is a Zstandard container, not a text resource the viewer can open.
+  dsh: () => null
 } satisfies Record<AiVaultAgent, LogFileResolver>
 
 export function aiVaultSessionLogFilePath(

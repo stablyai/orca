@@ -19,6 +19,7 @@ import { resolveMuseSessionsDir } from '../../../shared/muse-session-log'
 import { isKiroSessionMetadataPath } from '../scanners/kiro/session-scanner-kiro-parser'
 
 import { OPENCLAW_AGENT_SOURCE } from '../scanners/openclaw/openclaw-session-layout'
+import { DSH_AGENT_SOURCE } from '../scanners/dsh/session-scanner-dsh-source'
 import { isOmpConversationDirectory } from '../scanners/omp/session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
@@ -30,7 +31,7 @@ import {
 import { getHermesHome } from '../../hermes/hermes-default-home'
 import { isClaudeProjectBucketDirectory } from '../scanners/claude/claude-project-dir-encoding'
 import { SUBAGENT_DIR_NAME } from '../scanners/claude/session-scanner-subagent-transcripts'
-import type { AiVaultScanOptions } from '../session-scanner-types'
+import type { AiVaultScanOptions, FileWithMtime } from '../session-scanner-types'
 import {
   normalizeAgentSessionsDir,
   primeAgentSessionsDirFromEnv
@@ -83,6 +84,7 @@ export type AiVaultAgentSource = {
   directoryPredicate?: (name: string, depth: number) => boolean
   // Share the per-agent limit across alternate roots for one install.
   mergeRootDiscoveries?: boolean
+  selectFiles?: (files: readonly FileWithMtime[]) => FileWithMtime[]
 }
 
 type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent, AiVaultAgentSource> &
@@ -306,7 +308,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.jsonl'],
     // Exclude log, SQLite and materialized-projection sidecars.
     filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
-  }
+  },
+  dsh: DSH_AGENT_SOURCE
 }
 
 // The Pi walk labels the OMP transcripts it reads, so an OMP row can sit under Pi's roots too.
