@@ -185,16 +185,39 @@ export function routineRunErrorCopy(error: string, t: Translate = translate): st
 }
 
 /**
+ * Claude Code's own sign-in refusal, as a headless run reports it ("Not logged in · Please run
+ * /login"): the routine's runner had no Claude credential for Orca Cloud.
+ */
+const CLAUDE_NOT_SIGNED_IN = /not logged in|please run \/login|\brun \/login\b/i
+
+/** The agent exited because Claude isn't set up for Orca Cloud: say how to fix it, not the CLI's text. */
+export function isRoutineRunAgentSignInFailure(error: string, summary?: string | null): boolean {
+  const code = error.split(':', 1)[0]?.trim() ?? ''
+  const agentFailed = code.startsWith('agent_exit') || code === 'agent_failed'
+  return agentFailed && CLAUDE_NOT_SIGNED_IN.test(`${summary ?? ''} ${error}`)
+}
+
+/**
  * Copy plus tone: things that went wrong (couldn't start, couldn't post, interrupted, unknown) are
  * errors; outcomes that are expected bookkeeping (skipped, superseded, workspace gone) are neutral.
  */
 export function describeRoutineRunError(
   error: string,
-  t: Translate = translate
+  t: Translate = translate,
+  /** The run's summary: an agent's own failure text, read only to recognise a missing sign-in. */
+  summary?: string | null
 ): { text: string; tone: 'error' | 'neutral' } {
   const neutral = (text: string) => ({ text, tone: 'neutral' as const })
   const failure = (text: string) => ({ text, tone: 'error' as const })
   const code = error.split(':', 1)[0]?.trim() ?? ''
+  if (isRoutineRunAgentSignInFailure(error, summary)) {
+    return failure(
+      t(
+        'auto.components.settings.cloudRoutines.runError.claudeNotSetUp',
+        'Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Agent accounts, then run the routine again.'
+      )
+    )
+  }
   if (code === 'start_failed') {
     return failure(
       t(

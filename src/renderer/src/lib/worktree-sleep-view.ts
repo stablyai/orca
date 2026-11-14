@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useReducer, useSyncExternalStore } from 'react'
 
 // Two facts the sleep UI shows, kept apart from the store so the follower can set them before any
 // render: which workspaces are going to sleep right now (Sleep chosen, not yet ended), and which
@@ -166,6 +166,49 @@ export function useIsWorktreeGoingToSleep(worktreeId: string | null): boolean {
   )
 }
 
+/**
+ * SLEEP-REATTACH-BANNER (END-PASS n64 P3): a Sleep or Archive the person chose drops the terminal
+ * streams on purpose. `goingToSleep` ends when the sleep call returns, but a paired workspace's
+ * status poll says "sleeping" only seconds later, and in that gap a pane said "Reattaching terminal
+ * · Down for 10 sec". This hold keeps the reconnect notices quiet from the press until the status
+ * says asleep or a wake starts (the terminal recovery clears it then), or DELIBERATE_STOP_HOLD_MS.
+ */
+export const DELIBERATE_STOP_HOLD_MS = 90_000
+const deliberateStop = new Map<string, number>()
+
+export function noteDeliberateCloudStop(worktreeId: string, at: number = Date.now()): void {
+  deliberateStop.set(worktreeId, at + DELIBERATE_STOP_HOLD_MS)
+  emit()
+}
+
+export function clearDeliberateCloudStop(worktreeId: string): void {
+  if (deliberateStop.delete(worktreeId)) {
+    emit()
+  }
+}
+
+export function isDeliberateCloudStopHeld(worktreeId: string | null, now = Date.now()): boolean {
+  const until = worktreeId === null ? undefined : deliberateStop.get(worktreeId)
+  return until !== undefined && now < until
+}
+
+export function useIsDeliberateCloudStopHeld(worktreeId: string | null): boolean {
+  const held = useSyncExternalStore(subscribeWorktreeSleepView, () =>
+    isDeliberateCloudStopHeld(worktreeId)
+  )
+  // Re-render once the hold runs out, so a later real outage is announced again.
+  const until = worktreeId === null ? undefined : deliberateStop.get(worktreeId)
+  const [, expire] = useReducer((n: number) => n + 1, 0)
+  useEffect(() => {
+    if (!held || until === undefined) {
+      return
+    }
+    const timer = setTimeout(expire, Math.max(0, until - Date.now()) + 50)
+    return () => clearTimeout(timer)
+  }, [held, until])
+  return held
+}
+
 export function useIsWorktreeSleepViewHeld(worktreeId: string | null): boolean {
   return useSyncExternalStore(subscribeWorktreeSleepView, () => isWorktreeSleepViewHeld(worktreeId))
 }
@@ -180,5 +223,6 @@ export function resetWorktreeSleepViewForTests(): void {
   }
   copyTimers.clear()
   copySave.clear()
+  deliberateStop.clear()
   listeners.clear()
 }

@@ -9315,7 +9315,8 @@
             "queueExpired": "The run waited too long to start and was skipped.",
             "interrupted": "Orca Cloud restarted during the run.",
             "routineChanged": "The routine changed while this run was queued.",
-            "generic": "The run failed."
+            "generic": "The run failed.",
+            "claudeNotSetUp": "Claude isn’t set up for Orca Cloud, so this run couldn’t start it. Set it up once in Settings → Agent accounts, then run the routine again."
           },
           "event": {
             "prOpened": "PR opened",
@@ -27612,6 +27613,8 @@
       "recentCommits": "Recent commits"
     },
     "terminal": {
+      "archivedHistoryKept": "This workspace is archived. Unarchive it to keep working; your terminal history is kept.",
+      "archivedSince": "Archived since {{time}}",
       "asleepHistoryKept": "This workspace is asleep. Your terminal history is kept.",
       "asleepSince": "Asleep since {{time}}",
       "rerun": "Rerun {{command}}",

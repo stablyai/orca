@@ -9,6 +9,8 @@ export type CloudRecoveryContext = {
   waking: boolean
   /** Asleep or going to sleep: nothing to reconnect to, so a calm note instead of "Reconnecting" (RA-12). */
   asleep: boolean
+  /** Asleep because it was archived: its notes say "archived" and offer Unarchive, not Wake. */
+  archived: boolean
   /** What the person calls it (never the sandbox's server name or id). */
   workspaceName: string | null
   /** While asleep or waking: when it went to sleep (the local record's suspend time); null if unknown. */
@@ -57,5 +59,11 @@ export function useCloudRecoveryContext(
     !waking &&
     !isWakeReadyAfterRead(wake, status) &&
     (reported === 'sleeping' || reported === 'stopping' || reported === 'archived' || vmSuspended)
-  return { waking, asleep, workspaceName, asleepSince: asleep || waking ? suspendedAt : null }
+  return {
+    waking,
+    asleep,
+    archived: asleep && reported === 'archived',
+    workspaceName,
+    asleepSince: asleep || waking ? suspendedAt : null
+  }
 }

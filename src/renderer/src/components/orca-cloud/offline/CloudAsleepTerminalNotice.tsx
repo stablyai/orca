@@ -1,9 +1,9 @@
 import React from 'react'
-import { Play } from 'lucide-react'
+import { ArchiveRestore, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { getIntlLocale } from '@/i18n/i18n'
-import { wakeCloudWorkspace } from '../cloud-workspace-actions'
+import { runUnarchiveCloudWorkspace, wakeCloudWorkspace } from '../cloud-workspace-actions'
 
 /** "3:10 PM" today; "Nov 10, 3:10 PM" once it has been asleep across a day boundary. */
 export function formatAsleepSince(at: number, now = Date.now()): string {
@@ -25,10 +25,13 @@ export function CloudAsleepTerminalNotice({
   workspaceId,
   asleepSince,
   waking = false,
+  archived = false,
   historyEndPx = null
 }: {
   workspaceId: string
   asleepSince: number | null
+  /** Archived, not just asleep: say so, and offer Unarchive (Wake doesn't bring it back). */
+  archived?: boolean
   /** Waking: the waking pill speaks; keep only the greyed history and its divider. */
   waking?: boolean
   /**
@@ -52,9 +55,13 @@ export function CloudAsleepTerminalNotice({
       >
         <span className="h-px flex-1 bg-border" />
         <span>
-          {t('orcaCloudWorkspace.terminal.asleepSince', 'Asleep since {{time}}', {
-            time: formatAsleepSince(asleepSince)
-          })}
+          {archived
+            ? t('orcaCloudWorkspace.terminal.archivedSince', 'Archived since {{time}}', {
+                time: formatAsleepSince(asleepSince)
+              })
+            : t('orcaCloudWorkspace.terminal.asleepSince', 'Asleep since {{time}}', {
+                time: formatAsleepSince(asleepSince)
+              })}
         </span>
         <span className="h-px flex-1 bg-border" />
       </div>
@@ -80,19 +87,35 @@ export function CloudAsleepTerminalNotice({
             className="pointer-events-auto flex items-center justify-between gap-3 rounded-md border border-border bg-popover px-3.5 py-2.5 text-xs text-muted-foreground"
           >
             <span>
-              {t(
-                'orcaCloudWorkspace.terminal.asleepHistoryKept',
-                'This workspace is asleep. Your terminal history is kept.'
-              )}
+              {archived
+                ? t(
+                    'orcaCloudWorkspace.terminal.archivedHistoryKept',
+                    'This workspace is archived. Unarchive it to keep working; your terminal history is kept.'
+                  )
+                : t(
+                    'orcaCloudWorkspace.terminal.asleepHistoryKept',
+                    'This workspace is asleep. Your terminal history is kept.'
+                  )}
             </span>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() => void wakeCloudWorkspace(workspaceId)}
-            >
-              <Play />
-              {t('orcaCloudWorkspace.wake', 'Wake')}
-            </Button>
+            {archived ? (
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => void runUnarchiveCloudWorkspace(workspaceId)}
+              >
+                <ArchiveRestore />
+                {t('orcaCloudWorkspace.unarchive', 'Unarchive')}
+              </Button>
+            ) : (
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => void wakeCloudWorkspace(workspaceId)}
+              >
+                <Play />
+                {t('orcaCloudWorkspace.wake', 'Wake')}
+              </Button>
+            )}
           </div>
         )}
       </div>

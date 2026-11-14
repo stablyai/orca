@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { ComponentType } from 'react'
 import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
+import { canManageActiveTeam } from '@/lib/orca-cloud/orca-cloud-team-role'
 
 export type AccountMenuItem = {
   /** Stable id; registering the same id again replaces the earlier entry. */
@@ -14,6 +15,8 @@ export type AccountMenuItem = {
   requiredCapability?: string
   /** Show only to signed-in (connected) accounts, with no capability flag needed. */
   requiresSignIn?: boolean
+  /** Show only to an owner or admin of the active team (the console refuses members). */
+  requiresTeamAdmin?: boolean
   /** 'accent' marks a call to action (e.g. upgrade); default rows stay neutral. */
   tone?: 'accent'
   onSelect: () => void
@@ -58,6 +61,7 @@ export function selectVisibleAccountMenuItems(
   return registered
     .filter((item) => !item.requiredCapability || flags?.[item.requiredCapability] === true)
     .filter((item) => !item.requiresSignIn || authStatus?.state === 'connected')
+    .filter((item) => !item.requiresTeamAdmin || canManageActiveTeam(authStatus))
     .map((item, index) => ({ item, index }))
     .sort((a, b) => (a.item.order ?? 0) - (b.item.order ?? 0) || a.index - b.index)
     .map(({ item }) => item)
