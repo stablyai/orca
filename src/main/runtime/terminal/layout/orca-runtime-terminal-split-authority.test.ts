@@ -1,3 +1,4 @@
+import * as z from 'zod'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import { TERMINAL_LIFECYCLE_METHODS } from '../../rpc/methods/terminal/terminal-lifecycle-methods'
 import { withRuntimePaneAdmission } from '../../orca-runtime-tests/runtime-durable-store-fixture'
@@ -290,7 +291,7 @@ describe('remote runtime terminal split authority', () => {
       if (!response.ok) {
         throw new Error(response.error.message)
       }
-      const { split } = response.result as { split: { leafId: string } }
+      const { split } = z.object({ split: z.object({ leafId: z.string() }) }).parse(response.result)
       const expectedRoot = {
         type: 'split',
         direction: axis,
