@@ -14,6 +14,7 @@ import type {
   ClaudeUsageApi,
   CodexUsageApi,
   MuseUsageApi,
+  MistralVibeUsageApi,
   OpenCodeUsageApi,
   RateLimitsApi
 } from './api/agent-usage/agent-usage-api'
@@ -157,6 +158,7 @@ export type PreloadApi = {
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
   museUsage: MuseUsageApi
+  mistralVibeUsage: MistralVibeUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']

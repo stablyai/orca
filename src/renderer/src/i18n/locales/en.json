@@ -5942,6 +5942,7 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Overview",
           "grokUsageTab": "Grok",
+          "mistralVibeUsageTab": "Mistral Vibe",
           "trackingSince": "Tracking since {{value0}}"
         },
         "UsageOverviewPane": {
@@ -6056,6 +6057,17 @@
           "e5a6b7c8d9": "Weekly credits used",
           "f6b7c8d9e0": "Billing period reset",
           "a7b8c9d0e1": "Grok account settings"
+        },
+        "MistralVibeUsagePane": {
+          "title": "Mistral Vibe Usage Tracking",
+          "enableLabel": "Enable Mistral Vibe usage analytics",
+          "disabledDescription": "Reads Vibe's local session catalog to show token, model, and cost stats.",
+          "scopeAll": "All local Mistral Vibe usage",
+          "optionsLabel": "Mistral Vibe usage options",
+          "refreshAriaLabel": "Refresh Mistral Vibe usage",
+          "emptyMessage": "No local Mistral Vibe usage found yet for this scope.",
+          "costNote": "Cost uses the per-model prices in your Vibe config.toml; models without prices are excluded.",
+          "recentSessionsDescription": "Most recent local Mistral Vibe sessions in this scope."
         },
         "MuseUsagePane": {
           "title": "Muse Usage Tracking",
@@ -9666,7 +9678,7 @@
           "c40dadaac8": "Mobile",
           "c2ee313198": "Use existing machines over SSH for files, terminals, Git, and workspaces.",
           "7686cb5c36": "Connect this browser to a saved Orca server.",
-          "8acf3f22e0": "Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.",
+          "8acf3f22e0": "Orca stats plus Claude, Codex, OpenCode, Muse, and Mistral Vibe token analytics and Grok subscription usage.",
           "a737a4bb22": "Keyboard shortcuts for common actions.",
           "23bf7a1ad4": "Shortcuts",
           "7210ac09c4": "Native desktop notifications for agent activity and terminal events.",

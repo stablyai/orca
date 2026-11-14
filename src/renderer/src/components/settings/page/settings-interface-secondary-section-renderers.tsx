@@ -157,7 +157,7 @@ export function renderStatsSettingsSection(
       title={t('auto.components.settings.Settings.084f34826d', 'Stats & usage')}
       description={t(
         'auto.components.settings.Settings.8acf3f22e0',
-        'Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.'
+        'Orca stats plus Claude, Codex, OpenCode, Muse, and Mistral Vibe token analytics and Grok subscription usage.'
       )}
       searchEntries={navigation.getSectionSearchEntries('stats')}
     >

@@ -3,14 +3,16 @@ import type {
   ClaudeUsageTypes,
   CodexUsageTypes,
   OpenCodeUsageTypes,
-  MuseUsageTypes
+  MuseUsageTypes,
+  MistralVibeUsageTypes
 } from './usage-provider-slice-contract'
 
 export type {
   ClaudeUsageSlice,
   CodexUsageSlice,
   OpenCodeUsageSlice,
-  MuseUsageSlice
+  MuseUsageSlice,
+  MistralVibeUsageSlice
 } from './usage-provider-slice-contract'
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
@@ -55,4 +57,17 @@ export const createMuseUsageSlice = createUsageProviderSlice<'muse', 'Muse', Mus
   initialRange: '30d',
   getApi: () => window.api.museUsage,
   hasCachedData: (state) => state.hasAnyMuseData
+})
+
+export const createMistralVibeUsageSlice = createUsageProviderSlice<
+  'mistralVibe',
+  'MistralVibe',
+  MistralVibeUsageTypes
+>({
+  prefix: 'mistralVibe',
+  name: 'MistralVibe',
+  initialScope: 'orca',
+  initialRange: '30d',
+  getApi: () => window.api.mistralVibeUsage,
+  hasCachedData: (state) => state.hasAnyMistralVibeData
 })

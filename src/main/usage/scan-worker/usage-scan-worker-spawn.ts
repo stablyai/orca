@@ -9,6 +9,10 @@ import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../../claude
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../../muse-usage/types'
+import type {
+  MistralVibeUsageDailyAggregate,
+  MistralVibeUsageSession
+} from '../../mistral-vibe-usage/types'
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
 import type {
   UsageCacheSplitRequest,
@@ -18,6 +22,7 @@ import type {
 import {
   scanClaudeUsageOnWorker,
   scanCodexUsageOnWorker,
+  scanMistralVibeUsageOnWorker,
   scanMuseUsageOnWorker,
   scanOpenCodeUsageOnWorker,
   UsageScanWorkerClient
@@ -80,6 +85,20 @@ export function scanOpenCodeUsageDatabasesViaWorker(
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
   return scanOpenCodeUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
+}
+
+export function scanMistralVibeUsageFilesViaWorker(
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef
+): Promise<{
+  sessions: MistralVibeUsageSession[]
+  dailyAggregates: MistralVibeUsageDailyAggregate[]
+}> {
+  return scanMistralVibeUsageOnWorker(
+    (body) => getSharedClient().scan(body),
+    worktrees,
+    sourceCache
+  )
 }
 
 export function scanMuseUsageFilesViaWorker(
