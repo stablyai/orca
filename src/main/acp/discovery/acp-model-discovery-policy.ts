@@ -5,13 +5,17 @@ import type { InitializeResponse } from '../generated/acp-protocol.generated'
 export type AcpModelDiscovery =
   | {
       kind: 'initialize'
+      /** `home` is the resolved account home path the launch will pin (null when the agent locates accounts another way). */
       read(
         initialized: InitializeResponse,
         connection: {
           requestSessionFreeExtension(method: string, params: unknown): Promise<unknown>
-        }
+        },
+        home: string | null
       ): Promise<AgentSessionModelOption[]>
       listingNamesConfiguredModel: boolean
+      /** Catalog inputs under the pinned home, named relative to it; stamped so edits expire cached lists. */
+      homeConfigFiles?: readonly string[]
     }
   | {
       kind: 'command'

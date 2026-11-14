@@ -39,6 +39,10 @@ export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id,
       return translate('chat.sessionOptionCopy.xhighShort', 'XHigh')
     case 'fast':
       return translate('chat.sessionOptionCopy.fast', 'Fast')
+    case 'off':
+      return translate('chat.sessionOptionCopy.off', 'Off')
+    case 'on':
+      return translate('chat.sessionOptionCopy.on', 'On')
     case 'toggleOption':
       return translate('chat.sessionOptionCopy.toggleOption', 'Toggle {{value0}}', values)
     case 'chooseInAgentPicker':

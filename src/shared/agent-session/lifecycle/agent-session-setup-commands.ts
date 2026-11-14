@@ -45,7 +45,9 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     installCommand: 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash'
   },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
-  { agent: 'antigravity', loginCommand: [] }
+  { agent: 'antigravity', loginCommand: [] },
+  // Why the TUI: bare `mcode login` heads straight to the cn OAuth flow; the TUI's /login picks the account region.
+  { agent: 'mcode', loginCommand: ['mcode'], slashCommand: '/login' }
 ] as const
 
 export function agentSessionSetupFor(agent: string | undefined) {

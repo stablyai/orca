@@ -20,6 +20,7 @@ import {
 import { AgentModelCatalogListingStoppedError } from '../../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { createAcpAgentConnection } from '../process/acp-agent-connection'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import {
@@ -88,6 +89,11 @@ export function createAcpModelCatalogProbe(
       }
     )
     assertStructuredAgentResolutionCurrent(operation)
+    const home = agentSessionAccountHomePath(accountHome)
+    const homeConfigFiles =
+      discovery.kind === 'initialize' && home && discovery.homeConfigFiles
+        ? discovery.homeConfigFiles.map((name) => join(home, name))
+        : undefined
     return {
       identity: { command, prefixArgs, cwd, workspace },
       inputStamp: JSON.stringify(
@@ -95,7 +101,13 @@ export function createAcpModelCatalogProbe(
           [
             ...new Set([cwd, ...(discovery.kind === 'command' && workspace ? [workspace] : [])])
           ].map((directory) =>
-            agentModelCatalogInputStamp({ command, prefixArgs, cwd: directory, env })
+            agentModelCatalogInputStamp({
+              command,
+              prefixArgs,
+              cwd: directory,
+              env,
+              configFiles: homeConfigFiles
+            })
           )
         )
       ),
@@ -229,7 +241,7 @@ export function createAcpModelCatalogProbe(
               const initialized = await connection.initialize()
               assertStructuredAgentResolutionCurrent(operation)
               observeAcpForkSupport(spec.agent, initialized)
-              return listing.read(initialized, connection)
+              return listing.read(initialized, connection, agentSessionAccountHomePath(accountHome))
             },
             run
           )

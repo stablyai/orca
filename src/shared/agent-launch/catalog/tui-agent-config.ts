@@ -329,7 +329,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   // prettier-ignore
   devin: { detectCmd: 'devin', promptInjectionMode: 'argv', argvPromptSeparator: '--' },
   // prettier-ignore
-  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
+  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' },
+  // TUI launch tuning (expectedProcess, argv separator) is deferred to #31023 (#14051); the entry
+  // stays because ACP chat picker membership and launch routing read it.
+  // prettier-ignore
+  mcode: { detectCmd: 'mcode', promptInjectionMode: 'argv' }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(

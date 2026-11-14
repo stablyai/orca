@@ -15,6 +15,7 @@ import type {
   ClientCapabilities,
   InitializeResponse,
   ModelInfo,
+  SessionConfigOption,
   SessionNotification,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
@@ -115,6 +116,9 @@ export type AcpModelCommandReply =
 export type AcpDialect = {
   /** Effort replaces part of the native composite model selection. */
   effortChangesModel?: true
+  /** mcode only: its on/off effort values address the model's thinking variant, so writing them
+   *  rewrites the model id instead of a thought_level option. */
+  effortSelectsThinkingVariant?: true
   subagentStop?: {
     /** Probe without a target to establish support without cancelling a child. */
     probe: { method: string; params: unknown }
@@ -193,6 +197,7 @@ export type AcpDialect = {
   signInAccount?: AgentSessionAccountKind
   /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
+  normalizeConfigOptions?(options: SessionConfigOption[]): SessionConfigOption[]
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }
