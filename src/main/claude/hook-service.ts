@@ -34,9 +34,11 @@ import {
   refreshWindowsClaudeHookFiles
 } from './hooks/windows-hook-files'
 
-import { getManagedStatusLineScript } from './hooks/statusline-script'
-// oxfmt-ignore
-import { installClaudeManagedStatusLine, retireClaudeManagedStatusLine } from './hooks/statusline-install'
+import {
+  installClaudeManagedStatusLine,
+  refreshClaudeStatusLineScripts,
+  retireClaudeManagedStatusLine
+} from './hooks/statusline-install'
 import { refuseProfileAtDefaultHome } from './hooks/claude-profile-hook-target'
 import {
   applyManagedHooks,
@@ -49,7 +51,6 @@ import {
   getRemoteManagedEventCommand,
   getStatusLineInstallMarkerPath,
   getStatusLineScriptFileName,
-  getStatusLineScriptPath,
   findManagedEventHookForms,
   removeManagedHooks,
   removeManagedStatusLine,
@@ -176,11 +177,8 @@ export class ClaudeHookService {
     await (this.usesWindowsEntry
       ? refreshWindowsClaudeHookFiles(scriptPath, payload)
       : refreshManagedScriptIfPresent(scriptPath, payload))
-    // Refresh existing statusline scripts without creating new installs.
-    await refreshManagedScriptIfPresent(
-      getStatusLineScriptPath(this.options.settings),
-      getManagedStatusLineScript('local')
-    )
+    // Refresh existing statusline scripts (and their Windows stdin reader) without creating installs.
+    await refreshClaudeStatusLineScripts(this.options.settings)
   }
 
   install(options: ClaudeHookTargetOptions = {}): AgentHookInstallStatus {
