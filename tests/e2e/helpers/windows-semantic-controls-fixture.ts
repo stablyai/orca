@@ -25,7 +25,11 @@ const WindowsSemanticFixtureStateSchema = FixtureActivationSchema.extend({
 
 const WindowsFormsFixtureStateSchema = FixtureActivationSchema.extend({
   name: z.string(),
-  notes: z.string()
+  notes: z.string(),
+  presses: z.number(),
+  checked: z.boolean(),
+  combo: z.string(),
+  listTop: z.number()
 })
 
 export type WindowsSemanticFixtureState = z.infer<typeof WindowsSemanticFixtureStateSchema>

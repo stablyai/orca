@@ -149,6 +149,15 @@ public static class OrcaDesktopWin32 {
     [DllImport("user32.dll")]
     public static extern bool IsWindow(IntPtr hwnd);
 
+    [DllImport("user32.dll", EntryPoint = "PostMessageW")]
+    public static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetParent(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    public static extern int GetDlgCtrlID(IntPtr hwnd);
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
     public static extern int GetWindowLong(IntPtr hwnd, int index);
 
@@ -203,6 +212,35 @@ public static class OrcaDesktopWin32 {
         IntPtr copied;
         if (SendMessageTimeoutBuffer(hwnd, 0x000D, new IntPtr(capacity), buffer, AbortIfHung, EditMessageTimeoutMilliseconds, out copied) == IntPtr.Zero) { return null; }
         return buffer.ToString();
+    }
+
+    // A control message with no pointer arguments; null when the window did not answer.
+    public static long? SendControlMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam) {
+        IntPtr result;
+        if (SendMessageTimeout(hwnd, message, wParam, lParam, AbortIfHung, EditMessageTimeoutMilliseconds, out result) == IntPtr.Zero) { return null; }
+        return result.ToInt64();
+    }
+
+    // An exact-name search such as CB_FINDSTRINGEXACT, whose string user32 marshals across processes; null when unanswered.
+    public static long? FindControlString(IntPtr hwnd, uint message, int start, string name) {
+        IntPtr result;
+        if (SendMessageTimeoutString(hwnd, message, new IntPtr(start), name, AbortIfHung, EditMessageTimeoutMilliseconds, out result) == IntPtr.Zero) { return null; }
+        return result.ToInt64();
+    }
+
+    // An item's text through a length/text message pair such as CB_GETLBTEXTLEN/CB_GETLBTEXT; null when unanswered.
+    public static string GetControlItemText(IntPtr hwnd, uint lengthMessage, uint textMessage, int index) {
+        IntPtr length;
+        if (SendMessageTimeout(hwnd, lengthMessage, new IntPtr(index), IntPtr.Zero, AbortIfHung, EditMessageTimeoutMilliseconds, out length) == IntPtr.Zero || length.ToInt64() < 0) { return null; }
+        var buffer = new System.Text.StringBuilder((int)length.ToInt64() + 1);
+        IntPtr copied;
+        if (SendMessageTimeoutBuffer(hwnd, textMessage, new IntPtr(index), buffer, AbortIfHung, EditMessageTimeoutMilliseconds, out copied) == IntPtr.Zero) { return null; }
+        return buffer.ToString();
+    }
+
+    public static int GetClientHeight(IntPtr hwnd) {
+        RECT rect;
+        return GetClientRect(hwnd, out rect) ? rect.Bottom - rect.Top : 0;
     }
 
     // EM_GETSEL as [start, end]; null when the edit did not answer or an offset is past the 16-bit return value.
@@ -893,9 +931,14 @@ function Get-OrcaValueText($Element) {
     }
 }
 
+function Test-OrcaNativeClass([string]$ClassName, [string]$BaseClass) {
+    # Why: WinForms controls are superclasses named WindowsForms10.<BASE>.app..., and answer the base class's messages.
+    $ClassName -match "^(?:WindowsForms\d+\.)?(?:$BaseClass)(?:\.|$)"
+}
+
 function Test-OrcaEditClass([string]$ClassName) {
-    # Why: user32 edits, RichEdit and their WinForms superclasses answer EM_ and WM_GETTEXT messages from other processes.
-    $ClassName -match "^(?:WindowsForms\d+\.)?(?:Edit|RichEdit\w*)(?:\.|$)"
+    # Why: user32 edits and RichEdit answer EM_ and WM_GETTEXT messages from other processes.
+    Test-OrcaNativeClass $ClassName "Edit|RichEdit\w*"
 }
 
 # Only for elements Get-OrcaValueText left empty, so never a sensitive one (it answers "[redacted]" for those).
@@ -920,15 +963,24 @@ function Get-OrcaNativeEdit($Element, $Process) {
     }
 }
 
-function Assert-OrcaEditOwner($Edit) {
+function Assert-OrcaWindowOwner([IntPtr]$Handle, [int]$ProcessId) {
     # Why: a window handle can be recycled for another process between the tree read and the message.
     $owner = [uint32]0
-    if ([OrcaDesktopWin32]::IsWindow($Edit.handle)) {
-        [void][OrcaDesktopWin32]::GetWindowThreadProcessId($Edit.handle, [ref]$owner)
+    if ([OrcaDesktopWin32]::IsWindow($Handle)) {
+        [void][OrcaDesktopWin32]::GetWindowThreadProcessId($Handle, [ref]$owner)
     }
-    if ($owner -ne $Edit.processId) {
-        throw "stale element: the text field's window no longer belongs to the target app; run get-app-state again and use a fresh element index"
+    if ($owner -ne $ProcessId) {
+        throw "stale element: the control's window no longer belongs to the target app; run get-app-state again and use a fresh element index"
     }
+}
+
+# The element's own window when it is a native control of BaseClass owned by the target process.
+function Get-OrcaNativeControl($Element, $Process, [string]$BaseClass) {
+    if (-not (Test-OrcaNativeClass (Get-OrcaProperty $Element "ClassName") $BaseClass)) { return $null }
+    $handle = try { [IntPtr][int64]$Element.Current.NativeWindowHandle } catch { [IntPtr]::Zero }
+    if ($handle -eq [IntPtr]::Zero) { return $null }
+    Assert-OrcaWindowOwner $handle ([int]$Process.Id)
+    $handle
 }
 
 function ConvertTo-OrcaEditNewlines([string]$Text, [bool]$Collapse) {
@@ -937,14 +989,24 @@ function ConvertTo-OrcaEditNewlines([string]$Text, [bool]$Collapse) {
     $normalized -replace "`n", "`r`n"
 }
 
-function Invoke-OrcaEditTextInsertion($Edit, [int]$Index, [string]$Text) {
-    Assert-OrcaEditOwner $Edit
+function Invoke-OrcaEditTextInsertion($Edit, [int]$Index, [string]$Text, [switch]$ReplaceAll) {
+    Assert-OrcaWindowOwner $Edit.handle $Edit.processId
     $style = [OrcaDesktopWin32]::GetWindowLong($Edit.handle, -16)
     if (($style -band 0x0800) -ne 0) { throw "element $Index text is not settable: the field is read-only" }
     $insert = ConvertTo-OrcaEditNewlines $Text $false
     $before = if ($Edit.sensitive) { $null } else { [OrcaDesktopWin32]::GetEditText($Edit.handle, $EditReadbackLimit) }
     $selection = [OrcaDesktopWin32]::GetEditSelection($Edit.handle)
-    Assert-OrcaEditOwner $Edit
+    # Why: an edit cuts text past its EM_SETLIMITTEXT limit, which would leave a partial write; refuse it untouched instead.
+    $limit = [OrcaDesktopWin32]::SendControlMessage($Edit.handle, 0x00D5, [IntPtr]::Zero, [IntPtr]::Zero)
+    if ($null -ne $limit -and $limit -gt 0) {
+        # Why: RichEdit counts a line break as one character, so its lengths are compared without CRLF.
+        # Why: a readback cut at the read limit holds only a prefix, so the field reports its own length then.
+        $current = if ($null -ne $before -and $before.Length -lt $EditReadbackLimit) { (ConvertTo-OrcaEditNewlines $before $Edit.rich).Length } else { [OrcaDesktopWin32]::SendControlMessage($Edit.handle, 0x000E, [IntPtr]::Zero, [IntPtr]::Zero) }
+        $replaced = if ($ReplaceAll) { $current } elseif ($null -ne $selection) { [Math]::Abs($selection[1] - $selection[0]) } else { 0 }
+        $length = $current - $replaced + (ConvertTo-OrcaEditNewlines $Text $Edit.rich).Length
+        if ($null -ne $current -and $length -gt $limit) { throw "element $Index text is not settable: the result would be $length characters, past the field's $limit-character limit" }
+    }
+    Assert-OrcaWindowOwner $Edit.handle $Edit.processId
     if (-not [OrcaDesktopWin32]::ReplaceEditSelection($Edit.handle, $insert)) {
         throw "window_not_responding: the text field did not answer the insertion in time; the text may still land, so run get-app-state before retrying"
     }
@@ -1037,6 +1099,15 @@ function Invoke-OrcaValueTextInsertion($Element, [int]$Index, [string]$Text) {
     [pscustomobject]@{ path = "accessibility"; actionName = "setValue"; fallbackReason = $null; verification = $verification }
 }
 
+function Test-OrcaTextPatternReadOnly($Element) {
+    try {
+        $range = $Element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange
+        $range.GetAttributeValue([Windows.Automation.TextPattern]::IsReadOnlyAttribute) -eq $true
+    } catch {
+        $false
+    }
+}
+
 function Invoke-OrcaElementTextInsertion($Element, $Record, $Process, $RootElement, $Operation, [string]$Text) {
     if ($null -eq $Element) {
         throw "stale element: element $($Record.index) is gone; run get-app-state again and use a fresh element index"
@@ -1053,6 +1124,8 @@ function Invoke-OrcaElementTextInsertion($Element, $Record, $Process, $RootEleme
     }
     $action = Invoke-OrcaValueTextInsertion $Element $index $Text
     if ($null -ne $action) { return $action }
+    # Why: a read-only document with no ValuePattern (WPF RichTextBox) says so only through TextPattern; keys would do nothing.
+    if (Test-OrcaTextPatternReadOnly $Element) { throw "element $index text is not settable: the field is read-only" }
     if (-not [bool]$Operation.restoreWindow) {
         throw (New-OrcaForegroundRefusal $Process "element $index accepts text only as keys, which go only to the window in front" "" "takes the user's keyboard")
     }
@@ -1721,8 +1794,27 @@ function Find-OrcaElement($RootElement, $Record) {
     $null
 }
 
+# Why: UI Automation's Invoke and Toggle focus a WinForms button first, which activates its background window;
+# BM_CLICK runs the button's own click (and check box or radio state) with no focus change.
+function Invoke-OrcaNativeButtonClick($Element, $Process) {
+    if ($null -eq $Process) { return $false }
+    # Why: measured on WinForms, whose buttons click on BM_CLICK directly; a user32 button simulates the mouse and
+    # sets focus, which can fail in an inactive dialog, so those keep the UI Automation pattern.
+    if ((Get-OrcaProperty $Element "ClassName") -notmatch "^WindowsForms\d+\.BUTTON\.") { return $false }
+    $button = Get-OrcaNativeControl $Element $Process "Button"
+    if ($null -eq $button) { return $false }
+    # Why: a group box shares the Button class but presses nothing; real buttons offer one of these patterns.
+    $patterns = @(try { $Element.GetSupportedPatterns() } catch { @() })
+    $pressable = @([Windows.Automation.InvokePattern]::Pattern, [Windows.Automation.TogglePattern]::Pattern, [Windows.Automation.SelectionItemPattern]::Pattern)
+    if (@($patterns | Where-Object { $pressable -contains $_ }).Count -eq 0) { return $false }
+    # A click that opens a modal dialog doesn't return until the dialog closes, so an unanswered BM_CLICK still counts as sent.
+    [void][OrcaDesktopWin32]::SendControlMessage($button, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+    $true
+}
+
 # False only when the element offers none of these patterns; a pattern that fails is an error, never a cue for a real click.
-function Invoke-OrcaPrimaryAction($Element, $Index) {
+function Invoke-OrcaPrimaryAction($Element, $Index, $Process) {
+    if (Invoke-OrcaNativeButtonClick $Element $Process) { return $true }
     foreach ($pattern in @(
         [Windows.Automation.InvokePattern]::Pattern,
         [Windows.Automation.SelectionItemPattern]::Pattern,
@@ -1796,7 +1888,87 @@ function Test-OrcaRangeValueMatches([string]$Actual, [double]$Expected) {
         [Math]::Abs($actualNumber - $Expected) -le [Math]::Min(1e-6 * [Math]::Max(1.0, [Math]::Abs($Expected)), 1e-3)
 }
 
-function Set-OrcaElementValue($Element, [string]$Value) {
+function Set-OrcaNativeComboValue($Element, $Process, [string]$Value) {
+    $combo = Get-OrcaNativeControl $Element $Process "ComboBox"
+    if ($null -eq $combo) { return $null }
+    # Why: an owner-drawn combo without CBS_HASSTRINGS keeps item data, not names, so its items can't be found by name.
+    $style = [OrcaDesktopWin32]::GetWindowLong($combo, -16)
+    if (($style -band 0x0030) -ne 0 -and ($style -band 0x0200) -eq 0) { return $null }
+    $count = [OrcaDesktopWin32]::SendControlMessage($combo, 0x0146, [IntPtr]::Zero, [IntPtr]::Zero)
+    if ($null -eq $count -or $count -le 0) { return $null }
+    # Why: CB_FINDSTRINGEXACT ignores case and wraps, so walk its hits once and keep those whose text matches exactly.
+    $exact = @()
+    $first = [OrcaDesktopWin32]::FindControlString($combo, 0x0158, -1, $Value)
+    $hit = $first
+    for ($step = 0; $null -ne $hit -and $hit -ge 0 -and $step -lt $count; $step++) {
+        $text = [OrcaDesktopWin32]::GetControlItemText($combo, 0x0149, 0x0148, [int]$hit)
+        if ($text -ceq $Value) { $exact += [int]$hit }
+        $hit = [OrcaDesktopWin32]::FindControlString($combo, 0x0158, [int]$hit, $Value)
+        # Why: a search or read the combo didn't answer could hide a second option with the same name.
+        if ($null -eq $text -or $null -eq $hit) {
+            throw "window_not_responding: the combo box did not answer its option search in time; nothing was selected"
+        }
+        if ($hit -eq $first) { break }
+    }
+    if ($exact.Count -eq 0) { return $null }
+    if ($exact.Count -gt 1) { throw "element value is not settable by name: more than one option is named '$Value'" }
+    # CB_SETCURSEL changes the selection without opening the list; CBN_SELCHANGE runs the app's own change handler.
+    Assert-OrcaWindowOwner $combo ([int]$Process.Id)
+    if ($null -eq [OrcaDesktopWin32]::SendControlMessage($combo, 0x014E, [IntPtr]$exact[0], [IntPtr]::Zero)) {
+        throw "window_not_responding: the combo box did not answer in time; the selection may still change, so run get-app-state before retrying"
+    }
+    $parent = [OrcaDesktopWin32]::GetParent($combo)
+    if ($parent -ne [IntPtr]::Zero) {
+        Assert-OrcaWindowOwner $parent ([int]$Process.Id)
+        $command = [IntPtr]((1 -shl 16) -bor ([OrcaDesktopWin32]::GetDlgCtrlID($combo) -band 0xFFFF))
+        [void][OrcaDesktopWin32]::SendControlMessage($parent, 0x0111, $command, $combo)
+    }
+    # Why: the change handler ran inside the send above, so the selection now is the one the app kept.
+    $selected = [OrcaDesktopWin32]::SendControlMessage($combo, 0x0147, [IntPtr]::Zero, [IntPtr]::Zero)
+    # Why: a handler that clears the selection leaves CB_ERR (-1), which contradicts the write rather than hiding it.
+    $actual = if ($null -eq $selected) { $null } elseif ($selected -lt 0) { "" } else { [OrcaDesktopWin32]::GetControlItemText($combo, 0x0149, 0x0148, [int]$selected) }
+    $verification = if ($actual -ceq $Value) {
+        [pscustomobject]@{ state = "verified"; property = "value" }
+    } elseif ($null -eq $actual) {
+        [pscustomobject]@{ state = "unverified"; reason = "readback_unsupported" }
+    } else {
+        [pscustomobject]@{ state = "unverified"; reason = "value_mismatch"; actualPreview = $actual }
+    }
+    [pscustomobject]@{ verification = $verification }
+}
+
+function Set-OrcaNativeEditValue($Element, $Process, [int]$Index, [string]$Value) {
+    $edit = Get-OrcaNativeEdit $Element $Process
+    if ($null -eq $edit) { return $null }
+    # Why: UI Automation's ValuePattern focuses the field first, which activates its background window; selecting
+    # everything and replacing it runs the edit's own change notification, which WM_SETTEXT skips for multiline edits.
+    Assert-OrcaWindowOwner $edit.handle $edit.processId
+    if ($null -eq [OrcaDesktopWin32]::SendControlMessage($edit.handle, 0x00B1, [IntPtr]::Zero, [IntPtr](-1))) {
+        throw "window_not_responding: the text field did not answer in time; nothing was written"
+    }
+    $action = Invoke-OrcaEditTextInsertion $edit $Index $Value -ReplaceAll
+    $verification = if ($action.verification.state -eq "verified") {
+        [pscustomobject]@{ state = "verified"; property = "value" }
+    } elseif ($action.verification.reason -eq "text_mismatch") {
+        [pscustomobject]@{ state = "unverified"; reason = "value_mismatch" }
+    } else {
+        $action.verification
+    }
+    [pscustomobject]@{ verification = $verification }
+}
+
+function Set-OrcaElementValue($Element, $Process, [int]$Index, [string]$Value) {
+    if ($null -ne $Process) {
+        # Why: these write native controls without focusing them; a disabled one is locked against the user, so it is refused.
+        $native = (Test-OrcaEditClass (Get-OrcaProperty $Element "ClassName")) -or (Test-OrcaNativeClass (Get-OrcaProperty $Element "ClassName") "ComboBox")
+        if ($native -and (Test-OrcaElementDisabled $Element)) {
+            throw "element_not_enabled: element $Index is disabled, so no input was sent; do what enables it first, then run get-app-state and retry once its line no longer lists disabled"
+        }
+        $combo = Set-OrcaNativeComboValue $Element $Process $Value
+        if ($null -ne $combo) { return $combo }
+        $edit = Set-OrcaNativeEditValue $Element $Process $Index $Value
+        if ($null -ne $edit) { return $edit }
+    }
     try {
         $pattern = $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
         if (-not $pattern.Current.IsReadOnly) {
@@ -1939,8 +2111,44 @@ function Invoke-OrcaScrollPercent($Pattern, [bool]$Vertical, [bool]$Forward, [do
     $null -ne $after -and $after -ne $Before
 }
 
-function Invoke-OrcaScrollPattern($Element, $RootElement, [string]$Direction, [double]$Pages) {
+# Why: ScrollPattern on a list box focuses it first, which activates its background window; LB_SETTOPINDEX pages the
+# list itself. A page is the rows the list shows.
+function Invoke-OrcaNativeListScroll($Element, $RootElement, $Process, [string]$Direction, [double]$Pages) {
+    if ($null -eq $Process -or $Direction -notin @("up", "down")) { return $false }
+    $rootId = Get-OrcaRuntimeId $RootElement
+    $current = $Element
+    $list = $null
+    # Why: an item scrolls with its list box, the window a wheel at its center would scroll.
+    while ($null -ne $current -and $null -eq $list) {
+        $list = Get-OrcaNativeControl $current $Process "ListBox"
+        if (Test-OrcaSameRuntimeId (Get-OrcaRuntimeId $current) $rootId) { break }
+        $current = try { [Windows.Automation.TreeWalker]::RawViewWalker.GetParent($current) } catch { $null }
+    }
+    if ($null -eq $list) { return $false }
+    # Why: rows of an LBS_OWNERDRAWVARIABLE list differ in height, so a page can't be counted in rows, and an
+    # LBS_MULTICOLUMN list pages sideways.
+    if (([OrcaDesktopWin32]::GetWindowLong($list, -16) -band 0x0220) -ne 0) { return $false }
+    $top = [OrcaDesktopWin32]::SendControlMessage($list, 0x018E, [IntPtr]::Zero, [IntPtr]::Zero)
+    $count = [OrcaDesktopWin32]::SendControlMessage($list, 0x018B, [IntPtr]::Zero, [IntPtr]::Zero)
+    $itemHeight = [OrcaDesktopWin32]::SendControlMessage($list, 0x01A1, [IntPtr]::Zero, [IntPtr]::Zero)
+    if ($null -eq $top -or $null -eq $count -or $null -eq $itemHeight -or $itemHeight -le 0 -or $count -le 0) { return $false }
+    $rows = [Math]::Max(1, [Math]::Floor([OrcaDesktopWin32]::GetClientHeight($list) / $itemHeight))
+    $step = [int][Math]::Max(1, [Math]::Round($rows * $Pages))
+    $target = if ($Direction -eq "down") { $top + $step } else { $top - $step }
+    # Why: a list that shows every row leaves the scroll to an enclosing ScrollPattern.
+    if ($count -le $rows) { return $false }
+    $target = [Math]::Max(0, [Math]::Min($count - $rows, $target))
+    # Why: at that end already there is nothing left to move, as ScrollPattern reports at the end of its content.
+    if ($target -eq $top) { return $true }
+    if ($null -eq [OrcaDesktopWin32]::SendControlMessage($list, 0x0197, [IntPtr][int]$target, [IntPtr]::Zero)) {
+        throw "window_not_responding: the list did not answer in time; it may still scroll, so run get-app-state before retrying"
+    }
+    $true
+}
+
+function Invoke-OrcaScrollPattern($Element, $RootElement, $Process, [string]$Direction, [double]$Pages) {
     if ($null -eq $Element) { return $false }
+    if (Invoke-OrcaNativeListScroll $Element $RootElement $Process $Direction $Pages) { return $true }
     $vertical = $Direction -in @("up", "down")
     $forward = $Direction -in @("down", "right")
     $pattern = Get-OrcaScrollPattern $Element $RootElement $vertical
@@ -2271,7 +2479,7 @@ function Invoke-OrcaOperation($Operation) {
                 else { $null }
             $alternative = if ($null -eq $Operation.element) { "Click an element by --element-index instead when it lists Invoke, Select or Toggle." } else { "" }
             if ($null -eq $pointerNeed) {
-                if (Invoke-OrcaPrimaryAction $element $Operation.element.index) {
+                if (Invoke-OrcaPrimaryAction $element $Operation.element.index $process) {
                     $action = [pscustomobject]@{ path = "accessibility"; actionName = "primaryAction"; fallbackReason = $null }
                     break
                 }
@@ -2319,7 +2527,7 @@ function Invoke-OrcaOperation($Operation) {
                 $at = Get-OrcaPointerPoint $null $null $Operation.x $Operation.y "x" "y" $windowFrame
                 $scrollTarget = Find-OrcaScrollContainerAt $root $at.x $at.y ($Operation.direction -in @("up", "down"))
             }
-            if (Invoke-OrcaScrollPattern $scrollTarget $root $Operation.direction $pages) {
+            if (Invoke-OrcaScrollPattern $scrollTarget $root $process $Operation.direction $pages) {
                 $action = [pscustomobject]@{ path = "accessibility"; actionName = "scroll"; fallbackReason = $null }
                 break
             }
@@ -2384,7 +2592,7 @@ function Invoke-OrcaOperation($Operation) {
             $action = [pscustomobject]@{ path = "clipboard"; actionName = "paste"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "clipboard_paste" } }
         }
         "set_value" {
-            $written = if ($null -ne $element) { Set-OrcaElementValue $element ([string]$Operation.value) } else { $null }
+            $written = if ($null -ne $element) { Set-OrcaElementValue $element $process ([int]$Operation.element.index) ([string]$Operation.value) } else { $null }
             if ($null -eq $written) {
                 throw "element value is not settable"
             }
