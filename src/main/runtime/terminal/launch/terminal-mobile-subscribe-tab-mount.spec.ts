@@ -54,7 +54,7 @@ export function registerTerminalMobileSubscribeTabMountTests(): void {
       }
 
       runtime.attachWindow(1)
-      syncGraph(null)
+      await syncGraph(null)
       const internals = runtime as unknown as RuntimeInternals
       const leaf = internals.leaves.values().next().value
       if (!leaf) {
@@ -63,7 +63,7 @@ export function registerTerminalMobileSubscribeTabMountTests(): void {
       const handle = internals.issueHandle(leaf)
       const ptyWait = runtime.waitForLeafPtyId(handle)
 
-      syncGraph('pty-1')
+      await syncGraph('pty-1')
 
       await expect(ptyWait).resolves.toBe('pty-1')
       expect(runtime.resolveLiveLeafForHandle(handle)).toEqual({ ptyId: 'pty-1' })

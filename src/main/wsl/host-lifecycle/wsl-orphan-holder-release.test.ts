@@ -89,12 +89,14 @@ describe('wslHolderKeepPolicy', () => {
   it('keeps every holder when the host records cannot all be read', async () => {
     await addHost('Ubuntu', 42000)
     writeFileSync(getWslHostDeploymentStorePath(userDataPath), '{not json')
-    expect(wslHolderKeepPolicy({ userDataPath, keepHostHolders: true })('Alpine')).toBe(true)
+    await expect(
+      wslHolderKeepPolicy({ userDataPath, keepHostHolders: true })('Alpine')
+    ).resolves.toBe(true)
   })
 
   it('keeps the holder of a host added after the policy was made', async () => {
     const isWanted = wslHolderKeepPolicy({ userDataPath, keepHostHolders: true })
     await addHost('Ubuntu', 42000)
-    expect(isWanted('ubuntu')).toBe(true)
+    await expect(isWanted('ubuntu')).resolves.toBe(true)
   })
 })

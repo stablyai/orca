@@ -7,7 +7,7 @@ import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 describe('OrcaRuntimeService', () => {
   it('bounds retained work for many newline-separated huge ANSI cursor movements', async () => {
     const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
 
     const [terminal] = (await runtime.listTerminals()).terminals
     runtime.onPtyData('pty-1', '\x1b[4000GZ\n'.repeat(3000), 100)

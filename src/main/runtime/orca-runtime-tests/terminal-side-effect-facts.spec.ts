@@ -70,7 +70,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('does not confirm an agent exit from a foreground read predating its title', async () => {
     const { runtime, batches } = createSideEffectRuntime()
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     let resolveStaleRead!: (process: string) => void
     const staleRead = new Promise<string>((resolve) => {
       resolveStaleRead = resolve

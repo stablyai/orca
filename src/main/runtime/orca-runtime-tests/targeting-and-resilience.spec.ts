@@ -237,7 +237,7 @@ describe('OrcaRuntimeService', () => {
         stopAndWait,
         getForegroundProcess: async () => null
       })
-      syncSinglePty(runtime, 'pty-1')
+      await syncSinglePty(runtime, 'pty-1')
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
@@ -270,7 +270,7 @@ describe('OrcaRuntimeService', () => {
         stopAndWait: vi.fn(async () => false),
         getForegroundProcess: async () => null
       })
-      syncSinglePty(runtime, 'pty-1')
+      await syncSinglePty(runtime, 'pty-1')
 
       await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
         'Failed to physically stop every PTY'

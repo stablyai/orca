@@ -98,7 +98,11 @@ describe('OrcaRuntimeService', () => {
           await makeAdoptedLiveTabRuntime()
         const before = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
         const events: { worktree: string; snapshotVersion: number; tabs: unknown[] }[] = []
-        const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+        const unsubscribe = runtime.onMobileSessionTabsChanged(
+          (snapshot) => events.push(snapshot),
+          undefined,
+          'mobile'
+        )
 
         const result = await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {
           reason

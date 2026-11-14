@@ -20,7 +20,7 @@ describe('OrcaRuntimeService', () => {
       title: 'bash'
     })
 
-    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
+    await syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
     vi.useFakeTimers()
     vi.setSystemTime(0)
     try {

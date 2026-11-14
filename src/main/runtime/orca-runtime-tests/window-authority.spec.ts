@@ -123,14 +123,13 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.markRendererReloading(TEST_WINDOW_ID)
 
-    expect(
-      async () =>
-        await runtime.syncWindowGraph(TEST_WINDOW_ID, {
-          tabs: [],
-          leaves: [],
-          rendererGeneration: 'renderer-a'
-        })
-    ).toThrow('Runtime graph publisher belongs to a superseded renderer generation')
+    await expect(
+      runtime.syncWindowGraph(TEST_WINDOW_ID, {
+        tabs: [],
+        leaves: [],
+        rendererGeneration: 'renderer-a'
+      })
+    ).rejects.toThrow('Runtime graph publisher belongs to a superseded renderer generation')
     expect(runtime.getStatus()).toMatchObject({
       authoritativeWindowId: TEST_WINDOW_ID,
       graphStatus: 'reloading'
@@ -143,14 +142,13 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.markGraphReloadFailed(TEST_WINDOW_ID, 'renderer-process-gone')
 
-    expect(
-      async () =>
-        await runtime.syncWindowGraph(2, {
-          tabs: [],
-          leaves: [],
-          rendererGeneration: 'renderer-b'
-        })
-    ).toThrow('Runtime graph publisher does not match the pending desktop promotion')
+    await expect(
+      runtime.syncWindowGraph(2, {
+        tabs: [],
+        leaves: [],
+        rendererGeneration: 'renderer-b'
+      })
+    ).rejects.toThrow('Runtime graph publisher does not match the pending desktop promotion')
     expect(runtime.getStatus()).toMatchObject({
       authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
       graphStatus: 'ready'

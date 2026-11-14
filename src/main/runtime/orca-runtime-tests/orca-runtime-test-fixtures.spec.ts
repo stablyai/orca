@@ -460,7 +460,7 @@ async function createExplicitAgentStatusHarness(options: {
       ]
     })
   }
-  syncPty('pty-1')
+  await syncPty('pty-1')
   const [terminal] = (await runtime.listTerminals()).terminals
   return { runtime, handle: terminal.handle, syncPty }
 }

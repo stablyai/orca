@@ -20,7 +20,7 @@ type Host = 'headless' | 'window-empty-graph' | 'window-graph-unavailable'
 // Mail follows the terminal: a headless serve, or a window with no pane for it, still points it.
 async function coordinator(host: Host = 'headless') {
   const db = new OrchestrationDb(':memory:')
-  const { runtime, write } = createRuntime(db, { headless: host === 'headless' })
+  const { runtime, write } = await createRuntime(db, { headless: host === 'headless' })
   if (host !== 'headless') {
     await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   }

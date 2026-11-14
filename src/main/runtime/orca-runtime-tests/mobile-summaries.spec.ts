@@ -324,7 +324,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     runtime.onPtyData(
       'pty-1',
       '\x1b]9999;{"state":"working","prompt":"watch tests","agentType":"claude"}\x07',

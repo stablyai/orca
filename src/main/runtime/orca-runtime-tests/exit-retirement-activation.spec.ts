@@ -80,7 +80,7 @@ describe('OrcaRuntimeService', () => {
     const disk = makeDeferred()
     Object.assign(runtimeStore, { flushPendingOrThrowAsync: () => disk.promise })
     const published = vi.fn()
-    runtime.onMobileSessionTabsChanged(published)
+    runtime.onMobileSessionTabsChanged(published, undefined, 'mobile')
     // Model immediate paired-client reactivation on stream end.
     let reactivation: Promise<unknown> | undefined
     let observedAtStreamEnd: { binding?: string; publications: number } | undefined

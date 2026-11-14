@@ -26,19 +26,19 @@ describe('display surfaces after the stale-working title clear', () => {
         kill: () => true,
         getForegroundProcess: async () => 'codex'
       })
-      syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex working' })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex working' })
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', Date.now())
       runtime.onPtyData('pty-1', 'output without a title\r\n', Date.now())
       await vi.advanceTimersByTimeAsync(3_000)
       // The renderer applies the cleared fact and republishes its pane title.
-      syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex' })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex' })
       const psStatus = async () =>
         (await runtime.getWorktreePs()).worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
           ?.status
       expect(await psStatus()).toBe('active')
       // A renderer reload reattaches with the daemon's last title, as the spawn RPC path does.
       runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex working' })
-      syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex' })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex' })
       expect(await psStatus()).toBe('active')
     } finally {
       vi.useRealTimers()
@@ -91,7 +91,7 @@ describe('display surfaces after the stale-working title clear', () => {
           kill: () => true,
           getForegroundProcess: async () => foreground
         })
-        syncSinglePty(runtime, 'pty-1', { paneTitle: null, tabTitle: 'Terminal' })
+        await syncSinglePty(runtime, 'pty-1', { paneTitle: null, tabTitle: 'Terminal' })
         runtime.onPtyData('pty-1', '\x1b]0;Codex ready\x07', Date.now())
         runtime.onPtyData('pty-1', `\x1b]0;${spinner}\x07`, Date.now())
         await vi.advanceTimersByTimeAsync(100)
@@ -117,10 +117,10 @@ describe('display surfaces after the stale-working title clear', () => {
         kill: () => true,
         getForegroundProcess: async () => 'zsh'
       })
-      syncSinglePty(runtime, 'pty-1', { paneTitle: null })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: null })
       runtime.onPtyData('pty-1', '\x1b]0;⠋ repo\x07', Date.now())
       // The renderer republishes the spinner after main recorded it, and has not echoed the clear.
-      syncSinglePty(runtime, 'pty-1', { paneTitle: '⠋ repo' })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: '⠋ repo' })
       runtime.onPtyData('pty-1', '\x1b]133;D;0\x07\x1b]133;A\x07% ', Date.now())
       await vi.advanceTimersByTimeAsync(3_000)
       const handle = (await runtime.listTerminals()).terminals[0]?.handle ?? ''

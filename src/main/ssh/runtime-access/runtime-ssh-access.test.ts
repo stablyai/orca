@@ -10,6 +10,7 @@ import {
   resolveEnvironment
 } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
+import { resolveEnvironment as readDurableEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store-operations'
 import type { SshTarget } from '../../../shared/ssh-types'
 
 const mocks = vi.hoisted(() => ({
@@ -98,14 +99,18 @@ describe('independent runtime SSH access coordinator', () => {
         listTargets: () => [target],
         preflight: mocks.preflight,
         flush: mocks.flush,
-        claim: async () => {
-          expect((await current()).pendingSshAccessOperation?.operation).toBe('link')
+        claim: () => {
+          expect(
+            readDurableEnvironment(userDataPath, environmentId).pendingSshAccessOperation?.operation
+          ).toBe('link')
           events.push('claim')
           target = { ...target, orcadFence: { environmentId: environmentId } }
           return target
         },
-        release: async () => {
-          expect((await current()).pendingSshAccessOperation?.operation).toBe('unlink')
+        release: () => {
+          expect(
+            readDurableEnvironment(userDataPath, environmentId).pendingSshAccessOperation?.operation
+          ).toBe('unlink')
           events.push('release')
           target = { ...target, orcadFence: undefined }
           return target
@@ -139,6 +144,10 @@ describe('independent runtime SSH access coordinator', () => {
 
   it('cancels a pending connect and starts no tunnel when the link is aborted', async () => {
     const controller = new AbortController()
+    let connected!: () => void
+    const connecting = new Promise<void>((resolve) => {
+      connected = resolve
+    })
     mocks.connect.mockImplementationOnce(
       () =>
         new Promise((_resolve, fail) => {
@@ -146,12 +155,14 @@ describe('independent runtime SSH access coordinator', () => {
             fail(new Error('cancelled'))
             return undefined
           })
+          connected()
         })
     )
-    const link = await linkRuntimeSshAccess(userDataPath, request(), { signal: controller.signal })
-    await vi.waitFor(() => expect(mocks.connect).toHaveBeenCalled())
+    const link = linkRuntimeSshAccess(userDataPath, request(), { signal: controller.signal })
+    const cancelled = expect(link).rejects.toThrow('cancelled')
+    await connecting
     controller.abort()
-    await expect(link).rejects.toThrow('cancelled')
+    await cancelled
     expect(mocks.disconnect).toHaveBeenCalledWith('target')
     expect(mocks.start).not.toHaveBeenCalled()
   })

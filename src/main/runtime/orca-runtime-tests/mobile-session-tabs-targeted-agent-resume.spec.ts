@@ -361,9 +361,13 @@ describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publi
 
   it('settles a failed post-spawn publication when that PTY exits', async () => {
     const { runtime, resume } = await makeRuntime(makeSleptWorkspace())
-    const unsubscribe = runtime.onMobileSessionTabsChanged(() => {
-      throw new Error('publication failed')
-    })
+    const unsubscribe = runtime.onMobileSessionTabsChanged(
+      () => {
+        throw new Error('publication failed')
+      },
+      undefined,
+      'mobile'
+    )
     await expect(resume()).resolves.toEqual({ ok: false, reason: 'create_failed' })
     unsubscribe()
     runtime.onPtyExit('resumed-pty', 0)

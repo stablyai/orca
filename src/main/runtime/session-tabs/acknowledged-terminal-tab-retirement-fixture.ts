@@ -29,7 +29,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve }
 }
 
-export function createAcknowledgedTabRetirementFixture(bound = false) {
+export async function createAcknowledgedTabRetirementFixture(bound = false) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-close-ack-'))
   const databasePath = join(directory, 'profile-state.db')
   const authority = new DelayedAuthority(
@@ -111,7 +111,11 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
       incarnationId: SECOND_INCARNATION
     })
   }
-  function publish(present: boolean, version: number, includedLeaves?: readonly string[]): void {
+  function publish(
+    present: boolean,
+    version: number,
+    includedLeaves?: readonly string[]
+  ): Promise<unknown> {
     const session = store.getWorkspaceSession()
     const projected = present
       ? buildHeadlessMobileSessionTerminalTabs(
@@ -148,9 +152,9 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
         }
       ]
     }
-    runtime.syncWindowGraph(1, graph)
+    return runtime.syncWindowGraph(1, graph)
   }
-  publish(true, 1)
+  await publish(true, 1)
   store.setWorkspaceSession(
     advanceTerminalTopologyRevision(store.getWorkspaceSession(), ACK_WORKTREE)
   )
@@ -206,7 +210,7 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
     quit: () => (finalFlush ??= store.flushFinalOrThrowAsync()),
     dispose: async () => {
       runtime.setNotifier(null)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
       if (finalFlush) {
         await finalFlush
       } else {

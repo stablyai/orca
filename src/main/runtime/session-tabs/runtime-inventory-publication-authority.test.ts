@@ -189,9 +189,9 @@ describe('authoritative session tab inventory publication', () => {
     })
     await waitForInventoryWaiter(runtime)
 
-    expect(
-      async () => await runtime.syncWindowGraph(2, { tabs: [], leaves: [], mobileSessionTabs: [] })
-    ).toThrow('Runtime graph publisher does not match the authoritative window')
+    await expect(
+      runtime.syncWindowGraph(2, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    ).rejects.toThrow('Runtime graph publisher does not match the authoritative window')
     await Promise.resolve()
     expect(settled).toBe(false)
     expect(getSessionTabsInventoryPublication(runtime).epoch).toBeNull()

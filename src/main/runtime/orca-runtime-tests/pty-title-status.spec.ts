@@ -7,7 +7,7 @@ describe('OrcaRuntimeService', () => {
   it('resolves tui-idle when a completion title is coalesced with the next working title', async () => {
     // A coalesced done/working chunk must still expose the idle transition (#1083).
     const runtime = createRuntime()
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
     const [terminal] = (await runtime.listTerminals()).terminals
     const wait = runtime.waitForTerminal(terminal.handle, {

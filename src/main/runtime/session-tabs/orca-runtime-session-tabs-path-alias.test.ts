@@ -85,6 +85,12 @@ async function publishGraph(
   })
 }
 
+// Desktop frames prepare sender identity first; wait for the scheduled pass to deliver.
+async function senderFramesDelivered(runtime: OrcaRuntimeService): Promise<void> {
+  await new Promise<void>((resolve) => queueMicrotask(resolve))
+  await runtime['agentProjections'].senders.withPreparedPublication(() => undefined, false)
+}
+
 describe('session tab workspace path aliases', () => {
   it('delivers a later canonical publication to an early alias subscriber without a false empty frame', async () => {
     const runtime = new OrcaRuntimeService()
@@ -177,12 +183,14 @@ it('rejects ambiguous later aliases while retaining an exact host spelling', asy
     )
     await publishGraph(runtime, WORKTREE, [snapshot('repo::g:/git/example', 'pty-other')])
     runtime.onMobileSessionTabsChanged(() => {}, undefined, 'mobile')()
+    await senderFramesDelivered(runtime)
     expect(frames.filter((frame) => frame.type === 'updated')).toEqual([])
     await publishGraph(runtime, ALIAS, [
       snapshot(WORKTREE),
       snapshot('repo::g:/git/example', 'pty-other')
     ])
     runtime.onMobileSessionTabsChanged(() => {}, undefined, 'mobile')()
+    await senderFramesDelivered(runtime)
     expect(
       frames.filter((frame) => frame.type === 'updated').map((frame) => frame.worktree)
     ).toEqual([ALIAS])

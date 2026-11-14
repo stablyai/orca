@@ -1,4 +1,3 @@
-import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hostRows = vi.hoisted(() => new Map<string, { enabled: boolean; updatedAt: number }>())
@@ -13,12 +12,12 @@ const failOnUpdateOf = vi.hoisted((): { id: string | null; thenAlso: string | nu
 
 vi.mock('./wsl-host-service-instance', () => ({
   getWslHostService: () => ({
-    recordForEnvironment: () => ({ distro: 'Ubuntu' }),
+    recordForEnvironment: async () => ({ distro: 'Ubuntu' }),
     ensureForRuntimeCall: async () => {}
   })
 }))
 vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
-  resolveEnvironment: () => ({ id: 'wsl:Ubuntu', runtimeId: 'rt-1' })
+  resolveEnvironment: async () => ({ id: 'wsl:Ubuntu', runtimeId: 'rt-1' })
 }))
 vi.mock('../../../shared/remote-runtime/host-catalog/runtime-environments', () => ({
   getPreferredPairingOffer: () => ({})

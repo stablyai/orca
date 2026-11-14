@@ -98,7 +98,7 @@ function rendererFrame(
 }
 
 function accept(runtime: OrcaRuntimeService, frame: RuntimeMobileSessionTabsSnapshot) {
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [frame] })
+  return runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [frame] })
 }
 
 const list = (runtime: OrcaRuntimeService) => runtime.listMobileSessionTabs(`id:${WT}`)
@@ -115,14 +115,14 @@ describe('host active-tab publication', () => {
   it('keeps main-created inventory while current renderer navigation wins, and fences older renderer revisions', async () => {
     const runtime = createRuntime()
     await publish(runtime, A)
-    accept(runtime, rendererFrame(A, 10))
+    await accept(runtime, rendererFrame(A, 10))
     const beforeCreate = rendererFrame(A, 11)
     await publish(runtime, C)
-    accept(runtime, beforeCreate)
+    await accept(runtime, beforeCreate)
     expectSelection(await list(runtime), A)
     expect((await list(runtime)).tabs.map((tab) => tab.id)).toContain(C)
-    accept(runtime, rendererFrame(C, 12))
-    accept(runtime, beforeCreate)
+    await accept(runtime, rendererFrame(C, 12))
+    await accept(runtime, beforeCreate)
     expectSelection(await list(runtime), C)
   })
 })

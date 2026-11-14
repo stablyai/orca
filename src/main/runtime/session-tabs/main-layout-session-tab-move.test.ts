@@ -12,7 +12,7 @@ const WT = `id:${WORKTREE_ID}`
 
 /** The fixture's terminal tab, then editor tabs a and b, in one group. */
 async function setup(opts: { window?: boolean } = {}) {
-  const fixture = setupMainOwnedWorkspace()
+  const fixture = await setupMainOwnedWorkspace()
   for (const name of ['a', 'b']) {
     await fixture.runtime.applyLayoutCommand({
       type: 'openEditorTab',

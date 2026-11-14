@@ -27,7 +27,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait,
       getForegroundProcess: async () => null
     })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     const stopPty = vi.fn(async (_ptyId: string, stop: () => Promise<boolean>) => ({
       stopped: await stop(),
       owner: true

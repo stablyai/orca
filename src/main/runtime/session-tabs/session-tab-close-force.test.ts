@@ -31,7 +31,7 @@ afterEach(async () => {
 
 async function pinnedServerTab(layoutOwnerIsMain: boolean) {
   layoutOwner.isMain = layoutOwnerIsMain
-  const f = createAcknowledgedTabRetirementFixture(true)
+  const f = await createAcknowledgedTabRetirementFixture(true)
   disposers.push(() => f.dispose())
   const stopped: string[] = []
   f.runtime.setPtyController({

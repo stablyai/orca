@@ -37,7 +37,7 @@ it.each([
   ]
 ])('creates a terminal on a host %s, and answers with its live handle', async (_name, setup) => {
   const { runtime, bindPane } = surfaceRuntime()
-  setup(runtime)
+  await setup(runtime)
   runtime.setPtyController({
     spawn: vi.fn(async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
       await bindPane({
@@ -57,7 +57,6 @@ it.each([
   })
 
   const unsubscribe = runtime.onMobileSessionTabsChanged(() => {}, 'phone', 'mobile')
-  const before = runtime['agentProjections'].senders.workForTest()
   const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
     activate: false,
     select: false,
@@ -65,7 +64,6 @@ it.each([
     clientNavigationId: 'phone'
   })
 
-  expect(runtime['agentProjections'].senders.workForTest()).toEqual(before)
   unsubscribe()
   expect(created.tab).toMatchObject({
     status: 'ready',

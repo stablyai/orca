@@ -102,7 +102,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     const events: RuntimeMobileSessionTabsResult[] = []
-    runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+    runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot), undefined, 'mobile')
 
     const laptopTerminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'laptop-tab',

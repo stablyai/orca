@@ -19,14 +19,14 @@ import {
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-const tabsOf = (fixture: ReturnType<typeof setupMainOwnedWorkspace>) =>
+const tabsOf = (fixture: Awaited<ReturnType<typeof setupMainOwnedWorkspace>>) =>
   fixture.session().tabsByWorktree[WORKTREE_ID] ?? []
 
 describe("a phone's terminal close in a workspace main owns, with no window", () => {
   afterEach(() => resetAgentLaunchPanesForTests())
 
   it('closes the tab in main, records the close, and stops its terminal', async () => {
-    const fixture = setupMainOwnedWorkspace()
+    const fixture = await setupMainOwnedWorkspace()
 
     await fixture.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, { reason: 'user' })
 
@@ -38,7 +38,7 @@ describe("a phone's terminal close in a workspace main owns, with no window", ()
   })
 
   it('closes one pane of a split and stops only its terminal', async () => {
-    const fixture = setupMainOwnedWorkspace({ split: true })
+    const fixture = await setupMainOwnedWorkspace({ split: true })
 
     await fixture.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, `${TAB_ID}::${LEAF_B}`)
 
@@ -51,7 +51,7 @@ describe("a phone's terminal close in a workspace main owns, with no window", ()
   })
 
   it('refuses a pinned tab and keeps it and its terminal', async () => {
-    const fixture = setupMainOwnedWorkspace({ pinned: true })
+    const fixture = await setupMainOwnedWorkspace({ pinned: true })
 
     await expect(
       fixture.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, { reason: 'user' })
@@ -62,7 +62,7 @@ describe("a phone's terminal close in a workspace main owns, with no window", ()
   })
 
   it('leaves a launch running in a pinned tab it refused to close to finish into the tab', async () => {
-    const fixture = setupMainOwnedWorkspace({ pinned: true })
+    const fixture = await setupMainOwnedWorkspace({ pinned: true })
     const pane = { worktreeId: WORKTREE_ID, paneKey: makePaneKey(TAB_ID, LEAF_A) }
     const launch = trackRunningAgentLaunchPane(pane)
 
@@ -82,7 +82,7 @@ describe("a phone's terminal close in a workspace main owns, with no window", ()
   })
 
   it('closes a pinned tab the phone forces', async () => {
-    const fixture = setupMainOwnedWorkspace({ pinned: true })
+    const fixture = await setupMainOwnedWorkspace({ pinned: true })
 
     await fixture.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, {
       reason: 'user',

@@ -89,7 +89,7 @@ describe('registerRuntimeHandlers', () => {
 
   // #37067: a phone's re-read on the add's reposChanged came before this publish.
 
-  it('rejects a graph publication queued by a superseded main frame', () => {
+  it('rejects a graph publication queued by a superseded main frame', async () => {
     const runtime = {
       syncWindowGraph: vi.fn(),
       getStatus: vi.fn(),
@@ -102,9 +102,9 @@ describe('registerRuntimeHandlers', () => {
     const sender = { mainFrame: { generation: 2 } }
     fromWebContentsMock.mockReturnValue({ id: 17 })
 
-    expect(() =>
+    await expect(
       handler({ sender, senderFrame: { generation: 1 } }, { tabs: [], leaves: [] })
-    ).toThrow('Runtime graph sync must originate from the current main frame')
+    ).rejects.toThrow('Runtime graph sync must originate from the current main frame')
     expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
   })
 })

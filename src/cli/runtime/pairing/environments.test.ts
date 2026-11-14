@@ -55,14 +55,13 @@ describe('CLI runtime environments', () => {
       now: 100
     })
 
-    expect(
-      async () =>
-        await addEnvironmentFromPairingCode(userDataPath, {
-          name: 'workstation',
-          pairingCode: pairingCode('ws://127.0.0.1:2222', 2),
-          now: 200
-        })
-    ).toThrow('A server named "workstation" already exists.')
+    await expect(
+      addEnvironmentFromPairingCode(userDataPath, {
+        name: 'workstation',
+        pairingCode: pairingCode('ws://127.0.0.1:2222', 2),
+        now: 200
+      })
+    ).rejects.toThrow('A server named "workstation" already exists.')
     expect(await listEnvironments(userDataPath)).toHaveLength(1)
     expect((await resolveEnvironmentPairingOffer(userDataPath, 'workstation')).endpoint).toBe(
       'ws://127.0.0.1:1111'
