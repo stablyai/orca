@@ -152,7 +152,7 @@ export function AgentTerminalPreview({
     let refreshInFlight = false
     let refreshAgain = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
-    let resyncAttemptCount = 0
+    const resyncState = { attempts: 0 }
     const pendingLivePayloads: Extract<TerminalPreviewDataPayload, { type: 'data' }>[] = []
 
     const boxFit = createPreviewBoxFit({ container, getTerminal: () => terminal })
@@ -259,11 +259,11 @@ export function AgentTerminalPreview({
       }
       if (connection.resyncRequired) {
         refreshAgain = false
-        resyncAttemptCount++
-        if (resyncAttemptCount >= RESYNC_ALERT_THRESHOLD) {
+        resyncState.attempts += 1
+        if (resyncState.attempts >= RESYNC_ALERT_THRESHOLD) {
           setResyncSaturated(true)
         }
-        const delay = computeResyncBackoffDelay(resyncAttemptCount)
+        const delay = computeResyncBackoffDelay(resyncState.attempts)
         // Why: sustained output can overflow every capture; delay retries so recovery cannot spin two serializations per event-loop turn.
         writeReplayed('', () => {
           if (disposed || retryTimer) {
@@ -275,7 +275,7 @@ export function AgentTerminalPreview({
           }, delay)
         })
       } else {
-        resyncAttemptCount = 0
+        resyncState.attempts = 0
         setResyncSaturated(false)
         if (refreshAgain) {
           refreshAgain = false

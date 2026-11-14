@@ -8707,6 +8707,12 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "workspacePopout": {
+            "title": "Pop-out terminals",
+            "description": "Open workspace terminals in separate lightweight satellite windows.",
+            "copy": "Open workspace terminals in separate lightweight satellite windows.",
+            "toggleLabel": "Toggle pop-out terminals"
           }
         },
         "FloatingWorkspacePane": {
@@ -10907,6 +10913,14 @@
               "inWindow": "in-window",
               "worktrees": "worktrees",
               "eaf17a7214": "Agent dashboard"
+            },
+            "workspacePopout": {
+              "title": "Pop-out terminals",
+              "description": "Open workspace terminals in separate lightweight satellite windows.",
+              "popout": "popout",
+              "terminal": "terminal",
+              "window": "window",
+              "satellite": "satellite"
             }
           }
         },
@@ -20061,6 +20075,9 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "Create"
+      },
+      "terminalPreview": {
+        "saturationWarning": "High terminal output rate: reconnection throttled."
       }
     },
     "i18n": {
@@ -20201,6 +20218,11 @@
         "title": "Orca refused this browser",
         "retry": "Try again"
       }
+    },
+    "workspacePopout": {
+      "connecting": "Connecting to terminal...",
+      "dockTooltip": "Dock terminal back to main window (Cmd+W)",
+      "dockButton": "Dock to window"
     }
   },
   "components": {
@@ -22466,6 +22488,16 @@
         "cleaningUp": "Cleaning up…",
         "skipCleanup": "Skip cleanup and insert as heard"
       }
+    },
+    "terminal": {
+      "pane": {
+        "popout": {
+          "title": "Terminal open in companion window",
+          "description": "This terminal is running in a dedicated window. Keystrokes and output are directed there.",
+          "focus": "Show Window",
+          "dock": "Reattach to Main Window"
+        }
+      }
     }
   },
   "dashboardPopout": {
@@ -24472,7 +24504,8 @@
       "128cce6e6d": "Set title…",
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
-      "d286d1ab85": "Clear pane title"
+      "d286d1ab85": "Clear pane title",
+      "terminalPopOut": "Move terminal to new window"
     },
     "group": {
       "global": "Global",

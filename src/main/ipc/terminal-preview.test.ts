@@ -57,17 +57,22 @@ vi.mock('./renderer-lifetime-abort', () => ({
 import { registerTerminalPreviewHandlers } from './terminal-preview'
 
 describe('terminal-preview', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock WebContents sender tokens
   const trustedSender = { id: 1 } as unknown as Electron.WebContents
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock WebContents sender tokens
   const satelliteSender = { id: 2 } as unknown as Electron.WebContents
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock WebContents sender tokens
   const dashboardSender = { id: 3 } as unknown as Electron.WebContents
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock WebContents sender tokens
   const untrustedSender = { id: 99 } as unknown as Electron.WebContents
 
   beforeEach(() => {
     handlers.clear()
     vi.clearAllMocks()
-    registerTerminalPreviewHandlers(
-      mockRuntime as unknown as Parameters<typeof registerTerminalPreviewHandlers>[0]
-    )
+    const mockRuntimeUnknown: unknown = mockRuntime
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture supplies mock runtime methods
+    const runtimeParam = mockRuntimeUnknown as Parameters<typeof registerTerminalPreviewHandlers>[0]
+    registerTerminalPreviewHandlers(runtimeParam)
 
     isTrustedUIRendererMock.mockImplementation((s: unknown) => s === trustedSender)
     isWorkspacePopoutRendererMock.mockImplementation((s: unknown) => s === satelliteSender)
@@ -89,6 +94,7 @@ describe('terminal-preview', () => {
         rows: 24,
         lines: ['hello']
       })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handler returns snapshot structure
       const res = (await handlers.get('terminalPreview:connect')?.(
         { sender: satelliteSender },
         { ptyId: 'pty-1' }

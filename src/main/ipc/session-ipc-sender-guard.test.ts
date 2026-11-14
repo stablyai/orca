@@ -41,9 +41,12 @@ describe('session-ipc-sender-guard (INV-4: STRIDE)', () => {
       terminalLayoutsByTabId: {}
     }
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates partial store mock
     mockStore = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture mock returns partial session state
       getWorkspaceSession: vi.fn(() => storeState as unknown as WorkspaceSessionState),
       setWorkspaceSession: vi.fn((session: WorkspaceSessionState) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture mock records session state
         storeState = session as unknown as Record<string, unknown>
       }),
       patchWorkspaceSession: vi.fn((patch: WorkspaceSessionPatch) => {
@@ -52,15 +55,19 @@ describe('session-ipc-sender-guard (INV-4: STRIDE)', () => {
       getWorkspaceSessionHostIds: vi.fn(() => [])
     } as unknown as Store
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates partial OrcaRuntimeService mock
     mockRuntime = {
       shutdownReconnectFactsFor: vi.fn(() => ({})),
       closeTerminalSurfaceFromRenderer: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
 
-    const isWorkspacePopoutRenderer = (sender: unknown) => sender === satelliteSender
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture mock accepts unknown sender
+    const isWorkspacePopoutRenderer = ((sender: unknown) => sender === satelliteSender) as (
+      sender: Electron.WebContents
+    ) => boolean
 
     registerSessionHandlers(mockStore, mockRuntime, {
-      isWorkspacePopoutRenderer: isWorkspacePopoutRenderer as never
+      isWorkspacePopoutRenderer
     })
   })
 
@@ -68,6 +75,7 @@ describe('session-ipc-sender-guard (INV-4: STRIDE)', () => {
     const handler = handlers.get('session:set')!
     expect(handler).toBeDefined()
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates partial state
     const maliciousState = {
       activeWorktreeId: 'hacked',
       tabsByWorktree: {},
@@ -85,6 +93,7 @@ describe('session-ipc-sender-guard (INV-4: STRIDE)', () => {
     const handler = handlers.get('session:patch')!
     expect(handler).toBeDefined()
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates partial patch
     const maliciousPatch = {
       activeWorktreeId: 'hacked-patch'
     } as unknown as WorkspaceSessionPatch
@@ -113,6 +122,7 @@ describe('session-ipc-sender-guard (INV-4: STRIDE)', () => {
 
   it('permits session:set and session:patch from main sender', async () => {
     const setHandler = handlers.get('session:set')!
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates partial state
     const newState = {
       activeWorktreeId: 'legit-main',
       tabsByWorktree: {},

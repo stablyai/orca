@@ -66,6 +66,7 @@ export function validateWorkspacePopoutTarget(
   if (typeof value !== 'object' || value === null) {
     return { valid: false, reason: 'invalid-payload' }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: value is confirmed to be non-null object
   const candidate = value as Record<string, unknown>
   if (!isNonEmptyStringUnderLimit(candidate.worktreeId, WORKSPACE_POPOUT_ID_MAX_LENGTH)) {
     return { valid: false, reason: 'invalid-payload' }
@@ -94,6 +95,7 @@ export function validateWorkspacePopoutTarget(
       worktreeId: candidate.worktreeId,
       tabId: candidate.tabId,
       ptyId: candidate.ptyId,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: terminalInput is confirmed to be object or null
       terminalInput: candidate.terminalInput as DashboardCardTerminalInput | null,
       title: candidate.title
     }
@@ -108,6 +110,7 @@ export function isWorkspacePopoutDockArgs(value: unknown): value is { worktreeId
   if (typeof value !== 'object' || value === null) {
     return false
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: value is confirmed to be non-null object
   const candidate = value as Record<string, unknown>
   return isNonEmptyStringUnderLimit(candidate.worktreeId, WORKSPACE_POPOUT_ID_MAX_LENGTH)
 }

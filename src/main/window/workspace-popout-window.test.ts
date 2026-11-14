@@ -308,10 +308,13 @@ describe('workspace-popout-window', () => {
   it('isWorkspacePopoutRenderer accurately detects popout webContents', () => {
     createOrFocusWorkspacePopout(null, targetA1)
     const win = browserWindowInstances[0]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock WebContents
     const otherWebContents = new SimpleEmitter() as unknown as Electron.WebContents
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mock window webContents acts as Electron.WebContents
     expect(isWorkspacePopoutRenderer(win.webContents as unknown as Electron.WebContents)).toBe(true)
     expect(isWorkspacePopoutRenderer(otherWebContents)).toBe(false)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mock window webContents acts as Electron.WebContents
     expect(getWorkspacePopoutTarget(win.webContents as unknown as Electron.WebContents)).toEqual(
       targetA1
     )

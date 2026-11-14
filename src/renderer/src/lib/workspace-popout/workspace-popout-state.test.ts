@@ -39,6 +39,7 @@ describe('workspace-popout-state', () => {
     const onStateChangedMock = vi.fn().mockReturnValue(() => undefined)
 
     // Mock window for node environment
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates partial Window mock
     globalThis.window = {
       api: {
         workspacePopout: {

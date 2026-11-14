@@ -59,7 +59,7 @@ export function registerRuntimeHandlers(
   ipcMain.handle(
     'runtime:syncWindowGraph',
     (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
-      if (event?.sender && isPopout(event.sender as WebContents)) {
+      if (event?.sender && isPopout(event.sender)) {
         throw new Error('Runtime graph sync cannot originate from a satellite window')
       }
       const window = BrowserWindow.fromWebContents(event.sender)

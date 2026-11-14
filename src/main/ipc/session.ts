@@ -55,7 +55,7 @@ export function registerSessionHandlers(
   }
 
   ipcMain.handle('session:set', (event, args: WorkspaceSessionState, hostId?: string | null) => {
-    if (event?.sender && isPopout(event.sender as WebContents)) {
+    if (event?.sender && isPopout(event.sender)) {
       return
     }
     if (!isFenced(hostId)) {
@@ -69,7 +69,7 @@ export function registerSessionHandlers(
   })
 
   ipcMain.handle('session:patch', (event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    if (event?.sender && isPopout(event.sender as WebContents)) {
+    if (event?.sender && isPopout(event.sender)) {
       return
     }
     if (!isFenced(hostId)) {
@@ -86,7 +86,7 @@ export function registerSessionHandlers(
   ipcMain.handle(
     'session:close-terminal-surface',
     (event, args: { worktreeId?: unknown; target?: unknown; reason?: unknown } | undefined) => {
-      if (event?.sender && isPopout(event.sender as WebContents)) {
+      if (event?.sender && isPopout(event.sender)) {
         return null
       }
       const target = parseTerminalSurfaceCloseTarget(args?.target)

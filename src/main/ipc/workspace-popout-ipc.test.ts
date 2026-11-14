@@ -61,6 +61,7 @@ describe('workspace-popout-ipc', () => {
     | null = null
   let settingsState = { experimentalWorkspacePopout: true }
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock Store implementation
   const mockStore = {
     getSettings: () => settingsState,
     onSettingsChanged: (
@@ -81,8 +82,11 @@ describe('workspace-popout-ipc', () => {
     title: 'Terminal 1'
   }
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock WebContents tokens
   const trustedSender = { id: 1 } as unknown as Electron.WebContents
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock WebContents tokens
   const untrustedSender = { id: 99 } as unknown as Electron.WebContents
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock WebContents tokens
   const satelliteSender = { id: 2 } as unknown as Electron.WebContents
 
   beforeEach(() => {

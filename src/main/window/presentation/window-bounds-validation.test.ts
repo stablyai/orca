@@ -21,6 +21,7 @@ describe('window-bounds-validation', () => {
   ]
 
   beforeEach(() => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates mock Electron.Display array
     vi.mocked(screen.getAllDisplays).mockReturnValue(mockDisplays as unknown as Electron.Display[])
   })
 

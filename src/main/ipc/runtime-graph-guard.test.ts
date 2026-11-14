@@ -31,15 +31,19 @@ describe('runtime-graph-guard (INV-5: REQ-WPO-05 Anti-Hijack)', () => {
     handleMock.mockReset()
     fromWebContentsMock.mockReset()
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture creates partial OrcaRuntimeService mock
     mockRuntime = {
       syncWindowGraph: vi.fn().mockReturnValue({ accepted: true }),
       notifyReposChangedForRemoteClients: vi.fn()
     } as unknown as OrcaRuntimeService
 
-    const isWorkspacePopoutRenderer = (sender: unknown) => sender === satelliteSender
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture mock accepts unknown sender
+    const isWorkspacePopoutRenderer = ((sender: unknown) => sender === satelliteSender) as (
+      sender: Electron.WebContents
+    ) => boolean
 
     registerRuntimeHandlers(mockRuntime, {
-      isWorkspacePopoutRenderer: isWorkspacePopoutRenderer as never
+      isWorkspacePopoutRenderer
     })
   })
 
