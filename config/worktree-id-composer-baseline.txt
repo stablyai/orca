@@ -9,7 +9,6 @@
 1 src/main/ipc/worktrees/listing/detected-provider-listing.ts
 1 src/main/ipc/worktrees/listing/ssh-worktree-fallback.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
-1 src/main/runtime/workspaces/catalog/repo-worktree-row-resolution.ts
 1 src/main/runtime/workspaces/catalog/runtime-managed-worktree-queries.ts
 1 src/main/runtime/workspaces/creation/runtime-local-worktree-materialization.ts
 1 src/main/runtime/workspaces/creation/runtime-provisioned-root-adoption.ts

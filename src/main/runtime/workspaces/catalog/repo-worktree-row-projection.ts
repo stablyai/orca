@@ -2,6 +2,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { composeWorktreeId } from '../../../../shared/worktree/id'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
@@ -41,7 +42,7 @@ export function projectRepoWorktreeRows(
   }
   const expectedHostId = getRepoExecutionHostId(repo)
   const rows = (scan?.worktrees ?? []).map((gitWorktree) => {
-    const worktreeId = `${repo.id}::${gitWorktree.path}`
+    const worktreeId = composeWorktreeId(repo.id, gitWorktree.path)
     const meta =
       readWorktreeMetaForHost(store, worktreeId, expectedHostId) ??
       getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
