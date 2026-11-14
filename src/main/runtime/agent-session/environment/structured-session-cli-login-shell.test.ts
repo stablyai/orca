@@ -1,3 +1,4 @@
+// @orca-isolated-worker: Child sealing must not inherit another suite's partial session-host registry.
 /** Login profiles can put global Orca ahead on PATH; absolute ORCA_CLI_COMMAND must still reach this app. zsh runs in the real-shell lane. */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
