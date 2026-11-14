@@ -11,6 +11,7 @@ import {
 } from '@/components/integrations/source-control/cli-source-control-integration-cards'
 import { JiraIntegrationCard } from '@/components/integrations/task-trackers/jira-integration-card'
 import { LinearIntegrationCard } from '@/components/integrations/task-trackers/linear-integration-card'
+import { PlaneIntegrationCard } from '@/components/integrations/task-trackers/plane-integration-card'
 import {
   IntegrationCardGroup,
   IntegrationCardPresentationProvider
@@ -157,6 +158,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
           <IntegrationCardGroup>
             <LinearIntegrationCard />
             <JiraIntegrationCard />
+            <PlaneIntegrationCard />
           </IntegrationCardGroup>
           <p className="px-1 pt-0.5 text-[12px] leading-snug text-muted-foreground">
             {t(
