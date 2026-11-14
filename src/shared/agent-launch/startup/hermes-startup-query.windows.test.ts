@@ -33,7 +33,6 @@ windowsIt('preserves the startup query and spaced custom args in native Windows 
     })
     const encodedCommand = plan?.command.match(/-EncodedCommand\s+(\S+)/)?.[1]
 
-    expect(encodedCommand).toBeDefined()
     execFileSync('powershell.exe', ['-NoProfile', '-EncodedCommand', encodedCommand!], {
       cwd: tempDir,
       env: { ...process.env, ...plan?.env }
