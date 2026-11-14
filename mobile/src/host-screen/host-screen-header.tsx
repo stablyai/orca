@@ -118,14 +118,6 @@ export function HostScreenHeader({
       closeBeforePress: true,
       onPress: () => actions.navigateFromHostList(`${hostPath}/automations`)
     },
-    {
-      id: 'accounts',
-      label: t('hostScreen.hostScreenHeader.accounts', 'Accounts'),
-      icon: UserCircle,
-      disabled: disconnected,
-      closeBeforePress: true,
-      onPress: () => actions.navigateFromHostList(`${hostPath}/accounts`)
-    },
     ...(floatingWorkspaceEnabled
       ? [
           {
@@ -169,13 +161,21 @@ export function HostScreenHeader({
         titleOpacity={collapsingTitle?.barTitleOpacity}
         dividerOpacity={collapsingTitle?.barDividerOpacity}
         trailing={
-          <NavBarButton
-            ref={moreRef}
-            icon={MoreHorizontal}
-            accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
-            onPress={() => setMenuOpen(true)}
-            active={menuOpen}
-          />
+          <>
+            <NavBarButton
+              icon={UserCircle}
+              accessibilityLabel={t('hostScreen.hostScreenHeader.accounts', 'Accounts')}
+              disabled={disconnected}
+              onPress={() => actions.navigateFromHostList(`${hostPath}/accounts`)}
+            />
+            <NavBarButton
+              ref={moreRef}
+              icon={MoreHorizontal}
+              accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
+              onPress={() => setMenuOpen(true)}
+              active={menuOpen}
+            />
+          </>
         }
       />
       <PullDownMenu
