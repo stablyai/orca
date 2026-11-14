@@ -92,3 +92,18 @@ it('waits while a card animates its height, leaving the level as it was', () => 
   expect(runNativeChatDockFit(root, dock)).toBeNull()
   expect(root.getAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)).toBe('queue')
 })
+
+it('steps up when a floored scroller shows fewer lines than it must', () => {
+  const { root, dock } = dockOf(() => 700)
+  const request = document.createElement('div')
+  request.setAttribute('data-native-chat-dock-floor-lines', '2')
+  request.style.lineHeight = '20px'
+  dock.querySelector('#card')!.append(request)
+  const height = { client: 12 }
+  vi.spyOn(request, 'scrollHeight', 'get').mockReturnValue(120)
+  vi.spyOn(request, 'clientHeight', 'get').mockImplementation(() => height.client)
+  // One line of a long request in view: not enough, so the dock keeps folding.
+  expect(runNativeChatDockFit(root, dock)).toBe(5)
+  height.client = 40
+  expect(runNativeChatDockFit(root, dock)).toBe(0)
+})

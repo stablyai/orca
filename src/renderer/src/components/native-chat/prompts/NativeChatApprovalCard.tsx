@@ -150,6 +150,8 @@ export function NativeChatApprovalCard({
                 ref={contentRef}
                 data-native-chat-approval-content="true"
                 tabIndex={0}
+                // The dock fit must leave two lines of the request in view (or all of it, if shorter).
+                data-native-chat-dock-floor-lines={stacked ? undefined : 2}
                 className="min-h-0 max-h-72 shrink space-y-2 overflow-auto text-sm text-muted-foreground scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 {countdown ? <p className="tabular-nums">{countdown}</p> : null}

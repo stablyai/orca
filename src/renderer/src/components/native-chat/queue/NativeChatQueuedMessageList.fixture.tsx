@@ -147,15 +147,12 @@ function Pane({
             onCollapse={() => {}}
           />
         ) : (
-          // Stands in for the composer, which needs the app store.
-          <div data-native-chat-queue-dock className="shrink-0 bg-chat-pane px-3 pt-2 pb-4 sm:px-4">
-            <div
-              data-native-chat-dock-pinned
-              className="relative z-[1] min-h-19 rounded-xl border border-chat-composer-border bg-chat-composer-surface px-3.5 py-3 text-sm text-muted-foreground shadow-xs"
-            >
-              Message the agent…
-            </div>
-          </div>
+          <NativeChatComposer
+            terminalTabId="queue-fixture-tab"
+            paneKey="queue-fixture-pane"
+            targetPtyId={null}
+            agent="claude"
+          />
         )}
       </NativeChatDock>
     </div>

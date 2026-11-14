@@ -190,3 +190,18 @@ it('opens a list the person had folded in one activation once the dock folds it 
   expect(document.querySelector('ul')!.hidden).toBe(false)
   expect(fold.getAttribute('aria-expanded')).toBe('true')
 })
+
+it('keeps a list folded for room open while +N more holds focus, and keeps focus on it as it expands', async () => {
+  renderQueue(controller([1, 2, 3, 4, 5, 6].map((i) => card(i))), { questionOpen: true })
+  const root = document.querySelector('[data-native-chat-root]')!
+  const fold = screen.getByRole('button', { name: 'Queued messages' })
+  const more = screen.getByRole('button', { name: '+3 more' })
+  act(() => more.focus())
+  await act(async () => root.setAttribute('data-native-chat-dock-fit', 'queue'))
+  expect(fold.getAttribute('aria-expanded')).toBe('true')
+  fireEvent.click(more)
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Show less' }))
+  expect(fold.getAttribute('aria-expanded')).toBe('true')
+  act(() => fold.focus())
+  expect(fold.getAttribute('aria-expanded')).toBe('false')
+})

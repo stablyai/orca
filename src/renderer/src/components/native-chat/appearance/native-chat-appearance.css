@@ -128,7 +128,8 @@
   }
 }
 
-/* A question card body that scrolls in a short pane fades at the bottom while more lies below. */
+/* A question card body that scrolls in a short pane fades at the bottom, and its footer casts a
+   rule and shadow over it, while more lies below; both clear at the end of the scroll. */
 @property --native-chat-scroll-fade {
   syntax: '<length>';
   inherits: false;
@@ -137,7 +138,7 @@
 
 @keyframes native-chat-scroll-fade {
   from {
-    --native-chat-scroll-fade: calc(var(--spacing) * 10);
+    --native-chat-scroll-fade: calc(var(--spacing) * 14);
   }
   to {
     --native-chat-scroll-fade: 0px;
@@ -150,6 +151,28 @@
     black calc(100% - var(--native-chat-scroll-fade)),
     transparent
   );
+  scroll-timeline: --native-chat-question-body block;
   animation: native-chat-scroll-fade linear both;
-  animation-timeline: scroll(self);
+  animation-timeline: --native-chat-question-body;
+}
+
+[data-native-chat-dock-fit~='card'] .native-chat-question-card-surface {
+  timeline-scope: --native-chat-question-body;
+}
+
+@keyframes native-chat-scroll-shadow {
+  from {
+    box-shadow:
+      0 calc(var(--spacing) * -2) calc(var(--spacing) * 3) calc(var(--spacing) * -2)
+        color-mix(in srgb, black 60%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--foreground) 14%, transparent);
+  }
+  to {
+    box-shadow: none;
+  }
+}
+
+[data-native-chat-dock-fit~='card'] .native-chat-question-card-footer {
+  animation: native-chat-scroll-shadow linear both;
+  animation-timeline: --native-chat-question-body;
 }

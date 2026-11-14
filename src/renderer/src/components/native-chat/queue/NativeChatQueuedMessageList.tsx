@@ -127,6 +127,16 @@ export function NativeChatQueuedMessageList({
       refocusAfter(Promise.resolve())
     }
   })
+  const moreRef = useRef<HTMLButtonElement>(null)
+  const leaveList = (event: React.FocusEvent): void => {
+    const next = event.relatedTarget
+    const staysInList =
+      next instanceof Node &&
+      (listRef.current?.contains(next) === true || moreRef.current?.contains(next) === true)
+    if (!staysInList) {
+      setListFocused(false)
+    }
+  }
   const toggle = (): void => {
     if (fitFolded) {
       // A list the person folded before the dock did opens too, in one activation.
@@ -180,11 +190,7 @@ export function NativeChatQueuedMessageList({
               ref={listRef}
               id={listId}
               onFocus={() => setListFocused(true)}
-              onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) {
-                  setListFocused(false)
-                }
-              }}
+              onBlur={leaveList}
               // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
               hidden={!expanded}
               aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
@@ -247,8 +253,12 @@ export function NativeChatQueuedMessageList({
             {offersMore && expanded ? (
               <button
                 type="button"
+                ref={moreRef}
                 aria-controls={listId}
                 aria-expanded={showAll}
+                // Part of the list for focus: expanding must not let the dock fold it away under the toggle.
+                onFocus={() => setListFocused(true)}
+                onBlur={leaveList}
                 onClick={() => setShowAll(!showAll)}
                 className="mx-1 shrink-0 rounded-md px-1.5 py-1 text-left text-xs font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground focus-visible:outline-[1.5px] focus-visible:outline-foreground/45 [[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],[data-list-focus])_&]:hidden"
               >

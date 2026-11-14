@@ -15,6 +15,7 @@ const PINNED_SELECTOR = '[data-native-chat-dock-pinned]'
 const CLIP_SELECTOR = '[data-native-chat-dock-clip]'
 const ANIMATING_SELECTOR = '[data-native-chat-dock-animating]'
 const UNSQUEEZED_SELECTOR = '[data-native-chat-dock-unsqueezed]'
+const FLOOR_SELECTOR = '[data-native-chat-dock-floor-lines]'
 export const NATIVE_CHAT_DOCK_OBSERVED_SELECTOR =
   '[data-native-chat-dock-pinned], [data-native-chat-dock-content]'
 export const NATIVE_CHAT_DOCK_INVALIDATE_EVENT = 'native-chat-dock-invalidate'
@@ -68,6 +69,18 @@ export function nativeChatDockFits(dock: HTMLElement): boolean {
       rect.top < Math.max(...bounds.map((bound) => bound.top)) - SLACK ||
       rect.bottom > Math.min(...bounds.map((bound) => bound.bottom)) + SLACK
     ) {
+      return false
+    }
+  }
+  // A scroller with a line floor keeps that many lines in view, or all of a shorter text.
+  for (const scroller of Array.from(dock.querySelectorAll<HTMLElement>(FLOOR_SELECTOR))) {
+    if (!isRendered(scroller)) {
+      continue
+    }
+    const lines = Number(scroller.dataset.nativeChatDockFloorLines)
+    const lineHeight = Number.parseFloat(getComputedStyle(scroller).lineHeight)
+    const floor = Math.min(scroller.scrollHeight, lines * lineHeight)
+    if (Number.isFinite(floor) && scroller.clientHeight + SLACK < floor) {
       return false
     }
   }

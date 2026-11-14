@@ -42,7 +42,9 @@ function watchNativeChatDock(root: HTMLElement, dock: HTMLElement): () => void {
   const observed = new WeakSet<Element>()
   const observeNew = (): boolean => {
     let added = false
+    // The root too: a taller pane grows only the transcript, so no dock box changes to report the room.
     const targets = [
+      root,
       dock,
       ...dock.children,
       ...dock.querySelectorAll(NATIVE_CHAT_DOCK_OBSERVED_SELECTOR)

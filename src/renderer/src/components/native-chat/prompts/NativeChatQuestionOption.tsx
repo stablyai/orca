@@ -37,7 +37,7 @@ export function NativeChatQuestionOption({
     // Focus is an outline outside the tile and picked is a ring inside it, so a focused row never reads as picked.
     <div
       className={cn(
-        'rounded-[10px] outline-offset-2 outline-foreground/45 transition-colors has-[>button:focus-visible]:outline-[1.5px] has-[>button:focus-visible]:outline-solid',
+        'rounded-[10px] outline-offset-2 outline-foreground/45 transition-colors has-[>button:focus-visible]:outline-2 has-[>button:focus-visible]:outline-solid',
         selected
           ? 'bg-accent text-accent-foreground ring-[1.5px] ring-inset ring-foreground/45'
           : 'bg-foreground/5 text-foreground has-[>button:hover]:bg-foreground/8'

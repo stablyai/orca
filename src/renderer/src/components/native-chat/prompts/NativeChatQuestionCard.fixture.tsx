@@ -405,3 +405,15 @@ export const optionFocus = defineFixture({
     await new Promise(requestAnimationFrame)
   }
 })
+
+// Picked and keyboard-focused at once: the inner ring and check, plus the outside outline.
+export const pickedFocus = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={2} />,
+  interact: async (frame) => {
+    const row = frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]
+    row?.focus({ focusVisible: true })
+    row?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await new Promise(requestAnimationFrame)
+  }
+})

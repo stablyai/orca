@@ -314,7 +314,7 @@ export function NativeChatQuestionCard({
         <div
           ref={surfaceRef}
           data-native-chat-dock-clip
-          className="relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-[14px] border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm"
+          className="native-chat-question-card-surface relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-[14px] border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm"
         >
           <NativeChatQuestionCardHeader
             steps={prompt.questions.map((question, i) => ({
@@ -402,7 +402,7 @@ export function NativeChatQuestionCard({
           </div>
           <div
             data-native-chat-dock-pinned
-            className="flex shrink-0 items-center gap-2 px-3.5 pt-3 pb-3.5"
+            className="native-chat-question-card-footer relative flex shrink-0 items-center gap-2 px-3.5 pt-3 pb-3.5"
           >
             {index > 0 ? (
               <button
