@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { terminalForkPointBefore, terminalForkTurnEnd } from './terminal-fork-point'
+import {
+  terminalForkPointBefore,
+  terminalForkReplyIds,
+  terminalForkTurnEnd
+} from './terminal-fork-point'
 
 const rows = [
   { id: 'u1', role: 'user', source: 'transcript' },
@@ -15,5 +19,14 @@ describe('terminal fork points', () => {
   it('forks from your message through the turn before it', () => {
     expect(terminalForkPointBefore(rows, 'u2')).toBe('t1')
     expect(terminalForkPointBefore(rows, 'u1')).toBeUndefined()
+  })
+  it('offers a reply whose turn ends in tool rows, mid-transcript and at the idle end', () => {
+    const ended = [
+      ...rows,
+      { id: 'a2', role: 'assistant', source: 'transcript' },
+      { id: 't2', role: 'tool', source: 'transcript' }
+    ] as const
+    expect([...terminalForkReplyIds(ended, false)]).toEqual(['a2', 'a1'])
+    expect([...terminalForkReplyIds(ended, true)]).toEqual(['a1'])
   })
 })

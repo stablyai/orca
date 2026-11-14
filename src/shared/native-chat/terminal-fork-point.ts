@@ -31,3 +31,29 @@ export function terminalForkPointBefore(messages: readonly Row[], id: string): s
     .slice(0, index)
     .findLast((message) => message.source === 'transcript' && message.role !== 'user')?.id
 }
+
+type ReplyRow = Row & Pick<NativeChatMessage, 'agentStart' | 'queued' | 'pendingSend'>
+
+/** The replies a terminal chat forks from: each one whose turn ended at your next message (tool
+ *  rows after it still belong to its turn), or at the end once the agent is idle. */
+export function terminalForkReplyIds(
+  messages: readonly ReplyRow[],
+  agentWorking: boolean
+): ReadonlySet<string> {
+  const ids = new Set<string>()
+  messages.reduceRight<ReplyRow | undefined>((next, message) => {
+    if (
+      message.role === 'assistant' &&
+      message.source === 'transcript' &&
+      !message.agentStart &&
+      // A queued send waits on the running reply; it ends nothing until the agent is idle.
+      (next
+        ? next.role === 'user' && (!agentWorking || (!next.queued && next.pendingSend !== 'queued'))
+        : !agentWorking)
+    ) {
+      ids.add(message.id)
+    }
+    return message.role === 'tool' ? next : message
+  }, undefined)
+  return ids
+}

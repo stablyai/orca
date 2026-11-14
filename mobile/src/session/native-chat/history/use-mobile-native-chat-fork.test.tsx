@@ -215,3 +215,34 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
   })
   expect(latest?.offerFor(copied)).toBe('reserved')
 })
+
+it('still hands a chat it cannot copy to another agent as a recap', async () => {
+  const { client } = connection(0)
+  const run = vi.fn(async () => {})
+  function ForkProbe() {
+    latest = useMobileNativeChatFork({
+      client,
+      hostCapabilities: FORK_HOST,
+      hostStatusPending: false,
+      agent: 'claude',
+      sessionId: 'chat',
+      messages: [message],
+      turnJournal: { items: [reply], submissions: [] },
+      agentWorking: false,
+      sessionForkSupport: 'unsupported',
+      createFork: vi.fn(async () => {})
+    })
+    return null
+  }
+  await act(async () => {
+    renderers.push(create(createElement(ForkProbe)))
+  })
+  await settle()
+  expect(latest?.copyOffered()).toBe(false)
+  expect(latest?.offerFor(message)).toBe('available')
+  expect(latest?.forkWith(message, run, 'copy')).toBe(false)
+  await act(async () => {
+    expect(latest?.forkWith(message, run, 'recap')).toBe(true)
+  })
+  expect(run).toHaveBeenCalledWith('claude', { sessionId: 'chat', throughItemId: 'reply' })
+})

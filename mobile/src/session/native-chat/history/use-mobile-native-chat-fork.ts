@@ -1,5 +1,8 @@
 import { createContext, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { terminalForkTurnEnd } from '../../../../../src/shared/native-chat/terminal-fork-point'
+import {
+  terminalForkReplyIds,
+  terminalForkTurnEnd
+} from '../../../../../src/shared/native-chat/terminal-fork-point'
 import { AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY } from '../../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import {
@@ -17,7 +20,8 @@ import { useRegisteredAgent } from './use-mobile-registered-fork-agent'
 import {
   nativeChatForkInventory,
   nativeChatForkSupport,
-  nativeChatRowOffersFork
+  nativeChatRowOffersFork,
+  type NativeChatForkSupport
 } from '../../../../../src/shared/native-chat/native-chat-fork-offer'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { isRootAgentJournalItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
@@ -49,7 +53,7 @@ export type MobileNativeChatFork = {
     run: MobileNativeChatForkRun,
     kind: MobileNativeChatForkKind
   ) => boolean
-  /** Whether the same agent can take a copy of this chat; another agent's recap always can. */
+  /** Whether the same agent can take a copy of this chat; a recap needs only a finished reply. */
   copyOffered: () => boolean
   /** The newest response that can fork now. */
   latestForkable: () => NativeChatMessage | undefined
@@ -72,6 +76,9 @@ export function mobileNativeChatRowHoldsForkSlot(message: NativeChatMessage): bo
 export type MobileNativeChatForkContextValue = MobileNativeChatFork & {
   openSheet: (message: NativeChatMessage, preset?: ChatForkPreset) => void
 }
+
+// A recap is built from the transcript itself, so any finished reply can start one.
+const RECAP_SUPPORT: NativeChatForkSupport = { kind: 'known', fork: 'checkpoint' }
 
 export const MobileNativeChatForkContext = createContext<MobileNativeChatForkContextValue | null>(
   null
@@ -133,37 +140,20 @@ export function useMobileNativeChatFork(input: {
   )
   const terminal = input.terminal === true
   // Copying a terminal chat cuts Claude's transcript on the host; a recap needs neither.
-  const copyOffered =
-    !terminal ||
-    (agent === 'claude' &&
-      input.hostCapabilities?.includes(AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY) === true)
+  const copyOffered = terminal
+    ? agent === 'claude' &&
+      input.hostCapabilities?.includes(AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY) === true
+    : support.kind !== 'none'
   // A terminal chat has no session journal: a reply ends where the next message is yours.
-  const terminalForkPoints = useMemo(() => {
-    const ids = new Set<string>()
-    messages.forEach((message, index) => {
-      const next = messages[index + 1]
-      const last = index === messages.length - 1
-      if (
-        message.role === 'assistant' &&
-        message.source === 'transcript' &&
-        !message.agentStart &&
-        // A queued send waits on the running reply; it ends nothing until the agent is idle.
-        (next
-          ? next.role === 'user' &&
-            (!agentWorking || (!next.queued && next.pendingSend !== 'queued'))
-          : !agentWorking) &&
-        (!last || !agentWorking)
-      ) {
-        ids.add(message.id)
-      }
-    })
-    return ids
-  }, [agentWorking, messages])
+  const terminalForkPoints = useMemo(
+    () => terminalForkReplyIds(messages, agentWorking),
+    [agentWorking, messages]
+  )
   // Reserved at the press, before any await, so a second press never starts a second fork.
   const inFlight = useRef(false)
   const [pending, setPending] = useState(false)
-  const offerFor = useCallback(
-    (message: NativeChatMessage): MobileNativeChatForkOffer => {
+  const offerOf = useCallback(
+    (message: NativeChatMessage, kind: MobileNativeChatForkKind): MobileNativeChatForkOffer => {
       if (!mobileNativeChatRowHoldsForkSlot(message)) {
         return 'hidden'
       }
@@ -177,6 +167,7 @@ export function useMobileNativeChatFork(input: {
               : 'available'
       }
       const turnKey = turns.keyById.get(message.id)
+      const rowSupport = kind === 'recap' ? RECAP_SUPPORT : support
       const offered =
         !!sessionId &&
         isTuiAgent(agent ?? '') &&
@@ -187,11 +178,11 @@ export function useMobileNativeChatFork(input: {
             turnWorking: agentWorking && (turnKey === undefined || turnKey === turns.liveTurnKey),
             inLatestTurn: turnKey !== undefined && turnKey === turns.latestTurnKey
           },
-          { support, contextFloorSequence, forkableItemIds, inheritedThroughSequence }
+          { support: rowSupport, contextFloorSequence, forkableItemIds, inheritedThroughSequence }
         )
       return !offered
         ? 'reserved'
-        : pending || support.kind === 'unknown'
+        : pending || rowSupport.kind === 'unknown'
           ? 'disabled'
           : 'available'
     },
@@ -209,6 +200,12 @@ export function useMobileNativeChatFork(input: {
       turns
     ]
   )
+  // Every fork action opens the sheet: a chat that can't be copied still offers a recap.
+  const offerFor = useCallback(
+    (message: NativeChatMessage): MobileNativeChatForkOffer =>
+      offerOf(message, support.kind === 'none' ? 'recap' : 'copy'),
+    [offerOf, support.kind]
+  )
   const start = useCallback(
     (
       message: NativeChatMessage,
@@ -218,7 +215,7 @@ export function useMobileNativeChatFork(input: {
       if (
         (kind === 'copy' && !copyOffered) ||
         inFlight.current ||
-        offerFor(message) !== 'available' ||
+        offerOf(message, kind) !== 'available' ||
         !sessionId ||
         !agent ||
         !isTuiAgent(agent)
@@ -241,7 +238,7 @@ export function useMobileNativeChatFork(input: {
         })
       return true
     },
-    [agent, copyOffered, messages, offerFor, sessionId, terminal]
+    [agent, copyOffered, messages, offerOf, sessionId, terminal]
   )
   const fork = useCallback(
     (message: NativeChatMessage) => void start(message, createFork, 'copy'),
