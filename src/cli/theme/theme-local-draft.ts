@@ -55,7 +55,10 @@ function insideFolder(root: string, path: string): string {
 /** A theme plugin folder or theme JSON as a draft; read as data, never loaded as a plugin. */
 export async function draftFromLocal(path: string): Promise<ThemeStudioDraft> {
   const draft: ThemeStudioDraft = {
-    name: basename(path).replace(/\.json$/i, ''),
+    name:
+      basename(path)
+        .replace(/\.json$/i, '')
+        .slice(0, 64) || 'My Theme',
     light: null,
     dark: null
   }

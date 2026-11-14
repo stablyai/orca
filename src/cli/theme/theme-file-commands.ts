@@ -10,6 +10,7 @@ import type {
   ThemeStudioMode
 } from '../../shared/theme-studio/theme-studio-draft'
 import { themeStudioPluginFiles } from '../../shared/theme-studio/theme-studio-plugin-files'
+import { ThemeStudioError } from '../../shared/theme-studio/theme-studio-errors'
 import { call, localPath, modesFlag, print, stringFlag } from './theme-command-io'
 
 export async function shot(ctx: HandlerContext): Promise<void> {
@@ -53,6 +54,19 @@ export async function shot(ctx: HandlerContext): Promise<void> {
   )
 }
 
+function pluginFilesOrThrow(
+  draft: ThemeStudioDraft,
+  id: string | undefined
+): ReturnType<typeof themeStudioPluginFiles> {
+  try {
+    return themeStudioPluginFiles(draft, id)
+  } catch (error) {
+    throw error instanceof ThemeStudioError
+      ? new RuntimeClientError(error.code, error.message, error.data)
+      : error
+  }
+}
+
 export async function exportDraft(ctx: HandlerContext): Promise<void> {
   const target = stringFlag(ctx, 'dir')
   if (!target) {
@@ -72,7 +86,7 @@ export async function exportDraft(ctx: HandlerContext): Promise<void> {
   }
   const name = stringFlag(ctx, 'name')
   const draft = name ? { ...status.draft, name } : status.draft
-  const { id, files } = themeStudioPluginFiles(draft, stringFlag(ctx, 'id'))
+  const { id, files } = pluginFilesOrThrow(draft, stringFlag(ctx, 'id'))
   for (const [path, text] of Object.entries(files)) {
     const file = join(folder, ...path.split('/'))
     await mkdir(dirname(file), { recursive: true })

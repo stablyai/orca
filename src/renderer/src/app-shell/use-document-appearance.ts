@@ -84,17 +84,10 @@ export function useDocumentAppearance(): void {
   // An `orca theme` draft paints over the selected theme without touching settings.
   const draftTheme = useThemeStudioAppTheme(dark)
   const appTheme = draftTheme ?? (matchTerminal ? terminalTheme : pluginTheme)
-  const selectedEditorTheme = findCodeEditorTheme(
+  const editorTheme = findCodeEditorTheme(
     useAppStore((s) => (dark ? s.settings?.editorThemeDark : s.settings?.editorThemeLight)),
     pluginThemes
   )
-  // Why: an editor that follows the theme a draft replaces follows the draft.
-  const editorTheme =
-    draftTheme &&
-    typeof selectedEditorTheme === 'object' &&
-    selectedEditorTheme?.id === pluginTheme?.id
-      ? null
-      : selectedEditorTheme
   // Why Match Terminal and drafts needn't wait: they don't come from the plugin list.
   const pluginThemesLoaded = usePluginThemeStore((s) => s.loaded)
   const appPainted = useRef<Readonly<Record<string, string>>>({})

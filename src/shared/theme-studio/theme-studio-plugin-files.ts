@@ -6,6 +6,7 @@ import {
   readme
 } from '../plugins/authoring/plugin-template-files'
 import { hasUsableTerminalThemeColors } from '../terminal-themes/terminal-custom-themes'
+import { THEME_STUDIO_ERROR_CODES, ThemeStudioError } from './theme-studio-errors'
 import {
   THEME_STUDIO_MODES,
   type ThemeStudioDraft,
@@ -31,7 +32,23 @@ export function themeStudioPluginFiles(
   const modes = THEME_STUDIO_MODES.filter((mode) => draft[mode] !== null)
   const terminalModes = modes.filter((mode) => {
     const terminal = draft[mode]?.terminal
-    return terminal !== undefined && hasUsableTerminalThemeColors(terminal)
+    if (!terminal || Object.keys(terminal).length === 0) {
+      return false
+    }
+    // Why refuse: dropping a partial palette would lose terminal colors the preview showed.
+    if (!hasUsableTerminalThemeColors(terminal)) {
+      throw new ThemeStudioError(
+        THEME_STUDIO_ERROR_CODES.invalid,
+        `The ${mode} terminal palette needs a background, a foreground and at least one ANSI color.`,
+        {
+          mode,
+          nextSteps: [
+            `Set terminal.background, terminal.foreground and the ANSI colors with \`orca theme set --mode ${mode}\`, or unset the terminal colors you set.`
+          ]
+        }
+      )
+    }
+    return true
   })
   const label = (mode: ThemeStudioMode): string =>
     modes.length > 1 ? `${draft.name} ${mode === 'dark' ? 'Dark' : 'Light'}` : draft.name

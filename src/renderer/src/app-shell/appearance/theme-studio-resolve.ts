@@ -35,19 +35,27 @@ function selectedAppTheme(
   tokens: Record<string, string>
   tokenColors?: PluginThemeRegistration['tokenColors']
 } | null {
+  // Why both slots: Match Terminal paints the terminal's own mode, which may be the other one.
+  for (const slot of THEME_STUDIO_MODES) {
+    const selected = slot === 'dark' ? settings.pluginAppThemeDark : settings.pluginAppThemeLight
+    if (selected === MATCH_TERMINAL_APP_THEME) {
+      const synthesized = synthesizeTerminalAppTheme(
+        { ...settings, theme: slot },
+        systemPrefersDark,
+        browserColorProbe
+      )
+      if (synthesized?.base === mode) {
+        return {
+          ...synthesized,
+          label: MATCH_TERMINAL_APP_THEME,
+          pluginName: MATCH_TERMINAL_APP_THEME
+        }
+      }
+    }
+  }
   const selected = mode === 'dark' ? settings.pluginAppThemeDark : settings.pluginAppThemeLight
   if (!selected || isPluginContentSwitchedOff(settings, selected)) {
     return null
-  }
-  if (selected === MATCH_TERMINAL_APP_THEME) {
-    const synthesized = synthesizeTerminalAppTheme(
-      { ...settings, theme: mode },
-      systemPrefersDark,
-      browserColorProbe
-    )
-    return synthesized?.base === mode
-      ? { ...synthesized, label: MATCH_TERMINAL_APP_THEME, pluginName: MATCH_TERMINAL_APP_THEME }
-      : null
   }
   return themes.find((theme) => theme.id === selected && theme.base === mode) ?? null
 }

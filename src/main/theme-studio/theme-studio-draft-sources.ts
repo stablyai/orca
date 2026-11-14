@@ -17,6 +17,8 @@ import type {
 } from '../../shared/theme-studio/theme-studio-protocol'
 
 const DEFAULT_DRAFT_NAME = 'My Theme'
+// Why: a plugin name may run to 256 characters; a draft name is at most 64.
+const draftName = (name: string): string => name.trim().slice(0, 64) || DEFAULT_DRAFT_NAME
 
 /** Where a draft starts: its first undo step is named by `label`. */
 export type StartedDraft = { draft: ThemeStudioDraft; label: string }
@@ -53,11 +55,12 @@ export function draftFromResolved(resolved: ThemeStudioResolveResult, name?: str
     const entry = byMode.get(mode)
     return entry ? variantFromResolved(entry) : null
   }
-  // Why the plugin's own name: applying then replaces the theme that was edited.
+  // Why the plugin's own name: applying again replaces a theme `orca theme` saved; any other
+  // plugin keeps its own and gets a local copy.
   const themeName = shown?.themeName ?? null
   return {
     draft: {
-      name: name ?? themeName ?? DEFAULT_DRAFT_NAME,
+      name: draftName(name ?? themeName ?? DEFAULT_DRAFT_NAME),
       light: variant('light'),
       dark: variant('dark')
     },
@@ -95,7 +98,7 @@ export function draftFromInstalled(
   }
   const label = matches[0].pluginName
   return {
-    draft: { name: name ?? label, light: variant('light'), dark: variant('dark') },
+    draft: { name: draftName(name ?? label), light: variant('light'), dark: variant('dark') },
     label: `Start from ${label}`
   }
 }

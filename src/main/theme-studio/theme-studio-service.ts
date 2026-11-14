@@ -231,15 +231,22 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
   return {
     async status(options: { resolved: boolean; report: boolean }) {
       await session.ready
-      const draft = session.draft
       const window = deps.window()
+      const resolved = options.resolved && window ? await window.resolve() : undefined
+      const status = session.status()
+      const draft = session.draft
+      const report =
+        options.report && draft && window
+          ? await session.waitForReport(REPORT_TIMEOUT_MS)
+          : undefined
       return {
-        ...session.status(),
+        ...status,
         draft,
         hasWindow: window !== null,
-        ...(options.resolved && window ? { resolved: await window.resolve() } : {}),
-        ...(options.report && draft && window
-          ? { report: await session.waitForReport(REPORT_TIMEOUT_MS) }
+        ...(resolved ? { resolved } : {}),
+        // Why the revision check: an edit that landed meanwhile has its own report.
+        ...(report !== undefined
+          ? { report: report?.revision === status.revision ? report : null }
           : {})
       }
     },
@@ -268,15 +275,22 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
         session.end()
         return { discarded: status.active, name: status.name }
       }),
-    /** The user pressed Keep on the preview notice; a failure shows the notice again. */
-    keepFromWindow: (): Promise<void> =>
+    /** The user pressed Keep or Discard on the notice for `revision`; a newer draft is left alone,
+     *  and a failed Keep shows the notice again. */
+    actFromWindow: (action: 'keep' | 'discard', revision: number): Promise<void> =>
       exclusive(async () => {
+        if (revision !== session.currentRevision) {
+          return
+        }
+        if (action === 'discard') {
+          session.end()
+          return
+        }
         await apply(undefined)
       }).catch((error: unknown) => {
         console.warn('[theme-studio] could not keep the draft:', error)
         session.repaint()
-      }),
-    discardFromWindow: (): Promise<void> => exclusive(async () => session.end())
+      })
   }
 }
 

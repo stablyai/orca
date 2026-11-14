@@ -168,7 +168,10 @@ export class ThemeStudioSession {
       clearTimeout(this.persistTimer)
       this.persistTimer = null
     }
-    void rm(this.deps.sessionFile, { force: true }).catch(() => undefined)
+    // Why queued: a write still in flight must not land after the file is gone.
+    this.persisting = this.persisting.then(() =>
+      rm(this.deps.sessionFile, { force: true }).catch(() => undefined)
+    )
     this.revision += 1
     this.schedulePush()
     this.settleWaiters(null)
@@ -270,10 +273,6 @@ export class ThemeStudioSession {
       await mkdir(dirname(file), { recursive: true })
       await writeFile(`${file}.tmp`, body, 'utf8')
       await rename(`${file}.tmp`, file)
-      // Why: a discard while this write was in flight must not leave the draft to come back.
-      if (!this.draft) {
-        await rm(file, { force: true })
-      }
     } catch (error) {
       console.warn('[theme-studio] could not save the session:', error)
     }

@@ -118,15 +118,9 @@ export function bindThemeStudio(options: {
   })
   ipcMain.on(THEME_STUDIO_USER_ACTION_CHANNEL, (event, raw: unknown) => {
     const parsed = themeStudioUserActionSchema.safeParse(raw)
-    // Why the revision: a click on a toast for an older draft must not keep or drop a newer one.
-    if (
-      !fromMainWindow(event.sender) ||
-      !parsed.success ||
-      parsed.data.revision !== session.currentRevision
-    ) {
-      return
+    if (fromMainWindow(event.sender) && parsed.success) {
+      void service.actFromWindow(parsed.data.action, parsed.data.revision)
     }
-    void (parsed.data.action === 'discard' ? service.discardFromWindow() : service.keepFromWindow())
   })
   ipcMain.handle(THEME_STUDIO_CURRENT_CHANNEL, (event) => {
     const draft = session.draft
