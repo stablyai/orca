@@ -369,7 +369,6 @@
 2 test-no-wall-clock:src/cli/runtime/serve/updates/serve-appimage-update.test.ts
 4 test-no-wall-clock:src/cli/runtime/serve/supervision/serve-bundle-park.test.ts
 5 test-no-wall-clock:src/cli/runtime/serve/startup/serve-pid1-init-reaper.test.ts
-1 test-no-wall-clock:src/cli/runtime/status/status-caller.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/installation/commands/windows-native-hook-exe-hosts.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/installation/scripts/managed-hook-timeout.test.ts
 1 test-no-wall-clock:src/main/agent-hooks/server/testing/http/server-endpoint-file-lifecycle.test.ts
