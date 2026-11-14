@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { runtimeFixture } from './worker-quiet-runtime.test-fixture'
-import { startWorkerQuietWatch } from './worker-quiet-watch'
+import { WorkerQuietWatch } from './worker-quiet-watch'
 import { TerminalIdentitySource } from '../../../terminal/identity/terminal-identity-source'
 import { PANE } from '../../../../agent-hooks/server/testing/server.test-fixtures'
 
@@ -148,13 +148,14 @@ it('keeps idle admission monotonic across wall-clock jumps and preserves failure
   let wake = () => {}
   const sweep = vi.fn<() => boolean>().mockReturnValue(false)
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const stop = startWorkerQuietWatch({
+  const watch = new WorkerQuietWatch({
     sweep,
     subscribe: (listener) => {
       wake = listener
       return () => {}
     }
   })
+  watch.start()
   try {
     await vi.advanceTimersByTimeAsync(0)
     vi.setSystemTime(-9_000_000)
@@ -179,6 +180,6 @@ it('keeps idle admission monotonic across wall-clock jumps and preserves failure
     await vi.advanceTimersByTimeAsync(600_000)
     expect(sweep).toHaveBeenCalledTimes(3)
   } finally {
-    stop()
+    watch.pause()
   }
 })

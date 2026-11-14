@@ -5,7 +5,7 @@ import {
   MAX_WORKER_QUIET_MINUTES,
   resolveWorkerQuietMinutes
 } from '../../../../../shared/orchestration/workers/worker-quiet-settings'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { Input } from '../../ui/input'
 import { Button } from '../../ui/button'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
@@ -16,25 +16,29 @@ type Props = {
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }
 
-export function OrchestrationWorkerQuietSetting(props: Props): React.JSX.Element {
-  return (
-    <WorkerQuietControl key={String(props.settings.orchestrationQuietWorkerMinutes)} {...props} />
-  )
-}
-
-function WorkerQuietControl({ settings, updateSettings }: Props): React.JSX.Element {
+export function OrchestrationWorkerQuietSetting({
+  settings,
+  updateSettings
+}: Props): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const id = useId()
+  const raw = settings.orchestrationQuietWorkerMinutes
   const minutes = resolveWorkerQuietMinutes(settings)
-  const chosen = isWorkerQuietMinutes(settings.orchestrationQuietWorkerMinutes)
-  const [draft, setDraft] = useState(String(minutes || 15))
+  const chosen = isWorkerQuietMinutes(raw)
+  const [draft, setDraft] = useState({ raw, value: String(minutes || 15) })
   const [invalid, setInvalid] = useState(false)
+  if (!Object.is(draft.raw, raw)) {
+    setDraft({ raw, value: minutes > 0 ? String(minutes) : draft.value })
+    setInvalid(false)
+  }
   const save = (value: number | null): void => {
+    setInvalid(false)
     void updateSettings({ orchestrationQuietWorkerMinutes: value })
   }
   const commit = (): void => {
-    const value = Number(draft.trim())
-    if (!/^\d+$/.test(draft.trim()) || !isWorkerQuietMinutes(value) || value === 0) {
+    const value = Number(draft.value.trim())
+    if (!/^\d+$/.test(draft.value.trim()) || !isWorkerQuietMinutes(value) || value === 0) {
       setInvalid(true)
       return
     }
@@ -70,7 +74,7 @@ function WorkerQuietControl({ settings, updateSettings }: Props): React.JSX.Elem
               {t(
                 'auto.components.settings.OrchestrationPane.workerQuietInvalid',
                 'Enter a whole number of minutes between 1 and {{max}}.',
-                { max: MAX_WORKER_QUIET_MINUTES }
+                { max: MAX_WORKER_QUIET_MINUTES.toLocaleString(intlLocale) }
               )}
             </span>
           ) : null}
@@ -102,10 +106,9 @@ function WorkerQuietControl({ settings, updateSettings }: Props): React.JSX.Elem
             )}
             aria-invalid={invalid}
             aria-describedby={invalid ? `${id}-error` : undefined}
-            value={draft}
-            disabled={minutes === 0}
+            value={draft.value}
             onChange={(event) => {
-              setDraft(event.target.value)
+              setDraft({ raw, value: event.target.value })
               setInvalid(false)
             }}
             onBlur={() => {
@@ -114,13 +117,13 @@ function WorkerQuietControl({ settings, updateSettings }: Props): React.JSX.Elem
               }
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              if (event.key === 'Enter' && minutes > 0) {
                 commit()
               }
             }}
             className="w-24"
           />
-          <span className="text-xs text-muted-foreground">
+          <span className="text-settings-detail text-muted-foreground">
             {t('auto.components.settings.OrchestrationPane.workerQuietUnit', 'minutes')}
           </span>
           <Button variant="ghost" size="sm" disabled={!chosen} onClick={() => save(null)}>

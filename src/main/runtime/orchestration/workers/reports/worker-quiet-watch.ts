@@ -58,11 +58,3 @@ export class WorkerQuietWatch {
     }
   }
 }
-
-export function startWorkerQuietWatch(
-  deps: ConstructorParameters<typeof WorkerQuietWatch>[0]
-): () => void {
-  const watch = new WorkerQuietWatch(deps)
-  watch.start()
-  return () => watch.pause()
-}
