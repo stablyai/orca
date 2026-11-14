@@ -1,3 +1,6 @@
+import { z } from 'zod'
+import { readPluginPanelSvg } from '../../../main/plugins/media/plugin-panel-svg'
+import { canonicalPluginPanelIcon } from '../../../shared/plugins/contributions/plugin-panel-contribution'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
@@ -120,6 +123,33 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
     ...strictPluginArtifactWarnings(manifest, manifestTextReader(root)),
     ...hostCalls.warnings
   ]
+  if (manifest.manifestVersion === 2) {
+    for (const panel of manifest.contributes.panels) {
+      if (panel.icon && !canonicalPluginPanelIcon(panel.icon)) {
+        try {
+          await readPluginPanelSvg(root, panel.icon)
+        } catch (error) {
+          warnings.push(
+            `contributes.panels "${panel.id}" icon: ${error instanceof Error ? error.message : String(error)}; using plug`
+          )
+        }
+      }
+    }
+  } else {
+    const panels = z
+      .object({
+        contributes: z
+          .object({ panels: z.array(z.object({ icon: z.unknown().optional() })).optional() })
+          .optional()
+      })
+      .safeParse(raw).data?.contributes?.panels
+    if (
+      Array.isArray(panels) &&
+      panels.some((panel) => typeof panel?.icon === 'string' && /\.svg$/i.test(panel.icon))
+    ) {
+      warnings.push('Panel SVG icons require manifest format 2; upgrade the manifest to use them')
+    }
+  }
   return {
     path: root,
     file,

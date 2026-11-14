@@ -53,7 +53,7 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
     contentHash &&
     slot &&
     /^(?:[0-9a-f]{64}|[0-9a-f]{32}|dev)$/.test(contentHash) &&
-    /^(?:icon|cover|(?:screenshot|editor|new-file)-\d{1,2}|theme-(?:0|[1-9]\d{0,2})(?:-video)?|font-\d-\d)$/.test(
+    /^(?:icon|cover|(?:screenshot|editor|new-file|panel)-\d{1,2}|theme-(?:0|[1-9]\d{0,2})(?:-video)?|font-\d-\d)$/.test(
       slot
     )
   ) {

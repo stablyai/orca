@@ -1,3 +1,5 @@
+import { canonicalPluginPanelIcon } from '../../../shared/plugins/contributions/plugin-panel-contribution'
+import { readPluginPanelSvg } from './plugin-panel-svg'
 import { protocol } from 'electron'
 import {
   PLUGIN_IMAGE_SCHEME,
@@ -31,6 +33,14 @@ async function readInstalledImage(
 ): Promise<CheckedPluginImage | null> {
   if (!isCurrentContent(plugin, contentHash)) {
     return null
+  }
+  const panelMatch = /^panel-(\d{1,2})$/.exec(slot)
+  if (panelMatch && plugin.manifest.manifestVersion === 2) {
+    const path = plugin.manifest.contributes.panels[Number(panelMatch[1])]?.icon
+    if (!path || canonicalPluginPanelIcon(path)) {
+      return null
+    }
+    return { bytes: await readPluginPanelSvg(plugin.rootDir, path), mimeType: 'image/svg+xml' }
   }
   const declared = declaredPluginImages(plugin.manifest).find(
     (candidate) => candidate.slot === slot
@@ -85,6 +95,9 @@ export function createPluginImageRequestHandler(
               ? 'no-store'
               : 'private, max-age=31536000, immutable',
           'X-Content-Type-Options': 'nosniff',
+          ...(asset.mimeType === 'image/svg+xml'
+            ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" }
+            : {}),
           // Why: web fonts load in CORS mode; only the default session handles this scheme, so
           // plugin frames and browser tabs, which use their own sessions, still cannot reach it.
           ...(isFont ? { 'Access-Control-Allow-Origin': '*' } : {})

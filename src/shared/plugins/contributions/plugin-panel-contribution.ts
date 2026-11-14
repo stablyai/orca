@@ -97,6 +97,11 @@ export const PLUGIN_PANEL_UI_KINDS = ['html', 'components'] as const
 export type PluginPanelUi = (typeof PLUGIN_PANEL_UI_KINDS)[number]
 const COMPONENTS_PANEL_ENTRY = /\.(?:m?js|tsx?|mts|jsx)$/i
 
+export const pluginIconReferenceSchema = z.union([
+  z.enum(PLUGIN_PANEL_ICONS),
+  z.string().min(1).max(1024)
+])
+
 export const pluginPanelContributionSchema = z
   .object({
     id: pluginIdSchema.meta(
@@ -111,17 +116,14 @@ export const pluginPanelContributionSchema = z
         'Dashboard'
       ])
     ),
-    icon: z
-      .enum(PLUGIN_PANEL_ICONS)
-      .optional()
-      .meta({
-        ...pluginFieldDoc(
-          'Icon shown in the right-sidebar activity bar. Defaults to `plug`.',
-          PLUGIN_SCHEMA_SINCE_V1,
-          ['database']
-        ),
-        [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_ICON_SINCE
-      }),
+    icon: pluginIconReferenceSchema.optional().meta({
+      ...pluginFieldDoc(
+        'Icon shown in the right-sidebar activity bar: a built-in name or, in manifest format 2, a plugin-relative SVG path. Defaults to `plug`.',
+        PLUGIN_SCHEMA_SINCE_V1,
+        ['database']
+      ),
+      [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_ICON_SINCE
+    }),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
         `What the panel runs: an HTML page for \`ui: "html"\`, a \`.js\`/\`.mjs\` module for \`ui: "components"\`. Either may instead be a \`.ts\`/\`.tsx\`/\`.mts\`/\`.jsx\` file, which Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`; an \`html\` panel then gets a generated page around it). It is trusted code: install panels you trust.`,

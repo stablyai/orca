@@ -35,7 +35,9 @@ export async function readPluginPanelSvg(root: string, path: string): Promise<Bu
   const nodes = document.getElementsByTagName('*')
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes.item(i)
-    if (!node) continue
+    if (!node) {
+      continue
+    }
     if (['script', 'foreignobject'].includes(node.localName.toLowerCase())) {
       throw new Error('icon contains forbidden SVG content')
     }

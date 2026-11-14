@@ -1,3 +1,5 @@
+import { canonicalPluginPanelIcon } from '../../../shared/plugins/contributions/plugin-panel-contribution'
+import { readPluginPanelSvg } from '../media/plugin-panel-svg'
 import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
@@ -117,6 +119,17 @@ async function readManifestDir(
     installedPublisher ?? localPluginPublisher(parsed.manifest.publisher)
   )
   const pluginKey = qualifiedPluginKey(manifest)
+  if (manifest.manifestVersion === 2) {
+    for (const panel of manifest.contributes.panels) {
+      if (panel.icon && !canonicalPluginPanelIcon(panel.icon)) {
+        try {
+          await readPluginPanelSvg(rootDir, panel.icon)
+        } catch {
+          panel.icon = 'plug'
+        }
+      }
+    }
+  }
   if (!satisfiesOrcaEngineRange(hostVersion, manifest.engines.orca)) {
     return {
       pluginKey,
