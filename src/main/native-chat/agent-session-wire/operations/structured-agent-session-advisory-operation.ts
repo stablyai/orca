@@ -2,15 +2,21 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 
-export function advisorySendRefusal(
+export async function advisorySendRefusal(
   record: AgentSessionRecord | null,
   journal: AgentSessionJournal,
   operationId: string
 ) {
-  return (record?.advisoryPolicy || record?.executionPolicy) &&
-    journal.submissions().some((submission) => submission.clientMessageId !== operationId)
-    ? unsupportedAdvisoryOperation()
-    : null
+  if (!record?.advisoryPolicy && !record?.executionPolicy) {
+    return null
+  }
+  const { results } = await journal.reads.input({
+    kind: 'batch',
+    reads: [{ kind: 'input-count' }, { kind: 'input-ordinal', clientMessageId: operationId }]
+  })
+  const count = results.find((result) => result.kind === 'input-count')?.count
+  const ordinal = results.find((result) => result.kind === 'input-ordinal')?.ordinal
+  return count === 0 || (count === 1 && ordinal === 0) ? null : unsupportedAdvisoryOperation()
 }
 
 export function advisoryOperationRefusal(record: AgentSessionRecord | null, method: string) {

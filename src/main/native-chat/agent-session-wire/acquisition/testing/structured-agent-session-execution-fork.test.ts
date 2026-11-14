@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { forkTestSource } from './structured-agent-session-fork.test-fixture'
-import { createRestTestRig } from '../../host/testing/structured-agent-session-rest-test-rig'
+import { createRestTestRig } from '../../host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
 it('refuses to turn a bounded Codex source into an unbounded fork', async () => {
   const rig = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })

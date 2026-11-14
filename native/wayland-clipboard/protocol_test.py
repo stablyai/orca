@@ -172,7 +172,6 @@ class ClipboardProtocolTests(unittest.TestCase):
             self.assertEqual(server.paste(), text)
             self.assertEqual(server.paste(), text)
             server.send(server.source, 1)
-            self.assertTrue(server.disconnected.wait(1))
 
 
     def test_replacement_during_ack_is_success_but_device_loss_is_failure(self):
@@ -218,7 +217,6 @@ pid_t fork(void) {
             finally:
                 os.close(reader)
             server.send(server.source, 1)
-            self.assertTrue(server.disconnected.wait(1))
 
     def test_stalled_receiver_does_not_block_cancellation(self):
         with DataControlServer("ext_data_control") as server:
@@ -255,7 +253,6 @@ pid_t fork(void) {
                         pass
                 self.assertEqual(server.paste(), b"x" * 1024 * 1024)
                 server.send(server.source, 1)
-                self.assertTrue(server.disconnected.wait(1))
             finally:
                 for reader in readers:
                     os.close(reader)

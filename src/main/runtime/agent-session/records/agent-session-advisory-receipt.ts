@@ -51,17 +51,3 @@ export function applyAgentSessionAdvisoryReceipt(
     )
   }
 }
-
-export function createAdvisoryReceiptRecorder(
-  mutate: (
-    sessionId: string,
-    apply: (record: AgentSessionRecord) => AgentSessionRecord
-  ) => Promise<AgentSessionRecord>
-) {
-  return (input: AgentSessionAdvisoryReceiptWrite) => {
-    const snapshot = structuredClone(input)
-    return mutate(snapshot.sessionId, (record) =>
-      applyAgentSessionAdvisoryReceipt(record, snapshot)
-    )
-  }
-}

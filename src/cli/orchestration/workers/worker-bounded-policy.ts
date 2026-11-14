@@ -6,7 +6,7 @@ import {
 } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import type { RuntimeClient } from '../../runtime/client'
 
 export async function readWorkerBoundedPolicies(

@@ -40,17 +40,3 @@ export function applyAgentSessionExecutionReceipt(
     }
   }
 }
-
-export function createExecutionReceiptRecorder(
-  mutate: (
-    sessionId: string,
-    apply: (record: AgentSessionRecord) => AgentSessionRecord
-  ) => Promise<AgentSessionRecord>
-) {
-  return (input: AgentSessionExecutionReceiptWrite) => {
-    const snapshot = structuredClone(input)
-    return mutate(snapshot.sessionId, (record) =>
-      applyAgentSessionExecutionReceipt(record, snapshot)
-    )
-  }
-}

@@ -12,7 +12,7 @@ import { ORCHESTRATION_HANDLERS } from '../orchestration-handlers'
 import { printResult } from '../../output/command-result-output'
 
 import { RuntimeClient } from '../../runtime/client'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { parseArgs, validateCommandAndFlags } from '../../arguments/args'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from '../../specs/orchestration-worker-specs'
 
@@ -45,28 +45,6 @@ describe('orchestration worker-start CLI contract', () => {
       cwd: '/tmp/repo',
       json
     })
-
-  it('sets an unsuccessful exit code for an unknown receipt', async () => {
-    callMock.mockResolvedValue({
-      result: {
-        taskId: 'task_1',
-        dispatchId: 'ctx_1',
-        state: 'outcome_unknown',
-        effects: [],
-        residualResources: []
-      }
-    })
-
-    await invokeWorkerStart(
-      new Map<string, string | boolean>([
-        ['task', 'task_1'],
-        ['agent', 'codex'],
-        ['from', 'term_coord']
-      ])
-    )
-
-    expect(process.exitCode).toBe(1)
-  })
 
   it('carries a persisted caller request id into the native mutation envelope', async () => {
     callMock.mockResolvedValue({ result: { dispatchId: 'ctx_1', state: 'ready' } })

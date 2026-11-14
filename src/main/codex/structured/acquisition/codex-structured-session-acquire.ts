@@ -1,13 +1,11 @@
+import type { CodexStructuredAcquisitionInput } from './codex-structured-acquisition-input'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import { codexLaunchedAccountHome } from '../launch/codex-structured-launch-resolution'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type {
-  AgentSessionAcquisition,
-  StructuredAgentSessionAcquireInput
-} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import type { AgentSessionAcquisition } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { launchPreparationFailure } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import * as lifecycle from './codex-structured-acquisition-lifecycle'
 import { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
@@ -28,38 +26,14 @@ import { providerSpawnAbsent } from '../../../provider-process/provider-executab
 import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import {
   assertCodexConnectionOpen,
-  mintCodexAcquisitionGeneration,
-  type CodexAcquisitionRegistry,
-  type CodexAcquisitionAttempt,
-  type CodexSession,
-  type CodexStructuredSessionAdapterDeps
+  mintCodexAcquisitionGeneration
 } from '../session-lifecycle/codex-structured-session-state'
-import type { CodexStructuredSessionTeardown } from '../session-lifecycle/codex-structured-session-teardown'
-import type { CodexStructuredNotificationRetry } from '../session-lifecycle/codex-structured-notification-retry'
-import type { deliverCodexServerRequest } from '../session-lifecycle/codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 import { codexStartFailure } from '../../app-server/codex-startup-outcome'
 
-export async function acquireCodexStructuredSession(input: {
-  input: StructuredAgentSessionAcquireInput
-  deps: CodexStructuredSessionAdapterDeps
-  sessions: Map<string, CodexSession>
-  acquisitions: CodexAcquisitionRegistry
-  notificationRetries: CodexStructuredNotificationRetry
-  deliver: (
-    acquisition: CodexAcquisitionAttempt['window'],
-    sessionId: string,
-    event: () => unknown,
-    retainedBytes?: number
-  ) => void
-  handleServerRequest: (
-    sessionId: string,
-    request: Parameters<typeof deliverCodexServerRequest>[2]
-  ) => void
-  handleUnhandledFrame: (sessionId: string, kind: string, payload: unknown) => void
-  forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
-  closeCompleted: CodexStructuredSessionTeardown['close']
-}): Promise<AgentSessionAcquisition> {
+export async function acquireCodexStructuredSession(
+  input: CodexStructuredAcquisitionInput
+): Promise<AgentSessionAcquisition> {
   const { input: acquireInput, deps, sessions, acquisitions, notificationRetries } = input
   const sessionId = acquireInput.identity.sessionId
   const { previousAttempt, attempt } = acquisitions.start(sessionId)
@@ -168,8 +142,10 @@ export async function acquireCodexStructuredSession(input: {
             Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
           ),
         onSpawned: spawnIdentity.onSpawned,
+        onClose: (error) => attempt.historyCatchUp?.abort(error),
         onExit: (error, exit) => {
           acquisition.execution?.controls.stop()
+          attempt.historyCatchUp?.abort()
           acquisition.appliedSettings.end()
           try {
             // Orca's own close or cancel ends no start; Codex ending on its own does, from the
@@ -253,6 +229,7 @@ export async function acquireCodexStructuredSession(input: {
       if (disposed) {
         return
       }
+      attempt.historyCatchUp?.abort()
       disposed = true
       unbindReadingControl?.()
       acquisition.prompts.clear()

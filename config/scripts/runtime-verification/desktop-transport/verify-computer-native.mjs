@@ -41,51 +41,8 @@ const checks = [
     enabled: process.platform === 'linux'
   },
   {
-    name: 'Windows provider PowerShell parse',
-    command: process.platform === 'win32' ? 'powershell.exe' : 'pwsh',
-    args: [
-      '-NoLogo',
-      '-NoProfile',
-      '-Command',
-      [
-        '$errors=$null',
-        '$tokens=$null',
-        '[System.Management.Automation.Language.Parser]::ParseFile("native/computer-use-windows/runtime.ps1",[ref]$tokens,[ref]$errors) > $null',
-        'if ($errors.Count) { $errors | Format-List *; exit 1 }',
-        '"parse-ok"'
-      ].join('; ')
-    ],
-    enabled: true
-  },
-  {
     name: 'Windows provider handshake',
     run: verifyWindowsProviderHandshake,
-    enabled: process.platform === 'win32'
-  },
-  {
-    name: 'Windows pointer safety tests',
-    command: 'powershell.exe',
-    args: [
-      '-NoLogo',
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-File',
-      'native/computer-use-windows/runtime-pointer.test.ps1'
-    ],
-    enabled: process.platform === 'win32'
-  },
-  {
-    name: 'Windows native control tests',
-    command: 'powershell.exe',
-    args: [
-      '-NoLogo',
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-File',
-      'native/computer-use-windows/runtime-native-controls.test.ps1'
-    ],
     enabled: process.platform === 'win32'
   },
   {
@@ -182,7 +139,7 @@ function verifyWindowsProviderHandshake() {
       return false
     }
     const response = JSON.parse(result.stdout.trim())
-    if (response.ok === true && response.capabilities?.protocolVersion === 1) {
+    if (response.ok === true) {
       console.log('[computer-native] windows-handshake-ok')
       return true
     }

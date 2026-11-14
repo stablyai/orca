@@ -13,7 +13,7 @@ import type { SkillDiscoveryResult } from '../../shared/skills'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getRepeatedStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 
 const SHARE_TIMEOUT_MS = 10 * 60_000

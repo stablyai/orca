@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import { runCodexAppServerSession } from '../../app-server/codex-app-server-session'
 import { resolveCodexStructuredInvocation } from '../launch/codex-structured-launch-resolution'

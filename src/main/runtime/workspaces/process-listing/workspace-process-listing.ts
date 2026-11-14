@@ -32,7 +32,7 @@ import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { openAgentSessionRecordStoreOnce } from '../../agent-session/records/agent-session-record-store-slot'
+import { openLocalAgentSessionRecordStore } from '../../agent-session/records/local-agent-session-record-store-startup-open'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../../agent-hooks/first-work/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-rename-runtime'
 import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
@@ -210,28 +210,24 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   }
 
   /** Admission needs only the ledger; a later chat host must reuse this store. */
-  async openAgentSessionRecordStore() {
-    const { store } = await openAgentSessionRecordStoreOnce({
-      stateDirectory: getProfileUserDataPath(),
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
-    })
-    return store
-  }
+  openAgentSessionRecordStore = () =>
+    openLocalAgentSessionRecordStore(this.legacyStructuredSessionTabIds)
 
-  /** CI-line watches run on every host from startup, whether or not a chat was ever opened. */
-  startPullRequestWatches(): void {
-    void startPRWatchRuntime({
-      stateDirectory: getProfileUserDataPath(),
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
-      ...prWatchWorkspaceSources({
-        resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
-        store: () => this.requireStore()
-      })
-    })
+  /** CI-line watches run on every host once it serves (`admit`), whether or not a chat was ever opened. */
+  startPullRequestWatches(options: { admit?: boolean } = {}): void {
+    void startPRWatchRuntime(
+      {
+        stateDirectory: getProfileUserDataPath(),
+        legacySessionTabIds: this.legacyStructuredSessionTabIds,
+        hostId: LOCAL_EXECUTION_HOST_ID,
+        logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
+        ...prWatchWorkspaceSources({
+          resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+          store: () => this.requireStore()
+        })
+      },
+      options
+    )
   }
 
   /** Defer host creation until profile paths are final and chat is used; reuse an admission-opened record store. */
@@ -293,8 +289,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
       conversationNaming: nameChat,
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
-      queuedAgentMessageOwed: (sessionId, from, peek) =>
-        this.structuredChatMailOwed(sessionId, from, peek),
+      queuedAgentMessageOwed: (sessionId, from) => this.structuredChatMailOwed(sessionId, from),
       assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
       attentionDelivery: createStructuredAttentionMobileDelivery({
         readNotificationSettings: () => this.requireStore().getSettings().notifications,
@@ -317,7 +312,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })
-    // Re-arms watches a chat-runtime teardown stopped; a no-op while they run.
+    // Starts watches not yet running once the host has served: a failed first start or a teardown retries here.
     this.startPullRequestWatches()
   }
 }

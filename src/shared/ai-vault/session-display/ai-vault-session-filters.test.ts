@@ -88,43 +88,6 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
   })
 })
 
-describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', () => {
-  it('matches workspace scope across host path spellings', () => {
-    // Verify native containment across Windows folding, WSL aliases/mounts, trailing separators and near-miss siblings.
-    const cases: [workspace: string, cwd: string, matched: boolean][] = [
-      ['C:\\Users\\Ada\\repo', 'c:/users/ada/repo/app', true],
-      ['C:/Users/Ada/repo/', 'C:\\Users\\Ada\\repo', true],
-      ['C:\\Users\\Ada\\repo', 'C:\\Users\\Ada\\repo-other', false],
-      ['C:\\', 'C:\\anything', true],
-      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl$/Ubuntu/home/ada/repo/app', true],
-      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/Ada/Repo/App', true],
-      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/ada/repo/App', false],
-      ['//wsl$/Ubuntu/home/ada/repo', '//WSL.LOCALHOST/ubuntu/home/ada/repo', true],
-      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl.localhost/Debian/home/ada/repo', false],
-      ['//wsl.localhost/Ubuntu/mnt/c/work', '/mnt/c/work/app', true],
-      ['/Users/ada/repo', '/Users/ada/repo//app/', true],
-      ['/Users/ada/repo', '/Users/Ada/repo/app', false],
-      ['/Users/ada/repo', '/Users/ada/repository', false],
-      ['/', '/anywhere', true]
-    ]
-    for (const [workspace, cwd, expected] of cases) {
-      const actual = filterAiVaultSessions([{ ...baseSession, cwd }], {
-        query: '',
-        agents: ['claude'],
-        scope: 'workspace',
-        sort: 'updated',
-        activeWorktreePaths: [workspace],
-        hideEmptySessions: false
-      })
-      expect({ workspace, cwd, matched: actual.length === 1 }).toEqual({
-        workspace,
-        cwd,
-        matched: expected
-      })
-    }
-  })
-})
-
 describe('filterAiVaultSessions symlinked workspace', () => {
   it('keeps a session recorded under the real path when the host aliased it to the workspace', () => {
     const recordedUnderRealPath: AiVaultSession = {

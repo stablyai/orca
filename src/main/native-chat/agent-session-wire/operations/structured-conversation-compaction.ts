@@ -22,7 +22,7 @@ import {
   structuredAgentSessionFailureWordsContext,
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
-import { runAfterRewindStart } from './structured-agent-session-ready-operation'
+import { runAfterRewindStart } from './structured-agent-session-rewind-ready-operation'
 
 import type { ReadyOperationSelection } from './structured-agent-session-operation-child'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../delivery/structured-agent-session-send-settlement'
@@ -186,7 +186,7 @@ function acceptUnderSerialize(
         const record = context.deps.store.requireWritableRecord(ctx.sessionId)
         const refusal =
           record &&
-          conversationCommandBlocked(
+          (await conversationCommandBlocked(
             ctx,
             record,
             compactionChildWork(ctx.agents.capabilities(record.provider), () => ({
@@ -194,7 +194,7 @@ function acceptUnderSerialize(
               open: context.childWorkOpen(ctx.sessionId)
             })),
             context.sessions.get(ctx.sessionId)?.child ? undefined : 'at-rest'
-          )
+          ))
         const blocked =
           structuredAgentSessionSendBlock(record) ??
           (refusal ? { ok: false as const, refusal } : null)

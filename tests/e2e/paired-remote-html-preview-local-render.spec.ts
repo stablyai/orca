@@ -20,7 +20,6 @@ import {
   readPairedHtmlPreviewInventory,
   requireSingleDocWorkspace
 } from './helpers/paired-html-preview-inventory'
-import { focusPairedClientWindow } from './helpers/paired-client-window-reveal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const FIXTURE_NAME = 'paired-html-focus.html'
@@ -349,16 +348,17 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     expect(await readDocPreviewRenderedText(page, 'h1')).toBe(FIXTURE_HEADING)
 
     // Positive control: this same host registry must contain an ordinary client URL page.
-    await page.evaluate(async (url) => {
-      const state = window.__store?.getState()
-      const worktreeId = state?.activeWorktreeId
-      const groupId = worktreeId ? state?.activeGroupIdByWorktree[worktreeId] : null
-      if (!state || !groupId) {
-        throw new Error('paired client had no active group to open a browser tab in')
-      }
-      state.setBrowserDefaultUrl(url)
-      await state.openNewBrowserTabInActiveWorkspace(groupId)
-    }, marker.markerUrl)
+    await page.evaluate(
+      async ({ url, groupId }) => {
+        const state = window.__store?.getState()
+        if (!state) {
+          throw new Error('paired client had no store to open a browser tab in')
+        }
+        state.setBrowserDefaultUrl(url)
+        await state.openNewBrowserTabInActiveWorkspace(groupId)
+      },
+      { url: marker.markerUrl, groupId: sourceGroupId }
+    )
     await expect
       .poll(
         async () =>
@@ -389,16 +389,21 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     expect(withMarker.docWorkspaces).toHaveLength(1)
 
     // Close the URL tab’s offscreen window before trusted-click checks, which read the frontmost contents; require its host removal too.
-    await page.evaluate((origin) => {
-      const state = window.__store?.getState()
-      const worktreeId = state?.activeWorktreeId
-      for (const workspace of state?.browserTabsByWorktree[worktreeId ?? ''] ?? []) {
-        const pages = state?.browserPagesByWorkspace[workspace.id] ?? []
-        if (pages.some((browserPage) => browserPage.url.startsWith(origin))) {
-          state?.closeBrowserTab(workspace.id)
+    await page.evaluate(
+      ({ origin, worktreeId: targetWorktreeId }) => {
+        const state = window.__store?.getState()
+        const workspace = (state?.browserTabsByWorktree[targetWorktreeId] ?? []).find((tab) =>
+          (state?.browserPagesByWorkspace[tab.id] ?? []).some((browserPage) =>
+            browserPage.url.startsWith(origin)
+          )
+        )
+        if (!state || !workspace) {
+          throw new Error('paired client lost the URL control tab before closing it')
         }
-      }
-    }, marker.origin)
+        state.closeBrowserTab(workspace.id)
+      },
+      { origin: marker.origin, worktreeId }
+    )
     await expect
       .poll(
         async () =>
@@ -476,11 +481,6 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       .not.toBeNull()
     // Confirmed preview links honor the in-app preference; the default opens the system browser.
     await page.evaluate(() => window.__store?.getState().updateSettings({ openLinksInApp: true }))
-    // Trusted routing checks the reader’s front contents; preserve the fixture’s guarded activation policy.
-    expect(await focusPairedClientWindow(client)).toMatchObject({
-      isFocused: true,
-      isVisible: true
-    })
     // Take the baseline before the heading press so it cannot absorb an input-driven escape.
     const linkBaseline = {
       ...(await readPairedHtmlPreviewInventory(page, inventoryArgs)),

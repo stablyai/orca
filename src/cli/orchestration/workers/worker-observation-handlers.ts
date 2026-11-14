@@ -7,7 +7,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { escapeTerminalControlCharacters } from '../../../shared/terminal/output/terminal-control-character-escape'
 import type {
   OrchestrationWorkerReadResult,

@@ -6,11 +6,11 @@ import type { AgentSessionMutationEnvelope } from '../../../../../../shared/agen
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import {
   HOST_TEST_SESSION,
   HOST_TEST_NOW
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { call } from '../protocol/structured-agent-session-rpc.test-fixture'
 

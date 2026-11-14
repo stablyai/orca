@@ -1,7 +1,7 @@
 import { structuredChatDisplayName } from '../../../../../../shared/structured-chat-row-name'
 import { useAppStore } from '@/store/index'
 import { structuredChatTabBySessionId } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
-import { useStructuredConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
+import { useStructuredChatNaming } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
@@ -10,7 +10,7 @@ import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-orig
 export function useAiVaultSessionDisplayTitle(
   session: AiVaultSession,
   originalPane?: AiVaultOriginalPaneTarget | null
-): string {
+): { title: string; forked: boolean } {
   const owner = session.structuredSession
   const customLabel = useAppStore((state) => {
     const tab = owner
@@ -35,8 +35,12 @@ export function useAiVaultSessionDisplayTitle(
           ?.customTitle?.trim()
       : undefined
   )
-  const conversationName = useStructuredConversationName(session.executionHostId, owner?.sessionId)
+  const naming = useStructuredChatNaming(session.executionHostId, owner?.sessionId)
+  // A forked chat's row draws the fork mark before its title.
   return owner
-    ? structuredChatDisplayName(customLabel, conversationName, session.title)
-    : terminalTabTitle || session.title
+    ? {
+        title: structuredChatDisplayName(customLabel, naming.name, session.title),
+        forked: naming.forkSourceId !== null
+      }
+    : { title: terminalTabTitle || session.title, forked: false }
 }

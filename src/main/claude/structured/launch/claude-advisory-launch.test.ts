@@ -3,7 +3,7 @@ import { createClaudeStructuredLaunchResolver } from '../../../runtime/agent-ses
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { adapterFor, fakeClaude } from '../claude-structured-session-test-support'
 import { ClaudeStructuredSessionAdapter } from '../claude-structured-session-adapter'
 import type { AgentSessionAdvisoryReporter } from '../../../../shared/agent-session/agent-session-advisory-report'

@@ -1,4 +1,4 @@
-import type { StructuredAgentId } from './lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from './lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionAdvisoryPolicy } from './agent-session-advisory-policy'
 import type { AgentSessionExecutionPolicy } from './agent-session-execution-policy'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
@@ -7,7 +7,7 @@ import type { SendBody } from '../rpc-contract/structured-agent-session/structur
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionCreateFingerprint
-} from './lifecycle/structured-agent-session-mutation'
+} from './lifecycle/operations/structured-agent-session-mutation'
 
 /** Send conversation identity only; the executing host derives transcript/account paths so paired clients cannot choose files or credentials. */
 export type StructuredAgentSessionResumeSource = {

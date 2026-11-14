@@ -1,5 +1,5 @@
 import { agentSessionAdvisoryPolicySchema } from '../../../../shared/agent-session/agent-session-advisory-policy'
-import { agentSessionNeverStarted } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionNeverStarted } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'

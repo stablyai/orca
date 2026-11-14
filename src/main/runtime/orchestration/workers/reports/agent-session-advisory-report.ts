@@ -4,7 +4,7 @@ import {
   agentSessionAdvisoryReportSchema,
   type AgentSessionAdvisoryReporterFactory
 } from '../../../../../shared/agent-session/agent-session-advisory-report'
-import { acquiredAgentSessionAccount } from '../../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
+import { acquiredAgentSessionAccount } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { resolveStructuredWorkerIdentityForSession } from '../../terminal-authority/structured-sessions/structured-worker-authority'

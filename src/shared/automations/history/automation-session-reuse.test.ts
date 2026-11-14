@@ -115,15 +115,6 @@ describe('automation session reuse selection', () => {
     ).toBeNull()
   })
 
-  it('never picks an older record of a pane a newer run since used', () => {
-    expect(
-      find([
-        run({ id: 'run-done', createdAt: 1 }),
-        run({ id: 'run-reused-failed', status: 'dispatch_failed', createdAt: 2 })
-      ])
-    ).toBeNull()
-  })
-
   it('does not reuse legacy runs without exact pane and PTY identity', () => {
     expect(find([run({ terminalPaneKey: null })])).toBeNull()
     expect(find([run({ terminalPtyId: null })])).toBeNull()

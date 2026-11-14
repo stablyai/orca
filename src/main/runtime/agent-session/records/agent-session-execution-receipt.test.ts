@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { agentSessionExecutionPolicyFingerprint } from '../../../../shared/agent-session/agent-session-execution-policy'
 import { applyAgentSessionExecutionReceipt } from './agent-session-execution-receipt'
 

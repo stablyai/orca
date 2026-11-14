@@ -22,10 +22,7 @@ import {
   createCodexSessionOptionSetter,
   readLiveCodexSessionOptions
 } from '../catalog/codex-structured-session-options'
-import {
-  prepareCodexMessageDispatch,
-  readCodexAppliedInputOptions
-} from '../turns/codex-structured-message-options'
+import * as messageOptions from '../turns/codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
@@ -251,7 +248,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     try {
       const outcome = await dispatchCodexTurn(
         session,
-        await prepareCodexMessageDispatch(
+        await messageOptions.prepareCodexMessageDispatch(
           session,
           input,
           () => this.sessions.get(input.sessionId) === session,
@@ -324,8 +321,9 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
-  readAppliedInputOptions: NonNullable<SessionAdapter['readAppliedInputOptions']> = (input) =>
-    readCodexAppliedInputOptions(this.sessions.get(input.sessionId), input)
+  captureMessageSteeringInputs: NonNullable<SessionAdapter['captureMessageSteeringInputs']> = (
+    input
+  ) => messageOptions.readCodexMessageSteeringInputs(this.sessions.get(input.sessionId), input)
 
   projectOptions = (sessionId: string, options: Readonly<Record<string, string>>) =>
     projectCodexSessionOptions(this.sessions.get(sessionId), options)

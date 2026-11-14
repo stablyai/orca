@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { structuredAgentSessionDomainFingerprint } from './lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionDomainFingerprint } from './lifecycle/operations/structured-agent-session-mutation'
 
 const advisoryFields = {
   dataScope: z.literal('published'),

@@ -2,11 +2,9 @@ import { expect, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import {
-  readTestJournalOutcomes,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-current-work'
 import { hostStructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-host-current-work'
 import {
@@ -14,7 +12,7 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestMessage,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig
@@ -29,14 +27,6 @@ export const TURN: AgentJournalItemIdentity = {
 export const TURN_KEY = agentJournalItemKey(TURN)
 const IN_TURN = { kind: 'turn' as const, turnItemId: TURN_KEY }
 export const APPROVAL: AgentJournalItemIdentity = { ...TURN, ordinal: 2 }
-/** Recovered outcome values carry recovered=true. */
-export const REJECT_RECOVERED_ROWS = `
-  CREATE TEMP TRIGGER reject_recovered BEFORE INSERT ON journal_outcomes
-  WHEN (NEW.field = 'items' AND json_extract(NEW.value_json, '$.recovered') = 1)
-    OR (NEW.field = 'submissions' AND json_extract(NEW.value_json, '$[1].recovered') = 1)
-  BEGIN SELECT RAISE(ABORT, 'temporary storage failure'); END;
-`
-
 export async function leaveUnfinishedWork(
   current: QueuedMessageTestRig,
   options: { prompt?: true } = {}
@@ -71,10 +61,15 @@ export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
   if (!session || !child?.generation) {
     throw new Error('expected the original child')
   }
-  const database = openTestJournalHostDatabase(current.root)
-  const before = readTestJournalOutcomes(database.db, SESSION)
+  const before = await readTestJournalSnapshot(session.journal)
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  database.db.exec(REJECT_RECOVERED_ROWS)
+  await withTestAgentSessionDatabase(current.root, (db) =>
+    db.exec(`
+    CREATE TRIGGER reject_recovered BEFORE UPDATE OF payload_json ON journal_items
+    WHEN json_extract(NEW.payload_json, '$.recovered') = 1
+    BEGIN SELECT RAISE(ABORT, 'temporary storage failure'); END
+  `)
+  )
   await current.host.handleAdapterEvent({
     type: 'ended',
     sessionId: SESSION,
@@ -90,8 +85,8 @@ export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
     runtimeFence: child.fence + 1,
     deathEvidence: { kind: 'exit-observed', ownerFence: child.fence }
   })
-  expect(readTestJournalOutcomes(database.db, SESSION)).toEqual(before)
-  return { session, database, deadFence: child.fence }
+  expect(await readTestJournalSnapshot(session.journal)).toEqual(before)
+  return { session, deadFence: child.fence }
 }
 
 export async function exitChild(current: QueuedMessageTestRig): Promise<void> {
@@ -138,8 +133,10 @@ export function currentJournal(current: QueuedMessageTestRig) {
   return journal
 }
 
-export function currentWork(current: QueuedMessageTestRig): StructuredAgentSessionCurrentWork {
-  const work = hostStructuredAgentSessionCurrentWork(
+export async function currentWork(
+  current: QueuedMessageTestRig
+): Promise<StructuredAgentSessionCurrentWork> {
+  const work = await hostStructuredAgentSessionCurrentWork(
     { store: current.store, sessions: current.host.collaboratorsForTests().sessions },
     SESSION
   )
@@ -149,6 +146,7 @@ export function currentWork(current: QueuedMessageTestRig): StructuredAgentSessi
   return work
 }
 
-export function turnState(current: QueuedMessageTestRig): string | undefined {
-  return readAgentJournalTurn(currentJournal(current).itemBody(TURN_KEY) ?? undefined)?.state
+export async function turnState(current: QueuedMessageTestRig): Promise<string | undefined> {
+  return readAgentJournalTurn((await currentJournal(current).reads.itemBody(TURN_KEY)) ?? undefined)
+    ?.state
 }

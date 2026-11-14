@@ -41,7 +41,7 @@ vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
 
-vi.mock('@/components/floating-terminal/floating-workspace-panel-reveal', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-panel-reveal', () => ({
   revealFloatingWorkspacePanel: mocks.revealFloatingWorkspacePanel
 }))
 

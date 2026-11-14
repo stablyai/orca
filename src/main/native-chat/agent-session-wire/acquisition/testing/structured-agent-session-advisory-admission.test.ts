@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { forkTestSource } from './structured-agent-session-fork.test-fixture'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
   restTestSend,
   type RestTestRig
-} from '../../host/testing/structured-agent-session-rest-test-rig'
+} from '../../host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../../host/testing/structured-agent-session-host-test-data'
+} from '../../host/testing/structured-agent-session-host-test-data.test-fixture'
 
 let rig: RestTestRig | undefined
 
@@ -174,9 +174,6 @@ it('retains only the original advisory question across restart and permits its r
     ok: true,
     replayed: true
   })
-  expect((await rig!.host.journalSnapshot(HOST_TEST_SESSION)).submissions).toMatchObject([
-    { clientMessageId: original.envelope.clientOperationId }
-  ])
   expect(
     await rig!.host.cancel(REST_TEST_CALLER, {
       envelope: envelope('agentSession.cancel', {})

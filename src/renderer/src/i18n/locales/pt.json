@@ -1360,6 +1360,7 @@
         "fontFamily": "Fonte",
         "fontFamilyDescription": "Fonte usada nas mensagens, na atividade e na caixa de mensagem.",
         "inheritFont": "Mesma fonte do IDE",
+        "systemFont": "Fonte do sistema",
         "fontPreviewLabel": "Prévia da fonte do chat",
         "fontPreview": "A rápida raposa marrom salta sobre o cão preguiçoso.",
         "title": "Interface de chat",
@@ -1700,6 +1701,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Agentes instalados",
+      "availableRegion": "Agentes disponíveis para instalar",
       "codexTerminalServerIsolation": {
         "title": "Executar cada terminal do Codex em seu próprio servidor",
         "description": "Mantém o status do Orca e o fechamento de abas funcionando corretamente. Desative para usar o servidor compartilhado do Codex e sua visão geral dos agentes. Aplica-se a novos terminais."
@@ -19531,7 +19534,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Extensões do Chrome",
+                        "title": "Traga suas extensões do Chrome",
+                        "everydayTitle": "Suas ferramentas de navegador do dia a dia, no Orca",
                         "body": "Instale extensões pela Chrome Web Store e fixe-as ao lado da barra de endereços.",
                         "action": "Abrir Web Store",
                         "secondaryAction": "Entendi"
@@ -19781,6 +19785,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Dois Tons",
+            "silent": "Silencioso",
             "017abebfa6": "Padrão do Sistema"
           }
         }
@@ -20658,7 +20663,8 @@
         "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
         "forkedFrom": "Ramificado de",
-        "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}."
+        "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
+        "forkedFromUnknown": "Ramificado de outro chat"
       },
       "composer": {
         "planMode": "Planejar",
@@ -21674,7 +21680,12 @@
         "unconfirmedDetail": "Ela pode ter sido aberta. Confira o histórico de sessões antes de tentar novamente.",
         "failed": "{{agent}} não conseguiu ramificar este chat",
         "failedDetail": "Seu chat não foi alterado. Tente novamente.",
-        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar."
+        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar.",
+        "mark": "Fork ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Fork: {{name}}",
+        "sourceTooltip": "Ramificação de {{name}}",
+        "unknownSourceTooltip": "Ramificação de outro chat"
       },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",

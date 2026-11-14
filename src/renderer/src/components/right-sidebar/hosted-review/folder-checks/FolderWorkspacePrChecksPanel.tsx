@@ -14,7 +14,7 @@ import type {
   PRCheckDetail,
   PRCheckRunDetails
 } from '../../../../../../shared/github/checks/check-types'
-import { getAttachedWorktreesForFolderWorkspace } from '../../folder-workspace-attached-worktrees'
+import { getAttachedWorktreesForFolderWorkspace } from '../../folder-workspaces/folder-workspace-attached-worktrees'
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
 import type { ParentPrChecksRefreshOutcome, ParentPrChecksRow } from './parent-pr-checks-row-types'
 import {
@@ -26,7 +26,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { FolderWorkspaceEmptyState } from '../../folder-workspace-empty-state'
+import { FolderWorkspaceEmptyState } from '../../folder-workspaces/folder-workspace-empty-state'
 
 type FolderWorkspacePrChecksPanelProps = {
   isVisible?: boolean

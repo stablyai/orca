@@ -1,3 +1,4 @@
+import { replaceWorkerRecordReadback } from './worker-record-readback.test-fixture'
 import { agentSessionAdvisoryPolicyFingerprint } from '../../../../../shared/agent-session/agent-session-advisory-policy'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createAdvisoryReportPublisher } from './agent-session-advisory-report'
@@ -11,14 +12,14 @@ import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_NOW,
   HOST_TEST_SESSION
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -153,7 +154,7 @@ afterEach(async () => {
   structuredWorkerIdentities.clear()
   await rig.dispose()
   db.close()
-  vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
 function publisher() {
@@ -189,7 +190,7 @@ it('exposes the bound policy limits without snapshots or a qualification claim',
 it('discards a readback whose private advisory policy changed during the read', async () => {
   vi.spyOn(rig.host, 'hasSession').mockReturnValue(true)
   vi.spyOn(rig.host, 'readOptions').mockImplementation(async () => {
-    await rig.store.transitionHandoff(HOST_TEST_SESSION, (record) => ({
+    replaceWorkerRecordReadback(rig.store, HOST_TEST_SESSION, (record) => ({
       ...record,
       advisoryPolicy: { ...record.advisoryPolicy!, maxModelCalls: 3 }
     }))
@@ -273,7 +274,7 @@ it.each(['generation', 'host', 'deadline', 'policy', 'stop'] as const)(
       rig.clock.now += 300_001
     }
     if (changed === 'policy') {
-      await rig.store.transitionHandoff(HOST_TEST_SESSION, (record) => ({
+      replaceWorkerRecordReadback(rig.store, HOST_TEST_SESSION, (record) => ({
         ...record,
         advisoryPolicy: { ...record.advisoryPolicy!, maxModelCalls: 3 }
       }))

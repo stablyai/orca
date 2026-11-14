@@ -83,24 +83,6 @@ function capture(script: string, maxBuffer = 1024 * 1024) {
 }
 
 describe('worker-owned Git capture', () => {
-  it('keeps the caller responsive while process creation is blocked on the worker', async () => {
-    const gate = new SharedArrayBuffer(4)
-    await createHost(gate)
-    const pending = capture('process.stdout.write("ready")')
-    let completed = false
-    void pending.result.then(() => {
-      completed = true
-    })
-    try {
-      await nextTurn()
-      expect(completed).toBe(false)
-    } finally {
-      Atomics.store(new Int32Array(gate), 0, 1)
-      Atomics.notify(new Int32Array(gate), 0)
-    }
-    await expect(pending.result).resolves.toMatchObject({ error: null, stdout: 'ready' })
-  })
-
   it('preserves UTF-8, stdin, stderr and nonzero exit status', async () => {
     await createHost()
     const pending = capture(

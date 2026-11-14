@@ -33,10 +33,13 @@ function retireGuest(id: number, expected?: GuestMetadataEntry): void {
   const subscribers = listeners.get(id)
   guests.delete(id)
   initialReads.delete(id)
-  listeners.delete(id)
   entry?.stopObserving?.()
-  subscribers?.forEach((listener) => listener(null))
-  subscribers?.clear()
+  // oxlint-disable-next-line unicorn/no-useless-spread -- Retirement callbacks can subscribe or dispose synchronously.
+  for (const listener of [...(subscribers ?? [])]) {
+    if (subscribers?.has(listener)) {
+      listener(null)
+    }
+  }
 }
 
 function observeGuestDeath(
@@ -122,6 +125,21 @@ function refreshGuest(id: number, browserPageId: string): void {
       }
     })
   initialReads.set(id, request)
+}
+
+export function refreshBrowserGuestMetadata(
+  browserPageId: string,
+  webview: Electron.WebviewTag
+): void {
+  const id = readBrowserGuestId(webview)
+  if (id === null) {
+    return
+  }
+  const entry = Object.assign(guests.get(id) ?? {}, { browserPageId, applicable: false })
+  guests.set(id, entry)
+  observeGuestDeath(id, webview, entry)
+  initialReads.delete(id)
+  refreshGuest(id, browserPageId)
 }
 
 export function acceptBrowserGuestMetadata(state: BrowserGuestMetadata): void {

@@ -8,7 +8,7 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-s
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
 import type { StructuredSessionSurface } from '../agent-session/structured-agent-session-close'
-import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-groups/tab-order'
 import {
   chatTabId,

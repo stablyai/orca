@@ -659,6 +659,7 @@
         "fontKeywordTypeface": "Schriftart",
         "fontKeywordTypography": "Typografie",
         "inheritFont": "Wie IDE-Schrift",
+        "systemFont": "Systemschrift",
         "fontPreviewLabel": "Vorschau der Chat-Schrift",
         "fontPreview": "Der schnelle braune Fuchs springt über den faulen Hund.",
         "title": "Chat-Oberfläche",
@@ -804,6 +805,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Installierte Agenten",
+      "availableRegion": "Zur Installation verfügbare Agenten",
       "permissionsTitle": "Berechtigungen",
       "permissionsChoiceExplanation": "Legt fest, was alle Agenten ohne Rückfrage tun dürfen. Einzelne Agenten können unten abweichend eingestellt werden.",
       "permissionEachOwn": "Eigene Einstellungen je Agent",
@@ -3774,6 +3777,7 @@
             "1e4b81d892": "Dumpfer Schlag",
             "86af8d938c": "Gong",
             "80f7cc95b3": "Zweiton",
+            "silent": "Lautlos",
             "017abebfa6": "Systemstandard"
           }
         }
@@ -17174,7 +17178,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome-Erweiterungen",
+                        "title": "Bring deine Chrome-Erweiterungen mit",
+                        "everydayTitle": "Deine täglichen Browser-Tools, in Orca",
                         "body": "Installiere Erweiterungen aus dem Chrome Web Store und hefte sie neben der Adressleiste an.",
                         "action": "Web Store öffnen",
                         "secondaryAction": "Verstanden"
@@ -19468,7 +19473,8 @@
         "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
         "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
         "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
-        "forkedFrom": "Abgezweigt von"
+        "forkedFrom": "Abgezweigt von",
+        "forkedFromUnknown": "Abgezweigt von einem anderen Chat"
       },
       "composer": {
         "send": "Senden",
@@ -20222,7 +20228,12 @@
         "failed": "{{agent}} konnte diesen Chat nicht abzweigen",
         "hostUnsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut.",
         "failedDetail": "Dein Chat ist unverändert. Versuche es erneut.",
-        "commandWorking": "Abzweigen ist nicht möglich, während {{agent}} antwortet. Führe /fork erneut aus, wenn die Antwort fertig ist."
+        "commandWorking": "Abzweigen ist nicht möglich, während {{agent}} antwortet. Führe /fork erneut aus, wenn die Antwort fertig ist.",
+        "mark": "Zweig ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Zweig: {{name}}",
+        "sourceTooltip": "Abgezweigt von {{name}}",
+        "unknownSourceTooltip": "Von einem anderen Chat abgezweigt"
       },
       "cardKindHidden": {
         "description": "Das kannst du jederzeit hier ändern:",

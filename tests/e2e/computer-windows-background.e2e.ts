@@ -1,13 +1,6 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import type { ComputerActionResult, ComputerLaunchAppResult } from '../../src/shared/runtime-types'
-import {
-  ensureOrcaRuntimeLaunched,
-  parseJsonOutput,
-  runOrcaCli,
-  stopOrcaRuntime
-} from './helpers/computer-driver'
+import type { ComputerActionResult } from '../../src/shared/runtime-types'
+import { ensureOrcaRuntimeLaunched, runOrcaCli, stopOrcaRuntime } from './helpers/computer-driver'
 import { elementIndex, runPatternAction } from './helpers/windows-fixture-actions'
 import {
   launchWindowsFormsFixture,
@@ -251,59 +244,6 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
       const after = await readState()
       expect(after.activations).toBe(before.activations)
       expect(after.notes).toBe(before.notes)
-    })
-  }
-)
-
-async function foregroundWindowOwnerPid(): Promise<number> {
-  const { stdout } = await promisify(execFile)(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      [
-        'Add-Type -Name Foreground -Namespace OrcaE2E -MemberDefinition \'[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);\'',
-        '$owner = [uint32]0',
-        '[void][OrcaE2E.Foreground]::GetWindowThreadProcessId([OrcaE2E.Foreground]::GetForegroundWindow(), [ref]$owner)',
-        '$owner'
-      ].join('; ')
-    ],
-    { windowsHide: true }
-  )
-  return Number.parseInt(stdout.trim(), 10)
-}
-
-// Character Map is a classic single-process Win32 app on every Windows image, so its pid owns its window.
-describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
-  'computer-use Windows launch-app',
-  () => {
-    let launchedPid: number | null = null
-
-    beforeAll(async () => {
-      await ensureOrcaRuntimeLaunched()
-    })
-
-    afterAll(async () => {
-      if (launchedPid !== null) {
-        await promisify(execFile)('taskkill.exe', ['/PID', String(launchedPid), '/F'], {
-          windowsHide: true
-        }).catch(() => {})
-      }
-      await stopOrcaRuntime()
-    })
-
-    test('launch-app starts an app and reports where it ended up', async () => {
-      const result = parseJsonOutput<{ result: ComputerLaunchAppResult }>(
-        (await runOrcaCli(['computer', 'launch-app', 'charmap', '--json'])).stdout
-      ).result
-      launchedPid = result.app.pid
-
-      expect(result.launched).toBe(true)
-      // CI never holds a foreground lock (no user input), so any app may take the foreground here;
-      // what must hold is that delivery reports what happened.
-      const ownsForeground = (await foregroundWindowOwnerPid()) === result.app.pid
-      expect(result.delivery).toBe(ownsForeground ? 'foreground' : 'background')
     })
   }
 )

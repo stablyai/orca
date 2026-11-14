@@ -36,7 +36,10 @@ import {
   assertUniqueIdWhenRequired,
   type FolderWorkspaceMutationOptions
 } from './folder-workspace-unique-id-mutation'
-import { deleteFolderWorkspaceRow } from './folder-workspace-deletion'
+import {
+  deleteFolderWorkspaceRow,
+  type FolderWorkspaceDeleteOptions
+} from './folder-workspace-deletion'
 import { createFolderWorkspaceWithPluginHooks } from '../../plugins/hooks/workspace-create-plugin-hook'
 import {
   assertWslMoveRepoWritable,
@@ -275,8 +278,8 @@ export class RuntimeProjectGroupController {
 
   async deleteFolderWorkspace(
     folderWorkspaceId: string,
-    options: FolderWorkspaceMutationOptions = {}
-  ): Promise<{ deleted: boolean }> {
+    options: FolderWorkspaceDeleteOptions = {}
+  ): ReturnType<typeof deleteFolderWorkspaceRow> {
     return deleteFolderWorkspaceRow(this.deps, folderWorkspaceId, options)
   }
 }

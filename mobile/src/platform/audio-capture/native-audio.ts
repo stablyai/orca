@@ -5,10 +5,10 @@ import {
   audioStopParamsSchema,
   type BridgeAudioInterruption,
   type BridgeAudioPermission
-} from '../../mobile-web-shell/bridge/bridge-audio-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-audio-verbs'
 import { MAX_DICTATION_AUDIO_CHUNK_BYTES as BRIDGE_AUDIO_RING_MAX_BYTES } from '../../../../src/shared/rpc-contract/speech/speech-params'
-import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/bridge-native-verbs'
-import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/bridge-host-errors'
+import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
+import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge/bridge-host-errors'
 import { bytesToBase64 } from '../../hooks/mobile-dictation-session-state'
 import type { MicrophoneScreenLock } from './microphone-screen-lock'
 

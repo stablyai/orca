@@ -1,24 +1,25 @@
+import { reenterPackagedElectron } from '../runtime/app-launch/packaged-cli-interpreter'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import type { CommandHandler } from '../dispatch/dispatch'
-import { RuntimeClientError } from '../runtime/types'
-import { getOptionalServePort } from '../runtime/serve-port-flag'
-import { getOptionalServeBind, resolveServeBindValue } from '../runtime/serve-bind-flag'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { getOptionalServePort } from '../runtime/commands/serve-port-flag'
+import { getOptionalServeBind, resolveServeBindValue } from '../runtime/commands/serve-bind-flag'
 import { formatServeServiceInstall, formatServeServiceStatus } from './serve-service-format'
-import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
-import { getPlatformUserDataPath } from '../runtime/metadata'
+import { resolveLaunchUserDataPath } from '../runtime/profile/launch-user-data-path'
+import { getPlatformUserDataPath } from '../runtime/profile/metadata'
 import {
   clearServeSupervisorBrake,
   readServeSupervisorBrake
-} from '../runtime/serve-supervisor-brake'
+} from '../runtime/serve/supervision/serve-supervisor-brake'
 import {
   renderServeService,
   resolveServeServiceManager,
   type ServeServiceSpec
-} from '../runtime/serve-service-unit'
-import { resolveServiceCommand, resolveServicePath } from '../runtime/serve-app-launcher'
+} from '../runtime/serve/supervision/serve-service-unit'
+import { resolveServiceCommand, resolveServicePath } from '../runtime/app-launch/serve-app-launcher'
 
 type Run = (program: string, args: string[]) => Promise<{ code: number | null; out: string }>
 
@@ -268,7 +269,7 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
         'Use either --allow-public or --refuse-public, not both.'
       )
     }
-    const result = await installServeService({
+    const options = {
       command: optionalString(flags.get('command')),
       // Validate before launchd can loop on a bad value and trip the supervisor brake.
       port: getOptionalServePort(flags),
@@ -277,7 +278,9 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
       allowPublic: flags.get('allow-public') === true,
       refusePublic: flags.get('refuse-public') === true,
       dryRun: flags.get('dry-run') === true
-    })
+    }
+    reenterPackagedElectron()
+    const result = await installServeService(options)
     emit(result, json, formatServeServiceInstall)
   },
   'serve service status': async ({ json }) => {

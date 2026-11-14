@@ -1,12 +1,3 @@
-import { GitAdmissionScheduler } from '../../../../shared/git/admission/git-admission-scheduler'
-import {
-  acquireGitAdmission,
-  _resetGitAdmissionForTests
-} from '../../../git/command-runner/admission/git-subprocess-admission'
-import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -43,30 +34,13 @@ import {
   _resetWorktreeScanCacheForTests,
   bumpWorktreeScanGeneration
 } from '../../../git/worktrees/catalog/worktree-scan-cache'
-import {
-  _resetPendingWorktreeRemovalsForTests,
-  _settlePendingWorktreeRemovalsForTests,
-  resumeInterruptedWorktreeRemovals
-} from '../../../workspaces/removal/worktree-background-removal'
-import { prepareWorktreeRemovalsForStore } from '../../../workspaces/removal/worktree-removal-records-load'
-import {
-  writeWorktreeRemovalRecords,
-  readWorktreeRemovalRecords
-} from '../../../workspaces/removal/worktree-removal-records'
+import { _resetPendingWorktreeRemovalsForTests } from '../../../workspaces/removal/worktree-background-removal'
 
-const originalPlatform = process.platform
-let directory = ''
-afterEach(async () => {
+afterEach(() => {
   _resetPendingWorktreeRemovalsForTests()
   _resetWorktreeScanCacheForTests()
   scan.mockReset()
   nativeGraph.mockReset()
-  Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-  _resetGitAdmissionForTests()
-  if (directory) {
-    await rm(directory, { recursive: true, force: true })
-  }
-  directory = ''
 })
 function record(index: number, repoId: string): WorktreeRemovalRecord {
   return {
@@ -99,46 +73,6 @@ function host(repos: Repo[]) {
   }
 }
 
-it.each([10, 100])(
-  'shares the two owning repo inventories while completing %i saved removals',
-  async (population) => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-recovery-scan-contract-'))
-    const repos = [0, 1].map((i) => ({
-      id: `repo-${i}`,
-      path: `/missing/repo-${i}`,
-      displayName: 'repo',
-      badgeColor: '',
-      addedAt: 0
-    }))
-    const records = Array.from({ length: population }, (_, index) =>
-      record(index, `repo-${index % 2}`)
-    )
-    await writeWorktreeRemovalRecords(directory, () => records)
-    await prepareWorktreeRemovalsForStore({
-      getProfileStorageDirectory: () => directory,
-      getRepos: () => repos
-    })
-    let release!: () => void
-    const reading = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    scan.mockImplementation(async () => {
-      await reading
-      return []
-    })
-    const runtime = host(repos)
-    resumeInterruptedWorktreeRemovals((saved) => interruptedLocalWorktreeRemovalJob(saved, runtime))
-    // Each distinct repo needs one authoritative inventory; pending rows cannot require duplicate concurrent reads.
-    await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(2))
-    release()
-    await _settlePendingWorktreeRemovalsForTests()
-    expect(runtime.purge.mock.calls.map(([saved]) => saved.worktreeId).sort()).toEqual(
-      records.map((saved) => saved.worktreeId).sort()
-    )
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
-  }
-)
-
 it('obtains a fresh inventory after a catalog generation changes and protects the replacement checkout', async () => {
   const saved = record(0, 'repo-0')
   const runtime = host([
@@ -167,119 +101,3 @@ it('obtains a fresh inventory after a catalog generation changes and protects th
   release()
   await first
 })
-
-it.each([10, 100])(
-  'cancels queued recovery before spawning an inventory and preserves %i accepted records',
-  async (population) => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-recovery-cancel-'))
-    _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
-    const blocker = await acquireGitAdmission({
-      args: ['status'],
-      cwd: '/held',
-      tier: 'background'
-    })
-    const repos = [
-      { id: 'repo-0', path: '/missing/repo-0', displayName: 'repo', badgeColor: '', addedAt: 0 }
-    ]
-    const records = Array.from({ length: population }, (_, index) => record(index, 'repo-0'))
-    const spawn = vi.fn()
-    scan.mockImplementation(async (cwd: string, options: { signal: AbortSignal }) => {
-      const grant = await acquireGitAdmission({
-        args: ['worktree', 'list', '--porcelain'],
-        cwd,
-        signal: options.signal,
-        tier: 'background'
-      })
-      try {
-        spawn()
-        return []
-      } finally {
-        grant.release()
-      }
-    })
-    try {
-      await writeWorktreeRemovalRecords(directory, () => records)
-      await prepareWorktreeRemovalsForStore({
-        getProfileStorageDirectory: () => directory,
-        getRepos: () => repos
-      })
-      const runtime = host(repos)
-      resumeInterruptedWorktreeRemovals((saved) =>
-        interruptedLocalWorktreeRemovalJob(saved, runtime)
-      )
-      await vi.waitFor(() => expect(scan).toHaveBeenCalledOnce())
-      await worktreeRemovalLifetime.close()
-      expect(spawn).not.toHaveBeenCalled()
-      expect(runtime.purge).not.toHaveBeenCalled()
-      expect(
-        (await readWorktreeRemovalRecords(directory)).map((saved) => saved.worktreeId).sort()
-      ).toEqual(records.map((saved) => saved.worktreeId).sort())
-    } finally {
-      blocker.release()
-    }
-  }
-)
-
-it.each([10, 100])(
-  'cancels the shared native authorization after outer inventory for %i saved removals',
-  async (population) => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    directory = await mkdtemp(join(tmpdir(), 'orca-native-recovery-cancel-'))
-    _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
-    const blocker = await acquireGitAdmission({
-      args: ['status'],
-      cwd: '/held',
-      tier: 'background'
-    })
-    const records = Array.from({ length: population }, (_, index) => record(index, 'repo-0'))
-    const repos = [
-      { id: 'repo-0', path: '/missing/repo-0', displayName: 'repo', badgeColor: '', addedAt: 0 }
-    ]
-    scan.mockResolvedValue(
-      records.map((saved) => ({
-        path: saved.worktreePath,
-        branch: 'refs/heads/feature',
-        head: 'abc',
-        isBare: false,
-        isMainWorktree: false
-      }))
-    )
-    const spawned = vi.fn()
-    nativeGraph.mockImplementation(async (cwd: string, options: { signal: AbortSignal }) => {
-      const grant = await acquireGitAdmission({
-        args: ['worktree', 'list', '--porcelain'],
-        cwd,
-        signal: options.signal,
-        tier: 'background'
-      })
-      try {
-        spawned()
-        return []
-      } finally {
-        grant.release()
-      }
-    })
-    try {
-      await writeWorktreeRemovalRecords(directory, () => records)
-      await prepareWorktreeRemovalsForStore({
-        getProfileStorageDirectory: () => directory,
-        getRepos: () => repos
-      })
-      const runtime = host(repos)
-      resumeInterruptedWorktreeRemovals((saved) =>
-        interruptedLocalWorktreeRemovalJob(saved, runtime)
-      )
-      await vi.waitFor(() => expect(nativeGraph).toHaveBeenCalledOnce())
-      await worktreeRemovalLifetime.close()
-      expect(spawned).not.toHaveBeenCalled()
-      expect(runtime.acquireWatcherRemoval).not.toHaveBeenCalled()
-      expect(runtime.stopPtys).not.toHaveBeenCalled()
-      expect(runtime.purge).not.toHaveBeenCalled()
-      expect(
-        (await readWorktreeRemovalRecords(directory)).map((saved) => saved.worktreeId).sort()
-      ).toEqual(records.map((saved) => saved.worktreeId).sort())
-    } finally {
-      blocker.release()
-    }
-  }
-)

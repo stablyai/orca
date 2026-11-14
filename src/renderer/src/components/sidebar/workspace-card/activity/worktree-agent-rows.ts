@@ -1,6 +1,6 @@
 import type { Tab } from '../../../../../../shared/tab-types'
 import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import {
   isAgentStatusFresh,
   AGENT_STATUS_STALE_AFTER_MS
@@ -29,7 +29,7 @@ import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-iden
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 import { compareWorktreeAgentRows } from './worktree-agent-row-order'
 import { tabFromWorktreeAttributedStatusEntry } from './worktree-agent-row-fallback-tab'
-import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../../../shared/agent-session/lifecycle/resume/agent-session-start-time'
 import { resolveRowAgentType } from './worktree-agent-row-type'
 import { entryWithRuntimeOrchestration } from './worktree-agent-row-orchestration'
 

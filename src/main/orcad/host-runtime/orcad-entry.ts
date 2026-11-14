@@ -10,6 +10,7 @@ import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-ada
 import { prepareOrcadSecretStoreAndMigrate } from '../credentials/orcad-secret-store-startup'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from '../../../shared/orcad-bind-address'
 import {
+  startOrcadAgentSessionRecordStoreOpen,
   startOrcadWithHost,
   stopOrcadStructuredAgentSessions
 } from '../host-lifecycle/orcad-lifecycle'
@@ -121,8 +122,7 @@ async function activateOrcadRuntime(
   registerCleanup(profileShutdown.finalize)
   registerCleanup(stopOrcadStructuredAgentSessions)
   registerCleanup(() => watcherProcess.disposeWatcherProcessAndWait())
-  const { DesktopPushService } = await import('../../runtime/push/desktop-push-service')
-  const { resolvePushGatewayOrigin } = await import('../../runtime/push/push-gateway-origin')
+  const { startOrcadDesktopPushService } = await import('./orcad-desktop-push')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   const { startEventLoopDelayProbe } = await import('../../diagnostics/event-loop-delay-probe')
@@ -164,6 +164,9 @@ async function activateOrcadRuntime(
     !options.noAgentHookSync
   )
 
+  // Boots the chat writer during the daemon wait, after login env; restoration consumes this attempt.
+  const chatJournal = await startOrcadAgentSessionRecordStoreOpen(profileStore)
+
   // Install the daemon provider before PTY handlers can route their first call.
   await daemonStartup
 
@@ -193,6 +196,7 @@ async function activateOrcadRuntime(
   const { createOrcadPairedEnvironmentOptions } = await import('./orcad-paired-environment-options')
   const pairedEnvironments = createOrcadPairedEnvironmentOptions()
   const runtime = new OrcaRuntimeService(profileStore, stats, {
+    legacyStructuredSessionTabIds: chatJournal.open.legacySessionTabIds,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
     getAdditionalAiVaultCodexHomePaths: () => [
@@ -222,6 +226,7 @@ async function activateOrcadRuntime(
     }
   })
   profileShutdown.paneGrids = runtime
+  runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
 
   accountLaunch?.attachToRuntime(runtime)
   const { wireGitHubIssueLinkTitleFill } =
@@ -312,16 +317,8 @@ async function activateOrcadRuntime(
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())
   worktreeRemovalLifetime.resume(() => runtime.finishInterruptedWorktreeRemovals())
-  // The daemon has no window to wait for; its CI-line watches start with the runtime.
-  runtime.startPullRequestWatches()
   startOrcadSchedulers(runtime, profileStore, registerCleanup)
-  const pushService = DesktopPushService.create({
-    runtime,
-    runtimeRpc: rpc,
-    gatewayUrl: resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged())
-  })
-  pushService?.start()
-  getAppEnvironment().onWillQuit(() => pushService?.stop())
+  startOrcadDesktopPushService(runtime, rpc)
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 
   const readiness = await buildOrcadServeReadiness({
@@ -337,6 +334,9 @@ async function activateOrcadRuntime(
   })
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
+  // Background chat-journal maintenance and CI-line watches start once this host is serving.
+  chatJournal.serving()
+  runtime.startPullRequestWatches({ admit: true })
   reportStartupTiming()
   managedAgentHooks?.readinessPublished()
 

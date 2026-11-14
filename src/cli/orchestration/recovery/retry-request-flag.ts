@@ -1,5 +1,5 @@
 import { rejectValuelessFlag } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import {
   isOrchestrationRetryRequestId,
   RETRY_REQUEST_ID_GUIDANCE

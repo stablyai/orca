@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StructuredAgentSessionLifecycleEvent } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
 
 function ended(

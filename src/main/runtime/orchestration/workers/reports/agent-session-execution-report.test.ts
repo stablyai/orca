@@ -1,3 +1,4 @@
+import { replaceWorkerRecordReadback } from './worker-record-readback.test-fixture'
 import { agentSessionExecutionReceiptSchema } from '../../../../../shared/agent-session/agent-session-execution-receipt'
 import { readWorkerExecutionReceipt } from '../../../rpc/methods/orchestration/worker/worker-execution-receipt'
 import { createHash } from 'node:crypto'
@@ -13,14 +14,14 @@ import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_NOW,
   HOST_TEST_SESSION
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -192,7 +193,7 @@ afterEach(async () => {
   structuredWorkerIdentities.clear()
   await rig.dispose()
   db.close()
-  vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
 function publisher() {
@@ -225,7 +226,7 @@ it.each(['generation', 'host', 'deadline', 'policy', 'stop'] as const)(
       rig.clock.now += 120_001
     }
     if (changed === 'policy') {
-      await rig.store.transitionHandoff(HOST_TEST_SESSION, (record) => ({
+      replaceWorkerRecordReadback(rig.store, HOST_TEST_SESSION, (record) => ({
         ...record,
         executionPolicy: { ...record.executionPolicy!, sourcePin: 'c'.repeat(40) }
       }))
@@ -256,7 +257,7 @@ it('reads final proof from the native record and strips its private custody hash
       closure: { root: 'exited', tree: 'exited', observedAt: HOST_TEST_NOW + 1_000 }
     }
   })
-  await rig.store.transitionHandoff(HOST_TEST_SESSION, (record) => ({
+  replaceWorkerRecordReadback(rig.store, HOST_TEST_SESSION, (record) => ({
     ...record,
     lease: {
       ...record.lease,
@@ -300,7 +301,7 @@ it('reads final proof from the native record and strips its private custody hash
     kind: 'execution-receipt',
     qualification: { runtime: { runtimeId: 'qualification-runtime' } }
   })
-  await rig.store.transitionHandoff(HOST_TEST_SESSION, (record) => ({
+  replaceWorkerRecordReadback(rig.store, HOST_TEST_SESSION, (record) => ({
     ...record,
     lease: { ...record.lease, runtimeFence: record.lease.runtimeFence + 1 }
   }))

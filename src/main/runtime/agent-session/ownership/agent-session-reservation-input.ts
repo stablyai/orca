@@ -2,7 +2,7 @@ import {
   isAgentSessionLaunchEnv,
   isAgentSessionOptions
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/agent-session-launch-args'
+import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/records/agent-session-launch-args'
 import { validateAdvisoryReservationInput } from './agent-session-advisory-reservation'
 import { validateExecutionReservationInput } from './agent-session-execution-reservation'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'

@@ -1,4 +1,5 @@
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 // Validate fingerprints centrally. Prepare ledger replays without admitting writes; first runs
 // prepare ownership before lease admission, while command-receipt plans use their own admission.
 
@@ -7,11 +8,11 @@ import {
   agentSessionFingerprintConflict,
   agentSessionLedgerRefusal,
   computeAgentSessionPayloadFingerprint
-} from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type {
   AgentSessionOperationDecision,
   AgentSessionOperationRow
-} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
@@ -36,7 +37,8 @@ import type { StructuredAgentSessionCurrentWork } from '../observations/structur
 import { runSettledAgentSessionMutation } from './structured-agent-session-operation-settlement'
 import {
   agentSessionOperationOutcomeUnknown,
-  resolveAgentSessionReplayOutcome
+  resolveAgentSessionReplayOutcome,
+  resolveAsyncAgentSessionReplayOutcome
 } from './structured-agent-session-replay-outcome'
 import type { AgentSessionReplayContext } from './structured-agent-session-turns'
 import {
@@ -53,6 +55,11 @@ import {
   refuseAgentSessionMutation
 } from './structured-agent-session-mutation-refusals'
 
+type RecordedOperationReplay<TValue> =
+  | Omit<Extract<AgentSessionMutationResult<TValue>, { ok: true }>, 'cursor'>
+  | Extract<AgentSessionMutationResult<TValue>, { ok: false }>
+  | 'rerun'
+
 export type AgentSessionMutationSessionPreparation =
   | { ok: true }
   | { ok: false; refusal: AgentSessionWireRefusal }
@@ -67,7 +74,8 @@ export type AgentSessionMutationRequest<TValue> = {
   plan: MutationPlan<TValue>
   /** Read after preparation; absent if no conversation is held. */
   journal: () => AgentSessionJournal | undefined
-  currentWork?: () => StructuredAgentSessionCurrentWork | null
+  currentWork?: () => Promise<StructuredAgentSessionCurrentWork | null>
+  readWork?: JournalWorkReader
   /** Prepare between ledger evaluation and lease admission; return any terminal refusal. */
   prepareSession?: (
     ledger: Exclude<AgentSessionOperationDecision['decision'], 'refused'>,
@@ -183,13 +191,13 @@ async function admitAndRunAgentSessionMutationUnchecked<TValue>(
   }
 
   if (admission.decision === 'replay') {
-    const replayed = replayRecordedOperation(
+    const replayed = await replayRecordedOperation(
       request,
       mutationReplayContext(request, journal, record),
       admission.row
     )
     if (replayed !== 'rerun') {
-      return replayed
+      return replayed.ok ? { ...replayed, cursor: await journal.reads.cursor() } : replayed
     }
     // No durable effect landed; require first-run lease admission even if a refused ledger row exists.
     const rerun = admitAgentSessionMutation({
@@ -216,7 +224,13 @@ async function admitAndRunAgentSessionMutationUnchecked<TValue>(
     context
   })
   return outcome.ok
-    ? { ok: true, replayed: false, fence, cursor: journal.cursor(), value: outcome.value }
+    ? {
+        ok: true,
+        replayed: false,
+        fence,
+        cursor: await journal.reads.cursor(),
+        value: outcome.value
+      }
     : refuseAgentSessionMutation(outcome.refusal)
 }
 
@@ -264,11 +278,14 @@ async function answerRecordedOperation<TValue>(
     return 'rerun'
   }
   const context = mutationReplayContext(request, journal, current.record)
-  return replayRecordedOperation(request, context, current.decision.row)
+  const replayed = await replayRecordedOperation(request, context, current.decision.row)
+  return replayed !== 'rerun' && replayed.ok
+    ? { ...replayed, cursor: await journal.reads.cursor() }
+    : replayed
 }
 
 /** Reconstruct the recorded answer; rerun only when no durable effect landed. */
-export function replayRecordedOperation<TValue>(
+export async function replayRecordedOperation<TValue>(
   {
     plan,
     envelope
@@ -281,8 +298,8 @@ export function replayRecordedOperation<TValue>(
   },
   context: AgentSessionReplayContext,
   row: AgentSessionOperationRow
-): AgentSessionMutationResult<TValue> | 'rerun' {
-  const replay = resolveAgentSessionReplayOutcome({
+): Promise<RecordedOperationReplay<TValue>> {
+  const replay = await resolveAsyncAgentSessionReplayOutcome({
     operationId: envelope.clientOperationId,
     outcome: row.outcome,
     reconstruct: () => plan.replay(context, row.outcome),
@@ -297,7 +314,6 @@ export function replayRecordedOperation<TValue>(
         ok: true,
         replayed: true,
         fence: context.fence,
-        cursor: context.journal.cursor(),
         value: replay.value
       }
     : 'rerun'

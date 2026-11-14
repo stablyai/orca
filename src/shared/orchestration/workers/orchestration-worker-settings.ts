@@ -1,5 +1,5 @@
 import type { AgentSessionExecutionQualification } from '../../agent-session/agent-session-execution-qualification'
-import type { AgentSessionOptionsResult } from '../../agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../agent-session/options/protocol/agent-session-options-result'
 import type { AgentSessionAdvisoryPolicy } from '../../agent-session/agent-session-advisory-policy'
 import type { AgentSessionExecutionEvidence } from '../../agent-session/agent-session-execution-evidence'
 import type { AgentSessionAdvisoryReceipt } from '../../agent-session/agent-session-advisory-receipt'

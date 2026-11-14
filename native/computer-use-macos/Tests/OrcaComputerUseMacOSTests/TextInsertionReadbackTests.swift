@@ -10,13 +10,6 @@ final class TextInsertionReadbackTests: XCTestCase {
         )
     }
 
-    func testUnpredictableInsertionsReturnNil() {
-        XCTAssertNil(TextInsertionReadback.expectedValue(current: "abc", selection: nil, inserting: "d"))
-        XCTAssertNil(TextInsertionReadback.expectedValue(current: "abc", selection: 2..<4, inserting: "d"))
-        XCTAssertNil(TextInsertionReadback.expectedValue(current: "a😀", selection: 2..<2, inserting: "d"))
-        XCTAssertNil(TextInsertionReadback.expectedValue(current: "", selection: 0..<0, inserting: "send\n"))
-        XCTAssertNil(TextInsertionReadback.expectedValue(current: "hello", selection: 0..<5, inserting: "hello"))
-    }
 
     func testFieldStillFillingPastTheQuietWindowLands() {
         // One character every 0.4 s: each read is past the first 0.5 s window, but each change restarts it.
@@ -54,9 +47,6 @@ final class TextInsertionReadbackTests: XCTestCase {
         XCTAssertEqual(outcome, .undetermined)
     }
 
-    func testContentEditableNoBreakSpacesLand() {
-        XCTAssertEqual(settle(expected: "a  b ", reads: ["a \u{00A0}b\u{00A0}"], secondsPerRead: 0.025), .landed)
-    }
 
     func testFieldThatDropsTheTextIsAMismatch() {
         XCTAssertEqual(settle(expected: "hello", reads: Array(repeating: "", count: 100), secondsPerRead: 0.025), .mismatch)

@@ -35,7 +35,7 @@ type Prepared =
       before: Promise<void>
     }
 
-type StartFailure = NonNullable<ReturnType<typeof startThatFailedWhileQueued>>
+type StartFailure = NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>
 
 export class StructuredAgentSessionDeliveryLoop {
   private readonly running = new Map<string, DeliveryProgress>()
@@ -50,7 +50,9 @@ export class StructuredAgentSessionDeliveryLoop {
 
   dispose(): void {
     this.disposed = true
+    const ids = [...this.running.keys()]
     this.running.clear()
+    ids.forEach((id) => this.deps.activityChanged?.(id))
     this.deps.deliveryOrder.dispose()
   }
 
@@ -60,12 +62,12 @@ export class StructuredAgentSessionDeliveryLoop {
       return Promise.resolve()
     }
     this.running.get(sessionId)?.woke()
-    this.deps.deliveryOrder.reconcile(sessionId, this.deps.sessions.get(sessionId)?.journal)
     if (this.running.has(sessionId)) {
       return this.runs.get(sessionId) ?? Promise.resolve()
     }
     const progress = new DeliveryProgress()
     this.running.set(sessionId, progress)
+    this.deps.activityChanged?.(sessionId)
     const run = this.run(sessionId, progress).finally(() => {
       if (this.runs.get(sessionId) === run) {
         this.runs.delete(sessionId)
@@ -151,7 +153,7 @@ export class StructuredAgentSessionDeliveryLoop {
       await owned(async () => {
         try {
           const session = this.deps.sessions.get(sessionId)
-          const selected = session && oldestQueuedSubmission(session)
+          const selected = session && (await oldestQueuedSubmission(session))
           await this.fail(sessionId, { startKey: null, cause }, selected?.clientMessageId ?? null)
         } finally {
           this.stop(sessionId)
@@ -169,6 +171,7 @@ export class StructuredAgentSessionDeliveryLoop {
 
   private async prepare(sessionId: string, progress: DeliveryProgress): Promise<Prepared> {
     const session = this.deps.sessions.get(sessionId)
+    await this.deps.deliveryOrder.reconcile(sessionId, session?.journal)
     // A step that proved no change since the last one would repeat forever; park until a commit or wake.
     if (!session || this.disposed || progress.decide(sessionId, this.deps).kind === 'park') {
       return this.stop(sessionId)
@@ -184,22 +187,22 @@ export class StructuredAgentSessionDeliveryLoop {
       return this.stop(sessionId)
     }
     // Commands block while their child lives; ended command commits wake delivery again.
-    const work = this.deps.currentWork(sessionId)
-    const oldest = selectableStructuredSubmission(session.journal, work)
+    const work = await this.deps.currentWork(sessionId)
+    const oldest = await selectableStructuredSubmission(session.journal, work)
     if (!oldest || (session.child && work && structuredAgentSessionCommandRunning(work))) {
       return this.stop(sessionId)
     }
     if (this.deps.startFlights?.get(sessionId)) {
-      return { start: progress.claim(sessionId, this.deps, oldest.clientMessageId) }
+      return { start: await progress.claim(sessionId, this.deps, oldest.clientMessageId) }
     }
-    const failedStart = startThatFailedWhileQueued(session, oldest)
+    const failedStart = await startThatFailedWhileQueued(session, oldest)
     if (failedStart) {
       return this.fail(sessionId, failedStart, oldest.clientMessageId)
     }
     await this.deps.retireOutgrownChild(sessionId, undefined, oldest)
     const child = this.deps.sessions.get(sessionId)?.child
     if (!child || child.close) {
-      return { start: progress.claim(sessionId, this.deps, oldest.clientMessageId) }
+      return { start: await progress.claim(sessionId, this.deps, oldest.clientMessageId) }
     }
     return {
       ok: true,
@@ -242,12 +245,17 @@ export class StructuredAgentSessionDeliveryLoop {
       )
     }
     // Stop may take the lane during readiness; recheck before steering into work it is ending.
-    if (this.deps.stopping(sessionId) || awaitedChild.phase !== 'ready') {
+    if ((await this.deps.stopping(sessionId)) || awaitedChild.phase !== 'ready') {
       return this.stop(sessionId)
     }
     // Opening turns must exist before follow-ups join them.
-    const work = this.deps.currentWork(sessionId)
-    const next = structuredAgentSessionNextHandover(session, awaitedChild.fence, work)
+    const work = await this.deps.currentWork(sessionId)
+    const next = await structuredAgentSessionNextHandover(
+      session,
+      awaitedChild.fence,
+      this.deps.readWork(sessionId),
+      work
+    )
     if (!next) {
       return this.stop(sessionId)
     }
@@ -259,7 +267,7 @@ export class StructuredAgentSessionDeliveryLoop {
       }
     }
     if (
-      waitsForCodexTurnOptions(
+      await waitsForCodexTurnOptions(
         this.deps.record(sessionId),
         session.journal,
         next,
@@ -268,6 +276,9 @@ export class StructuredAgentSessionDeliveryLoop {
       )
     ) {
       return this.stop(sessionId)
+    }
+    if (session.child !== awaitedChild) {
+      return 'continue'
     }
     const pending = await beginStructuredAgentSessionInputHandover(
       this.deps,
@@ -290,7 +301,7 @@ export class StructuredAgentSessionDeliveryLoop {
       await recordStructuredAgentSessionDeliveryFailure(
         { journal: session.journal, fence: this.deps.conversationFence(sessionId) },
         failure,
-        this.deps.failureTextContext(sessionId),
+        await this.deps.failureTextContext(sessionId),
         clientMessageId
       )
     }
@@ -299,11 +310,8 @@ export class StructuredAgentSessionDeliveryLoop {
 
   /** Clear under serialization so the next accept can wake a new loop. */
   private stop(sessionId: string): 'stop' {
-    const journal = this.deps.sessions.get(sessionId)?.journal
-    if (journal && this.running.has(sessionId)) {
-      this.deps.captureTitleSourceUnavailable?.(sessionId, journal)?.()
-    }
     this.running.delete(sessionId)
+    this.deps.activityChanged?.(sessionId)
     this.deps.deliveryOrder.parkSends(sessionId)
     return 'stop'
   }

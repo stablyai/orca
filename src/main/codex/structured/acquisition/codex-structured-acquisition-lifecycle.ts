@@ -1,15 +1,15 @@
-import type { acquireCodexStructuredSession } from './codex-structured-session-acquire'
+import type { CodexStructuredAcquisitionInput } from './codex-structured-acquisition-input'
 import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
+import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
 } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { isCodexAppServerHandshakeExitUnprovenError } from '../../app-server/codex-app-server-handshake-exit-proof'
-import {
-  cancelCodexAcquisitionAttempt,
-  type CodexAcquisitionAttempt,
-  type CodexAcquisitionRegistry
+import type {
+  CodexAcquisitionAttempt,
+  CodexAcquisitionRegistry
 } from '../session-lifecycle/codex-structured-session-state'
 
 export async function stopSupersededCodexAcquisition(input: {
@@ -65,7 +65,7 @@ export async function closeFailedCodexAcquisition(input: {
 }
 
 export function bindCodexExecutionDeadline(
-  input: Parameters<typeof acquireCodexStructuredSession>[0],
+  input: CodexStructuredAcquisitionInput,
   execution: CodexStructuredLaunch['execution'],
   attempt: CodexAcquisitionAttempt,
   generation: string
@@ -134,4 +134,28 @@ export function bindCodexExecutionDeadline(
       }
     })
   }
+}
+
+export async function cancelCodexAcquisitionAttempt(
+  attempt: CodexAcquisitionAttempt | undefined,
+  requestedClose = true
+): Promise<boolean> {
+  if (!attempt) {
+    return true
+  }
+  const closed = await cancelProcessAcquisition({
+    cancel: () => {
+      attempt.historyCatchUp?.abort()
+      attempt.cancelled = true
+      attempt.requestedClose = requestedClose
+    },
+    connection: () => attempt.window.connection,
+    exitProven: () => attempt.exitProven,
+    finished: attempt.finished
+  })
+  if (closed) {
+    attempt.exitProven = true
+    attempt.dispose?.()
+  }
+  return closed
 }

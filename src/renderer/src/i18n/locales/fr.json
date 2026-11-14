@@ -437,6 +437,7 @@
         "fontFamily": "Police",
         "fontFamilyDescription": "Police des messages, de l’activité et de la zone de saisie.",
         "inheritFont": "Même police que l’IDE",
+        "systemFont": "Police système",
         "fontPreviewLabel": "Aperçu de la police du chat",
         "fontPreview": "Le vif renard brun saute par-dessus le chien paresseux.",
         "title": "Interface de chat",
@@ -584,6 +585,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Agents installés",
+      "availableRegion": "Agents disponibles à l’installation",
       "codexTerminalServerIsolation": {
         "title": "Exécutez chaque terminal Codex sur son propre serveur",
         "description": "Maintient le bon fonctionnement du statut d'Orca et des onglets de fermeture. Désactivez-la pour utiliser le serveur partagé du Codex et l'aperçu de ses agents. S'applique aux nouveaux terminaux."
@@ -3535,6 +3538,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Two Tone",
+            "silent": "Silencieux",
             "017abebfa6": "Son système par défaut"
           }
         }
@@ -17146,7 +17150,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Extensions Chrome",
+                        "title": "Apportez vos extensions Chrome",
+                        "everydayTitle": "Vos outils de navigation du quotidien, dans Orca",
                         "body": "Installez des extensions depuis le Chrome Web Store et épinglez-les à côté de la barre d’adresse.",
                         "action": "Ouvrir le Web Store",
                         "secondaryAction": "Compris"
@@ -19807,7 +19812,8 @@
         "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
         "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
         "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
-        "forkedFrom": "Branche créée à partir de"
+        "forkedFrom": "Branche créée à partir de",
+        "forkedFromUnknown": "Branche créée à partir d’une autre conversation"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} octet",
@@ -20292,7 +20298,12 @@
         "failed": "{{agent}} n’a pas pu créer de branche de cette conversation",
         "hostUnsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez.",
         "failedDetail": "Votre conversation est inchangée. Réessayez.",
-        "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée."
+        "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée.",
+        "mark": "Branche ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Branche : {{name}}",
+        "sourceTooltip": "Branche de {{name}}",
+        "unknownSourceTooltip": "Branche d’une autre conversation"
       },
       "cardKindHidden": {
         "description": "Vous pouvez modifier cela à tout moment dans",

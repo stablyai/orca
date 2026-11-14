@@ -6,6 +6,11 @@ export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 export const AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION = 3 as const
 export const AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION = 4 as const
 
+export type AgentSessionRecordSchemaVersion =
+  | typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
+  | typeof AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
+  | typeof AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION
+
 export function isAgentSessionPolicyRecord(record: Record<string, unknown>): boolean {
   return (
     (record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&

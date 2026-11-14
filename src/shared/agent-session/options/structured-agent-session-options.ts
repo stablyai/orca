@@ -1,36 +1,39 @@
-import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
-import { discoveredModel } from './structured-agent-session-discovered-model'
+import type {
+  AgentSessionOptionCatalog,
+  CatalogModel
+} from './catalog-providers/agent-session-option-catalog-types'
+import { discoveredModel } from './model-catalog/structured-agent-session-discovered-model'
 import {
   createStructuredAgentSessionOptionRecord,
   replaceStructuredAgentSessionAnsweredValues,
   type StructuredAgentSessionOptionRecord
-} from './structured-agent-session-option-state'
+} from './reconciliation/structured-agent-session-option-state'
 import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
-} from '../../native-chat/input/native-chat-session-option-defaults'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
+} from '../../native-chat/input/session-options/native-chat-session-option-defaults'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode-option-id'
 import {
   usesInstalledAgentModelCatalog,
   usesModelSpecificAcpEfforts
-} from './agent-model-catalog-ownership'
+} from './model-catalog/agent-model-catalog-ownership'
 import {
   fillUnknownCatalogEfforts,
   enrichStructuredAgentEfforts
-} from './agent-session-model-efforts'
-import { structuredAgentSessionRememberedPickModel } from './structured-agent-session-remembered-pick-model'
+} from './model-catalog/agent-session-model-efforts'
+import { structuredAgentSessionRememberedPickModel } from './selection/structured-agent-session-remembered-pick-model'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
   AgentSessionAcceptedInputSources,
   AgentSessionOptionsResult
-} from './agent-session-options-result'
+} from './protocol/agent-session-options-result'
 import { labelFromModelId } from '../../model-id-label'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
-import { listingVerifiedModelIds } from './structured-agent-session-listing-verified-ids'
+import { listingVerifiedModelIds } from './model-catalog/structured-agent-session-listing-verified-ids'
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
-} from './structured-agent-session-option-codec'
+} from './selection/structured-agent-session-option-codec'
 
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,

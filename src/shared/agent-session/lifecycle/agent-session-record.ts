@@ -1,15 +1,16 @@
 import {
-  type AGENT_SESSION_RECORD_SCHEMA_VERSION,
-  type AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION,
-  type AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION,
+  type AgentSessionRecordSchemaVersion,
   isAgentSessionPolicyRecord
 } from './agent-session-record-policy'
-import { isOptionalUsageLimitContinueCancel } from './agent-session-usage-limit-continue'
 import type { AgentSessionExecutionPolicy } from '../agent-session-execution-policy'
 import type { AgentSessionAdvisoryPolicy } from '../agent-session-advisory-policy'
-import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
-import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
-import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
+import { isOptionalUsageLimitContinueCancel } from './stopping/agent-session-usage-limit-continue'
+import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evidence'
+import {
+  isAgentSessionRewindRecord,
+  type AgentSessionRewindRecord
+} from './rewind/agent-session-rewind'
+import { isAgentSessionLaunchArgs } from './records/agent-session-launch-args'
 import { isAgentSessionConversationName } from '../agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -17,24 +18,22 @@ import {
   type PersistedAgentSessionObservationLease,
   type PersistedAgentSessionObservationRecord,
   type PersistedAgentSessionRecord
-} from './agent-session-legacy-handoff-lease'
+} from './leases/agent-session-legacy-handoff-lease'
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
-import type { AgentSessionLastTurn } from './agent-session-last-turn'
+import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
 import type { ExecutionHostId } from '../../execution-host'
-import {
-  isAgentSessionConversationCommandRecord,
-  type AgentSessionConversationCommandRecord
-} from '../agent-session-conversation-command'
+import { isAgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
+import type { AgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
-} from './agent-session-provider-handle'
+} from './provider-handles/agent-session-provider-handle'
 import {
   isAgentSessionProviderContextBoundary,
   type AgentSessionProviderContextBoundary
 } from '../agent-session-provider-context'
-import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from './provider-handles/agent-session-provider-handle-encoding'
 import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
@@ -42,7 +41,7 @@ import {
   MAX_PATH_LENGTH,
   type AgentSessionAccountHome,
   type AgentSessionLaunchedAccount
-} from './agent-session-account-home'
+} from './accounts/agent-session-account-home'
 
 export {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
@@ -121,13 +120,12 @@ export type AgentSessionForkedFrom = {
   itemId: string
   /** Where the inherited history ends in this chat's own journal. */
   childBoundary: { kind: 'item'; itemId: string } | { kind: 'start' }
+  /** Saved under the source's shown name; absent on forks older builds titled "<source> fork". */
+  plainName?: true
 }
 
 export type AgentSessionRecord = {
-  schemaVersion:
-    | typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
-    | typeof AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
-    | typeof AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION
+  schemaVersion: AgentSessionRecordSchemaVersion
   sessionId: string
   location: AgentSessionExecutionLocation
   /** The agent this session names, whether this build can run it or not. */
