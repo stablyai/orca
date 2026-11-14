@@ -4,6 +4,7 @@ import { httpCandidateNormalizer, httpCharacterReader } from './adf-http-link'
 import { markdownToAdf } from './markdown-adf'
 import { adfToMarkdownText } from './adf-markdown'
 import { trailingWhitespaceReader } from './adf-text-marks'
+import { adfChildren, adfRecord } from './adf-nodes'
 
 it('round-trips supported block structure and mixed inline marks', async () => {
   const source =
@@ -577,9 +578,9 @@ it('keeps bare-link destinations separate from escaped text and mark delimiters'
     expect(actual).toBe(markdown)
     const doc = await markdownToAdf(actual)
     expect(doc).toMatchObject({ content: [{ type: 'paragraph' }] })
-    const blocks = doc.content as { content: { text: string; marks?: unknown[] }[] }[]
-    expect(blocks[0].content.map((node) => node.text).join('')).toBe(text)
-    expect(blocks[0].content).toContainEqual({
+    const inline = adfChildren(adfRecord(adfChildren(doc.content)[0]).content)
+    expect(inline.map((node) => adfRecord(node).text).join('')).toBe(text)
+    expect(inline).toContainEqual({
       type: 'text',
       text: linkText,
       marks: [...(style ? [{ type: style }] : []), { type: 'link', attrs: { href } }]

@@ -100,10 +100,13 @@ function inlineTokens(
         tokens.push({ value: marker, style: 'close' })
         break
       }
-      default:
-        if ('children' in node) {
-          inlineTokens(node.children, inLink, inTable, tokens)
-        }
+      case 'linkReference':
+        inlineTokens(node.children, inLink, inTable, tokens)
+        break
+      case 'footnoteReference':
+      case 'image':
+      case 'imageReference':
+        break
     }
   }
 }
