@@ -85,7 +85,7 @@ it('uses documented link and textual task fallbacks', async () => {
 
 it('uses the renderer CJK emphasis and prose URL boundaries', async () => {
   expect(adfToMarkdownText(await markdownToAdf('**「重要」**です https://example.com。次'))).toBe(
-    '**「重要」**です <https://example.com>。次'
+    '**「重要」**&#x3067;す <https://example.com>。次'
   )
 })
 
