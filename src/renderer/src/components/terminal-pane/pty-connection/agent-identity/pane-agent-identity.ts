@@ -1,4 +1,3 @@
-import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store/index'
@@ -25,13 +24,12 @@ import {
 } from './pane-launch-agent-candidate'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent-title'
+import { paneHasKnownAgentIdentity, paneHasLiveHookAgentIcon } from './pane-known-agent-identity'
 
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   // Share expected-agent derivation between 133;D confirmation and visible resampling so their identity guards cannot drift.
-  session.paneHasLiveHookAgentIcon = (state: ReturnType<typeof useAppStore.getState>): boolean => {
-    const entry = state.agentStatusByPaneKey[session.cacheKey]
-    return entry?.state !== 'done' && Boolean(agentTypeToIconAgent(entry?.agentType))
-  }
+  session.paneHasLiveHookAgentIcon = (state: ReturnType<typeof useAppStore.getState>): boolean =>
+    paneHasLiveHookAgentIcon(state, session.cacheKey)
   // One launch ladder serves finish confirmation, visible sampling and OSC color-reply suppression.
   const panePane = (): PaneLaunchAgentPaneSlice => ({
     worktreeId: session.deps.worktreeId,
@@ -53,16 +51,8 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.shouldAnswerPaneOscColorQueries = (): boolean =>
     paneShouldAnswerOscColorQueries(useAppStore.getState(), panePane())
   // Confirm leaked nested-shell 133;D for launch/hook-known agents even before any command read found them.
-  session.paneHasKnownAgentIdentity = (): boolean => {
-    const state = useAppStore.getState()
-    const registeredLaunchAgent =
-      state.agentLaunchConfigByPaneKey[session.cacheKey]?.identity?.agentType
-    return (
-      Boolean(state.paneForegroundAgentByPaneKey[session.cacheKey]?.agent) ||
-      session.paneHasLiveHookAgentIcon(state) ||
-      isTuiAgent(registeredLaunchAgent)
-    )
-  }
+  session.paneHasKnownAgentIdentity = (): boolean =>
+    paneHasKnownAgentIdentity(useAppStore.getState(), session.cacheKey)
   session.clearStaleAgentTabTitleOnConfirmedShell = () =>
     clearStaleAgentTabTitleOnConfirmedShell(session)
   session.deferredCommandFinishedStatusDrop = null
