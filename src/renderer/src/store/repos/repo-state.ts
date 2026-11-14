@@ -73,6 +73,7 @@ export type RepoUpdate = Partial<
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   hiddenAt?: Repo['hiddenAt'] | null
   ghAccount?: GhAccountBinding | null
+  workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']
