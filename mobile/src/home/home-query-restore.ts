@@ -5,7 +5,7 @@ import {
   HOST_LIST_TARGET,
   homeWorktreeCountsKey,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { hostObserverOptions } from '../query/host-query'
 import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import { persistedHostQueryKey } from '../query/host-query-persistence'
@@ -14,7 +14,7 @@ import { homeStatsKey, homeStatsQuery } from '../stats/home-stats-summary-read'
 import {
   homeWorktreeCountsQuery,
   type HomeWorktreeCounts
-} from '../worktree/home-host-worktree-fetch'
+} from '../worktree/catalog/home-host-worktree-fetch'
 
 // Where Home kept its counts before the device store: read once to seed the store, then removed.
 const LEGACY_SNAPSHOT_KEY = 'orca:home-snapshot:v1'

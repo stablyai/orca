@@ -25,8 +25,8 @@ import { useRefreshHostClient } from '../src/transport/connection/host-client-ho
 import { colors, spacing, pressedStyle } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { TextInputModal } from '../src/components/TextInputModal'
-import { ConnectionLog } from '../src/components/ConnectionLog'
+import { TextInputModal } from '../src/components/sheets/TextInputModal'
+import { ConnectionLog } from '../src/components/host-connection/ConnectionLog'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
@@ -40,7 +40,7 @@ import {
   Step,
   waitForBeat
 } from '../src/pairing/pairing-visuals'
-import { triggerSuccess } from '../src/platform/haptics'
+import { triggerSuccess } from '../src/platform/haptics/haptics'
 import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 // Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.

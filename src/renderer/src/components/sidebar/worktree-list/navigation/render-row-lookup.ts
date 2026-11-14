@@ -40,12 +40,6 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
 }
 
 export function rowKeyMatchesRenderRow(row: RenderRow, rowKey: string): boolean {
-  if (row.type === 'lineage-group') {
-    return (
-      row.rows.some((item) => item.rowKey === rowKey) ||
-      (row.folder !== undefined && rowKeyMatchesRenderRow(row.folder, rowKey))
-    )
-  }
   if (row.type === 'folder-workspace' && rowKey === folderWorkspaceKey(row.folderWorkspace.id)) {
     return true
   }
@@ -81,13 +75,6 @@ export function renderRowContainsWorktree(
           composeWorktreeHostIdentity(executionHostId, worktreeId))
     )
   }
-  if (row.type === 'lineage-group') {
-    return (
-      row.rows.some((item) => itemMatchesWorktree(item, worktreeId, executionHostId)) ||
-      (row.folder !== undefined &&
-        renderRowContainsWorktree(row.folder, worktreeId, executionHostId))
-    )
-  }
   return row.type === 'item' && itemMatchesWorktree(row, worktreeId, executionHostId)
 }
 
@@ -96,9 +83,6 @@ export function getRenderRowWorktreeItem(
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): WorktreeItemRow | null {
-  if (row.type === 'lineage-group') {
-    return row.rows.find((item) => itemMatchesWorktree(item, worktreeId, executionHostId)) ?? null
-  }
   return row.type === 'item' && itemMatchesWorktree(row, worktreeId, executionHostId) ? row : null
 }
 
@@ -135,8 +119,7 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
   for (let index = 0; index < renderRows.length; index++) {
     const row = renderRows[index]
     // Host-qualified reveals include folder rows, not just worktree item rows.
-    const folderRow =
-      row.type === 'folder-workspace' ? row : row.type === 'lineage-group' ? row.folder : undefined
+    const folderRow = row.type === 'folder-workspace' ? row : undefined
     if (
       folderRow &&
       folderWorkspaceKey(folderRow.folderWorkspace.id) === worktree.id &&
@@ -148,7 +131,7 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
     if (row.type === 'folder-workspace') {
       continue
     }
-    const itemRows = row.type === 'lineage-group' ? row.rows : row.type === 'item' ? [row] : []
+    const itemRows = row.type === 'item' ? [row] : []
     const itemRow = itemRows.find(
       (candidate) => getWorktreeHostIdentity(candidate.worktree) === identity
     )

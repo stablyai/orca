@@ -3,20 +3,27 @@ import { Fragment, memo, useCallback, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
-import { AgentSpinner, agentStatusColors } from '../components/AgentSpinner'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { SwipeRowActions } from '../components/SwipeRowActions'
+import { AgentSpinner, agentStatusColors } from './presentation/AgentSpinner'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
+import { SwipeRowActions } from '../components/list/SwipeRowActions'
 import { HOME_ROW_TEXT_INSET, homeListStyles } from '../home/home-list-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { triggerMediumImpact } from '../platform/haptics'
+import { triggerMediumImpact } from '../platform/haptics/haptics'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../host-catalog/host-profile'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
-import { agentStateLabel, formatTimeAgo, type AgentDotState } from '../worktree/agent-row-display'
-import { isDisclosureOpen, toggleDisclosure } from '../worktree/agent-child-disclosure'
-import { areStructurallyEqual } from '../worktree/structural-equality'
+import {
+  agentStateLabel,
+  formatTimeAgo,
+  type AgentDotState
+} from '../worktree/agent-lineage/agent-row-display'
+import {
+  isDisclosureOpen,
+  toggleDisclosure
+} from '../worktree/agent-lineage/agent-child-disclosure'
+import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
 import type { AgentListSection } from './agent-list-model'
 import { agentStatusGroup, type AgentListRow } from './agent-list-rows'
 import { agentListPreview } from './agent-list-row-text'

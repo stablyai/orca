@@ -1,12 +1,12 @@
 import { GitBranch } from 'lucide-react-native'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { prStateIcon } from '../components/pr-state-token'
-import { prStateColor } from '../components/WorktreeMetaGlyphs'
+import { prStateIcon } from '../source-control/review/status/pr-state-token'
+import { prStateColor } from '../worktree/row-presentation/WorktreeMetaGlyphs'
 import {
   HOST_LIST_TARGET,
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostQuery } from '../query/host-query'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

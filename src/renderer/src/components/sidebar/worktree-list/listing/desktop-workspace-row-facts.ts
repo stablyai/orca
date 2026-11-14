@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
@@ -10,7 +11,7 @@ import {
   isCliCreatedWorkspace,
   isDefaultBranchWorkspace,
   isDetachedHeadWorkspace
-} from '../../../../../../shared/worktree/workspace-kinds'
+} from '../../../../../../shared/worktree/visibility/workspace-kinds'
 import { isWorkspaceOwnedBySomeoneElse } from '../../../../../../shared/workspace-creator-visibility'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -43,7 +44,7 @@ export function buildDesktopWorkspaceRowFactReader(
     return repo ? getWorktreeExecutionHostId(worktree, repo, inputs.defaultHostId) : null
   }
   return {
-    isArchived: (worktree) => worktree.isArchived,
+    isArchived: (worktree) => worktree.isArchived || isWorktreeRetiredByRemoval(worktree),
     ...hiddenProjectRowFacts(inputs.hiddenProjects),
     isFolderWorkspace: (worktree) => parseWorkspaceKey(worktree.id)?.type === 'folder',
     repoId: (worktree) => worktree.repoId,

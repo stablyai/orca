@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { useAppStore } from '@/store/index'
@@ -16,10 +17,8 @@ import {
 } from '../ownership/folder-workspace-runtime-owner'
 import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import {
-  ensureFolderWorkspaceInitialTerminal,
-  ensureWorktreeHasInitialTerminal
-} from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
+import { ensureFolderWorkspaceInitialTerminal } from '@/lib/workspace/activation/initial-surface/folder-workspace-initial-terminal'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/workspace/activation/worktree-nav-view-history-replay'
 import {
@@ -104,6 +103,8 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
   const shouldGateAgentActivation =
     !opts?.startup &&
+    !opts?.setup &&
+    !opts?.backendStartupTerminalSpawned &&
     (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
@@ -121,7 +122,9 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   const primaryTabId = shouldGateAgentActivation
     ? null
     : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface, {
-        seedUserDefaultSurface
+        seedUserDefaultSurface,
+        setup: opts?.setup,
+        backendStartupTerminalSpawned: opts?.backendStartupTerminalSpawned
       })
 
   if (opts?.showWorkspaceList) {
@@ -135,7 +138,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
     })
   }
 
-  if (opts?.providesInitialSurface !== true) {
+  if (opts?.providesInitialSurface !== true && !opts?.backendStartupTerminalSpawned) {
     ensureWebRuntimeWorktreeTerminalAfterWake(workspaceKey, {
       runtimeEnvironmentId,
       startup: opts?.startup,
@@ -158,7 +161,7 @@ export function activateAndRevealWorktreeWithOutcome(
     return { opened: { primaryTabId: null } }
   }
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
-  if (!wt) {
+  if (!wt || isWorktreeRetiredByRemoval(wt)) {
     return { refused: { reason: 'workspace-missing', failureNotified: false } }
   }
   const pendingCreationId = findPendingWorktreeCreationId(state.pendingWorktreeCreations, wt.id)

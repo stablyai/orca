@@ -4,7 +4,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   workspaceMetadataSetRow,
   type WorkspaceMetadataSet
-} from '../../../shared/worktree/workspace-metadata-set'
+} from '../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceAttachment } from '../../../shared/worktree/types'
 import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
 import type { Store } from '../../persistence/loading-store/store'

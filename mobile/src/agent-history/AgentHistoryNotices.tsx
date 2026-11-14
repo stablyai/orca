@@ -5,7 +5,7 @@ import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobil
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { AutoHeight } from '../components/AutoHeight'
+import { AutoHeight } from '../components/motion/AutoHeight'
 import type { AiVaultScanIssue } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultScanIssueKey,

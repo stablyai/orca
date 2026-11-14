@@ -1,7 +1,7 @@
 /** Share orcad's profile lock to prevent concurrent desktop/serve writers; Electron's own instance lock cannot fence plain Node. */
-import { acquireOrcadInstanceLock } from '../../orcad/orcad-instance-lock'
-import type { OrcadInstanceLock } from '../../orcad/orcad-instance-lock-hold'
-import { OrcadInstanceLockError } from '../../orcad/orcad-data-root-privacy'
+import { acquireOrcadInstanceLock } from '../../orcad/instance-lock/orcad-instance-lock'
+import type { OrcadInstanceLock } from '../../orcad/instance-lock/orcad-instance-lock-hold'
+import { OrcadInstanceLockError } from '../../orcad/instance-lock/orcad-data-root-privacy'
 import {
   writeStartupDiagnosticLine,
   type StartupDiagnosticSink

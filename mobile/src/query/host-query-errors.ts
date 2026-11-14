@@ -3,7 +3,7 @@ import { isLogicalClientSuspendedError } from '../transport/connection/logical-c
 import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import '../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
-import { GITHUB_CONNECTION_CHANGED } from '../source-control/review/github-target-invocation'
+import { GITHUB_CONNECTION_CHANGED } from '../source-control/review/github-operations/github-target-invocation'
 
 export const CUTOVER_RETRY_DELAY_MS = 250
 

@@ -10,10 +10,10 @@ import {
   pressedStyle
 } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { MobileAgentIcon } from '../../components/MobileAgentIcon'
+import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
-import { getQuickCommandAgentLabel } from '../quick-commands'
+import { getQuickCommandAgentLabel } from './quick-commands'
 import { getTerminalQuickCommandBodySize } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
   MAX_QUICK_COMMAND_LABEL_LENGTH,
@@ -28,7 +28,7 @@ import {
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
-import { MobileSwitch } from '../../components/MobileSwitch'
+import { MobileSwitch } from '../../components/controls/MobileSwitch'
 
 type Props = {
   draft: QuickCommandDraft

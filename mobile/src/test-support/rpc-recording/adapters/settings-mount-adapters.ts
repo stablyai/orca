@@ -1,9 +1,9 @@
-import type * as UsePrBotAuthorOverridesModule from '../../../source-control/review/use-pr-bot-author-overrides'
-import type * as UseNewWorkspaceRuntimeContextModule from '../../../components/use-new-workspace-runtime-context'
-import type * as UseHostRepoMetadataModule from '../../../host-screen/use-host-repo-metadata'
+import type * as UsePrBotAuthorOverridesModule from '../../../source-control/review/pull-request/comments/use-pr-bot-author-overrides'
+import type * as UseNewWorkspaceRuntimeContextModule from '../../../new-workspace/creation/runtime/use-new-workspace-runtime-context'
+import type * as UseHostRepoMetadataModule from '../../../host-screen/catalog/use-host-repo-metadata'
 import type * as UseMobileTasksRuntimeHydrationModule from '../../../tasks/screen-state/use-mobile-tasks-runtime-hydration'
 import { notifyManager, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import type * as HostListQueries from '../../../host-screen/host-list-queries'
+import type * as HostListQueries from '../../../host-screen/catalog/host-list-queries'
 import type * as ResumeMetadata from '../../../agent-history/mobile-agent-history-resume-metadata'
 import { hostQueryKey, hostScopeKey } from '../../../query/host-query-key'
 import type { OperationExposure } from '../operation-module-loader'
@@ -23,7 +23,7 @@ export function settingsMountAdapters(
   return {
     'settings.bot-overrides': ({ client }) => {
       const useOverrides = modules.load<typeof UsePrBotAuthorOverridesModule>(
-        'mobile/src/source-control/review/use-pr-bot-author-overrides.ts'
+        'mobile/src/source-control/review/pull-request/comments/use-pr-bot-author-overrides.ts'
       ).usePRBotAuthorOverrides
       let state: ReadonlySet<string> = new Set()
       let revision = 1
@@ -53,7 +53,7 @@ export function settingsMountAdapters(
     },
     'settings.workspace-context': ({ client }) => {
       const useContext = modules.load<typeof UseNewWorkspaceRuntimeContextModule>(
-        'mobile/src/components/use-new-workspace-runtime-context.ts'
+        'mobile/src/new-workspace/creation/runtime/use-new-workspace-runtime-context.ts'
       ).useNewWorkspaceRuntimeContext
       let state: ReturnType<typeof useContext>
       let visible = true
@@ -94,10 +94,10 @@ export function settingsMountAdapters(
     },
     'settings.repo-metadata': (context) => {
       const useMetadata = modules.load<typeof UseHostRepoMetadataModule>(
-        'mobile/src/host-screen/use-host-repo-metadata.ts'
+        'mobile/src/host-screen/catalog/use-host-repo-metadata.ts'
       ).useHostRepoMetadata
       const queries = modules.load<typeof HostListQueries>(
-        'mobile/src/host-screen/host-list-queries.ts'
+        'mobile/src/host-screen/catalog/host-list-queries.ts'
       )
       const state = observableModel(context, { clientRef: { current: context.client } })
       // A fault schedule ends with the read settling on a timeout, after the recorder's last zero-time drain; deliver

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { getTerminalPtyOwnershipIdentity } from '@/store/terminals/terminal-tab-retirement'
+import { getTerminalPtyOwnershipIdentity } from '@/store/terminals/retirement/terminal-tab-retirement'
 import {
   getTerminalNoticeLifetime,
   retireTerminalNoticeLifetime,

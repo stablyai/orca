@@ -8,7 +8,7 @@ import {
 } from '../../shared/jira/jira-issue-url'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export function resolveJiraTarget(
   context: HandlerContext,

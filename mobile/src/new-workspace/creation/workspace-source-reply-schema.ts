@@ -1,7 +1,7 @@
 import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
 import { SSH_CONNECTION_STATUS } from '../../transport/connection/ssh-connection-status-arms'
-import { SETUP_RUN_POLICIES } from '../../components/new-workspace-reply-schema'
+import { SETUP_RUN_POLICIES } from './runtime/new-workspace-reply-schema'
 
 const sourceText = (name: string) => salvagedOptional(name, z.string())
 

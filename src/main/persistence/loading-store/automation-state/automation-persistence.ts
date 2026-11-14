@@ -36,6 +36,11 @@ import {
 } from '../../scheduling-automations/automation-definition-operations'
 import { deleteAutomation as deleteAutomationOperation } from '../../scheduling-automations/automation-definition-removal'
 import {
+  updateAutomations as updateAutomationsOperation,
+  type AutomationBatchUpdate,
+  type AutomationBatchUpdateResult
+} from '../../scheduling-automations/automation-definition-update'
+import {
   createAutomationRun as createAutomationRunOperation,
   listAutomationRuns as listAutomationRunsOperation,
   listAutomationRunsPage as listAutomationRunsOperationPage,
@@ -167,6 +172,14 @@ export class AutomationPersistence {
     const stored = this[automationPersistenceContext].runtime.state.automations ?? []
     return this[automationEnablement].track(stored, id, () =>
       updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
+    )
+  }
+
+  /** `updateAutomation` for many rows with one list write and one flush. */
+  updateAutomations(batch: readonly AutomationBatchUpdate[]): AutomationBatchUpdateResult[] {
+    const stored = this[automationPersistenceContext].runtime.state.automations ?? []
+    return this[automationEnablement].trackMany(stored, () =>
+      updateAutomationsOperation(getAutomationDefinitionOperations(this), batch)
     )
   }
 

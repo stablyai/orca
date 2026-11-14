@@ -4,6 +4,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { withRepositoryGitCause } from '../../../git/repository-git-cause'
 import { listRepoWorktreesForDetectedScan } from '../../../workspaces/catalog/repo-worktrees'
 import {
   getRegisteredWorktreeRootsRevision,
@@ -122,7 +123,12 @@ export async function listDetectedGitWorktrees(
     },
     {
       scan: async () => {
-        const worktrees = await listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions)
+        const worktrees = await withRepositoryGitCause(
+          repo.path,
+          localWorktreeGitOptions,
+          { family: 'catalog', reason: 'desktop-catalog', cache: 'refresh' },
+          () => listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions)
+        )
         return worktrees.length > 0 ? { kind: 'rows', worktrees } : { kind: 'true-empty' }
       },
       ...worktreeCatalogHygienePlan(store, repo, localWorktreeGitOptions, true)

@@ -1,4 +1,8 @@
 import type { PRRefreshRendererPort } from './pr-refresh-renderer-port'
+import type {
+  PreparedPRBranchRead,
+  preparePRBranchRead
+} from '../../client/lookup/pr-for-branch-outcome'
 import { vi, type Mock } from 'vitest'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 
@@ -51,11 +55,44 @@ export function rendererPortModuleMock(mocks: PRRefreshCoordinatorMocks): Render
   return { prRefreshRenderers: () => port }
 }
 
-export type ClientModuleMock = { getPRForBranchOutcome: Mock }
+export type ClientModuleMock = {
+  getPRForBranchOutcome: Mock
+  preparePRBranchRead: typeof preparePRBranchRead
+}
 
 export function clientModuleMock(mocks: PRRefreshCoordinatorMocks): ClientModuleMock {
   return {
-    getPRForBranchOutcome: mocks.getPRForBranchOutcomeMock
+    getPRForBranchOutcome: mocks.getPRForBranchOutcomeMock,
+    preparePRBranchRead: async (...args) => {
+      const prepared: PreparedPRBranchRead = {
+        key: '',
+        reprepare: async () => prepared,
+        cached: () => null,
+        isCurrent: () => true,
+        accepts: () => true,
+        didRead: () => true,
+        release: () => {},
+        hold: () => () => {},
+        canRetain: () => true,
+        scheduleError: () => {},
+        pending: () => null,
+        withExecution: (operation) => operation(),
+        read: async (settle) => {
+          const outcome = await mocks.getPRForBranchOutcomeMock(...args)
+          return settle ? settle(outcome, { retained: true }) : outcome
+        },
+        readResult: async (settle) => ({
+          outcome: await prepared.read(settle),
+          sequence: 0,
+          current: () => true
+        }),
+        readRetained: async (settle) => {
+          const outcome = await mocks.getPRForBranchOutcomeMock(...args)
+          return settle ? settle(outcome, { retained: true }) : outcome
+        }
+      }
+      return prepared
+    }
   }
 }
 

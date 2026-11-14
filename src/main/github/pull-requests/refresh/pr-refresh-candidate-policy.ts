@@ -1,5 +1,8 @@
 import { shouldAcceptMergedFallbackPR } from '../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
-import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
+import {
+  REVIEW_REFRESH_COOLDOWN_MS,
+  reviewRefreshIntervalMs
+} from '../../../../shared/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
@@ -10,6 +13,8 @@ import type {
 import type { GitHubPRBranchLookupOptions } from '../../client/lookup/pull-request-lookup-data'
 import { PR_CHECK_PAGE_LIMIT } from '../../client/check/pr-check-rollup'
 import { parsePRKey } from '../../pr-watch/pr-watch-types'
+import { quietPRIntervalForCandidate } from '../../client/lookup/pr-quiet-policy-evidence'
+import { cachedPRBranchOutcome } from '../../client/lookup/pr-read-identity'
 
 export const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 export const POST_PUSH_DELAY_MS = 2_500
@@ -26,6 +31,9 @@ export function hostedReviewOptionArgs(
 ): [] | [GitHubPRBranchLookupOptions] {
   const options: GitHubPRBranchLookupOptions =
     requestOptions.userRefresh === true ? { userRefresh: true } : {}
+  if (bypassesFreshnessDelay(reason)) {
+    options.resetQuietBackoff = true
+  }
   options.localGitExecOptions = {
     ...(candidate.localGitOptions?.wslDistro
       ? { wslDistro: candidate.localGitOptions.wslDistro }
@@ -126,10 +134,52 @@ export function shouldSkipFresh(
   return Date.now() - candidate.cachedFetchedAt < refreshIntervalForCandidate(candidate)
 }
 
-export function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null {
+export function foregroundRefreshAgeMs(candidate: GitHubPRRefreshCandidate): number {
+  const interval = refreshIntervalForCandidate(candidate)
+  return Number.isFinite(interval) ? interval : REVIEW_REFRESH_COOLDOWN_MS
+}
+
+export function foregroundExposureDueAt(
+  candidate: GitHubPRRefreshCandidate,
+  reexposed: boolean
+): number | null {
+  return reexposed &&
+    !Number.isFinite(refreshIntervalForCandidate(candidate)) &&
+    candidate.cachedFetchedAt != null &&
+    Date.now() - candidate.cachedFetchedAt >= foregroundRefreshAgeMs(candidate)
+    ? Date.now()
+    : null
+}
+
+export function freshRetryAt(
+  candidate: GitHubPRRefreshCandidate,
+  foreground = false
+): number | null {
   return candidate.cachedFetchedAt == null || hasStaleHead(candidate)
     ? null
-    : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate)
+    : candidate.cachedFetchedAt +
+        (foreground ? foregroundRefreshAgeMs(candidate) : refreshIntervalForCandidate(candidate))
+}
+
+export function freshQueuedPROutcome(
+  candidate: GitHubPRRefreshCandidate,
+  reason: GitHubPRRefreshReason,
+  foreground = false
+): PRRefreshOutcome | null {
+  const cached = cachedPRBranchOutcome(
+    candidate.repoPath,
+    candidate.branch,
+    candidate.linkedPRNumber ?? null,
+    candidate.connectionId ?? null,
+    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+    hostedReviewOptionArgs(candidate, reason)[0] ?? {}
+  )
+  const outcome = cached?.outcome
+  if (!outcome || outcome.kind === 'upstream-error') {
+    return null
+  }
+  const dueAt = freshRetryAt(visibleCandidateAfterOutcome(candidate, outcome), foreground)
+  return dueAt !== null && dueAt > Date.now() ? outcome : null
 }
 
 export function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefreshAlias {
@@ -176,6 +226,12 @@ export function hasStaleHead(candidate: GitHubPRRefreshCandidate): boolean {
 }
 
 export function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): number {
+  if (candidate.cachedFetchedAt != null && !hasStaleHead(candidate)) {
+    const quiet = quietPRIntervalForCandidate(candidate)
+    if (quiet !== null) {
+      return quiet
+    }
+  }
   return (
     reviewRefreshIntervalMs({
       state: candidate.cachedPRState,

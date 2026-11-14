@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
@@ -8,9 +9,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
@@ -24,15 +28,12 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
-import { structuredAgentSessionHeldStarts } from '../../startup/testing/structured-agent-session-held-start.test-support'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
+import { structuredAgentSessionHeldStarts } from '../../startup/testing/structured-agent-session-held-start.test-fixture'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -82,7 +83,7 @@ async function startHost(): Promise<void> {
           reportedOptions: { model: '' }
         }))
     }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestAgentSessionDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     idleSweep: { intervalMs: 5, idleMs: () => idleMs },
@@ -119,7 +120,7 @@ afterEach(async () => {
 })
 
 async function submission(id: string): Promise<AgentJournalSubmission | undefined> {
-  return (await host.journalSnapshot(SESSION)).submissions.find(
+  return (await readTestHostJournal(host, SESSION)).submissions.find(
     (entry) => entry.clientMessageId === id
   )
 }
@@ -135,7 +136,7 @@ async function writeAsEarlierProcess(
   })
   const journal = await openAgentSessionJournal({
     identity: journalIdentityFor(record, params),
-    database: openTestJournalHostDatabase(root)
+    database: await openTestAgentSessionDatabase(root)
   })
   await write(journal, record.lease.runtimeFence)
   await journal.close()

@@ -1,5 +1,5 @@
 import type * as UseMobileTasksWorkspaceCreateActionsModule from '../../../tasks/workspace-creation/use-mobile-tasks-workspace-create-actions'
-import type * as UseNewWorkspaceCreateSubmitModule from '../../../components/use-new-workspace-create-submit'
+import type * as UseNewWorkspaceCreateSubmitModule from '../../../new-workspace/creation/runtime/use-new-workspace-create-submit'
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -77,7 +77,7 @@ export function workspaceSettingsMounts(
   return {
     'settings.workspace-submit': (context) => {
       const useSubmit = modules.load<typeof UseNewWorkspaceCreateSubmitModule>(
-        'mobile/src/components/use-new-workspace-create-submit.ts'
+        'mobile/src/new-workspace/creation/runtime/use-new-workspace-create-submit.ts'
       ).useNewWorkspaceCreateSubmit
       const model = observableModel(context, {
         client: context.client,

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { X } from 'lucide-react-native'
-import { MobileMarkdown } from '../../components/MobileMarkdown'
+import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { composerInputStyles } from '../../components/composer-input/composer-input-styles'
 import { styles } from '../mobile-tasks-legacy-styles'
 import {

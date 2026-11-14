@@ -11,18 +11,19 @@
     "metaRepo": "vars.classic && repo != null && !place.hideRepoBadge && !vars.pinnedRepo",
     "hostLabel": "options.show.host ? host.contextLabel : null",
     "hostBadge": "vars.hostLabel != null && (!vars.compact || place.showProjectName)",
-    "metaRow": "!vars.compact",
+    "detailsRow": "!vars.newStyle || options.detailsRow",
+    "metaRow": "!vars.compact && vars.detailsRow",
     "detachedInMeta": "vars.metaRow && !vars.folder && ws.detachedHead",
     "branch": "!vars.folder && len(ws.branch) > 0 && !vars.newStyle && (!vars.compact || ws.branch != ws.name)",
-    "identityInMeta": "vars.newStyle && options.show.branch && ws.identity != null",
-    "folderInMeta": "vars.newStyle ? options.show.branch && vars.folder && ws.identity != null : vars.folder",
+    "identityInMeta": "vars.newStyle && vars.metaRow && options.show.branch && ws.identity != null",
+    "folderInMeta": "vars.newStyle ? vars.metaRow && options.show.branch && vars.folder && ws.identity != null : vars.folder",
     "conflict": "git.conflictOperation == 'cherry-pick'",
     "hasComment": "len(trim(ws.comment)) > 0",
     "details": "links.count > 0 || (options.show.issue && links.issue) || (options.show.linearIssue && links.linearIssue) || (options.show.jiraIssue && links.jiraIssue) || (!vars.newStyle && options.show.pr && review != null) || (options.show.comment && vars.hasComment) || (options.show.automation && provenance.automation) || (options.show.cli && provenance.cli)",
     "ports": "options.show.ports && ports.count > 0",
     "indicators": "vars.details || vars.ports",
-    "metaIndicators": "vars.classic && vars.indicators",
-    "titleIndicators": "!vars.classic && vars.indicators",
+    "metaIndicators": "!vars.compact && vars.metaRow && vars.indicators",
+    "titleIndicators": "!vars.metaRow && vars.indicators",
     "hasMetaRow": "vars.metaRow ? vars.metaRepo || vars.hostBadge || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive || vars.metaIndicators : vars.conflict || git.cacheTimerActive",
     "star": "vars.compact && ws.isMain && !vars.folder",
     "headerActions": "vars.star || place.deleteQuickAction",
@@ -74,6 +75,11 @@
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
                 {
+                  "el": "HostBadge",
+                  "when": "vars.newStyle && !vars.metaRow && vars.hostBadge",
+                  "props": { "label": "=vars.hostLabel" }
+                },
+                {
                   "el": "Row",
                   "when": "vars.titleIndicators",
                   "props": {
@@ -84,6 +90,18 @@
                     "inset": "end"
                   },
                   "children": [{ "el": "Indicators" }]
+                },
+                {
+                  "el": "Row",
+                  "when": "vars.newStyle",
+                  "props": {
+                    "push": true,
+                    "keep": true,
+                    "align": "center",
+                    "gap": "sm",
+                    "inset": "end"
+                  },
+                  "children": [{ "el": "TitleStatus" }]
                 }
               ]
             },
@@ -117,7 +135,7 @@
                 { "el": "MetaRepoBadge", "when": "vars.metaRepo" },
                 {
                   "el": "HostBadge",
-                  "when": "vars.hostBadge",
+                  "when": "vars.metaRow && vars.hostBadge",
                   "props": { "label": "=vars.hostLabel" }
                 },
                 {
@@ -152,7 +170,9 @@
                 "gap": "sm",
                 "inset": "end"
               },
-              "children": [{ "el": "Indicators", "props": { "hover": "meta" } }]
+              "children": [
+                { "el": "Indicators", "props": { "hover": "=vars.classic ? 'meta' : null" } }
+              ]
             }
           ]
         }

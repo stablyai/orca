@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { getFeatureWallOpenSource } from './feature-wall-modal-helpers'
+import { getFeatureWallOpenSource } from './tour/feature-wall-open-source'
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { FeatureWallTourSurface } from './FeatureWallTourSurface'
 import { useTranslate } from '@/i18n/use-translate'
 

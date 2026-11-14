@@ -1,6 +1,6 @@
 import type { MarkdownDocState } from '../../files/session-documents/session-document-state'
 import type { MobileSessionTab } from './mobile-session-tabs'
-import type { ActionSheetAction } from '../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
 import { closeTabsAfterConfirmation } from '../../../../src/shared/bulk-tab-close-confirmation'
 import { translate } from '../../i18n/mobile-i18n'

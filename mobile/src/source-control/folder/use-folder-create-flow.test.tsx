@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FakeSession } from '../../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import { markRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
-import type { NewWorktreeModalProps } from '../../components/new-worktree-modal-types'
+import type { NewWorktreeModalProps } from '../../new-workspace/creation/forms/new-worktree-modal-types'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
 import { isFolderRepoCreateBusy, type FolderRepoTarget } from './folder-repo-worktree-create'
 import { useFolderCreateFlow, type FolderCreateRepo } from './use-folder-create-flow'
@@ -19,30 +19,30 @@ const seen = vi.hoisted(() => {
   return state
 })
 vi.mock('react-native', () => ({ AppState: {} }))
-vi.mock('../../components/NewWorktreeModalController', () => ({
+vi.mock('../../new-workspace/creation/modal/NewWorktreeModalController', () => ({
   NewWorktreeModalController: (props: NewWorktreeModalProps) => {
     seen.composer = props
     return null
   }
 }))
-vi.mock('../../components/ConfirmModal', () => ({
+vi.mock('../../components/sheets/ConfirmModal', () => ({
   ConfirmModal: (props: { visible: boolean; onConfirm?: () => void; onCancel: () => void }) => {
     seen.confirm = props
     return null
   }
 }))
-vi.mock('../../components/TransientToast', () => ({
+vi.mock('../../components/feedback/TransientToast', () => ({
   TransientToast: () => null,
   useTransientToast: () => ({
     message: null,
     showToast: (text: string) => seen.toasts.push(text)
   })
 }))
-vi.mock('../../platform/haptics', () => ({
+vi.mock('../../platform/haptics/haptics', () => ({
   triggerSuccess: () => (seen.haptics += 1),
   triggerError: () => (seen.haptics += 1)
 }))
-vi.mock('../../platform/external-link', () => ({ openExternalLink: () => {} }))
+vi.mock('../../platform/external-links/external-link', () => ({ openExternalLink: () => {} }))
 vi.mock('../../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'connected' })
 }))

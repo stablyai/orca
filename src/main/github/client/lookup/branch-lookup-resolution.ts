@@ -1,7 +1,7 @@
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
-import { isCommitPartOfMergedPR } from '../../pull-requests/refresh/merged-pr-commit-membership'
+import { mergedPRHeadMembership } from '../../pull-requests/refresh/merged-pr-head-membership'
 import type { MergedReviewCommitMembership as MergedPRCommitMembership } from '../../../source-control/merged-review-membership-memo'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../../../source-control/repo-default-branch'
 import { getGitHubApiRepositoryForRemote } from '../../repositories/github-api-repository-remote-probe'
@@ -99,11 +99,16 @@ export async function resolvePRForBranchOutcome(input: {
     if (!candidateRepo || !headOid) {
       return 'unknown'
     }
-    const membership = await isCommitPartOfMergedPR({
+    const membership = await mergedPRHeadMembership({
       ownerRepo: candidateRepo,
       prNumber: candidate.number,
-      commitOid: headOid,
-      ghOptions
+      prHeadOid: candidate.headRefOid,
+      baseRefName: candidate.baseRefName,
+      headOid,
+      ghOptions,
+      repoPath,
+      connectionId,
+      localGitOptions
     })
     if (membership === 'contained') {
       confirmedContainedHeadOid = headOid

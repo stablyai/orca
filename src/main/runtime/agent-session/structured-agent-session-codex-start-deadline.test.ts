@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // A Codex start has no per-step deadline: a slow `initialize` still delivers the held message, and
 // one that never answers is ended by the start's own overall limit ("never finished starting").
 
@@ -6,12 +7,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { codexScriptedChild } from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestMessage
-} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { recordAgentSessionStartup } from '../../observability/agent-session-instrumentation'
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
@@ -19,10 +20,8 @@ import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/
 import { awakeNow, createAwakeClock } from '../../power/awake-clock'
 import type * as AwakeClockModule from '../../power/awake-clock'
 import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 
 vi.mock('../../observability/agent-session-instrumentation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -126,7 +125,7 @@ it('fails the held message as never finished starting when the start passes its 
 
   await vi.waitFor(async () => {
     await host.flushStreamedEvents(HOST_TEST_SESSION)
-    const [held] = (await host.journalSnapshot(HOST_TEST_SESSION)).submissions
+    const [held] = (await readTestHostJournal(host, HOST_TEST_SESSION)).submissions
     expect(held?.dispatchState).toBe('rejected')
     expect(readWholeAgentSessionFailureFact(held?.rejection)).toMatchObject({ kind: 'hostStopped' })
   })

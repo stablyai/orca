@@ -37,7 +37,7 @@ export function TerminalAdvancedTypographyControls({
   const searchEntries = getTerminalAdvancedTypographySearchEntries()
 
   return (
-    <div className="divide-y divide-border/40">
+    <>
       <SearchableSetting
         title={t('auto.components.settings.TerminalAppearanceSection.bb4ac88514', 'Font weight')}
         description={searchEntries[0]?.description}
@@ -190,6 +190,6 @@ export function TerminalAdvancedTypographyControls({
           .
         </p>
       </SearchableSetting>
-    </div>
+    </>
   )
 }

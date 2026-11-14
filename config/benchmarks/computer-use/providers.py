@@ -194,7 +194,7 @@ class CuaEngine:
             raise RuntimeError("selected cua element has no token")
         if action == "click":
             tool, args = "click", {**base, "element_token": tok}
-        elif action == "type":
+        elif action in ("type", "type_into"):
             tool, args = "type_text", {**base, "element_token": tok, "text": text}
         elif action == "return":
             tool, args = "press_key", {**base, "element_token": tok, "key": "return"}
@@ -254,6 +254,9 @@ class OrcaEngine:
         if action == "click":
             req = self._req("click", el, escalate)
         elif action == "type":
+            # Why: click-then-type mirrors public `type-text` without --element-index, which types at focus.
+            req = self._req("type_text", None, escalate, text=text)
+        elif action == "type_into":
             req = self._req("type_text", el, escalate, text=text)
         elif action == "return":
             req = self._req("press_key", el, escalate, key="return")

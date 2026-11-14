@@ -9,7 +9,7 @@ import {
   SquareChevronRight
 } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
-import type { ActionSheetAction } from '../components/ActionSheetModal'
+import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

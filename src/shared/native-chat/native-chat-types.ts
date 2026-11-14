@@ -7,7 +7,7 @@ import type {
   AgentSessionBackgroundTaskRunState
 } from '../agent-session/agent-session-background-task-wire'
 import type { AgentSessionTokenUsage } from '../agent-session/agent-session-context-usage'
-import type { AgentSessionOrcaStop } from '../agent-session/lifecycle/agent-session-orca-stop'
+import type { AgentSessionOrcaStop } from '../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import type { AgentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
@@ -137,7 +137,18 @@ export type NativeChatSubagentEntry = {
   startedAt?: number
   /** Epoch ms the entry latched terminal. */
   settledAt?: number
+  /** The child's role (Claude's `subagent_type`), when it has one. */
+  agentType?: string
+  model?: string
+  /** Reasoning effort, in the provider's own words. */
+  effort?: string
+  /** The tool it is running now; only while it works. */
+  operation?: NativeChatSubagentOperation
+  /** The newest thing it said; once settled, its result. */
+  lastMessage?: string
 }
+
+export type NativeChatSubagentOperation = { toolName: string; input?: string }
 
 /** Provider-neutral roster revised in place by Claude/Codex activity. */
 export type NativeChatSubagentGroupBlock = {

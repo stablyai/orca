@@ -17,15 +17,15 @@ import type { HostProfile } from '../src/host-catalog/host-profile'
 import { useFocusedSettingsHostClients } from '../src/settings/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc/rpc-client-contract'
 import { LIST_LEADING_INSET, ListRow } from '../src/components/list/ListGroup'
-import { PickerModal, type PickerOption } from '../src/components/PickerModal'
-import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
+import { PickerModal, type PickerOption } from '../src/components/sheets/PickerModal'
+import { TerminalShortcutSettings } from '../src/terminal/shortcuts/settings/TerminalShortcutSettings'
 import {
   readTerminalAutoRestoreFitMs,
   saveTerminalAutoRestoreFitMs,
   setTerminalAutoRestoreFitMsForHost
-} from '../src/terminal/terminal-auto-restore-fit-state'
-import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
-import { useTerminalTextScaleSetting } from '../src/terminal/use-terminal-text-scale-setting'
+} from '../src/terminal/viewport/terminal-auto-restore-fit-state'
+import { setTerminalSettingsScrollEnabled } from '../src/terminal/preferences/terminal-settings-scroll-lock'
+import { useTerminalTextScaleSetting } from '../src/terminal/preferences/use-terminal-text-scale-setting'
 import {
   SettingsEmptyRow,
   SettingsNavBar,

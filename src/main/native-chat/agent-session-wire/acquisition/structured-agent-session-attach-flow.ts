@@ -15,9 +15,9 @@ import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../../shared/agent-session/agent-session-wire'
-import { agentSessionLeaseAdmitsWriter } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { agentSessionLeaseAdmitsWriter } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,
@@ -36,9 +36,7 @@ import {
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { StructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import { resolveAgentSessionReplayOutcome } from '../operations/structured-agent-session-replay-outcome'
-import { readAgentSessionHydrationPage } from '../publication/history/agent-session-history-page'
-import { withPublishedWork } from '../observations/agent-session-published-work'
-import { heldStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
+import { captureAttachedHydration } from './structured-agent-session-attach-hydration'
 import { acquireOwner } from './structured-agent-session-acquisition'
 import {
   importAdoptedTranscript,
@@ -50,7 +48,7 @@ import {
 } from '../../../observability/agent-session-instrumentation'
 import type { StructuredAgentSessionStartupAttempt } from '../startup/structured-agent-session-startup-attempt-contract'
 import type { StructuredAgentSessionStartupProgress } from '../startup/structured-agent-session-startup-tracking'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import {
   heldStructuredAgentSessionAttachLock,
@@ -288,28 +286,22 @@ export async function performAttach(
 
   const fence = record.lease.runtimeFence
   const tabId = store.getSessionTabId(sessionId)
-  const view = attached.journal.publicRead()
-  const work = heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
-  let page: ReturnType<typeof readAgentSessionHydrationPage> | undefined
+  const { page, cursor } = await captureAttachedHydration(
+    store,
+    sessionId,
+    attached.journal,
+    fence,
+    withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId))
+  )
   return {
     ok: true,
     replayed,
     fence,
-    cursor: attached.journal.cursor(),
+    cursor,
     value: {
       sessionId,
       fence,
-      get page() {
-        return (page ??= withPublishedWork(
-          readAgentSessionHydrationPage(
-            attached.journal,
-            fence,
-            withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId)),
-            view.currentSnapshot()
-          ),
-          work
-        ))
-      },
+      page,
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
       ...(tabId ? { tabId } : {})
     }

@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/git/remotes/git-review-branch-source'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { readLocalGitConfigSignature } from '../../repositories/local-git-config-signature'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import {
   TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS,
   trackedUpstreamSnapshotCache,

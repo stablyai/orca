@@ -6,15 +6,18 @@ import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, History, RefreshCw } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
+import {
+  MobileSegmentedControl,
+  type MobileSegment
+} from '../components/controls/MobileSegmentedControl'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useSessionScreenHandlers } from '../session/session-screen-handlers'
-import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
-import { getWorktreeLabel } from '../worktree/worktree-label'
+import { worktreeCatalogRead } from '../worktree/catalog/worktree-catalog-operations'
+import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
@@ -23,9 +26,9 @@ import {
   resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from './ai-vault-resume-preparation'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
 import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
@@ -40,9 +43,9 @@ import {
   MobileNoMatchState,
   MobileOfflineState,
   MobileStateView
-} from '../components/MobileStateView'
+} from '../components/feedback/MobileStateView'
 import { AgentHistoryResumeNotice, AgentHistoryScanNotices } from './AgentHistoryNotices'
-import { TransientToast, useTransientToast } from '../components/TransientToast'
+import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
 import type { Translate } from '../i18n/mobile-i18n'

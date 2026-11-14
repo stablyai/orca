@@ -57,6 +57,7 @@ export function observeClaudeSessionExit(
   if (!session || session.connection !== attempt.connection) {
     return
   }
+  session.historyCatchUp?.abort()
   const observedAt = lifecycle.deps.now?.() ?? Date.now()
   session.delivery.dispose()
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)

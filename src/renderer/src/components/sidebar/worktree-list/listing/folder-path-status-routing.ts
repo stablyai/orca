@@ -7,7 +7,7 @@ import {
 import type { FolderWorkspacePathStatusRequest } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shared/sidebar-list/host-filtering'
+import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 
 export function getRuntimeEnvironmentIdForFolderPathStatusHost(
   hostId: ExecutionHostId

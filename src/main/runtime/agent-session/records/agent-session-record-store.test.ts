@@ -2,27 +2,27 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type {
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  closeTestAgentSessionRecordStores,
+  closeTestAgentSessionDatabase,
+  openTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStore
+  readPersistedTestAgentSessionStore,
+  withTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 
@@ -128,11 +128,28 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
 describe('acquisition path', () => {
+  it('replays a successful reservation using its saved session when the retry proposes another id', async () => {
+    const store = await open()
+    const request = reserveRequest()
+    await store.reserveOwner(request)
+    await store.commitOperationReceipt(
+      store.operationOutcomeReceipt({
+        callerKey: request.operation.callerKey,
+        operationId: request.operation.operationId,
+        outcome: { status: 'succeeded', sessionId: 'session-alpha' }
+      })
+    )
+    const replay = await store.reserveOwner({ ...request, sessionId: 'session-beta' })
+    expect(replay.disposition).toBe('replayed')
+    expect(replay.record.sessionId).toBe('session-alpha')
+    expect(store.getRecord('session-beta')).toBeNull()
+  })
+
   it('refuses a child that cannot echo the reserved spawn token', async () => {
     const store = await open()
     await store.reserveOwner(reserveRequest())
@@ -244,8 +261,10 @@ describe('concurrent claims', () => {
     const before = store.getRecord('session-alpha')
     const persistedBefore = await readPersistedTestAgentSessionStore(directory)
     // Fail the record update inside commit, like full-disk/I/O failure.
-    openTestJournalHostDatabase(directory).db.exec(
-      "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
+    await withTestAgentSessionDatabase(directory, (db) =>
+      db.exec(
+        "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
+      )
     )
     await expect(store.setConversationName('session-alpha', 'renamed')).rejects.toThrow(
       'disk I/O error'
@@ -290,6 +309,93 @@ describe('expiry is not eviction', () => {
 })
 
 describe('restart reconciliation', () => {
+  it('keeps recovery pending across receipts and real writer restarts, without invalidating observers', async () => {
+    await establishOwner(await open())
+    await closeTestAgentSessionDatabase(directory)
+    let store = await open()
+    await store.setConversationName('session-alpha', 'retained name')
+    expect(
+      (await readPersistedTestAgentSessionStore(directory)).records['session-alpha'].lease
+    ).toMatchObject({ runtimeFence: 1, unreconciled: true })
+    await expect(
+      store.renewLease({
+        sessionId: 'session-alpha',
+        fence: 1,
+        childProbe: MATCHED,
+        now: NOW + 100
+      })
+    ).rejects.toThrow('execution_owner_reconciling')
+
+    // A second real installation must retain debt that the first one did not complete.
+    await closeTestAgentSessionDatabase(directory)
+    store = await open()
+    await store.reconcileOnRestart({ probe: async () => MATCHED, now: NOW + 500 })
+    await expect(
+      store.renewLease({
+        sessionId: 'session-alpha',
+        fence: 1,
+        childProbe: MATCHED,
+        now: NOW + 600
+      })
+    ).resolves.toMatchObject({ lease: { runtimeFence: 1, ownerProcess: { pid: 4242 } } })
+    const database = await openTestAgentSessionDatabase(directory)
+    expect((await database.loadRecords()).records.get('session-alpha')?.lease.unreconciled).toBe(
+      false
+    )
+    expect(
+      (await readPersistedTestAgentSessionStore(directory)).records['session-alpha'].lease
+    ).toMatchObject({ runtimeFence: 1, unreconciled: false, ownerProcess: { pid: 4242 } })
+
+    await closeTestAgentSessionDatabase(directory)
+    store = await open()
+    await expect(
+      store.renewLease({
+        sessionId: 'session-alpha',
+        fence: 1,
+        childProbe: MATCHED,
+        now: NOW + 700
+      })
+    ).rejects.toThrow('execution_owner_reconciling')
+  })
+
+  it('rejects a held restart verdict after an ordinary record change', async () => {
+    await establishOwner(await open())
+    const store = await open()
+    const probe = Promise.withResolvers<AgentSessionOwnerProbe>()
+    const started = Promise.withResolvers<void>()
+    const stale = store.reconcileOnRestart({
+      probe: async () => {
+        started.resolve()
+        return probe.promise
+      },
+      now: NOW + 1_000
+    })
+    await started.promise
+    await store.setConversationName('session-alpha', 'new name')
+    probe.resolve({ outcome: 'pid-absent' })
+    expect(await stale).toEqual(new Map())
+    expect(
+      (await readPersistedTestAgentSessionStore(directory)).records['session-alpha']
+    ).toMatchObject({
+      conversationName: 'new name',
+      lease: {
+        runtimeFence: 1,
+        claimStatus: 'live',
+        unreconciled: true,
+        ownerProcess: { pid: 4242, spawnToken: 'spawn-a' }
+      }
+    })
+    await store.reconcileOnRestart({ probe: async () => MATCHED, now: NOW + 1_100 })
+    await expect(
+      store.renewLease({
+        sessionId: 'session-alpha',
+        fence: 1,
+        childProbe: MATCHED,
+        now: NOW + 1_200
+      })
+    ).resolves.toMatchObject({ lease: { runtimeFence: 1 } })
+  })
+
   it('never applies a stale restart probe to a lease another reconcile already settled', async () => {
     await establishOwner(await open())
     const store = await open()

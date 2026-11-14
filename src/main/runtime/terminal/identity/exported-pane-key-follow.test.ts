@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')

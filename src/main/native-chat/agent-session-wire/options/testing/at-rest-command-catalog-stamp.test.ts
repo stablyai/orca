@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
-import { hostTestRestingOptionsRecord } from '../../host/testing/structured-agent-session-host-test-data'
+import { hostTestRestingOptionsRecord } from '../../host/testing/structured-agent-session-host-test-data.test-fixture'
 import { AtRestCommandCatalog } from '../at-rest-command-catalog'
 
 function catalogWithSkills() {

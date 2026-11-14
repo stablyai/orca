@@ -45,7 +45,6 @@ export const UNIT_EXCLUDE = [
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts',
   'src/shared/startup-shell-portability.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts',
-  'tests/e2e/relay-region-compatibility.unit.test.ts',
   'tests/e2e/relay-region-correction.unit.test.ts',
   'src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts',
   // Electron probes with in-process deadlines; the package job runs them serially.

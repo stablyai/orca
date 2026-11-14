@@ -1,3 +1,4 @@
+import { getPackagedElectronExecutable } from '../../runtime/app-launch/packaged-cli-interpreter'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,15 +22,18 @@ type Dependencies = {
   /** The runtime this CLI runs on: Electron as Node in a packaged app, or Node in development. */
   execPath: string
   version: string
-  electron: string | undefined
+  electron: boolean
 }
 
-const defaults = (): Dependencies => ({
-  run: runProcess,
-  execPath: process.execPath,
-  version: process.version,
-  electron: process.versions.electron
-})
+const defaults = (): Dependencies => {
+  const packagedElectron = getPackagedElectronExecutable()
+  return {
+    run: runProcess,
+    execPath: packagedElectron ?? process.execPath,
+    version: process.version,
+    electron: Boolean(packagedElectron || process.versions.electron)
+  }
+}
 
 function supports(version: string): boolean {
   const [major = 0, minor = 0] = version.replace(/^v/, '').split('.').map(Number)

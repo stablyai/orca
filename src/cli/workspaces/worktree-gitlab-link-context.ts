@@ -2,7 +2,7 @@ import { parseRemoteProjectRefCandidate } from '../../main/gitlab/projects/proje
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
 import { parseGitLabIssueOrMRLink, type ProjectSlug } from '../../shared/new-workspace/gitlab-links'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { CliRepoTarget } from './worktree-project-target'
 

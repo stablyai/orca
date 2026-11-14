@@ -1,5 +1,5 @@
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
-import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
+import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { DeviceEntry } from './device-entry'
 import { parseMobilePushRegistration } from '../../../../../shared/mobile-push-contract'
 import { isDevicePublicKeyB64 } from '../../../../../shared/remote-runtime/pairing/device-key-proof'

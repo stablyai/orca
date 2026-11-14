@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { Keyboard, Platform } from 'react-native'
-import { useClipboardWriter } from '../../platform/clipboard'
+import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
@@ -8,10 +8,10 @@ import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-
 import { useSessionLeaveGuard } from '../../session/session-leave-guard'
 import { markdownTabSave } from './mobile-markdown-tab-operations'
 import { dropDocumentEditDraft, markdownTabDraftKey } from '../../drafts/document-edit-draft-rows'
-import { triggerSuccess, triggerError } from '../../platform/haptics'
+import { triggerSuccess, triggerError } from '../../platform/haptics/haptics'
 import type { DirtyMarkdownDraft } from './session-document-state'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
-import type { MobileSessionDiffCommentsModel } from '../../source-control/review/use-mobile-session-diff-comments'
+import type { MobileSessionDiffCommentsModel } from '../../source-control/review/review-notes/use-mobile-session-diff-comments'
 
 // Depend on the action’s narrow scope so Back behavior can be tested without constructing the whole session model.
 export type MobileSessionMarkdownActionsScope = Pick<

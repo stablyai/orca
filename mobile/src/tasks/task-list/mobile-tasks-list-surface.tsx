@@ -1,12 +1,12 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { translate } from '../../i18n/mobile-i18n'
 import { colors, type MobileColorScheme } from '../../theme/mobile-theme'
-import { TaskProviderLogo } from '../../components/TaskProviderLogo'
+import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { renderMobileTasksGitHubProjectList } from '../project-board/mobile-tasks-github-project-list'
 import { renderMobileTasksLinearList } from '../providers/linear/mobile-tasks-linear-list'
 import { renderMobileTasksProviderItemList } from './mobile-tasks-provider-item-list'
-import { JiraConnectPrompt } from '../../components/JiraConnectPrompt'
-import { MobileStateView } from '../../components/MobileStateView'
+import { JiraConnectPrompt } from '../providers/JiraConnectPrompt'
+import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { renderMobileTasksSupportState } from './mobile-tasks-list-state'
 
 export function renderMobileTasksListSurface(

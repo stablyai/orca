@@ -14,7 +14,8 @@ export function NativeChatQuestionOption({
   preview,
   selected,
   disabled,
-  onSelect
+  onSelect,
+  onEnter
 }: {
   badge: string
   initialFocus: boolean
@@ -25,14 +26,16 @@ export function NativeChatQuestionOption({
   selected: boolean
   disabled: boolean
   onSelect: () => void
+  /** Enter on the row: the card picks it, or confirms when it is the chosen single-select row. */
+  onEnter: () => void
 }): React.JSX.Element {
   return (
     // The tile wraps the row and its preview, so the preview reads as part of the picked option.
     // One root whether or not the preview shows, so selecting never remounts the focused row.
-    // p-px leaves a 1px gap between the inset focus ring and the tile's border.
+    // The focus ring goes on the tile, not the row, so a shown preview sits inside it instead of under it.
     <div
       className={cn(
-        'rounded-[10px] border p-px transition-colors',
+        'rounded-[10px] border transition-colors has-[>button:focus-visible]:ring-2 has-[>button:focus-visible]:ring-inset has-[>button:focus-visible]:ring-chat-focus-ring',
         selected ? 'border-primary bg-foreground/8' : 'border-question-option-border'
       )}
     >
@@ -40,11 +43,28 @@ export function NativeChatQuestionOption({
         type="button"
         disabled={disabled}
         onClick={onSelect}
+        // On the row, not the card's key hook, so Enter works when the card did not take focus;
+        // preventDefault stops the native Enter click from toggling the row instead.
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+            return
+          }
+          event.preventDefault()
+          if (
+            !event.repeat &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            !event.altKey &&
+            !event.shiftKey
+          ) {
+            onEnter()
+          }
+        }}
         aria-pressed={selected}
         data-native-chat-prompt-card-focus-target={initialFocus || undefined}
-        // Focus is an inset ring, never the selected fill, so the row that opens focused does not read as picked.
+        // Focus is the tile's ring, never the selected fill, so the row that opens focused does not read as picked.
         className={cn(
-          'flex w-full items-start gap-3 rounded-[8px] px-3 py-2.5 text-left text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-chat-focus-ring disabled:pointer-events-none',
+          'flex w-full items-start gap-3 rounded-[9px] px-3 py-2.5 text-left text-foreground transition-colors focus-visible:outline-none disabled:pointer-events-none',
           !selected && 'hover:bg-foreground/5'
         )}
       >

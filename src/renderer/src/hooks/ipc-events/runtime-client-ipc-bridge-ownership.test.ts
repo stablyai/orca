@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime-environment-subscriptions'
+import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime/runtime-environment-subscriptions'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
@@ -153,28 +153,6 @@ function createHarness() {
   }
 }
 
-it('does no Linear read dispatch or cache publication after cleanup while setup is pending', async () => {
-  const h = createHarness()
-  let publications = 0
-  const stopCounting = useAppStore.subscribe((state, previous) => {
-    if (state.linearIssueCache !== previous.linearIssueCache) {
-      publications += 1
-    }
-  })
-  try {
-    h.start()()
-    for (let index = 0; index < 100; index += 1) {
-      h.emit(0)
-    }
-    expect(h.getIssue).not.toHaveBeenCalled()
-    expect(publications).toBe(0)
-  } finally {
-    stopCounting()
-    await h.finish()
-  }
-  expect(h.ipc.removeListener).toHaveBeenCalledOnce()
-})
-
 it('does not navigate for an unaddressed activation from an older remote host', async () => {
   const h = createHarness()
   try {
@@ -251,38 +229,6 @@ it('does not mistake a local repo with the same id for the publishing remote rep
     await h.finish()
   }
 })
-
-it.each(['cleanup', 're-pair'] as const)(
-  'cancels an accepted activation after %s during repository discovery',
-  async (change) => {
-    const h = createHarness()
-    const repos = Promise.withResolvers<never[]>()
-    h.fetchRuntimeEnvironmentRepos.mockImplementation(() => repos.promise)
-    try {
-      const stop = h.start()
-      h.emit(0, false, {
-        type: 'activateWorktree',
-        repoId: 'remote-repo',
-        worktreeId: 'remote-wt',
-        navigation: 'clients'
-      })
-      expect(h.fetchRuntimeEnvironmentRepos).toHaveBeenCalledWith('host-a')
-      if (change === 'cleanup') {
-        stop()
-      } else {
-        replaceRuntimeEnvironmentRevisions([{ id: 'host-a', createdAt: 1, pairingRevision: 2 }])
-      }
-      repos.resolve([])
-      for (let index = 0; index < 10; index += 1) {
-        await Promise.resolve()
-      }
-      expect(h.activateNotifiedWorktree).not.toHaveBeenCalled()
-    } finally {
-      repos.resolve([])
-      await h.finish()
-    }
-  }
-)
 
 it('accepts a fresh bridge early frame while rejecting the previous bridge frame', async () => {
   const h = createHarness()

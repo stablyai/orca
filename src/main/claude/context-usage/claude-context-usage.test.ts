@@ -1,12 +1,14 @@
+import { selectStructuredAgentContextUsage } from '../../../shared/agent-session/structured-agent-session-context-usage'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { selectStructuredAgentContextUsage } from '../../../shared/agent-session/structured-agent-session-context-usage'
-import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { StructuredAgentSessionSnapshotRoutes } from '../../native-chat/agent-session-wire/host/structured-agent-session-snapshot-routes'
 import { createDeferredStructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createClaudeJournalTranslator } from '../structured/journal/claude-structured-journal-translation'
 import { bindClaudeContextUsageCapture } from './claude-context-usage'
 
@@ -62,6 +64,8 @@ it('shows the report after a compaction when responses carry no usage', async ()
   })
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
+  const routes = new StructuredAgentSessionSnapshotRoutes(testEventSinkLogging().logger)
+  await deferred.followSnapshots(routes.observe('orca-session', journal))
   deferred.bind({ journal, fence: 1, publish: () => {} })
   const answers: ((value: unknown) => void)[] = []
   const unbind = bindClaudeContextUsageCapture(
@@ -75,7 +79,7 @@ it('shows the report after a compaction when responses carry no usage', async ()
     }
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
   }
-  const ring = () => selectStructuredAgentContextUsage(journal.snapshot().items)
+  const ring = async () => selectStructuredAgentContextUsage([], await journal.reads.contextUsage())
 
   translator.handle(
     frame({ type: 'system', subtype: 'init', uuid: 'init', model: 'deepseek-v4.1-flash' }, 900)
@@ -105,7 +109,7 @@ it('shows the report after a compaction when responses carry no usage', async ()
   )
   translator.handle(responseWithoutUsage('reply-a2', 4_000))
   await settle()
-  expect(ring()).toBeNull()
+  expect(await ring()).toBeNull()
 
   answers.at(-1)?.({
     model: 'deepseek-v4.1-flash',
@@ -114,7 +118,11 @@ it('shows the report after a compaction when responses carry no usage', async ()
     categories: []
   })
   await settle()
-  expect(ring()).toMatchObject({ usedTokens: 40_000, windowTokens: 200_000, estimated: false })
+  expect(await ring()).toMatchObject({
+    usedTokens: 40_000,
+    windowTokens: 200_000,
+    estimated: false
+  })
   unbind?.()
   translator.dispose()
   deferred.close()

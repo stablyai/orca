@@ -4,13 +4,13 @@ import { translate } from '../../i18n/mobile-i18n'
 import { View, Text, Pressable, FlatList } from 'react-native'
 import { colors, spacing, type MobileColorScheme, pressedStyle } from '../../theme/mobile-theme'
 import { ChevronDown, Inbox } from 'lucide-react-native'
-import { TaskProviderLogo } from '../../components/TaskProviderLogo'
+import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 
 import {
   MobileLoadErrorState,
   MobileNoMatchState,
   MobileStateView
-} from '../../components/MobileStateView'
+} from '../../components/feedback/MobileStateView'
 import { clearMobileTasksSearch } from '../screen/mobile-tasks-search-control'
 import { styles } from '../mobile-tasks-legacy-styles'
 import { projectGroupMeta, projectFieldDisplayLabel } from './mobile-tasks-project-fields'

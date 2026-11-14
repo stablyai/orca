@@ -4,6 +4,7 @@ import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import type {
   ComputerActionMetadata,
   ComputerActionResult,
+  ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerSnapshotResult
@@ -31,7 +32,7 @@ export function formatGetAppState(result: ComputerSnapshotResult): string {
       ? ''
       : ` @ ${result.snapshot.window.x},${result.snapshot.window.y}`
   const truncation = result.snapshot.truncation?.truncated
-    ? `  Truncated: yes (max nodes ${result.snapshot.truncation.maxNodes ?? 'unknown'}, max depth ${result.snapshot.truncation.maxDepth ?? 'unknown'})`
+    ? `  Truncated: yes (max nodes ${result.snapshot.truncation.maxNodes ?? 'unknown'}, max depth ${result.snapshot.truncation.maxDepth ?? 'unknown'}); read cut-off children with --element-index <their parent's index>`
     : '  Truncated: no'
   return [
     `${app.name} (pid ${app.pid}${bundle})`,
@@ -108,6 +109,12 @@ export function formatListApps(result: ComputerListAppsResult): string {
     .join('\n')
 }
 
+export function formatLaunchApp(result: ComputerLaunchAppResult): string {
+  const verb = result.launched ? 'Launched' : 'Already running:'
+  const place = result.delivery === 'foreground' ? 'in the foreground' : 'in the background'
+  return `${verb} ${result.app.name} pid:${result.app.pid} ${place}`
+}
+
 export function formatListWindows(result: ComputerListWindowsResult): string {
   if (result.windows.length === 0) {
     return `No windows found for ${result.app.name}.`
@@ -138,7 +145,6 @@ export type ComputerActionFollowUpTarget = {
   worktree?: string
   windowId?: number
   windowIndex?: number
-  restoreWindow?: boolean
 }
 
 export function formatComputerAction(
@@ -189,9 +195,6 @@ function formatComputerFollowUpCommand(
     } else if (windowIndex !== null && windowIndex !== undefined) {
       args.push('--window-index', String(windowIndex))
     }
-  }
-  if (target.restoreWindow) {
-    args.push('--restore-window')
   }
   return args.join(' ')
 }

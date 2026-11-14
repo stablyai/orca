@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import type { RuntimeClient } from '../../runtime/client'
 import { readRetryRequestFlag } from './retry-request-flag'
 import { orchestrationMutationRecoveryError } from './orchestration-mutation-recovery'
-import { isRequestUnsent } from '../../runtime/client-error-recovery'
+import { isRequestUnsent } from '../../runtime/connection/client-error-recovery'
 
 const MAX_UNAVAILABLE_RETRY_DELAY_MS = 15_000
 

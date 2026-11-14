@@ -1,13 +1,12 @@
+import { readTestJournalItems } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // Exercise shipped RPC, schemas, capability gate, stores, lease and adapter; only the Codex app-server child is fake.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type * as JournalStoreFactory from '../../native-chat/agent-session-journal/journal-store-factory'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 import {
   openStructuredCodexRpcHarness,
   SESSION,
@@ -15,7 +14,7 @@ import {
   TURN,
   type StructuredCodexRpcHarness
 } from '../rpc/methods/structured-sessions/structured-codex-session-rpc-test-harness'
-import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const { journalOpenHold } = vi.hoisted(() => {
   const journalOpenHold: { next: { entered: () => void; released: Promise<void> } | null } = {
@@ -133,13 +132,13 @@ describe('a structured codex session over agentSession.*', () => {
       identity,
       stateDirectory: harness.root
     })
-    expect(reopened.snapshot().items.map(textOf)).toContain('Buffered while the journal opens.')
+    expect((await readTestJournalItems(reopened)).map(textOf)).toContain(
+      'Buffered while the journal opens.'
+    )
     expect(
-      reopened
-        .snapshot()
-        .items.some(
-          (item) => item.body?.kind === 'status' && item.body.turnLifecycle?.state === 'running'
-        )
+      (await readTestJournalItems(reopened)).some(
+        (item) => item.body?.kind === 'status' && item.body.turnLifecycle?.state === 'running'
+      )
     ).toBe(false)
   })
 })

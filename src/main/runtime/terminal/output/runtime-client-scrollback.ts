@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithMigrationCatalog } from '../../hosts/migration/runtime-migration-catalog'
-import type { SessionReadTerminalScrollbackResult } from '../../../../shared/rpc-contract/session-terminal-scrollback-params'
+import type { SessionReadTerminalScrollbackResult } from '../../../../shared/rpc-contract/session-tabs/session-terminal-scrollback-params'
 import {
   readHostTerminalScrollback,
   type HostTerminalScrollbackReadRequest

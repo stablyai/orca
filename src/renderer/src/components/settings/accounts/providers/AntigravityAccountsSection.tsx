@@ -26,6 +26,7 @@ import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigra
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
   AntigravityTerminalAccountRows,
   type AntigravityAccountAction
@@ -204,7 +205,7 @@ export function AntigravityAccountsSection({
     ) : null
 
   return (
-    <div id="accounts-antigravity" className="scroll-mt-6 space-y-3">
+    <div id={ACCOUNTS_SECTION_IDS.antigravity} className="scroll-mt-6 space-y-3">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">

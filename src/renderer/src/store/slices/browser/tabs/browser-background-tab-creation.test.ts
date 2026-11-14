@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
-import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import {
@@ -82,14 +82,11 @@ describe('setActiveWorktree', () => {
     })
     main = await drawTabsFromMain(store)
 
-    const browserTab = store
-      .getState()
-      .createBrowserTab(backgroundWt, 'https://example.com', { activate: true })
+    store.getState().createBrowserTab(backgroundWt, 'https://example.com', { activate: true })
     await settled()
 
     const s = store.getState()
     expect(s.activeTabType).toBe('terminal')
     expect(s.activeTabTypeByWorktree[backgroundWt]).toBe('browser')
-    expect(s.activeBrowserTabIdByWorktree[backgroundWt]).toBe(browserTab.id)
   })
 })

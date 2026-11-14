@@ -1,4 +1,4 @@
-import type { BrowserSnapshotOptions } from '../../shared/rpc-contract/browser-observation-params'
+import type { BrowserSnapshotOptions } from '../../shared/rpc-contract/browser/browser-observation-params'
 import type {
   BrowserBackResult,
   BrowserEvalResult,
@@ -18,7 +18,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 

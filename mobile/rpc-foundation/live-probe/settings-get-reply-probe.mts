@@ -3,7 +3,7 @@ import WebSocket from 'ws'
 import nacl from 'tweetnacl'
 import { readFileSync } from 'node:fs'
 import { deriveSharedKey, e2eeDecrypt, e2eeEncrypt } from '../../scripts/mock-server-encryption.ts'
-import { botOverridesRead } from '../../src/source-control/review/mobile-pr-bot-settings-operations.ts'
+import { botOverridesRead } from '../../src/source-control/review/pull-request/comments/mobile-pr-bot-settings-operations.ts'
 import { newTabSettingsRead } from '../../src/session/agent-launch/mobile-new-tab-settings-operations.ts'
 import {
   optionalSettingsRead,

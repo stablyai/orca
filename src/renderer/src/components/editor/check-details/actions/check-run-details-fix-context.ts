@@ -4,7 +4,7 @@ import {
   getCheckDetailsPromptKey
 } from '../../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { hostedReviewInfoFromGitHubPRInfo as gitHubPRToChecksPanelReview } from '../../../../../../shared/source-control/hosted-review/hosted-review-github'
-import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { useAppStore } from '@/store/index'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
@@ -17,7 +17,7 @@ import type {
 import type { Repo } from '../../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function resolveCheckRunDetailsFixCheck(

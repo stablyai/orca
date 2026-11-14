@@ -9,14 +9,12 @@ import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-depend
 import {
   createBundleServer,
   installCspViolationRecorder,
-  installListenerRecorder,
   readShellCsp
 } from '../preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
-const diagramDir = join(mobileDir, 'src/components/pr-sidebar')
+const diagramDir = join(mobileDir, 'src/components/mermaid')
 
-// Use design fixture so recorded byte counts remain comparable.
 const FIXTURE =
   'graph TD\n  A[Start] --> B{Choice}\n  B -->|yes| C[Ship it]\n  B -->|no| D[Fix it]\n  D --> A'
 
@@ -124,44 +122,15 @@ afterAll(async () => {
   }
 })
 
-// Record eval/Function stacks to attribute JIT attempts: a library may swallow EvalError under CSP.
-// Playwright also evaluates harness functions, so only bundle-script callers count as page JIT.
-function installJitRecorder() {
-  globalThis.__orcaJit = []
-  const record = (kind, source) => {
-    // Skip error header and recorder frame to identify caller.
-    const stack = (new Error('jit').stack ?? '').split('\n').slice(2).join(' | ')
-    globalThis.__orcaJit.push({ kind, source: String(source).slice(0, 60), stack })
-  }
-  // oxlint-disable-next-line eslint/no-eval -- SAFETY: the recorder holds the real eval so it can count and forward calls; naming it is this function's whole purpose.
-  const realEval = globalThis.eval
-  // oxlint-disable-next-line eslint/no-eval -- SAFETY: replacing eval with a counting wrapper is the measurement, not a call.
-  globalThis.eval = function (source) {
-    record('eval', source)
-    return realEval.call(globalThis, source)
-  }
-  const RealFunction = globalThis.Function
-  function PatchedFunction(...args) {
-    record('Function', args.map((one) => String(one).slice(0, 40)).join('|'))
-    return RealFunction.apply(this, args)
-  }
-  PatchedFunction.prototype = RealFunction.prototype
-  globalThis.Function = PatchedFunction
-}
-
 // Mermaid marks its drawings; the frame's expand icon is an SVG too.
 function readDiagram() {
   const DRAWING = 'svg[aria-roledescription]'
   const frame = document.querySelector('[data-testid="mermaid-diagram"]')
-  const svg = frame?.querySelector(DRAWING) ?? null
   return {
-    framed: frame !== null,
     inFrame: frame ? frame.querySelectorAll(DRAWING).length : -1,
     // Count SVGs across document too: Mermaid’s temporary body element can orphan diagrams outside component host.
     inDocument: document.querySelectorAll(DRAWING).length,
     sourceBox: document.querySelector('[data-testid="mermaid-diagram-source"]') !== null,
-    id: svg?.id ?? null,
-    html: svg?.outerHTML ?? null,
     text: frame?.textContent ?? null
   }
 }
@@ -175,9 +144,7 @@ async function openPage(browser) {
     }
   })
   page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`))
-  await page.addInitScript(installJitRecorder)
   await page.addInitScript(installCspViolationRecorder)
-  await page.addInitScript(installListenerRecorder)
   await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => document.body.dataset.ready === 'yes')
   return { page, consoleErrors }

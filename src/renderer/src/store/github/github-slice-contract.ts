@@ -9,6 +9,7 @@ import type {
 } from '../../../../shared/github/comments/comment-types'
 import type {
   GitHubPRRefreshEvent,
+  PRSnapshotReply,
   GitHubPRRefreshReason
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
@@ -70,6 +71,9 @@ export type GitHubSlice = {
       fallbackPRSource?: GitHubPRFallbackSource | null
       reason?: GitHubPRRefreshReason
       userRefresh?: boolean
+      selected?: boolean
+      onReadOutcome?: (outcome: PRSnapshotReply) => void
+      signal?: AbortSignal
     }
   ) => Promise<PRInfo | null>
   fetchIssue: (

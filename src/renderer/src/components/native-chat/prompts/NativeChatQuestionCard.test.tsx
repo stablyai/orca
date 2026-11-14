@@ -2,10 +2,11 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
+import { getByRole, queryByRole } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 
-import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
+import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 
 // Answers must use option indices; labels can be duplicated and a non-first choice must retain its position.
 
@@ -126,44 +127,76 @@ describe('NativeChatQuestionCard', () => {
     pressKey({ key: 'Enter' }, rows[1]!)
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
-  it('opens with focus on option 1 without picking it, and Skip turns into Submit once picked', () => {
+  it('submits with a second Enter on the last step instead of deselecting the pick', () => {
     vi.useFakeTimers()
     container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
     act(() => {
       root.render(
         <NativeChatQuestionCard
           prompt={tabsOrSpaces}
-          onAnswer={() => {}}
+          onAnswer={onAnswer}
           onCancel={() => {}}
           shouldFocus
         />
       )
     })
-    act(() => vi.runAllTimers())
     const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
-    const confirmButton = (): HTMLButtonElement =>
-      [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-        /^(Skip|Submit)/.test(button.textContent ?? '')
-      )!
-    expect(document.activeElement).toBe(rows[0])
-    // Focus is a ring only; the picked look (primary border, fill) is reserved for aria-pressed rows.
-    expect(rows[0]!.getAttribute('aria-pressed')).toBe('false')
-    expect(rows[0]!.className).not.toMatch(/(^|\s)(focus:)?bg-accent(\s|$)/)
-    expect(rows[0]!.parentElement!.className).not.toContain('border-primary')
-    expect(confirmButton().textContent).toBe('Skip')
-
-    act(() => rows[1]!.click())
+    act(() => rows[1]!.focus())
+    pressKey({ key: 'Enter' }, rows[1]!)
     expect(rows[1]!.getAttribute('aria-pressed')).toBe('true')
-    expect(rows[1]!.parentElement!.className).toContain('border-primary')
-    expect(rows[0]!.parentElement!.className).not.toContain('border-primary')
-    // The Enter hint is decoration; the button's name stays "Submit".
-    const submit = confirmButton()
-    expect(submit.querySelector('[aria-hidden]')?.textContent).toBe('↵')
-    expect(
-      [...submit.childNodes]
-        .filter((node) => !(node instanceof Element && node.hasAttribute('aria-hidden')))
-        .map((node) => node.textContent)
-        .join('')
-    ).toBe('Submit')
+    // Before the auto-advance fires, Enter on the chosen row submits it.
+    pressKey({ key: 'Enter' }, rows[1]!)
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+    act(() => vi.runAllTimers())
+    expect(onAnswer).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Submit on the last step once an earlier question is answered, even after skipping', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    const onAnswer = vi.fn()
+    const onCancel = vi.fn()
+    const question = (header: string): AskPrompt['questions'][number] => ({
+      question: `${header}?`,
+      header,
+      multiSelect: false,
+      options: [{ label: `${header} A` }, { label: `${header} B` }]
+    })
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={{ questions: [question('One'), question('Two'), question('Three')] }}
+          onAnswer={onAnswer}
+          onCancel={onCancel}
+          shouldFocus
+        />
+      )
+    })
+    const rows = (): HTMLButtonElement[] => [
+      ...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    ]
+    const skip = (): void => act(() => getByRole(container, 'button', { name: 'Skip' }).click())
+    skip()
+    skip()
+    expect(rows()[0]!.textContent).toContain('Three A')
+    // With nothing answered, the last step still offers Skip, which dismisses.
+    expect(getByRole(container, 'button', { name: 'Skip' })).toBeTruthy()
+
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[data-native-chat-question-step]')!.click()
+    )
+    act(() => rows()[1]!.click())
+    act(() => vi.runAllTimers())
+    skip()
+    expect(rows()[0]!.textContent).toContain('Three A')
+    expect(queryByRole(container, 'button', { name: 'Skip' })).toBeNull()
+    act(() => getByRole(container, 'button', { name: 'Submit' }).click())
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(onAnswer).toHaveBeenCalledWith([
+      { indices: [1], other: '' },
+      { indices: [], other: '' },
+      { indices: [], other: '' }
+    ])
   })
 })
