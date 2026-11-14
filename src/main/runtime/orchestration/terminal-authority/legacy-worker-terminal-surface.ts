@@ -4,9 +4,9 @@ import type {
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../../shared/runtime-terminal-contracts'
-import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
+import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
 import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration-legacy-worker-terminal-recovery'
+import type { LegacyWorkerTerminalRecoveryPlan } from './release/orchestration-legacy-worker-terminal-recovery'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type {
   LegacyWorkerRecoveryCandidate,
@@ -77,6 +77,17 @@ export abstract class LegacyWorkerTerminalSurface extends OrcaRuntimeWithRestore
     }
     if (pty && this.paneOfPty(pty).tabId === candidate.tabId) {
       forgetPtySurface(this.terminalIdentity, pty)
+    }
+    // Why: an exit this run never saw leaves the pane's restored hook row holding the conversation;
+    // a newer terminal already in the pane owns that row.
+    const paneTakenOver =
+      (leaf?.ptyId && leaf.ptyId !== candidate.ptyId) ||
+      [...this.ptysById.values()].some(
+        (other) =>
+          other.ptyId !== candidate.ptyId && this.paneOfPty(other).paneKey === candidate.paneKey
+      )
+    if (!paneTakenOver) {
+      this.reconcileAgentStatusForEndedProcessFn?.([candidate.paneKey])
     }
     this.notifier?.resolveLegacyWorkerTerminalRecovery?.(
       candidate.paneKey,

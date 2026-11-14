@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { shouldShowUsagePercentageDisplayChangeNotice } from '../../../../shared/usage-percentage-display-change-notice'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from '../settings/appearance/appearance-usage-percentage-search'
@@ -19,6 +19,7 @@ function openUsagePercentageSettings(): void {
 export function useUsagePercentageDisplayChangeNotice(
   hasVisibleUsageMeters: boolean
 ): Omit<ComponentProps<typeof StatusBarUsageChangeNoticeCard>, 'children'> {
+  const t = useTranslate()
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const dismissed = useAppStore((s) => s.usagePercentageDisplayChangeNoticeDismissed)
   const dismiss = useAppStore((s) => s.dismissUsagePercentageDisplayChangeNotice)
@@ -36,16 +37,16 @@ export function useUsagePercentageDisplayChangeNotice(
     noticeKey: 'percentage',
     eligible,
     dismiss,
-    title: translate(
+    title: t(
       'auto.components.status.bar.UsagePercentageDisplayChangeNotice.title',
       'Usage now shows % used'
     ),
-    description: translate(
+    description: t(
       'auto.components.status.bar.UsagePercentageDisplayChangeNotice.body',
       'Prefer remaining? Change it in Settings.'
     ),
     action: {
-      label: translate(
+      label: t(
         'auto.components.status.bar.UsagePercentageDisplayChangeNotice.openSettings',
         'Open Settings'
       ),

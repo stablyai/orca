@@ -6,7 +6,6 @@
 config/scripts/performance/session-search/session-search-tool-heavy-corpus.ts src/main/ai-vault/session-transcript-reader.ts
 config/scripts/runtime-verification/desktop-transport/run-linux-lid-sleep-assertion-docker.mjs src/main/linux-lid-sleep-assertion.ts
 config/scripts/runtime-verification/desktop-transport/run-ssh-staged-upload-reliability.mjs src/main/ssh/ssh-relay-install-namespace.test.ts
-config/scripts/session-search-file-id-e2e/run.ts src/main/ai-vault/session-scanner-service-entry.ts
 config/scripts/static-analysis/ratchets/renderer-state/check-layout-writer-ratchets.mjs src/renderer/src/runtime/remote-workspace-frozen/
 config/scripts/workflow/source-routing/pr-code-change-scope.mjs src/main/runtime/runtime-worktree-agent-
 config/scripts/workflow/source-routing/pr-code-change-scope.mjs src/shared/agent-session-mutation-envelope
@@ -20,3 +19,9 @@ config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-co
 config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts
 config/tsconfig.node.json src/renderer/src/components/native-chat/structured-agent-question-projection.ts
 tests/e2e/capture-opencode-tui-repro.mjs src/cli/cmd/tui/ui/spinner
+tests/e2e/cross-version-wire/released-chat-writers.ts src/main/native-chat/agent-session-wire/structured-agent-session-event-sink.ts
+# Released source trees retain this actual registry; the current registry is checked first.
+tests/e2e/cross-version-wire/release-module-locations.ts src/main/runtime/rpc/methods/index.ts
+tests/e2e/cross-version-wire/release-module-locations.ts src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts
+# Release tags with flat skill owners need the restored harness beside that actual source.
+.github/workflows/release-cut.yml src/main/skills/skill-provider-runtime-roots.test.ts

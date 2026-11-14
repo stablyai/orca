@@ -1,6 +1,6 @@
 /** Use kernel boot ID and /proc start ticks for distro/process identity; wall-clock jumps after host sleep can misidentify live processes (microsoft/WSL#4179/#10006). */
-import type { OrcadProcessIncarnation } from '../../orcad/orcad-process-start-time'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadProcessIncarnation } from '../../orcad/instance-lock/orcad-process-start-time'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 
 export type WslGuestIdentity = {

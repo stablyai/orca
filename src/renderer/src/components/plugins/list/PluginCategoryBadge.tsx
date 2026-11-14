@@ -4,6 +4,7 @@ import { pluginCategoryLabel } from './plugin-category-label'
 import { pluginCategoryIcon, pluginEntryCategoryIcon } from './plugin-category-icons'
 import type { PluginListEntry } from './plugin-list-entries'
 import { pluginFilterKinds } from './plugin-list-filter'
+import { useTranslate } from '../../../i18n/use-translate'
 
 /** A category's icon, for places that show a category without a plugin. */
 export function PluginCategoryIcon({ category }: { category: string }): React.JSX.Element {
@@ -11,10 +12,11 @@ export function PluginCategoryIcon({ category }: { category: string }): React.JS
 }
 
 function KindBadge({ entry, kind }: { entry: PluginListEntry; kind: string }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Badge variant="hostContext">
       {createElement(pluginEntryCategoryIcon(entry, kind), { 'aria-hidden': true })}
-      {pluginCategoryLabel(kind)}
+      {pluginCategoryLabel(kind, t)}
     </Badge>
   )
 }

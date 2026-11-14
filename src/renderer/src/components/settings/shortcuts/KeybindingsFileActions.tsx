@@ -4,7 +4,7 @@ import { ChevronDown, Code2, ExternalLink, FileText, FolderOpen, RefreshCw } fro
 import { toast } from 'sonner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { useAppStore } from '../../../store/index'
-import { revealFloatingWorkspacePanel } from '../../../lib/floating-workspace-panel-reveal'
+import { revealFloatingWorkspacePanel } from '../../floating-terminal/floating-workspace-panel-reveal'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { Button } from '../../ui/button'
 import {
@@ -14,7 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { floatingWorkspaceUnavailableReason } from '@/components/floating-terminal/floating-workspace-availability'
 
 function openFailureMessage(reason: string): string {
   switch (reason) {
@@ -30,6 +31,7 @@ function openFailureMessage(reason: string): string {
 }
 
 export function KeybindingsFileActions(): React.JSX.Element {
+  const t = useTranslate()
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
   const ensureKeybindingsFile = useAppStore((state) => state.ensureKeybindingsFile)
   const openKeybindingsFile = useAppStore((state) => state.openKeybindingsFile)
@@ -68,11 +70,17 @@ export function KeybindingsFileActions(): React.JSX.Element {
   }
 
   const editKeybindingsInOrca = async (): Promise<void> => {
+    // The editor opens in the floating workspace, which a browser tab cannot host.
+    const unavailable = floatingWorkspaceUnavailableReason()
+    if (unavailable) {
+      toast.info(unavailable)
+      return
+    }
     try {
       const filePath = await prepareKeybindingsPath()
       if (!filePath) {
         toast.error(
-          translate(
+          t(
             'auto.components.settings.KeybindingsFileActions.cdf794f46d',
             'Keybindings file is not available.'
           )
@@ -109,7 +117,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.settings.KeybindingsFileActions.dd532a01ce',
               'Failed to open keybindings in Orca.'
             )
@@ -117,12 +125,12 @@ export function KeybindingsFileActions(): React.JSX.Element {
     }
   }
 
-  const openKeybindingsInExternalEditor = async (command: 'code' | 'cursor'): Promise<void> => {
+  const openKeybindingsInExternalEditor = async (editorId: 'vscode' | 'cursor'): Promise<void> => {
     try {
       const filePath = await prepareKeybindingsPath()
       if (!filePath) {
         toast.error(
-          translate(
+          t(
             'auto.components.settings.KeybindingsFileActions.cdf794f46d',
             'Keybindings file is not available.'
           )
@@ -131,7 +139,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
       }
       const result = await window.api.shell.openInExternalEditor({
         path: filePath,
-        command,
+        builtInEditorId: editorId,
         ownerHostId: LOCAL_EXECUTION_HOST_ID
       })
       if (!result.ok) {
@@ -141,7 +149,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.settings.KeybindingsFileActions.c5886a31cc',
               'Failed to open external editor.'
             )
@@ -162,10 +170,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
         onClick={() => void editKeybindingsInOrca()}
       >
         <FileText className="size-3" />
-        {translate(
-          'auto.components.settings.KeybindingsFileActions.1c2be2b2c6',
-          'Edit File in Orca'
-        )}
+        {t('auto.components.settings.KeybindingsFileActions.ad58206841', 'Edit file in Orca')}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -174,7 +179,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
             variant="ghost"
             size="icon-xs"
             className="rounded-none border-l border-border"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.KeybindingsFileActions.400397a10d',
               'Open keybindings file menu'
             )}
@@ -185,39 +190,30 @@ export function KeybindingsFileActions(): React.JSX.Element {
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => void openKeybindingsFile()}>
             <ExternalLink className="size-3.5" />
-            {translate(
-              'auto.components.settings.KeybindingsFileActions.98f1a23e1c',
-              'Open with Default App'
+            {t(
+              'auto.components.settings.KeybindingsFileActions.4bfe7a2e43',
+              'Open with default app'
             )}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('code')}>
+          <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('vscode')}>
             <Code2 className="size-3.5" />
-            {translate(
-              'auto.components.settings.KeybindingsFileActions.1637f64033',
-              'Open in VS Code'
-            )}
+            {t('auto.components.settings.KeybindingsFileActions.1637f64033', 'Open in VS Code')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('cursor')}>
             <Code2 className="size-3.5" />
-            {translate(
-              'auto.components.settings.KeybindingsFileActions.9e24c0e858',
-              'Open in Cursor'
-            )}
+            {t('auto.components.settings.KeybindingsFileActions.9e24c0e858', 'Open in Cursor')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => void revealKeybindingsFile()}>
             <FolderOpen className="size-3.5" />
-            {translate(
-              'auto.components.settings.KeybindingsFileActions.a8a8d6b9d3',
-              'Reveal in File Manager'
+            {t(
+              'auto.components.settings.KeybindingsFileActions.c322555264',
+              'Reveal in file manager'
             )}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void reloadKeybindings()}>
             <RefreshCw className="size-3.5" />
-            {translate(
-              'auto.components.settings.KeybindingsFileActions.abc49853fb',
-              'Reload from Disk'
-            )}
+            {t('auto.components.settings.KeybindingsFileActions.5b639aea5c', 'Reload from disk')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

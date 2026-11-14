@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { getIndexedReposById } from '@/store/worktree-repo-index'
+import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { getRepoCommitMessageModelDiscoveryHostKey } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import {
   replaySourceControlAiModelEdits,

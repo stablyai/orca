@@ -16,7 +16,7 @@ import { errorMessage } from '../../../shared/error-message'
 import {
   clearSshCredentialDeclined,
   isSshCredentialDeclined
-} from '../../ssh/ssh-credential-decline'
+} from '../../ssh/authentication/ssh-credential-decline'
 
 export function registerSshConnectionHandlers(): void {
   setSshTargetRegistryHandlers({

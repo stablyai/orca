@@ -1,11 +1,11 @@
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { unregisterPty } from '../../../memory/pty-registry'
 import { forgetCodexPaneAccount } from '../../../codex/configuration/homes/codex-pane-account-registry'
-import { openCodeHookService } from '../../../opencode/hook-service'
-import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
-import { agentHookServer } from '../../../agent-hooks/server'
-import { clearMigrationUnsupportedPty } from '../../../agent-hooks/migration-unsupported-pty-state'
-import { clearNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
+import { openCodeHookService } from '../../../opencode/status-hooks/hook-service'
+import { piTitlebarExtensionService } from '../../../pi/managed-extensions/titlebar-extension-service'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+import { clearMigrationUnsupportedPty } from '../../../agent-hooks/observations/migration-unsupported-pty-state'
+import { clearNativeWindowsConptyPty } from '../../../runtime/terminal/output/terminal-model-query-authority'
 import {
   clearHiddenRendererPtyDeliveryState,
   isHiddenRendererPty

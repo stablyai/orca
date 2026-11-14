@@ -1,6 +1,6 @@
 import type { Translate } from '../i18n/mobile-i18n'
-import type { SendSheetState } from '../session/mobile-diff-review-screen-model'
-import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
+import type { SendSheetState } from '../source-control/review/mobile-diff-review-screen-model'
+import type { useMobileDiffReviewController } from '../source-control/review/use-mobile-diff-review-controller'
 
 export function sendSheetMessage(
   t: Translate,

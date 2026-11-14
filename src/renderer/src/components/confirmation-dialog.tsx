@@ -17,9 +17,9 @@ import {
   type ConfirmationDialogContextValue,
   type ConfirmationDialogOptions
 } from '@/components/confirmation-dialog-context'
-import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 
 type ConfirmationDialogRequest = {
   id: number
@@ -32,6 +32,7 @@ export function ConfirmationDialogProvider({
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const nextIdRef = useRef(0)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
@@ -216,7 +217,7 @@ export function ConfirmationDialogProvider({
                 className="text-sm font-normal text-foreground/80"
               >
                 {displayedRequest.options.dontAskAgain.label ??
-                  translate('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
+                  t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
               </Label>
             </div>
           ) : null}
@@ -240,7 +241,7 @@ export function ConfirmationDialogProvider({
                 }}
               >
                 {displayedRequest?.options.cancelLabel ??
-                  translate('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
+                  t('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
               </Button>
             )}
             <Button
@@ -256,7 +257,7 @@ export function ConfirmationDialogProvider({
               }}
             >
               {displayedRequest?.options.confirmLabel ??
-                translate('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}
+                t('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -33,33 +33,31 @@ describe('workspaceMayOverrideDefaultModel', () => {
     const folder = join(repo, 'packages', 'app')
     write(join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n')
     mkdirSync(folder, { recursive: true })
-    write(join(root, '.codex', 'config.toml'), 'model = "above-the-repo"\n')
-    expect(await mayOverride('codex', folder)).toBe(false)
-    write(join(repo, '.codex', 'config.toml'), 'model = "gpt-project"\n')
-    expect(await mayOverride('codex', folder)).toBe(true)
+    write(join(root, '.pi', 'settings.json'), '{"defaultModel":"above-the-repo"}')
+    expect(await mayOverride('pi', folder)).toBe(false)
+    write(join(repo, '.pi', 'settings.json'), '{"defaultModel":"project"}')
+    expect(await mayOverride('pi', folder)).toBe(true)
   })
 
   it('reads only the folder itself when no repository contains it', async () => {
     const folder = join(root, 'loose')
     mkdirSync(folder, { recursive: true })
-    write(join(root, '.codex', 'config.toml'), 'model = "parent"\n')
-    expect(await mayOverride('codex', folder)).toBe(false)
+    write(join(root, '.pi', 'settings.json'), '{"defaultModel":"parent"}')
+    expect(await mayOverride('pi', folder)).toBe(false)
   })
 
-  it('skips the .codex directory that is the account home itself', async () => {
+  it('skips the .pi directory that is the account home itself', async () => {
     const worktree = join(root, 'home-repo')
     write(join(worktree, '.git'), 'gitdir: /elsewhere')
-    write(join(worktree, '.codex', 'config.toml'), 'model = "user"\n')
-    expect(await mayOverride('codex', worktree, join(worktree, '.codex'))).toBe(false)
+    write(join(worktree, '.pi', 'settings.json'), '{"defaultModel":"user"}')
+    expect(await mayOverride('pi', worktree, join(worktree, '.pi'))).toBe(false)
   })
 
   it('counts unreadable project config as an override', async () => {
     const worktree = join(root, 'broken')
     write(join(worktree, '.git'), 'gitdir: /elsewhere')
-    write(join(worktree, '.claude', 'settings.json'), '{ "model": ')
-    write(join(worktree, '.codex', 'config.toml'), 'model = ')
-    expect(await mayOverride('claude', worktree)).toBe(true)
-    expect(await mayOverride('codex', worktree)).toBe(true)
+    write(join(worktree, '.pi', 'settings.json'), '{ "defaultModel": ')
+    expect(await mayOverride('pi', worktree)).toBe(true)
   })
 
   it('reads OpenCode config above the repository root too, as OpenCode 2.x does', async () => {

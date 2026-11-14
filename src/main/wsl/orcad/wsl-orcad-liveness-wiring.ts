@@ -9,7 +9,7 @@ import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../../shared/orcad-terminal-census'
-import { requestOrcadTerminalCensus } from '../../ssh/orcad-terminal-census-client'
+import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import { subscribeSystemPowerLifecycle } from '../../power/system-power-lifecycle'
 import {
   deferUntilWslDistroRunning,

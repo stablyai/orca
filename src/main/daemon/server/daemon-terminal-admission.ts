@@ -18,7 +18,7 @@ import type {
 } from '../terminal-host/terminal-host-create-contract'
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import { isSpawnIntent } from '../../../shared/host-spawn-admission'
+import { isSpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import '../../../shared/terminal/pty/ingress/pty-startup-ingress'
 import { parsePtyStartupIngressIntent } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
 import {
@@ -183,6 +183,7 @@ export class DaemonTerminalAdmission {
       shellState: result.shellState,
       incarnationId: result.incarnationId,
       ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
+      ...(result.launchNote !== undefined ? { launchNote: result.launchNote } : {}),
       wslDistro: result.wslDistro,
       ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
       ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),

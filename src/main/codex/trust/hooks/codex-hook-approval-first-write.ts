@@ -1,5 +1,4 @@
-import '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { CODEX_EVENT_NAME_BY_LABEL } from '../../hooks/definitions/codex-hook-identity'
 import {
   readHookTrustBlocks,

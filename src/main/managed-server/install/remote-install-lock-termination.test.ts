@@ -8,8 +8,8 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
 
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { acquireInstallLock, isRelayInstallLockStale } from './remote-install-lock'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import { unusedSshConnection } from '../testing/managed-host-transport.test-fixture'
 
 const conn = unusedSshConnection()
 const mockExec = vi.mocked(execCommand)

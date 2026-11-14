@@ -5,8 +5,8 @@ import {
   loadBrowserSessionMeta,
   persistBrowserSessionMeta,
   type PendingBrowserCookieImport
-} from '../../sessions/browser-session-meta-store'
-import { isValidPersistedBrowserSessionProfile } from '../../sessions/browser-session-persisted-profile-validation'
+} from '../../sessions/profiles/browser-session-meta-store'
+import { isValidPersistedBrowserSessionProfile } from '../../sessions/profiles/browser-session-persisted-profile-validation'
 import { renameFileWithWindowsRetry } from '../../../../shared/windows-retry-file-operations'
 import {
   applyScopedStagedCookieImport,

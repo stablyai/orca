@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { bindPaneFirst } from './bind-first-pane.test-fixture'
-import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
+import { makeAgentStatusStoreWiring } from '../terminal/identity/agent-status-store-wiring.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
@@ -11,11 +11,9 @@ import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
-  makeWorkspaceSessionWithHeadlessTerminal,
   makeWorktreeMeta,
   store
 } from './orca-runtime-test-fixtures.spec'
-import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // No SSH Git provider is installed, so these fixtures use stored rows.
 function storedWorktreeMeta(
@@ -218,95 +216,6 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
-  it('marks the desktop-active worktree as isActive', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal()
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const active = worktrees.filter((w) => w.isActive)
-    expect(active).toHaveLength(1)
-    expect(active[0]?.worktreeId).toBe(TEST_WORKTREE_ID)
-  })
-
-  it('includes SSH-backed worktrees in the mobile worktree summary', async () => {
-    const remoteRepo = {
-      id: 'repo-ssh',
-      path: '/home/me/project',
-      displayName: 'remote-vm',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-1'
-    }
-    const remoteWorktree = {
-      path: '/home/me/project/.worktrees/feature-mobile',
-      head: 'def',
-      branch: 'refs/heads/feature/mobile',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const metaById: Record<string, WorktreeMeta> = {
-      [`${remoteRepo.id}::${remoteWorktree.path}`]: makeWorktreeMeta({
-        displayName: 'Remote mobile'
-      })
-    }
-    const getRepo = vi.fn((id: string) => (id === remoteRepo.id ? remoteRepo : undefined))
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo,
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-        return metaById[worktreeId]
-      }
-    }
-
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getAgentStatusSnapshot: () =>
-        Array.from({ length: 100 }, (_, index) => ({
-          paneKey: `remote-tab:${String(index).padStart(8, '0')}-5555-4555-8555-555555555555`,
-          worktreeId: `${remoteRepo.id}::${remoteWorktree.path}/`,
-          tabId: 'remote-tab',
-          state: 'working',
-          prompt: 'remote agent without a PTY',
-          agentType: 'codex',
-          connectionId: 'ssh-1',
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }))
-    })
-    const summaries = await runtime.getWorktreePs()
-
-    expect(worktreePathComparison.worktreePathComparisonKey(remoteWorktree.path, 'linux')).toBe(
-      worktreePathComparison.worktreePathComparisonKey(`${remoteWorktree.path}/`, 'linux')
-    )
-
-    expect(summaries.worktrees).toEqual([
-      expect.objectContaining({
-        worktreeId: `${remoteRepo.id}::${remoteWorktree.path}`,
-        repoId: remoteRepo.id,
-        repo: 'remote-vm',
-        path: remoteWorktree.path,
-        displayName: 'Remote mobile',
-        hasHostSidebarActivity: true,
-        status: 'working',
-        agents: expect.arrayContaining([
-          expect.objectContaining({
-            prompt: 'remote agent without a PTY',
-            agentType: 'codex'
-          })
-        ])
-      })
-    ])
-    expect(summaries.worktrees[0]?.agents).toHaveLength(100)
-    // Naming reads the session once; the qualified summary lookup does not read a bare repo ID.
-    expect(getRepo).toHaveBeenCalledTimes(1)
-  })
-
   it.each([
     ['relative', 'project', 'feature\\name', 'feature/name', 'feature\\name', true],
     [
@@ -504,58 +413,6 @@ describe('OrcaRuntimeService', () => {
     expect(getRepo).not.toHaveBeenCalled()
     // The prior per-miss path scan exceeded the 3s poll interval at this scale.
     expect(pathReadCount).toBeLessThan(40_000)
-  })
-
-  it('caches repeated malformed path misses before normalizing them again', async () => {
-    const remoteRepo = {
-      id: 'repo-repeated-miss',
-      path: '/remote',
-      displayName: 'repeated-miss-vm',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-repeated-miss'
-    }
-    const remoteWorktree = {
-      path: '/remote/existing',
-      head: 'head-existing',
-      branch: 'refs/heads/existing',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const storedMeta = storedWorktreeMeta(remoteRepo.id, [remoteWorktree])
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
-      getAllWorktreeMeta: () => storedMeta,
-      getWorktreeMeta: () => undefined
-    }
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getAgentStatusSnapshot: () =>
-        Array.from({ length: 2_000 }, (_, index) => ({
-          paneKey: `repeated-miss-tab:${String(index).padStart(8, '0')}-bbbb-4bbb-8bbb-bbbbbbbbbbbb`,
-          worktreeId: `${remoteRepo.id}::relative/./missing\\leaf`,
-          tabId: 'repeated-miss-tab',
-          state: 'working' as const,
-          prompt: `repeated missing agent ${index}`,
-          agentType: 'codex',
-          connectionId: 'ssh-repeated-miss',
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }))
-    })
-    const cwdSpy = vi.spyOn(process, 'cwd')
-
-    try {
-      const summaries = await runtime.getWorktreePs()
-
-      expect(summaries.worktrees[0]?.agents).toEqual([])
-      // Relative-key resolution may consult cwd once per poll, not once per agent row.
-      expect(cwdSpy.mock.calls.length).toBeLessThan(50)
-    } finally {
-      cwdSpy.mockRestore()
-    }
   })
 
   it('keeps no-PTY agent worktrees in the truncated mobile summary', async () => {

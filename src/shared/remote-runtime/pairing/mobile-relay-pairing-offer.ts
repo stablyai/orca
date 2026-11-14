@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
   PAIRING_ENDPOINT_MAX_CHARACTERS,

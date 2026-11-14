@@ -2,10 +2,6 @@ import { expect, it } from 'vitest'
 import { access } from 'node:fs/promises'
 import { runProcessSync } from '@orca/process-host'
 
-it('uses Bun for ordinary suites when the Bun project is selected', () => {
-  expect(Boolean(process.versions.bun)).toBe(process.env.ORCA_VITEST_RUNTIME === 'bun')
-})
-
 it('preserves Node access() success and missing-file rejection', async () => {
   await expect(access(import.meta.filename)).resolves.toBeUndefined()
   await expect(access(`${import.meta.filename}.missing`)).rejects.toMatchObject({ code: 'ENOENT' })

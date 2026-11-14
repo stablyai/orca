@@ -1,5 +1,5 @@
-import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
-import type { DispatchContextRow } from '../../types'
+import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
+import type { DispatchContextRow } from '../orchestration-records'
 import { parseWorkerTerminalPriorOwnerIds } from '../pane-key-match'
 export type CustodyResource = Pick<
   WorkerTerminalResourceRow,

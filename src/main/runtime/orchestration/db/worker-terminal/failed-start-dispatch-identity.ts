@@ -1,6 +1,6 @@
-import type { WorkerDispatchRow } from '../../types'
+import type { WorkerDispatchRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
-import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
 
 /** Copy pre-boot custody identity into the failed Dispatch so release can re-prove it; caller owns the transaction. */
 export function recordFailedStartDispatchIdentity(

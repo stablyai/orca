@@ -1,7 +1,21 @@
-import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
+import type {
+  RuntimeProjectGroupDependencies,
+  FolderWorkspaceUpdates
+} from './runtime-project-group-contract'
+export type { RuntimeProjectGroupDependencies } from './runtime-project-group-contract'
+import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
+import { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
+import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
+import { getSetupConfig } from '../../../shared/orca-hook-setup-config'
+import type { FolderWorkspaceCreateResult } from '../../../shared/folder-workspaces/folder-workspace-create'
+import type { RuntimeGroupFolderCreateInput } from '../workspaces/creation/runtime-group-folder-setup'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type {
+  ProjectGroup,
+  ProjectGroupMutation,
+  ProjectGroupUpdate
+} from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   FolderWorkspacePathStatus,
@@ -14,59 +28,24 @@ import {
   getFolderWorkspacePathStatusForPath
 } from '../../project-groups/folder-workspace-path-status'
 import { FolderWorkspaceCreateRefusedError } from '../../project-groups/folder-workspace-create-refusal'
-import type { RuntimeStore } from '../runtime-store-contract'
-import type { RuntimeWorktreeLifecycleEvent } from '../workspaces/lifecycle/worktree-lifecycle-event'
 import {
   runtimeVisibleFolderWorkspaces,
   runtimeVisibleProjectGroups
 } from '../workspaces/catalog/runtime-visible-catalog'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  assertUniqueIdWhenRequired,
+  type FolderWorkspaceMutationOptions
+} from './folder-workspace-unique-id-mutation'
+import {
+  deleteFolderWorkspaceRow,
+  type FolderWorkspaceDeleteOptions
+} from './folder-workspace-deletion'
 import { createFolderWorkspaceWithPluginHooks } from '../../plugins/hooks/workspace-create-plugin-hook'
 import {
-  assertWslMoveProjectWritable,
   assertWslMoveRepoWritable,
   isLocalWslMoveRow,
   shouldDropWslMoveProjectUpdate
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-
-type RuntimeProjectGroupDependencies = {
-  getStore: () => RuntimeStore | null
-  // `connectionId` narrows twins by their SSH target; undefined keeps the plain selector.
-  resolveRepo: (selector: string, connectionId?: string | null) => Promise<Repo>
-  notifyReposChanged: () => void
-  resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
-  teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
-  acquireFileWatcherRemoval: (
-    path: string,
-    connectionId?: string
-  ) => Promise<{ finish(removed: boolean): Promise<void> }>
-  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
-  emitWorktreeLifecycle: (event: RuntimeWorktreeLifecycleEvent) => void
-}
-
-type FolderWorkspaceUpdates = Partial<
-  Pick<
-    FolderWorkspace,
-    | 'name'
-    | 'folderPath'
-    | 'linkedTask'
-    | 'linkedItems'
-    | 'linkedTaskSourceContext'
-    | 'comment'
-    | 'isArchived'
-    | 'isUnread'
-    | 'isPinned'
-    | 'sortOrder'
-    | 'manualOrder'
-    | 'workspaceStatus'
-    | 'createdWithAgent'
-    | 'pendingFirstAgentMessageRename'
-    | 'firstAgentMessageRenameError'
-    | 'lastActivityAt'
-    | 'diffComments'
-  >
-> &
-  WorkspaceAttachmentMutation
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export class RuntimeProjectGroupController {
   constructor(private readonly deps: RuntimeProjectGroupDependencies) {}
@@ -86,6 +65,24 @@ export class RuntimeProjectGroupController {
 
   listVisibleFolderWorkspaces(): FolderWorkspace[] {
     return runtimeVisibleFolderWorkspaces(this.deps.getStore())
+  }
+
+  async checkGroupHooks(groupId: string, options: { background?: boolean } = {}) {
+    const group = this.listGroups().find((entry) => entry.id === groupId)
+    const owner = group && projectGroupHookOwner(group)
+    if (!owner) {
+      throw new Error('folder_workspace_project_group_not_found')
+    }
+    const checked = await new RuntimeRepositoryHooksCommands({
+      resolveRepo: async () => owner,
+      readCreateSourceHooks: async () => undefined
+    }).checkRepoHooks(groupId, options)
+    return {
+      ...checked,
+      hookSettings: owner.hookSettings,
+      setupRunPolicy: getEffectiveSetupRunPolicy(owner),
+      setupConfig: getSetupConfig(owner, checked.hooks)
+    }
   }
 
   async createGroup(input: {
@@ -110,10 +107,7 @@ export class RuntimeProjectGroupController {
     return group
   }
 
-  async updateGroup(
-    groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  ): Promise<ProjectGroup | null> {
+  async updateGroup(groupId: string, updates: ProjectGroupUpdate): Promise<ProjectGroup | null> {
     const store = this.deps.getStore()
     if (!store?.updateProjectGroup) {
       throw new Error('runtime_unavailable')
@@ -137,6 +131,18 @@ export class RuntimeProjectGroupController {
     return { deleted }
   }
 
+  async updateGroups(mutations: readonly ProjectGroupMutation[]): Promise<ProjectGroup[] | null> {
+    const store = this.deps.getStore()
+    if (!store?.updateProjectGroups) {
+      throw new Error('runtime_unavailable')
+    }
+    const updated = store.updateProjectGroups(mutations)
+    if (updated?.length) {
+      this.deps.notifyReposChanged()
+    }
+    return updated
+  }
+
   async moveProject(
     repoSelector: string,
     groupId: string | null,
@@ -157,18 +163,9 @@ export class RuntimeProjectGroupController {
     return moved
   }
 
-  async createFolderWorkspace(input: {
-    projectGroupId: string
-    name?: string
-    folderPath?: string | null
-    connectionId?: string | null
-    creatorProvenance?: FolderWorkspace['creatorProvenance']
-    linkedTask?: FolderWorkspace['linkedTask']
-    linkedItems?: FolderWorkspace['linkedItems']
-    linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
-    createdWithAgent?: FolderWorkspace['createdWithAgent']
-    pendingFirstAgentMessageRename?: boolean
-  }): Promise<FolderWorkspace> {
+  async createFolderWorkspace(
+    input: RuntimeGroupFolderCreateInput
+  ): Promise<FolderWorkspaceCreateResult> {
     // Every refusal below comes before the store write, so it proves nothing was created.
     const store = this.deps.getStore()
     if (!store?.createFolderWorkspace) {
@@ -205,8 +202,21 @@ export class RuntimeProjectGroupController {
         creatorProvenance: request.creatorProvenance ?? { kind: 'host' }
       })
     )
+    input.onWorkspaceCreated?.(`folder:${workspace.id}`)
     this.deps.notifyReposChanged()
-    return workspace
+    try {
+      return (
+        (await this.deps.finishFolderCreation?.(input, group, workspace)) ?? {
+          folderWorkspace: workspace
+        }
+      )
+    } catch (error) {
+      console.warn('[hooks] group workspace startup failed:', error)
+      return {
+        folderWorkspace: workspace,
+        warning: 'Setup or the agent could not start. Open the workspace and try again.'
+      }
+    }
   }
 
   async getFolderPathStatus(
@@ -221,12 +231,14 @@ export class RuntimeProjectGroupController {
 
   async updateFolderWorkspace(
     folderWorkspaceId: string,
-    updates: FolderWorkspaceUpdates
+    updates: FolderWorkspaceUpdates,
+    options: FolderWorkspaceMutationOptions = {}
   ): Promise<FolderWorkspace | null> {
     const store = this.deps.getStore()
     if (!store?.updateFolderWorkspace) {
       throw new Error('runtime_unavailable')
     }
+    assertUniqueIdWhenRequired(store, folderWorkspaceId, options)
     const existing = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
     if (
       existing &&
@@ -254,6 +266,8 @@ export class RuntimeProjectGroupController {
         repos: store.getRepos()
       })
       assertFolderWorkspacePathUsable(status)
+      // The path check awaited; a twin added meanwhile must not receive this update.
+      assertUniqueIdWhenRequired(store, folderWorkspaceId, options)
     }
     const updated = store.updateFolderWorkspace(folderWorkspaceId, updates)
     if (updated) {
@@ -262,52 +276,10 @@ export class RuntimeProjectGroupController {
     return updated
   }
 
-  async deleteFolderWorkspace(folderWorkspaceId: string): Promise<{ deleted: boolean }> {
-    const store = this.deps.getStore()
-    if (!store?.removeFolderWorkspace) {
-      throw new Error('runtime_unavailable')
-    }
-    const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
-    if (workspace && isLocalWslMoveRow(workspace)) {
-      assertWslMoveProjectWritable(store, { folderWorkspaceId })
-    }
-    let gate:
-      | Awaited<ReturnType<RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']>>
-      | undefined
-    try {
-      if (workspace) {
-        const worktreeId = folderWorkspaceKey(folderWorkspaceId)
-        // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
-        let connectionId: string | null | undefined
-        try {
-          connectionId = this.deps.resolveFolderConnectionId(workspace)
-        } catch (error) {
-          console.warn(`[folder-workspace] skipping PTY teardown for ${worktreeId}:`, error)
-        }
-        if (connectionId !== undefined) {
-          gate = await this.deps.acquireFileWatcherRemoval(
-            workspace.folderPath,
-            connectionId ?? undefined
-          )
-          await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
-        }
-        this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
-      }
-      const deleted = store.removeFolderWorkspace(folderWorkspaceId)
-      if (deleted) {
-        this.deps.notifyReposChanged()
-        // The same removal a worktree announces, so its consumers end work held there too.
-        if (workspace) {
-          this.deps.emitWorktreeLifecycle({
-            kind: 'removed',
-            worktreeId: folderWorkspaceKey(folderWorkspaceId),
-            path: workspace.folderPath
-          })
-        }
-      }
-      return { deleted }
-    } finally {
-      await gate?.finish(false)
-    }
+  async deleteFolderWorkspace(
+    folderWorkspaceId: string,
+    options: FolderWorkspaceDeleteOptions = {}
+  ): ReturnType<typeof deleteFolderWorkspaceRow> {
+    return deleteFolderWorkspaceRow(this.deps, folderWorkspaceId, options)
   }
 }

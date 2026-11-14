@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { Package } from 'lucide-react-native'
-import { loadHosts } from '../transport/host-store'
+import { loadHosts } from '../host-catalog/host-store'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
@@ -9,7 +9,7 @@ import {
   useMobileWebBundleProbe,
   type MobileWebBundleProbeState
 } from './use-mobile-web-bundle-probe'
-import type { HostProfile } from '../transport/types'
+import type { HostProfile } from '../host-catalog/host-profile'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ListGroup, ListRow } from '../components/list/ListGroup'

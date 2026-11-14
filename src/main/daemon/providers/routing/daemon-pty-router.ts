@@ -6,11 +6,11 @@ import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
   IPtyProvider,
-  PtyBackgroundStreamEvent,
   PtyProviderBufferSnapshot,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+  PtySpawnOptions
+} from '../../../providers/pty/provider-contract'
+import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { LegacyDaemonExitProof } from './daemon-legacy-exit-proof'
 import { shutdownRoutedDaemonSession } from './daemon-routed-session-shutdown'
@@ -224,6 +224,8 @@ export class DaemonPtyRouter implements IPtyProvider {
   async resetInputModes(id: string): Promise<void> {
     await this.adapterFor(id).resetInputModes(id)
   }
+
+  reportFocusLost = async (id: string): Promise<void> => this.adapterFor(id).reportFocusLost?.(id)
 
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0

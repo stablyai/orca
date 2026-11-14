@@ -1,4 +1,4 @@
-import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from './execution-host/project-execution-runtime'
 import type { GlobalSettings } from './global-settings-types'
 
 type LocalWindowsTerminalRuntimeSettings =

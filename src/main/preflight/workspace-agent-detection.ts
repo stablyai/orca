@@ -1,8 +1,8 @@
 import { isFolderRepo } from '../../shared/repo-kind'
-import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight-params'
+import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
-import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
+import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
 import { captureHostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import {
   getRepoExecutionHostId,
@@ -32,8 +32,12 @@ import {
   refreshShellPathAndDetectAgents,
   type RefreshAgentsResult
 } from './agent-detection'
-import type { InstalledAgentDetectionOptions } from './installed-agent-detection'
+import {
+  agentCommandOverrideDetectionOptions,
+  type InstalledAgentDetectionOptions
+} from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
+import { notifyAgentsRefreshedOnHost } from './agents-refreshed-on-host'
 
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
@@ -151,16 +155,10 @@ export async function assertAgentDetectionHostRunning(host: AgentDetectionHost):
   }
 }
 
-const agentRefreshListeners = new Set<() => void>()
-
-export function onAgentsRefreshedOnHost(listener: () => void): () => void {
-  agentRefreshListeners.add(listener)
-  return () => agentRefreshListeners.delete(listener)
-}
-
 export async function refreshAgentsOnHost(
   host: AgentDetectionHost,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  userInitiated = false
 ): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
@@ -172,7 +170,7 @@ export async function refreshAgentsOnHost(
         ? refreshShellPathAndDetectAgents(host.context, options)
         : refreshShellPathAndDetectAgents(host.context)
     const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
-    agentRefreshListeners.forEach((listener) => listener())
+    notifyAgentsRefreshedOnHost(userInitiated && !wsl)
     return result
   }
   return wsl ? refresh() : refreshAtRestCommandContext(refresh)
@@ -193,7 +191,8 @@ export async function detectProjectLaunchContext(
     throw new Error('worktree_execution_host_unresolved')
   }
   const agents = await detectAgentsOnHost(
-    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } }
+    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } },
+    agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
   )
   return {
     agents: agents.filter(isTuiAgent),

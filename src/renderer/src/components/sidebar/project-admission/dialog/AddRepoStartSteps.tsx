@@ -4,9 +4,9 @@ import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/di
 import { Button } from '@/components/ui/button'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getAddRepoLocalStartActions } from './add-repo-local-start-actions'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AddRepoNestedScanProgressNoticeProps = {
   busyLabel: string
@@ -21,6 +21,7 @@ function AddRepoNestedScanProgressNotice({
   nestedScanId,
   onStopNestedScan
 }: AddRepoNestedScanProgressNoticeProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
       <Loader2 className="size-3.5 shrink-0 animate-spin" />
@@ -33,14 +34,8 @@ function AddRepoNestedScanProgressNotice({
               variant="ghost"
               size="icon-xs"
               className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
-              aria-label={translate(
-                'auto.components.sidebar.AddRepoStartSteps.9906cae183',
-                'Stop scan'
-              )}
-              title={translate(
-                'auto.components.sidebar.AddRepoStartSteps.69ea7f8dc4',
-                'Stop scanning'
-              )}
+              aria-label={t('auto.components.sidebar.AddRepoStartSteps.9906cae183', 'Stop scan')}
+              title={t('auto.components.sidebar.AddRepoStartSteps.69ea7f8dc4', 'Stop scanning')}
               onClick={onStopNestedScan}
             >
               <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
@@ -48,7 +43,7 @@ function AddRepoNestedScanProgressNotice({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoStartSteps.d301db1c9a',
               'Scanning repositories. Click to stop.'
             )}
@@ -94,26 +89,38 @@ export function AddRepoLocalStartStep({
   onOpenCreateStep,
   onStopNestedScan
 }: AddRepoLocalStartStepProps): React.JSX.Element {
+  const t = useTranslate()
   const browseActionRef = useRef<HTMLButtonElement | null>(null)
   const actionsRef = useRef<HTMLDivElement | null>(null)
   const actionsUnavailable = isAdding || actionsDisabled
-  const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
-    onBrowse,
-    onOpenCloneStep,
-    onOpenRemoteStep,
-    onOpenCreateStep,
-    browseHostKind,
-    offersServerSshHosts
-  })
+  const { primaryAction, secondaryActions } = getAddRepoLocalStartActions(
+    {
+      onBrowse,
+      onOpenCloneStep,
+      onOpenRemoteStep,
+      onOpenCreateStep,
+      browseHostKind,
+      offersServerSshHosts
+    },
+    t
+  )
 
   // The highlight and Enter chip follow keyboard focus; Browse is only the initial selection.
   const [selectedKind, setSelectedKind] = useState<string | null>(primaryAction.kind)
   const visibleSelectedKind = actionsUnavailable ? null : selectedKind
 
   useEffect(() => {
-    if (!actionsUnavailable) {
-      browseActionRef.current?.focus()
+    const browseAction = browseActionRef.current
+    // Another dialog's trap would pull early focus back; AddRepoDialogChrome focuses Browse once this dialog's trap mounts.
+    const focusedDialog = document.activeElement?.closest('[role="dialog"]')
+    if (
+      actionsUnavailable ||
+      !browseAction ||
+      (focusedDialog && !focusedDialog.contains(browseAction))
+    ) {
+      return
     }
+    browseAction.focus()
   }, [actionsUnavailable])
 
   const handleArrowNavigation = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -147,11 +154,11 @@ export function AddRepoLocalStartStep({
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate('auto.components.sidebar.AddRepoStartSteps.d13757911c', 'Add a project')}
+          {t('auto.components.sidebar.AddRepoStartSteps.d13757911c', 'Add a project')}
         </DialogTitle>
         {repoCount === 0 ? (
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoStartSteps.acf895cb42',
               'Add a project to get started with Orca.'
             )}
@@ -179,7 +186,7 @@ export function AddRepoLocalStartStep({
         />
         <div className="space-y-1.5">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {translate('auto.components.sidebar.AddRepoStartSteps.87596c1446', 'Other ways to add')}
+            {t('auto.components.sidebar.AddRepoStartSteps.87596c1446', 'Other ways to add')}
           </p>
           {/* Use input for the outline; primary-foreground is near-black and disappears in dark mode. */}
           <div className="overflow-hidden rounded-md border border-input bg-background">
@@ -253,6 +260,7 @@ const AddRepoPrimaryStartAction = ({
     onFocus={onFocus}
     disabled={disabled}
     data-add-repo-action
+    data-add-repo-initial-focus
     className={cn(
       'h-auto min-h-[3.75rem] w-full justify-start gap-3 whitespace-normal px-3 py-2.5 text-left',
       selected

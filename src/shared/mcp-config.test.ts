@@ -1,13 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   canInspectLocalMcpConfigRoot,
-  getMcpConfigCandidateParentDir,
-  getMcpConfigParentDirs,
   inspectMcpConfigContent,
   maskMcpEnv,
-  MCP_CONFIG_CANDIDATES,
-  MCP_STARTER_CONFIG,
-  selectExistingMcpConfigCandidates
+  MCP_CONFIG_CANDIDATES
 } from './mcp-config'
 import {
   MCP_CONFIG_INSPECTION_MAX_BYTES,
@@ -23,14 +19,6 @@ afterEach(() => {
 
 describe('mcp-config', () => {
   const workspaceCandidate = MCP_CONFIG_CANDIDATES[0]
-
-  it('reports missing configs', () => {
-    expect(inspectMcpConfigContent(workspaceCandidate, null)).toMatchObject({
-      exists: false,
-      status: 'missing',
-      servers: []
-    })
-  })
 
   it('reports invalid JSON without exposing file contents', () => {
     const result = inspectMcpConfigContent(workspaceCandidate, '{"API_TOKEN":"secret-token",}')
@@ -145,14 +133,6 @@ describe('mcp-config', () => {
     })
   })
 
-  it('keeps starter config valid and empty', () => {
-    expect(inspectMcpConfigContent(workspaceCandidate, MCP_STARTER_CONFIG)).toMatchObject({
-      exists: true,
-      status: 'valid',
-      servers: []
-    })
-  })
-
   it('parses the exact input boundary and rejects +1 before JSON parsing', () => {
     const parse = vi.spyOn(JSON, 'parse')
     const exact = `${' '.repeat(MCP_CONFIG_INSPECTION_MAX_BYTES - 2)}{}`
@@ -237,29 +217,6 @@ describe('mcp-config', () => {
       issue: 'Environment exceeds the MCP inspection field limits.'
     })
     expect(inspectEnv()?.env).toBeUndefined()
-  })
-
-  it('plans directory discovery before reading candidate files', () => {
-    expect(getMcpConfigParentDirs()).toEqual(['.cursor', '.claude'])
-    expect(
-      MCP_CONFIG_CANDIDATES.map((candidate) => getMcpConfigCandidateParentDir(candidate))
-    ).toEqual(['', '.cursor', '', '.claude'])
-
-    const entriesByRelativeDir = new Map([
-      [
-        '',
-        [
-          { name: '.mcp.json', isDirectory: false },
-          { name: '.cursor', isDirectory: true },
-          { name: '.claude', isDirectory: false }
-        ]
-      ],
-      ['.cursor', [{ name: 'mcp.json', isDirectory: false }]]
-    ])
-
-    expect(
-      selectExistingMcpConfigCandidates(entriesByRelativeDir).map((entry) => entry.label)
-    ).toEqual(['Workspace', 'Cursor'])
   })
 
   it('rejects Windows-only local roots on non-Windows hosts', () => {

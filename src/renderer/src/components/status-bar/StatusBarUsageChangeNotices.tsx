@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/store'
 import { StatusBarUsageChangeNoticeCard } from './StatusBarUsageChangeNoticeCard'
@@ -13,6 +14,7 @@ export function StatusBarUsageChangeNotices({
   children: ReactNode
   hasVisibleUsageMeters: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const ready = useAppStore((s) => s.persistedUIReady)
   const dismissed = useAppStore((s) => s.statusBarCompactChangeNoticeDismissed)
   const dismiss = useAppStore((s) => s.dismissStatusBarCompactChangeNotice)
@@ -27,14 +29,14 @@ export function StatusBarUsageChangeNotices({
           noticeKey: 'compact',
           eligible: ready && visible && hasVisibleUsageMeters && modal === 'none',
           dismiss,
-          title: translate(
+          title: t(
             'auto.components.status.bar.StatusBarUsageChangeNotices.compactTitle',
             'Usage display is now compact'
           ),
           description: (
             <Trans
               i18n={i18n}
-              defaults={translate(
+              defaults={t(
                 'auto.components.status.bar.StatusBarUsageChangeNotices.compactBody',
                 'One headline metric per provider. Choose <detailed>Detailed</detailed> in the Usage menu to show more limits.'
               )}

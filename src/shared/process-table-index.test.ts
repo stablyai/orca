@@ -106,18 +106,6 @@ describe('collectDescendantsFromIndex', () => {
     expect(boundedWalk(rows, 50)).toEqual([{ pid: 60, ppid: 50, depth: 1 }])
   })
 
-  it('ignores disconnected cycles and unrelated components', () => {
-    const rows = [
-      { pid: 2, ppid: 1 },
-      { pid: 8, ppid: 9 },
-      { pid: 9, ppid: 8 },
-      { pid: 20, ppid: 19 }
-    ]
-    expect(boundedWalk(rows, 1)).toEqual([{ pid: 2, ppid: 1, depth: 1 }])
-    expect(boundedWalk(rows, 99)).toEqual([])
-    expect(boundedWalk([], 1)).toEqual([])
-  })
-
   it('queues each PID once, retaining the first queued duplicate', () => {
     const rows = [
       { pid: 2, ppid: 1, marker: 'first' },

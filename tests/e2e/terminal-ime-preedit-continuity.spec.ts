@@ -11,9 +11,11 @@ test('keeps the CJK prefix in place across mixed text and the layout budget', as
   try {
     await orcaPage.evaluate(() => {
       const state = window.__store!.getState()
-      const terminal = window.__paneManagers!.get(state.activeTabId!)!.getActivePane()!.terminal
-      terminal.options.fontSize = 13
-      terminal.options.fontFamily = 'monospace'
+      const pane = window.__paneManagers!.get(state.activeTabId!)!.getActivePane()!
+      pane.terminal.options.fontSize = 13
+      pane.terminal.options.fontFamily = 'monospace'
+      // Why: like font zoom, refit now; a later refit changes the cell width and shifts the baseline.
+      pane.fitAddon.fit()
     })
     await writeToActiveTerminal(orcaPage, '\x1b[2J\x1b[H')
     const prefix = 'あ'.repeat(32)

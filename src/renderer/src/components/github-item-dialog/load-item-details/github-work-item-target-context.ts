@@ -1,17 +1,20 @@
 import { useGitHubOperationOwner } from '@/hooks/useGitHubOperationScope'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
+import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
+import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import {
-  resolvePullRequestRepo,
-  parseOwnerRepoFromItemUrl
-} from '@/components/github/github-work-item-identity'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
+  parseGitHubItemRepository as parseOwnerRepoFromItemUrl,
+  type GitHubWorkItemTarget
+} from '../../../../../shared/github/work-items/work-item-target'
+import {
+  getTaskSourceCacheScope,
+  type TaskSourceContext
+} from '../../../../../shared/work-items/task-source-context'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import { getWorkItemDetailsCacheKey } from './work-item-details-cache'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { createContext, useContext, useMemo } from 'react'
-import type { GitHubWorkItemTarget } from '../../../../../shared/github/work-item-target'
 
 export const GitHubWorkItemTargetContext = createContext<{
   resource: GitHubWorkItemTarget

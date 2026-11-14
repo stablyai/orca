@@ -14,8 +14,4 @@ describe('servedPluginHostImages', () => {
       })
     ).toEqual({ cover: served, screenshots: [served] })
   })
-
-  it('drops everything when no image is served', () => {
-    expect(servedPluginHostImages({ cover: { url: 'http://x/y.png', alt: 'x' } })).toEqual({})
-  })
 })

@@ -46,7 +46,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     if (!(event instanceof CustomEvent)) {
       return
     }
-    const { fileId, onNotClosed }: EditorSaveAndCloseDetail = event.detail
+    const { fileId, tabId, onNotClosed }: EditorSaveAndCloseDetail = event.detail
     const file = store.getState().openFiles.find((openFile) => openFile.id === fileId)
     if (!file) {
       return
@@ -68,7 +68,11 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
     }
-    store.getState().closeFile(fileId)
+    if (tabId) {
+      store.getState().closeUnifiedTab(tabId)
+    } else {
+      store.getState().closeFile(fileId)
+    }
   }
 
   const handleSaveFile = async (event: Event): Promise<void> => {

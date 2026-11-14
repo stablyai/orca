@@ -28,7 +28,7 @@ vi.mock('@/store/index', () => {
   useAppStore.getState = () => mocks.state
   return { useAppStore }
 })
-vi.mock('@/runtime/runtime-server-directory-browser', () => ({
+vi.mock('@/runtime/files/reads/runtime-server-directory-browser', () => ({
   browseRuntimeServerDirectory: vi.fn()
 }))
 // Only the run-as-host gate is faked; saved hosts come from the store state above.

@@ -4,6 +4,7 @@ import { clampUsedPercent } from '../../../../shared/usage-percentage-display'
 import { formatCreditCount } from '../../../../shared/credit-count-format'
 import { formatCurrencyAmount } from '../../../../shared/currency-format'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 
 export const USAGE_WARNING_PERCENT = 60
@@ -19,35 +20,36 @@ export function barColor(usedPct: number): string {
   return 'bg-red-500'
 }
 
-export function getExtraUsageLabel(provider: ProviderRateLimits['provider']): string {
+export function getExtraUsageLabel(
+  provider: ProviderRateLimits['provider'],
+  t: Translate = translate
+): string {
   if (provider === 'claude') {
-    return translate('auto.components.status.bar.tooltip.7404abbece', 'Usage credits')
+    return t('auto.components.status.bar.tooltip.7404abbece', 'Usage credits')
   }
   if (provider === 'opencode-go') {
-    return translate('auto.components.status.bar.tooltip.fbc80d8be2', 'Zen balance')
+    return t('auto.components.status.bar.tooltip.fbc80d8be2', 'Zen balance')
   }
   if (provider === 'codex') {
-    return translate('auto.components.status.bar.tooltip.f21b2ba897', 'Credits')
+    return t('auto.components.status.bar.tooltip.f21b2ba897', 'Credits')
   }
-  return translate('auto.components.status.bar.tooltip.c03c61f53f', 'Balance')
+  return t('auto.components.status.bar.tooltip.c03c61f53f', 'Balance')
 }
 
-function renderUncappedBalanceLine(balance: ExtraUsageBalance): string {
+function renderUncappedBalanceLine(balance: ExtraUsageBalance, t: Translate = translate): string {
   if (balance.unit === 'credits') {
     if (balance.unlimited) {
-      return translate('auto.components.status.bar.tooltip.56c0d70577', 'Unlimited')
+      return t('auto.components.status.bar.tooltip.56c0d70577', 'Unlimited')
     }
-    return translate(
-      'auto.components.status.bar.tooltip.87b5bda4d3',
-      '{{value0}} credits available',
-      { value0: formatCreditCount(balance.balance) }
-    )
+    return t('auto.components.status.bar.tooltip.87b5bda4d3', '{{value0}} credits available', {
+      value0: formatCreditCount(balance.balance)
+    })
   }
   if (balance.balance === null) {
     return ''
   }
   const currencyText = formatCurrencyAmount(balance.balance, balance.currencyCode)
-  return translate('auto.components.status.bar.tooltip.f6a27a3c0a', '{{value0}} available', {
+  return t('auto.components.status.bar.tooltip.f6a27a3c0a', '{{value0}} available', {
     value0: currencyText
   })
 }
@@ -69,12 +71,13 @@ export function ProviderExtraUsageSection({
   emptyBarClass: string
   usagePercentageDisplay: UsagePercentageDisplay
 }): React.JSX.Element | null {
-  const label = getExtraUsageLabel(provider)
+  const t = useTranslate()
+  const label = getExtraUsageLabel(provider, t)
   if (balance.unit === 'credits') {
     return (
       <div className="space-y-1">
         <div className={`font-medium ${textClass}`}>{label}</div>
-        <div className={mutedClass}>{renderUncappedBalanceLine(balance)}</div>
+        <div className={mutedClass}>{renderUncappedBalanceLine(balance, t)}</div>
       </div>
     )
   }
@@ -82,15 +85,15 @@ export function ProviderExtraUsageSection({
   if (provider === 'opencode-go' && balance.balance === null) {
     const status =
       balance.disabledReason === 'refresh-failed'
-        ? translate('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed')
-        : translate('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')
+        ? t('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed')
+        : t('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')
     return (
       <div className="space-y-1">
         <div className={`font-medium ${textClass}`}>{label}</div>
         <div className={mutedClass}>{status}</div>
         {balance.disabledReason === 'api-key-source' ? (
           <div className={faintClass}>
-            {translate(
+            {t(
               'auto.components.status.bar.provider.extra.usage.section.apiKeyBalanceUnavailable',
               'Balance is not included in this usage response.'
             )}
@@ -112,7 +115,7 @@ export function ProviderExtraUsageSection({
     const limitLabel =
       limitText === null
         ? null
-        : translate(
+        : t(
             'auto.components.status.bar.provider.extra.usage.section.135d51c19f',
             'Limit {{value0}}',
             { value0: limitText }
@@ -124,7 +127,7 @@ export function ProviderExtraUsageSection({
       <div className="space-y-1">
         <div className={`font-medium ${textClass}`}>{label}</div>
         <div className={mutedClass}>
-          {balanceText === null ? limitLabel : renderUncappedBalanceLine(balance)}
+          {balanceText === null ? limitLabel : renderUncappedBalanceLine(balance, t)}
         </div>
       </div>
     )
@@ -144,11 +147,11 @@ export function ProviderExtraUsageSection({
       </div>
       <div className={`flex justify-between ${mutedClass}`}>
         <span>{`${spent} / ${limit}`}</span>
-        <span>{formatUsagePercentageLabel(spentPct, usagePercentageDisplay)}</span>
+        <span>{formatUsagePercentageLabel(spentPct, usagePercentageDisplay, t)}</span>
       </div>
       {balanceText !== null ? (
         <div className={faintClass}>
-          {translate('auto.components.status.bar.tooltip.473d45cd0f', 'Balance {{value0}}', {
+          {t('auto.components.status.bar.tooltip.473d45cd0f', 'Balance {{value0}}', {
             value0: balanceText
           })}
         </div>

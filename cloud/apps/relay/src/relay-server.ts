@@ -18,6 +18,10 @@ import {
   reserveDeadManWindowMs
 } from './cell/reservations/cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
+import { EDGE_CELL_ID, EdgeAssignments } from './edge-relay.js'
+import { EdgeEvacuation } from './edge-relay-evacuation.js'
+import type { EdgeControl } from './edge-relay-control.js'
+import { createEdgeAdmin } from './edge-admin-client.js'
 import { classifyAssignmentLease } from './assignment/assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell/control-flags/cell-flags.js'
 import { CellReserveBook } from './cell/reservations/cell-reserve-book.js'
@@ -135,6 +139,8 @@ export function createRelayServer(
     connectionLedgerLimits?: { hardCap: number; controlReserve: number }
     cellIncarnation?: string
     cellFlags?: () => AppliedControlFlags<CellFlags>
+    // Runtime edge control (director/edge.json); absent, the edge runs on its boot config.
+    edgeControl?: EdgeControl
   } = {}
 ) {
   const cellIncarnation = options.cellIncarnation ?? randomUUID()
@@ -166,6 +172,42 @@ export function createRelayServer(
       observability.recordControlRenewal?.(durationMs, outcome),
     deadCellVerdict: (cellId, now) => pollEvidence.deadCellVerdict?.(cellId, now) ?? null
   })
+  // Relay edge: directors with an edge URL seed the edge cell and then answer the cohort there.
+  // Until the seed lands (or if it fails) the override answers nothing and today's path runs.
+  const edgeAdmin =
+    config.role === 'director' && config.edge?.adminSigningKey
+      ? createEdgeAdmin({
+          cellUrl: config.edge.cellUrl,
+          signingKey: config.edge.adminSigningKey,
+          issuer: config.publicUrl
+        })
+      : undefined
+  const edgeConfig =
+    config.edge && options.edgeControl ? { ...config.edge, control: options.edgeControl.flags } : config.edge
+  const edgeAssignments =
+    config.role === 'director' && edgeConfig
+      ? new EdgeAssignments(observedDatabase, edgeConfig, options.now, edgeAdmin)
+      : undefined
+  // Hosts that left the cohort are drained off the edge, rather than waiting out their lease.
+  const edgeEvacuation =
+    config.role === 'director' && edgeConfig && edgeAdmin
+      ? new EdgeEvacuation(observedDatabase, edgeConfig, edgeAdmin, EDGE_CELL_ID, options.now, options.random)
+      : undefined
+  edgeEvacuation?.start()
+  // A rollback (mode off/down, a smaller share) starts draining within seconds.
+  options.edgeControl?.onChange(() => edgeEvacuation?.controlChanged())
+  if (edgeAssignments) {
+    void edgeAssignments.ensureEdgeCell().then(
+      () => console.warn(JSON.stringify({ event: 'orca_relay_edge_cell_ready' })),
+      (error: unknown) =>
+        console.error(
+          JSON.stringify({
+            event: 'orca_relay_edge_cell_seed_failed',
+            reason: error instanceof Error ? error.message : 'unknown'
+          })
+        )
+    )
+  }
   const readiness = createRelayReadiness(observedDatabase, config.jwksUrl, {
     jwksGraceMs: config.readinessJwksGraceMs,
     sqlGraceMs: config.readinessSqlGraceMs,
@@ -488,6 +530,7 @@ export function createRelayServer(
     recordRegionRequest: (region) => observability.recordRegionRequest?.(region),
     shadowSeats: shadowSeatPoller?.directory,
     reservePlacement,
+    edgeAssignments,
     compareShadowSeats: shadowCompare
       ? (route, identity, answer) => {
           shadowCompare.compare(route, identity, answer)
@@ -682,8 +725,11 @@ export function createRelayServer(
               const invite = await store.resolveInviteForMove(hostId, auth.data.credential)
               const identity = invite ? { userId: invite.userId, relayHostId: hostId } : null
               // Released combined-service invites gain their first durable cell assignment here.
+              // A host on the relay edge is answered there; the liveness rule would re-place it.
               const assignment = identity
-                ? ((await assignments.resolve(identity)) ?? (await assignments.assign(identity)))
+                ? ((await edgeAssignments?.edgeAssignment(identity)) ??
+                  (await assignments.resolve(identity)) ??
+                  (await assignments.assign(identity)))
                 : null
               if (!invite || !assignment) {
                 phoneAdmission?.hostData.release()
@@ -880,6 +926,7 @@ export function createRelayServer(
     dataSockets.close()
     store.resumeAudit.stop()
     rehomeSwitch?.stop()
+    edgeEvacuation?.stop()
   })
   const resumeAuditDropped = (): number => {
     const drops = store.resumeAudit.drops()

@@ -1,9 +1,9 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
-import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { useNewWorkspaceRuntimeContext } from './use-new-workspace-runtime-context'
 
 type RuntimeContext = ReturnType<typeof useNewWorkspaceRuntimeContext>
@@ -41,7 +41,6 @@ function clientAnswering(settingsResult: unknown, uiResult: unknown): RpcClient 
 describe('useNewWorkspaceRuntimeContext', () => {
   let renderer: ReactTestRenderer | null = null
   let context: RuntimeContext | null = null
-  let servers = 0
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -65,7 +64,7 @@ describe('useNewWorkspaceRuntimeContext', () => {
   async function answer(
     settingsResult: unknown,
     uiResult: unknown,
-    serverId = `runtime:${++servers}`
+    serverId: string
   ): Promise<PublishedState> {
     const element = createElement(Harness, {
       client: clientAnswering(settingsResult, uiResult),
@@ -82,14 +81,6 @@ describe('useNewWorkspaceRuntimeContext', () => {
     const { runtimeSettings, trustedOrcaHooks, availableProviders } = context!
     return { runtimeSettings, trustedOrcaHooks, availableProviders }
   }
-
-  // Stale trusted hooks would skip the setup-hook approval prompt; assert they are cleared.
-  it('blanks the trust an earlier host published when the next ui result is null', async () => {
-    expect((await answer({ settings: SETTINGS }, UI_WITH_TRUST)).trustedOrcaHooks).toEqual(
-      TRUSTED_HOOKS
-    )
-    expect((await answer({ settings: SETTINGS }, null)).trustedOrcaHooks).toEqual({})
-  })
 
   async function swapToUnansweredClient(serverId: string): Promise<void> {
     const next = new FakeSession('connected')

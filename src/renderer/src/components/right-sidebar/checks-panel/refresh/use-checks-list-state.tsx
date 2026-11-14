@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { useActiveWorktree } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import type { GitLabProjectRef } from '../../../../../../shared/gitlab-types'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
-import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/pull-request-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../../shared/github/checks/check-types'
+import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/repositories/repository-identity'
 import { sortChecksBySeverity } from '../../../../../../shared/source-control/checks/pr-check-severity-order'
 import { summarizeProviderChecks } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import { createCheckRunDetailsRequestId } from '@/components/editor/check-details/actions/check-run-details-tab'
@@ -48,7 +51,6 @@ export function useChecksListState({
     {}
   )
   const detailsContextRef = useRef(checkDetailsContextKey)
-  const autoExpandedContextRef = useRef<string | null>(null)
   // Expanded details use the sidebar scroller; constraining the list too would create nested scrollbars.
   const shouldConstrainCheckList = checksExpanded && expandedCheckKeys.size === 0
   const { detailsHeight, handleResizeStart } = useCheckDetailsResize(
@@ -74,59 +76,26 @@ export function useChecksListState({
   } = summarizeProviderChecks(checks)
   const failingCount = inclusiveFailingCount - cancelledCount
 
-  useEffect(() => {
-    const validKeys = new Set(rows.map((row) => row.key))
-    setDetailsByCheckKey((current) => {
-      const next: Record<string, CheckDetailsLoadState> = {}
-      for (const [key, state] of Object.entries(current)) {
-        if (validKeys.has(key)) {
-          next[key] = state
-        }
-      }
-      return next
-    })
-    // Close the one-shot latch outside the updater; React may run an updater twice.
-    let autoExpandKey: string | undefined
-    if (autoExpandedContextRef.current !== checkDetailsContextKey) {
-      autoExpandKey = rows.find((row) => isFailedCheck(row.check))?.key
-      autoExpandedContextRef.current = checkDetailsContextKey
+  // Reconcile during render so each checks poll commits once instead of twice.
+  const [reconciledFor, setReconciledFor] = useState<{
+    rows: typeof rows
+    contextKey: string
+  } | null>(null)
+  if (reconciledFor?.rows !== rows) {
+    setReconciledFor({ rows, contextKey: checkDetailsContextKey })
+    const nextDetails = reconcileCheckDetailsWithRows(detailsByCheckKey, rows)
+    if (nextDetails !== detailsByCheckKey) {
+      setDetailsByCheckKey(nextDetails)
     }
-    setExpandedCheckKeys((current) => {
-      const next = new Set([...current].filter((key) => validKeys.has(key)))
-      if (autoExpandKey !== undefined) {
-        next.add(autoExpandKey)
-      }
-      return next
-    })
-  }, [checkDetailsContextKey, rows])
-
-  useEffect(() => {
-    setDetailsByCheckKey((current) => {
-      let changed = false
-      const next: Record<string, CheckDetailsLoadState> = { ...current }
-      for (const row of rows) {
-        const cached = next[row.key]
-        if (!cached || cached.loading) {
-          continue
-        }
-        // Why: a failed load (GitLab auth blip, 404, offline) otherwise pins its error
-        // forever — there is no retry affordance — so re-arm it once the job moves on.
-        const stale = cached.details
-          ? cached.details.status !== row.check.status ||
-            cached.details.conclusion !== row.check.conclusion
-          : Boolean(
-              cached.errorAt &&
-              (cached.errorAt.status !== row.check.status ||
-                cached.errorAt.conclusion !== row.check.conclusion)
-            )
-        if (stale) {
-          delete next[row.key]
-          changed = true
-        }
-      }
-      return changed ? next : current
-    })
-  }, [rows])
+    const autoExpandKey =
+      reconciledFor?.contextKey !== checkDetailsContextKey
+        ? rows.find((row) => isFailedCheck(row.check))?.key
+        : undefined
+    const nextExpanded = reconcileExpandedCheckKeys(expandedCheckKeys, rows, autoExpandKey)
+    if (nextExpanded !== expandedCheckKeys) {
+      setExpandedCheckKeys(nextExpanded)
+    }
+  }
 
   const requestCheckDetails = useCallback(
     (row: { check: PRCheckDetail; key: string }) => {
@@ -352,4 +321,53 @@ export function useChecksListState({
     toggleCheckExpanded,
     requestCheckDetails
   }
+}
+
+type CheckRow = { check: PRCheckDetail; key: string }
+
+function reconcileCheckDetailsWithRows(
+  current: Record<string, CheckDetailsLoadState>,
+  rows: readonly CheckRow[]
+): Record<string, CheckDetailsLoadState> {
+  const rowByKey = new Map(rows.map((row) => [row.key, row]))
+  let changed = false
+  const next: Record<string, CheckDetailsLoadState> = {}
+  for (const [key, cached] of Object.entries(current)) {
+    const row = rowByKey.get(key)
+    if (!row) {
+      changed = true
+      continue
+    }
+    // Why: a failed load (GitLab auth blip, 404, offline) otherwise pins its error
+    // forever — there is no retry affordance — so re-arm it once the job moves on.
+    const stale =
+      !cached.loading &&
+      (cached.details
+        ? cached.details.status !== row.check.status ||
+          cached.details.conclusion !== row.check.conclusion
+        : Boolean(
+            cached.errorAt &&
+            (cached.errorAt.status !== row.check.status ||
+              cached.errorAt.conclusion !== row.check.conclusion)
+          ))
+    if (stale) {
+      changed = true
+      continue
+    }
+    next[key] = cached
+  }
+  return changed ? next : current
+}
+
+function reconcileExpandedCheckKeys(
+  current: Set<string>,
+  rows: readonly CheckRow[],
+  autoExpandKey: string | undefined
+): Set<string> {
+  const validKeys = new Set(rows.map((row) => row.key))
+  const next = new Set([...current].filter((key) => validKeys.has(key)))
+  if (autoExpandKey !== undefined) {
+    next.add(autoExpandKey)
+  }
+  return next.size === current.size && [...next].every((key) => current.has(key)) ? current : next
 }

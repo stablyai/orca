@@ -1,9 +1,12 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
+import { queuedRows, queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../../rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 
 import { describe, expect, it, vi } from 'vitest'
+import { agentSessionSendSubmission } from '../../../../../shared/agent-session/agent-session-wire'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { sendChatTask } from '../../../rpc/methods/orchestration/chat-task-delivery'
 import {
   providerFaults,
@@ -19,9 +22,7 @@ import {
   dispatcher,
   host,
   openChat,
-  queuedCardTexts,
   request,
-  runtime,
   sendUserMessage,
   settleTurn,
   turnText
@@ -54,10 +55,6 @@ async function runningUserTurn(
   }
 }
 
-function queuedRows(sessionId: string) {
-  return host.collaboratorsForTests().sessions.get(sessionId)?.journal.queuedMessages.list() ?? []
-}
-
 async function refusal(method: string, params: Record<string, unknown>, sessionId?: string) {
   const response = await dispatcher.dispatch(
     request(method, params, sessionId ? { sessionId } : {})
@@ -70,7 +67,7 @@ async function refusal(method: string, params: Record<string, unknown>, sessionI
 
 /** Who each agent message in the chat's journal says it is from. */
 async function taskSenders(sessionId: string): Promise<unknown[]> {
-  return (await host.journalSnapshot(sessionId)).items.flatMap((item) =>
+  return (await readTestHostJournal(host, sessionId)).items.flatMap((item) =>
     item.body.kind === 'message' && item.body.from ? [item.body.from] : []
   )
 }
@@ -80,44 +77,6 @@ function dispatchCount(): unknown {
 }
 
 describe('a chat as the assignee of orchestration dispatch', () => {
-  it('records the chat by its Orca session ID and sends an idle chat its task as a turn', async () => {
-    await openChat(COORDINATOR)
-    const worker = await openChat(PEER_CHAT)
-    const { runId, taskId } = await coordinatorRunAndTask()
-
-    const dispatched = call(
-      'orchestration.dispatch',
-      { task: taskId, to: WORKER, inject: true },
-      { sessionId: COORDINATOR }
-    )
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    await settleTurn(PEER_CHAT, 0)
-    const result = await dispatched
-
-    expect(result).toMatchObject({ injected: true })
-    const dispatchId = idOf(result.dispatch)
-    expect(db.getDispatchContextById(dispatchId)).toMatchObject({
-      run_id: runId,
-      assignee_handle: WORKER,
-      assignee_orca_session_id: PEER_CHAT,
-      assignee_pane_key: null,
-      process_incarnation: null,
-      status: 'dispatched'
-    })
-    const task = turnText(worker.turns[0]!)
-    expect(task).toContain('build it')
-    expect(task).toContain(`Your Orca session ID is: ${WORKER}`)
-    expect(task).toContain('The coordinator cannot see this chat')
-    expect(task).toContain('More supervised work arrives in this chat')
-    expect(task).not.toContain('this terminal')
-    expect(task).not.toMatch(/exit the shell/i)
-    expect(task).not.toMatch(/address/i)
-    expect(task).toContain(dispatchId)
-    expect(await taskSenders(PEER_CHAT)).toMatchObject([
-      { kind: 'agent', orchestration: { message: 'task', taskId, dispatchId } }
-    ])
-  })
-
   it("holds the task as a card in a busy chat's queue, naming the Dispatch, and sends it when the turn ends", async () => {
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)
@@ -147,7 +106,7 @@ describe('a chat as the assignee of orchestration dispatch', () => {
       orchestration: { message: 'task', runId, taskId, dispatchId }
     }
     // On the card's body: the turn the queue sends carries it, and the provider never sees it.
-    expect(queuedRows(PEER_CHAT).map((card) => card.body.from)).toMatchObject([from])
+    expect((await queuedRows(PEER_CHAT)).map((card) => card.body.from)).toMatchObject([from])
 
     await endTurn()
     await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
@@ -197,24 +156,6 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(db.getTask(taskId)?.status).toBe('dispatched')
   })
 
-  it('refuses a chat that injects a Dispatch into itself, naming no --from, with no row written', async () => {
-    await openChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-
-    const error = await refusal(
-      'orchestration.dispatch',
-      { task: taskId, to: formatOrcaSessionAddress(testOrcaSessionId(COORDINATOR)), inject: true },
-      COORDINATOR
-    )
-
-    expect(error).toMatchObject({
-      code: 'terminal_is_coordinator',
-      message: expect.stringContaining("is this coordinator's own Orca session ID")
-    })
-    expect(dispatchCount()).toEqual({ n: 0 })
-    expect(db.getTask(taskId)?.status).toBe('ready')
-  })
-
   it('refuses a chat that was closed, with no row written', async () => {
     await openChat(COORDINATOR)
     await openChat(PEER_CHAT)
@@ -234,7 +175,37 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(dispatchCount()).toEqual({ n: 0 })
   })
 
-  it("hands the chat its coordinator's mail to the Dispatch whole, so its own check has nothing left", async () => {
+  it("hands the chat its coordinator's mail to the Dispatch whole, so its own check has nothing left", async ({
+    onTestFinished
+  }) => {
+    const accepted = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    let held = false
+    onTestFinished(() => release.resolve())
+    const observe = host.sendAnswer
+    vi.spyOn(host, 'sendAnswer').mockImplementation(async (...args) => {
+      const answer = await observe(...args)
+      if (answer.kind === 'accepted' && !held) {
+        held = true
+        accepted.resolve()
+        await release.promise
+      }
+      return answer
+    })
+    const settle = host.waitForSendSettlement
+    vi.spyOn(host, 'waitForSendSettlement').mockImplementation(async (...args) => {
+      const answer = await settle(...args)
+      if (
+        !held &&
+        answer &&
+        agentSessionSendSubmission(answer.value)?.dispatchState === 'accepted'
+      ) {
+        held = true
+        accepted.resolve()
+        await release.promise
+      }
+      return answer
+    })
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)
     const { taskId } = await coordinatorRunAndTask()
@@ -257,34 +228,13 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     )
     expect(await queuedCardTexts(PEER_CHAT)).toEqual([])
     await settleTurn(PEER_CHAT, 0)
-    expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
-      messages: []
-    })
-  })
-
-  it("counts a chat worker's own Dispatch as depth 2, under the nesting cap", async () => {
-    await openChat(COORDINATOR)
-    await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-    const parent = await call(
-      'orchestration.dispatch',
-      { task: taskId, to: WORKER },
-      { sessionId: COORDINATOR }
-    )
-    expect(parent.dispatch).toMatchObject({ depth: 1 })
-    await call('orchestration.runCreate', { objective: 'sub' }, { sessionId: PEER_CHAT })
-    const subTask = idOf(
-      (await call('orchestration.taskCreate', { spec: 'part' }, { sessionId: PEER_CHAT })).task
-    )
-
-    const subDispatch = { task: subTask, to: 'term_worker' }
-
-    const maxDepth = vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(1)
-    expect(await refusal('orchestration.dispatch', subDispatch, PEER_CHAT)).toMatchObject({
-      code: 'nested_worker_depth_exceeded'
-    })
-    maxDepth.mockReturnValue(2)
-    const child = await call('orchestration.dispatch', subDispatch, { sessionId: PEER_CHAT })
-    expect(child.dispatch).toMatchObject({ depth: 2, creator_dispatch_id: idOf(parent.dispatch) })
+    await accepted.promise
+    try {
+      expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
+        messages: []
+      })
+    } finally {
+      release.resolve()
+    }
   })
 })

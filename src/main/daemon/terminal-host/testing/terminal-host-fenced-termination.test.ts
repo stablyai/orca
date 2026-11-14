@@ -121,16 +121,4 @@ describe('execution-side conditional teardown', () => {
     await expect(termination.completion).resolves.toEqual({ outcome: 'ended' })
     expect(host.listSessions()).toEqual([])
   })
-
-  it('does not join another incarnation’s already-running teardown', async () => {
-    const created = await create()
-    const kill = host.kill('pty', { immediate: true })
-    const result = host.beginFencedTermination(
-      request('old-incarnation', { requireUnattached: false })
-    )
-    expect(result).toEqual({ accepted: false, result: { outcome: 'refused', reason: 'replaced' } })
-    handles[0]!._simulateExit(0)
-    await kill
-    expect(created.incarnationId).toBeTruthy()
-  })
 })

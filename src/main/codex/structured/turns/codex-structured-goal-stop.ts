@@ -1,7 +1,7 @@
 import type {
   AgentSessionCancelOutcome,
   AgentSessionStopOutcome
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import { codexMethodUnavailable } from '../catalog/codex-structured-applied-settings'

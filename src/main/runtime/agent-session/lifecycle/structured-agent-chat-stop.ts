@@ -1,4 +1,4 @@
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 /** Stop every running chat child for this agent, rejecting unless all are proven gone; chats remain and next send restarts them. */
 export async function stopStructuredAgentChats(agent: string, label: string): Promise<void> {

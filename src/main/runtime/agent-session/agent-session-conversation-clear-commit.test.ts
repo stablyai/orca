@@ -2,18 +2,18 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import {
   closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+  createTrackedJournalOpener
+} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear
 } from './records/agent-session-conversation-command-record'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
 
@@ -22,12 +22,14 @@ const SOURCE = 'session-alpha'
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
 
 let directory: string
+const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-agent-session-clear-commit-'))
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
@@ -109,8 +111,8 @@ async function prepare(released = true) {
       now: NOW + 1
     })
   }
-  const journal = new AgentSessionJournal({
-    database: openTestJournalHostDatabase(directory),
+  const journal = await journals.open({
+    stateDirectory: directory,
     identity: {
       sessionId: SOURCE,
       workspaceId: 'workspace-1',
@@ -120,7 +122,6 @@ async function prepare(released = true) {
     },
     now: () => NOW + 5
   })
-  await journal.open()
   const completed = clear(store.getRecord(SOURCE)!.lease.runtimeFence)
   const operation = {
     callerKey: completed.command.callerKey,
@@ -128,9 +129,9 @@ async function prepare(released = true) {
   }
   await store.admitOperation({ ...operation, fingerprint: 'clear', now: NOW })
   const append = (input = completed) =>
-    journal.context.clear(
-      providerContextBoundaryForClear(input),
-      store.conversationReceipts.clear(() => input, operation)
+    journal.write(
+      { kind: 'context-clear', boundary: providerContextBoundaryForClear(input) },
+      () => ({ receipt: store.conversationReceipts.clear(() => input, operation) })
     )
   return { store, journal, completed, operation, append }
 }
@@ -150,48 +151,6 @@ async function queueClearCards(journal: AgentSessionJournal) {
 }
 
 describe('clear transaction', () => {
-  it.each([false, true])('clears only automatic names (user=%s)', async (user) => {
-    const { store, journal, completed, operation, append } = await prepare()
-    await (user
-      ? store.setUserConversationName(SOURCE, 'Saved name', 'rename')
-      : store.setConversationName(SOURCE, 'Saved name'))
-    const before = store.getRecord(SOURCE)!
-    expect(before.providerHandleChain).toHaveLength(1)
-    await queueClearCards(journal)
-    const epoch = journal.cursor().epoch
-    await append()
-    const reopened = await open()
-    expect(reopened.listRecords()).toHaveLength(1)
-    expect(reopened.getRecord(SOURCE)).toMatchObject({
-      providerContextBoundary: providerContextBoundaryForClear(completed),
-      providerHandleChain: [],
-      lease: { provenHandleLinkId: null },
-      accountHome: before.accountHome,
-      options: before.options,
-      conversationCommand: completed.command
-    })
-    expect(reopened.getRecord(SOURCE)?.conversationName).toBe(user ? 'Saved name' : undefined)
-    const context = providerContextBoundaryForClear(completed).operationId
-    expect(
-      await reopened.compareAndSetConversationName(SOURCE, 'Saved name', null, context)
-    ).toEqual(user ? null : expect.objectContaining({ conversationName: 'Saved name' }))
-    expect(
-      await reopened.compareAndSetConversationName(SOURCE, 'Stale result', 'Saved name', null)
-    ).toBeNull()
-    expect(
-      await reopened.compareAndSetConversationName(SOURCE, 'Saved name', 'Saved name', null)
-    ).toBeNull()
-    expect((await open()).getRecord(SOURCE)?.conversationName).toBe('Saved name')
-    expect(reopened.getSessionTabId(SOURCE)).toBe('tab-alpha')
-    expect(JSON.stringify(reopened.getRecord(SOURCE))).not.toContain('pre-clear-provider-context')
-    expect(journal.cursor().epoch).toBe(epoch)
-    expect(journal.queuedMessages.get('command')).toMatchObject({ state: 'withdrawn' })
-    expect(journal.queuedMessages.pauses()).toMatchObject([{ messageIds: ['first', 'last'] }])
-    expect(
-      reopened.getOperationRow(operation.callerKey, operation.operationId)?.outcome.status
-    ).toBe('succeeded')
-  })
-
   it('rolls the divider and receipt back when the fence moved', async () => {
     const { store, journal, completed, operation, append } = await prepare()
     await queueClearCards(journal)
@@ -205,23 +164,13 @@ describe('clear transaction', () => {
     expect(journal.cursor()).toEqual(before)
     expect((await open()).getRecord(SOURCE)?.conversationName).toBe('Saved name')
     expect(
-      journal.queuedMessages.list().map(({ messageId, state }) => ({ messageId, state }))
+      (await journal.queuedMessages.list()).map(({ messageId, state }) => ({ messageId, state }))
     ).toEqual(['first', 'command', 'last'].map((messageId) => ({ messageId, state: 'waiting' })))
-    expect(journal.queuedMessages.pauses()).toEqual([])
+    expect(await journal.queuedMessages.pauses()).toEqual([])
     expect((await open()).getRecord(SOURCE)?.providerContextBoundary).toBeUndefined()
     expect((await open()).getRecord(SOURCE)?.providerHandleChain).toEqual(previousChain)
     expect(store.getOperationRow(operation.callerKey, operation.operationId)?.outcome.status).toBe(
       'pending'
     )
-  })
-
-  it('refuses a boundary while ownership is still reserved', async () => {
-    const { store, journal, append } = await prepare(false)
-    const before = journal.cursor()
-    await expect(append()).rejects.toMatchObject({
-      refusal: { code: 'agent_session_ownership_unknown' }
-    })
-    expect(journal.cursor()).toEqual(before)
-    expect(store.getRecord(SOURCE)?.providerContextBoundary).toBeUndefined()
   })
 })

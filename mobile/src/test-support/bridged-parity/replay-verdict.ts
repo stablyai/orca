@@ -1,5 +1,5 @@
 import type { BridgePortPair } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
 import { absentResultExplainsResiduals } from './absent-result-evidence'
 import { classifyBridgedParity } from './divergence-classes'

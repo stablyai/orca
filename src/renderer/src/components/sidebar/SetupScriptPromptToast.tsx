@@ -1,7 +1,8 @@
 import React from 'react'
 import { toast } from 'sonner'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type SavedInProjectSettingsToastProps = {
   onOpenSettings: () => void
@@ -10,11 +11,12 @@ type SavedInProjectSettingsToastProps = {
 function SavedInProjectSettingsToast({
   onOpenSettings
 }: SavedInProjectSettingsToastProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span>
       <Trans
         i18n={i18n}
-        defaults={translate(
+        defaults={t(
           'auto.components.sidebar.SetupScriptPromptCard.savedInProjectSettings',
           "Saved in this <settings>project's settings</settings>"
         )}

@@ -1,3 +1,5 @@
+import { loadGitHistoryRefs, validateHistoryRefs } from './git-history-revisions'
+import { gitHistoryTokens } from './git-history-token-store'
 import {
   GIT_HISTORY_COMMIT_FORMAT,
   gitHistoryRefFromFullName,
@@ -148,30 +150,41 @@ export async function loadGitHistoryFromExecutor(
   options: GitHistoryOptions = {}
 ): Promise<GitHistoryResult> {
   const limit = clampHistoryLimit(options.limit)
-  const headOid = await resolveCommit(git, cwd, 'HEAD')
-  if (!headOid) {
-    return {
-      items: [],
-      hasIncomingChanges: false,
-      hasOutgoingChanges: false,
-      hasMore: false,
-      limit
-    }
+  const refs = options.branchOnly ? 'head' : (options.refs ?? 'head')
+  validateHistoryRefs(refs)
+  const empty = {
+    items: [],
+    hasIncomingChanges: false,
+    hasOutgoingChanges: false,
+    hasMore: false,
+    limit,
+    refs,
+    ...(Array.isArray(refs) ? { resolvedRefs: [] } : {})
   }
-
-  const { currentRef, branchName } = await resolveCurrentRef(git, cwd, headOid)
+  const requestedToken = options.branchOnly ? undefined : options.historyToken
+  const pinned =
+    requestedToken !== undefined ? gitHistoryTokens.get(requestedToken, cwd, refs) : undefined
+  if (requestedToken !== undefined && !pinned) {
+    return { ...empty, historyChanged: true }
+  }
+  const headOid = await resolveCommit(git, cwd, 'HEAD')
+  const current = headOid ? await resolveCurrentRef(git, cwd, headOid) : undefined
+  const currentRef = current?.currentRef
+  const branchName = current?.branchName ?? null
   const [remoteRef, rawBaseRef] = await Promise.all([
     resolveUpstreamRef(git, cwd, branchName),
     resolveNamedRef(git, cwd, options.baseRef)
   ])
 
   const baseRef =
-    rawBaseRef && rawBaseRef.id !== remoteRef?.id && rawBaseRef.id !== currentRef.id
+    rawBaseRef && rawBaseRef.id !== remoteRef?.id && rawBaseRef.id !== currentRef?.id
       ? rawBaseRef
       : undefined
 
   // The base may equal the upstream here (a branch tracking main), unlike the graph's comparison base.
   const branchBase =
+    headOid &&
+    currentRef &&
     options.branchOnly &&
     rawBaseRef?.revision &&
     !(await isBaseOfItself(git, cwd, rawBaseRef, currentRef))
@@ -179,37 +192,74 @@ export async function loadGitHistoryFromExecutor(
       : undefined
 
   // Keep upstream/base as comparison metadata so old workspaces do not gain fetched commits outside their HEAD history.
-  const historyRevisions = branchBase
-    ? [headOid, `^${branchBase.range.baseRef.revision}`]
-    : [headOid]
+  let historyRevisions = branchBase
+    ? [headOid!, `^${branchBase.range.baseRef.revision}`]
+    : headOid
+      ? [headOid]
+      : []
+  let resolvedRefs: string[] | undefined
+  if (pinned) {
+    historyRevisions = pinned.revisions
+    resolvedRefs = pinned.resolvedRefs
+  } else if (refs !== 'head') {
+    const catalog = await loadGitHistoryRefs(git, cwd)
+    const selected = Array.isArray(refs) ? new Set(refs) : undefined
+    const chosen = selected ? catalog.filter((ref) => selected.has(ref.id)) : catalog
+    resolvedRefs = selected ? chosen.map((ref) => ref.id).sort() : undefined
+    historyRevisions = [
+      ...new Set([
+        ...(refs === 'all' && headOid ? [headOid] : []),
+        ...chosen.flatMap((ref) => (ref.revision ? [ref.revision] : []))
+      ])
+    ]
+  }
+  const historyToken =
+    requestedToken ??
+    (options.refs !== undefined && !options.branchOnly
+      ? gitHistoryTokens.put(cwd, refs, historyRevisions, resolvedRefs)
+      : undefined)
+  const echo = { refs, ...(resolvedRefs ? { resolvedRefs } : {}), historyToken }
+  if (!historyRevisions.length) {
+    return { ...empty, ...echo }
+  }
   const skip = clampHistorySkip(options.skip)
 
   let mergeBase: string | undefined
-  if (remoteRef?.revision && currentRef.revision && remoteRef.revision !== currentRef.revision) {
+  if (remoteRef?.revision && currentRef?.revision && remoteRef.revision !== currentRef?.revision) {
     try {
-      const { stdout } = await git(['merge-base', currentRef.revision, remoteRef.revision], cwd)
+      const { stdout } = await git(['merge-base', currentRef?.revision, remoteRef.revision], cwd)
       mergeBase = stdout.trim() || undefined
     } catch {
       mergeBase = undefined
     }
   }
 
-  const { stdout } = await git(
-    [
-      'log',
-      '--no-show-signature',
-      '--no-color',
-      `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
-      '-z',
-      '--topo-order',
-      '--decorate=full',
-      ...(branchBase ? ['--shortstat'] : []),
-      ...(skip > 0 ? [`--skip=${skip}`] : []),
-      `-n${limit + 1}`,
-      ...historyRevisions
-    ],
-    cwd
-  )
+  let stdout: string
+  try {
+    const result = await git(
+      [
+        'log',
+        '--no-show-signature',
+        '--no-color',
+        `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
+        '-z',
+        '--topo-order',
+        '--decorate=full',
+        ...(branchBase ? ['--shortstat'] : []),
+        ...(skip > 0 ? [`--skip=${skip}`] : []),
+        `-n${limit + 1}`,
+        ...(refs === 'head' && !pinned ? historyRevisions : ['--stdin'])
+      ],
+      cwd,
+      refs === 'head' && !pinned ? undefined : `${historyRevisions.join('\n')}\n`
+    )
+    stdout = result.stdout
+  } catch (error) {
+    if (pinned && /bad object|unknown revision|invalid object|bad revision/i.test(String(error))) {
+      return { ...empty, ...echo, historyChanged: true }
+    }
+    throw error
+  }
   const parsed = parseGitHistoryLog(stdout)
   const items = parsed.slice(0, limit)
   if (branchBase) {
@@ -220,11 +270,12 @@ export async function loadGitHistoryFromExecutor(
   const hasIncomingChanges =
     Boolean(remoteRef?.revision && mergeBase) && remoteRef?.revision !== mergeBase
   const hasOutgoingChanges =
-    Boolean(currentRef.revision && remoteRef?.revision && mergeBase) &&
-    currentRef.revision !== mergeBase
+    Boolean(currentRef?.revision && remoteRef?.revision && mergeBase) &&
+    currentRef?.revision !== mergeBase
 
   return {
     items,
+    ...echo,
     currentRef,
     remoteRef,
     baseRef,

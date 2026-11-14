@@ -1,0 +1,50 @@
+import { expect, test } from '@playwright/test'
+
+test('keeps a pending workspace rename alive across the row context menu', async ({ page }) => {
+  await page.goto(
+    '/fixtures.html?id=sidebar/workspace-card/details/WorktreeCardDetailsHover:pendingRename&theme=light'
+  )
+  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
+  const row = page.getByRole('button', { name: 'Workspace row', exact: true })
+  const details = page.locator('[data-slot="hover-card-content"]')
+  await row.hover()
+  await details.getByText('Rename me', { exact: true }).dblclick()
+  const editor = page.getByRole('textbox', { name: 'Rename workspace' })
+  await editor.fill('Renamed workspace')
+  await editor.press('Enter')
+  await expect(editor).toBeDisabled()
+  await row.click({ button: 'right' })
+  await expect(page.getByRole('menuitem', { name: 'Dismiss menu' })).toBeVisible()
+  await expect(editor).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Finish saving' }).click()
+  await expect(editor).toHaveCount(0)
+  await page.mouse.move(900, 600)
+  await expect(details).toBeHidden()
+  await row.hover()
+  await expect(details.getByText('Renamed workspace', { exact: true })).toBeVisible()
+  await page.mouse.move(900, 600)
+  await expect(details).toBeHidden()
+})
+
+test('right-clicking scan help preserves the group name input and dismisses help', async ({
+  page
+}) => {
+  await page.goto('/fixtures.html?id=repo/NestedRepoScanLimitNotice:editingGroupName&theme=light')
+  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
+  const input = page.getByRole('textbox', { name: 'Group name' })
+  await input.fill('My group')
+  const help = page.getByRole('button', { name: 'Nested repository scan limits' })
+  await help.hover()
+  const details = page.getByRole('dialog')
+  await expect(details).toBeVisible()
+  await help.click({ button: 'right' })
+  await expect(details).toBeHidden()
+  await expect(input).toBeFocused()
+  await page.keyboard.type(' name')
+  await expect(input).toHaveValue('My group name')
+  await help.focus()
+  await expect(details).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(details).toBeHidden()
+})

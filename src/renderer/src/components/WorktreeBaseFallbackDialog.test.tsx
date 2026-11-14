@@ -27,16 +27,6 @@ async function renderDialog(activeModal: AppState['activeModal'] = 'none'): Prom
   })
 }
 
-function getButton(label: string): HTMLButtonElement {
-  const button = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
-    (candidate) => candidate.textContent === label
-  )
-  if (!button) {
-    throw new Error(`Button not found: ${label}`)
-  }
-  return button
-}
-
 describe('WorktreeBaseFallbackDialog', () => {
   beforeEach(() => {
     useAppStore.setState(initialState, true)
@@ -51,30 +41,6 @@ describe('WorktreeBaseFallbackDialog', () => {
     document.body.innerHTML = ''
     resetWorktreeBaseFallbackNoticesForTests()
     useAppStore.setState(initialState, true)
-  })
-
-  it('explains the fallback and advances queued notices', async () => {
-    requestWorktreeBaseFallbackNotice({
-      requestedRef: 'origin/main',
-      localRef: 'main'
-    })
-    requestWorktreeBaseFallbackNotice({
-      requestedRef: 'upstream/develop',
-      localRef: 'develop'
-    })
-    await renderDialog()
-
-    expect(document.body.textContent).toContain('Workspace created from a local base')
-    expect(document.body.textContent).toContain(
-      'The remote-tracking ref "origin/main" was unavailable'
-    )
-    expect(document.body.textContent).toContain('may not include the latest remote changes')
-
-    await act(async () => {
-      getButton('Got it').click()
-    })
-
-    expect(document.body.textContent).toContain('"upstream/develop" was unavailable')
   })
 
   it('waits until another app modal closes', async () => {

@@ -6,7 +6,7 @@ import {
 } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from '../session-lifecycle/codex-structured-session-adapter'
 
 // Shapes as a live default-mode session sent them (codex-cli 0.157); only the sender is remapped.

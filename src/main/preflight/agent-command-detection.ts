@@ -8,6 +8,7 @@ import {
 import { findCommandsOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import { buildLocalPreflightEnv } from '../ipc/preflight-local-env'
 import { readGuestWindowsDriveMounts } from '../ipc/wsl-guest-windows-drive-path'
+import { hasPathSeparatorToken } from '../../shared/managed-agent-command-token'
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
@@ -25,7 +26,10 @@ export async function detectAgentCommandsOnHost(
   const onPathCommands = await findCommandsOnLocalPath(commands, {
     env: buildLocalPreflightEnv()
   })
-  const missedCommands = commands.filter((cmd) => !onPathCommands.has(cmd))
+  // A path was already checked directly; the install-dir fallback would count any absolute path as found.
+  const missedCommands = commands.filter(
+    (cmd) => !onPathCommands.has(cmd) && !hasPathSeparatorToken(cmd)
+  )
   // Resolve cold-GUI install dirs once; use the same WSL-filtered PATH while retaining process PATH elsewhere.
   const guestMounts = readGuestWindowsDriveMounts()
   // The batch includes the fallback's PATH normalization and Windows executable names.

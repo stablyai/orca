@@ -11,10 +11,10 @@ import type { RunSourceControlAgentActionStartArgs } from '../ai/runSourceContro
 import type { Repo } from '../../../../../../shared/repo-types'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { saveSourceControlAiActionRecipeForTarget } from '../ai/recipe-persistence'
-import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { useAppStore } from '@/store/index'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT,

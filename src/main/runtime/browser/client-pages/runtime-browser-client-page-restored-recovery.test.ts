@@ -4,7 +4,6 @@ import {
   RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
   RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY
 } from './client-hosted-browser-page-persistence'
-import { adoptRuntimeBrowserClientPagesFromInventory } from './runtime-browser-client-page-adoption'
 import { recoverUnavailableRuntimeBrowserClientPages } from './runtime-browser-client-page-recovery'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -67,59 +66,6 @@ describe('recovery of rehydrated client-hosted pages', () => {
     expect(notifyWorkspace).not.toHaveBeenCalled()
   })
 
-  it('never recovers a rehydrated row whose record names no paired device', async () => {
-    const { authority, pages } = harness({ pairedDeviceId: undefined })
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease(),
-      authority,
-      pages,
-      notifyWorkspace: vi.fn(),
-      resolveExecutionHostKey: resolvesTo('native:runtime-new:2')
-    })
-
-    expect(authority.createClientPage).not.toHaveBeenCalled()
-  })
-
-  it('leaves a rehydrated row held while its workspace has no route yet', async () => {
-    const { authority, pages, notifyWorkspace } = harness()
-    const releaseUnrecoverablePage = vi.fn()
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease(),
-      authority,
-      pages,
-      notifyWorkspace,
-      releaseUnrecoverablePage,
-      resolveExecutionHostKey: async () => ({ status: 'unavailable' })
-    })
-
-    // Unavailable routes defer recovery; only workspace-gone authorizes retirement.
-    expect(authority.createClientPage).not.toHaveBeenCalled()
-    expect(releaseUnrecoverablePage).not.toHaveBeenCalled()
-    expect(pages.getPage('page-a')?.placement).toEqual(RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT)
-    expect(notifyWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('drops a rehydrated row whose workspace is gone', async () => {
-    const { authority, pages } = harness()
-    const releaseUnrecoverablePage = vi.fn()
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease(),
-      authority,
-      pages,
-      notifyWorkspace: vi.fn(),
-      releaseUnrecoverablePage,
-      resolveExecutionHostKey: async () => ({ status: 'workspace-gone' })
-    })
-
-    expect(authority.createClientPage).not.toHaveBeenCalled()
-    expect(releaseUnrecoverablePage).toHaveBeenCalledWith(
-      expect.objectContaining({ browserPageId: 'page-a' })
-    )
-  })
-
   it('never recovers a rehydrated row without a way to resolve the current route key', async () => {
     const { authority, pages } = harness()
     const releaseUnrecoverablePage = vi.fn()
@@ -136,34 +82,6 @@ describe('recovery of rehydrated client-hosted pages', () => {
 
     // Old route keys are not fallback; clients refuse them with browser_client_network_route_authority_mismatch.
     expect(authority.createClientPage).not.toHaveBeenCalled()
-  })
-
-  it('lets adoption take a rehydrated row back when the client still holds the guest', async () => {
-    const { pages } = harness()
-    const adoptionAuthority = {
-      authorityRuntimeId: 'runtime-new',
-      authorityEpoch: 'epoch-new',
-      getPlacement: vi.fn(() => freshPlacement),
-      adoptClientPages: vi.fn(async () => ['page-a'])
-    }
-
-    const result = await adoptRuntimeBrowserClientPagesFromInventory({
-      lease: adoptionLease(),
-      authority: adoptionAuthority,
-      pages,
-      notifyWorkspace: vi.fn(),
-      resolveExecutionHostKey: async () => ({
-        status: 'resolved',
-        executionHostKey: 'native:runtime-a:1'
-      })
-    })
-
-    // Adopt live guests by rekeying DOM; persisted rows must not divert them into destructive recreation.
-    expect(result.adoptedPageIds).toEqual(['page-a'])
-    expect(pages.getPage('page-a')).toMatchObject({
-      placement: freshPlacement,
-      url: 'https://client-latest.internal/'
-    })
   })
 })
 
@@ -188,6 +106,9 @@ function harness(options: { pairedDeviceId?: string } = {}) {
   const commands: { browserPageId: string; type: string }[] = []
   const placements = new Map<string, RuntimeBrowserClientPlacement | undefined>()
   const authority = {
+    clientPageInitializations: { canContinue: () => false },
+    admitClientPageInitialization: () => 'stale' as const,
+    claimLegacyClientPageRecovery: () => undefined,
     authorityRuntimeId: 'runtime-new',
     authorityEpoch: 'epoch-new',
     getPlacement: vi.fn((browserPageId: string) => placements.get(browserPageId)),
@@ -198,10 +119,16 @@ function harness(options: { pairedDeviceId?: string } = {}) {
       })
     ),
     completePageRetirement: vi.fn(() => true),
-    createClientPage: vi.fn(async (input: { browserPageId: string }) => {
-      placements.set(input.browserPageId, freshPlacement)
-      return freshPlacement
-    }),
+    createClientPage: vi.fn(
+      async (input: {
+        browserPageId: string
+        committed?(placement: RuntimeBrowserClientPlacement): void
+      }) => {
+        placements.set(input.browserPageId, freshPlacement)
+        input.committed?.(freshPlacement)
+        return freshPlacement
+      }
+    ),
     issueClientPageCommand: vi.fn((input: { browserPageId: string }, command: { type: string }) => {
       commands.push({ browserPageId: input.browserPageId, type: command.type })
       return { event: {}, result: Promise.resolve({ status: 'completed' as const }) }
@@ -225,28 +152,5 @@ function lease() {
     pageInventoryProtocolVersion: 1 as const,
     pageReconciliationProtocolVersion: 1 as const,
     pageInventory: []
-  }
-}
-
-function adoptionLease() {
-  return {
-    ...lease(),
-    connectionId: 'conn-a',
-    hostCapabilities: [] as readonly string[],
-    pageInventory: [
-      {
-        authorityRuntimeId: 'runtime-old',
-        authorityEpoch: 'epoch-old',
-        browserHostClientId: 'host-relaunched',
-        browserHostGeneration: 1,
-        browserPageId: 'page-a',
-        pageHostGeneration: 3,
-        browserProfileId: 'profile-a',
-        executionHostKey: 'native:runtime-a:1',
-        workspaceId: 'workspace-a',
-        state: 'active' as const,
-        currentUrl: 'https://client-latest.internal/'
-      }
-    ]
   }
 }

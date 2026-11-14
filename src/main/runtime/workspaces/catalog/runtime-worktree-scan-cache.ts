@@ -4,7 +4,7 @@ import {
   getRepoRoutingConnectionId,
   getRepoSshConnectionId
 } from '../../../../shared/execution-host'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   resolveLocalProjectRuntimeForRepo,
   type ProjectRuntimeResolutionStore

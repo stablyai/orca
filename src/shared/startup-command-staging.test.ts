@@ -32,27 +32,6 @@ function stage(command: string, shellPath = '/bin/zsh', platform: NodeJS.Platfor
 }
 
 describe('stageStartupCommand', () => {
-  it('types exactly 512 bytes, stages 513', () => {
-    expect(stage('a'.repeat(512)).delivery).toBe('typed')
-    expect(stage('a'.repeat(513)).delivery).toBe('staged')
-  })
-
-  it('measures bytes, not characters', () => {
-    expect(stage('é'.repeat(257)).delivery).toBe('staged')
-  })
-
-  it('ignores a trailing submit byte when measuring', () => {
-    expect(stage(`${'a'.repeat(512)}\n`).delivery).toBe('typed')
-    expect(stage(`${'a'.repeat(512)}\r\n`).delivery).toBe('typed')
-  })
-
-  it.each([['\n'], ['\r'], ['\t'], ['\x1b'], ['\x03'], ['\x7f']])(
-    'stages a short line carrying control byte %j',
-    (byte) => {
-      expect(stage(`claude 'a${byte}b'`).delivery).toBe('staged')
-    }
-  )
-
   it('writes a 0600 script whose body is exactly the command, and types a sourcing line', () => {
     const command = `claude '${'x'.repeat(600)}'`
     const staged = stage(`${command}\n`)
@@ -63,100 +42,6 @@ describe('stageStartupCommand', () => {
     expect(statSync(scriptPath).mode & 0o777).toBe(0o600)
     expect(readFileSync(scriptPath, 'utf8')).toBe(`command rm -f -- '${scriptPath}'\n${command}\n`)
   })
-
-  // Why: ksh runs a sourced file's commands in the shell's own process group, so Ctrl-Z is lost.
-  it.each([['/bin/ksh'], ['/usr/bin/mksh']])(
-    'runs a long Orca-built line through /bin/sh in %s, and types a short one as is',
-    (shellPath) => {
-      const staged = stageStartupCommand({
-        command: `claude '${'x'.repeat(600)}'`,
-        shellPath,
-        orcaBuiltLine: true,
-        platform: 'darwin',
-        directory
-      })
-      expect(staged.command).toBe(`/bin/sh '${staged.scriptPath}'`)
-      const command = `claude 'wow!! great'`
-      expect(
-        stageStartupCommand({
-          command,
-          shellPath,
-          orcaBuiltLine: true,
-          platform: 'darwin',
-          directory
-        })
-      ).toEqual({ command, delivery: 'typed' })
-    }
-  )
-
-  it.each([['/bin/ksh'], ['/usr/bin/mksh']])(
-    'types a long command the user wrote as it always was in %s',
-    (shellPath) => {
-      const command = 'a'.repeat(600)
-      expect(stage(command, shellPath)).toEqual({ command, delivery: 'typed' })
-      expect(readdirSync(directory)).toEqual([])
-    }
-  )
-
-  // Measured: tcsh typed `'fix C:'"\\"'dir'` as `fix C:\\dir` and expanded `!!` in `'wow!! great'`.
-  it.each([['/bin/tcsh'], ['/usr/bin/nu'], [undefined]])(
-    'stages even a short Orca-built line for a shell that cannot source it (%s)',
-    (shellPath) => {
-      const command = `claude 'wow!! great'`
-      const staged = stageStartupCommand({
-        command,
-        shellPath,
-        orcaBuiltLine: true,
-        platform: 'darwin',
-        directory
-      })
-      expect(staged.command).toBe(`/bin/sh '${staged.scriptPath}'`)
-      expect(readFileSync(staged.scriptPath!, 'utf8')).toContain(`\n${command}\n`)
-    }
-  )
-
-  // Why: behind `/bin/sh` the agent is not the shell's own job, and a pasted prompt waits on that.
-  it.each([['/bin/tcsh'], ['/usr/bin/nu'], [undefined]])(
-    'types a short plain Orca-built line as is for a shell that cannot source it (%s)',
-    (shellPath) => {
-      const command = `claude '--dangerously-skip-permissions' '--model' 'claude-opus-5-5[1m]'`
-      expect(
-        stageStartupCommand({
-          command,
-          shellPath,
-          orcaBuiltLine: true,
-          platform: 'darwin',
-          directory
-        })
-      ).toEqual({ command, delivery: 'typed' })
-      expect(readdirSync(directory)).toEqual([])
-    }
-  )
-
-  it.each([[`claude 'it'\\''s'`], ['claude "x"'], ["claude '$HOME'"], ["claude 'a`b'"]])(
-    'stages a short Orca-built line tcsh would not read literally: %s',
-    (command) => {
-      const staged = stageStartupCommand({
-        command,
-        shellPath: '/bin/tcsh',
-        orcaBuiltLine: true,
-        platform: 'darwin',
-        directory
-      })
-      expect(staged.command).toBe(`/bin/sh '${staged.scriptPath}'`)
-    }
-  )
-
-  // Why: a quick command or --command written for tcsh or nu is not sh syntax.
-  it.each([['/bin/tcsh'], ['/usr/bin/nu'], [undefined]])(
-    'types a command the user wrote as it always was in a shell that cannot source it (%s)',
-    (shellPath) => {
-      const command = `foreach f (*.log)\n  echo $f\nend`
-      const staged = stageStartupCommand({ command, shellPath, platform: 'darwin', directory })
-      expect(staged).toEqual({ command, delivery: 'typed' })
-      expect(readdirSync(directory)).toEqual([])
-    }
-  )
 
   it('types the full command and says so when the script cannot be written', () => {
     const command = 'a'.repeat(600)

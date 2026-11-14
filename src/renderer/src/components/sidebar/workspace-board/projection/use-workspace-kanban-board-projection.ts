@@ -13,7 +13,7 @@ import {
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeDragGroup } from '../../worktree-list/drag/worktree-manual-order'
-import type { useRepoMap } from '@/store/selectors'
+import type { useRepoMap } from '@/store/repos/use-repository-catalog'
 
 export function useWorkspaceKanbanBoardProjection(args: {
   activeWorktreeId: string | null

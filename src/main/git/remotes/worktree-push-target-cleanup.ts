@@ -3,7 +3,7 @@
 import type { Store } from '../../persistence/loading-store/store'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import { parseGitHubOwnerRepo } from '../../github/github-remote-identity-parsing'
+import { parseGitHubOwnerRepo } from '../../github/repositories/github-remote-identity-parsing'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { iterateProcessOutputLines } from '../../../shared/process-output-field-scanner'
 

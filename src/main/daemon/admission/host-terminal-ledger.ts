@@ -17,7 +17,7 @@ import {
   NO_OTHER_AUTOMATIC_WORK,
   recentAutomaticAdmits,
   type OtherAutomaticWork
-} from '../../../shared/host-automatic-work-budget'
+} from '../../../shared/terminal/pty/admission/host-automatic-work-budget'
 
 // Leave roughly half the default macOS PTY limit for other terminals and agent-owned PTYs.
 export const DEFAULT_MAX_HOST_TERMINALS = 256

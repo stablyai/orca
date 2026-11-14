@@ -1,9 +1,22 @@
 import React from 'react'
-import { CheckCircle2, ChevronDown, CircleDashed, MinusCircle, XCircle } from 'lucide-react'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  CircleDashed,
+  MinusCircle,
+  XCircle
+} from 'lucide-react'
+import { isGitLabAllowedFailureJob } from '@/components/github/pr-check-presentation'
+import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import { CheckJobLogTail } from '@/components/right-sidebar/checks-panel/logs/check-job-log-tail'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import type { PRCheckJob, PRCheckStep } from '../../../../../../shared/github/check-types'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import type {
+  PRCheckDetail,
+  PRCheckJob,
+  PRCheckStep
+} from '../../../../../../shared/github/checks/check-types'
 import {
   resolveStepOutcome,
   summarizeJobSteps,
@@ -14,7 +27,10 @@ import { CheckRunCopyButton } from './CheckRunCopyButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { checkJobIdentities, checkReadingStepsKey } from '../reading/check-details-reading-cache'
 import type { CheckDetailsReadingOwner } from '../reading/check-details-reading-owner'
 
@@ -105,14 +121,17 @@ function OtherJobSteps({
 }
 
 function JobCard({
+  check,
   job,
   identity,
   owner
 }: {
+  check: PRCheckDetail
   job: PRCheckJob
   identity: string
   owner?: CheckDetailsReadingOwner
 }): React.JSX.Element {
+  const t = useTranslate()
   const breakdown = summarizeJobSteps(job)
   const jobFailed = resolveStepOutcome(job) === 'failure'
   const collapsible = [...breakdown.succeeded, ...breakdown.skipped, ...breakdown.pending]
@@ -120,7 +139,7 @@ function JobCard({
   if (breakdown.succeeded.length > 0) {
     const count = breakdown.succeeded.length
     summaryParts.push(
-      translate('auto.components.editor.CheckRunJobs.stepsSucceeded', '{{count}} succeeded', {
+      t('auto.components.editor.CheckRunJobs.stepsSucceeded', '{{count}} succeeded', {
         count,
         defaultValue_one: '{{count}} succeeded'
       })
@@ -129,7 +148,7 @@ function JobCard({
   if (breakdown.skipped.length > 0) {
     const count = breakdown.skipped.length
     summaryParts.push(
-      translate('auto.components.editor.CheckRunJobs.stepsSkipped', '{{count}} skipped', {
+      t('auto.components.editor.CheckRunJobs.stepsSkipped', '{{count}} skipped', {
         count,
         defaultValue_one: '{{count}} skipped'
       })
@@ -138,7 +157,7 @@ function JobCard({
   if (breakdown.pending.length > 0) {
     const count = breakdown.pending.length
     summaryParts.push(
-      translate('auto.components.editor.CheckRunJobs.stepsPending', '{{count}} pending', {
+      t('auto.components.editor.CheckRunJobs.stepsPending', '{{count}} pending', {
         count,
         defaultValue_one: '{{count}} pending'
       })
@@ -148,7 +167,9 @@ function JobCard({
   return (
     <div className="px-3 py-3">
       <div className="flex min-w-0 items-center gap-2">
-        {jobFailed ? (
+        {isGitLabAllowedFailureJob(check, job) ? (
+          <AlertTriangle className={cn('size-4 shrink-0', CHECK_COLOR.gitlabAllowedFailure)} />
+        ) : jobFailed ? (
           <XCircle className="size-4 shrink-0 text-destructive" />
         ) : (
           <CheckCircle2 className="size-4 shrink-0 text-status-success" />
@@ -158,7 +179,7 @@ function JobCard({
         </span>
         {breakdown.failed.length > 0 && (
           <Badge variant="destructive">
-            {translate(
+            {t(
               'auto.components.editor.CheckRunJobs.stepsFailedOfTotal',
               '{{failed}} / {{count}} steps failed',
               {
@@ -193,9 +214,7 @@ function JobCard({
           failed={jobFailed}
           identity={identity}
           owner={owner}
-          summary={summaryParts.join(
-            translate('auto.components.editor.CheckRunJobs.5a8e1d4f23', ' · ')
-          )}
+          summary={summaryParts.join(t('auto.components.editor.CheckRunJobs.5a8e1d4f23', ' · '))}
         />
       )}
     </div>
@@ -203,21 +222,24 @@ function JobCard({
 }
 
 export function CheckRunJobs({
+  check,
   jobs,
   hasFailedJobs,
   positionOwner
 }: {
+  check: PRCheckDetail
   jobs: PRCheckJob[]
   hasFailedJobs: boolean
   positionOwner?: CheckDetailsReadingOwner
 }): React.JSX.Element {
+  const t = useTranslate()
   const entries = checkJobIdentities(jobs)
   const visible = hasFailedJobs
     ? entries.filter(({ job }) => resolveStepOutcome(job) === 'failure')
     : entries
   const clipboardText = formatJobsForClipboard(
     visible.map(({ job }) => job),
-    translate('auto.components.editor.CheckRunDetailsPanel.ee07b33924', 'unknown')
+    t('auto.components.editor.CheckRunDetailsPanel.ee07b33924', 'unknown')
   )
 
   return (
@@ -225,17 +247,23 @@ export function CheckRunJobs({
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="text-sm font-medium">
           {hasFailedJobs
-            ? translate('auto.components.editor.CheckRunDetailsPanel.066fedd446', 'Failed jobs')
-            : translate('auto.components.editor.CheckRunDetailsPanel.49731703ea', 'Jobs')}
+            ? t('auto.components.editor.CheckRunDetailsPanel.066fedd446', 'Failed jobs')
+            : t('auto.components.editor.CheckRunDetailsPanel.49731703ea', 'Jobs')}
         </div>
         <CheckRunCopyButton
           text={clipboardText}
-          label={translate('auto.components.editor.CheckRunJobs.copy', 'Copy jobs')}
+          label={t('auto.components.editor.CheckRunJobs.copy', 'Copy jobs')}
         />
       </div>
       <div className="divide-y divide-border/50">
         {visible.map(({ job, identity }) => (
-          <JobCard key={identity} job={job} identity={identity} owner={positionOwner} />
+          <JobCard
+            key={identity}
+            check={check}
+            job={job}
+            identity={identity}
+            owner={positionOwner}
+          />
         ))}
       </div>
     </section>

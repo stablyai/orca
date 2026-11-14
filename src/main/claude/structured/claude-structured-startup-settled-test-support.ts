@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 
 const opened = new WeakMap<

@@ -6,10 +6,10 @@ import type {
   BrowserInterceptEnableResult,
   BrowserInterceptedRequest,
   BrowserNetworkLogResult
-} from '../../shared/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
-import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../flags'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
+import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../arguments/flags'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 export const BROWSER_CAPTURE_HANDLERS: Record<string, CommandHandler> = {

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openTerminalManageSessions } from '../settings/terminal/session-management/open-terminal-manage-sessions'
 
 const POLL_INTERVAL_MS = 30_000
 
 export function StalledTerminalDaemonBanner(): React.JSX.Element | null {
+  const t = useTranslate()
   const [stalled, setStalled] = useState(false)
 
   useEffect(() => {
@@ -57,16 +58,16 @@ export function StalledTerminalDaemonBanner(): React.JSX.Element | null {
         <TriangleAlert className="mt-px size-3.5 shrink-0 text-destructive" aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-1.5">
           <p className="text-xs font-semibold leading-snug">
-            {translate('terminal.stalledDaemonBanner.title', 'Terminal service may need a restart')}
+            {t('terminal.stalledDaemonBanner.title', 'Terminal service may need a restart')}
           </p>
           <p className="text-xs leading-snug text-muted-foreground">
-            {translate(
+            {t(
               'terminal.stalledDaemonBanner.body',
               'Background work on this computer is stalled. Typing and new terminals may not work. Restarting the terminal service ends its running terminals and commands.'
             )}
           </p>
           <Button type="button" variant="outline" size="xs" onClick={openTerminalManageSessions}>
-            {translate('terminal.stalledDaemonBanner.review', 'Review restart options')}
+            {t('terminal.stalledDaemonBanner.review', 'Review restart options')}
           </Button>
         </div>
       </div>

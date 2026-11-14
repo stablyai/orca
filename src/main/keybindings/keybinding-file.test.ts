@@ -57,4 +57,20 @@ describe('keybinding-file', () => {
       'view.tasks': ['Ctrl+Alt+T']
     })
   })
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'does not reimport a manually deleted shortcut on %s',
+    (platform) => {
+      migrateLegacyKeybindings(filePath, platform, { 'view.tasks': ['Ctrl+Alt+T'] })
+      const document: { platforms: Record<string, Record<string, unknown>> } = JSON.parse(
+        readFileSync(filePath, 'utf8')
+      )
+      delete document.platforms[platform]['view.tasks']
+      writeFileSync(filePath, JSON.stringify(document))
+
+      migrateLegacyKeybindings(filePath, platform, { 'view.tasks': ['Ctrl+Alt+T'] })
+
+      expect(readKeybindingFile(filePath, platform).overrides).toEqual({})
+    }
+  )
 })

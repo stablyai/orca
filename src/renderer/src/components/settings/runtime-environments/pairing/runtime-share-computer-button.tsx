@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Share2 } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { Button } from '../../../ui/button'
 import {
@@ -18,6 +18,7 @@ import { usePublishedMachineName } from '../../../machine-identity/use-published
 
 /** Desktop only: lets other devices pair with this computer. */
 export function RuntimeShareComputerButton(): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [activeLinkCount, setActiveLinkCount] = useState<number | null>(null)
@@ -51,16 +52,16 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
     <>
       <Button type="button" size="sm" onClick={() => setOpen(true)}>
         <Share2 />
-        {translate('auto.components.settings.serverList.shareTitle', 'Share this computer')}
+        {t('auto.components.settings.serverList.shareTitle', 'Share this computer')}
       </Button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-xl" scrollable>
           <DialogHeader>
             <DialogTitle>
-              {translate('auto.components.settings.serverList.shareTitle', 'Share this computer')}
+              {t('auto.components.settings.serverList.shareTitle', 'Share this computer')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
+              {t(
                 'auto.components.settings.serverList.shareDialogDescriptionRuns',
                 'Anyone with the link can run commands as you on this computer until you revoke it.'
               )}
@@ -69,12 +70,10 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
           {activeLinkCount ? (
             <p className="text-xs text-muted-foreground">
               {activeLinkCount === 1
-                ? translate('auto.components.settings.serverList.oneActiveLink', '1 active link')
-                : translate(
-                    'auto.components.settings.serverList.activeLinks',
-                    '{{value0}} active links',
-                    { value0: activeLinkCount }
-                  )}
+                ? t('auto.components.settings.serverList.oneActiveLink', '1 active link')
+                : t('auto.components.settings.serverList.activeLinks', '{{value0}} active links', {
+                    value0: activeLinkCount
+                  })}
             </p>
           ) : null}
           <RuntimePairingUrlGenerator framed={false} showHeader={false} />
@@ -83,15 +82,11 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
           ) : (
             <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
               <span className="min-w-0 truncate">
-                {translate(
-                  'auto.components.settings.serverList.shownAs',
-                  'Shown to others as {{name}}',
-                  {
-                    name:
-                      publishedMachineName ??
-                      translate('auto.components.settings.serverList.thisComputer', 'This computer')
-                  }
-                )}
+                {t('auto.components.settings.serverList.shownAs', 'Shown to others as {{name}}', {
+                  name:
+                    publishedMachineName ??
+                    t('auto.components.settings.serverList.thisComputer', 'This computer')
+                })}
               </span>
               <span aria-hidden>·</span>
               <button
@@ -99,7 +94,7 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
                 className="shrink-0 cursor-pointer rounded-sm text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => setEditingName(true)}
               >
-                {translate('auto.components.settings.serverList.editName', 'Edit')}
+                {t('auto.components.settings.serverList.editName', 'Edit')}
               </button>
             </div>
           )}
@@ -110,7 +105,7 @@ export function RuntimeShareComputerButton(): React.JSX.Element {
               size="sm"
               onClick={() => handleOpenChange(false)}
             >
-              {translate('auto.components.settings.serverList.done', 'Done')}
+              {t('auto.components.settings.serverList.done', 'Done')}
             </Button>
           </DialogFooter>
         </DialogContent>

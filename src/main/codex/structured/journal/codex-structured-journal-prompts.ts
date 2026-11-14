@@ -1,5 +1,5 @@
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import {
   codexApprovalItem,
   codexPromptIdentity,
@@ -22,8 +22,8 @@ import {
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
-import '../../../native-chat/agent-session-journal/journal-row-builders'
-import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+import '../../../native-chat/agent-session-journal/writing/journal-row-builders'
+import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 
 type CodexGroupedPendingJournalPrompt = CodexPendingJournalPrompt & { promptKey: string }
 

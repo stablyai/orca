@@ -1,6 +1,6 @@
 import { expect, type Mock } from 'vitest'
 
-import { clearGitCapabilityStateForTests } from '../../command-runner/git-capability-state'
+import { clearGitCapabilityStateForTests } from '../../command-runner/host-routing/git-capability-state'
 import { _resetWorktreeScanCacheForTests } from '../catalog/worktree-scan-cache'
 import { __resetSparseCheckoutStateCacheForTests } from '../sparse-checkout/worktree-sparse-checkout-cache'
 

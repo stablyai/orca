@@ -1,7 +1,7 @@
 import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import { relaunchApp, type AppRelaunchReason } from '../../startup/quit/app-relaunch'
-import { quitProcess } from '../../startup/process-quit-request'
+import { quitProcess } from '../../startup/quit/process-quit-request'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -27,16 +27,16 @@ import {
   getOrcaProfileListState,
   setActiveOrcaProfile
 } from '../../orca-profiles/profile-index-store'
-import { seedNewOrcaProfileTelemetryConsent } from '../../orca-profiles/profile-telemetry-consent-seed'
+import { initializeNewOrcaProfileState } from '../../orca-profiles/storage/new-profile-state'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../../orca-profiles/profile-ui-scope'
-import { transferOrcaProfileProject } from '../../orca-profiles/profile-project-transfer'
-import { transferActiveProfileProject } from '../../orca-profiles/profile-active-transfer'
-import { findOrcaProfileProjectsByPath } from '../../orca-profiles/profile-project-presence'
+import { transferOrcaProfileProject } from '../../orca-profiles/project-transfer/profile-project-transfer'
+import { transferActiveProfileProject } from '../../orca-profiles/project-transfer/profile-active-transfer'
+import { findOrcaProfileProjectsByPath } from '../../orca-profiles/catalog/profile-project-presence'
 import {
   flushActiveProfileBeforeFileMutation,
   flushActiveProfileBeforeRelaunch
-} from '../../orca-profiles/profile-persistence-deadline'
+} from '../../orca-profiles/storage/profile-persistence-deadline'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import {
   createCloudLinkedOrcaProfile,
@@ -44,10 +44,10 @@ import {
   getCurrentOrcaProfileAuthStatus,
   selectCurrentOrcaProfileOrg,
   signOutCurrentOrcaProfile
-} from '../../orca-profiles/profile-cloud-service'
-import { refreshCurrentOrcaProfileAuth } from '../../orca-profiles/profile-cloud-capability-refresh'
+} from '../../orca-profiles/cloud-auth/profile-cloud-service'
+import { refreshCurrentOrcaProfileAuth } from '../../orca-profiles/cloud-auth/profile-cloud-capability-refresh'
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
-import { onOrcaCloudSessionInvalidated } from '../../orca-profiles/profile-cloud-session-invalidation'
+import { onOrcaCloudSessionInvalidated } from '../../orca-profiles/cloud-session/profile-cloud-session-invalidation'
 import {
   broadcastOrcaProfileAuthStatusChanged,
   broadcastOrcaProfileSignInProgressChanged
@@ -56,7 +56,7 @@ import {
   cancelOrcaCloudSignIn,
   getOrcaCloudSignInProgress,
   onOrcaCloudSignInProgressChanged
-} from '../../orca-profiles/profile-cloud-sign-in-progress'
+} from '../../orca-profiles/cloud-auth/profile-cloud-sign-in-progress'
 import { profileIdFromArgs } from './orca-profile-id-arg'
 import { transferProjectArgsFromUnknown } from './orca-profile-project-transfer-args'
 
@@ -169,7 +169,7 @@ export function registerOrcaProfileHandlers(
     'orcaProfiles:createLocal',
     (_event, args?: CreateLocalOrcaProfileArgs): CreateLocalOrcaProfileResult => {
       const result = createLocalOrcaProfile(args)
-      seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+      initializeNewOrcaProfileState(result.profile.id, store.getSettings().telemetry)
       return result
     }
   )
@@ -278,7 +278,7 @@ export function registerOrcaProfileHandlers(
         createCloudLinkedProfileArgsFromUnknown(rawArgs)
       )
       if (result.status === 'created') {
-        seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+        initializeNewOrcaProfileState(result.profile.id, store.getSettings().telemetry)
         options.onAuthMutation?.()
       }
       return result

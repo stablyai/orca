@@ -7,13 +7,13 @@ import {
 import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithSubscribeToTerminalResize } from '../layout/terminal-resize-listeners'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
 import type {
-  RuntimeMobileSessionTabsResult,
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-terminal-contracts'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
+import type { PtyControllerInventory } from '../lifecycle/runtime-pty-controller-contract'
 import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { adoptRuntimeTerminalOrphansFromInventory } from './runtime-terminal-orphan-adoption'

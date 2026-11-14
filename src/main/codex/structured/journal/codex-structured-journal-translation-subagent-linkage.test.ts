@@ -5,7 +5,7 @@ import type {
   AgentJournalProducerLinkage
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexThreadItem } from '../items/codex-thread-item-identity'
 import { CODEX_COMMAND_APPROVAL_METHOD } from '../prompts/codex-prompt-registry'
@@ -46,8 +46,8 @@ function harness(primaryThreadId: string | null = PARENT) {
       }
       return { accepted: true }
     },
-    tryAppendLifecycleTransition: (identity, body, _resolve, options) => {
-      record(identity, body, options)
+    tryAppendLifecycleTransition: (identity, resolution, options) => {
+      record(identity, resolution.choice.body, options)
       return { accepted: true }
     },
     appendTombstone: () => {},

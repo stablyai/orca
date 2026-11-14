@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import {
-  selectRefreshedNetworkAddress,
-  type MobileNetworkInterface
-} from '../settings/mobile/pairing/mobile-network-interface-selection'
+import { selectRefreshedNetworkAddress } from './pairing/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import {
   useMobilePairingCustomAddress,
   useMobilePairingCustomAddresses
@@ -23,7 +21,7 @@ export type MobilePairingAddressChange = {
 }
 
 export function useMobilePairingAddressPreference(args: {
-  networkInterfaces: readonly MobileNetworkInterface[]
+  networkInterfaces: readonly PairingNetworkInterface[]
   onSelectionInvalidated: (change: MobilePairingAddressChange) => void
 }): {
   selectedAddress: string | undefined
@@ -32,7 +30,7 @@ export function useMobilePairingAddressPreference(args: {
   selectAddress: (address: string) => void
   selectCustomAddress: (address: string) => void
   removeCustomAddress: (address: string) => void
-  selectAddressAfterRefresh: (interfaces: readonly MobileNetworkInterface[]) => void
+  selectAddressAfterRefresh: (interfaces: readonly PairingNetworkInterface[]) => void
 } {
   const { networkInterfaces, onSelectionInvalidated } = args
   const updateSettings = useAppStore((state) => state.updateSettings)
@@ -51,7 +49,7 @@ export function useMobilePairingAddressPreference(args: {
   const pendingCustomAddressWritesRef = useRef<(string | undefined)[]>([])
 
   const selectAddressAfterRefresh = useCallback(
-    (interfaces: readonly MobileNetworkInterface[]): void => {
+    (interfaces: readonly PairingNetworkInterface[]): void => {
       const nextAddress = selectRefreshedNetworkAddress(
         selectedAddressRef.current,
         interfaces,

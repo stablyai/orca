@@ -15,12 +15,12 @@ import {
   TERMINAL_ARTIFACT_CONTENT_BLOCK_BYTES,
   terminalArtifactContentDigest
 } from './artifact-integrity'
-import { isBinaryBuffer } from '../../../../shared/binary-buffer'
+import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../../shared/runtime-types'
-import { FONT_FILE_MIME_TYPES } from '../../../../shared/font-file-extensions'
+} from '../../../../shared/file-content/runtime-file-read'
+import { FONT_FILE_MIME_TYPES } from '../../../../shared/file-preview/font-file-extensions'
 import {
   assertFileReadRange,
   fileRangePage,
@@ -37,10 +37,12 @@ export async function readLocalTerminalArtifactFileFromHandle(
   if (fileStat.isDirectory()) {
     throw new Error('Cannot read a directory')
   }
-  if (fileStat.size > MOBILE_FILE_READ_MAX_BYTES) {
-    throw new Error('file_too_large')
-  }
   assertTerminalFileGrantFresh(grant, fileStat)
+  if (fileStat.size > MOBILE_FILE_READ_MAX_BYTES) {
+    // Why: as files.read does, name a binary before its size refuses it, so no reader pages it as text.
+    const probe = await readFileHandleBufferBounded(handle, BINARY_PROBE_BYTES)
+    throw new Error(isBinaryBuffer(probe) ? 'binary_file' : 'file_too_large')
+  }
   const buffer = await readFileHandleBufferBounded(handle, MOBILE_FILE_READ_MAX_BYTES + 1)
   assertTerminalArtifactContentUnchanged(grant, buffer)
   if (isBinaryBuffer(buffer)) {

@@ -65,13 +65,13 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       Pressable: 'Pressable',
       StyleSheet: {
         create: (styles: unknown) => styles,
-        absoluteFillObject: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
+        absoluteFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
       },
       Text: 'Text',
       View: 'View',
       useWindowDimensions: () => ({ width: 390, height: 844 })
     }),
-    // Stub Expo-dependent native handlers; native-clipboard.test.ts covers their behavior.
+    // Stub Expo-dependent native handlers.
     'expo-clipboard': () => ({
       setStringAsync: () => Promise.resolve(true),
       getStringAsync: () => Promise.resolve('')
@@ -101,6 +101,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       launchImageLibraryAsync: () => Promise.resolve({ canceled: true }),
       requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: false })
     }),
+    // The store module loads the pairing keychain, whose native module the react-native mock lacks.
+    '../device-store/device-store': () => ({ processDeviceStore: () => ({}) }),
     'expo-file-system': () => ({
       File: class {
         readonly size = 0
@@ -165,7 +167,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
     },
     '../app-update/use-wall-app-update': () => ({ useWallAppUpdate: () => null }),
     // Keep the real bridge hook; stub only Expo-dependent client lookup.
-    '../transport/host-client-hooks': () => ({
+    '../transport/connection/host-client-hooks': () => ({
       useHostClient: () => ({ client: dependencies.client })
     }),
     // Reaching the real one imports the host store and expo-secure-store, whose module touches an Expo
@@ -206,7 +208,9 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         pageReady: dependencies.pageReady,
         pageFrame: dependencies.pageFrame,
         backClaimed: dependencies.backClaimed,
-        ownsHostArea: dependencies.ownsHostArea
+        ownsHostArea: dependencies.ownsHostArea,
+        // This connection's verdict is open, so the page's desktop-bound frames pass.
+        hostStatus: { protocolVersion: 1 }
       })
     })
   }

@@ -1,5 +1,5 @@
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
-import type { BrowserDialogAnswer } from '../../../browser/agent-browser/agent-browser-bridge-page-commands'
+import type { BrowserDialogAnswer } from '../../../browser/agent-browser/commands/agent-browser-bridge-page-commands'
 import type { BrowserCommandTargetParams } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 

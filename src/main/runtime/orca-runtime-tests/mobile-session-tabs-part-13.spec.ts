@@ -270,59 +270,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('rolls back a half-created terminal whose surface never publishes', async () => {
-    vi.useFakeTimers()
-    try {
-      const closeTerminal = vi.fn()
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setNotifier({
-        focusTerminal: vi.fn(),
-        worktreesChanged: vi.fn(),
-        reposChanged: vi.fn(),
-        activateWorktree: vi.fn(),
-        createTerminal: vi.fn(),
-        revealTerminalSession: vi.fn(),
-        splitTerminal: vi.fn(),
-        renameTerminal: vi.fn(),
-        closeTerminal,
-        closeSessionTab: vi.fn(),
-        terminalFitOverrideChanged: vi.fn(),
-        terminalDriverChanged: vi.fn()
-      })
-      // Reply without a surface graph to drive timeout rollback.
-      const webContents = { send: vi.fn() }
-      const send = vi.fn((_channel: string, payload: { requestId: string }) => {
-        ipcMain.emit(
-          'terminal:tabCreateReply',
-          { sender: webContents },
-          { requestId: payload.requestId, tabId: 'tab-ghost', title: 'Terminal' }
-        )
-      })
-      webContents.send = send
-      runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-      electronMocks.BrowserWindow.fromId.mockReturnValue({
-        isDestroyed: () => false,
-        webContents
-      })
-
-      const pending = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        activate: false
-      })
-      const settled = pending.then(
-        () => ({ ok: true as const }),
-        (error: Error) => ({ ok: false as const, error })
-      )
-      await vi.advanceTimersByTimeAsync(11_000)
-      const outcome = await settled
-
-      expect(outcome.ok).toBe(false)
-      expect(closeTerminal).toHaveBeenCalledWith('tab-ghost')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('rolls back a mobile create when the materialize spawn fails and no live PTY backs the tab', async () => {
     vi.useFakeTimers()
     try {

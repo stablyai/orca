@@ -11,6 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { notebookVenvParent } from '../../../../../../shared/notebook-venv-location'
 import { cancelSetup, createVirtualEnvironment, installIpykernel } from './ipynb-kernel-session'
@@ -19,59 +20,53 @@ import type { KernelSetup } from './ipynb-kernel-store'
 
 type SetupMode = 'install' | 'venv' | 'installing' | 'creating-venv'
 
-function setupCopy(mode: SetupMode, env: string, folder: string) {
+function setupCopy(mode: SetupMode, env: string, folder: string, t: Translate = translate) {
   switch (mode) {
     case 'install':
       return {
-        title: translate(
-          'auto.components.editor.IpynbViewer.missingIpykernelTitle',
-          'Install ipykernel?'
-        ),
-        description: translate(
+        title: t('auto.components.editor.IpynbViewer.missingIpykernelTitle', 'Install ipykernel?'),
+        description: t(
           'auto.components.editor.IpynbViewer.missingIpykernel',
           "Running cells with '{{env}}' requires the ipykernel package.",
           { env }
         ),
-        action: translate('auto.components.editor.IpynbViewer.install', 'Install')
+        action: t('auto.components.editor.IpynbViewer.install', 'Install')
       }
     case 'venv':
       return {
-        title: translate(
+        title: t(
           'auto.components.editor.IpynbViewer.createVenvTitle',
           'Create a virtual environment?'
         ),
-        description: translate(
+        description: t(
           'auto.components.editor.IpynbViewer.venvDescription',
           "Orca will create a .venv in {{folder}} from '{{env}}', install ipykernel into it, and run this notebook there.",
           { env, folder }
         ),
-        action: translate('auto.components.editor.IpynbViewer.createVenv', 'Create .venv')
+        action: t('auto.components.editor.IpynbViewer.createVenv', 'Create .venv')
       }
     case 'installing':
       return {
-        title: translate(
-          'auto.components.editor.IpynbViewer.installingTitle',
-          'Installing ipykernel…'
-        ),
-        description: translate(
+        title: t('auto.components.editor.IpynbViewer.installingTitle', 'Installing ipykernel…'),
+        description: t(
           'auto.components.editor.IpynbViewer.installingDescription',
           "Installing ipykernel into '{{env}}' with pip. This can take a minute.",
           { env }
         ),
-        action: translate('auto.components.editor.IpynbViewer.installingButton', 'Installing…')
+        action: t('auto.components.editor.IpynbViewer.installingButton', 'Installing…')
       }
     case 'creating-venv':
       return {
-        title: translate(
+        title: t(
           'auto.components.editor.IpynbViewer.creatingVenvTitle',
           'Creating virtual environment…'
         ),
-        description: translate(
+        description: t(
           'auto.components.editor.IpynbViewer.creatingVenvDescription',
           'Creating .venv in {{folder}} and installing ipykernel into it. This can take a minute.',
           { folder }
         ),
-        action: translate('auto.components.editor.IpynbViewer.creatingButton', 'Creating…')
+        action: t('auto.components.editor.IpynbViewer.creatingButton', 'Creating…')
       }
   }
 }
@@ -89,13 +84,14 @@ export function IpynbKernelSetupDialog({
   open: boolean
   onChooseAnother: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!setup) {
     return null
   }
   const { base, offer, phase, error } = setup
   const working = phase !== 'idle'
   const venvParent = notebookVenvParent(filePath, rootPath)
-  const copy = setupCopy(working ? phase : offer, base.name, basename(venvParent))
+  const copy = setupCopy(working ? phase : offer, base.name, basename(venvParent), t)
   const command =
     offer === 'venv' ? venvSetupCommand(base.path, venvParent) : ipykernelInstallCommand(base.path)
 
@@ -116,7 +112,7 @@ export function IpynbKernelSetupDialog({
         {error ? (
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-destructive">
-              {translate(
+              {t(
                 'auto.components.editor.IpynbViewer.setupFailed',
                 'That did not work. Output from Python:'
               )}
@@ -134,13 +130,13 @@ export function IpynbKernelSetupDialog({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate('auto.components.editor.IpynbViewer.copyCommand', 'Copy command')}
+            aria-label={t('auto.components.editor.IpynbViewer.copyCommand', 'Copy command')}
             onClick={() =>
               void window.api.ui
                 .writeClipboardText(command)
                 .then(() =>
                   toast.success(
-                    translate('auto.components.editor.IpynbViewer.commandCopied', 'Command copied')
+                    t('auto.components.editor.IpynbViewer.commandCopied', 'Command copied')
                   )
                 )
             }
@@ -156,10 +152,7 @@ export function IpynbKernelSetupDialog({
             disabled={working}
             onClick={onChooseAnother}
           >
-            {translate(
-              'auto.components.editor.IpynbViewer.useAnotherPython',
-              'Use another Python…'
-            )}
+            {t('auto.components.editor.IpynbViewer.useAnotherPython', 'Use another Python…')}
           </Button>
           <div className="flex gap-2">
             <Button
@@ -169,7 +162,7 @@ export function IpynbKernelSetupDialog({
               disabled={working}
               onClick={() => cancelSetup(filePath)}
             >
-              {translate('auto.components.editor.IpynbViewer.7f0d7077c6', 'Cancel')}
+              {t('auto.components.editor.IpynbViewer.7f0d7077c6', 'Cancel')}
             </Button>
             <Button
               type="button"
@@ -184,7 +177,7 @@ export function IpynbKernelSetupDialog({
             >
               {working ? <Loader2 className="animate-spin" /> : null}
               {error && !working
-                ? translate('auto.components.editor.IpynbViewer.tryAgain', 'Try again')
+                ? t('auto.components.editor.IpynbViewer.tryAgain', 'Try again')
                 : copy.action}
             </Button>
           </div>

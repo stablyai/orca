@@ -5,17 +5,22 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AntigravityAccountsSection } from './AntigravityAccountsSection'
-import { callAntigravityAccounts } from '@/runtime/runtime-antigravity-accounts-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { AntigravityAccountState } from '../../../../../../shared/antigravity-account-types'
 
-vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client', () => ({
   callAntigravityAccounts: vi.fn(),
   callAntigravityChatSignIn: vi.fn(),
   subscribeAntigravityChatSignIn: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
-vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
+vi.mock('@/components/agent/icons/AgentIcon', () => ({
+  AgentIcon: () => null
+}))
 
 const state: AntigravityAccountState = {
   accounts: [
@@ -75,6 +80,14 @@ beforeEach(() => {
 
 afterEach(() => cleanup())
 
+function renderSection() {
+  render(
+    <TooltipProvider>
+      <AntigravityAccountsSection owner={owner} target={target} label="This device" />
+    </TooltipProvider>
+  )
+}
+
 describe('native Antigravity Accounts', () => {
   it.each([
     { change: 'a known identity changes', before: state, after: changedState },
@@ -101,25 +114,25 @@ describe('native Antigravity Accounts', () => {
   ])('clears previous quota when $change during usage refresh', async ({ before, after }) => {
     vi.mocked(callAntigravityAccounts).mockResolvedValue(before)
     vi.mocked(callRuntimeRpc).mockResolvedValue(usage)
-    render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
-    await screen.findByRole('button', { name: 'Refresh usage' })
-    await userEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
+    renderSection()
+    await screen.findByRole('button', { name: /^Refresh usage/ })
+    await userEvent.click(screen.getByRole('button', { name: /^Refresh usage/ }))
     await screen.findByText('Session: 31% · Weekly: —')
     vi.mocked(callAntigravityAccounts).mockResolvedValueOnce(before).mockResolvedValueOnce(after)
-    await userEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Refresh usage/ }))
     expect(await screen.findByRole('alert')).toHaveTextContent('native account changed')
     expect(screen.queryByText('Session: 31% · Weekly: —')).toBeNull()
   })
 
   it('re-reads native identity after an unsuccessful selection rather than retaining stale native state', async () => {
-    render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
-    await screen.findByText('Native account')
+    renderSection()
+    await screen.findByText('Active')
     vi.mocked(callAntigravityAccounts)
       .mockRejectedValueOnce(new Error('Readback failed'))
       .mockResolvedValueOnce({ ...state, activeAccountId: null, currentAccount: null })
-    await userEvent.click(screen.getByRole('button', { name: 'Selected' }))
+    await userEvent.click(screen.getByRole('button', { name: /synthetic@example\.invalid/ }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Readback failed')
-    expect(screen.queryByText('Native account')).toBeNull()
+    expect(screen.queryByText('Active')).toBeNull()
     expect(screen.getByText(/The native account changed/)).toBeTruthy()
   })
 })

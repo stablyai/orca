@@ -3,13 +3,13 @@ import cjkFriendly from 'markdown-it-cjk-friendly'
 import footnote from 'markdown-it-footnote'
 import type { AlignType, Parent, PhrasingContent, Root, RootContent, Table } from 'mdast'
 import remend from 'remend'
-import { forEachGitHubCallout } from '../../../src/shared/github/github-callouts'
+import { forEachGitHubCallout } from '../../../src/shared/github/markdown/github-callouts'
 import { codeNode, type Token } from './mobile-markdown-code-nodes'
 import { inlineTagNode, inlineTagPairs } from './mobile-markdown-inline-html'
 import { readTaskMarker } from './mobile-markdown-task-items'
 import { plainText } from './mobile-markdown-plain-text'
 import { appendHtmlBlock, noteInlineHtml, popContainer } from './mobile-markdown-details'
-import { mobileMarkdownMath } from './mobile-markdown-math'
+import { mobileMarkdownMath, type MathEnv } from './mobile-markdown-math'
 import {
   displayFormulas,
   inlineMathNode,
@@ -30,9 +30,6 @@ const markdown = new MarkdownIt({ html: true, linkify: true })
 // Every href parses as a link, file: included; routeMarkdownHref decides what a tap opens.
 markdown.validateLink = () => true
 endLinkifyUrlsAtProsePunctuation(markdown.linkify)
-
-/** markdown-it's env for every parse of one document; mobile-markdown-math reads `chatMath`. */
-type MathEnv = { chatMath: boolean }
 
 const PATH_FLANK = /[\w\\/]/
 const LINE_BREAK_TAG = /^<br\s*\/?>$/i
@@ -294,10 +291,16 @@ function withLastBlockClosed(source: string, tokens: readonly Token[], chatMath:
 }
 
 /** `growing`: the text is still arriving, so markup its end leaves open is closed first, instead
- *  of flashing raw markers and half-written links. `chatMath`: chat's `\(` and `\[` math too. */
-export function parseMobileMarkdownTree(source: string, growing: boolean, chatMath = false): Root {
-  const env: MathEnv = { chatMath }
-  let tokens = markdown.parse(source, env)
+ *  of flashing raw markers and half-written links. `chatMath`: chat's `\(` and `\[` math too.
+ *  `parsed`: the source's tokens and their env, when the caller has read them already. */
+export function parseMobileMarkdownTree(
+  source: string,
+  growing: boolean,
+  chatMath = false,
+  parsed?: { env: MathEnv; tokens: readonly Token[] }
+): Root {
+  const env = parsed?.env ?? { chatMath }
+  let tokens = parsed?.tokens ?? markdown.parse(source, env)
   let text = source
   if (growing) {
     text = withLastBlockClosed(source, tokens, chatMath)
@@ -311,6 +314,9 @@ export function parseMobileMarkdownTree(source: string, growing: boolean, chatMa
   })
   return root
 }
+
+/** markdown-it's tokens for the text, as every parse here reads them. */
+export const markdownTokens = (source: string, env: MathEnv): Token[] => markdown.parse(source, env)
 
 /** The 0-based lines markdown-it reads as code, at any depth. */
 export function mobileMarkdownCodeLines(source: string): Set<number> {

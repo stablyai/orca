@@ -1,8 +1,8 @@
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
-import type { AiVaultAgentSource } from '../../session-scanner-agent-sources'
-import { pathSegments } from '../../session-file-discovery'
+import type { AiVaultAgentSource } from '../../discovery/session-scanner-agent-sources'
+import { pathSegments } from '../../discovery/session-file-discovery'
 
 /** At depth 1, enter only agent sessions directories, excluding embedded tools' histories (#11394). */
 export function openClawSessionDirectoryPredicate(name: string, depth: number): boolean {

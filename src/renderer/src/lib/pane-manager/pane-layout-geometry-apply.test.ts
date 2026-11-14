@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-
 import type { PaneManagerOptions } from './pane-manager-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 
 // Why: happy-dom has no canvas, so xterm cannot open; geometry never touches the terminal.
 vi.mock('./pane-lifecycle', async (importOriginal) => {

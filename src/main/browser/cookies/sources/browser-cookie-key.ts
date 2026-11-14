@@ -9,7 +9,7 @@ import {
   browserRootPath,
   type DetectedBrowser
 } from './browser-cookie-source-profiles'
-import type { EncryptionKeyResult } from './browser-cookie-sqlite'
+import type { EncryptionKeyResult } from './chromium-encryption-key-contract'
 import type { LinuxCookieKeyFailure } from '../../../../shared/browser-workspace-types'
 
 const PBKDF2_ITERATIONS = 1003

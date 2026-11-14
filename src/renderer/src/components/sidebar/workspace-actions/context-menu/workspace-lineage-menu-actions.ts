@@ -5,7 +5,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
-import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/structured-chat-slept-at'
+import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/agent-status/structured-chat-slept-at'
 import { getWorkspaceDeleteLineage } from '../deletion/workspace-delete-lineage'
 
 type WorkspaceActivityMaps = {

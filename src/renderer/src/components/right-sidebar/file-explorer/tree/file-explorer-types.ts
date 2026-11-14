@@ -1,5 +1,7 @@
+import type { Dispatch, SetStateAction } from 'react'
+import type { UserOpenedPathStat } from '@/lib/files/access/user-opened-local-path'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { DirEntryCursor } from '../../../../../../shared/file-dir-page'
+import type { DirEntryCursor } from '../../../../../../shared/file-listing/file-dir-page'
 
 export type FileExplorerOperationOwner =
   | { kind: 'local' }
@@ -40,3 +42,29 @@ export type DirCache = {
 
 /** Retry covered dir reads after supersession, but not unreadable roots, which would add one dead transport timeout per dir. */
 export type FileExplorerTreeRefreshOutcome = 'refreshed' | 'superseded' | 'root-unreadable'
+
+export type UseFileExplorerTreeResult = {
+  dirCache: Record<string, DirCache>
+  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  /** Workspace whose committed root listing owns the rendered cache. */
+  sourceWorkspaceId: string | null
+  /** Dirs with a read in flight — kept out of dirCache so the row projection does not rebuild. */
+  loadingDirPaths: ReadonlySet<string>
+  rootCache: DirCache | undefined
+  rootError: string | null
+  loadDir: (
+    dirPath: string,
+    depth: number,
+    options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
+  ) => Promise<boolean>
+  statPath: (path: string) => Promise<UserOpenedPathStat>
+  markPathAsDirectory: (path: string) => void
+  refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
+  /** `wakeWslDistro` only for a user act: it may start a stopped WSL distro. */
+  refreshDir: (dirPath: string, options?: { wakeWslDistro?: boolean }) => Promise<void>
+  /** Reads the next page of a folder a remote server listed only in part. */
+  loadMoreDir: (dirPath: string) => Promise<void>
+  /** True while a dir's cached listing predates the last full refresh that skipped it. */
+  isDirStale: (dirPath: string) => boolean
+  resetAndLoad: (options?: { wakeWslDistro?: boolean }) => void
+}

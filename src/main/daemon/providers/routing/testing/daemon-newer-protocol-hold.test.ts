@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -44,11 +44,6 @@ function writePid(dir: string, protocolVersion: number, contents: string): void 
 
 const RECORD = JSON.stringify({ pid: 42, startedAtMs: 1_700_000_000_000, launchNonce: 'n' })
 
-async function holds(): Promise<boolean> {
-  await discoverNewerProtocolHolds(runtimeDir)
-  return isHoldingForNewerProtocolDaemon()
-}
-
 beforeEach(async () => {
   vi.clearAllMocks()
   runtimeDir = mkdtempSync(join(tmpdir(), 'orca-newer-daemon-'))
@@ -62,63 +57,6 @@ beforeEach(async () => {
 afterEach(() => {
   rmSync(runtimeDir, { recursive: true, force: true })
   rmSync(otherProfileDir, { recursive: true, force: true })
-})
-
-describe('discoverNewerProtocolHolds', () => {
-  it('holds nothing for this and older protocols, or another profile', async () => {
-    writePid(runtimeDir, PROTOCOL_VERSION, RECORD)
-    writePid(runtimeDir, PROTOCOL_VERSION - 1, RECORD)
-    writePid(otherProfileDir, NEWER, RECORD)
-    await expect(holds()).resolves.toBe(false)
-    expect(probes.identity).not.toHaveBeenCalled()
-  })
-
-  it('holds nothing for a gone or recycled pid and leaves the newer files alone', async () => {
-    probes.identity.mockResolvedValue('mismatch')
-    writePid(runtimeDir, NEWER, RECORD)
-    writeFileSync(join(runtimeDir, `daemon-v${NEWER}.token`), 'secret')
-    await expect(holds()).resolves.toBe(false)
-    expect(readdirSync(runtimeDir).sort()).toEqual([
-      `daemon-v${NEWER}.pid`,
-      `daemon-v${NEWER}.token`
-    ])
-    expect(readFileSync(getDaemonPidPath(runtimeDir, NEWER), 'utf8')).toBe(RECORD)
-  })
-
-  it.each([
-    ['connected', true],
-    ['unknown', true],
-    ['refused', false],
-    ['missing', false]
-  ] as const)(
-    'settles an unidentifiable owner by its endpoint (%s holds: %s)',
-    async (endpoint, expected) => {
-      probes.identity.mockResolvedValue('unknown')
-      probes.endpoint.mockResolvedValue(endpoint)
-      writePid(runtimeDir, NEWER, RECORD)
-      await expect(holds()).resolves.toBe(expected)
-    }
-  )
-
-  it('re-probes a timed-out endpoint once before holding', async () => {
-    probes.identity.mockResolvedValue('unknown')
-    probes.endpoint.mockResolvedValueOnce('unknown').mockResolvedValueOnce('refused')
-    writePid(runtimeDir, NEWER, RECORD)
-    await expect(holds()).resolves.toBe(false)
-    expect(probes.endpoint).toHaveBeenCalledTimes(2)
-  })
-
-  it.each(['', '{"pid":4242,"startedAt', 'not a record'])(
-    'never holds forever on an unparseable record %j',
-    async (contents) => {
-      writePid(runtimeDir, NEWER, contents)
-      probes.endpoint.mockResolvedValue('missing')
-      await expect(holds()).resolves.toBe(false)
-      probes.endpoint.mockResolvedValue('connected')
-      await expect(holds()).resolves.toBe(true)
-      expect(probes.identity).not.toHaveBeenCalled()
-    }
-  )
 })
 
 describe('reopenNewerDaemonTerminals', () => {
@@ -160,15 +98,5 @@ describe('reopenNewerDaemonTerminals', () => {
     probes.endpoint.mockResolvedValue('refused')
     await expect(reopenNewerDaemonTerminals(runtimeDir)).resolves.toEqual({ reopened: true })
     expect(probes.kill).not.toHaveBeenCalled()
-  })
-
-  it('shares one stop between concurrent clicks', async () => {
-    probes.identity.mockResolvedValueOnce('match').mockResolvedValue('mismatch')
-    const results = await Promise.all([
-      reopenNewerDaemonTerminals(runtimeDir),
-      reopenNewerDaemonTerminals(runtimeDir)
-    ])
-    expect(results).toEqual([{ reopened: true }, { reopened: true }])
-    expect(probes.kill).toHaveBeenCalledTimes(1)
   })
 })

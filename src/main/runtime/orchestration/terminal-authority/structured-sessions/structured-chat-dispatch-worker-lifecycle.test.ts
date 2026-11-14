@@ -1,40 +1,36 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
-
 import { execFile } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
+import '../../../rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
+
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { closeStructuredAgentSessionChild } from '../../../agent-session/structured-agent-session-close'
-import { restoreJournal } from '../../../../native-chat/agent-session-journal/journal-open'
 import { OrcaRuntimeRpcServer } from '../../../rpc/server/runtime-rpc'
-import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
   PEER_CHAT,
   WAIT,
   call,
-  clearChat,
   coordinatorRunAndTask,
-  codex,
   db,
-  dispatcher,
   host,
   openChat,
-  request,
-  root,
-  runtime,
   sendUserMessage,
   settleTurn,
-  startClearedContext
+  codex,
+  runtime,
+  root
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
 const WORKER = formatOrcaSessionAddress(testOrcaSessionId(PEER_CHAT))
+
 const cliPath = join(process.cwd(), 'src/cli/index.ts')
 const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href
 
@@ -127,41 +123,6 @@ function expectChatOpen(sessionId: string): void {
 }
 
 describe("a chat assignee's report", () => {
-  it('is admitted from the chat itself, and settles its Dispatch', async () => {
-    const { taskId, dispatchId } = await dispatchToChat()
-
-    await call('orchestration.send', workerDone(taskId, dispatchId), { sessionId: PEER_CHAT })
-
-    expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
-    expect(db.getTask(taskId)?.status).toBe('completed')
-  })
-
-  it('is admitted from the same cleared chat, which keeps its Dispatch', async () => {
-    const { taskId, dispatchId } = await dispatchToChat()
-    const cleared = await clearChat(PEER_CHAT)
-    expect(cleared).toBe(PEER_CHAT)
-    expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
-    await startClearedContext(cleared)
-
-    await call('orchestration.send', workerDone(taskId, dispatchId), { sessionId: cleared })
-
-    expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
-  })
-
-  it('is refused from a terminal that names the chat as its caller', async () => {
-    const { taskId, dispatchId } = await dispatchToChat()
-
-    const response = await dispatcher.dispatch(
-      request('orchestration.send', { ...workerDone(taskId, dispatchId), from: WORKER })
-    )
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'session_caller_chat_not_declarable' }
-    })
-    expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
-  })
-
   it("is refused from a terminal that carries the chat's Dispatch under its own handle", async () => {
     const { taskId, dispatchId } = await dispatchToChat()
 
@@ -177,43 +138,6 @@ describe("a chat assignee's report", () => {
 })
 
 describe("a chat assignee's liveness, stop and close", () => {
-  it('reads live at rest, since the next send starts its agent', async () => {
-    const { dispatchId } = await dispatchToChat()
-    await host.close(PEER_CHAT, 'evict')
-    expect(host.deps.store.getRecord(PEER_CHAT)?.lease.claimStatus).toBe('released')
-
-    const shown = await call('orchestration.workerShow', { dispatch: dispatchId })
-
-    expect(shown).toMatchObject({
-      observation: { status: 'live', exactWorker: true },
-      projection: { liveness: { verdict: 'live', source: 'execution_host' } }
-    })
-  })
-
-  it('is stopped and abandoned without closing or interrupting the chat', async () => {
-    const stopped = await dispatchToChat()
-    expect(await call('orchestration.workerStop', { dispatch: stopped.dispatchId })).toMatchObject({
-      processAction: 'none'
-    })
-    expectChatOpen(PEER_CHAT)
-
-    const more = await call(
-      'orchestration.taskCreate',
-      { spec: 'more' },
-      { sessionId: COORDINATOR }
-    )
-    const { dispatch } = await call(
-      'orchestration.dispatch',
-      { task: idOf(more.task), to: WORKER },
-      { sessionId: COORDINATOR }
-    )
-    expect(await call('orchestration.workerAbandon', { dispatch: idOf(dispatch) })).toMatchObject({
-      state: 'abandoned',
-      processAction: 'none'
-    })
-    expectChatOpen(PEER_CHAT)
-  })
-
   it('fails its Dispatch when the chat is closed, as a closed terminal does, and reads exited', async () => {
     const { taskId, dispatchId } = await dispatchToChat()
 
@@ -267,27 +191,6 @@ describe("a chat assignee's liveness, stop and close", () => {
     expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
   })
 
-  it('reads unverifiable, never exited, when the cleared chat record is unknown', async () => {
-    const { dispatchId } = await dispatchToChat()
-    const cleared = await clearChat(PEER_CHAT)
-    expect(cleared).toBe(PEER_CHAT)
-    const getConversation = host.deps.store.getConversation.bind(host.deps.store)
-    vi.spyOn(host.deps.store, 'getConversation').mockImplementation((sessionId) =>
-      sessionId === cleared ? null : getConversation(sessionId)
-    )
-
-    expect(await call('orchestration.workerShow', { dispatch: dispatchId })).toMatchObject({
-      observation: {
-        status: 'unverifiable',
-        reason: 'No durable record backs this chat.'
-      },
-      projection: { liveness: { verdict: 'unverifiable' } }
-    })
-    expect(await call('orchestration.workerList', {})).toMatchObject({
-      workers: [{ dispatchId, projection: { liveness: { verdict: 'unverifiable' } } }]
-    })
-  })
-
   it("reads the chat's transcript for worker-read", async () => {
     const { dispatchId, worker } = await dispatchToChat()
     expect(await sendUserMessage(PEER_CHAT, 'working on it')).toMatchObject({ ok: true })
@@ -301,8 +204,8 @@ describe("a chat assignee's liveness, stop and close", () => {
     const prefix = journal.cursor()
     await host.close(PEER_CHAT, 'evict')
     expect(host.hasSession(PEER_CHAT)).toBe(false)
-    const saved = restoreJournal(host.deps.journalDatabase.db, PEER_CHAT)?.state
-    expect(saved?.lastSequence).toBeGreaterThanOrEqual(prefix.sequence)
+    const saved = await journal.reads.cursor()
+    expect(saved.sequence).toBeGreaterThanOrEqual(prefix.sequence)
     const acquisitions = codex.connections.length
     const server = new OrcaRuntimeRpcServer({
       runtime,

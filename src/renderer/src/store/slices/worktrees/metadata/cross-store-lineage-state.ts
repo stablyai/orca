@@ -5,8 +5,8 @@ import type {
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { reuseEqualRecordMap } from '../../repo-identity-reconcile'
-import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import { reuseEqualRecordMap } from '../../../../lib/catalog-reconciliation/catalog-record-reconciliation'
+import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 
 export type HostLineageList = {
   worktreeLineageById: Readonly<Record<string, WorktreeLineage>>

@@ -57,7 +57,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   }
 
   const pid = Number(trimmed)
-  return Number.isFinite(pid)
+  return Number.isSafeInteger(pid) && pid > 0
     ? {
         pid,
         startedAtMs: null,

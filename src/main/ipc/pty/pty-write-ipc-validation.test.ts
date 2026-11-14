@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from './pty-ipc-mock-registry'
+import { onMock, spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './register-handlers'
+import { bindSession } from '../../telemetry/protected-milestones'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -9,16 +10,16 @@ vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePt
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
-vi.mock('../../opencode/hook-service', () =>
+vi.mock('../../opencode/status-hooks/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
-vi.mock('../../agent-hooks/server', () =>
+vi.mock('../../agent-hooks/server/agent-hook-server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
-vi.mock('../../pi/titlebar-extension-service', () =>
+vi.mock('../../pi/managed-extensions/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
 vi.mock('../../pty/shell-startup/pwsh', () =>
@@ -33,13 +34,13 @@ vi.mock('../../telemetry/client', () =>
 vi.mock('../../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../../cli/launchers/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
-vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
+vi.mock('../../agent-hooks/observations/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
@@ -58,6 +59,28 @@ describe('registerPtyHandlers', () => {
     createMockProc,
     getPtyWriteListener
   } = setupPtyIpcSuite()
+
+  it('admits a terminal user activity observation only from the main window', () => {
+    const captured: string[] = []
+    const settings = { telemetry: { protectedMilestones: { installCohort: 'existing' } } }
+    const store = { getSettings: () => settings, updateSettings: () => undefined }
+    bindSession(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies all store methods read by milestone capture.
+      store as never,
+      (name) => captured.push(name),
+      () => true
+    )
+    registerPtyHandlers(mainWindow as never)
+    const listener = onMock.mock.calls.find(([name]) => name === 'pty:noteUserInput')?.[1]
+    if (!listener) {
+      throw new Error('missing terminal user input listener')
+    }
+
+    listener(foreignWindowIpcEvent)
+    expect(captured).toEqual([])
+    listener(mainWindowIpcEvent)
+    expect(captured).toEqual(['meaningful_activity_day'])
+  })
 
   it('rejects malformed and cross-window pty write IPC before provider writes', async () => {
     const mockProc = createMockProc()

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type * as I18n from '@/i18n/i18n'
 import { expect, it, vi } from 'vitest'
 
 import {
@@ -9,7 +10,10 @@ import {
 } from './ai-vault-native-account-index'
 import { accountSettings, installAccountFixture } from './ai-vault-account-test-fixture'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18n>()),
+  translate: (_key: string, fallback: string) => fallback
+}))
 installAccountFixture()
 
 it('compares real coverage under the same evidence across ordered candidates and A/B/A roots', () => {

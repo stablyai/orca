@@ -1,6 +1,6 @@
 import type { CloseTerminalPaneDetail } from '@/constants/terminal'
-import { detachTerminalLayoutLeaf } from '@/components/terminal-pane/terminal-layout-leaf-detach'
-import type { AppState } from '@/store'
+import { detachTerminalLayoutLeaf } from '@/components/terminal-pane/layout/detach/terminal-layout-leaf-detach'
+import type { AppState } from '@/store/types'
 import { makePaneKey, parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 type LegacyWorkerTerminalRecoveryEvent = {

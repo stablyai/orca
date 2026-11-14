@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function CodexRestartStatusPrompt(): React.JSX.Element | null {
+  const t = useTranslate()
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
@@ -31,7 +32,7 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
       <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-status-warning-text" />
       <div className="min-w-0 flex-1 text-xs font-medium text-status-warning-text">
         {/* Why: notices are per-PTY-session but restart is per-pane; show both counts so split panes don't look wrong. */}
-        {translate(
+        {t(
           'auto.components.status.bar.StatusBar.staleCodexSessions',
           '{{count}} Codex sessions are still on the old account.',
           {
@@ -41,7 +42,7 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
         )}
         {staleCodexStatus.staleWorktreeCount > 1 ? (
           <span className="mt-0.5 block text-2xs font-normal text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.status.bar.StatusBar.59c6e7b4e0',
               'Visible sessions restart now. Others restart when their worktree becomes active.'
             )}
@@ -57,12 +58,10 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
       >
         <Button type="button" variant="outline" size="xs" className="shrink-0">
           {staleCodexStatus.staleSessionCount === 1
-            ? translate('auto.components.status.bar.StatusBar.6cd6650b4c', 'Restart Session')
-            : translate(
-                'auto.components.status.bar.StatusBar.cd9d7b40ff',
-                'Restart {{value0}} Sessions',
-                { value0: staleCodexStatus.staleSessionCount }
-              )}
+            ? t('auto.components.status.bar.StatusBar.6cd6650b4c', 'Restart Session')
+            : t('auto.components.status.bar.StatusBar.cd9d7b40ff', 'Restart {{value0}} Sessions', {
+                value0: staleCodexStatus.staleSessionCount
+              })}
         </Button>
       </DropdownMenuItem>
     </div>

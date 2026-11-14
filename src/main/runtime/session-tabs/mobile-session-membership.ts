@@ -1,14 +1,15 @@
+import type { MobileSessionTabSubscription } from '../construction/runtime-identity-state'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from './session-tabs-change-publication'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as SessionTabsProjection } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { OrcaRuntimeWithGetTerminalInteractiveWait as GetTerminalInteractiveWaitMethods } from '../terminal/wait/terminal-interactive-wait'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { hasHostAuthoritativeTerminalMembership } from '../../persistence/terminal-topology/terminal-topology-membership'
+import { hasHostAuthoritativeTerminalMembership } from '../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-session-contracts'
 import { retireTerminalSurfacesFromSnapshot } from '../terminal/surface/mobile-session-terminal-retirement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
@@ -22,7 +23,11 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     ...args: Parameters<SessionTabsProjection['toMobileSessionTabsResult']>
   ): ReturnType<SessionTabsProjection['toMobileSessionTabsResult']>
 
-  protected abstract hasAgentSenderListeners(): boolean
+  protected abstract selectMobileSessionTabsListeners(
+    worktree?: string,
+    clientNavigationId?: string,
+    candidates?: Iterable<MobileSessionTabSubscription>
+  ): MobileSessionTabSubscription[]
 
   abstract getTerminalWorktreeIdForPaneKey(
     ...args: Parameters<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
@@ -35,14 +40,19 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
 
   /** Republish only worktrees whose sender scope differs from the one their last frame carried. */
   refreshAgentSenderAssociations(): void {
-    if (!this.hasAgentSenderListeners()) {
+    const listeners = this.selectMobileSessionTabsListeners().filter(
+      (subscription) => subscription.clientKind !== 'mobile'
+    )
+    if (listeners.length === 0) {
       return
     }
     const changed = this.agentProjections.senders.changedScopes(
       this.mobileSessionTabsByWorktree.keys()
     )
     for (const worktreeId of changed) {
-      this.touchMobileSessionTabsForWorktree(worktreeId)
+      if (this.selectMobileSessionTabsListeners(worktreeId, undefined, listeners).length > 0) {
+        this.touchMobileSessionTabsForWorktree(worktreeId)
+      }
     }
   }
 

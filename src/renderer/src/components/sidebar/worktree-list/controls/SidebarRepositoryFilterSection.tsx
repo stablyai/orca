@@ -7,26 +7,28 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { SidebarProjectFilterPanel } from './SidebarProjectFilterPanel'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
-function getProjectFilterVisibilityLabel({
-  selectedCount,
-  selectedRepos
-}: {
-  selectedCount: number
-  selectedRepos: readonly Repo[]
-}): string {
+function getProjectFilterVisibilityLabel(
+  {
+    selectedCount,
+    selectedRepos
+  }: {
+    selectedCount: number
+    selectedRepos: readonly Repo[]
+  },
+  t: Translate = translate
+): string {
   if (selectedCount === 0) {
-    return translate(
-      'auto.components.sidebar.SidebarRepositoryFilterSection.allProjects',
-      'All projects'
-    )
+    return t('auto.components.sidebar.SidebarRepositoryFilterSection.allProjects', 'All projects')
   }
   if (selectedCount === 1 && selectedRepos[0]) {
     return selectedRepos[0].displayName
   }
-  return translate(
+  return t(
     'auto.components.sidebar.SidebarRepositoryFilterSection.selectedProjects',
     '{{count}} projects',
     { count: selectedCount, defaultValue_one: '{{count}} project' }
@@ -38,17 +40,25 @@ type SidebarRepositoryFilterSectionProps = {
   // Agents inject their own persisted filter; workspace navigation supplies the defaults.
   filterRepoIds?: readonly string[]
   setFilterRepoIds?: (ids: string[]) => void
+  /** Lists hidden projects too, for views (Agents) that still show their work. */
+  includeHidden?: boolean
 }
 
 const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilterSection({
   preserveWorkspaceBoardOpen = false,
   filterRepoIds: filterRepoIdsProp,
-  setFilterRepoIds: setFilterRepoIdsProp
+  setFilterRepoIds: setFilterRepoIdsProp,
+  includeHidden = false
 }: SidebarRepositoryFilterSectionProps) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const workspaceFilterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setWorkspaceFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
-  const repos = useAppStore((s) => s.repos)
+  const allRepos = useAppStore((s) => s.repos)
+  const repos = useMemo(
+    () => (includeHidden ? allRepos : withoutHiddenRepos(allRepos)),
+    [allRepos, includeHidden]
+  )
   const filterRepoIds = filterRepoIdsProp ?? workspaceFilterRepoIds
   const setFilterRepoIds = setFilterRepoIdsProp ?? setWorkspaceFilterRepoIds
 
@@ -73,7 +83,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
     () => repos.filter((repo) => !selectedRepoIdSet.has(repo.id)),
     [repos, selectedRepoIdSet]
   )
-  const visibilityLabel = getProjectFilterVisibilityLabel({ selectedCount, selectedRepos })
+  const visibilityLabel = getProjectFilterVisibilityLabel({ selectedCount, selectedRepos }, t)
 
   const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])
 
@@ -86,10 +96,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between gap-3">
           <span>
-            {translate(
-              'auto.components.sidebar.SidebarRepositoryFilterSection.7679f0c268',
-              'Projects'
-            )}
+            {t('auto.components.sidebar.SidebarRepositoryFilterSection.7679f0c268', 'Projects')}
           </span>
           <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
             {visibilityLabel}
@@ -102,10 +109,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
       >
         <div className="flex items-center justify-between px-2 py-1">
           <span className="text-[11px] font-semibold text-muted-foreground">
-            {translate(
-              'auto.components.sidebar.SidebarRepositoryFilterSection.7679f0c268',
-              'Projects'
-            )}
+            {t('auto.components.sidebar.SidebarRepositoryFilterSection.7679f0c268', 'Projects')}
             {hasRepoFilter && (
               <span className="ml-1.5 font-medium text-foreground">· {selectedCount}</span>
             )}
@@ -116,10 +120,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
             className="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
             disabled={!hasRepoFilter}
           >
-            {translate(
-              'auto.components.sidebar.SidebarRepositoryFilterSection.d3a9c4cea1',
-              'Clear'
-            )}
+            {t('auto.components.sidebar.SidebarRepositoryFilterSection.d3a9c4cea1', 'Clear')}
           </button>
         </div>
 

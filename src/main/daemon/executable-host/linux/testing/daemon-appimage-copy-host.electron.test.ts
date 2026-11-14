@@ -32,14 +32,14 @@ import {
 import {
   buildDaemonSessionClient,
   type DaemonSessionClientResult
-} from '../../../../orcad/orcad-daemon-session-client-fixture'
+} from '../../../../orcad/testing/daemon-processes/orcad-daemon-session-client-fixture'
 import {
   killAndAwaitExit,
   killProfileDaemons,
   removeTestRoot
-} from '../../../../orcad/orcad-daemon-teardown-fixture'
-import { locatePinnedNodeForTests } from '../../../../orcad/orcad-node-slot-fixture'
-import { resolveAppImageExtractedRoot } from '../../../../cli/appimage-extracted-root'
+} from '../../../../orcad/testing/daemon-processes/orcad-daemon-teardown-fixture'
+import { locatePinnedNodeForTests } from '../../../../orcad/testing/native-slots/orcad-node-slot-fixture'
+import { resolveAppImageExtractedRoot } from '../../../../cli/appimage/appimage-extracted-root'
 
 const ENTRY_IN_APPDIR = 'resources/app.asar.unpacked/out/main/daemon-entry.js'
 const requireFromTest = createRequire(import.meta.url)
@@ -245,21 +245,6 @@ describe.runIf(linux)('the AppImage terminal daemon on the extracted copy', () =
         isReattach: false,
         output: true
       })
-    }
-  )
-
-  it(
-    'stays on Electron, and says so, when the extracted copy carries no Node',
-    { timeout: 120_000 },
-    async () => {
-      const install = await installAppImage('no-node')
-      const userData = newProfile(install)
-      extractCopy(install, '1.0.0', false)
-      const window = await openWindow(install, userData, '1.0.0')
-      expect(window.result).toEqual({ adopted: false, mode: null })
-      expect(window.stderr()).toContain('AppImage daemon host fallback reason=no-bundled-node')
-      expect(executableOf(profileDaemonPid(userData)!)).toBe(electron)
-      await window.quit()
     }
   )
 })

@@ -4,7 +4,7 @@ import {
   installDocPreviewGuestPolicy,
   readDocPreviewGuestDocumentUrl
 } from './doc-preview-guest-policy'
-import { buildDocPreviewUrl } from '../../../shared/doc-preview-scheme'
+import { buildDocPreviewUrl } from '../../../shared/document-preview/doc-preview-scheme'
 import { mintDocPreviewGrant, revokeAllDocPreviewGrants } from './doc-preview-grant-registry'
 
 type GuestHandlers = Record<string, (...args: unknown[]) => void>

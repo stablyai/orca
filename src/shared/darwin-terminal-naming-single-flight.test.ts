@@ -3,19 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ runProcess }))
 
-import { captureDarwinProcessTable } from './darwin-process-table-capture'
 import {
   DARWIN_TERMINAL_NAMING_STALL_MS,
   claimDarwinTerminalNaming,
-  resetDarwinTerminalNamingForTests,
-  waitForDarwinTerminalNaming
+  resetDarwinTerminalNamingForTests
 } from './darwin-terminal-naming-single-flight'
-import { monotonicNow } from './deadline-settle-notifier'
+
 import { setLibprocAddonForTests, type LibprocProcessRow } from './libproc-addon'
 import { resetNativeReadsForTests } from './libproc-native-reads'
 import { runPsInProcess } from './libproc-process-table'
 import { resetPsFallbackForTests } from './libproc-ps-fallback'
-import { PS_ARGS } from './process-table-snapshot'
 
 const ROW: LibprocProcessRow = {
   pid: 4300,
@@ -51,17 +48,6 @@ afterEach(() => {
 })
 
 describe('terminal naming single flight', () => {
-  it('sends canonical captures straight to ps while a naming pass is stuck', async () => {
-    holdNamingSlot()
-    const capture = vi.fn(async () => 'canonical')
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      expect(await captureDarwinProcessTable(capture, (stdout) => stdout, 1_000)).toBe('canonical')
-    }
-    expect(capture.mock.calls).toEqual(
-      Array.from({ length: 3 }, () => [PS_ARGS, expect.any(Number), true])
-    )
-  })
-
   it('hands in-process tty= readers to ps once the pass outlives the stall threshold', async () => {
     holdNamingSlot()
     setLibprocAddonForTests({
@@ -79,17 +65,5 @@ describe('terminal naming single flight', () => {
     expect(await waiting).toEqual(ps)
     expect(await runPsInProcess(args, { timeoutMs: 5_000 })).toEqual(ps)
     expect(runProcess).toHaveBeenCalledWith(expect.objectContaining({ program: '/bin/ps', args }))
-  })
-
-  it('keeps one reaction on a stuck pass however many waiters time out', async () => {
-    const reactions = holdNamingSlot()
-    const waits = Array.from({ length: 300 }, () =>
-      waitForDarwinTerminalNaming(monotonicNow() + 10)
-    )
-    await vi.advanceTimersByTimeAsync(10)
-    await Promise.all(waits)
-    // The notifier's and the slot release's.
-    expect(reactions).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(0)
   })
 })

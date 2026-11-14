@@ -35,7 +35,11 @@ export type FirstPartyAgentStatus = {
   updatedAt: number
   sessionBoundary?: boolean
   programAtRest?: boolean
+  programSignInRequiredSince?: number
 } | null
+
+/** agy shows its sign-in splash at startup, then signs itself in (#28348); only a lasting block is real. */
+export const PROGRAM_SIGN_IN_BLOCK_PERSIST_MS = 3_000
 
 /** Tier 1: an idle marker the agent put in a title itself. */
 export function hasExplicitIdleTitle(record: TuiIdleEvidenceRecord): boolean {
@@ -83,7 +87,8 @@ export function hasSustainedTitleIdle(
   record: TuiIdleEvidenceRecord,
   agent: TuiAgent | null | undefined,
   quiescenceMs: number,
-  launchReadiness = false
+  launchReadiness = false,
+  commandPainted: () => boolean = () => true
 ): boolean {
   if (record.lastAgentStatus !== 'idle') {
     return false
@@ -94,7 +99,17 @@ export function hasSustainedTitleIdle(
     return true
   }
   // No output clock means no corroboration for name-only titles; await stronger evidence or timeout (#6011).
-  return hasQuietOutput(record, quiescenceMs)
+  return hasQuietPaintedOutput(record, quiescenceMs, commandPainted)
+}
+
+/** Why paint too: a shell auto-title names the agent at exec, so a slow boot that has drawn
+ *  nothing yet is quiet under its name long before its composer exists (STA-2380). */
+function hasQuietPaintedOutput(
+  record: TuiIdleEvidenceRecord,
+  quiescenceMs: number,
+  commandPainted: () => boolean
+): boolean {
+  return hasQuietOutput(record, quiescenceMs) && commandPainted()
 }
 
 /** Why a missing clock is not quiet: an adopted or restored pane cannot measure it. */
@@ -136,6 +151,10 @@ export type TuiIdleEvaluationInput = {
   /** Waiting for a just-launched agent to open its composer, where a name-only title proves
    *  nothing until the stream goes quiet. */
   launchReadiness?: boolean
+  /** Whether the running command has painted since the shell started it: the agent's own
+   *  composer marker where it draws one (Claude), else any visible byte after the command-start
+   *  marker; true when the shell sends no marker. Corroborates name-only titles alongside quiet. */
+  readCommandPainted?: () => boolean
 }
 
 export type TuiIdleVerdict =
@@ -189,6 +208,15 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   const blockedReason = input.readTailBlockedReason()
   if (blockedReason) {
     return { kind: 'blocked', reason: blockedReason }
+  }
+  // Why fail fast: a signed-out agent (agy's login menu) swallows any prompt sent now and
+  // stays blocked until a human signs in, so waiting out the timeout only hides why.
+  const signInSince = input.firstPartyStatus?.programSignInRequiredSince
+  if (signInSince !== undefined && hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)) {
+    const blockedAt = signInSince + PROGRAM_SIGN_IN_BLOCK_PERSIST_MS
+    return Date.now() >= blockedAt
+      ? { kind: 'blocked', reason: 'agent-sign-in-prompt' }
+      : { kind: 'pending', quietForeground: 'closed', recheckAt: blockedAt }
   }
   // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
   if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {
@@ -251,11 +279,25 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   // Screen rules veto weak name/process guesses and replace sustained-title inference.
   const ruled = input.readAgentRuleVerdict()
   if (ruled !== null) {
-    return isSettledWeakIdle(ruled, input.record, input.quiescenceMs, input.launchReadiness)
+    return isSettledWeakIdle(
+      ruled,
+      input.record,
+      input.quiescenceMs,
+      input.launchReadiness,
+      input.readCommandPainted
+    )
       ? READY_WEAK
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  if (hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs, input.launchReadiness)) {
+  if (
+    hasSustainedTitleIdle(
+      input.record,
+      input.agent,
+      input.quiescenceMs,
+      input.launchReadiness,
+      input.readCommandPainted
+    )
+  ) {
     return READY_WEAK
   }
   return {
@@ -273,12 +315,14 @@ function isSettledWeakIdle(
   verdict: AgentStateVerdict,
   record: TuiIdleEvidenceRecord,
   quiescenceMs: number,
-  launchReadiness = false
+  launchReadiness = false,
+  commandPainted: () => boolean = () => true
 ): boolean {
   return (
     verdict.state === 'idle' &&
     verdict.strength === 'weak' &&
-    ((!verdict.requiresQuiet && !launchReadiness) || hasQuietOutput(record, quiescenceMs))
+    ((!verdict.requiresQuiet && !launchReadiness) ||
+      hasQuietPaintedOutput(record, quiescenceMs, commandPainted))
   )
 }
 

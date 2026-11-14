@@ -4,11 +4,11 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
@@ -19,11 +19,15 @@ import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
-} from '../../../../lib/skill-runtime-command'
+} from '../../../../lib/skills/runtime/skill-runtime-command'
 import { WslCliRegistration } from './WslCliRegistration'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { GENERAL_SETTING_ANCHORS } from '../../general/general-setting-anchors'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
-import { useLocalCliSkillFreshnessName } from '../../../../hooks/use-local-cli-skill-freshness-name'
+import { useLocalCliSkillFreshnessName } from '../../../../hooks/skills/freshness/use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -33,14 +37,14 @@ type CliSectionProps = {
   wslCapabilitiesLoading?: boolean
 }
 
-function getRevealLabel(platform: string): string {
+function getRevealLabel(platform: string, t: Translate = translate): string {
   if (platform === 'darwin') {
-    return translate('auto.components.settings.CliSection.6f894ef9c2', 'Show in Finder')
+    return t('auto.components.settings.CliSection.6f894ef9c2', 'Show in Finder')
   }
   if (platform === 'win32') {
-    return translate('auto.components.settings.CliSection.cbe55e4d48', 'Show in Explorer')
+    return t('auto.components.settings.CliSection.cbe55e4d48', 'Show in Explorer')
   }
-  return translate('auto.components.settings.CliSection.9fd4023db0', 'Show in File Manager')
+  return t('auto.components.settings.CliSection.71e5d9feae', 'Show in file manager')
 }
 
 function getInstallDescription(platform: string): string {
@@ -67,6 +71,7 @@ export function CliSection({
   wslAvailable = false,
   wslCapabilitiesLoading = false
 }: CliSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const [status, setStatus] = useState<CliInstallStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -123,7 +128,7 @@ export function CliSection({
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? formatCliUserFacingDetail(error.message) || error.message
             : translate(
                 'auto.components.settings.CliSection.7baec27029',
                 'Failed to load CLI status.'
@@ -145,174 +150,165 @@ export function CliSection({
   const isEnabled = status?.state === 'installed' && !pathStatusUnknown
   const isSupported = status?.supported ?? false
   const isBrowserManaged = status?.unsupportedReason === 'launch_mode_unavailable'
-  const revealLabel = getRevealLabel(currentPlatform)
+  const revealLabel = getRevealLabel(currentPlatform, t)
   const canRevealCommandPath =
     status?.commandPath != null && ['installed', 'stale', 'conflict'].includes(status.state)
 
+  const shellCommandLabel = t(
+    'settings.general.cli.otherTerminals',
+    '{{command}} in other terminals',
+    { command: commandName }
+  )
+  const showDiagnostics = Boolean(
+    installFailure ||
+    pathStatusUnknown ||
+    status?.state === 'stale' ||
+    status?.state === 'conflict' ||
+    status?.state === 'unsupported' ||
+    (status?.state === 'installed' && status.pathConfigured === false)
+  )
+
   return (
-    <section className="space-y-4" data-settings-section="cli">
-      <div className="space-y-1">
-        <h2 className="text-sm font-semibold">
-          {translate('auto.components.settings.CliSection.c5c0f2641d', 'Orca CLI')}
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.CliSection.outsideOrcaDescription',
-            'Orca terminals already have `orca`. Turn this on to use `orca` from other terminals outside Orca.'
-          )}
-        </p>
-      </div>
+    <div data-settings-section="cli">
+      <SettingsGroup title={t('settings.general.cli.title', 'Command line')}>
+        <div data-settings-row="" className="space-y-3 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label>{shellCommandLabel}</Label>
+              <p
+                className={`text-xs ${pathStatusUnknown ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
+              >
+                {loading
+                  ? t(
+                      'auto.components.settings.CliSection.d363e5929b',
+                      'Checking CLI registration…'
+                    )
+                  : showDiagnostics
+                    ? formatCliUserFacingDetail(status?.detail) ||
+                      getInstallDescription(currentPlatform)
+                    : t(
+                        'settings.general.cli.description',
+                        'Orca’s own terminals already have it.'
+                      )}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => void refreshStatus()}
+                      disabled={loading || busyAction !== null}
+                      aria-label={t(
+                        'auto.components.settings.CliSection.52e640f3a0',
+                        'Refresh CLI status'
+                      )}
+                    >
+                      <RefreshCw className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {t('auto.components.settings.CliSection.5dae812f50', 'Refresh')}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {!isBrowserManaged ? (
+                <Switch
+                  aria-label={shellCommandLabel}
+                  checked={isEnabled}
+                  disabled={loading || !isSupported || pathStatusUnknown || busyAction !== null}
+                  onCheckedChange={() => setDialogOpen(true)}
+                  className="disabled:opacity-60"
+                />
+              ) : null}
+            </div>
+          </div>
 
-      <div className="space-y-3 rounded-xl border border-border/60 bg-card/50 p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <Label>
-              {translate('auto.components.settings.CliSection.38edbb5721', 'Shell command')}
-            </Label>
-            <p
-              className={`text-xs ${pathStatusUnknown ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
-            >
-              {loading
-                ? translate(
-                    'auto.components.settings.CliSection.d363e5929b',
-                    'Checking CLI registration…'
-                  )
-                : (status?.detail ?? getInstallDescription(currentPlatform))}
+          {showDiagnostics && status?.commandPath ? (
+            <p className="text-xs text-muted-foreground">
+              {t('auto.components.settings.CliSection.15eaad0d31', 'Command path:')}{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <TooltipProvider delayDuration={250}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => void refreshStatus()}
-                    disabled={loading || busyAction !== null}
-                    aria-label={translate(
-                      'auto.components.settings.CliSection.52e640f3a0',
-                      'Refresh CLI status'
-                    )}
-                  >
-                    <RefreshCw className="size-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {translate('auto.components.settings.CliSection.5dae812f50', 'Refresh')}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {!isBrowserManaged ? (
-              <Switch
-                aria-label={translate(
-                  'auto.components.settings.CliSection.38edbb5721',
-                  'Shell command'
-                )}
-                checked={isEnabled}
-                disabled={loading || !isSupported || pathStatusUnknown || busyAction !== null}
-                onCheckedChange={() => setDialogOpen(true)}
-                className="disabled:opacity-60"
-              />
-            ) : null}
-          </div>
-        </div>
+          ) : null}
 
-        {status?.commandPath ? (
-          <p className="text-xs text-muted-foreground">
-            {translate('auto.components.settings.CliSection.15eaad0d31', 'Command path:')}{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
-          </p>
-        ) : null}
+          {status?.state === 'stale' && status.currentTarget ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {t('auto.components.settings.CliSection.b0c310ab46', 'Existing launcher target:')}{' '}
+              <code>{status.currentTarget}</code>
+            </p>
+          ) : null}
 
-        {status?.state === 'stale' && status.currentTarget ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
-            {translate(
-              'auto.components.settings.CliSection.b0c310ab46',
-              'Existing launcher target:'
-            )}{' '}
-            <code>{status.currentTarget}</code>
-          </p>
-        ) : null}
-
-        {status?.state === 'installed' &&
-        status.pathConfigured === false &&
-        status.pathDirectory ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
-            {status.pathDirectory}{' '}
-            {translate(
-              'auto.components.settings.CliSection.7f2747f7dd',
-              'is not currently visible on PATH for this shell.'
-            )}
-          </p>
-        ) : null}
-
-        {!loading && !isSupported && !isBrowserManaged && status?.detail ? (
-          <p className="text-xs text-muted-foreground">{status.detail}</p>
-        ) : null}
-
-        {installFailure ? (
-          <div
-            role="alert"
-            className="space-y-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-          >
-            <p className="font-medium">
-              {translate(
-                'auto.components.settings.CliSection.a2b13efa94',
-                'Failed to register `{{value0}}` in PATH.',
-                { value0: commandName }
+          {status?.state === 'installed' &&
+          status.pathConfigured === false &&
+          status.pathDirectory ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {status.pathDirectory}{' '}
+              {t(
+                'auto.components.settings.CliSection.7f2747f7dd',
+                'is not currently visible on PATH for this shell.'
               )}
             </p>
-            <p className="leading-snug">{installFailure.reason}</p>
-            {installFailure.conflictCommandPath ? (
-              <p className="leading-snug">
-                {translate(
-                  'auto.components.settings.CliSection.installFailureConflictRemedy',
-                  'Remove {{value0}} and register again if it is no longer needed.',
-                  { value0: installFailure.conflictCommandPath }
+          ) : null}
+
+          {!loading && !isSupported && !isBrowserManaged && status?.detail ? (
+            <p className="text-xs text-muted-foreground">
+              {formatCliUserFacingDetail(status.detail)}
+            </p>
+          ) : null}
+
+          {installFailure ? (
+            <div
+              role="alert"
+              className="space-y-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            >
+              <p className="font-medium">
+                {t(
+                  'auto.components.settings.CliSection.a2b13efa94',
+                  'Failed to register `{{value0}}` in PATH.',
+                  { value0: commandName }
                 )}
               </p>
-            ) : null}
-          </div>
-        ) : null}
+              <p className="leading-snug">{installFailure.reason}</p>
+              {installFailure.conflictCommandPath ? (
+                <p className="leading-snug">
+                  {t(
+                    'auto.components.settings.CliSection.installFailureConflictRemedy',
+                    'Remove {{value0}} and register again if it is no longer needed.',
+                    { value0: installFailure.conflictCommandPath }
+                  )}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
-        <div className="flex items-center gap-2">
-          {status?.commandPath ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                if (status.commandPath) {
-                  void window.api.shell.openPath(status.commandPath, LOCAL_EXECUTION_HOST_ID)
-                }
-              }}
-              disabled={loading || !canRevealCommandPath}
-              className="gap-2"
-            >
-              <FolderOpen className="size-3.5" />
-              {revealLabel}
-            </Button>
+          {showDiagnostics && status?.commandPath ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (status.commandPath) {
+                    void window.api.shell.openPath(status.commandPath, LOCAL_EXECUTION_HOST_ID)
+                  }
+                }}
+                disabled={loading || !canRevealCommandPath}
+                className="gap-2"
+              >
+                <FolderOpen className="size-3.5" />
+                {revealLabel}
+              </Button>
+            </div>
           ) : null}
         </div>
 
         {!isBrowserManaged ? (
-          <div className="border-t border-border/60 pt-3">
-            <div className="space-y-0.5">
-              <Label>
-                {translate('auto.components.settings.CliSection.04873eea3e', 'Agent skills')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.CliSection.36a6f919ba',
-                  'Give agents Orca-aware workspace, terminal, and progress workflows.'
-                )}
-              </p>
-            </div>
-
+          <div id={GENERAL_SETTING_ANCHORS.cliSkill}>
             <AgentSkillSetupPanel
-              className="mt-3"
-              variant="inline"
-              title={translate('auto.components.settings.CliSection.6053cf736c', 'CLI skill')}
-              description={translate(
+              variant="row"
+              title={t('settings.general.cli.skillTitle', 'Orca skill for agents')}
+              description={t(
                 'auto.components.settings.CliSection.e8012c03a1',
                 'Enables agents to use Orca workspace, terminal, and progress commands.'
               )}
@@ -328,9 +324,9 @@ export function CliSection({
             />
           </div>
         ) : null}
-      </div>
 
-      <WslCliRegistration currentPlatform={currentPlatform} />
+        <WslCliRegistration currentPlatform={currentPlatform} />
+      </SettingsGroup>
 
       <CliRegistrationDialog
         busyAction={busyAction}
@@ -343,6 +339,6 @@ export function CliSection({
         onRemove={remove}
         open={dialogOpen}
       />
-    </section>
+    </div>
   )
 }

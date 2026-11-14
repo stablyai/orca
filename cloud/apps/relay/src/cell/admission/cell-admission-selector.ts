@@ -154,6 +154,32 @@ export async function synchronizeCellAdmissionBoundary(
   )
 }
 
+// A cell that is never admitted to (the edge placeholder) joins the selector as existing-only in
+// the transaction that inserted its relay_cells row, so the membership never drifts from admission
+// and deploy workflows carry it like a retired cell. The caller holds the relay_cells lock.
+export async function registerExistingOnlyCell(
+  transaction: RelayDatabase,
+  cellId: string,
+  now: number
+): Promise<void> {
+  await ensureCellAdmission(transaction, cellId, 'existing-only', now)
+  const selector = await lockedSelector(transaction)
+  if (!selector.membership.existingOnly.includes(cellId)) {
+    const membership = normalizeMembership({
+      ...selector.membership,
+      existingOnly: [...selector.membership.existingOnly, cellId]
+    })
+    await transaction.query(
+      `UPDATE relay_admission_selectors SET membership_json = ?, updated_at = ?
+       WHERE selector_id = ?`,
+      [encodeMembership(membership), now, SELECTOR_ID]
+    )
+    await requireSelectorMatchesAdmission(transaction, { ...selector, membership })
+    return
+  }
+  await requireSelectorMatchesAdmission(transaction, selector)
+}
+
 export class RelayCellAdmissionSelector {
   constructor(
     private readonly database: RelayDatabase,

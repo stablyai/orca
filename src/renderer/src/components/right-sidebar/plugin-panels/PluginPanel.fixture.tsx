@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { buildPluginPanelShellHtml } from '../../../../../shared/plugins/frames/plugin-panel-shell'
 import PluginPanel from './PluginPanel'
 

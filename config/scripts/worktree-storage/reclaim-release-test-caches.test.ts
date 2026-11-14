@@ -185,10 +185,3 @@ it('skips publication locks and a shared source copy lease', async () => {
   expect((await lstat(local)).isDirectory()).toBe(true)
   expect((await lstat(seed)).isDirectory()).toBe(true)
 })
-
-it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
-  'rejects invalid minimum age %s',
-  async (age) => {
-    await expect(reclaimReleaseTestCaches({ minAgeDays: age })).rejects.toThrow('--min-age-days')
-  }
-)

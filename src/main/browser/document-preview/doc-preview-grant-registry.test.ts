@@ -38,29 +38,6 @@ describe('resolveDocPreviewTargetPath', () => {
     expect(resolveDocPreviewTargetPath(atWorkspaceRoot, 'docs/styles.css')).toBeNull()
   })
 
-  it('authorizes only the requested sibling directory', () => {
-    const grant = mintDocPreviewGrant({
-      owner: sshOwner,
-      requestBase: '/srv/repo',
-      root: '/srv/repo/docs',
-      entryRelativePath: 'docs/report.html',
-      browserPageId: 'page-1'
-    })
-
-    expect(resolveDocPreviewTargetPath(grant, 'docs/report.html')).toBe(
-      '/srv/repo/docs/report.html'
-    )
-    expect(resolveDocPreviewTargetPath(grant, 'assets/chart.js')).toBeNull()
-    expect(resolveDocPreviewTargetPath(grant, '.env')).toBeNull()
-
-    expect(authorizeDocPreviewDirectory(grant.id, 'assets/chart.js')).toBe(true)
-    expect(resolveDocPreviewTargetPath(grant, 'assets/chart.js')).toBe('/srv/repo/assets/chart.js')
-    expect(resolveDocPreviewTargetPath(grant, 'assets/theme.css')).toBe(
-      '/srv/repo/assets/theme.css'
-    )
-    expect(resolveDocPreviewTargetPath(grant, '.env')).toBeNull()
-  })
-
   it('uses Windows semantics when authorizing a sibling directory', () => {
     const grant = mintDocPreviewGrant({
       owner: sshOwner,

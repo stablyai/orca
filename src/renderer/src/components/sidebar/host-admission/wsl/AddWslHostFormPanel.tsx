@@ -11,28 +11,29 @@ import {
 import { RefreshCw } from 'lucide-react'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { WslHostDistro } from '../../../../../../shared/wsl-host-types'
 import { getWslHostServerFilesMissingLabel } from '../../wsl-host-row-status'
 import { wslSetVersion2Command } from '../../../../../../shared/wsl-host-failure-copy'
 
-export function wslDistroStateLabel(distro: WslHostDistro): string {
+export function wslDistroStateLabel(distro: WslHostDistro, t: Translate = translate): string {
   if (distro.version === 1) {
-    return translate('auto.components.sidebar.AddWslHostFormPanel.wsl1', 'WSL 1 · not supported')
+    return t('auto.components.sidebar.AddWslHostFormPanel.wsl1', 'WSL 1 · not supported')
   }
   if (distro.environmentId) {
-    return translate('auto.components.sidebar.AddWslHostFormPanel.added', 'Already a host')
+    return t('auto.components.sidebar.AddWslHostFormPanel.added', 'Already a host')
   }
   if (distro.state === 'unverifiable') {
-    return translate('auto.components.sidebar.AddWslHostFormPanel.unverifiable', 'Unknown')
+    return t('auto.components.sidebar.AddWslHostFormPanel.unverifiable', 'Unknown')
   }
   return distro.state === 'running'
-    ? translate('auto.components.sidebar.AddWslHostFormPanel.running', 'Running')
-    : translate('auto.components.sidebar.AddWslHostFormPanel.stopped', 'Stopped')
+    ? t('auto.components.sidebar.AddWslHostFormPanel.running', 'Running')
+    : t('auto.components.sidebar.AddWslHostFormPanel.stopped', 'Stopped')
 }
 
 /** Why a WSL 1 row is disabled, with the command that converts it. */
-export function wsl1DistroReason(name: string): string {
-  return translate(
+export function wsl1DistroReason(name: string, t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.AddWslHostFormPanel.wsl1Reason',
     'WSL 1 can’t run an Orca host; convert with {{command}}',
     { command: wslSetVersion2Command(name) }
@@ -83,6 +84,7 @@ export function AddWslHostFormPanel({
   onSubmit: () => void
   onCancel: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const selected = distros.find((distro) => distro.name === selectedDistro)
   // The closed select hides each row's reason, so the first WSL 1 distro's is repeated below it.
   const wsl1Distro = distros.find((distro) => distro.version === 1)
@@ -93,10 +95,10 @@ export function AddWslHostFormPanel({
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate('auto.components.sidebar.AddWslHostFormPanel.title', 'Add WSL distro')}
+          {t('auto.components.sidebar.AddWslHostFormPanel.title', 'Add WSL distro')}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.sidebar.AddWslHostFormPanel.description',
             'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle; projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.'
           )}
@@ -106,7 +108,7 @@ export function AddWslHostFormPanel({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor="add-wsl-distro">
-            {translate('auto.components.sidebar.AddWslHostFormPanel.distro', 'Distro')}
+            {t('auto.components.sidebar.AddWslHostFormPanel.distro', 'Distro')}
           </Label>
           {serverFilesMissing ? null : (
             <Button
@@ -117,7 +119,7 @@ export function AddWslHostFormPanel({
               disabled={adding || refreshing}
             >
               {refreshing ? <LoadingSpinner className="size-3" /> : <RefreshCw />}
-              {translate('auto.components.sidebar.AddWslHostFormPanel.refresh', 'Refresh')}
+              {t('auto.components.sidebar.AddWslHostFormPanel.refresh', 'Refresh')}
             </Button>
           )}
         </div>
@@ -131,14 +133,11 @@ export function AddWslHostFormPanel({
             <SelectValue
               placeholder={
                 loading
-                  ? translate(
+                  ? t(
                       'auto.components.sidebar.AddWslHostFormPanel.loading',
                       'Looking for WSL distros…'
                     )
-                  : translate(
-                      'auto.components.sidebar.AddWslHostFormPanel.placeholder',
-                      'Choose a distro'
-                    )
+                  : t('auto.components.sidebar.AddWslHostFormPanel.placeholder', 'Choose a distro')
               }
             />
           </SelectTrigger>
@@ -148,11 +147,11 @@ export function AddWslHostFormPanel({
                 <span className="flex min-w-0 flex-col">
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate">{distro.name}</span>
-                    <span className="text-muted-foreground">{wslDistroStateLabel(distro)}</span>
+                    <span className="text-muted-foreground">{wslDistroStateLabel(distro, t)}</span>
                   </span>
                   {distro.version === 1 ? (
                     <span className="text-2xs text-muted-foreground">
-                      {wsl1DistroReason(distro.name)}
+                      {wsl1DistroReason(distro.name, t)}
                     </span>
                   ) : null}
                 </span>
@@ -162,19 +161,19 @@ export function AddWslHostFormPanel({
         </Select>
         {serverFilesMissing ? (
           <p role="alert" className="text-xs text-destructive">
-            {getWslHostServerFilesMissingLabel()}
+            {getWslHostServerFilesMissingLabel(t)}
           </p>
         ) : null}
         {noWsl2Distros ? (
           <div className="space-y-0.5 rounded-md border border-border bg-muted/30 px-3 py-2">
             <p className="text-xs font-medium">
-              {translate(
+              {t(
                 'auto.components.sidebar.AddWslHostFormPanel.noWsl2Title',
                 'No WSL 2 distros found'
               )}
             </p>
             <p className="text-2xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.sidebar.AddWslHostFormPanel.noWsl2Install',
                 'Install one from a Windows terminal with {{command}}, then choose Refresh.',
                 { command: 'wsl --install' }
@@ -183,11 +182,11 @@ export function AddWslHostFormPanel({
           </div>
         ) : null}
         {wsl1Distro ? (
-          <p className="text-xs text-muted-foreground">{wsl1DistroReason(wsl1Distro.name)}</p>
+          <p className="text-xs text-muted-foreground">{wsl1DistroReason(wsl1Distro.name, t)}</p>
         ) : null}
         {stopped ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.AddWslHostFormPanel.stoppedHint',
               '{{value0}} is stopped. Adding it starts it.',
               { value0: selected.name }
@@ -196,7 +195,7 @@ export function AddWslHostFormPanel({
         ) : null}
         {unverifiable ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.AddWslHostFormPanel.unverifiableHint',
               'WSL didn’t say whether {{value0}} is running. Adding it starts it if needed.',
               { value0: selected.name }
@@ -205,7 +204,7 @@ export function AddWslHostFormPanel({
         ) : null}
         {adding ? (
           <p className="text-xs text-muted-foreground" aria-live="polite">
-            {translate(
+            {t(
               'auto.components.sidebar.AddWslHostFormPanel.addingHint',
               'Installing and starting the Orca server in the distro. The first time can take a minute.'
             )}
@@ -222,7 +221,7 @@ export function AddWslHostFormPanel({
         <span />
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={onCancel} disabled={adding}>
-            {translate('auto.components.sidebar.AddRemoteHostDialog.cancel', 'Cancel')}
+            {t('auto.components.sidebar.AddRemoteHostDialog.cancel', 'Cancel')}
           </Button>
           <Button
             type="button"
@@ -231,13 +230,10 @@ export function AddWslHostFormPanel({
           >
             {adding ? <LoadingSpinner className="size-4" /> : null}
             {adding
-              ? translate('auto.components.sidebar.AddWslHostFormPanel.adding', 'Setting up…')
+              ? t('auto.components.sidebar.AddWslHostFormPanel.adding', 'Setting up…')
               : stopped
-                ? translate(
-                    'auto.components.sidebar.AddWslHostFormPanel.startAndAdd',
-                    'Start and add'
-                  )
-                : translate('auto.components.sidebar.AddWslHostFormPanel.add', 'Add host')}
+                ? t('auto.components.sidebar.AddWslHostFormPanel.startAndAdd', 'Start and add')
+                : t('auto.components.sidebar.AddWslHostFormPanel.add', 'Add host')}
           </Button>
         </div>
       </DialogFooter>

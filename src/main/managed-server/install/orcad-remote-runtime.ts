@@ -10,7 +10,7 @@ import {
 } from '../../../shared/orcad-artifacts'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 // Assign the long slot path once to reduce command size on the wire.
 function assignOrcadSlot(directory: string): string {

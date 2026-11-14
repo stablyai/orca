@@ -14,7 +14,7 @@ import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem
 } from '../agent-session-argument-problem'
-import type { AgentSessionRewindReason } from '../lifecycle/agent-session-rewind'
+import type { AgentSessionRewindReason } from '../lifecycle/rewind/agent-session-rewind-reasons'
 import { readAgentSessionLegacyRefusalFacts } from './agent-session-legacy-refusal-fields'
 import {
   readAgentSessionExpiredAttachments,

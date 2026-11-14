@@ -18,7 +18,7 @@ import {
   PROPERTY_OPTIONS,
   getWorktreeCardDisplayOptions
 } from '../../worktree-list/controls/sidebar-workspace-option-items'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type CardMenuItemProps = {
   preserveWorkspaceBoardOpen: boolean
@@ -43,6 +43,7 @@ function useToggleCardProperty(): (property: WorktreeCardProperty, checked: bool
 }
 
 function AgentModelProperty(): React.JSX.Element {
+  const t = useTranslate()
   const showAgentModels = useAppStore((s) => s.showAgentModels !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const setShowAgentModels = useAppStore((s) => s.setShowAgentModels)
@@ -53,7 +54,7 @@ function AgentModelProperty(): React.JSX.Element {
       onCheckedChange={(checked) => setShowAgentModels(checked === true)}
       onSelect={(e) => e.preventDefault()}
     >
-      {translate('sidebar.cardProperties.agentModel', 'Agent model')}
+      {t('sidebar.cardProperties.agentModel', 'Agent model')}
     </DropdownMenuCheckboxItem>
   )
 }
@@ -62,15 +63,19 @@ function AgentModelProperty(): React.JSX.Element {
 export function WorktreeCardDisplayMenuItem({
   preserveWorkspaceBoardOpen
 }: CardMenuItemProps): React.JSX.Element {
+  const t = useTranslate()
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const hasProjectGroups = useAppStore((s) => s.projectGroups.length > 0)
   const toggleProperty = useToggleCardProperty()
   const options = useMemo(() => getWorktreeCardDisplayOptions(hasProjectGroups), [hasProjectGroups])
+  const experimentalCard = useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle === true)
+  const detailsRow = useAppStore((s) => s.settings?.worktreeCardDetailsRow !== false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between gap-3">
-          {translate(
+          {t(
             'auto.components.sidebar.SidebarWorkspaceOptionsMenu.newCardDisplay.title',
             'Card display'
           )}
@@ -80,6 +85,20 @@ export function WorktreeCardDisplayMenuItem({
         className="w-56"
         data-workspace-board-preserve-open={boardAttr(preserveWorkspaceBoardOpen)}
       >
+        {experimentalCard ? (
+          <>
+            <DropdownMenuCheckboxItem
+              checked={detailsRow}
+              onCheckedChange={(checked) =>
+                void updateSettings({ worktreeCardDetailsRow: checked === true })
+              }
+              onSelect={(e) => e.preventDefault()}
+            >
+              {t('sidebar.cardSlot.detailsRow', 'Details row')}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         {options.map((opt) => (
           <DropdownMenuCheckboxItem
             key={opt.id}
@@ -99,6 +118,7 @@ export function WorktreeCardDisplayMenuItem({
 export function WorktreeCardLayoutMenuItem({
   preserveWorkspaceBoardOpen
 }: CardMenuItemProps): React.JSX.Element {
+  const t = useTranslate()
   const compact = useAppStore((s) => s.settings?.compactWorktreeCards === true)
   const setWorktreeCardMode = useAppStore((s) => s.setWorktreeCardMode)
   const cardLayout = compact ? 'compact' : 'detailed'
@@ -109,10 +129,7 @@ export function WorktreeCardLayoutMenuItem({
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between">
           <span>
-            {translate(
-              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.320b675c9a',
-              'Card layout'
-            )}
+            {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.320b675c9a', 'Card layout')}
           </span>
           <span className="text-[11px] font-medium text-muted-foreground">{cardLayoutLabel}</span>
         </span>
@@ -143,6 +160,7 @@ export function WorktreeCardLayoutMenuItem({
 export function WorktreeCardPropertiesMenuItem({
   preserveWorkspaceBoardOpen
 }: CardMenuItemProps): React.JSX.Element {
+  const t = useTranslate()
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const compact = useAppStore((s) => s.settings?.compactWorktreeCards === true)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
@@ -154,18 +172,12 @@ export function WorktreeCardPropertiesMenuItem({
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between">
           <span>
-            {translate(
-              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ba87080fb7',
-              'Show properties'
-            )}
+            {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.ba87080fb7', 'Show properties')}
           </span>
           {value === null ? null : (
             <span className="text-[11px] font-medium text-muted-foreground">
               {value === 'hover'
-                ? translate(
-                    'auto.components.sidebar.SidebarWorkspaceOptionsMenu.3d4b9c4997',
-                    'Hover'
-                  )
+                ? t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.3d4b9c4997', 'Hover')
                 : value}
             </span>
           )}
@@ -188,7 +200,7 @@ export function WorktreeCardPropertiesMenuItem({
         <AgentModelProperty />
         <DropdownMenuSeparator />
         <DropdownMenuLabel>
-          {translate(
+          {t(
             'auto.components.sidebar.SidebarWorkspaceOptionsMenu.95c9754653',
             'Agent activity layout'
           )}

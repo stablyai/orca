@@ -8,7 +8,7 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { withCrossStoreChildKey } from '../../../shared/worktree/cross-store-lineage-records'
+import { withCrossStoreChildKey } from '../../../shared/worktree/lineage/cross-store-lineage-records'
 import { repointRowArrays, repointRowRecord } from './worktree-identity-row-repoint'
 
 /** Mutate worktree references in place; return whether anything changed so callers can gate persistence. */
@@ -289,6 +289,9 @@ export function migrateWorktreeIdentity(
   }
   if (state.ui?.explorerDisplayRootByWorktree) {
     changed = moveKey(state.ui.explorerDisplayRootByWorktree) || changed
+  }
+  if (state.ui?.gitGraphFiltersByWorktree) {
+    changed = moveKey(state.ui.gitGraphFiltersByWorktree) || changed
   }
   const showDotfiles = state.ui?.showDotfilesByWorktree
   if (showDotfiles) {

@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
 import { LARGE_MARKDOWN_PREVIEW_MAX_BYTES } from '../document-worker/markdown-preview-document-types'
 import '../../../status-bar/workspace-space-format'
@@ -13,6 +13,7 @@ export function MarkdownPreviewSizeGate({
   isDiff?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   if (!isClipboardTextByteLengthOverLimit(content, LARGE_MARKDOWN_PREVIEW_MAX_BYTES)) {
     return <>{children}</>
   }
@@ -20,12 +21,12 @@ export function MarkdownPreviewSizeGate({
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
       <span>
         {isDiff
-          ? translate(
+          ? t(
               'editor.markdownPreview.tooLargeInDiff',
               'File is larger than the {{limit}} preview limit. Switch to source mode to view the diff.',
               { limit: formatBytes(LARGE_MARKDOWN_PREVIEW_MAX_BYTES) }
             )
-          : translate(
+          : t(
               'editor.markdownPreview.tooLarge',
               'File is larger than the {{limit}} preview limit. Open the file to view its source.',
               { limit: formatBytes(LARGE_MARKDOWN_PREVIEW_MAX_BYTES) }

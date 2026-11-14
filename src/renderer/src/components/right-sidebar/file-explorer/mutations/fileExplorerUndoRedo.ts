@@ -1,5 +1,5 @@
 /** Keep exact mutation paths/content in memory; OS trash restore has no portable API here. */
-import { FileWriteRefusedError } from '../../../../../../shared/file-write-disk-precondition'
+import { FileWriteRefusedError } from '../../../../../../shared/file-write/file-write-disk-precondition'
 
 const MAX_STEPS = 50
 

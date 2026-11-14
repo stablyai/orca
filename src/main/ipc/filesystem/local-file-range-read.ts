@@ -1,5 +1,5 @@
 import type { FileHandle } from 'node:fs/promises'
-import type { RuntimeFileReadChunkResult } from '../../../shared/runtime-types'
+import type { RuntimeFileReadChunkResult } from '../../../shared/file-content/runtime-file-read'
 import { openLocalRegularFile } from './local-regular-file-read'
 
 export async function readLocalFileRange(

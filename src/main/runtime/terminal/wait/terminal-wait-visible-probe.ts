@@ -19,7 +19,7 @@ import {
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
 import { outputClockOf } from './tui-idle-evidence-source'
-import { createSetupCompletionScanner } from '../../orchestration/setup-completion-signal'
+import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 

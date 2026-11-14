@@ -6,12 +6,12 @@ import {
   WorktreeCardDetailSectionContent
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetadataActionIcon } from '../metadata/WorktreeCardMetadataControls'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getAutomationTargetFromHostId,
   listAutomationRunsForTarget,
   listAutomationsForTarget
-} from '@/components/automations/automation-host-client'
+} from '@/components/automations/hosts/automation-host-client'
 
 type WorktreeCardAutomationDetailSectionProps = {
   provenance: AutomationWorkspaceProvenance
@@ -30,6 +30,7 @@ export function WorktreeCardAutomationDetailSection({
   onOpenAutomation,
   onOpenAutomationRun
 }: WorktreeCardAutomationDetailSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const [availability, setAvailability] = React.useState<AutomationProvenanceAvailability>({
     status: 'checking'
   })
@@ -82,12 +83,12 @@ export function WorktreeCardAutomationDetailSection({
     <WorktreeCardDetailSection>
       <DetailHeader
         icon={<CalendarClock className="size-3 text-muted-foreground" />}
-        label={translate('auto.components.sidebar.WorktreeCardMeta.automationHeader', 'Automation')}
+        label={t('auto.components.sidebar.WorktreeCardMeta.automationHeader', 'Automation')}
         actions={
           <>
             {onOpenAutomation && canOpenAutomation && (
               <MetadataActionIcon
-                label={translate(
+                label={t(
                   'auto.components.sidebar.WorktreeCardMeta.openAutomation',
                   'Open automation'
                 )}
@@ -98,10 +99,7 @@ export function WorktreeCardAutomationDetailSection({
             )}
             {onOpenAutomationRun && canOpenAutomationRun && (
               <MetadataActionIcon
-                label={translate(
-                  'auto.components.sidebar.WorktreeCardMeta.openAutomationRun',
-                  'Open run'
-                )}
+                label={t('auto.components.sidebar.WorktreeCardMeta.openAutomationRun', 'Open run')}
                 onClick={onOpenAutomationRun}
               >
                 <PlayCircle className="size-3" />
@@ -119,7 +117,7 @@ export function WorktreeCardAutomationDetailSection({
         </div>
         {availability.status === 'checking' ? (
           <div className="text-[11px] leading-snug text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.WorktreeCardMeta.checkingAutomationAvailability',
               'Checking automation availability...'
             )}
@@ -127,7 +125,7 @@ export function WorktreeCardAutomationDetailSection({
         ) : null}
         {availability.status === 'automation-missing' ? (
           <div className="text-[11px] leading-snug text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.WorktreeCardMeta.automationMissing',
               'Automation no longer available.'
             )}
@@ -135,7 +133,7 @@ export function WorktreeCardAutomationDetailSection({
         ) : null}
         {availability.status === 'available' && !availability.runAvailable ? (
           <div className="text-[11px] leading-snug text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.WorktreeCardMeta.automationRunMissing',
               'Run history no longer available.'
             )}
@@ -143,7 +141,7 @@ export function WorktreeCardAutomationDetailSection({
         ) : null}
         {availability.status === 'unavailable' ? (
           <div className="text-[11px] leading-snug text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.WorktreeCardMeta.automationAvailabilityUnavailable',
               'Automation availability could not be checked.'
             )}

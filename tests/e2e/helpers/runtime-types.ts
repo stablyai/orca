@@ -1,6 +1,7 @@
 import type { AppState } from '../../../src/renderer/src/store/types'
 import type { PaneManager } from '../../../src/renderer/src/lib/pane-manager/pane-manager'
-import type { OpenFile, RightSidebarTab } from '../../../src/renderer/src/store/slices/editor'
+import type { OpenFile } from '../../../src/renderer/src/store/slices/editor/types/open-file'
+import type { RightSidebarTab } from '../../../src/shared/ui-chrome-types'
 import type {
   ManagedPane,
   ManagedPaneInternal,

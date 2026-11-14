@@ -1,5 +1,5 @@
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
-import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
+import { getRuntimeGitUpstreamStatus } from '@/runtime/source-control/git/runtime-git-sync-client'
 import { getBranchLineTotalMergeBase } from './branch-line-total-request-gate'
 import {
   clearAutomaticPushTargetUpstreamStatusCache,

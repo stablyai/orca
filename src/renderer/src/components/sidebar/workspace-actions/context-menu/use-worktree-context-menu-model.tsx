@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
-import { useRepoById } from '@/store/selectors'
+import { useAppStore } from '@/store/index'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useContextWorkspaceStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
 import { useMenuScopedWorktreeCatalog } from './use-menu-scoped-worktree-catalog'
@@ -27,13 +27,15 @@ import {
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
+import { selectWorkspaceShowsUnread } from '../../worktree-card-slot-rollup'
 import {
   useWorktreeParentPickerTransition,
   type PendingParentPicker
 } from '../parenting/use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type WorktreeContextMenuProps = {
   worktree: Worktree
@@ -56,6 +58,7 @@ export function useWorktreeContextMenuModel({
   onOpenChange,
   onLifecycleComplete
 }: WorktreeContextMenuProps) {
+  const t = useTranslate()
   const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
   const effectiveSelectedWorktrees = selectedWorktrees ?? defaultSelectedWorktrees
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
@@ -109,6 +112,10 @@ export function useWorktreeContextMenuModel({
   )
   const unifiedTabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.unifiedTabsByWorktree, EMPTY_UNIFIED_TABS_BY_WORKTREE)
+  )
+  // The menu offers what the card shows: unread when any agent result or the flag is unread.
+  const showsUnread = useAppStore((s) =>
+    menuOpen ? selectWorkspaceShowsUnread(s, worktree) : worktree.isUnread
   )
   const agentStatusByPaneKey = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
@@ -186,11 +193,14 @@ export function useWorktreeContextMenuModel({
     [activeContextWorktrees, repoMap]
   )
   const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
-  const { sleepLabel, deleteLabel } = getWorktreeContextMenuBatchLabels({
-    isMultiContext,
-    sleepableCount: sleepableWorktrees.length,
-    deletableCount: batchDeleteWorktrees.length
-  })
+  const { sleepLabel, deleteLabel } = getWorktreeContextMenuBatchLabels(
+    {
+      isMultiContext,
+      sleepableCount: sleepableWorktrees.length,
+      deletableCount: batchDeleteWorktrees.length
+    },
+    t
+  )
   const {
     hasParentLink,
     hasAnyContextLineage,
@@ -283,6 +293,7 @@ export function useWorktreeContextMenuModel({
     setMenuOpenState,
     setWorkspaceUnreadByUser,
     setWorktreesPinnedAndReveal,
+    showsUnread,
     sleepableWorktrees,
     subtreeSleepableWorktrees,
     statusesForWorktree,
@@ -326,6 +337,7 @@ export function useWorktreeContextMenuModel({
 
   return {
     ...commands,
+    showsUnread,
     activeContextWorktrees,
     batchDeleteWorktrees,
     browserTabsByWorktree,

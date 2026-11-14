@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
-import { createAiVaultScanCancelledError } from '../ai-vault-scan-cancellation'
+import { createAiVaultScanCancelledError } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import {
   AI_VAULT_SERVICE_IDLE_TIMEOUT_MS,
   AI_VAULT_SERVICE_MAX_CALLS,
@@ -218,7 +218,7 @@ export class AiVaultScannerServiceClient {
   }
 
   private onMessage(message: unknown): void {
-    if (!isAiVaultServiceChildMessage(message)) {
+    if (!isAiVaultServiceChildMessage(message) || message.type === 'trace') {
       this.onFault(new Error('AI Vault service sent a malformed message.'))
       return
     }

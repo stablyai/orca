@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isAbsoluteBrowserUrl } from '../browser/client-hosting/browser-expected-url'
 import { memoizeStringResult } from '../string-result-cache'
 

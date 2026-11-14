@@ -1,17 +1,18 @@
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
-function formatAheadOfTitle(count: number, ref: string): string {
-  return translate(
+function formatAheadOfTitle(count: number, ref: string, t: Translate = translate): string {
+  return t(
     'auto.components.right.sidebar.SourceControl.compareBaseCommitsAhead',
     '{{count}} commits ahead of {{ref}}',
     { count, ref, defaultValue_one: '{{count}} commit ahead of {{ref}}' }
   )
 }
 
-function formatBehindOfTitle(count: number, ref: string): string {
-  return translate(
+function formatBehindOfTitle(count: number, ref: string, t: Translate = translate): string {
+  return t(
     'auto.components.right.sidebar.SourceControl.compareBaseCommitsBehind',
     '{{count}} commits behind {{ref}}',
     { count, ref, defaultValue_one: '{{count}} commit behind {{ref}}' }
@@ -66,7 +67,8 @@ export function shouldShowSourceControlBranchContextChrome(
 // Show both directions against the named base so rebased branches also reveal commits behind it.
 export function buildSourceControlCompareBaseStats(
   summary: GitBranchCompareSummary | null | undefined,
-  baseRef: string
+  baseRef: string,
+  t?: Translate
 ): SourceControlBranchContextStat[] {
   if (summary?.status !== 'ready') {
     return []
@@ -78,7 +80,7 @@ export function buildSourceControlCompareBaseStats(
     stats.push({
       key: 'compare-ahead',
       label: `↑${commitsAhead}`,
-      title: formatAheadOfTitle(commitsAhead, baseLabel)
+      title: formatAheadOfTitle(commitsAhead, baseLabel, t)
     })
   }
   const commitsBehind = summary.commitsBehind
@@ -86,7 +88,7 @@ export function buildSourceControlCompareBaseStats(
     stats.push({
       key: 'compare-behind',
       label: `↓${commitsBehind}`,
-      title: formatBehindOfTitle(commitsBehind, baseLabel)
+      title: formatBehindOfTitle(commitsBehind, baseLabel, t)
     })
   }
   return stats

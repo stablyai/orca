@@ -1,5 +1,5 @@
 <h1 align="center">
-  <a href="https://onOrca.dev"><img src="../../resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
+  <a href="https://orca.dev"><img src="../../resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
 </h1>
 
 <p align="center">
@@ -20,7 +20,7 @@
   Codex, Claude Code, OpenCode veya Pi'yi yan yana çalıştırın - her biri kendi worktree'sinde, hepsi tek yerden takip edilir.
 </p>
 
-<h3 align="center"><a href="https://onorca.dev/download"><ins>Orca'yı indirin</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>Orca'yı indirin</ins></a></h3>
 
 <p align="center">
   <img src="../assets/readme-hero.jpg" alt="Paralel worktree'lerde ajan çalıştıran Orca masaüstü uygulaması, köşede Orca mobil yardımcı uygulaması" width="960" />
@@ -36,11 +36,11 @@
 
 Ajanlarınızı telefonunuzdan izleyin ve yönlendirin - bir ajan işini bitirdiğinde bildirim alın, nerede olursanız olun takip talimatı gönderin.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://www.onorca.dev/download/android) · [Dokümanlar →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://orca.dev/download/android) · [Dokümanlar →](https://orca.dev/docs/mobile)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="../assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="../assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Mobil yardımcı uygulamayla birlikte Orca masaüstü" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/mobile"><picture><source srcset="../assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="../assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Mobil yardımcı uygulamayla birlikte Orca masaüstü" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -50,11 +50,11 @@ Ajanlarınızı telefonunuzdan izleyin ve yönlendirin - bir ajan işini bitirdi
 
 Tek bir prompt'u beş ajana birden dağıtın; her biri kendi izole git worktree'sinde çalışsın - sonuçları karşılaştırıp kazananı merge edin.
 
-[Dokümanlar →](https://www.onorca.dev/docs/model/worktrees)
+[Dokümanlar →](https://orca.dev/docs/model/worktrees)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="../site/public/docs/tab-split.gif" type="image/gif"><img src="../site/public/docs/posters/tab-split.jpg" alt="Paralel worktree orkestrasyonu" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/model/worktrees"><picture><source srcset="../site/public/docs/tab-split.gif" type="image/gif"><img src="../site/public/docs/posters/tab-split.jpg" alt="Paralel worktree orkestrasyonu" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -64,11 +64,11 @@ Tek bir prompt'u beş ajana birden dağıtın; her biri kendi izole git worktree
 
 WebGL ile çizilen Ghostty ayarında terminaller, sınırsız bölme ve yeniden başlatmadan sağ çıkan scrollback.
 
-[Dokümanlar →](https://www.onorca.dev/docs/terminal)
+[Dokümanlar →](https://orca.dev/docs/terminal)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="../../resources/onboarding/feature-wall/tile-02.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-02.poster.jpg" alt="Terminal bölmeleri" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/terminal"><picture><source srcset="../../resources/onboarding/feature-wall/tile-02.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-02.poster.jpg" alt="Terminal bölmeleri" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -78,11 +78,11 @@ WebGL ile çizilen Ghostty ayarında terminaller, sınırsız bölme ve yeniden 
 
 Gerçek bir Chromium penceresindeki herhangi bir arayüz öğesine tıklayın; öğenin HTML'i, CSS'i ve kırpılmış ekran görüntüsü doğrudan ajanınızın prompt'una gitsin.
 
-[Dokümanlar →](https://www.onorca.dev/docs/browser/design-mode)
+[Dokümanlar →](https://orca.dev/docs/browser/design-mode)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/browser/design-mode"><picture><source srcset="../site/public/docs/orca-design-mode.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-05.poster.jpg" alt="Gömülü tarayıcı ve Tasarım Modu" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/browser/design-mode"><picture><source srcset="../site/public/docs/orca-design-mode.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-05.poster.jpg" alt="Gömülü tarayıcı ve Tasarım Modu" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -92,11 +92,11 @@ Gerçek bir Chromium penceresindeki herhangi bir arayüz öğesine tıklayın; �
 
 PR'ları, issue'ları ve proje panolarını uygulamanın içinde gezin - herhangi bir görevden worktree açın, bağlam değiştirmeden inceleyin.
 
-[Dokümanlar →](https://www.onorca.dev/docs/review/linear)
+[Dokümanlar →](https://orca.dev/docs/review/linear)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="../../resources/onboarding/feature-wall/tile-03.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-03.poster.jpg" alt="Orca'da GitHub ve Linear görev akışları" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/review/linear"><picture><source srcset="../../resources/onboarding/feature-wall/tile-03.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-03.poster.jpg" alt="Orca'da GitHub ve Linear görev akışları" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -106,11 +106,11 @@ PR'ları, issue'ları ve proje panolarını uygulamanın içinde gezin - herhang
 
 Ajanları güçlü bir uzak makinede çalıştırın; dosya düzenleme, git ve terminaller eksiksiz - otomatik yeniden bağlanma ve port yönlendirme dahil.
 
-[Dokümanlar →](https://www.onorca.dev/docs/ssh)
+[Dokümanlar →](https://orca.dev/docs/ssh)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="../../resources/onboarding/feature-wall/tile-06.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-06.poster.jpg" alt="SSH üzerinden uzak worktree'ler" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/ssh"><picture><source srcset="../../resources/onboarding/feature-wall/tile-06.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-06.poster.jpg" alt="SSH üzerinden uzak worktree'ler" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -120,11 +120,11 @@ Ajanları güçlü bir uzak makinede çalıştırın; dosya düzenleme, git ve t
 
 Herhangi bir diff satırına yorum bırakın ve ajana geri gönderin - Orca'dan çıkmadan inceleyin, düzenleyin ve commit edin.
 
-[Dokümanlar →](https://www.onorca.dev/docs/review/annotate-ai-diff)
+[Dokümanlar →](https://orca.dev/docs/review/annotate-ai-diff)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><picture><source srcset="../site/public/docs/annotate-ai-diff.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-08.poster.jpg" alt="Yapay zekâ tarafından üretilen diff'lere not düşme" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/review/annotate-ai-diff"><picture><source srcset="../site/public/docs/annotate-ai-diff.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-08.poster.jpg" alt="Yapay zekâ tarafından üretilen diff'lere not düşme" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -134,11 +134,11 @@ Herhangi bir diff satırına yorum bırakın ve ajana geri gönderin - Orca'dan 
 
 Her yerde otomatik kaydeden VS Code editörü - dosyaları veya görselleri doğrudan bir ajan prompt'una sürükleyin.
 
-[Dokümanlar →](https://www.onorca.dev/docs/editing/file-explorer)
+[Dokümanlar →](https://orca.dev/docs/editing/file-explorer)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/editing/file-explorer"><picture><source srcset="../../resources/onboarding/feature-wall/tile-07.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-07.poster.jpg" alt="Bir ajan prompt'una dosya ve görsel sürükleme" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/editing/file-explorer"><picture><source srcset="../../resources/onboarding/feature-wall/tile-07.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-07.poster.jpg" alt="Bir ajan prompt'una dosya ve görsel sürükleme" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -148,22 +148,22 @@ Her yerde otomatik kaydeden VS Code editörü - dosyaları veya görselleri doğ
 
 Orca'yı ajanlar da kullanır - her akışı `orca worktree create`, `snapshot`, `click` ve `fill` ile script'leyin.
 
-[Dokümanlar →](https://www.onorca.dev/docs/cli/overview)
+[Dokümanlar →](https://orca.dev/docs/cli/overview)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="../../resources/onboarding/feature-wall/tile-09.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-09.poster.jpg" alt="Orca'yı CLI'dan script'leme" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/cli/overview"><picture><source srcset="../../resources/onboarding/feature-wall/tile-09.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-09.poster.jpg" alt="Orca'yı CLI'dan script'leme" width="100%" /></picture></a>
 </td>
 </tr>
 </table>
 
 **Kutudan çıkan diğerleri:**
 
-- **[Hızlı açma](https://www.onorca.dev/docs/model/quick-open)** - Worktree'ler, dosyalar, ajanlar, komutlar ve repo bağlamı arasında akışınızdan çıkmadan arama yapın.
-- **[Hesap değiştirme ve kullanım takibi](https://www.onorca.dev/docs/agents/usage-tracking)** - Claude ve Codex kullanımınızı ve limit sıfırlanma zamanlarını görün, yeniden giriş yapmadan hesaplar arasında geçiş yapın.
-- **[Zengin repo önizlemeleri](https://www.onorca.dev/docs/editing/markdown)** - Çalışma alanında Markdown, görsel, PDF ve repo dokümanlarını önizleyin.
-- **[Bilgisayar Kullanımı](https://www.onorca.dev/docs/cli/computer-use)** - Bir akış gerçek etkileşim gerektirdiğinde ajanların masaüstü uygulamalarını ve görünür arayüzü kullanmasına izin verin.
-- **[Bildirimler ve okunmadı durumu](https://www.onorca.dev/docs/notifications)** - Bir ajan bittiğinde ya da ilginizi istediğinde haberiniz olsun; sonra dönmek için konuşmaları okunmadı olarak işaretleyin.
+- **[Hızlı açma](https://orca.dev/docs/model/quick-open)** - Worktree'ler, dosyalar, ajanlar, komutlar ve repo bağlamı arasında akışınızdan çıkmadan arama yapın.
+- **[Hesap değiştirme ve kullanım takibi](https://orca.dev/docs/agents/usage-tracking)** - Claude ve Codex kullanımınızı ve limit sıfırlanma zamanlarını görün, yeniden giriş yapmadan hesaplar arasında geçiş yapın.
+- **[Zengin repo önizlemeleri](https://orca.dev/docs/editing/markdown)** - Çalışma alanında Markdown, görsel, PDF ve repo dokümanlarını önizleyin.
+- **[Bilgisayar Kullanımı](https://orca.dev/docs/cli/computer-use)** - Bir akış gerçek etkileşim gerektirdiğinde ajanların masaüstü uygulamalarını ve görünür arayüzü kullanmasına izin verin.
+- **[Bildirimler ve okunmadı durumu](https://orca.dev/docs/notifications)** - Bir ajan bittiğinde ya da ilginizi istediğinde haberiniz olsun; sonra dönmek için konuşmaları okunmadı olarak işaretleyin.
 - **Ve çok daha fazlası** - her gün sürüm çıkarıyoruz, bu liste sürekli geride kalıyor. Asıl özellik listesi [changelog](https://github.com/stablyai/orca/releases).
 
 ---
@@ -216,7 +216,7 @@ Orca'yı ajanlar da kullanır - her akışı `orca worktree create`, `snapshot`,
 
 ### Masaüstü - macOS, Windows, Linux
 
-- **[onOrca.dev üzerinden indirin](https://onorca.dev/download)**
+- **[orca.dev üzerinden indirin](https://orca.dev/download)**
 - Ya da derlemeyi doğrudan alın: [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [Tüm derlemeler](https://github.com/stablyai/orca/releases/latest)
 
 _Ya da bir paket yöneticisiyle:_
@@ -234,7 +234,7 @@ yay -S stably-orca-bin
 Ajanlarınızı telefonunuzdan izlemek ve yönlendirmek için masaüstü uygulamanızla eşleştirin.
 
 - **iOS:** [App Store'dan indirin](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [APK'yı indirin](https://www.onorca.dev/download/android) · [Kurulum rehberi](https://www.onorca.dev/docs/android-apk)
+- **Android:** [APK'yı indirin](https://orca.dev/download/android) · [Kurulum rehberi](https://orca.dev/docs/android-apk)
 
 ---
 
@@ -242,12 +242,12 @@ Ajanlarınızı telefonunuzdan izlemek ve yönlendirmek için masaüstü uygulam
 
 - **Discord:** Topluluğa **[Discord](https://discord.gg/fzjDKHxv8Q)** üzerinden katılın.
 - **Twitter / X:** Güncellemeler ve duyurular için **[@orca_build](https://x.com/orca_build)** hesabını takip edin.
-- **WeChat:** Orca topluluğunun WeChat grubuna katılmak için karekodu okutun.
+- **WeChat:** Orca topluluğunun bir WeChat grubuna katılmak için karekodu okutun.
 
-  <img src="../assets/wechat-qr-group14.jpg" alt="Orca topluluğunun WeChat grubu karekodu" width="160" />
+  <img src="../assets/wechat-qr.jpg" alt="Orca topluluğunun WeChat grubu karekodu" width="160" />
 
 - **Geri bildirim ve fikirler:** Hızlı sürüm çıkarıyoruz. Eksik bulduğunuz bir şey mi var? [Yeni bir özellik isteyin](https://github.com/stablyai/orca/issues).
-- **Gizlilik:** Orca'nın hangi anonim kullanım verisini topladığını ve bunu nasıl kapatacağınızı [gizlilik ve telemetri dokümanlarında](https://www.onorca.dev/docs/telemetry) bulabilirsiniz.
+- **Gizlilik:** Orca'nın hangi anonim kullanım verisini topladığını ve bunu nasıl kapatacağınızı [gizlilik ve telemetri dokümanlarında](https://orca.dev/docs/telemetry) bulabilirsiniz.
 - **Destek olun:** Günlük sürümleri takip etmek için bu repoyu [yıldızlayın](https://github.com/stablyai/orca).
 
 ---

@@ -12,7 +12,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentJournalTurnOutcome } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
-import type { StructuredAgentSessionTurnVerdict } from '../agent-session-wire/structured-agent-session-stale-turn-verdict'
+import type { StructuredAgentSessionTurnVerdict } from '../agent-session-wire/termination/structured-agent-session-stale-turn-verdict'
 
 /** The assembler owns turn rows; prompts travel as requests. */
 export type ProviderTimelineItemBody = Exclude<
@@ -30,6 +30,8 @@ export type ProviderTimelineJoin = {
   turn?: string
   /** Placement recovered from an existing journal row without reversing provider keys. */
   scope?: AgentJournalTurnScope
+  /** Related provider items supply saved placement at the write position. */
+  scopeItems?: readonly string[]
 }
 
 /** Named items share full-snapshot rows; anonymous streams create a message each time they start. */
@@ -64,7 +66,14 @@ export type ProviderTimelineEvent =
   /** Background-task messages outlive their initiating call/turn and become unverifiable on session end. */
   | ({ type: 'item.open'; item: string; body: ProviderTimelineItemBody } & Produced & Joined)
   /** Full snapshot; settled tools retain terminal bodies. */
-  | ({ type: 'item.update'; item: string; body: ProviderTimelineItemBody } & Produced & Joined)
+  | ({
+      type: 'item.update'
+      item: string
+      body: ProviderTimelineItemBody
+      /** ACP startup retries a lost-session warning by visible semantic identity. */
+      lossWarning?: true
+    } & Produced &
+      Joined)
   /** Terminal snapshot replaces text streamed under the same item ID. */
   | ({ type: 'item.close'; item: string; body: ProviderTimelineItemBody } & Produced & Joined)
   | ({

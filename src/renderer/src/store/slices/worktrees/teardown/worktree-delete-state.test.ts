@@ -4,8 +4,8 @@ import {
   mockApi,
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory
-} from '../../worktrees-slice-test-harness'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
+} from '../worktrees-slice-test-harness'
+import { makeWorktree } from '../worktree.test-fixture'
 import { getDeleteStateForWorktreeHost } from '../../../../components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 
 vi.mock('sonner', () => ({

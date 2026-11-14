@@ -4,7 +4,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { makeWorktree } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), toastError: vi.fn() }))

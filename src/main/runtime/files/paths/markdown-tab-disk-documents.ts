@@ -13,13 +13,13 @@ import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/runtime
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../../../shared/file-write-disk-precondition'
-import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+} from '../../../../shared/file-write/file-write-disk-precondition'
+import { getDiskBaselineSignature } from '../../../../shared/file-write/disk-baseline-signature'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
 } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { findListedEditorFile } from '../../mobile-session-editor-projection'
+import { findListedEditorFile } from '../../session-tabs/headless-editor-tabs'
 
 export type MarkdownDiskFile = { content: string; byteLength: number }
 

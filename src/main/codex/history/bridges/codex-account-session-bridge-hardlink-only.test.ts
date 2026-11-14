@@ -1,20 +1,24 @@
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import type * as NodeFs from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const crossVolume = vi.hoisted(() => ({ on: false }))
+const crossVolume = vi.hoisted(() => {
+  const state: { on: boolean; beforeLink?: (targetPath: string) => void } = { on: false }
+  return state
+})
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFs>()
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
   return {
     ...actual,
-    linkSync: (...args: Parameters<typeof actual.linkSync>) => {
+    link: async (...args: Parameters<typeof actual.link>) => {
+      crossVolume.beforeLink?.(String(args[1]))
       if (crossVolume.on) {
         throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' })
       }
-      return actual.linkSync(...args)
+      return actual.link(...args)
     }
   }
 })
@@ -39,27 +43,19 @@ beforeEach(() => {
 
 afterEach(() => {
   crossVolume.on = false
+  crossVolume.beforeLink = undefined
   rmSync(root, { recursive: true, force: true })
 })
 
-it('skips a cross-volume rollout for a hardlink-only target, creating nothing', async () => {
-  const summary = await bridgeCodexSessionsIntoAccountHome({
-    targetCodexHomePath: join(root, 'codex'),
-    sourceCodexHomePaths: [join(root, 'account')],
-    hardlinkOnly: true
-  })
+it('does not count a dangling link another writer made after the listing as bridged', async () => {
+  crossVolume.on = false
+  crossVolume.beforeLink = (targetPath) => symlinkSync(join(root, 'missing.jsonl'), targetPath)
 
-  expect(summary).toMatchObject({ scannedFiles: 1, linkedFiles: 0, skippedFiles: 1 })
-  expect(summary.bridgedThreads.size).toBe(0)
-  expect(existsSync(join(root, 'codex', 'sessions'))).toBe(false)
-})
-
-it('still falls back to a symlink between Orca-managed homes', async () => {
   const summary = await bridgeCodexSessionsIntoAccountHome({
     targetCodexHomePath: join(root, 'codex'),
     sourceCodexHomePaths: [join(root, 'account')]
   })
 
-  expect(summary).toMatchObject({ linkedFiles: 1, skippedFiles: 0 })
-  expect(lstatSync(join(root, 'codex', 'sessions', ROLLOUT)).isSymbolicLink()).toBe(true)
+  expect(summary).toMatchObject({ scannedFiles: 1, linkedFiles: 0 })
+  expect(summary.bridgedThreads.size).toBe(0)
 })

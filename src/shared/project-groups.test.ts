@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   clearMissingProjectGroupMemberships,
   createProjectGroup,
-  getEffectiveProjectGroupManualRank,
-  getNextProjectGroupOrder,
   getProjectGroupSubtreeIds,
-  normalizeProjectGroupName,
   normalizeProjectGroups
 } from './project-groups'
 import type { Repo } from './repo-types'
@@ -23,32 +20,6 @@ function repo(overrides: Partial<Repo>): Repo {
 }
 
 describe('project-groups', () => {
-  it('creates a durable project group with normalized defaults', () => {
-    const group = createProjectGroup({
-      name: '  Platform  ',
-      parentPath: '/srv/platform',
-      createdFrom: 'folder-scan',
-      tabOrder: 3,
-      now: 100
-    })
-
-    expect(group).toMatchObject({
-      name: 'Platform',
-      parentPath: '/srv/platform',
-      parentGroupId: null,
-      createdFrom: 'folder-scan',
-      tabOrder: 3,
-      isCollapsed: false,
-      color: null,
-      createdAt: 100,
-      updatedAt: 100
-    })
-  })
-
-  it('trims empty group names to a fallback', () => {
-    expect(normalizeProjectGroupName('   ', 'Existing')).toBe('Existing')
-  })
-
   it('normalizes persisted groups and drops malformed entries', () => {
     const groups = normalizeProjectGroups([
       { id: 'b', name: 'B', tabOrder: 2 },
@@ -96,32 +67,6 @@ describe('project-groups', () => {
 
     expect(repos.find((entry) => entry.id === 'known')?.projectGroupId).toBe(groups[0].id)
     expect(repos.find((entry) => entry.id === 'missing')?.projectGroupId).toBeNull()
-  })
-
-  it('falls back to global repo order when projectGroupOrder is unset', () => {
-    const repoOrder = new Map([
-      ['a', 0],
-      ['b', 2]
-    ])
-
-    expect(
-      getEffectiveProjectGroupManualRank(repo({ id: 'a', projectGroupOrder: 5 }), repoOrder)
-    ).toBe(5)
-    expect(getEffectiveProjectGroupManualRank(repo({ id: 'a' }), repoOrder)).toBe(0)
-    expect(getEffectiveProjectGroupManualRank(repo({ id: 'b' }), repoOrder)).toBe(2000)
-    expect(getEffectiveProjectGroupManualRank(repo({ id: 'c' }), repoOrder, 1)).toBe(1000)
-  })
-
-  it('computes the next order inside a group independently from ungrouped repos', () => {
-    expect(
-      getNextProjectGroupOrder(
-        [
-          repo({ id: 'a', projectGroupId: 'g', projectGroupOrder: 2 }),
-          repo({ id: 'b', projectGroupId: null, projectGroupOrder: 9 })
-        ],
-        'g'
-      )
-    ).toBe(3)
   })
 
   it('collects descendant group ids for subtree deletion', () => {

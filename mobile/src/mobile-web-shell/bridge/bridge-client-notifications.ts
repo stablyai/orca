@@ -1,5 +1,5 @@
 import type { BridgeTerminalToolbar } from './bridge-terminal-key'
-import type { ForegroundNudgeReason } from '../../transport/types'
+import type { ForegroundNudgeReason } from '../../transport/connection/connection-state'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
@@ -16,6 +16,7 @@ import {
 import { captureBridgeError } from './bridge-error-capture'
 import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
+import { BRIDGE_PAGE_LOCATION } from './bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import {
   BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
@@ -46,6 +47,7 @@ export type BridgeClientNotifications = {
   notifyPageFault: (error: unknown) => boolean
   notifyPagePainted: () => void
   notifyBackClaim: (claimed: boolean) => void
+  notifyPageLocation: (href: string) => void
   notifyTerminalKeyRailClaim: (
     claimed: boolean,
     inputOwner?: string,
@@ -138,6 +140,9 @@ export function createBridgeClientNotifications(
     },
     notifyBackClaim: (claimed) => {
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed })
+    },
+    notifyPageLocation: (href) => {
+      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_LOCATION, href })
     },
     // Only to a shell that granted the rail: any other refuses the name, and has no rail to draw.
     notifyTerminalKeyRailClaim: (claimed, inputOwner, toolbar) => {

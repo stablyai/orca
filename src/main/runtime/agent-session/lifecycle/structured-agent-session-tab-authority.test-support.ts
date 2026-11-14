@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,20 +12,24 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import {
   createStore,
   closeTestStores,
   testState
 } from '../../../persistence/persistence-test-harness'
 import { initOrcaProfilePaths } from '../../../orca-profiles/profile-storage-paths'
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createTestParams,
   CREATE_TEST_CALLER
-} from '../../../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
-import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
+import {
+  seedTestAgentSessionRecordStore,
+  openTestAgentSessionRecordStoreSlot
+} from '../records/agent-session-record-store-test-harness'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { withChatTabChanges } from '../agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
@@ -52,6 +56,15 @@ afterEach(async () => {
 })
 
 export class AuthorityRuntime extends OrcaRuntimeService {
+  protected override structuredAgentCatalogDependencies() {
+    const missing = () => ({ command: join(root, 'agent-not-installed'), prefixArgs: [] })
+    return {
+      ...super.structuredAgentCatalogDependencies(),
+      resolveClaudeCommand: missing,
+      resolveCodexCommand: missing
+    }
+  }
+
   protected override async refreshMobileSessionPtyRecords() {
     return new Set<string>()
   }
@@ -133,6 +146,12 @@ export async function openAuthorityRuntime(
   runtime = new AuthorityRuntime(rig.profile),
   installFirst = false
 ): Promise<AuthorityRig> {
+  await openTestAgentSessionRecordStoreSlot({
+    stateDirectory: root,
+    hostId: 'local',
+    legacySessionTabIds: runtime.capturedSelection(),
+    logger: createStructuredAgentSessionLogger()
+  })
   // Exercise the production admission route before the real host installer reuses its slot.
   if (installFirst) {
     await runtime.ensureStructuredAgentSessionHost()
@@ -186,23 +205,6 @@ export async function holdStartup(rig: AuthorityRig) {
     release.resolve()
     await restore
     await chatTabCommandsSettled()
-  }
-}
-export function rejectVisibility(rig: AuthorityRig) {
-  const db = rig.host.deps.journalDatabase.db
-  db.exec(
-    "CREATE TEMP TRIGGER reject_initial_tabs BEFORE INSERT ON agent_session_store_meta WHEN NEW.key='session_tabs_recorded' BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
-  )
-  db.exec(
-    "CREATE TEMP TRIGGER reject_tab_delta BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
-  )
-  db.exec(
-    "CREATE TEMP TRIGGER reject_tab_insert BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
-  )
-  return () => {
-    db.exec('DROP TRIGGER reject_tab_insert')
-    db.exec('DROP TRIGGER reject_initial_tabs')
-    db.exec('DROP TRIGGER reject_tab_delta')
   }
 }
 export async function createC(

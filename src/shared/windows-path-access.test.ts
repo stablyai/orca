@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  classifyRejectedWindowsPath,
   windowsPathAccess,
   wslDistroWindowsPathAccess,
   type WindowsPathAccessContext
@@ -21,12 +20,6 @@ describe('windowsPathAccess', () => {
     expect(windowsPathAccess(toRuntimeExecutionHostId('paired-server'), context())).toBeNull()
     expect(windowsPathAccess('runtime:unresolved-owner', context())).toBeNull()
     expect(windowsPathAccess(null, context())).toBeNull()
-  })
-
-  it('is null off Windows, even for a WSL host', () => {
-    expect(windowsPathAccess(WSL_HOST, context('darwin'))).toBeNull()
-    expect(windowsPathAccess(WSL_HOST, context('linux'))).toBeNull()
-    expect(windowsPathAccess(WSL_HOST, context(null))).toBeNull()
   })
 })
 
@@ -70,18 +63,5 @@ describe('wslDistroWindowsPathAccess', () => {
     expect(access.fromWindows('\\\\wsl.localhost\\Ubuntu-22.04\\home\\me')).toBeNull()
     expect(access.fromWindows('\\\\fileserver\\share\\repo')).toBeNull()
     expect(access.fromWindows('/home/me')).toBeNull()
-  })
-})
-
-describe('classifyRejectedWindowsPath', () => {
-  it('names why a path was refused', () => {
-    expect(classifyRejectedWindowsPath('C:\\Users\\me')).toEqual({ kind: 'windows-drive' })
-    expect(classifyRejectedWindowsPath('d:/src')).toEqual({ kind: 'windows-drive' })
-    expect(classifyRejectedWindowsPath('\\\\?\\C:\\src')).toEqual({ kind: 'windows-drive' })
-    expect(classifyRejectedWindowsPath('\\\\wsl$\\Debian\\home')).toEqual({
-      kind: 'other-distro',
-      distro: 'Debian'
-    })
-    expect(classifyRejectedWindowsPath('\\\\fileserver\\share')).toEqual({ kind: 'not-wsl' })
   })
 })

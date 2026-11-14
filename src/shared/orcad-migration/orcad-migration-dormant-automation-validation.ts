@@ -1,9 +1,10 @@
-import { AutomationCanonicalLaunchSetup } from '../rpc-contract/automation-params'
-import { automationCanonicalDefinition } from '../automation-launch-setup'
-import { assertAutomationExtraAgentArgs } from '../automation-extra-agent-args-record'
+import { AutomationCanonicalLaunchSetup } from '../rpc-contract/automations/automation-params'
+import { automationCanonicalDefinition } from '../automations/launch/automation-launch-setup'
+import { assertAutomationExtraAgentArgs } from '../automations/launch/automation-extra-agent-args-record'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
-import type { Automation, AutomationRun } from '../automations-types'
-import { getAutomationRunRepoId } from '../automation-run-identity'
+import type { Automation } from '../automations/automation-definition'
+import type { AutomationRun } from '../automations/history/automation-run'
+import { getAutomationRunRepoId } from '../automations/history/automation-run-identity'
 import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from './orcad-migration-blob-transfer'
 import type { OrcadMigrationAutomationRunHistoryRef } from './orcad-migration-manifest'
 import {
@@ -245,6 +246,7 @@ function isMigratedAutomationRun(value: unknown): value is AutomationRun {
     'orcad_migration_dormant_automation_run_dispatched_invalid',
     true
   )
+  optionalFinite(record.launchedAt, 'orcad_migration_dormant_automation_run_launched_invalid')
   requiredFinite(record.createdAt, 'orcad_migration_dormant_automation_run_created_invalid')
   optionalPositiveInteger(record.runNumber, 'orcad_migration_dormant_automation_run_number_invalid')
   optionalPositiveInteger(

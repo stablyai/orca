@@ -6,7 +6,7 @@ import type {
   MobileRelayHostRelay
 } from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type {
   MobileDesktopRelayHostListing,
   MobileDesktopRelayHosts

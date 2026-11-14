@@ -4,27 +4,30 @@ import {
 } from '../../ssh/targets/ssh-target-registry'
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/desktop-sidebar-facts'
-import type { RuntimeStore } from '../runtime-store-contract'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import {
+  savedWorkspaceCatalog,
+  WORKTREE_METADATA_DOMAINS
+} from '../../persistence/profile-save-domains'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeWithSidebarTemporal } from './orca-runtime-sidebar-temporal'
-import type { PairedServerRowsProducer } from './paired-server-rows-producer'
+import type { PairedServerRowsProducer } from './workspace-rows/paired-server-rows-producer'
 import type { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-lifecycle-queue'
-import type { WorkspaceRowsProducer } from './workspace-rows-producer'
-import type { RepoIconDataUrls } from './repo-icon-data-urls'
-import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
-import { readDesktopSidebarFacts } from './desktop-sidebar-facts'
+import type { WorkspaceRowsProducer } from './workspace-rows/workspace-rows-producer'
+import type { RepoIconDataUrls } from './repo-icons/repo-icon-data-urls'
+import type { SidebarInputsFeedDomain } from './feed/sidebar-inputs-feed'
+import { readDesktopSidebarFacts } from './catalog/desktop-sidebar-facts'
 import { readStoreInstallationId } from '../hosts/platform-probe/host-descriptor'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
-import { readSidebarProjectCatalog } from './sidebar-project-catalog'
+import { readSidebarProjectCatalog } from './catalog/sidebar-project-catalog'
 import {
   buildPairedServerReviewFacts,
   buildWorkspaceReviewFacts
-} from '../../../shared/sidebar-list/workspace-review-facts'
-import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/paired-server-activity-facts'
+} from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
+import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/feed-facts/paired-server-activity-facts'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/workspace-activity-facts'
+import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 
 /** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */
 export function readRuntimeDesktopSidebarFacts(
@@ -227,11 +230,11 @@ export function sidebarInputsFeedDomains(
         const detaches = [
           watchCatalog(changed),
           store?.onWorkspaceSessionWritten?.(() => changed()),
-          // Pins, settings (saved with or without notifying), UI, and full saves (repos, folders, SSH).
+          // Pins, settings (saved with or without notifying), UI, and catalog saves (repos, folders, SSH).
           store?.onStateWritten?.((domains) => {
             if (
-              domains === undefined ||
-              DESKTOP_WRITE_DOMAINS.some((domain) => domains.includes(domain))
+              savedWorkspaceCatalog(domains) ||
+              DESKTOP_WRITE_DOMAINS.some((domain) => domains?.includes(domain))
             ) {
               changed(urgent)
             }
@@ -260,9 +263,9 @@ export function sidebarInputsFeedDomains(
           pairedServerRows.revision.onChange(changed),
           // Manual repo order and project order live in the UI state.
           sources.store()?.onUIChanged?.(() => changed()),
-          // Catalog writes are full saves, and some (a project rename) announce no event.
+          // Some catalog writes (a project rename) announce no event.
           sources.store()?.onStateWritten?.((domains) => {
-            if (domains === undefined) {
+            if (savedWorkspaceCatalog(domains)) {
               changed()
             }
           })

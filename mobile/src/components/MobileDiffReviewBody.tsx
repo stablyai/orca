@@ -4,12 +4,15 @@ import { MobileLoadErrorState, MobileOfflineState, MobileStateView } from './Mob
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileDiffReviewLines, type LineRange } from './MobileDiffReviewLines'
-import type { ReviewDiffState, ReviewScreenState } from '../session/mobile-diff-review-screen-model'
+import type {
+  ReviewDiffState,
+  ReviewScreenState
+} from '../source-control/review/mobile-diff-review-screen-model'
 import type {
   MobileDiffReviewQueueFilter,
   MobileDiffReviewQueueItem
-} from '../session/mobile-diff-review-queue'
-import type { MobileDiffReviewThread } from '../session/mobile-diff-review-github'
+} from '../source-control/review/mobile-diff-review-queue'
+import type { MobileDiffReviewThread } from '../source-control/review/mobile-diff-review-github'
 import type { PRCommentCardActions } from './pr-sidebar/PRCommentCard'
 
 type Props = {

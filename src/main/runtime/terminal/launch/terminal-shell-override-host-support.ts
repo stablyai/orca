@@ -1,5 +1,5 @@
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 
 /** Refuse shell overrides the execution host cannot honor; silently substituting a shell also misquotes its startup command. */

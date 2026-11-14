@@ -5,7 +5,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { useAppStore } from '@/store/index'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
 
 type AddedRepoOwner = {
   runtimeEnvironmentId?: string | null

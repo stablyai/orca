@@ -2,8 +2,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import type * as GenerationClient from '@/runtime/runtime-git-generation-client'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import type * as GenerationClient from '@/runtime/source-control/git/runtime-git-generation-client'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import {
   getDefaultSourceControlAiSettings,
@@ -15,12 +16,12 @@ import { TooltipProvider } from '../../../ui/tooltip'
 import { SourceControlTextActionAgentPicker } from './SourceControlTextActionAgentPicker'
 
 const discover = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-git-generation-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
   discoverRuntimeCommitMessageModels: discover
 }))
 // The WSL case runs the real client; loaded at collection, outside any test's timeout.
 const actualGenerationClient = await vi.importActual<typeof GenerationClient>(
-  '@/runtime/runtime-git-generation-client'
+  '@/runtime/source-control/git/runtime-git-generation-client'
 )
 
 const SOL = [{ id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }]

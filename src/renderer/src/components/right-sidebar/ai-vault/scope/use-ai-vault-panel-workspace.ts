@@ -1,6 +1,10 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { useActiveRepo, useActiveWorktree, useActiveWorktreeId } from '@/store/selectors'
+import { useActiveRepo } from '@/store/repos/use-repository-catalog'
+import {
+  useActiveWorktree,
+  useActiveWorktreeId
+} from '@/store/workspaces/selection/use-selected-worktree'
 import {
   selectAiVaultPanelWorkspace,
   type AiVaultPanelWorkspace,

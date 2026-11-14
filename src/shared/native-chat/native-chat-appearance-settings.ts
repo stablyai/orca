@@ -29,6 +29,20 @@ export type NativeChatGlobalSettings = {
   nativeChatScrollToLatestOnSend?: boolean
   /** The changed-files card under each turn that edited files. Absent means on. */
   nativeChatTurnDiffSummary?: boolean
+  /** Lines saying how CI went on a pull request the chat opened or pushed to. Absent means on. */
+  nativeChatCiResultLines?: boolean
+  /** A "New" line above what arrived while the reader was away. Absent follows the default below. */
+  nativeChatMarkNewMessages?: boolean
+}
+
+/** Not written into default settings, so flipping this reaches everyone who never chose. */
+const NATIVE_CHAT_MARKS_NEW_MESSAGES_BY_DEFAULT = true
+
+export function nativeChatMarksNewMessages(
+  settings: { readonly nativeChatMarkNewMessages?: unknown } | null | undefined
+): boolean {
+  const value = settings?.nativeChatMarkNewMessages
+  return typeof value === 'boolean' ? value : NATIVE_CHAT_MARKS_NEW_MESSAGES_BY_DEFAULT
 }
 
 /** Only explicit OFF keeps a reader's place on send. */
@@ -43,6 +57,13 @@ export function nativeChatShowsTurnDiffSummary(
   settings: { readonly nativeChatTurnDiffSummary?: unknown } | null | undefined
 ): boolean {
   return settings?.nativeChatTurnDiffSummary !== false
+}
+
+/** Only explicit OFF hides CI result lines; the host keeps recording them either way. */
+export function nativeChatShowsCiResultLines(
+  settings: { readonly nativeChatCiResultLines?: unknown } | null | undefined
+): boolean {
+  return settings?.nativeChatCiResultLines !== false
 }
 
 export const DEFAULT_NATIVE_CHAT_FONT_SIZE = 14

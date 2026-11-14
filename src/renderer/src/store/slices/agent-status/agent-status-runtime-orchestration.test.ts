@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 import type { AgentStatusObservation } from '../../../../../shared/agent-status/contracts/agent-status-observation'
 

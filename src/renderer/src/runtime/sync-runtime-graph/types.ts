@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-types'
+import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 

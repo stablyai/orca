@@ -1,5 +1,5 @@
 import type { CodexTrustGrantSessionVerifyClass } from '../../app-server/codex-app-server-client'
-import { WSL_CODEX_NOT_FOUND_MESSAGE } from '../../../codex-accounts/wsl-codex-command'
+import { WSL_CODEX_NOT_FOUND_MESSAGE } from '../../../codex-cli/wsl-codex-command'
 
 /** Retain legacy lanes for the telemetry schema and dashboards. */
 export type CodexTrustGrantTelemetryLane = 'real-home' | 'managed'

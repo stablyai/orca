@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 
 export function LargeDiffLoadPrompt({
@@ -9,6 +9,7 @@ export function LargeDiffLoadPrompt({
   // Uncounted deferred rows can be small binaries; do not label them large.
   sizeUnknown?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       data-testid="large-diff-load-prompt"
@@ -17,11 +18,11 @@ export function LargeDiffLoadPrompt({
       <div className="space-y-3 text-center">
         <div className="text-sm font-medium text-foreground">
           {sizeUnknown
-            ? translate(
+            ? t(
                 'auto.components.editor.LargeDiffLoadPrompt.c3d9f4a712',
                 "This diff's size isn't known yet, so it loads on request."
               )
-            : translate(
+            : t(
                 'auto.components.editor.LargeDiffLoadPrompt.a0af0198aa',
                 'Large diffs are not rendered by default.'
               )}
@@ -35,7 +36,7 @@ export function LargeDiffLoadPrompt({
             onLoad()
           }}
         >
-          {translate('auto.components.editor.LargeDiffLoadPrompt.f7fa7a40d0', 'Load diff')}
+          {t('auto.components.editor.LargeDiffLoadPrompt.f7fa7a40d0', 'Load diff')}
         </Button>
       </div>
     </div>

@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import path from 'node:path'
 import type * as FsPromises from 'node:fs/promises'
 import { scanWorkspacePorts } from './local-workspace-port-scanner'
-import { attributePortToWorkspace } from './local-workspace-port-attribution'
+import {
+  attributePortToWorkspace,
+  attributePortsToWorkspaces,
+  normalizeWorkspacePortProbes
+} from './local-workspace-port-attribution'
 import { resetWorkspacePortScanTimeoutBackoffForTests } from './local-workspace-port-scan-state'
 
 const runPortScanCommandMock = vi.hoisted(() => vi.fn())
@@ -26,8 +30,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const LSOF_LISTEN_OUTPUT = ['p123', 'cnode', 'd0x1', 'n127.0.0.1:5173'].join('\n')
 
-function urlWatcherStub(): { lookup: () => undefined; reconcileScan: Mock } {
-  return { lookup: () => undefined, reconcileScan: vi.fn() }
+function urlWatcherStub(): { lookup: () => undefined; reconcileWorkspaces: Mock } {
+  return { lookup: () => undefined, reconcileWorkspaces: vi.fn() }
 }
 
 const worktrees = [
@@ -89,5 +93,51 @@ describe('scanWorkspacePorts with delayed process creation', () => {
     const skipped = await scanWorkspacePorts(worktrees, urlWatcherStub())
 
     expect(skipped.ports[0]?.kind).toBe('external')
+  })
+})
+
+describe('scan-local workspace attribution', () => {
+  it('preserves cwd precedence, root boundaries and probe ties across a listener batch', () => {
+    const probes = normalizeWorkspacePortProbes([
+      { id: 'first', repoId: 'r', displayName: 'first', path: '/repo/bb' },
+      { id: 'second', repoId: 'r', displayName: 'second', path: '/repo/aa' },
+      { id: 'root', repoId: 'r', displayName: 'root', path: '/' },
+      { id: 'spaces', repoId: 'r', displayName: 'spaces', path: '/a /a' },
+      { id: 'long', repoId: 'r', displayName: 'long', path: '/a /b' },
+      { id: 'suffix', repoId: 'r', displayName: 'suffix', path: '/b' },
+      { id: 'unicode', repoId: 'r', displayName: 'unicode', path: '/repo/🌊' }
+    ])
+    probes.push({ ...probes[1], normalizedPath: '/repo/bb' })
+    const listeners = [
+      { cwd: '/repo/aa/server', commandLine: 'node /repo/bb/start' },
+      { commandLine: 'node /repo/aa/x /repo/bb/y' },
+      { cwd: '/outside' },
+      { cwd: '/' },
+      { commandLine: 'node /repo/bb-other/server' },
+      { commandLine: 'node --dir=/repo/bb:5173' },
+      { commandLine: 'z/a /a /a' },
+      { commandLine: 'z/a /b' },
+      { commandLine: 'node /a /b' },
+      { commandLine: 'node --dir=/repo/🌊:3000' },
+      { cwd: '/repo/🌊/server' }
+    ].map((evidence, i) => ({ host: '127.0.0.1', port: 3000 + i, ...evidence }))
+
+    expect(
+      attributePortsToWorkspaces(listeners, probes).map(({ owner }) =>
+        owner ? [owner.worktreeId, owner.confidence] : null
+      )
+    ).toEqual([
+      ['second', 'cwd'],
+      ['first', 'command'],
+      null,
+      ['root', 'cwd'],
+      null,
+      ['first', 'command'],
+      ['spaces', 'command'],
+      ['suffix', 'command'],
+      ['long', 'command'],
+      ['unicode', 'command'],
+      ['unicode', 'cwd']
+    ])
   })
 })

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { ExternalWorktreeVisibility, Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
 import { effectiveExternalWorktreeVisibility } from '../../../../../../shared/external-worktree-visibility'
@@ -7,7 +8,7 @@ import {
   effectiveDefaultCustomWorktreeSourceVisibility,
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../../../../shared/worktree/visibility-sources'
+} from '../../../../../../shared/worktree/visibility/visibility-sources'
 import type { WorktreeVisibilitySourceRow } from './WorktreeVisibilitySourceList'
 
 export type WorktreeVisibilitySourceProvenance = {
@@ -90,32 +91,37 @@ export function listInheritedWorktreeVisibilitySources(
   })
 }
 
-export function worktreeVisibilityValueLabel(visibility: ExternalWorktreeVisibility): string {
+export function worktreeVisibilityValueLabel(
+  visibility: ExternalWorktreeVisibility,
+  t: Translate = translate
+): string {
   return visibility === 'show'
-    ? translate('auto.components.sidebar.WorktreeVisibilitySourceList.show', 'Show')
-    : translate('auto.components.sidebar.WorktreeVisibilitySourceList.hide', 'Hide')
+    ? t('auto.components.sidebar.WorktreeVisibilitySourceList.show', 'Show')
+    : t('auto.components.sidebar.WorktreeVisibilitySourceList.hide', 'Hide')
 }
 
 /** Show an override notice only when the project disagrees with the global value. */
 export function getWorktreeVisibilityOverrideNotice(
   provenance: WorktreeVisibilitySourceProvenance | null,
-  visibility: ExternalWorktreeVisibility
+  visibility: ExternalWorktreeVisibility,
+  t: Translate = translate
 ): string | null {
   if (provenance?.kind !== 'project-override' || provenance.globalVisibility === visibility) {
     return null
   }
-  return translate(
+  return t(
     'auto.components.sidebar.WorktreeVisibilitySourceList.overridingGlobal',
     'Overriding global setting: {{value0}}',
-    { value0: worktreeVisibilityValueLabel(provenance.globalVisibility) }
+    { value0: worktreeVisibilityValueLabel(provenance.globalVisibility, t) }
   )
 }
 
 export function getWorktreeVisibilitySourceNote(
-  provenance: WorktreeVisibilitySourceProvenance | null
+  provenance: WorktreeVisibilitySourceProvenance | null,
+  t: Translate = translate
 ): string | null {
   return provenance?.kind === 'project-source'
-    ? translate(
+    ? t(
         'auto.components.sidebar.WorktreeVisibilitySourceList.projectOnly',
         'Added in this project only.'
       )

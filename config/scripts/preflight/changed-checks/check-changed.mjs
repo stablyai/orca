@@ -20,6 +20,8 @@ const HEARTBEAT_MS = 60_000
 const DEFAULT_STEP_TIMEOUT_MINUTES = 30
 // Windows caps a command line near 32K characters; past this, lint the whole tree instead.
 const MAX_PATH_ARGUMENT_CHARS = 24_000
+// Concurrent agents each run this gate; automatic Vitest sizing per run overloaded shared hosts.
+const DEFAULT_VITEST_MAX_WORKERS = '2'
 const LINTABLE = /\.[cm]?[jt]sx?$/
 const ANTI_SLOP_ROOTS = ['src/', 'config/', 'tests/', 'mobile/']
 
@@ -140,7 +142,7 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
         '--config',
         'config/vitest.config.ts',
         '--passWithNoTests',
-        ...(maxWorkers ? [`--maxWorkers=${maxWorkers}`] : [])
+        `--maxWorkers=${maxWorkers ?? DEFAULT_VITEST_MAX_WORKERS}`
       ])
     tasks.push({
       name: 'unit tests',

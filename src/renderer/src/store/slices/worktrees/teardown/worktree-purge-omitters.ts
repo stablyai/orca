@@ -1,7 +1,8 @@
+import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type { AppState } from '../../../types'
 import type { WorkspaceLineage } from '../../../../../../shared/worktree/lineage-types'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { normalizeRightSidebarRoute } from '../../../right-sidebar-route'
+import { normalizeRightSidebarRoute } from '../../right-sidebar/right-sidebar-route'
 import type { WorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { omitRecordKeys } from './record-key-omission'
 
@@ -76,6 +77,12 @@ export function createWorktreePurgeOmitters(
     omitByPaneKeyTabPrefix,
     omitByBrowserWorkspaceId,
     omitByPageId,
+    omitBrowserPageHandles: () =>
+      annotateBrowserPageHandles(
+        omitByPageId(s.remoteBrowserPageHandlesByPageId),
+        doomedPageIds,
+        s.remoteBrowserPageHandlesByPageId
+      ),
     omitByFileId
   }
 }

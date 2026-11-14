@@ -8,7 +8,7 @@ import {
   ConnectorConversation,
   type ConnectorEvent
 } from '../../shared/connector-cloud-contract'
-import { writeSecureJsonFile } from '../../shared/secure-file'
+import { writeSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import type {
   ConversationEvent,
   ConversationSnapshot

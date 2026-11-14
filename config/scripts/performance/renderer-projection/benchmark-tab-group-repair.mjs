@@ -7,7 +7,7 @@ import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 
 const root = resolve(import.meta.dirname, '../../../..')
-const source = join(root, 'src/renderer/src/store/slices/tab-group-reference-repair.ts')
+const source = join(root, 'src/renderer/src/store/slices/tabs/tab-group-reference-repair.ts')
 const directory = await mkdtemp(join(tmpdir(), 'orca-tab-repair-'))
 const current = await readFile(source, 'utf8')
 const indexed = `const orderedTabIds = new Set(group.tabOrder)

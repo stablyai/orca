@@ -4,6 +4,7 @@ import type { ResourcePtyRow } from './resource-pty-view-model'
 import type { useResourceSessionInventory } from './use-resource-session-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 const COMPLETION_FLUSH_MS = 50
 const MAX_CONCURRENT_TERMINATIONS = 4
@@ -13,25 +14,25 @@ type TerminationBatch = { pending: number; unpublished: number; resolve: () => v
 type QueuedTermination = TerminationTarget & { batch: TerminationBatch }
 type TerminationCompletion = QueuedTermination & { remove: boolean; error?: string }
 
-export function ptyTerminationReason(reason: string): string {
+export function ptyTerminationReason(reason: string, t: Translate = translate): string {
   switch (reason) {
     case 'claimed':
-      return translate(
+      return t(
         'resourceManager.pty.claimed',
         'An agent now owns this terminal. Refresh before trying again.'
       )
     case 'attached':
-      return translate(
+      return t(
         'resourceManager.pty.attached',
         'A client is now attached to this terminal. Refresh before trying again.'
       )
     case 'unsupported':
-      return translate(
+      return t(
         'resourceManager.pty.endUnsupported',
         'End is unavailable for this terminal. Its host does not support the required safety checks. Close it from its tab or on its host.'
       )
     default:
-      return translate(
+      return t(
         'resourceManager.pty.unverifiableEnd',
         'Unverifiable: the host could not confirm the result. The terminal may still be running.'
       )
@@ -129,7 +130,9 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
     function drain(): void {
       const pending = queue.current
       while (pending.active < MAX_CONCURRENT_TERMINATIONS && pending.head < pending.items.length) {
-        const target = pending.items[pending.head++]!
+        // Why: oxc React Compiler 0.152 emits a member postfix update used as a value as a prefix one.
+        const target = pending.items[pending.head]!
+        pending.head += 1
         pending.active += 1
         void terminate(target).finally(() => {
           pending.active -= 1

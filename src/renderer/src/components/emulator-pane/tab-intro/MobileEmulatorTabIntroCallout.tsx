@@ -1,0 +1,65 @@
+import { X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTranslate } from '@/i18n/use-translate'
+import { useMobileEmulatorTabIntroActions } from './use-mobile-emulator-tab-intro-actions'
+
+export function MobileEmulatorTabIntroCallout(): React.JSX.Element {
+  const t = useTranslate()
+  const { keepIntro, hideIntro, dismissIntro } = useMobileEmulatorTabIntroActions()
+
+  return (
+    <div
+      className="mobile-emulator-tab-intro-callout--menu mt-1 flex items-center gap-2 rounded-lg border-x border-b border-border/70 bg-muted px-2 py-1.5 dark:bg-accent/80"
+      // Prevent Radix outside-selection so Keep/Hide/Dismiss actions leave the callout’s menu open.
+      onPointerDown={(event) => event.preventDefault()}
+    >
+      <p className="min-w-0 flex-1 text-[11px] leading-4 text-foreground/85">
+        {t(
+          'auto.components.emulator.pane.MobileEmulatorTabIntroCallout.5789936d9a',
+          'Preview iOS simulators while agents drive the screen.'
+        )}
+      </p>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-6 px-2 text-[11px]"
+          onClick={keepIntro}
+        >
+          {t('auto.components.emulator.pane.MobileEmulatorTabIntroCallout.8014b4b80b', 'Keep')}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-6 px-2 text-[11px] text-muted-foreground"
+          onClick={hideIntro}
+        >
+          {t('auto.components.emulator.pane.MobileEmulatorTabIntroCallout.6e051a40b7', 'Hide')}
+        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t(
+                'auto.components.emulator.pane.MobileEmulatorTabIntroCallout.1924982130',
+                'Dismiss'
+              )}
+              className="size-6 text-muted-foreground"
+              onClick={dismissIntro}
+            >
+              <X className="size-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {t('auto.components.emulator.pane.MobileEmulatorTabIntroCallout.1924982130', 'Dismiss')}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  )
+}

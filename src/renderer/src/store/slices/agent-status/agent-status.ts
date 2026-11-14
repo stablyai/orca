@@ -1,4 +1,4 @@
-import { agentSenderPublicationPatch } from '@/runtime/agent-sender-associations'
+import { agentSenderPublicationPatch } from '@/runtime/native-chat/agent-senders/agent-sender-publication-patch'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { AgentStatusSlice } from './agent-status-slice-contract'

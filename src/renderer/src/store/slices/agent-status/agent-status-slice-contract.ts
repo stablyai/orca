@@ -1,5 +1,5 @@
 import type { AgentSenderPublication } from '../../../../../shared/agent-sender-associations'
-import type { AgentSenderPublications } from '@/runtime/agent-sender-associations'
+import type { AgentSenderPublications } from '@/runtime/native-chat/agent-senders/agent-sender-publication-patch'
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata,
@@ -31,7 +31,7 @@ import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentPaneConversationIdentity } from '../agent-pane-conversation'
+import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
 import type { AgentStatusStateUpdate } from './agent-status-runtime'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 

@@ -1,11 +1,13 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { HostRemoveDialog } from './HostRemoveDialog'
 
 const initialState = useAppStore.getState()
@@ -61,7 +63,7 @@ it('releases both obsolete catalogs and cached indexes while host dialogs stay m
     const retired = {
       worktrees: new WeakRef(state.worktreesByRepo),
       detected: new WeakRef(state.detectedWorktreesByRepo),
-      index: new WeakRef(getWorktreeMapFromState(state))
+      index: new WeakRef(getIndexedWorktreeMap(selectWorktreesByRepo(state)))
     }
     view.rerender(dialogs(null))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

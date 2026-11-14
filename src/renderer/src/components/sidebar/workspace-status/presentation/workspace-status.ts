@@ -9,6 +9,7 @@ import {
   DEFAULT_WORKSPACE_STATUS_ICON_ID
 } from '../../../../../../shared/workspace-statuses'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import {
   getWorkspaceStatusIconOptions,
@@ -117,11 +118,11 @@ export const getWorkspaceStatusColorOptions = createLocalizedCatalog(() => [
   }
 ])
 
-function getFallbackColorOption(): WorkspaceStatusColorOption {
+function getFallbackColorOption(t: Translate = translate): WorkspaceStatusColorOption {
   return (
     getWorkspaceStatusColorOptions()[0] ?? {
       id: DEFAULT_WORKSPACE_STATUS_COLOR_ID,
-      label: translate('auto.components.sidebar.workspace.status.52e3c6e2a4', 'Neutral'),
+      label: t('auto.components.sidebar.workspace.status.52e3c6e2a4', 'Neutral'),
       tone: 'text-muted-foreground',
       swatch: 'bg-muted-foreground',
       border: 'border-t-muted-foreground/45',
@@ -130,11 +131,11 @@ function getFallbackColorOption(): WorkspaceStatusColorOption {
   )
 }
 
-function getFallbackIconOption(): WorkspaceStatusIconOption {
+function getFallbackIconOption(t: Translate = translate): WorkspaceStatusIconOption {
   return (
     getWorkspaceStatusIconOptions()[1] ?? {
       id: DEFAULT_WORKSPACE_STATUS_ICON_ID,
-      label: translate('auto.components.sidebar.workspace.status.a702bc08d4', 'Dot'),
+      label: t('auto.components.sidebar.workspace.status.a702bc08d4', 'Dot'),
       icon: CircleDot
     }
   )
@@ -165,7 +166,10 @@ const DEFAULT_STATUS_VISUALS: Record<
   }
 }
 
-export function getWorkspaceStatusVisualMeta(status: WorkspaceStatus | WorkspaceStatusDefinition): {
+export function getWorkspaceStatusVisualMeta(
+  status: WorkspaceStatus | WorkspaceStatusDefinition,
+  t?: Translate
+): {
   tone: string
   swatch: string
   border: string
@@ -181,12 +185,12 @@ export function getWorkspaceStatusVisualMeta(status: WorkspaceStatus | Workspace
     getWorkspaceStatusColorOptions().find(
       (option) => option.id === DEFAULT_WORKSPACE_STATUS_COLOR_ID
     ) ??
-    getFallbackColorOption()
+    getFallbackColorOption(t)
   const iconOptions = getWorkspaceStatusIconOptions()
   const icon =
     iconOptions.find((option) => option.id === iconId) ??
     iconOptions.find((option) => option.id === DEFAULT_WORKSPACE_STATUS_ICON_ID) ??
-    getFallbackIconOption()
+    getFallbackIconOption(t)
 
   return {
     tone: color.tone,

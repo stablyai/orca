@@ -1,4 +1,4 @@
-import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
+import type { AgentPaneChange } from '../agent-hooks/observations/agent-transition-detector'
 import { agentMainAgentVerdict } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -12,7 +12,7 @@ import { judgeIdleAgentTurn } from '../runtime/agent-state-rules/agent-turn-idle
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
-} from '../runtime/terminal-agent-turn-news'
+} from '../runtime/push/notifications/terminal-agent-turn-news'
 import {
   allLinks,
   type ExternalConversationLinkStore,

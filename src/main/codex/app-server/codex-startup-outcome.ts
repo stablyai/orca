@@ -3,7 +3,7 @@ import {
   agentSessionStartFailure,
   type AgentSessionStartAnswer,
   type AgentSessionStartFailure
-} from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import { CodexAppServerUnsupportedError } from './codex-app-server-session'
 import { CodexAppServerExitError } from './codex-app-server-exit-error'

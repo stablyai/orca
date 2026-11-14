@@ -52,6 +52,10 @@ export async function* listCodexSessionJsonlFilesIncrementally(
   )
 }
 
+export function isCodexSessionRolloutFileName(fileName: string): boolean {
+  return fileName.endsWith('.jsonl') || fileName.endsWith('.jsonl.zst')
+}
+
 export async function* listCodexSessionRolloutFilesIncrementally(
   rootPath: string,
   options: CodexSessionBridgeIncrementalOptions,
@@ -60,7 +64,7 @@ export async function* listCodexSessionRolloutFilesIncrementally(
   yield* listCodexSessionFilesIncrementally(
     rootPath,
     options,
-    (fileName) => fileName.endsWith('.jsonl') || fileName.endsWith('.jsonl.zst'),
+    isCodexSessionRolloutFileName,
     onDirectoryError
   )
 }

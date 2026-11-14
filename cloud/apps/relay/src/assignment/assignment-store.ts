@@ -35,6 +35,7 @@ import {
   RELAY_REGIONS,
   type RelayRegion
 } from '@orca-cloud/relay-contract/relay-regions'
+import { EDGE_CELL_ID } from '../edge-relay.js'
 import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract/protocol-limits'
 import type {
   RegionCorrectionRequest,
@@ -4168,9 +4169,13 @@ export class RelayAssignmentStore {
     // Neither side of an idle rehome may be a reserve-mode cell: the commit moves rows here.
     const reserveCells = await this.reserveModeCells()
     if (reserveCells === null) return []
+    // Nor the relay edge: its hosts' data lives there and comes back only through the assign path.
     return selection.candidates.filter(
       (candidate) =>
-        !reserveCells.has(candidate.sourceCellId) && !reserveCells.has(candidate.targetCellId)
+        !reserveCells.has(candidate.sourceCellId) &&
+        !reserveCells.has(candidate.targetCellId) &&
+        candidate.sourceCellId !== EDGE_CELL_ID &&
+        candidate.targetCellId !== EDGE_CELL_ID
     )
   }
 
@@ -8182,7 +8187,10 @@ export class RelayAssignmentStore {
        LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
        LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
        LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
-       ORDER BY cell.cell_id ASC`
+       WHERE cell.cell_id <> ?
+       ORDER BY cell.cell_id ASC`,
+      // The relay edge placeholder serves no seat feed.
+      [EDGE_CELL_ID]
     )
     return rows.map((row) => {
       const lastHeartbeatAt = optionalInteger(row, 'last_heartbeat_at')

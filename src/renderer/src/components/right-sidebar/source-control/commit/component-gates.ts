@@ -4,9 +4,14 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 
 export function shouldRenderCommitArea(
   unresolvedConflictCount: number,
-  conflictOperation: GitConflictOperation
+  conflictOperation: GitConflictOperation,
+  sequencerRecoverySupported = true
 ): boolean {
-  return unresolvedConflictCount === 0 && conflictOperation === 'unknown'
+  return (
+    unresolvedConflictCount === 0 &&
+    (conflictOperation === 'unknown' ||
+      (conflictOperation === 'revert' && !sequencerRecoverySupported))
+  )
 }
 
 export function pickDefaultSourceControlAgent(

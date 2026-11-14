@@ -1,4 +1,4 @@
-import type { CommandSpec } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
 import { ACCOUNT_COMMAND_SPECS } from './account'
 import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
 import { BROWSER_BASIC_COMMAND_SPECS } from './browser-basic'
@@ -23,6 +23,7 @@ import { INTROSPECTION_COMMAND_SPECS } from './introspection'
 import { JIRA_COMMAND_SPECS } from './jira'
 import { LINEAR_COMMAND_SPECS } from './linear'
 import { VM_COMMAND_SPECS } from './vm'
+import { VM_ENV_COMMAND_SPECS } from './vm-env'
 import { SKILL_COMMAND_SPECS } from './skills'
 import { ARTIFACT_COMMAND_SPECS } from './artifacts'
 import { SEARCH_COMMAND_SPECS } from './search'
@@ -30,7 +31,10 @@ import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 import { REFERENCE_COMMAND_SPECS } from './reference'
 import { PORTS_COMMAND_SPECS } from './ports'
 import { PLUGIN_AUTHORING_COMMAND_SPECS, PLUGIN_RUNTIME_COMMAND_SPECS } from './plugin'
+import { PAIR_COMMAND_SPECS } from './pair'
 import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
+import { PLUGIN_INSTALL_COMMAND_SPECS } from './plugin-install'
+import { WORKSPACE_CLEANUP_COMMAND_SPECS } from './workspace-cleanup'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -40,6 +44,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...PROJECT_COMMAND_SPECS,
   ...FILE_COMMAND_SPECS,
   ...AUTOMATION_COMMAND_SPECS,
+  ...WORKSPACE_CLEANUP_COMMAND_SPECS,
   ...BROWSER_BASIC_COMMAND_SPECS,
   ...BROWSER_ADVANCED_COMMAND_SPECS,
   ...ORCHESTRATION_COMMAND_SPECS.map(withFullRecordFlag),
@@ -57,6 +62,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...JIRA_COMMAND_SPECS,
   ...LINEAR_COMMAND_SPECS,
   ...VM_COMMAND_SPECS,
+  ...VM_ENV_COMMAND_SPECS,
   ...EMULATOR_COMMAND_SPECS,
   ...SKILL_COMMAND_SPECS,
   ...SEARCH_COMMAND_SPECS,
@@ -64,5 +70,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...PORTS_COMMAND_SPECS,
   ...PLUGIN_AUTHORING_COMMAND_SPECS,
   ...PLUGIN_RUNTIME_COMMAND_SPECS,
-  ...PLUGIN_VIEW_COMMAND_SPECS
+  ...PLUGIN_VIEW_COMMAND_SPECS,
+  ...PLUGIN_INSTALL_COMMAND_SPECS,
+  ...PAIR_COMMAND_SPECS
 ]

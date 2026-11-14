@@ -1,11 +1,17 @@
+import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-hook-settings-schema'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
+import { TaskSourceContextSchema } from '../../../shared/work-items/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  FolderWorkspaceHookCreateShape,
+  FolderWorkspaceDelete,
+  assertFolderWorkspaceStartup
+} from '../../../shared/rpc-contract/workspaces/folder-workspace-params'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -18,15 +24,21 @@ export const ProjectGroupCreateArgs = z.object({
 export const ProjectGroupUpdateArgs = z.object({
   groupId: z.string().min(1),
   updates: z.object({
+    hookSettings: WorkspaceHookSettingsSchema.optional(),
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
+    rootProjectOrder: z.number().finite().nullable().optional(),
     color: z.string().nullable().optional()
   })
 })
 
 export const ProjectGroupSelectorArgs = z.object({
   groupId: z.string().min(1)
+})
+
+export const ProjectGroupUpdateManyArgs = z.object({
+  mutations: z.array(ProjectGroupUpdateArgs)
 })
 
 export const ProjectHostSetupExistingFolderIpcArgs = z.object({
@@ -140,6 +152,7 @@ function assertFolderWorkspaceLinkedSourceContextMatch(
 
 export const FolderWorkspaceCreateArgs = z
   .object({
+    ...FolderWorkspaceHookCreateShape,
     projectGroupId: z.string().min(1),
     name: z.string().optional(),
     folderPath: z.string().nullable().optional(),
@@ -152,6 +165,7 @@ export const FolderWorkspaceCreateArgs = z
     pendingFirstAgentMessageRename: z.boolean().optional()
   })
   .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
+  .superRefine(assertFolderWorkspaceStartup)
 
 export const FolderWorkspaceUpdateArgs = z.object({
   folderWorkspaceId: z.string().min(1),
@@ -183,6 +197,8 @@ export const FolderWorkspaceUpdateArgs = z.object({
 export const FolderWorkspaceSelectorArgs = z.object({
   folderWorkspaceId: z.string().min(1)
 })
+
+export const FolderWorkspaceDeleteArgs = FolderWorkspaceDelete
 
 export const FolderWorkspacePathStatusArgs = z.discriminatedUnion('scope', [
   z.object({

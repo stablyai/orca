@@ -1,6 +1,6 @@
-import { orderMainWorktreeFirst } from '../../../src/shared/sidebar-list/section-order'
+import { orderMainWorktreeFirst } from '../../../src/shared/sidebar-list/sections/section-order'
 import { withFolderWorkspacesLast } from './folder-workspace-lane-order'
-import { prGroupOfPsLinkedPR } from '../../../src/shared/sidebar-list/workspace-review-facts'
+import { prGroupOfPsLinkedPR } from '../../../src/shared/sidebar-list/feed-facts/workspace-review-facts'
 import {
   buildWorktreeOccurrencePlan,
   type WorktreeOccurrenceSection
@@ -27,9 +27,9 @@ import type {
 } from '../../../src/shared/workspace-view/workspace-view-options'
 import { hostSortsByStamps, sortWorktrees } from './workspace-list-ordering'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
-import { NO_WORKTREE_HOST_CONTEXT, resolveWorktreeHostId } from './worktree-host-context-labels'
+import { NO_WORKTREE_HOST_CONTEXT } from './worktree-host-context-labels'
 import type { WorktreeHostContextOf } from './worktree-host-context-labels'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../src/shared/execution-host'
 import {
   buildProjectGroupingIndex,
   buildProjectSections,
@@ -38,11 +38,13 @@ import {
 } from '../../../src/shared/project-section-grouping'
 import { withRepoSectionDisplayLabels } from '../../../src/shared/project-section-order'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
-import {
-  filterWorkspaceRows,
-  type WorkspaceRowFactReader
-} from '../../../src/shared/workspace-view/workspace-row-filters'
 import { translate } from '../i18n/mobile-i18n'
+import {
+  indexHiddenProjects,
+  isRepoHidden,
+  withoutHiddenFilterRepoIds
+} from '../../../src/shared/hidden-projects'
+import { filterWorktrees } from './workspace-row-filtering'
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
 
@@ -82,6 +84,7 @@ export function buildSectionRepoMap(
   return repoMap
 }
 export { getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
+export { filterWorktrees, isWorktreeActive } from './workspace-row-filtering'
 
 // A section before lineage expansion: host rows only, no per-row view yet.
 type PlannedSection = Omit<Section, 'data'> & { data: Worktree[] }
@@ -99,64 +102,6 @@ function makeSection(
     ...(decoration.repo ? { repo: decoration.repo } : {}),
     data: [...data]
   }
-}
-
-// Idle prompts have no recent output; live terminals or unread output still count as active.
-export function isWorktreeActive(
-  w: Pick<Worktree, 'hasHostSidebarActivity' | 'status' | 'liveTerminalCount'> & {
-    unread?: boolean
-  }
-): boolean {
-  return w.hasHostSidebarActivity !== undefined
-    ? w.hasHostSidebarActivity
-    : Boolean(w.unread) || (w.status ? w.status !== 'inactive' : w.liveTerminalCount > 0)
-}
-
-// Older hosts omit the main-worktree flag; use the legacy branch heuristic.
-function guessDefaultBranchWorkspace(w: Worktree): boolean {
-  if (w.isMainWorktree !== undefined) {
-    return w.isMainWorktree && w.branch.trim() !== ''
-  }
-  const branch = w.branch.replace(/^refs\/heads\//, '')
-  return branch === 'main' || branch === 'master'
-}
-
-function phoneRowFacts(
-  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
-): WorkspaceRowFactReader<Worktree> {
-  return {
-    isArchived: (w) => w.isArchived === true,
-    isFolderWorkspace: (w) => w.workspaceKind === 'folder-workspace',
-    repoId: (w) => w.repoId,
-    hostId: (w) => resolveWorktreeHostId(w, repoHostIdByRepoId),
-    isOtherClient: (w) => w.desktopOtherClient === true,
-    isDefaultBranch: (w) => w.defaultBranch ?? guessDefaultBranchWorkspace(w),
-    isAutomationCreated: (w) => w.automationCreated === true,
-    isCliCreated: (w) => w.cliCreated === true,
-    isDetachedHead: (w) => w.detachedHead === true,
-    // Why the guess: #8873's exemption must fail open on hosts that predate isMainWorktree.
-    isMainWorktree: (w) => w.isMainWorktree ?? guessDefaultBranchWorkspace(w),
-    isSleeping: (w) => !isWorktreeActive(w)
-  }
-}
-
-export function filterWorktrees(
-  worktrees: Worktree[],
-  filters: FilterState,
-  search: string,
-  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map()
-): Worktree[] {
-  const result = filterWorkspaceRows(worktrees, filters, phoneRowFacts(repoHostIdByRepoId))
-  const q = search.trim().toLowerCase()
-  if (!q) {
-    return result
-  }
-  return result.filter(
-    (w) =>
-      w.displayName.toLowerCase().includes(q) ||
-      w.branch.toLowerCase().includes(q) ||
-      w.repo.toLowerCase().includes(q)
-  )
 }
 
 export function isWorktreePinned(w: Worktree, localPins: Set<string>): boolean {
@@ -185,12 +130,14 @@ export function buildMobileWorkspacePlan(
     'in-progress': translate('worktree.workspaceListSections.inProgress', 'In progress'),
     closed: translate('worktree.workspaceListSections.closed', 'Closed')
   }
-  const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId)
+  const hiddenProjects = indexHiddenProjects(projectCatalog.repos, LOCAL_EXECUTION_HOST_ID)
+  const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId, hiddenProjects)
+  const listedFilterIds = withoutHiddenFilterRepoIds(filters.filterRepoIds, hiddenProjects)
   const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
     worktrees,
     lineageStores,
-    filters.filterRepoIds
+    listedFilterIds
   )
   const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)
@@ -221,7 +168,8 @@ export function buildMobileWorkspacePlan(
           .filter(
             (repo) =>
               !representedRepoIds.has(repo.id) &&
-              (filters.filterRepoIds.length === 0 || filters.filterRepoIds.includes(repo.id)) &&
+              !isRepoHidden(repo) &&
+              (listedFilterIds.length === 0 || listedFilterIds.includes(repo.id)) &&
               (!query || repo.displayName.toLowerCase().includes(query))
           )
           .map((repo) => repo.id)

@@ -12,6 +12,9 @@ import { createPluginDeclarativeRetainedMemory } from './plugin-declarative-reta
 
 type SendToGuest = (event: string, payload: unknown) => void
 
+/** Hydrations whose workspace is remembered; a guest flushes before applying the next one. */
+const HYDRATIONS_KEPT = 8
+
 async function readState(
   sessionToken: string | null,
   workspace: string | null
@@ -47,6 +50,9 @@ export function usePluginDeclarativeState(options: {
   // The document that asked to hydrate; workspace switches re-hydrate only that guest.
   const [readyDocument, setReadyDocument] = useState<string | null>(null)
   const latest = useRef({ panelId, sessionToken, visible, workspace, sendToGuest })
+  // The workspace each `ui.hydrate` carried, by its id: a guest's write is stored under the
+  // workspace its values came from, not the one active when it arrives.
+  const [hydrations] = useState(() => ({ next: 0, workspaces: new Map<number, string | null>() }))
   useEffect(() => {
     latest.current = { panelId, sessionToken, visible, workspace, sendToGuest }
   })
@@ -63,7 +69,16 @@ export function usePluginDeclarativeState(options: {
       const memory: Record<string, PluginDeclarativeStoredValue> | null =
         hotReload && seededRef.current !== readyDocument ? retained.snapshot() : null
       seededRef.current = readyDocument
+      const hydration = hydrations.next
+      hydrations.next += 1
+      hydrations.workspaces.set(hydration, workspace)
+      for (const kept of hydrations.workspaces.keys()) {
+        if (kept < hydration - HYDRATIONS_KEPT) {
+          hydrations.workspaces.delete(kept)
+        }
+      }
       const payload: PluginDeclarativeHydratePayload = {
+        hydration,
         panel: { id: latest.current.panelId },
         visible: latest.current.visible,
         ...(state ? { plugin: state.plugin, workspace: state.workspace } : {}),
@@ -75,7 +90,7 @@ export function usePluginDeclarativeState(options: {
     return () => {
       cancelled = true
     }
-  }, [hotReload, readyDocument, retained, workspace])
+  }, [hotReload, hydrations, readyDocument, retained, workspace])
 
   useEffect(() => {
     if (readyDocument) {
@@ -103,10 +118,19 @@ export function usePluginDeclarativeState(options: {
         const panelState = window.api?.plugins?.panelState
         const token = latest.current.sessionToken
         if (persist.success && panelState && token) {
+          const { hydration } = persist.data
+          // Why: after a switch, a write made before it still belongs to the old workspace.
+          const target =
+            hydration === undefined
+              ? latest.current.workspace
+              : hydrations.workspaces.get(hydration)
+          if (target === undefined) {
+            return
+          }
           void panelState({
             op: 'write',
             sessionToken: token,
-            workspace: latest.current.workspace,
+            workspace: target,
             entries: persist.data.entries
           }).catch(() => undefined)
         }

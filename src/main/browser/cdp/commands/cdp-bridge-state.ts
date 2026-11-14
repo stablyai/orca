@@ -1,6 +1,6 @@
 import { webContents } from 'electron'
 import { BrowserError } from '../../browser-error'
-import type { CdpTabState } from './cdp-auxiliary-commands'
+import type { CdpTabState } from './cdp-tab-state'
 
 export type CdpQueuedCommand = {
   execute: () => Promise<unknown>

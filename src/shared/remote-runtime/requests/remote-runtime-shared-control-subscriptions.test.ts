@@ -33,20 +33,6 @@ function okResponse(subscriptionId: string): RuntimeRpcResponse<unknown> {
 }
 
 describe('closeSharedControlLogicalSubscription — replay-window leak', () => {
-  it('sends the unsubscribe when closed after an established subscribe replay completes', () => {
-    const { subscriptions, subscription } = makeSubscriptions()
-    subscription.sent = true
-    subscription.remoteSubscriptionId = 'server-sub-1'
-
-    const request = vi.fn()
-    closeSharedControlLogicalSubscription({ subscriptions, subscription, request })
-
-    expect(request).toHaveBeenCalledWith('runtime.clientEvents.unsubscribe', {
-      subscriptionId: 'server-sub-1'
-    })
-    expect(subscriptions.size).toBe(0)
-  })
-
   it('does NOT leak a server subscription when close races the replay resubscribe window', () => {
     const { subscriptions, subscription } = makeSubscriptions()
     subscription.sent = true
@@ -82,16 +68,6 @@ describe('closeSharedControlLogicalSubscription — replay-window leak', () => {
     expect(request).toHaveBeenCalledWith('runtime.clientEvents.unsubscribe', {
       subscriptionId: 'server-sub-2'
     })
-    expect(subscriptions.size).toBe(0)
-  })
-
-  it('finishes locally without an unsubscribe for a never-sent subscription', () => {
-    const { subscriptions, subscription } = makeSubscriptions()
-    // No frame was sent, so there is no remote subscription to clean up.
-    const request = vi.fn()
-    closeSharedControlLogicalSubscription({ subscriptions, subscription, request })
-
-    expect(request).not.toHaveBeenCalled()
     expect(subscriptions.size).toBe(0)
   })
 

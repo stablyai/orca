@@ -8,19 +8,20 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { findWorktreeById, getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { findRepoForHost } from '../../repo-host-identity'
-import { reuseEqualRecordMap } from '../../repo-identity-reconcile'
+import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
+import { reuseEqualRecordMap } from '../../../../lib/catalog-reconciliation/catalog-record-reconciliation'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function getWorktreeHostId(
   state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
   worktreeId: string
 ): ExecutionHostId | null {
-  const worktree = findWorktreeById(selectWorktreesByRepo(state), worktreeId)
+  const worktree = findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId)
   if (worktree?.hostId) {
     return worktree.hostId
   }

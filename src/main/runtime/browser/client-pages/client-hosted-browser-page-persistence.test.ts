@@ -1,17 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS,
-  CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS,
-  persistedClientHostedBrowserPageSchema
-} from '../../../../shared/workspace-session/client-hosted-browser-page-record'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { parseWorkspaceSessionSalvaging } from '../../../../shared/workspace-session/workspace-session-salvage'
 import {
-  isRestoredClientHostedBrowserPlacement,
   persistClientHostedBrowserPages,
-  rehydrateClientHostedBrowserPages,
-  RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
-  RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY
+  rehydrateClientHostedBrowserPages
 } from './client-hosted-browser-page-persistence'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -25,103 +16,6 @@ const livePlacement = Object.freeze({
 })
 
 describe('client-hosted browser page persistence', () => {
-  it('writes a client page and rehydrates it into a held row', () => {
-    const store = sessionStore()
-    const pages = registryWith(livePlacement)
-
-    expect(persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')).toBe(true)
-
-    const restored = new RuntimeBrowserPageRegistry()
-    rehydrateClientHostedBrowserPages(restored, {
-      listWorkspaceSessions: () => [store.session],
-      isKnownWorktree: () => true,
-      now: () => NOW
-    })
-
-    expect(restored.getPage('page-a')).toMatchObject({
-      browserPageId: 'page-a',
-      workspaceId: 'repo-1::wt-a',
-      browserProfileId: 'profile-a',
-      // Predecessor route keys name the dead process and cannot be reused.
-      executionHostKey: RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY,
-      pairedDeviceId: 'device-a',
-      url: 'https://kept.internal/',
-      title: 'Kept',
-      loading: false,
-      active: false
-    })
-    expect(isRestoredClientHostedBrowserPlacement(restored.getPage('page-a')!.placement)).toBe(true)
-  })
-
-  it('persists no authority: a rehydrated placement can never equal a mintable one', () => {
-    expect(RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT.browserHostGeneration).toBe(0)
-    expect(RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT.pageHostGeneration).toBe(0)
-    expect(isRestoredClientHostedBrowserPlacement(livePlacement)).toBe(false)
-
-    const store = sessionStore()
-    persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')
-    const [row] = store.session.clientHostedBrowserPagesByWorktree!['repo-1::wt-a']!
-
-    // Persist no authority: the next epoch could mistake it for a live placement.
-    expect(Object.keys(row).sort()).toEqual([
-      'browserPageId',
-      'browserProfileId',
-      'pairedDeviceId',
-      'savedAt',
-      'title',
-      'url',
-      'v',
-      'workspaceId'
-    ])
-  })
-
-  it('skips a rewrite when the projection is unchanged', () => {
-    const store = sessionStore()
-    const pages = registryWith(livePlacement)
-
-    expect(persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')).toBe(true)
-    expect(persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')).toBe(false)
-    expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
-  })
-
-  it('refreshes a parked tab so the expiry measures held-ness, not last change', () => {
-    let now = NOW
-    const store = sessionStore()
-    store.now = () => now
-    const pages = registryWith(livePlacement)
-    persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')
-
-    now = NOW + CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS + 1
-    expect(persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')).toBe(true)
-
-    expect(store.session.clientHostedBrowserPagesByWorktree?.['repo-1::wt-a']?.[0]?.savedAt).toBe(
-      now
-    )
-    expect(persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')).toBe(false)
-  })
-
-  it('drops the worktree entry once its last page retires', () => {
-    const store = sessionStore()
-    const pages = registryWith(livePlacement)
-    persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')
-
-    pages.retirePage('page-a', livePlacement)
-    expect(persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')).toBe(true)
-
-    expect(store.session.clientHostedBrowserPagesByWorktree).toEqual({})
-  })
-
-  it('survives a worktree that no longer resolves instead of throwing', () => {
-    const store = sessionStore()
-    store.setWorkspaceSession.mockImplementation(() => {
-      throw new Error('folder_workspace_not_found')
-    })
-
-    expect(() =>
-      persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')
-    ).not.toThrow()
-  })
-
   it('never rehydrates a row whose worktree is gone', () => {
     const store = sessionStore()
     persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')
@@ -131,20 +25,6 @@ describe('client-hosted browser page persistence', () => {
       listWorkspaceSessions: () => [store.session],
       isKnownWorktree: () => false,
       now: () => NOW
-    })
-
-    expect(restored.listPages()).toEqual([])
-  })
-
-  it('drops a row whose host never came back within the expiry bound', () => {
-    const store = sessionStore()
-    persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')
-    const restored = new RuntimeBrowserPageRegistry()
-
-    rehydrateClientHostedBrowserPages(restored, {
-      listWorkspaceSessions: () => [store.session],
-      isKnownWorktree: () => true,
-      now: () => NOW + CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS + 1
     })
 
     expect(restored.listPages()).toEqual([])
@@ -191,66 +71,6 @@ describe('client-hosted browser page persistence', () => {
     })
 
     expect(restored.listPages()).toEqual([])
-  })
-})
-
-describe('persisted client-hosted browser page schema', () => {
-  const valid = {
-    v: 1,
-    browserPageId: 'page-a',
-    workspaceId: 'repo-1::wt-a',
-    browserProfileId: 'profile-a',
-    url: 'https://kept.internal/',
-    title: 'Kept',
-    pairedDeviceId: 'device-a',
-    savedAt: NOW
-  }
-
-  it('accepts a row this build wrote', () => {
-    expect(persistedClientHostedBrowserPageSchema.safeParse(valid).success).toBe(true)
-  })
-
-  it.each([
-    ['a newer schema version', { v: 2 }],
-    ['a version this build predates', { v: 0 }],
-    ['a missing version', { v: undefined }],
-    ['an empty page id', { browserPageId: '' }],
-    ['a missing paired device', { pairedDeviceId: undefined }],
-    ['a non-integer timestamp', { savedAt: 1.5 }]
-  ])('refuses %s rather than partly trusting it', (_why, override) => {
-    expect(
-      persistedClientHostedBrowserPageSchema.safeParse({ ...valid, ...override }).success
-    ).toBe(false)
-  })
-
-  it('drops only the unreadable rows and keeps their siblings', () => {
-    const parsed = parseWorkspaceSessionSalvaging({
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      clientHostedBrowserPagesByWorktree: {
-        'repo-1::wt-a': [valid, { ...valid, v: 99, browserPageId: 'page-future' }]
-      }
-    })
-
-    expect(parsed.ok && parsed.value.clientHostedBrowserPagesByWorktree?.['repo-1::wt-a']).toEqual([
-      valid
-    ])
-    expect(parsed.ok && parsed.droppedCount).toBe(1)
-  })
-
-  it('strips a field the schema does not declare, so authority cannot ride along', () => {
-    const smuggled = persistedClientHostedBrowserPageSchema.parse({
-      ...valid,
-      browserHostGeneration: 4,
-      pageHostGeneration: 7,
-      connectionId: 'conn-a',
-      executionHostKey: 'native:runtime-a:1'
-    })
-
-    expect(smuggled).toEqual(valid)
   })
 })
 

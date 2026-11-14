@@ -2,12 +2,12 @@ import { TextWrap } from 'lucide-react-native'
 import { memo, useContext, useMemo } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { highlightMobileCode } from '../session/mobile-file-syntax'
+import { highlightMobileCode } from '../files/session-documents/mobile-file-syntax'
 import {
   MobileNativeChatDisclosureContext,
   MobileNativeChatMarkdownRowKeyContext,
   useMobileNativeChatDisclosure
-} from '../session/native-chat/transcript/mobile-native-chat-disclosure-store'
+} from '../session/native-chat/transcript/viewport/mobile-native-chat-disclosure-store'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSyntaxSegments } from './MobileSyntaxSegments'

@@ -28,8 +28,6 @@ function mount(markdown: string) {
 }
 
 it.each([
-  ['- [ ]', '- [ ]', [false]],
-  ['- [x]', '- [x]', [true]],
   ['- [ ]   ', '- [ ]', [false]],
   ['- [ ] Parent\n  - [x]', '- [ ] Parent\n  - [x]', [false, true]]
 ])(

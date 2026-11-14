@@ -1,7 +1,7 @@
 // Resolve parent and Git defaults on the chosen host while rejecting stale async results.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { browseRuntimeServerDirectory } from '@/runtime/files/reads/runtime-server-directory-browser'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { AddRepoDialogStep } from '../dialog/add-repo-dialog-types'
 import { getDefaultCreateProjectParent, type GitAvailability } from './create-project-defaults'
 

@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+.dev.vars
+spike/.keys.json
+.wrangler-deploy-*.jsonc

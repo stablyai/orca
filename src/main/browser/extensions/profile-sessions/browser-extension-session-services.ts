@@ -1,7 +1,7 @@
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { observeBrowserExtensionCookieChanges } from '../api/cookies'
 import { observeBrowserExtensionActionSession } from '../actions/browser-extension-action-registry'
 import { revokeBrowserExtensionActiveTabInSession } from '../permissions/browser-extension-active-tab'
@@ -22,7 +22,7 @@ import {
   installBrowserExtensionWebRequestForwarding,
   observeBrowserExtensionWebRequests,
   stopObservingBrowserExtensionWebRequests
-} from '../browser-extension-web-request'
+} from '../requests/browser-extension-web-request-observer'
 
 // Why once: a session outlives the experimental setting being switched off and on again.
 const servedSessions = new WeakSet<Electron.Session>()

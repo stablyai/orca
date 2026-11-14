@@ -1,7 +1,7 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
 import type { SshTarget, SshConnectionState } from '../../../../../../shared/ssh-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import {
   beginSshConnect,
@@ -23,6 +23,7 @@ export function SshTargetRow({
   onSelect,
   onConnect
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   // Share one connection per target across surfaces and preserve it through row unmounts.
   const connecting = useSshConnectInFlight(target.id)
   const status = target.state?.status ?? 'disconnected'
@@ -81,10 +82,10 @@ export function SshTargetRow({
           {isBusy ? (
             <>
               <Loader2 className="size-3 animate-spin" />
-              {translate('auto.components.sidebar.SshTargetRow.4677394048', 'Connecting…')}
+              {t('auto.components.sidebar.SshTargetRow.4677394048', 'Connecting…')}
             </>
           ) : (
-            translate('auto.components.sidebar.SshTargetRow.75ad429b5d', 'Connect')
+            t('auto.components.sidebar.SshTargetRow.75ad429b5d', 'Connect')
           )}
         </button>
       )}

@@ -7,6 +7,8 @@ export const TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES = 8 * 1024 * 1024
 export const TERMINAL_MULTIPLEX_PENDING_MAX_BYTES = 256 * 1024
 export const TERMINAL_MULTIPLEX_ACK_BATCH_BYTES = 192 * 1024
 export const TERMINAL_MULTIPLEX_ACK_FLUSH_MS = 4
+// Visible-but-unfocused panes accept a longer host coalescing window; output stays byte-exact.
+export type TerminalOutputCadence = 'focused' | 'background'
 // History a recovery after lost output carries, so the client replaces its stale history instead of splicing it.
 export const TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS = 1000
 // 128 covers large paired clients while fixed ACK windows and per-stream queues bound pressure.

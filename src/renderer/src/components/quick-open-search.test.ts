@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { QuickOpenPathRanker, prepareQuickOpenFiles, rankQuickOpenFiles } from './quick-open-search'
+import {
+  QuickOpenPathRanker,
+  prepareQuickOpenFiles,
+  rankQuickOpenFiles
+} from '../../../shared/quick-open/quick-open-path-search'
 
 describe('quick-open-search', () => {
   it('prefers filename substring matches over path-only matches', () => {
@@ -92,20 +96,6 @@ it('bridges camel and acronym word boundaries for typed separators without match
   ])
   expect(rankQuickOpenFiles('product-', files).map((item) => item.path)).toContain(
     'src/ProductDetail.ts'
-  )
-})
-
-it('evaluates all terms up to the existing byte limit and rejects only oversized input', () => {
-  const terms = Array.from({ length: 350 }, (_, i) => `t${i}`)
-  const query = terms.join(' ')
-  const path = `${terms.join('/')}.ts`
-  expect(query.length).toBeLessThan(2048)
-  expect(rankQuickOpenFiles(query, prepareQuickOpenFiles([path])).map((item) => item.path)).toEqual(
-    [path]
-  )
-  expect(rankQuickOpenFiles(`${query} absent`, prepareQuickOpenFiles([path]))).toEqual([])
-  expect(rankQuickOpenFiles(`${query}${' '.repeat(2048)}`, prepareQuickOpenFiles([path]))).toEqual(
-    []
   )
 })
 

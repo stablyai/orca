@@ -1,10 +1,10 @@
-import { buildImageDataUri } from '../../../../../src/shared/image-data-uri'
+import { buildImageDataUri } from '../../../../../src/shared/file-preview/image-data-uri'
 import { isAgentSessionAttachmentStorePath } from '../../../../../src/shared/agent-session/agent-session-attachments'
 import { PrioritySemaphore } from '../../../../../src/shared/priority-semaphore'
-import { filePreviewImageSchema } from '../../../files/file-preview-reply-schema'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc-operation'
-import { rpcResultVariant } from '../../../transport/rpc-operation-result-reader'
-import type { RpcClient } from '../../../transport/rpc-client'
+import { filePreviewImageSchema } from '../../../files/preview/file-preview-reply-schema'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 
 // Accept device-loadable URI schemes only; a bare host/SSH path must remain a text placeholder.
 const RENDERABLE_IMAGE_URI = /^(file:|data:|https?:|content:|blob:)/i

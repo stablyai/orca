@@ -15,7 +15,7 @@ import {
   TAB_ID,
   WORKTREE_ID,
   setupMainOwnedWorkspace
-} from '../../main-owned-workspace-runtime-fixture'
+} from '../../terminal/layout/main-owned-workspace-runtime-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

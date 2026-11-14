@@ -2,7 +2,7 @@ import { CalendarClock } from 'lucide-react-native'
 import { Fragment, useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native'
 import Animated, { FadeIn } from 'react-native-reanimated'
-import { toAutomationOwnerPrecondition } from '../../../../src/shared/automation-owner-precondition'
+import { toAutomationOwnerPrecondition } from '../../../../src/shared/automations/ownership/automation-owner-precondition'
 import {
   automationErrorMessage,
   automationOutcomeUnknownMessage
@@ -14,13 +14,14 @@ import { useAutomationRuns } from '../../automations/use-automation-runs'
 import { describeLoadError } from '../../components/load-error-description'
 import { useNow } from '../../hooks/use-now'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useHostClient } from '../../transport/host-client-hooks'
-import type { ConnectionState, HostProfile } from '../../transport/types'
-import { useHostDisplay } from '../../transport/use-host-display'
+import { useHostClient } from '../../transport/connection/host-client-hooks'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { HostProfile } from '../../host-catalog/host-profile'
+import { useHostDisplay } from '../../host-descriptors/use-host-display'
 import { homeListStyles as list } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import { MobileHomeAutomationRow, MobileHomeAutomationRunRow } from './MobileHomeAutomationRows'
@@ -95,7 +96,7 @@ function HostAutomations(props: {
   useMobileColorScheme()
   const desktop = useHostDisplay(props.host).title
   const { client } = useHostClient(props.host.id)
-  const catalog = useAutomationCatalog(client, false)
+  const catalog = useAutomationCatalog(props.host.id, client)
   const history = useAutomationRuns(client, null, catalog.revision, catalog.connected)
   const enabled = useOptimisticEnabled(catalog)
   const reducedMotion = useReducedMotionEnabled() === true

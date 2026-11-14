@@ -1,10 +1,10 @@
 import { PRCheckEmptyDetails } from '@/components/pr-check-empty-details'
-import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import {
   createGitHubChecksTabState,
@@ -14,16 +14,19 @@ import {
 import {
   canUseGitHubRepoContext,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+} from '../../../../../shared/github/work-items/work-item-types'
+import {
+  type TaskSourceContext,
+  getTaskSourceCacheScope
+} from '../../../../../shared/work-items/task-source-context'
+
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import {
   getCheckCountChips,
@@ -42,6 +45,7 @@ import {
 } from './checks-tab-actions'
 import { requestGitHubCheckDetails } from './checks-tab-request-details'
 import { ChecksTabActions, ChecksTabCompactHeader } from './checks-tab-header'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Identity token for one checks context; compared by reference so a stale refresh is dropped. */
 type ChecksContextOwner = Record<string, never>
@@ -67,6 +71,7 @@ export function ChecksTab({
   variant?: 'compact' | 'page'
   onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { checkOwner, onOwnerUpdated } = usePRCheckRefreshOwner(item, sourceContext)
   const [fixingChecks, setFixingChecks] = useState(false)
   const mountedRef = useMountedRef()
@@ -121,7 +126,8 @@ export function ChecksTab({
   const summaryLabel = getChecksSummaryLabel(
     list,
     checkOwner,
-    resolvedChecksState.checkObservationOwner
+    resolvedChecksState.checkObservationOwner,
+    t
   )
   const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(overallCounts)
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
@@ -295,7 +301,8 @@ export function ChecksTab({
     },
     onFix: () => {
       void handleFixBrokenChecks()
-    }
+    },
+    t
   })
   const compactHeader = (
     <ChecksTabCompactHeader
@@ -336,7 +343,7 @@ export function ChecksTab({
     )
   }
   if (variant === 'page') {
-    const countChips = getCheckCountChips(counts)
+    const countChips = getCheckCountChips(counts, t)
     return (
       <div className="flex flex-col gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">

@@ -6,7 +6,8 @@ import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemera
 import { EPHEMERAL_VM_CLEANUP_STOPPED_ERROR } from '../../../../../../shared/ephemeral-vm-recipe-destroy-result'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import { ephemeralVmCleanupErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { ephemeralVmCleanupErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { EphemeralVmCleanupStopDialog } from './EphemeralVmCleanupStopDialog'
@@ -40,41 +41,45 @@ export function getVisibleEphemeralVmRuntimes(
     .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
 }
 
-export function getEphemeralVmRuntimeStatusLabel(runtime: EphemeralVmRuntimeRecord): string {
+export function getEphemeralVmRuntimeStatusLabel(
+  runtime: EphemeralVmRuntimeRecord,
+  t: Translate = translate
+): string {
   if (hasCleanupStopped(runtime)) {
-    return translate(
+    return t(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupStopped',
       'Cleanup stopped'
     )
   }
   if (hasCleanupFailed(runtime)) {
-    return translate(
-      'auto.components.settings.EphemeralVmRuntimesSection.cleanupFailed',
-      'Cleanup failed'
-    )
+    return t('auto.components.settings.EphemeralVmRuntimesSection.cleanupFailed', 'Cleanup failed')
   }
   if (runtime.cleanupStatus === 'running' || runtime.status === 'cleanup_pending') {
-    return translate(
+    return t(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupRunning',
       'Cleanup running'
     )
   }
+  if (runtime.status === 'provisioning') {
+    return t('auto.components.settings.EphemeralVmRuntimesSection.provisioning', 'Provisioning')
+  }
   if (runtime.cleanupStatus === 'disabled') {
-    return translate(
+    return t(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupDisabled',
       'Cleanup disabled'
     )
   }
   if (runtime.status === 'running') {
-    return translate('auto.components.settings.EphemeralVmRuntimesSection.running', 'Running')
+    return t('auto.components.settings.EphemeralVmRuntimesSection.running', 'Running')
   }
   if (runtime.status === 'failed') {
-    return translate('auto.components.settings.EphemeralVmRuntimesSection.failed', 'Failed')
+    return t('auto.components.settings.EphemeralVmRuntimesSection.failed', 'Failed')
   }
   return runtime.status
 }
 
 export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
+  const t = useTranslate()
   const [runtimes, setRuntimes] = useState<EphemeralVmRuntimeRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [cleaningId, setCleaningId] = useState<string | null>(null)
@@ -116,9 +121,11 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
     void refresh()
   }, [refresh])
 
-  const hasRunningCleanup = runtimes.some(isCleanupRunning) || cleaningId !== null
+  const hasRunningLifecycle =
+    runtimes.some((runtime) => isCleanupRunning(runtime) || runtime.status === 'provisioning') ||
+    cleaningId !== null
   useEffect(() => {
-    if (!hasRunningCleanup) {
+    if (!hasRunningLifecycle) {
       return
     }
     let cancelled = false
@@ -136,7 +143,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
         clearTimeout(timer)
       }
     }
-  }, [hasRunningCleanup, refresh])
+  }, [hasRunningLifecycle, refresh])
 
   const cleanupRuntime = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
     setCleaningId(runtime.id)
@@ -149,7 +156,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
       if (hasCleanupFailed(cleaned)) {
         throw new Error(
           ephemeralVmCleanupErrorText(cleaned) ??
-            translate(
+            t(
               'auto.components.settings.EphemeralVmRuntimesSection.cloudVmCleanupFailedToast',
               'Couldn’t clean up Cloud VM runtime.'
             )
@@ -158,11 +165,11 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
       if (mountedRef.current) {
         toast.success(
           cleaned.cleanupStatus === 'disabled'
-            ? translate(
+            ? t(
                 'auto.components.settings.EphemeralVmRuntimesSection.cloudVmMarkedCleaned',
                 'Marked Cloud VM runtime as cleaned.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.EphemeralVmRuntimesSection.cloudVmCleaned',
                 'Cleaned up Cloud VM runtime.'
               )
@@ -174,7 +181,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.EphemeralVmRuntimesSection.cloudVmCleanupFailedToast',
                 'Couldn’t clean up Cloud VM runtime.'
               )
@@ -198,11 +205,11 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
       if (mountedRef.current) {
         toast.success(
           result.command
-            ? translate(
+            ? t(
                 'auto.components.settings.EphemeralVmRuntimesSection.copiedCleanupCommand',
                 'Copied cleanup command.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.EphemeralVmRuntimesSection.copiedCleanupPayload',
                 'Copied cleanup payload.'
               )
@@ -213,13 +220,31 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.EphemeralVmRuntimesSection.copyCleanupFailed',
                 'Couldn’t copy cleanup command.'
               )
         )
       }
     }
+  }
+
+  const forgetRuntime = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
+    try {
+      await window.api.ephemeralVm.forgetRuntime({ runtimeId: runtime.id })
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t(
+                'auto.components.settings.EphemeralVmRuntimesSection.removeFromListFailed',
+                'Couldn’t remove Cloud VM runtime from the list.'
+              )
+        )
+      }
+    }
+    await refresh(false)
   }
 
   const stopCleanup = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
@@ -235,7 +260,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.EphemeralVmRuntimesSection.stopCleanupFailed',
                 'Couldn’t stop Cloud VM cleanup.'
               )
@@ -267,7 +292,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefresh',
                     'Refresh Cloud VM runtimes'
                   )}
@@ -278,9 +303,9 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefreshLabel',
-                  'Refresh Cloud VMs'
+                {t(
+                  'auto.components.settings.EphemeralVmRuntimesSection.cca21fb369',
+                  'Refresh cloud VMs'
                 )}
               </TooltipContent>
             </Tooltip>
@@ -293,7 +318,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
             <EphemeralVmRuntimeRow
               key={runtime.id}
               runtime={runtime}
-              statusLabel={getEphemeralVmRuntimeStatusLabel(runtime)}
+              statusLabel={getEphemeralVmRuntimeStatusLabel(runtime, t)}
               cleanupFailed={hasCleanupFailed(runtime)}
               cleanupRunning={isCleanupRunning(runtime) || cleaningId === runtime.id}
               isStopping={stoppingId === runtime.id}
@@ -305,6 +330,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
               onCleanup={() => void cleanupRuntime(runtime)}
               onStopCleanup={() => setPendingStop(runtime)}
               onCopyCleanupCommand={() => void copyCleanupCommand(runtime)}
+              onForget={() => void forgetRuntime(runtime)}
             />
           ))}
         </div>

@@ -3,9 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { build } from 'esbuild'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { executePluginHostCall } from './plugin-host-methods'
-import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
-import { PluginWorkerManager, type PluginWorkerSpawnSpec } from './plugin-worker-manager'
+import { executePluginHostCall } from './host-api/plugin-host-methods'
+import {
+  bindPluginHostServices,
+  type PluginRuntimeDelegate
+} from './host-api/plugin-host-service-bindings'
+import { PluginWorkerManager } from './plugin-worker-manager'
+import type { PluginWorkerSpawnSpec } from './worker-supervision/plugin-worker-startup'
 
 const PLUGIN_KEY = 'local.dev-storage'
 const roots: string[] = []

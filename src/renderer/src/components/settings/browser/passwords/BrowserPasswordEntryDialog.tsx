@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   BrowserPasswordEntryEditResult,
   BrowserPasswordEntryInput
@@ -88,6 +89,7 @@ function BrowserPasswordEntryForm({
   start: BrowserPasswordEntryFormStart
   onDone: (saved: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [draft, setDraft] = useState<BrowserPasswordEntryInput>(
     start.mode === 'edit'
       ? { site: start.site, username: start.username, password: start.password, note: start.note }
@@ -137,11 +139,11 @@ function BrowserPasswordEntryForm({
       <DialogHeader>
         <DialogTitle>
           {start.mode === 'edit'
-            ? translate('settings.browser.passwords.form.editTitle', 'Edit password')
-            : translate('settings.browser.passwords.form.addTitle', 'Add password')}
+            ? t('settings.browser.passwords.form.editTitle', 'Edit password')
+            : t('settings.browser.passwords.form.addTitle', 'Add password')}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'settings.browser.passwords.form.description',
             'Orca fills it when you pick it under a sign-in field on this site.'
           )}
@@ -150,15 +152,12 @@ function BrowserPasswordEntryForm({
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="browser-password-site">
-            {translate('settings.browser.passwords.form.site', 'Site')}
+            {t('settings.browser.passwords.form.site', 'Site')}
           </Label>
           <Input
             id="browser-password-site"
             value={draft.site}
-            placeholder={translate(
-              'settings.browser.passwords.form.sitePlaceholder',
-              'example.com'
-            )}
+            placeholder={t('settings.browser.passwords.form.sitePlaceholder', 'example.com')}
             disabled={start.mode === 'edit'}
             autoFocus={start.mode === 'add'}
             onChange={(event) => set('site')(event.target.value)}
@@ -166,12 +165,12 @@ function BrowserPasswordEntryForm({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="browser-password-username">
-            {translate('settings.browser.passwords.form.username', 'Username')}
+            {t('settings.browser.passwords.form.username', 'Username')}
           </Label>
           <Input
             id="browser-password-username"
             value={draft.username}
-            placeholder={translate(
+            placeholder={t(
               'settings.browser.passwords.form.usernamePlaceholder',
               'Email or username'
             )}
@@ -181,7 +180,7 @@ function BrowserPasswordEntryForm({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="browser-password-password">
-            {translate('settings.browser.passwords.form.password', 'Password')}
+            {t('settings.browser.passwords.form.password', 'Password')}
           </Label>
           <div className="flex items-center gap-2">
             <Input
@@ -198,15 +197,15 @@ function BrowserPasswordEntryForm({
               onClick={() => setShowPassword((shown) => !shown)}
               aria-label={
                 showPassword
-                  ? translate('settings.browser.passwords.hide', 'Hide password')
-                  : translate('settings.browser.passwords.show', 'Show password')
+                  ? t('settings.browser.passwords.hide', 'Hide password')
+                  : t('settings.browser.passwords.show', 'Show password')
               }
             >
               {showPassword ? <EyeOff /> : <Eye />}
             </Button>
           </div>
           <p className="text-2xs text-muted-foreground">
-            {translate(
+            {t(
               'settings.browser.passwords.form.currentHint',
               'Save the password you use on this site today.'
             )}
@@ -215,7 +214,7 @@ function BrowserPasswordEntryForm({
         {showNote ? (
           <div className="space-y-1.5">
             <Label htmlFor="browser-password-note">
-              {translate('settings.browser.passwords.form.note', 'Note')}
+              {t('settings.browser.passwords.form.note', 'Note')}
             </Label>
             <Textarea
               id="browser-password-note"
@@ -227,17 +226,17 @@ function BrowserPasswordEntryForm({
         ) : (
           <Button type="button" variant="ghost" size="xs" onClick={() => setShowNote(true)}>
             <Plus />
-            {translate('settings.browser.passwords.form.addNote', 'Add a note')}
+            {t('settings.browser.passwords.form.addNote', 'Add a note')}
           </Button>
         )}
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
       </div>
       <DialogFooter>
         <Button type="button" variant="ghost" size="sm" onClick={() => onDone(false)}>
-          {translate('settings.browser.passwords.form.cancel', 'Cancel')}
+          {t('settings.browser.passwords.form.cancel', 'Cancel')}
         </Button>
         <Button type="submit" size="sm" disabled={!canSave}>
-          {translate('settings.browser.passwords.form.save', 'Save')}
+          {t('settings.browser.passwords.form.save', 'Save')}
         </Button>
       </DialogFooter>
     </form>

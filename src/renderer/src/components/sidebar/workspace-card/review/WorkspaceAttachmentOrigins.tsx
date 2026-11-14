@@ -3,16 +3,16 @@ import { Terminal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { terminalLayoutContainsLeaf } from '../../../../../../shared/workspace-session/workspace-session-pane-ownership'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import { getWorkspaceAttachmentOriginKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-origins'
-import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
-import { projectedStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
+import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
+import { projectedStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 
 const EMPTY_TABS: Tab[] = []
 
@@ -55,6 +55,7 @@ export function WorkspaceAttachmentOrigins({
   workspace: Worktree
   compact?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const names = useStructuredChatTabNames()
   const tabs = useReferenceTabs(workspace)
   const origins = item.origins?.filter((origin) => origin.kind === 'observed') ?? []
@@ -79,10 +80,10 @@ export function WorkspaceAttachmentOrigins({
           tab?.label ||
           origin.label ||
           origin.agent ||
-          translate('workspace.links.terminal', 'Terminal')
-        const description = translate('workspace.links.seenIn', 'Seen in {{label}}', { label })
+          t('workspace.links.terminal', 'Terminal')
+        const description = t('workspace.links.seenIn', 'Seen in {{label}}', { label })
         if (compact) {
-          const unavailable = translate('workspace.links.unavailableTab', 'Tab unavailable')
+          const unavailable = t('workspace.links.unavailableTab', 'Tab unavailable')
           return (
             <Tooltip key={getWorkspaceAttachmentOriginKey(origin)}>
               <TooltipTrigger asChild>
@@ -135,7 +136,7 @@ export function WorkspaceAttachmentOrigins({
             className="text-[11px] text-muted-foreground"
             title={origin.sessionId}
           >
-            {description} · {translate('workspace.links.unavailableTab', 'Tab unavailable')}
+            {description} · {t('workspace.links.unavailableTab', 'Tab unavailable')}
           </span>
         )
       })}

@@ -19,7 +19,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, '../../..', '..')
 const SHARED_DIR = path.join(REPO_ROOT, 'src', 'shared')
 const CONTRACT_DIR = path.join(SHARED_DIR, 'rpc-contract')
 const RPC_DIR = path.join(REPO_ROOT, 'src', 'main', 'runtime', 'rpc')
-const REGISTRY_ENTRY = path.join(RPC_DIR, 'methods', 'index.ts')
+const REGISTRY_ENTRY = path.join(RPC_DIR, 'methods', 'rpc-method-registry.ts')
 const OUTPUT_PATH = path.join(CONTRACT_DIR, 'rpc-params-catalog.generated.ts')
 
 // Create ignored out/ before mkdtemp; keep scratch under repo for external node_modules resolution and formatter config discovery.
@@ -32,16 +32,25 @@ function scratchDir(prefix) {
 const posix = (value) => value.split(path.sep).join('/')
 const repoPath = (absolute) => posix(path.relative(REPO_ROOT, absolute))
 
+function isProductionModule(file) {
+  const value = posix(file)
+  return (
+    !/(?:^|\/)(?:test-support|testing|__tests__|fixtures)(?:\/|$)/.test(value) &&
+    !/\.(?:test|spec|test-fixture|fixture)\.[cm]?tsx?$/.test(value) &&
+    !/\.d\.[cm]?ts$/.test(value)
+  )
+}
+
 function indexableModules() {
   // Exclude tests or catalog’s CJS bundle requires Vitest and throws.
   const modules = new Set(
-    globSync('*.ts', { cwd: CONTRACT_DIR })
-      .filter((name) => !name.endsWith('.test.ts'))
+    globSync('**/*.ts', { cwd: CONTRACT_DIR })
+      .filter(isProductionModule)
       .map((name) => path.join(CONTRACT_DIR, name))
   )
   modules.delete(OUTPUT_PATH)
   for (const file of globSync('**/*.ts', { cwd: RPC_DIR })) {
-    if (file.endsWith('.test.ts')) {
+    if (!isProductionModule(file)) {
       continue
     }
     const source = readFileSync(path.join(RPC_DIR, file), 'utf8')
@@ -50,6 +59,7 @@ function indexableModules() {
       // Exclude generator output even when params import its types; stale catalog bundling would break regeneration precisely when needed.
       if (
         resolved !== OUTPUT_PATH &&
+        isProductionModule(resolved) &&
         resolved.startsWith(`${SHARED_DIR}${path.sep}`) &&
         existsSync(resolved)
       ) {

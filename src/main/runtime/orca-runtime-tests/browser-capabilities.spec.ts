@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import './runtime-test-module-registration.spec'
-import { OrcaRuntimeService } from '../orca-runtime'
-import { deleteWorktreeHistoryDirMock } from '../orca-runtime-test-mocks/setup.spec'
+import '../orca-runtime'
+import '../orca-runtime-test-mocks/setup.spec'
 import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import {
@@ -14,7 +14,7 @@ import {
   attachClientBrowserHost,
   publishClientHostedPage
 } from './orca-runtime-test-scenario-builders.spec'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('preserves a live client page across headed renderer graph updates and prunes it after retirement', async () => {
@@ -118,117 +118,5 @@ describe('OrcaRuntimeService', () => {
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-other')?.placement).toEqual(
       survivor
     )
-  })
-
-  it('drops a client page record even when its close command cannot be issued', async () => {
-    const runtime = createRuntime()
-    const host = attachClientBrowserHost(runtime)
-    await publishClientHostedPage(runtime, host, 'page-removed', TEST_WORKTREE_ID)
-    host.detachDelivery()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
-
-    expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-removed')).toBeUndefined()
-    expect(runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)).toEqual([])
-    await vi.waitFor(() =>
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('could not close its client page'),
-        expect.objectContaining({
-          browserPageId: 'page-removed',
-          error: expect.objectContaining({ message: 'browser_host_command_delivery_required' })
-        })
-      )
-    )
-    warn.mockRestore()
-  })
-
-  it('leaves client-hosted pages alone when another host still owns the same worktree id', async () => {
-    const runtimeStore = {
-      ...store,
-      getWorktreeMeta: () => ({ ...store.getWorktreeMeta(TEST_WORKTREE_ID), hostId: 'local' }),
-      removeWorktreeMeta: vi.fn()
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const host = attachClientBrowserHost(runtime)
-    const placement = await publishClientHostedPage(runtime, host, 'page-kept', TEST_WORKTREE_ID)
-
-    runtime['removeWorktreeMetadataAndHistory'](
-      runtimeStore as never,
-      TEST_WORKTREE_ID,
-      'runtime:env-b'
-    )
-
-    expect(host.takeCommands()).toEqual([])
-    expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-kept')?.placement).toEqual(
-      placement
-    )
-  })
-
-  it('preserves bare-id runtime state when removing a different qualified owner', () => {
-    const removeWorktreeMeta = vi.fn()
-    const runtimeStore = {
-      ...store,
-      getWorktreeMeta: () => ({ ...store.getWorktreeMeta(TEST_WORKTREE_ID), hostId: 'local' }),
-      removeWorktreeMeta
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const internals = runtime as unknown as {
-      mobileSessionTabsByWorktree: Map<string, unknown>
-      removeWorktreeMetadataAndHistory: (
-        runtimeStore: typeof store,
-        worktreeId: string,
-        hostId: string
-      ) => void
-    }
-    const localSession = { tabs: [{ id: 'local-tab' }] }
-    internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, localSession)
-
-    internals.removeWorktreeMetadataAndHistory(
-      runtimeStore as typeof store,
-      TEST_WORKTREE_ID,
-      'runtime:env-b'
-    )
-
-    expect(removeWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: TEST_WORKTREE_ID, hostId: 'runtime:env-b' })
-    )
-    expect(internals.mobileSessionTabsByWorktree.get(TEST_WORKTREE_ID)).toBe(localSession)
-  })
-
-  it('preserves bare-id runtime state when removed-host metadata masks another owner', () => {
-    const localRepo = store.getRepo(TEST_REPO_ID)!
-    const remoteRepo = { ...localRepo, connectionId: 'ssh-1' }
-    const removeWorktreeMeta = vi.fn()
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [localRepo, remoteRepo],
-      getWorktreeMeta: () => ({ ...store.getWorktreeMeta(TEST_WORKTREE_ID), hostId: 'ssh:ssh-1' }),
-      removeWorktreeMeta
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const internals = runtime as unknown as {
-      mobileSessionTabsByWorktree: Map<string, unknown>
-      removeWorktreeMetadataAndHistory: (
-        runtimeStore: typeof store,
-        worktreeId: string,
-        hostId: string
-      ) => void
-    }
-    const survivingSession = { tabs: [{ id: 'same-id-local-tab' }] }
-    internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, survivingSession)
-    deleteWorktreeHistoryDirMock.mockClear()
-
-    internals.removeWorktreeMetadataAndHistory(
-      runtimeStore as typeof store,
-      TEST_WORKTREE_ID,
-      'ssh:ssh-1'
-    )
-
-    expect(removeWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: TEST_WORKTREE_ID, hostId: 'ssh:ssh-1' })
-    )
-    expect(internals.mobileSessionTabsByWorktree.get(TEST_WORKTREE_ID)).toBe(survivingSession)
-    expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
   })
 })

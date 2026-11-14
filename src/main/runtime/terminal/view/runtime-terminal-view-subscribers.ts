@@ -63,6 +63,16 @@ export class RuntimeTerminalViewSubscribers {
     return false
   }
 
+  /** A remote view could be displaying this PTY: one is on screen, or one cannot report a hidden pane. */
+  mayBeShownRemotely(ptyId: string): boolean {
+    const paneReporting = this.paneReportingRemoteViews.get(ptyId)?.size ?? 0
+    return (
+      this.isShownRemotely(ptyId) ||
+      (this.remoteCounts.get(ptyId) ?? 0) > paneReporting ||
+      this.deps.hasMobileSubscribers(ptyId)
+    )
+  }
+
   registerRaw(ptyId: string): () => void {
     this.rawCounts.set(ptyId, (this.rawCounts.get(ptyId) ?? 0) + 1)
     this.deps.notifyPresenceChanged(ptyId)

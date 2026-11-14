@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RemoteFileBrowser } from '../../host-path-browser/RemoteFileBrowser'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AddRepoServerPathStartStepProps = {
   serverPath: string
@@ -15,6 +15,7 @@ type AddRepoServerPathStartStepProps = {
   hostSelector?: ReactNode
   notice?: ReactNode
   initialBrowsing?: boolean
+  directEntry?: boolean
   onServerPathChange: (path: string) => void
   onAddServerPath: (kind: 'git' | 'folder') => void
   onOpenCloneStep: () => void
@@ -29,11 +30,13 @@ export function AddRepoServerPathStartStep({
   hostSelector,
   notice,
   initialBrowsing = false,
+  directEntry = false,
   onServerPathChange,
   onAddServerPath,
   onOpenCloneStep,
   onOpenCreateStep
 }: AddRepoServerPathStartStepProps): React.JSX.Element {
+  const t = useTranslate()
   const [browsing, setBrowsing] = useState(initialBrowsing)
   // Windows picks/Explorer drops arrive prefilled; expose their path immediately.
   const [pathEntryOpen, setPathEntryOpen] = useState(initialBrowsing || serverPath.trim() !== '')
@@ -43,13 +46,13 @@ export function AddRepoServerPathStartStep({
       <>
         <DialogHeader>
           <DialogTitle>
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoServerStartStep.ac66a3ed2d',
               'Browse host filesystem'
             )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoServerStartStep.0f8aba944c',
               'Navigate to a directory and click Select to choose it.'
             )}
@@ -76,13 +79,10 @@ export function AddRepoServerPathStartStep({
       <>
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.sidebar.AddRepoServerStartStep.39bd249b3a',
-              'Add a project'
-            )}
+            {t('auto.components.sidebar.AddRepoServerStartStep.39bd249b3a', 'Add a project')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoServerStartStep.8efa930eb5',
               'Add another project from the selected host.'
             )}
@@ -95,11 +95,8 @@ export function AddRepoServerPathStartStep({
           <div className="grid grid-cols-3 gap-2">
             <AddRepoServerStartAction
               icon={FolderOpen}
-              title={translate(
-                'auto.components.sidebar.AddRepoServerStartStep.0adf083af7',
-                'Browse host'
-              )}
-              description={translate(
+              title={t('auto.components.sidebar.AddRepoServerStartStep.0adf083af7', 'Browse host')}
+              description={t(
                 'auto.components.sidebar.AddRepoServerStartStep.516187414c',
                 'Existing project or folder'
               )}
@@ -108,11 +105,11 @@ export function AddRepoServerPathStartStep({
             />
             <AddRepoServerStartAction
               icon={Globe}
-              title={translate(
+              title={t(
                 'auto.components.sidebar.AddRepoServerStartStep.47759c9491',
                 'Clone from URL'
               )}
-              description={translate(
+              description={t(
                 'auto.components.sidebar.AddRepoServerStartStep.a2ea37d549',
                 'Remote Git repository'
               )}
@@ -121,11 +118,11 @@ export function AddRepoServerPathStartStep({
             />
             <AddRepoServerStartAction
               icon={Server}
-              title={translate(
+              title={t(
                 'auto.components.sidebar.AddRepoServerStartStep.a81ffa0a99',
                 'Create on host'
               )}
-              description={translate(
+              description={t(
                 'auto.components.sidebar.AddRepoServerStartStep.d40d751517',
                 'New repo or folder'
               )}
@@ -139,7 +136,7 @@ export function AddRepoServerPathStartStep({
               <Lightbulb className="size-3.5" />
             </span>
             <span className="min-w-0">
-              {translate(
+              {t(
                 'auto.components.sidebar.AddRepoServerStartStep.6b9958492a',
                 'Want to import many repos at once? Browse to the parent folder.'
               )}
@@ -152,7 +149,7 @@ export function AddRepoServerPathStartStep({
             disabled={disabled}
             className="mx-auto block rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
           >
-            {translate(
+            {t(
               'auto.components.sidebar.AddRepoServerStartStep.438493f214',
               'Or enter a host path manually'
             )}
@@ -166,13 +163,10 @@ export function AddRepoServerPathStartStep({
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate(
-            'auto.components.sidebar.AddRepoServerStartStep.3d0c035483',
-            'Open host project'
-          )}
+          {t('auto.components.sidebar.AddRepoServerStartStep.3d0c035483', 'Open host project')}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.sidebar.AddRepoServerStartStep.423b5d3d31',
             'Add a Git repository or folder that already exists on the selected host.'
           )}
@@ -187,14 +181,14 @@ export function AddRepoServerPathStartStep({
             htmlFor="server-project-path"
             className="block text-[11px] font-medium text-muted-foreground"
           >
-            {translate('auto.components.sidebar.AddRepoServerStartStep.867692f505', 'Host path')}
+            {t('auto.components.sidebar.AddRepoServerStartStep.867692f505', 'Host path')}
           </label>
           <div className="flex gap-2">
             <Input
               id="server-project-path"
               value={serverPath}
               onChange={(event) => onServerPathChange(event.target.value)}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.sidebar.AddRepoServerStartStep.92d25420a0',
                 '/home/user/project'
               )}
@@ -212,7 +206,7 @@ export function AddRepoServerPathStartStep({
                   className="h-11 w-11 shrink-0"
                   onClick={() => setBrowsing(true)}
                   disabled={isAddingServerPath || !runtimeEnvironmentId}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.sidebar.AddRepoServerStartStep.ac66a3ed2d',
                     'Browse host filesystem'
                   )}
@@ -221,7 +215,7 @@ export function AddRepoServerPathStartStep({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
+                {t(
                   'auto.components.sidebar.AddRepoServerStartStep.ac66a3ed2d',
                   'Browse host filesystem'
                 )}
@@ -235,10 +229,7 @@ export function AddRepoServerPathStartStep({
             disabled={!serverPath.trim() || isAddingServerPath}
             className="h-10"
           >
-            {translate(
-              'auto.components.sidebar.AddRepoServerStartStep.8da4d1a5be',
-              'Add Git Project'
-            )}
+            {t('auto.components.sidebar.AddRepoServerStartStep.8da4d1a5be', 'Add Git Project')}
           </Button>
           <Button
             onClick={() => onAddServerPath('folder')}
@@ -246,10 +237,7 @@ export function AddRepoServerPathStartStep({
             variant="outline"
             className="h-10"
           >
-            {translate(
-              'auto.components.sidebar.AddRepoServerStartStep.e1710bf831',
-              'Open as Folder'
-            )}
+            {t('auto.components.sidebar.AddRepoServerStartStep.e1710bf831', 'Open as Folder')}
           </Button>
         </div>
         {isAddingServerPath && addProjectBusyLabel ? (
@@ -258,17 +246,16 @@ export function AddRepoServerPathStartStep({
             <span>{addProjectBusyLabel}</span>
           </div>
         ) : null}
-        <button
-          type="button"
-          onClick={() => setPathEntryOpen(false)}
-          disabled={isAddingServerPath}
-          className="mx-auto block rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
-        >
-          {translate(
-            'auto.components.sidebar.AddRepoServerStartStep.ae990c86a0',
-            'Back to add options'
-          )}
-        </button>
+        {!directEntry ? (
+          <button
+            type="button"
+            onClick={() => setPathEntryOpen(false)}
+            disabled={isAddingServerPath}
+            className="mx-auto block rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
+          >
+            {t('auto.components.sidebar.AddRepoServerStartStep.ae990c86a0', 'Back to add options')}
+          </button>
+        ) : null}
       </div>
     </>
   )

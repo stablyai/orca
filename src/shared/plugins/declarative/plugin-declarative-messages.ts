@@ -129,7 +129,9 @@ export const pluginDeclarativePersistPayloadSchema = z
           .strict()
       )
       .min(1)
-      .max(64)
+      .max(64),
+    /** The `ui.hydrate` whose values the entries were written over; absent before the first. */
+    hydration: revisionSchema.optional()
   })
   .strict()
 export type PluginDeclarativePersistPayload = z.infer<typeof pluginDeclarativePersistPayloadSchema>
@@ -171,4 +173,6 @@ export type PluginDeclarativeHydratePayload = {
   memory?: Record<string, PluginDeclarativeStoredValue>
   /** Dev folders only: post `ui.retain` so the next hot reload can hand memory atoms over. */
   retain?: true
+  /** Names this hydrate; the guest's later `ui.persist` posts echo it until the next one. */
+  hydration?: number
 }

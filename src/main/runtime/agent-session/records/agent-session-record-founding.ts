@@ -1,7 +1,7 @@
 import {
   AGENT_SESSION_FOUNDING_FENCE,
   agentSessionNeverStarted
-} from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+} from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
@@ -18,6 +18,7 @@ export type AgentSessionRecordIdentity = Pick<
   | 'options'
   | 'launchArgs'
   | 'launchDirectory'
+  | 'forkedFrom'
   | 'conversationName'
 >
 
@@ -35,6 +36,7 @@ export function agentSessionRecordIdentityFields(
     location: identity.location,
     provider: identity.provider,
     accountHome: identity.accountHome,
+    ...(identity.forkedFrom ? { forkedFrom: identity.forkedFrom } : {}),
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),

@@ -1,24 +1,37 @@
-import type {
-  CreateHostedReviewInput,
-  CreateHostedReviewResult,
-  CreateStackedHostedReviewInput,
-  CreateStackedHostedReviewResult,
-  HostedReviewCreationEligibility,
-  HostedReviewCreationEligibilityArgs,
-  HostedReviewForBranchReply
-} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import {
+  preparePRBranchRead,
+  readRecentPhonePROutcome
+} from '../../../github/client/lookup/pr-for-branch-outcome'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type {
   GitHubPRRefreshReason,
-  PRRefreshOutcome
-} from '../../../../shared/github/pull-request-refresh-types'
+  PRSnapshotReply
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getPRForBranchOutcome } from '../../../github/client/lookup/pr-for-branch-outcome'
+import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
+import {
+  admissionTierForRefreshReason,
+  bypassesFreshnessDelay
+} from '../../../github/pull-requests/refresh/pr-refresh-candidate-policy'
 import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
-import { admissionTierForRefreshReason } from '../../../github/pr-refresh-candidate-policy'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
-import { hostedReviewForBranchReply } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import {
+  runHostedPRRead,
+  runHostedPRSnapshot
+} from '../../../github/pull-requests/refresh/pr-refresh-coordinator'
+import { HOSTED_PR_COMPLETION_WAIT_MS } from '../../../github/pull-requests/refresh/hosted-pr-read-jobs'
+import {
+  type CreateHostedReviewInput,
+  type CreateHostedReviewResult,
+  type CreateStackedHostedReviewInput,
+  type CreateStackedHostedReviewResult,
+  type HostedReviewCreationEligibility,
+  type HostedReviewCreationEligibilityArgs,
+  type HostedReviewForBranchReply,
+  hostedReviewForBranchReply
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
+
 import { readHostedReviewForBranch } from '../../../source-control/hosted-review'
 import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from '../../../source-control/hosted-review-execution-host'
@@ -71,8 +84,13 @@ export class RuntimeHostedReviewCommands {
     acceptMergedFallbackPR?: boolean,
     currentHeadOid?: string | null,
     reason?: GitHubPRRefreshReason,
-    userRefresh?: boolean
-  ): Promise<PRRefreshOutcome> {
+    userRefresh?: boolean,
+    clientKind?: DeviceScope,
+    signal?: AbortSignal,
+    acceptRevalidationOnly = false,
+    selected = false
+  ): Promise<PRSnapshotReply> {
+    const deadline = Date.now() + HOSTED_PR_COMPLETION_WAIT_MS
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
       ...this.deps.getExecutionOptions(
@@ -83,22 +101,55 @@ export class RuntimeHostedReviewCommands {
     if (userRefresh === true) {
       lookupOptions.userRefresh = true
     }
+    if (reason && bypassesFreshnessDelay(reason)) {
+      lookupOptions.resetQuietBackoff = true
+    }
     if (acceptMergedFallbackPR === true) {
       lookupOptions.acceptMergedFallbackPR = true
     }
     if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
       lookupOptions.currentHeadOid = currentHeadOid.trim()
     }
-    const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
-      Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
-    return getPRForBranchOutcome(
+    const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
+    // Legacy phone reads retain their narrower thirty-second reuse contract.
+    if (clientKind === 'mobile' && reason === undefined) {
+      const recent = await readRecentPhonePROutcome(
+        repo.path,
+        branch,
+        linkedPRNumber ?? null,
+        connectionId,
+        fallbackPRNumber ?? null,
+        lookupOptions
+      )
+      if (recent) {
+        return recent
+      }
+    }
+    const candidate = {
+      cacheKey: `${repo.path}::${branch}`,
+      repoKind: repo.kind ?? ('git' as const),
+      repoId: repo.id,
+      repoPath: repo.path,
+      branch,
+      connectionId,
+      currentHeadOid: lookupOptions.currentHeadOid ?? null,
+      linkedPRNumber: linkedPRNumber ?? null,
+      fallbackPRNumber: linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
+      localGitOptions: lookupOptions.localGitExecOptions,
+      isSelected: reason === 'swr' && userRefresh !== true && selected
+    }
+    const prepared = await preparePRBranchRead(
       repo.path,
       branch,
       linkedPRNumber ?? null,
-      hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo)),
+      connectionId,
       linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
-      ...lookupOptionArgs
+      lookupOptions
     )
+    if (reason === 'swr' && userRefresh !== true) {
+      return runHostedPRSnapshot(candidate, prepared, deadline, signal, acceptRevalidationOnly)
+    }
+    return runHostedPRRead(candidate, prepared)
   }
 
   async getHostedReviewForBranch(args: {

@@ -1,14 +1,14 @@
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 import type {
   CheckStatus,
   ProviderCheckSummary,
-  GitHubRepositoryIdentity,
   PRInfo
-} from '../../../../../../shared/github/pull-request-types'
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/repositories/repository-identity'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { AppState } from '@/store/index'
+import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 
 export type ParentPrChecksCacheEntry<T> = {

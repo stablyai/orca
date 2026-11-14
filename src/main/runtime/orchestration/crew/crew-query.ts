@@ -1,8 +1,14 @@
 import { z } from 'zod'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import type { OrchestrationCoordinatorKey } from '../orchestration-caller-identity'
-import type { OrchestrationDb } from '../db'
+import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
+import type { OrchestrationDb } from '../db/orchestration-db'
+import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import { currentRunCoordinatorOrcaSessionIdSql } from '../db/runs/run-coordinator-orca-session'
+import {
+  closedApproval,
+  type WorkerApprovalPayload
+} from '../../../../shared/orchestration/approvals/worker-approval-payload'
+import { readApprovalReport } from '../workers/approvals/worker-approval-report'
 
 const nullable = z.string().nullable()
 export const CrewAssignment = z.object({
@@ -128,6 +134,79 @@ export function readCrewTraffic(
   `)
       .all(JSON.stringify(aliases), cutoff, JSON.stringify(aliases), cutoff)
   )
+}
+
+const WORKER_ENDED = {
+  by: 'worker-ended',
+  decision: null,
+  reason: null,
+  reasonDelivered: false
+} as const
+
+// Why a bound: one coordinator's approvals, the still-open ones first, then the newest receipts.
+const CREW_APPROVAL_ROWS = 100
+
+/** Each worker approval's newest report to this party, oldest first: receipts are the chat's
+ *  history, so they stay. Only Orca's own stop reports count, never a payload a worker sent itself. */
+export function readCrewApprovals(
+  db: OrchestrationDb,
+  aliases: string[]
+): { approval: WorkerApprovalPayload; at: string; askedAt: string }[] {
+  const rows = z
+    .object({
+      id: z.string(),
+      payload: z.string(),
+      created_at: z.string(),
+      asked_at: z.string(),
+      asked_sequence: z.number(),
+      ended: z.number(),
+      ended_at: z.string()
+    })
+    .array()
+    .parse(
+      db.db
+        .prepare(`WITH reports AS (
+          SELECT id, payload, created_at, sequence, json_extract(payload, '$.approval.approvalId') AS approval_id
+          FROM messages WHERE to_handle IN (SELECT value FROM json_each(?))
+            AND id LIKE 'msg\\_stop\\_%' ESCAPE '\\' AND payload LIKE '%"approval":%' AND json_valid(payload)
+            AND json_type(payload, '$.approval') = 'object'
+        ), newest AS (SELECT approval_id, MAX(sequence) AS sequence, MIN(created_at) AS asked_at,
+            MIN(sequence) AS asked_sequence
+          FROM reports GROUP BY approval_id)
+        SELECT reports.id, reports.payload, reports.created_at, newest.asked_at, newest.asked_sequence,
+          d.status IS NOT NULL AND d.status NOT IN ('pending', 'dispatched') AS ended,
+          COALESCE(d.completed_at, reports.created_at) AS ended_at
+        FROM reports JOIN newest ON newest.sequence = reports.sequence
+        LEFT JOIN dispatch_contexts d ON d.id = json_extract(reports.payload, '$.approval.worker.dispatchId')
+        -- The bound never hides one still waiting on an answer.
+        ORDER BY (json_extract(reports.payload, '$.approval.state') = 'open'
+            AND (d.status IS NULL OR d.status IN ('pending', 'dispatched'))) DESC,
+          reports.sequence DESC
+        LIMIT ${CREW_APPROVAL_ROWS}`)
+        .all(JSON.stringify(aliases))
+    )
+    .toSorted((a, b) => a.asked_sequence - b.asked_sequence)
+  const shown: { approval: WorkerApprovalPayload; at: string; askedAt: string }[] = []
+  for (const row of rows) {
+    const approval = readApprovalReport(row)
+    if (!approval) {
+      continue
+    }
+    // A prompt is answerable only while its Dispatch runs: once that ends it is closed, and a
+    // terminal that is gone, or a close no one named, was the worker ending.
+    const ended =
+      row.ended === 1 &&
+      (approval.state === 'open' ||
+        approval.outcome?.by === 'terminal-only' ||
+        approval.outcome?.by === 'unknown')
+    const at = ended ? row.ended_at : row.created_at
+    shown.push({
+      approval: ended ? closedApproval(approval, WORKER_ENDED) : approval,
+      at: exposeUtcTimestamp(at) ?? at,
+      askedAt: exposeUtcTimestamp(row.asked_at) ?? row.asked_at
+    })
+  }
+  return shown
 }
 
 export function readCrewQuestions(db: OrchestrationDb, aliases: string[]) {

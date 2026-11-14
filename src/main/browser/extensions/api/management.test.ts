@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { getEnabledExtensionIds: () => [...mocks.enabled] }
 }))
 vi.mock('../installation/browser-extension-install-store', () => ({
@@ -25,7 +25,9 @@ vi.mock('../browser-extension-management', () => ({
 vi.mock('../installation/browser-extension-list-changes', () => ({
   notifyBrowserExtensionListChanged: mocks.notify
 }))
-vi.mock('./permissions', () => ({ hasBrowserExtensionUserGesture: () => mocks.gesture }))
+vi.mock('../permissions/browser-extension-user-gesture', () => ({
+  hasBrowserExtensionUserGesture: () => mocks.gesture
+}))
 
 const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const { registerManagementNamespace } = await import('./management')

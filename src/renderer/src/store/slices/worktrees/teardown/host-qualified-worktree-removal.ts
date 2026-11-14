@@ -1,7 +1,7 @@
 /** Pin every removal step to confirmed host; same repoId::path on another machine may hold different uncommitted work (STA-4343). */
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -10,13 +10,13 @@ import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost,
   type WorktreeOperationRoute
-} from '@/lib/worktree-operation-route'
-import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+} from '@/lib/workspace/ownership/worktree-operation-route'
+import { captureWorktreeOperationGenerationGuard } from '@/lib/workspace/ownership/worktree-operation-generation'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import { WORKTREE_REMOVAL_HOST_CHANGED_ERROR } from '../listing/worktree-slice-constants'
 import { translate } from '@/i18n/i18n'
-import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
+import { cleanupEphemeralVmRuntimesForDeleted } from '@/runtime/ephemeral-vm/ephemeral-vm-runtime-cleanup'
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
 import { completePreservedBranchCleanup } from './complete-preserved-branch-cleanup'
 
@@ -25,13 +25,9 @@ import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cle
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import {
   dropConfirmedHostRow,
-  prepareHostScopedRemovalCompletion,
-  preservesSameIdRendererState,
   resolveSameIdSurvivingHostId
 } from './host-qualified-worktree-row-removal'
-import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
-
-export { prepareHostScopedRemovalCompletion, preservesSameIdRendererState }
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/workspace/ownership/duplicate-paired-servers'
 
 type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined
 type RemoveWorktreeSliceResult = Awaited<ReturnType<WorktreeSlice['removeWorktree']>>

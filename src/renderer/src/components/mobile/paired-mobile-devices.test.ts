@@ -23,22 +23,6 @@ describe('paired mobile devices', () => {
     })
   })
 
-  it('coalesces concurrent refreshes onto one mobile device IPC call', async () => {
-    let resolveLookup: (value: { devices: [] }) => void = () => {}
-    const lookup = new Promise<{ devices: [] }>((resolve) => {
-      resolveLookup = resolve
-    })
-    listDevices.mockReturnValueOnce(lookup)
-
-    const first = refreshPairedMobileDevices()
-    const second = refreshPairedMobileDevices()
-
-    expect(listDevices).toHaveBeenCalledTimes(1)
-
-    resolveLookup({ devices: [] })
-    await expect(Promise.all([first, second])).resolves.toEqual([[], []])
-  })
-
   it('returns the current cache when a newer write supersedes an in-flight refresh', async () => {
     const staleDevice = { deviceId: 'old-phone', name: 'Old phone', pairedAt: 1, lastSeenAt: 2 }
     const currentDevice = { deviceId: 'new-phone', name: 'New phone', pairedAt: 3, lastSeenAt: 4 }

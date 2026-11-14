@@ -4,13 +4,13 @@ import type {
   CodexDispatchEchoes,
   CodexDispatchRequestOrigin
 } from '../turns/codex-structured-dispatch-echo'
-import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 import type { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
 import type { CodexThreadItem } from '../items/codex-thread-item-identity'
 import type { CodexHelperName } from '../items/codex-collab-agent-item-translation'
-import type { StructuredAgentSessionCommandRun } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionCommandRun } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 export type CodexActiveJournalItem = {
   threadId: string

@@ -3,11 +3,11 @@ import {
   type AgentJournalRunningCallEnd
 } from '../../../../shared/agent-journal-tool-call-lifecycle'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import {
   endedJournalReasoning,
   withJournalReasoningLifecycle
-} from '../../../native-chat/agent-session-journal/journal-reasoning-row'
+} from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 import type { CodexStructuredItemStreams } from './codex-structured-item-stream-contracts'
 import {
   codexJournalItem,

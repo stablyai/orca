@@ -1,10 +1,10 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
-import { buildExecutionHostRegistry } from '../../execution-host-registry'
-import type { ExecutionHostHealth } from '../../execution-host-health'
+import { buildExecutionHostRegistry } from '../../execution-host/execution-host-registry'
+import type { ExecutionHostHealth } from '../../execution-host/execution-host-health'
 import {
   pickerExecutionHosts,
   type ManagedOrcadDeploymentSummary
-} from '../../managed-orcad-execution-host'
+} from '../../execution-host/managed-orcad-execution-host'
 import type { RuntimeCompatVerdict } from '../../protocol-compat'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
 import {

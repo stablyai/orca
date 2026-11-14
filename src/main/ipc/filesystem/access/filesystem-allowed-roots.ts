@@ -1,5 +1,5 @@
 import { isAbsolute, resolve } from 'node:path'
-import type { RuntimeStore } from '../../../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import { computeWorkspaceRootWithin, getWorktreePathSettings } from '../../worktree-logic'
 import { wslHomeUnlessStopped } from '../../../wsl/discovery/wsl-home-unless-stopped'
 import { getWorktreeMirrorDistroForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'

@@ -1,0 +1,193 @@
+// @vitest-environment happy-dom
+
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
+import { useAppStore } from '@/store'
+
+const { resetTransport, subscriptions, transport } = vi.hoisted(() => {
+  const subscriptions: { onFrame: (frame: unknown) => void }[] = []
+  const transport = { readSession: vi.fn(), subscribe: vi.fn() }
+  const resetTransport = (): void => {
+    subscriptions.splice(0)
+    // Hold the seed in flight so only emitted frames move the view.
+    transport.readSession.mockReset().mockImplementation(() => new Promise(() => {}))
+    transport.subscribe.mockReset().mockImplementation((_args, onFrame) => {
+      subscriptions.push({ onFrame })
+      return vi.fn()
+    })
+  }
+  return { resetTransport, subscriptions, transport }
+})
+
+vi.mock('./native-chat-session-transport', () => ({
+  getNativeChatSessionTransport: () => transport
+}))
+
+import { NOTFOUND_RETRY_WINDOW_MS, useNativeChatLiveSession } from './use-native-chat-live-session'
+import type {
+  UseNativeChatLiveSessionArgs,
+  NativeChatLiveSession
+} from './native-chat-live-session-contract'
+
+import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
+
+const BASE_ARGS: UseNativeChatLiveSessionArgs = {
+  paneKey: 'tab-1:leaf-1',
+  agent: 'claude',
+  sessionId: 'session-1',
+  transcriptPath: '/home/agent/session-1.jsonl',
+  enabled: true
+}
+
+const PENDING_FRAME = { type: 'snapshot', messages: [], hasMore: false, pending: true }
+
+function assistant(id: string): NativeChatMessage {
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'text', text: id }],
+    timestamp: 1,
+    source: 'transcript'
+  }
+}
+
+describe('useNativeChatLiveSession — unflushed transcript (pending frame)', () => {
+  let root: Root
+  let latest: NativeChatLiveSession | null = null
+
+  function Probe(props: UseNativeChatLiveSessionArgs): null {
+    latest = useNativeChatLiveSession(props)
+    return null
+  }
+
+  async function render(props: UseNativeChatLiveSessionArgs = BASE_ARGS): Promise<void> {
+    await act(async () => {
+      root.render(createElement(Probe, props))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  async function emit(frame: unknown): Promise<void> {
+    await act(async () => {
+      subscriptions[0]?.onFrame(frame)
+      await Promise.resolve()
+    })
+  }
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    root = createRoot(document.createElement('div'))
+    latest = null
+    resetTransport()
+    useAppStore.setState({ agentStatusByPaneKey: {} })
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    vi.useRealTimers()
+  })
+
+  it('keeps the readSession seed live, so the real transcript still backfills', async () => {
+    // A flush between stream drains needs the independent seed; pending frames must leave it eligible.
+    let settleRead = (_result: { messages: NativeChatMessage[] }): void => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (settleRead = resolve))
+    )
+    await render()
+
+    await emit(PENDING_FRAME)
+    await act(async () => {
+      settleRead({ messages: [assistant('flushed-later')] })
+      await Promise.resolve()
+    })
+
+    expect(latest?.readPhase).toBe('ready')
+    expect(latest?.messages.map((message) => message.id)).toEqual(['flushed-later'])
+  })
+
+  it('settles to ready when the real snapshot arrives on the same subscription', async () => {
+    await render()
+
+    await emit(PENDING_FRAME)
+    await emit({ type: 'snapshot', messages: [assistant('m-1')], hasMore: false })
+
+    expect(latest?.readPhase).toBe('ready')
+    expect(latest?.messages.map((message) => message.id)).toEqual(['m-1'])
+  })
+
+  it('stops duplicate seed polling once the live stream owns the pending transcript', async () => {
+    vi.useFakeTimers()
+    let settleRead = (_result: { error: string; notFound: true }): void => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (settleRead = resolve))
+    )
+    await render()
+
+    await emit(PENDING_FRAME)
+    await act(async () => {
+      settleRead({ error: 'no transcript', notFound: true })
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(NOTFOUND_RETRY_WINDOW_MS + 30_000)
+    })
+
+    expect(latest?.readPhase).toBe('awaiting')
+    expect(latest?.status).not.toBe('error')
+    expect(transport.readSession).toHaveBeenCalledOnce()
+  })
+
+  it('does not drop live appends already merged into the window', async () => {
+    await render()
+
+    await emit({ type: 'appended', messages: [assistant('appended-1')] })
+    await emit(PENDING_FRAME)
+
+    expect(latest?.readPhase).toBe('awaiting')
+    expect(latest?.messages.map((message) => message.id)).toEqual(['appended-1'])
+  })
+})
+
+describe('useNativeChatRetainedSession — unflushed transcript', () => {
+  let root: Root
+  let latest: NativeChatLiveSession | null = null
+
+  function Probe(props: UseNativeChatLiveSessionArgs): null {
+    latest = useNativeChatRetainedSession(props)
+    return null
+  }
+
+  async function emit(frame: unknown): Promise<void> {
+    await act(async () => {
+      subscriptions[0]?.onFrame(frame)
+      await Promise.resolve()
+    })
+  }
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    root = createRoot(document.createElement('div'))
+    latest = null
+    resetTransport()
+    useAppStore.setState({ agentStatusByPaneKey: {} })
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+  })
+
+  it('retains committed history instead of capturing the empty pending window', async () => {
+    await act(async () => {
+      root.render(createElement(Probe, BASE_ARGS))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await emit({ type: 'snapshot', messages: [assistant('committed')], hasMore: false })
+
+    await emit(PENDING_FRAME)
+
+    expect(latest?.readPhase).toBe('awaiting')
+    expect(latest?.messages.map((message) => message.id)).toEqual(['committed'])
+  })
+})

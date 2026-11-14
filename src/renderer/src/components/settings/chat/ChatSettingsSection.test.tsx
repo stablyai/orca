@@ -11,13 +11,16 @@ import { getChatAppearanceSearchEntries } from '../appearance/chat/chat-appearan
 import { getChatNamingSearchEntry } from './chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
 import { getChatBehaviorSearchEntries } from './chat-behavior-search'
+import { getChatTurnActivitySearchEntries } from './chat-turn-activity-search'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { i18n } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { getChatLaunchSearchEntries } from './chat-launch-search'
 
-vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
+vi.mock('@/lib/agent-session/launch/inventory/host-chat-program-acquisition', () => ({
+  useChatProgramFacts: () => {}
+}))
 
 afterEach(async () => {
   cleanup()
@@ -52,6 +55,7 @@ function renderChat(
         searchEntries={[
           ...(showDesktopOnlySettings ? getChatLaunchSearchEntries() : []),
           ...getChatAppearanceSearchEntries(),
+          ...getChatTurnActivitySearchEntries(),
           ...getChatBehaviorSearchEntries(),
           ...(showDesktopOnlySettings
             ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]

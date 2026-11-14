@@ -6,7 +6,7 @@ import {
 } from './terminal/window-close-running-work'
 import type { TerminalWorkspaceProjectionController } from './use-terminal-workspace-projection'
 import { runWithWindowCloseCheckpointScope } from './window-close-request-coordinator'
-import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
+import { showShutdownCheckpointFailureToast } from '@/app-shell/shutdown/shutdown-checkpoint-failure-toast'
 
 export function useTerminalEditorCloseFoundation(
   controller: TerminalWorkspaceProjectionController
@@ -43,6 +43,7 @@ export function useTerminalEditorCloseFoundation(
     if (!accepted) {
       // Report checkpoint-vetoed quits instead of silently trapping the window (#15352); dirty-file vetoes provide no reason.
       showShutdownCheckpointFailureToast()
+      window.api.ui.cancelWindowClose()
       return
     }
     window.api.ui.confirmWindowClose()

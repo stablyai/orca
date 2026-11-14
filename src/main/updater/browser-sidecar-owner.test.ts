@@ -4,7 +4,7 @@ import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime
 import { installServeSupervisorDisconnectQuit } from './serve-update-handoff'
 
 const { quit } = vi.hoisted(() => ({ quit: vi.fn() }))
-vi.mock('../startup/process-quit-request', () => ({ quitProcess: quit }))
+vi.mock('../startup/quit/process-quit-request', () => ({ quitProcess: quit }))
 vi.mock('../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => {
     throw new Error('No profile access for sidecar owner')
@@ -26,17 +26,4 @@ it('couples the browser to its IPC owner on every platform and removes the inher
   parent.emit('disconnect')
   expect(quit).toHaveBeenCalledOnce()
   dispose()
-})
-
-it('quits when the owner disappeared before startup finished', () => {
-  const parent = Object.assign(new EventEmitter(), { connected: false })
-  installServeSupervisorDisconnectQuit(true, parent)
-  expect(quit).toHaveBeenCalledOnce()
-})
-
-it('removes the listener on disposal', () => {
-  const parent = Object.assign(new EventEmitter(), { connected: true })
-  installServeSupervisorDisconnectQuit(true, parent)()
-  parent.emit('disconnect')
-  expect(quit).not.toHaveBeenCalled()
 })

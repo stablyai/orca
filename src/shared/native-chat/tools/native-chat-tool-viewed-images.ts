@@ -1,5 +1,5 @@
 import { isRuntimePathAbsolute } from '../../cross-platform-path'
-import { isRasterImagePath } from '../../file-preview-kind'
+import { isRasterImagePath } from '../../file-preview/file-preview-kind'
 import {
   isToolCallBlock,
   type NativeChatBlock,

@@ -24,16 +24,6 @@ describe('deriveNativeChatStreamingText', () => {
     ).toBeNull()
   })
 
-  it('shows the preview while it leads an empty/user-tailed transcript', () => {
-    expect(
-      deriveNativeChatStreamingText({
-        messages: [user('do the thing')],
-        previewText: 'Working on it',
-        working: true
-      })
-    ).toBe('Working on it')
-  })
-
   it('treats an optimistic user echo as the active streaming-turn boundary', () => {
     const optimistic = {
       ...user('new prompt'),

@@ -15,6 +15,10 @@ export function attachEphemeralVmRuntimeToWorkspace(args: {
   if (!runtime) {
     throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
   }
+  if (!runtime.recipeResult) {
+    // Write-ahead rows have no VM details to attach; they must stay destroyable as they are.
+    throw new Error(`Ephemeral VM runtime never finished provisioning: ${args.runtimeId}`)
+  }
   if (['cleanup_pending', 'cleanup_failed', 'cleaned'].includes(runtime.status)) {
     throw new Error(`Cannot attach cleaned ephemeral VM runtime: ${args.runtimeId}`)
   }

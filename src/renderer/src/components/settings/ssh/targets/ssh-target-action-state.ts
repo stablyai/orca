@@ -3,10 +3,6 @@ import type { SshConnectionStatus } from '../../../../../../shared/ssh-types'
 
 export type SshTargetBusyAction = 'terminate' | 'reset' | 'remove'
 
-export function isSshTargetConnecting(status: SshConnectionStatus): boolean {
-  return isConnectingSshStatus(status)
-}
-
 export function shouldClearPendingSshReset({
   pendingTargetId,
   pendingResetIsBusy,
@@ -16,5 +12,5 @@ export function shouldClearPendingSshReset({
   pendingResetIsBusy: boolean
   connectionStatus: SshConnectionStatus
 }): boolean {
-  return pendingTargetId !== null && !pendingResetIsBusy && isSshTargetConnecting(connectionStatus)
+  return pendingTargetId !== null && !pendingResetIsBusy && isConnectingSshStatus(connectionStatus)
 }

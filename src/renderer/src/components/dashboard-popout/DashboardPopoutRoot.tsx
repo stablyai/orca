@@ -1,8 +1,8 @@
-import { useAppMenuPaste } from '@/hooks/useAppMenuPaste'
-import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
-import { AgentKanbanBoard } from './AgentKanbanBoard'
-import { useDashboardSnapshot } from './useDashboardSnapshot'
-import { useAgentDashboardTelemetry } from './use-agent-dashboard-telemetry'
+import { useAppMenuPaste } from '@/hooks/clipboard/menu/useAppMenuPaste'
+import { useAppMenuSelectionActions } from '@/hooks/app-commands/useAppMenuSelectionActions'
+import { AgentKanbanBoard } from '../dashboard/board/AgentKanbanBoard'
+import { useDashboardSnapshot } from './snapshot/useDashboardSnapshot'
+import { useAgentDashboardTelemetry } from '../dashboard/board/use-agent-dashboard-telemetry'
 
 export function DashboardPopoutRoot(): React.JSX.Element {
   // The pop-out has no App shell to translate Edit-menu IPC into terminal ownership events.

@@ -9,7 +9,7 @@ import {
 } from '../api-runtime/browser-extension-namespace-registry'
 import { hasBrowserExtensionHostPermission } from '../permissions/browser-extension-permission-grants'
 import { listBrowserExtensionTabs } from '../tabs-and-windows/browser-extension-tab-model'
-import { browserExtensionHostPatternsInSession } from './permissions'
+import { browserExtensionHostPatternsInSession } from '../permissions/browser-extension-session-permissions'
 
 /** Each extension session has one cookie store; Chrome names the regular store "0". */
 const STORE_ID = '0'

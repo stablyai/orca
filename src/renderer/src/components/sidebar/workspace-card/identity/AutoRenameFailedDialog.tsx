@@ -9,11 +9,12 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type AutoRenameFailedDialogProps = {
   open: boolean
@@ -32,13 +33,14 @@ export function AutoRenameFailedDialog({
   onOpenChange,
   ...props
 }: AutoRenameFailedDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const [dismissing, setDismissing] = useState(false)
-  const dismissLabel = translate(
+  const dismissLabel = t(
     'auto.components.sidebar.AutoRenameFailedDialog.dismissError',
     'Dismiss error'
   )
-  const dismissingLabel = translate(
+  const dismissingLabel = t(
     'auto.components.sidebar.AutoRenameFailedDialog.dismissing',
     'Dismissing…'
   )
@@ -69,14 +71,14 @@ export function AutoRenameFailedDialog({
     <NameGenerationFailedDialog
       {...props}
       onOpenChange={onOpenChange}
-      title={translate(
+      title={t(
         'auto.components.sidebar.AutoRenameFailedDialog.ca3b225195',
         'Branch auto-name failed'
       )}
       description={
         <Trans
           i18n={i18n}
-          defaults={translate(
+          defaults={t(
             'auto.components.sidebar.AutoRenameFailedDialog.couldNotGenerateBranchName',
             "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message."
           )}
@@ -141,6 +143,7 @@ export function NameGenerationFailedDialog({
   readFullOutput,
   action
 }: NameGenerationFailedDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const [copied, setCopied] = useState(false)
   const [fullOutput, setFullOutput] = useState<string | null>(null)
   const copiedResetTimerRef = useRef<number | null>(null)
@@ -207,10 +210,7 @@ export function NameGenerationFailedDialog({
         {/* Cap and wrap literal CLI output; min-w-0 prevents unbroken tokens widening the grid. */}
         <div className="min-w-0 space-y-1.5">
           <p className="text-xs font-medium text-foreground">
-            {translate(
-              'auto.components.sidebar.AutoRenameFailedDialog.74fc00776f',
-              'Error details'
-            )}
+            {t('auto.components.sidebar.AutoRenameFailedDialog.74fc00776f', 'Error details')}
           </p>
           <div className="relative">
             <Button
@@ -220,11 +220,8 @@ export function NameGenerationFailedDialog({
               onClick={handleCopy}
               aria-label={
                 copied
-                  ? translate('auto.components.sidebar.AutoRenameFailedDialog.a23b22d16f', 'Copied')
-                  : translate(
-                      'auto.components.sidebar.AutoRenameFailedDialog.eab8b45238',
-                      'Copy error'
-                    )
+                  ? t('auto.components.sidebar.AutoRenameFailedDialog.a23b22d16f', 'Copied')
+                  : t('auto.components.sidebar.AutoRenameFailedDialog.eab8b45238', 'Copy error')
               }
               className="absolute right-1.5 top-1.5 text-muted-foreground hover:text-foreground"
             >
@@ -237,7 +234,7 @@ export function NameGenerationFailedDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            {translate('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
+            {t('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
           </Button>
           {action}
         </DialogFooter>

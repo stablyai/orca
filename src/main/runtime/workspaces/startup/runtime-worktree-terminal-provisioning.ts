@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree-first-surface'
-import { buildObservedSetupCommand } from '../../orchestration/setup-completion-signal'
-import { buildSetupRunnerCommand } from '../../../../shared/setup-runner-command'
+import { buildObservedSetupCommand } from '../../orchestration/workers/launch/setup-completion-signal'
+import { buildSetupRunnerCommand } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { DefaultTerminalTab } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
@@ -11,6 +11,7 @@ export type WorktreeProvisionTerminalOptions = {
   /** The pane main already wrote (layout-owner build): the terminal starts in it. */
   tabId?: string
   leafId?: string
+  cwd?: string
   title?: string
   command?: string
   env?: Record<string, string>
@@ -242,6 +243,7 @@ export async function provisionWorktreeTerminals(
         )
       const env = { ...args.setup.envVars, ...observed?.env }
       const setupTerminal = await host.createTerminal(args.worktreeSelector, {
+        ...(args.setup.cwd ? { cwd: args.setup.cwd } : {}),
         title: host.getSetupTerminalTitle?.() ?? 'Setup',
         command,
         env,

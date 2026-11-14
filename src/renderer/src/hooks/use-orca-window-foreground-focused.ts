@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { isOrcaWindowForegroundFocused } from '@/components/terminal-pane/terminal-notification-pane-visibility'
+import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
 
 function subscribe(onChange: () => void): () => void {
   window.addEventListener('focus', onChange)

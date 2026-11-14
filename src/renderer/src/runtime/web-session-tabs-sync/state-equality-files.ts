@@ -1,5 +1,5 @@
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import { sameStringArray } from './state-equality-core'
 import { sameAiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'

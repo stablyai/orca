@@ -9,7 +9,7 @@ import type {
   WriteTerminalRenderDesyncEvidenceResult
 } from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
@@ -54,7 +54,9 @@ export type AppApi = {
   /** Whether this machine's runtime holds a structured chat, saved or live. */
   holdsStructuredAgentSessions: () => Promise<boolean>
   onStructuredAgentSessionsHeldChanged: (callback: (held: boolean) => void) => () => void
-  recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
+  recoverLegacyWorkerTerminalsForRendererStartup: (options?: {
+    afterReconnect?: boolean
+  }) => Promise<void>
   /** Enabled only by ORCA_STARTUP_DIAGNOSTICS. */
   startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
   /** macOS input mode or non-IME layout ID; null off macOS or if the defaults read fails. */

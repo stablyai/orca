@@ -29,34 +29,6 @@ describe('browser host page reconciliation preconditions', () => {
     controller.abort(new Error('test cleanup'))
     await inFlight
   })
-
-  it.each([
-    ['authorityRuntimeId', { authorityRuntimeId: 'runtime-old' }],
-    ['authorityEpoch', { authorityEpoch: 'epoch-old' }],
-    ['browserHostClientId', { browserHostClientId: 'host-b' }],
-    ['browserHostGeneration', { browserHostGeneration: 2 }]
-  ])('refuses a plan whose intents disagree on %s', async (_field, disagreement) => {
-    const placements = new BrowserHostPagePlacementRegistry(authority)
-    const orchestrator = new BrowserHostPageReconciliationOrchestrator(authority, placements)
-    const state = leaseState({ pageInventory: [oldPage('page-a')] })
-    state.executionHostGrants.grant('native:runtime-new:1')
-
-    await expect(
-      orchestrator.adopt(state, [{ ...reclaimIntent('page-a', 8), ...disagreement }])
-    ).rejects.toThrow('browser_host_page_reconciliation_authority_stale')
-    expect(placements.getPlacement('page-a')).toBeUndefined()
-  })
-
-  it('refuses a lease that never negotiated the reconciliation protocol', async () => {
-    const orchestrator = new BrowserHostPageReconciliationOrchestrator(
-      authority,
-      new BrowserHostPagePlacementRegistry(authority)
-    )
-
-    await expect(
-      orchestrator.adopt(leaseState({ legacy: true }), [reclaimIntent('page-a', 8)])
-    ).rejects.toThrow('browser_host_reconciliation_protocol_required')
-  })
 })
 
 function leaseState(

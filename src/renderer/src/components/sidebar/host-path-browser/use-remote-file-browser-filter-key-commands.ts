@@ -8,9 +8,9 @@ import {
   type DirEntry
 } from './remote-file-browser-entry-actions'
 import { stepRemoteFileBrowserHighlight } from './remote-file-browser-highlight'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type { PreviewState } from './remote-file-browser-path-preview-resolver'
-import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 
 export type RemoteFileBrowserFilterKeyCommandsArgs = {
   loading: boolean

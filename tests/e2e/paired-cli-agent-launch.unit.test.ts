@@ -10,10 +10,10 @@ import { OrcaRuntimeRpcServer } from '../../src/main/runtime/rpc/server/runtime-
 import {
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
-import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch'
-import { STATUS_METHODS } from '../../src/main/runtime/rpc/methods/status'
-import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch.test-fixture'
+import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch'
+import { STATUS_METHODS } from '../../src/main/runtime/rpc/methods/host-management/status'
+import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const TARGETS = [
   { kind: 'existing', worktree: 'id:wt-7' },
@@ -81,6 +81,11 @@ describe.each([
       if (target.kind === 'create-worktree') {
         expect(boundary.createManagedWorktree).toHaveBeenCalledTimes(1)
         expect(boundary.createTerminal).not.toHaveBeenCalled()
+      } else if (target.kind === 'create-folder-workspace') {
+        expect(boundary.createTerminal).not.toHaveBeenCalled()
+        expect(boundary.createFolderWorkspace).toHaveBeenCalledWith(
+          expect.objectContaining({ startupAgent: 'claude', startupPrompt: 'Reply with OK' })
+        )
       } else {
         expect(boundary.createTerminal).toHaveBeenCalledTimes(1)
         expect(boundary.createTerminal).toHaveBeenCalledWith(

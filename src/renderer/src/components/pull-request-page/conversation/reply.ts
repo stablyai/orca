@@ -9,11 +9,11 @@ import {
   addPRReviewCommentReplyForRepo
 } from '@/components/github/github-work-item-comment-mutations'
 import { translate } from '@/i18n/i18n'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export async function postConversationReply(args: {
   canUseRepoMutationContext: boolean

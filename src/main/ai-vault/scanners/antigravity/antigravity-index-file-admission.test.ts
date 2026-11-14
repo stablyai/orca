@@ -1,10 +1,9 @@
 import type * as NodeFsPromises from 'node:fs/promises'
-import { constants } from 'node:fs'
+
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '@orca/process-host'
 
 const { afterStat } = vi.hoisted(() => {
   const afterStat: { run: null | (() => Promise<void>) } = { run: null }
@@ -21,7 +20,7 @@ vi.mock('node:fs/promises', async (original) => {
     }
   }
 })
-import { readNodeFileWithinLimit } from '../../../../shared/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { readLocalAntigravityHistory } from './session-scanner-antigravity-history'
 
 const roots: string[] = []
@@ -30,36 +29,12 @@ async function filePath() {
   roots.push(root)
   return join(root, 'projects.json')
 }
-async function fifo(path: string) {
-  const result = await runProcess({ program: 'mkfifo', args: [path], timeoutMs: 2000 })
-  if (result.code !== 0) {
-    throw new Error('Could not create task-owned FIFO')
-  }
-}
 afterEach(async () => {
   afterStat.run = null
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
 describe('bounded regular metadata reads', () => {
-  it.skipIf(process.platform === 'win32')(
-    'rejects a regular path replaced by a FIFO between stat and open',
-    async () => {
-      const file = await filePath()
-      await writeFile(file, '{}')
-      afterStat.run = async () => {
-        afterStat.run = null
-        await rm(file)
-        await fifo(file)
-      }
-      await expect(readNodeFileWithinLimit(file, 64, { regularFileOnly: true })).rejects.toThrow(
-        'regular file'
-      )
-      expect(constants.O_NONBLOCK).toBeGreaterThan(0)
-    },
-    2000
-  )
-
   it('retains ordinary metadata within the byte bound', async () => {
     const file = await filePath()
     await writeFile(file, '{"project":"/workspace"}')

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getIntlLocale } from '@/i18n/i18n'
+import { useIntlLocale } from '@/i18n/use-translate'
 import {
   formatPluginRelativeTime,
   pluginRelativeTimeTickMs,
@@ -23,13 +23,11 @@ export function PluginDeclarativeRelativeTimeText({
   at: number
   format?: PluginRelativeTimeFormat
 }): React.JSX.Element {
+  const intlLocale = useIntlLocale()
   const now = useRelativeNow(at)
   return (
-    <time
-      dateTime={new Date(at).toISOString()}
-      title={new Date(at).toLocaleString(getIntlLocale())}
-    >
-      {formatPluginRelativeTime(at, now, format, getIntlLocale())}
+    <time dateTime={new Date(at).toISOString()} title={new Date(at).toLocaleString(intlLocale)}>
+      {formatPluginRelativeTime(at, now, format, intlLocale)}
     </time>
   )
 }

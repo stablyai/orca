@@ -8,7 +8,7 @@ import {
   type KnownRuntimeEnvironment
 } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
-import { fingerprintRuntimeSshTarget } from '../ssh/runtime-ssh-target-fingerprint'
+import { fingerprintRuntimeSshTarget } from '../ssh/runtime-access/runtime-ssh-target-fingerprint'
 
 export type ListRuntimeEnvironments = () => readonly Pick<
   KnownRuntimeEnvironment,

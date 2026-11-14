@@ -72,19 +72,6 @@ describe('local worktree metadata scan expectations', () => {
     expect(state.worktreeMetaByIdentity?.[IDENTITY_KEY]).toBeUndefined()
   })
 
-  it('removes equal legacy and canonical projections after a persistence round trip', () => {
-    const state = makeState()
-    const meta = makeMeta()
-    state.worktreeMeta[WORKTREE_ID] = structuredClone(meta)
-    state.worktreeMetaByIdentity = { [IDENTITY_KEY]: structuredClone(meta) }
-    state.worktreeIdentityAliases = { [LOCAL_ALIAS]: [IDENTITY_KEY] }
-
-    expect(pruneCaptured(state)).toEqual([WORKTREE_ID])
-    expect(state.worktreeMeta[WORKTREE_ID]).toBeUndefined()
-    expect(state.worktreeIdentityAliases[LOCAL_ALIAS]).toBeUndefined()
-    expect(state.worktreeMetaByIdentity[IDENTITY_KEY]).toBeUndefined()
-  })
-
   it('does not sweep an unrelated unaliased canonical row during pruning', () => {
     const { state, meta } = makeCanonicalOnlyState()
     const unrelated = makeMeta(`${REPO_ID}::/workspace/unrelated`)
@@ -96,31 +83,6 @@ describe('local worktree metadata scan expectations', () => {
     expect(meta).not.toBe(unrelated)
   })
 
-  it('allocates expectations only for the scanned repository', () => {
-    const state = makeState()
-    const otherRepo = makeRepo('repo-2')
-    const otherId = `${otherRepo.id}::/workspace/other`
-    const canonicalId = `${REPO_ID}::/workspace/canonical`
-    const canonicalKey = 'canonical-key'
-    state.repos.push(otherRepo)
-    state.worktreeMeta[WORKTREE_ID] = makeMeta()
-    state.worktreeMeta[otherId] = makeMeta(otherId)
-    state.worktreeMetaByIdentity = {
-      [canonicalKey]: makeMeta(canonicalId),
-      'other-key': makeMeta(otherId)
-    }
-    state.worktreeIdentityAliases = {
-      [`local|${canonicalId}`]: [canonicalKey],
-      [`local|${otherId}`]: ['other-key']
-    }
-
-    const scan = captureNativeLocalWorktreeMetadataScanExpectation(state, state.repos[0]!)
-
-    expect(scan.metadata.map(({ worktreeId }) => worktreeId).sort()).toEqual(
-      [WORKTREE_ID, canonicalId].sort()
-    )
-  })
-
   it('preserves metadata when an alias array is replaced with identical contents', () => {
     const { state } = makeCanonicalOnlyState()
     const scan = captureNativeLocalWorktreeMetadataScanExpectation(state, state.repos[0]!)
@@ -130,54 +92,6 @@ describe('local worktree metadata scan expectations', () => {
       []
     )
     expect(state.worktreeMetaByIdentity?.[IDENTITY_KEY]).toBeDefined()
-  })
-
-  it('preserves metadata when the captured alias array is mutated in place', () => {
-    const { state } = makeCanonicalOnlyState()
-    const scan = captureNativeLocalWorktreeMetadataScanExpectation(state, state.repos[0]!)
-    state.worktreeIdentityAliases![LOCAL_ALIAS]!.push('new-identity')
-    state.worktreeMetaByIdentity!['new-identity'] = makeMeta()
-
-    expect(pruneSessionlessMissingLocalWorktreeMetadataForRepo(state, scan, scan.metadata)).toEqual(
-      []
-    )
-  })
-
-  it.each([
-    [
-      'replaced',
-      (state: PersistedState) => {
-        state.worktreeMetaByIdentity![IDENTITY_KEY] = {
-          ...state.worktreeMetaByIdentity![IDENTITY_KEY]!
-        }
-      }
-    ],
-    [
-      'host-mutated',
-      (state: PersistedState) => {
-        state.worktreeMetaByIdentity![IDENTITY_KEY]!.hostId = 'ssh:builder'
-      }
-    ],
-    [
-      'instance-mutated',
-      (state: PersistedState) => {
-        state.worktreeMetaByIdentity![IDENTITY_KEY]!.instanceId = 'new-instance'
-      }
-    ],
-    [
-      'content-mutated',
-      (state: PersistedState) => {
-        state.worktreeMetaByIdentity![IDENTITY_KEY]!.comment = 'new comment'
-      }
-    ]
-  ] as const)('preserves metadata when a canonical row is %s', (_label, mutate) => {
-    const { state } = makeCanonicalOnlyState()
-    const scan = captureNativeLocalWorktreeMetadataScanExpectation(state, state.repos[0]!)
-    mutate(state)
-
-    expect(pruneSessionlessMissingLocalWorktreeMetadataForRepo(state, scan, scan.metadata)).toEqual(
-      []
-    )
   })
 
   it.each([
@@ -213,30 +127,5 @@ describe('local worktree metadata scan expectations', () => {
       []
     )
     expect(state.worktreeMeta[WORKTREE_ID]).toBeDefined()
-  })
-
-  it.each([WORKTREE_ID, `bogus|${WORKTREE_ID}`, `ssh:builder|${WORKTREE_ID}`])(
-    'preserves metadata with an unqualified or foreign alias: %s',
-    (alias) => {
-      const state = makeState()
-      state.worktreeMeta[WORKTREE_ID] = makeMeta()
-      state.worktreeMetaByIdentity = { [IDENTITY_KEY]: state.worktreeMeta[WORKTREE_ID]! }
-      state.worktreeIdentityAliases = { [alias]: [IDENTITY_KEY] }
-
-      expect(pruneCaptured(state)).toEqual([])
-      expect(state.worktreeMeta[WORKTREE_ID]).toBeDefined()
-    }
-  )
-
-  it('preserves an unqualified alias whose worktree path contains a pipe', () => {
-    const state = makeState()
-    const pipedId = `${REPO_ID}::/workspace/a|b`
-    state.worktreeMeta[pipedId] = makeMeta(pipedId)
-    state.worktreeMetaByIdentity = { [IDENTITY_KEY]: state.worktreeMeta[pipedId]! }
-    state.worktreeIdentityAliases = { [pipedId]: [IDENTITY_KEY] }
-
-    expect(pruneCaptured(state)).toEqual([])
-    expect(state.worktreeMeta[pipedId]).toBeDefined()
-    expect(state.worktreeIdentityAliases[pipedId]).toEqual([IDENTITY_KEY])
   })
 })

@@ -1,7 +1,7 @@
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getErrorCode } from '../worktree-operation-options'
-import { parseWorktreePreparationOwnerPid } from '../../../../shared/worktree/create-preparation'
+import { parseWorktreePreparationOwnerPid } from '../../../../shared/worktree/creation/create-preparation'
 
 /** Existence only: the hook's content is never read. */
 export type PostCheckoutHookPresence = 'present' | 'absent' | 'custom_hooks_path' | 'unknown'

@@ -1,18 +1,22 @@
-import { normalizePRCheckHeadSha } from '../../../../shared/github/pr-check-head'
+import { normalizePRCheckHeadSha } from '../../../../shared/github/checks/pr-check-head'
 import {
   withGitHubRepoExecution,
   githubRepoContext,
-  ghRepoExecOptions
-} from '../../github-repository-identity'
+  ghRepoExecOptions,
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { extractExecError } from '../../../git/exec-error'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-import { mapCheckStatus, mapCheckConclusion } from '../../mappers'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
+import type { PRCheckDetail } from '../../../../shared/github/checks/check-types'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { mapCheckStatus, mapCheckConclusion } from '../../api/github-read-response'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import type { GhExecOptions } from './../github-exec-scope'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
 import { PR_CHECKS_ROLLUP_QUERY, type GraphQLPRChecksResponse } from './pr-checks-graphql-query'

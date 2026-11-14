@@ -1,10 +1,9 @@
 import type { MobileWebShellSession, MobileWebShellStep } from './mobile-web-shell-session-contract'
 import {
   readFailureSide,
-  type MobileWebShellUpdateFailureCause,
-  type MobileWebShellUpdateFailureFacts
+  type MobileWebShellUpdateFailureCause
 } from './mobile-web-shell-update-failure'
-import { updateFailureOutcomeOf } from './mobile-web-shell-update-failure-outcome'
+import { updateFailureRecordEffect } from './mobile-web-shell-update-failure-outcome'
 import { cachedGenerationWall, gateState, gateVerdict } from './mobile-web-shell-gates'
 import { openByOwnRoutes } from './mobile-web-shell-cached-generation'
 import { step } from './mobile-web-shell-session-step'
@@ -15,13 +14,10 @@ export function onDownloadFailed(
   cause: MobileWebShellUpdateFailureCause
 ): MobileWebShellStep {
   const decided = decideDownloadFailed(session, cause)
-  const failure: MobileWebShellUpdateFailureFacts = {
-    ...cause,
-    offeredBuildId: session.requestedBuildId,
-    cachedBuildId: session.cached?.buildId ?? null,
-    ...updateFailureOutcomeOf(decided.session.state)
+  return {
+    ...decided,
+    effects: [...decided.effects, updateFailureRecordEffect(session, cause, decided.session.state)]
   }
-  return { ...decided, effects: [...decided.effects, { kind: 'record-update-failure', failure }] }
 }
 
 // Fall back to intact cached bytes under their own routes, checking compatibility when the host remains reachable.

@@ -2,14 +2,14 @@ import { useCallback, useMemo, useState } from 'react'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
   stageRuntimeGitWorktreeScope
-} from '@/runtime/runtime-git-working-tree-client'
+} from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import {
   getStageAllPaths,
   getUnstageAllPaths,
@@ -56,6 +56,7 @@ export function useSourceControlBulkActions({
   clearSelection: () => void
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
+  const sourceControlScope = useSourceControlScope()
   const [isExecutingBulk, setIsExecutingBulk] = useState(false)
   // Reset during render so switches never paint the previous worktree's busy state.
   const [bulkActionsWorktreeId, setBulkActionsWorktreeId] = useState(activeWorktreeId)
@@ -92,7 +93,7 @@ export function useSourceControlBulkActions({
     }
     setIsExecutingBulk(true)
     try {
-      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      const connectionId = sourceControlConnectionId(sourceControlScope, activeWorktreeId ?? null)
       await bulkStageRuntimeGitPaths(
         {
           // Route staging through workspace ownership rather than focused runtime.
@@ -117,7 +118,8 @@ export function useSourceControlBulkActions({
     clearSelection,
     activeWorktreeId,
     isExecutingBulk,
-    refreshActiveGitStatusAfterMutation
+    refreshActiveGitStatusAfterMutation,
+    sourceControlScope
   ])
 
   const handleBulkUnstage = useCallback(async () => {
@@ -126,7 +128,7 @@ export function useSourceControlBulkActions({
     }
     setIsExecutingBulk(true)
     try {
-      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      const connectionId = sourceControlConnectionId(sourceControlScope, activeWorktreeId ?? null)
       await bulkUnstageRuntimeGitPaths(
         {
           // Route unstaging through workspace ownership rather than focused runtime.
@@ -151,7 +153,8 @@ export function useSourceControlBulkActions({
     clearSelection,
     activeWorktreeId,
     isExecutingBulk,
-    refreshActiveGitStatusAfterMutation
+    refreshActiveGitStatusAfterMutation,
+    sourceControlScope
   ])
 
   // Scopes replace explicit paths; only the host can enumerate changes beyond the listing cap.
@@ -167,7 +170,7 @@ export function useSourceControlBulkActions({
           target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId: activeWorktreeId,
           worktreePath,
-          connectionId: getConnectionId(activeWorktreeId ?? null) ?? undefined
+          connectionId: sourceControlConnectionId(sourceControlScope, activeWorktreeId ?? null)
         }
         await (scope
           ? stageRuntimeGitWorktreeScope(context, scope)
@@ -181,6 +184,7 @@ export function useSourceControlBulkActions({
       }
     },
     [
+      sourceControlScope,
       activeRepoTarget,
       activeWorktreeId,
       clearSelection,
@@ -209,7 +213,7 @@ export function useSourceControlBulkActions({
       }
       setIsExecutingBulk(true)
       try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        const connectionId = sourceControlConnectionId(sourceControlScope, activeWorktreeId ?? null)
         await bulkUnstageRuntimeGitPaths(
           {
             // Route unstaging through workspace ownership rather than focused runtime.
@@ -229,6 +233,7 @@ export function useSourceControlBulkActions({
       }
     },
     [
+      sourceControlScope,
       activeRepoTarget,
       activeWorktreeId,
       clearSelection,

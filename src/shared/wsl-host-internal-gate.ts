@@ -1,10 +1,22 @@
-/** Keep WSL hosts internal until project moves are lossless and WSL parity is met. Main/preload agree through the same launch environment. */
+/** WSL hosts are on by default; `0`, `false`, `off` or `no` closes the gate for a launch. Main/preload agree through the same launch environment. */
 export const WSL_HOSTS_INTERNAL_GATE_ENV = 'ORCA_INTERNAL_WSL_HOSTS'
+
+const GATE_OFF_VALUES = new Set(['0', 'false', 'off', 'no'])
 
 export function isWslHostsInternalGateOpen(
   env: Readonly<Record<string, string | undefined>>
 ): boolean {
-  return env[WSL_HOSTS_INTERNAL_GATE_ENV] === '1'
+  const value = env[WSL_HOSTS_INTERNAL_GATE_ENV]
+  if (value === undefined) {
+    return true
+  }
+  // cmd.exe's `set NAME="0"` keeps the quotes in the value.
+  const word = value
+    .trim()
+    .replace(/^(["'])(.*)\1$/, '$2')
+    .trim()
+    .toLowerCase()
+  return !GATE_OFF_VALUES.has(word)
 }
 
 /**

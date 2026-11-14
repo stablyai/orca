@@ -3,7 +3,7 @@ import { FolderMinus, Search } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import {
@@ -29,6 +29,7 @@ export default function HiddenWorktreeRecoveryList({
   toggling,
   onShow
 }: Props): React.JSX.Element | null {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const headingId = useId()
   const listRef = useRef<HTMLDivElement>(null)
@@ -60,14 +61,14 @@ export default function HiddenWorktreeRecoveryList({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 id={headingId} className="text-sm font-medium">
-            {translate(
+            {t(
               'auto.components.sidebar.WorktreeVisibilityDialog.7d21c5e848',
               'Hidden worktrees ({{value0}})',
               { value0: hidden.length }
             )}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.HiddenWorktreeRecoveryList.64e6f53f05',
               'Show one without enabling its source.'
             )}
@@ -80,11 +81,11 @@ export default function HiddenWorktreeRecoveryList({
               type="search"
               className="h-8 pl-8 text-xs"
               value={query}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.sidebar.WorktreeVisibilityDialog.search',
                 'Search hidden worktrees'
               )}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.sidebar.WorktreeVisibilityDialog.searchHiddenPlaceholder',
                 'Search {{count}} worktrees…',
                 { count: hidden.length, defaultValue_one: 'Search {{count}} worktree…' }
@@ -132,7 +133,7 @@ export default function HiddenWorktreeRecoveryList({
                       variant="outline"
                       size="sm"
                       disabled={busyPath !== null || toggling || listState === 'checking'}
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.sidebar.HiddenWorktreeRecoveryList.showWorktree',
                         'Show {{value0}} at {{value1}}',
                         { value0: worktree.displayName, value1: displayPath }
@@ -140,14 +141,11 @@ export default function HiddenWorktreeRecoveryList({
                       onClick={() => void onShow(worktree.path)}
                     >
                       {busyPath === worktree.path
-                        ? translate(
+                        ? t(
                             'auto.components.sidebar.WorktreeVisibilityDialog.2f80cd4b97',
                             'Showing…'
                           )
-                        : translate(
-                            'auto.components.sidebar.WorktreeVisibilityDialog.e64b81d3a9',
-                            'Show'
-                          )}
+                        : t('auto.components.sidebar.WorktreeVisibilityDialog.e64b81d3a9', 'Show')}
                     </Button>
                   </div>
                 </li>
@@ -163,32 +161,32 @@ export default function HiddenWorktreeRecoveryList({
           <div className="min-w-0">
             <div className="text-[13px] font-medium">
               {normalizedQuery
-                ? translate(
+                ? t(
                     'auto.components.sidebar.WorktreeVisibilityDialog.noMatches',
                     'No matching worktrees'
                   )
                 : discoveredCount > 0
-                  ? translate(
+                  ? t(
                       'auto.components.sidebar.WorktreeVisibilityDialog.allShown',
                       'All discovered worktrees are shown'
                     )
-                  : translate(
+                  : t(
                       'auto.components.sidebar.WorktreeVisibilityDialog.noneFound',
                       'No non-Orca worktrees found'
                     )}
             </div>
             <div className="text-xs text-muted-foreground">
               {normalizedQuery
-                ? translate(
+                ? t(
                     'auto.components.sidebar.WorktreeVisibilityDialog.tryDifferentSearch',
                     'Try a different name or path.'
                   )
                 : discoveredCount > 0
-                  ? translate(
+                  ? t(
                       'auto.components.sidebar.WorktreeVisibilityDialog.disableSource',
                       'Disable a source to manage its worktrees individually.'
                     )
-                  : translate(
+                  : t(
                       'auto.components.sidebar.WorktreeVisibilityDialog.appearWhenDetected',
                       'New worktrees will appear here when Orca detects them.'
                     )}

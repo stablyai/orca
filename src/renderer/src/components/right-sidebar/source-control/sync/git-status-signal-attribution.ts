@@ -1,21 +1,28 @@
 import type { GitStatusMetadataChangedEvent } from '../../../../../../shared/worktree/types'
-import { areRuntimePathsEqual } from '../../../../../../shared/worktree/ownership'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
 
-/** Unattributed signals from older main/SSH/global changes may affect any checkout. */
-export function isGitStatusSignalForWorktree(
+const REFRESH_EVERY_OBSERVER = (): boolean => true
+
+/** Builds one signal's recipient test; observers pass their path already normalized, or null. */
+export function gitStatusSignalRecipientTest(
   signal: GitStatusMetadataChangedEvent,
-  activeWorktreePath: string | null,
-  repoWorktreePaths: readonly string[]
-): boolean {
+  readKnownRepoWorktreePaths: (repoId: string) => readonly string[]
+): (normalizedObserverPath: string | null) => boolean {
   const attributed = signal.worktreePaths
-  if (!attributed?.length || !activeWorktreePath) {
-    return true
+  // Unattributed signals from older main/SSH/global changes may affect any checkout.
+  if (!attributed?.length) {
+    return REFRESH_EVERY_OBSERVER
   }
-  if (attributed.some((path) => areRuntimePathsEqual(path, activeWorktreePath))) {
-    return true
-  }
-  // Skip only known siblings; unknown spellings such as symlinked roots may still name this checkout.
-  return !attributed.every((path) =>
-    repoWorktreePaths.some((known) => areRuntimePathsEqual(path, known))
+  const attributedPaths = new Set(attributed.map(normalizeRuntimePathForComparison))
+  const knownPaths = new Set(
+    readKnownRepoWorktreePaths(signal.repoId).map(normalizeRuntimePathForComparison)
   )
+  // Skip only known siblings; unknown spellings such as symlinked roots may still name this checkout.
+  for (const path of attributedPaths) {
+    if (!knownPaths.has(path)) {
+      return REFRESH_EVERY_OBSERVER
+    }
+  }
+  return (normalizedObserverPath) =>
+    normalizedObserverPath === null || attributedPaths.has(normalizedObserverPath)
 }

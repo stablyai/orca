@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DirEntry } from '../../../../../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
 
 const readRuntimeDirectoryPage = vi.fn()
 const readRuntimeDirectory = vi.fn()
 let hostPages = true
-vi.mock('@/runtime/runtime-directory-page-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-directory-page-client', () => ({
   readRuntimeDirectoryPage: (...args: unknown[]) => readRuntimeDirectoryPage(...args),
   runtimeDirectoryPagesSupported: () => hostPages
 }))
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-directory-read', () => ({
   readRuntimeDirectory: (...args: unknown[]) => readRuntimeDirectory(...args)
 }))
 vi.mock('../navigation/file-explorer-operation-owner', () => ({

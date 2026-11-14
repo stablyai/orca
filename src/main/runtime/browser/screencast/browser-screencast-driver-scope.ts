@@ -1,4 +1,4 @@
-import type { RuntimeBrowserDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 
 export type BrowserScreencastSubscriber = {
   cancel: (emitEnd?: boolean) => void
@@ -16,7 +16,7 @@ export function screencastSubscriberDrivesAsMobile(
 
 export function resolveBrowserDriverAfterMobileRelease(
   remaining: Iterable<BrowserScreencastSubscriber>
-): RuntimeBrowserDriverState {
+): RuntimeTerminalDriverState {
   let fallback: BrowserScreencastSubscriber | null = null
   for (const subscriber of remaining) {
     if (subscriber.drivesAsMobile) {

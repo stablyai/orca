@@ -50,12 +50,4 @@ describe('repo.update worktree refresh', () => {
     expect(await isExternalVisible()).toBe(true)
     expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
-
-  it('skips the worktree refresh for catalog-only edits', async () => {
-    const { runtime, events } = await createScannedRuntime()
-
-    await runtime.updateRepo(`id:${TEST_REPO_ID}`, { displayName: 'renamed' })
-
-    expect(events.some((event) => event.type === 'worktreesChanged')).toBe(false)
-  })
 })

@@ -1,11 +1,15 @@
-import { getWorkerTerminalAutoReleaseScheduler } from '../worker-terminal-auto-release-scheduler'
+import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
+import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-approval-orphans'
 import { OrcaRuntimeWithAutomationApiOperations } from '../../workspaces/persisted-surfaces/automation-api-operations'
 
 export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWithAutomationApiOperations {
-  abstract ensureOrchestrationFederationRelay(runId?: string): void
+  abstract ensureOrchestrationFederationRelay(
+    runId?: string,
+    options?: { keepAwake?: boolean }
+  ): void
 
   protected abstract scheduleRestoredMessageRepoints(): void
 
@@ -24,6 +28,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       // Recover deadlines armed before a restart.
       getWorkerTerminalAutoReleaseScheduler(this).rearm()
       this.continueRestoredWorkerMail(this._orchestrationDb)
+      // No terminal prompt's hold survives a restart; its card must not stay answerable.
+      closeOrphanedTerminalApprovals(this._orchestrationDb)
     }
     return this._orchestrationDb
   }

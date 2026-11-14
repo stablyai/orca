@@ -1,18 +1,18 @@
 import type { WorkspaceAttachmentMetadata } from '../../../../../../shared/workspace-attachments/workspace-attachment-legacy'
-import type { AppState } from '@/store/index'
+import type { SourceControlAiSettingsInput } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type {
   RuntimeGeneratePullRequestFieldsOverrides,
   RuntimeGitContext
-} from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-client-context'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { SourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type {
   PullRequestFieldRevisions,
   PullRequestGenerationFields
-} from '@/store/slices/pull-request-generation'
-import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
+} from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
 
 export type PullRequestGenerationOutcome = { result: PullRequestGenerationFields | null }
 
@@ -34,7 +34,7 @@ export type UseCreatePullRequestDialogFieldsOptions = {
   currentBaseRef?: string | null
   repo?: Pick<Repo, 'sourceControlAi'> | null
   /** Generation preferences; routing comes from `target`. */
-  settings: AppState['settings']
+  settings: SourceControlAiSettingsInput | null
   /** The worktree owner's transport. */
   target: RuntimeClientTarget | null
   submitting: boolean

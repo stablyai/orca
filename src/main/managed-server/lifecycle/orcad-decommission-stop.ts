@@ -4,7 +4,7 @@ import {
   cancelRemoteOrcadManagedStop,
   completeRemoteOrcadManagedStop
 } from './orcad-managed-remote-stop'
-import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import type { OrcadSlotOptions } from '../activation/orcad-recovery-slot'
 import type {
   OrcadDaemonRetirementVerdict,
   OrcadManagedStopRequest

@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "lib": [
+      "es2022"
+    ],
+    "types": [
+      "@cloudflare/workers-types",
+      "@types/node"
+    ],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": false,
+    "baseUrl": ".",
+    "paths": {
+      "@orca-cloud/relay-contract": [
+        "../../packages/relay-contract/src/index.ts"
+      ],
+      "@orca-cloud/relay-contract/*": [
+        "../../packages/relay-contract/src/*.ts"
+      ],
+      "@orca-cloud/postgres-schema": [
+        "../../packages/postgres-schema/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src"
+  ]
+}

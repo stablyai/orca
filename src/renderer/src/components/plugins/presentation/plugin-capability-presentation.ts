@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { reachablePluginCapabilities } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
 import type { PluginTrust } from './plugin-access-profile'
 
@@ -12,55 +13,59 @@ export function shownPluginCapabilities<T extends { kind: string }>(
     : reachablePluginCapabilities(capabilities, 'sandboxed-ui')
 }
 
-export function pluginCapabilityDescription(kind: string, fallback: string): string {
+export function pluginCapabilityDescription(
+  kind: string,
+  fallback: string,
+  t: Translate = translate
+): string {
   switch (kind) {
     case 'workspace:read':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.workspaceRead',
         'Read workspace names, branches, and terminals'
       )
     case 'agent:read':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.agentsRead',
         'Get notified when agent status changes'
       )
     case 'terminal:send':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.terminalRun',
         'Run commands in your terminals, including SSH'
       )
     case 'terminal:read':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.terminalRead',
         'Read the output of your terminals, including SSH'
       )
     case 'workspace:write':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.workspaceWrite',
         'Open your workspaces and files, and run built-in commands'
       )
     case 'agent:launch':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.agentLaunch',
         'Start agents in your workspaces, including SSH'
       )
     case 'notifications:show':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.notificationsShow',
         'Show desktop notifications'
       )
     case 'storage:own':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.storage',
         'Store its own data'
       )
     case 'secrets:own':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.secrets',
         'Store its own encrypted secrets'
       )
     case 'settings:own':
-      return translate(
+      return t(
         'auto.components.settings.PluginConsentDialog.capability.settingsOwn',
         'Read and change its own settings'
       )

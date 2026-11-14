@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithVisibleSnapshotPreview } from './terminal-visible-state'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../wait/terminal-interactive-probe-budget'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
-import { showsClaudeDialog } from '../../claude-open-dialog-hold'
+import { showsClaudeDialog } from '../wait/claude-open-dialog-hold'
 import { detectTerminalWaitBlockedReason } from '../wait/terminal-wait-detection'
 import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 

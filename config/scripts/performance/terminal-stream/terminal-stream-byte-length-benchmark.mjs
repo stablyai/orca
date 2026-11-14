@@ -60,15 +60,18 @@ const { TERMINAL_OUTPUT_BATCH_MAX_BYTES, TERMINAL_STREAM_CHUNK_BYTES } = await i
     import.meta.url
   ).href
 )
-const { measureClipboardTextByteLength } = await import(
-  new URL('../../../../src/shared/clipboard-text.ts', import.meta.url).href
+const { measureUtf8ByteLength } = await import(
+  new URL('../../../../src/shared/utf8-byte-limits.ts', import.meta.url).href
 )
 const {
   MIN_NATIVE_BYTE_LENGTH_CODE_UNITS,
   measureTerminalStreamByteLength,
   terminalStreamByteLengthExceeds
 } = await import(
-  new URL('../../../../src/main/runtime/rpc/terminal-stream-byte-length.ts', import.meta.url).href
+  new URL(
+    '../../../../src/main/runtime/rpc/terminal/terminal-stream-byte-length.ts',
+    import.meta.url
+  ).href
 )
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = (() => {
@@ -107,9 +110,9 @@ function runWithNativeCallCount(fn) {
   }
 }
 
-const legacyMeasure = measureClipboardTextByteLength
+const legacyMeasure = measureUtf8ByteLength
 const legacyExceeds = (data, maxBytes) =>
-  measureClipboardTextByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
+  measureUtf8ByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
 
 function mulberry32(seed) {
   let state = seed >>> 0
@@ -128,7 +131,7 @@ function makeTerminalText(codeUnits, sampleId) {
   const lines = [
     '[35m✻ Thinking…[0m\r\n',
     '  ⏺ Running tests… 42 passed, 0 failed\r\n',
-    '│ src/main/runtime/rpc/methods/terminal.ts  │\r\n',
+    '│ src/main/runtime/rpc/methods/terminal/terminal.ts  │\r\n',
     '  ✅ build succeeded in 12.4s — café naïve\r\n',
     '[32m+ added line[0m\r\n'
   ]

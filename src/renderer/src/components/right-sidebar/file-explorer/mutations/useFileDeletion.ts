@@ -25,13 +25,16 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/autosave/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { deleteRuntimePath, writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import {
+  deleteRuntimePath,
+  writeRuntimeFile
+} from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
-} from '../../../../../../shared/file-write-disk-precondition'
+} from '../../../../../../shared/file-write/file-write-disk-precondition'
 import { deleteWithPermanentFallback } from './file-explorer-trash-fallback'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
 
 type UseFileDeletionParams = {
@@ -260,24 +263,30 @@ export function useFileDeletion({
           needsConfirmation: roots.some(needsRemoteDeleteConfirmation),
           confirmBatch: () =>
             confirm({
+              title: translate('common.delete', 'Delete'),
               // Count selected children even when ancestor roots subsume their deletes.
-              title: hasLocalDelete
-                ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.deleteItems',
-                    'Delete {{count}} items?',
-                    { count: nodes.length, defaultValue_one: 'Delete {{count}} item?' }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.useFileDeletion.permanentlyDeleteItems',
-                    'Permanently delete {{count}} items?',
-                    { count: nodes.length, defaultValue_one: 'Permanently delete {{count}} item?' }
-                  ),
-              description: !hasLocalDelete
-                ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
-                    'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
-                  )
-                : mixedBatchDeleteDescription(isWindows),
+              description: [
+                hasLocalDelete
+                  ? translate(
+                      'auto.components.right.sidebar.useFileDeletion.deleteItems',
+                      'Delete {{count}} items?',
+                      { count: nodes.length, defaultValue_one: 'Delete {{count}} item?' }
+                    )
+                  : translate(
+                      'auto.components.right.sidebar.useFileDeletion.permanentlyDeleteItems',
+                      'Permanently delete {{count}} items?',
+                      {
+                        count: nodes.length,
+                        defaultValue_one: 'Permanently delete {{count}} item?'
+                      }
+                    ),
+                !hasLocalDelete
+                  ? translate(
+                      'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
+                      'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
+                    )
+                  : mixedBatchDeleteDescription(isWindows)
+              ].join('\n'),
               confirmLabel: translate(
                 'auto.components.right.sidebar.useFileDeletion.92276aceb7',
                 'Delete'

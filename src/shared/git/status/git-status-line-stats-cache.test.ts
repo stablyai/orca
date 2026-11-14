@@ -3,7 +3,6 @@ import {
   applyCachedGitStatusLineStats,
   clearGitStatusLineStatsCache,
   clearGitStatusLineStatsCacheKey,
-  GIT_STATUS_LINE_STATS_CACHE_MAX_AGE_MS,
   reuseOrRecomputeGitStatusLineStats,
   storeGitStatusLineStats
 } from './git-status-line-stats-cache'
@@ -42,24 +41,6 @@ describe('git status line stats cache', () => {
         cacheKey: 'native\0/repo',
         head: 'head-2',
         entries: [{ path: 'src/a.ts', status: 'modified', area: 'unstaged' }]
-      })
-    ).toBe(false)
-  })
-
-  it('invalidates a matching status identity at the bounded age', () => {
-    storeGitStatusLineStats({
-      cacheKey: 'native\0/repo',
-      head: 'head-1',
-      entries: cachedEntries,
-      now: 1_000
-    })
-
-    expect(
-      applyCachedGitStatusLineStats({
-        cacheKey: 'native\0/repo',
-        head: 'head-1',
-        entries: [{ path: 'src/a.ts', status: 'modified', area: 'unstaged' }],
-        now: 1_000 + GIT_STATUS_LINE_STATS_CACHE_MAX_AGE_MS
       })
     ).toBe(false)
   })

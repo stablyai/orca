@@ -2,6 +2,7 @@ import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { Button } from '../../../ui/button'
@@ -23,11 +24,12 @@ function PreservedBranchBatchToastBody({
   branches: readonly PreservedBranchCleanup[]
   onReview: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const actionableCount = branches.filter((branch) => branch.expectedHead).length
   return (
     <div className="flex w-full flex-col gap-3">
       <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
-        {translate(
+        {t(
           'auto.components.sidebar.preserved.branch.batch.toast.a3cdd9d9e6',
           'Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.',
           {
@@ -40,7 +42,7 @@ function PreservedBranchBatchToastBody({
       {actionableCount > 0 ? (
         <Button type="button" variant="destructive" size="sm" className="w-full" onClick={onReview}>
           <Trash2 className="size-3.5" />
-          {translate(
+          {t(
             'auto.components.sidebar.preserved.branch.batch.toast.6310412304',
             'Review {{count}} Branches',
             { count: actionableCount, defaultValue_one: 'Review {{count}} Branch' }

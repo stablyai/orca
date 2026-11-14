@@ -1,6 +1,6 @@
 // Bound replayed context facts to what live writers can produce.
 
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   MAX_CONTEXT_CATEGORIES,
   MAX_CONTEXT_CATEGORY_NAME_CHARS,

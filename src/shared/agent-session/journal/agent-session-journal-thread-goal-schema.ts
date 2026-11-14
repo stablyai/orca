@@ -1,6 +1,6 @@
 // The journal's thread-goal transition, validated as deeply as the rest of the render model.
 
-import { z } from 'zod'
+import * as z from 'zod'
 import { openDiscriminatedUnion } from './agent-session-journal-open-union'
 
 const ThreadGoal = z.object({

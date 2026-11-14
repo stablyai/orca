@@ -1,21 +1,22 @@
 import { useMemo } from 'react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { cn } from '@/lib/utils'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status'
-import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { cn } from '@/lib/class-names'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status/aggregation/worktree-agent-status'
+import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'
 import {
   useAgentMessageSenderViews,
   type AgentMessageSenderInput
-} from '../native-chat/native-chat-agent-message-sender-view'
+} from '../native-chat/messages/agent-senders/native-chat-agent-message-sender-view'
 import { isAgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
-import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
+import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type CrewRowLook = { partyKey: string; status: WorktreeStatus; agentType: string }

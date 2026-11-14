@@ -17,8 +17,8 @@ import {
   isRuntimeFolderWorkspaceIdForRepo,
   mergeRuntimeFolderWorkspace
 } from './runtime-folder-workspace'
-import type { RuntimeStore } from '../../runtime-store-contract'
-import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 
 /** Callers hold a local removal route; an `ssh:` or `runtime:` host is refused before this. */

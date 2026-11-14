@@ -1,20 +1,21 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
 import {
-  getAllWorktreesFromState,
-  getRepoMapFromState,
-  getWorktreeMapFromState
-} from '@/store/selectors'
+  getIndexedAllWorktrees,
+  getIndexedWorktreeMap
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { EMPTY_REPO_MAP, EMPTY_WORKTREE_MAP, EMPTY_WORKTREES } from './worktree-context-menu-policy'
 
 // Closed menus select stable empties so rank or catalog churn cannot wake every mounted row menu.
 export function useMenuScopedWorktreeCatalog(menuOpen: boolean) {
   // Check first so closed menus never rebuild the shared catalog indexes.
-  const repoMap = useAppStore((s) => (menuOpen ? getRepoMapFromState(s) : EMPTY_REPO_MAP))
+  const repoMap = useAppStore((s) => (menuOpen ? getIndexedRepoMap(s.repos) : EMPTY_REPO_MAP))
   const worktreeMap = useAppStore((s) =>
-    menuOpen ? getWorktreeMapFromState(s) : EMPTY_WORKTREE_MAP
+    menuOpen ? getIndexedWorktreeMap(selectWorktreesByRepo(s)) : EMPTY_WORKTREE_MAP
   )
   const allWorktrees = useAppStore((s) =>
-    menuOpen ? getAllWorktreesFromState(s) : EMPTY_WORKTREES
+    menuOpen ? getIndexedAllWorktrees(selectWorktreesByRepo(s)) : EMPTY_WORKTREES
   )
   return { repoMap, worktreeMap, allWorktrees }
 }

@@ -1,28 +1,31 @@
 import { useCallback } from 'react'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { toast } from 'sonner'
-import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
-import { githubProjectHost } from '../../../../../../shared/github/project-identity'
-import { setReactionOnSubject, restoreReactionOnSubject } from '@/lib/pr-comment-reactions'
+import { mergePRCommentIntoList } from '@/store/github/comments/pr-comment-cache'
+import { githubProjectHost } from '../../../../../../shared/github/projects/project-identity'
+import {
+  setReactionOnSubject,
+  restoreReactionOnSubject
+} from '@/lib/source-control/review/comments/pr-comment-reactions'
 import { buildPRCommentConversationReplyBody } from './pr-comment-fixing-reply-body'
 import {
   attachPRReviewReplyParent,
   canPostPRReviewThreadReply,
   resolvePRReviewReplyThreadId
 } from './pr-comments-ai-launch-ack'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
 import type { ChecksPanelCommentResolutionState } from './use-checks-panel-comment-resolution'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
+import type { ChecksPanelComposerState } from '../review-actions/use-checks-panel-composer-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
-import { isMutablePRConversationComment } from '../../../../../../shared/github/pr-comment-mutability'
+import { isMutablePRConversationComment } from '../../../../../../shared/github/comments/pr-comment-mutability'
 import type {
   GitHubReactionContent,
   PRComment
-} from '../../../../../../shared/github/comment-types'
+} from '../../../../../../shared/github/comments/comment-types'
 import { translate } from '@/i18n/i18n'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
-import { gitHubSlugApiForWorkspace } from '@/runtime/github-slug-owner-api'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
+import { gitHubSlugApiForWorkspace } from '@/runtime/repository-github/github-slug-owner-api'
 import { errorMessage } from '../../../../../../shared/error-message'
 
 type ChecksPanelCommentMutationsInput = Pick<
@@ -153,7 +156,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         return
       }
       const confirmed = await confirm({
-        title: translate('auto.components.right.sidebar.ChecksPanel.ea9b649ce3', 'Delete comment?'),
+        title: translate('common.delete', 'Delete'),
         description: translate(
           'auto.components.right.sidebar.ChecksPanel.3b203c62f8',
           'This will permanently remove the comment from the PR.'

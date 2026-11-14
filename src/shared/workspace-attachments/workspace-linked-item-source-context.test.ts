@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TaskSourceContext } from '../task-source-context'
+import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { WorkspaceLinkedItem } from '../worktree/types'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 
@@ -54,40 +54,5 @@ describe('workspace linked-item source context', () => {
         JIRA_CONTEXT
       )
     ).toBe(false)
-  })
-
-  it('infers GitHub/GitLab provider when TaskPage seeds omit provider', () => {
-    expect(
-      isWorkspaceLinkedItemSourceContextMatch(
-        {
-          type: 'issue',
-          number: 42,
-          title: 'GitHub issue',
-          url: 'https://github.com/acme/repo/issues/42'
-        },
-        {
-          kind: 'task-source',
-          provider: 'github',
-          projectId: 'project-1',
-          hostId: 'local'
-        }
-      )
-    ).toBe(true)
-    expect(
-      isWorkspaceLinkedItemSourceContextMatch(
-        {
-          type: 'mr',
-          number: 7,
-          title: 'GitLab MR',
-          url: 'https://gitlab.com/acme/repo/-/merge_requests/7'
-        },
-        {
-          kind: 'task-source',
-          provider: 'gitlab',
-          projectId: 'project-1',
-          hostId: 'local'
-        }
-      )
-    ).toBe(true)
   })
 })

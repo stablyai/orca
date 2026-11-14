@@ -9,9 +9,10 @@ import {
   listRemoteDirectory,
   readTextFileRemote,
   writeTextFileRemoteAtomic
-} from '../agent-hooks/installer-utils-remote'
-import type { HermesConfig } from './hermes-config-yaml'
+} from '../agent-hooks/installation/remote/hook-text-files-remote'
+
 import {
+  type HermesConfig,
   disablePlugin,
   enablePlugin,
   getConfigEnablement,

@@ -13,19 +13,20 @@ import {
   getLocalPathOpenOwnerForRoute,
   isRevealOrEditorOpenBlocked,
   showLocalPathOpenBlockedToast
-} from '@/lib/local-path-open-guard'
-import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
-import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
+} from '@/lib/files/os-open/local-path-open-guard'
+import { getLocalFileManagerLabel } from '@/lib/files/os-open/local-file-manager-label'
+import { OpenInApplicationIcon } from '@/lib/files/os-open/open-in-app-catalog'
+import { getExternalEditorOpenCapability } from '@/lib/files/os-open/external-editor-open-capability'
 import {
   getWorkspaceEditorSshHost,
   type WorkspaceEditorSshHost
-} from '@/lib/workspace-editor-ssh-target'
-import type { WorkspaceOwnerRef } from '@/lib/resolve-owner'
-import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
+} from '@/components/file-actions/workspace-editor-ssh-target'
+import type { WorkspaceOwnerRef } from '@/lib/workspace/ownership/resolve-owner'
+import { NO_OPEN_IN_APPLICATIONS } from '@/lib/files/os-open/open-in-application-selection'
 import { showOpenFailureToast } from './worktree-open-failure-toast'
 import type { OpenInApplication } from '../../../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type WorktreeOpenInMenuItemsProps = {
   worktreePath: string
@@ -66,7 +67,8 @@ export function getOpenInEntryAvailability(
   connectionId?: string | null,
   runtimeEnvironmentId?: string | null,
   ownerUnresolved?: boolean,
-  runtimeSshHost?: WorkspaceEditorSshHost | null
+  runtimeSshHost?: WorkspaceEditorSshHost | null,
+  t: Translate = translate
 ): { disabled: boolean; metadata?: string; disabledReason?: string } {
   if (entry.target === 'file-manager') {
     const disabled = isRevealOrEditorOpenBlocked(
@@ -75,7 +77,7 @@ export function getOpenInEntryAvailability(
     return disabled
       ? {
           disabled: true,
-          metadata: translate('auto.components.sidebar.WorktreeOpenInMenu.localOnly', 'Local only')
+          metadata: t('auto.components.sidebar.WorktreeOpenInMenu.localOnly', 'Local only')
         }
       : { disabled: false }
   }
@@ -89,14 +91,14 @@ export function getOpenInEntryAvailability(
   if (!capability.allowed) {
     return {
       disabled: true,
-      metadata: translate('auto.components.sidebar.WorktreeOpenInMenu.localOnly', 'Local only'),
+      metadata: t('auto.components.sidebar.WorktreeOpenInMenu.localOnly', 'Local only'),
       disabledReason:
         capability.reason === 'local-only-editor'
-          ? translate(
+          ? t(
               'auto.components.sidebar.WorktreeOpenInMenu.remoteEditorHint',
               'Only VS Code, Cursor, and Zed can open folders on an SSH host.'
             )
-          : translate(
+          : t(
               'auto.components.sidebar.WorktreeOpenInMenu.remoteRuntimeEditorHint',
               'Apps on this computer can open this server’s files only when Orca reaches it over SSH.'
             )
@@ -105,13 +107,13 @@ export function getOpenInEntryAvailability(
   if (capability.wsl) {
     return {
       disabled: false,
-      metadata: translate('auto.components.sidebar.WorktreeOpenInMenu.wsl', 'WSL')
+      metadata: t('auto.components.sidebar.WorktreeOpenInMenu.wsl', 'WSL')
     }
   }
   return capability.remote
     ? {
         disabled: false,
-        metadata: translate('auto.components.sidebar.WorktreeOpenInMenu.remoteSsh', 'Remote SSH')
+        metadata: t('auto.components.sidebar.WorktreeOpenInMenu.remoteSsh', 'Remote SSH')
       }
     : { disabled: false }
 }
@@ -137,6 +139,8 @@ export async function openWorktreePath(args: {
   runtimeEnvironmentId?: string | null
   ownerUnresolved?: boolean
   workspace?: WorkspaceOwnerRef | null
+  /** Saved Open In application; `command` only drives renderer capability checks. */
+  openInApplicationId?: string
   command?: string
   subject?: 'workspace' | 'path'
 }): Promise<void> {
@@ -179,7 +183,7 @@ export async function openWorktreePath(args: {
       ? await window.api.shell.openInFileManager(args.worktreePath, owner)
       : await window.api.shell.openInExternalEditor({
           path: args.worktreePath,
-          command: args.command,
+          openInApplicationId: args.openInApplicationId,
           connectionId: editorConnectionId,
           ownerHostId: owner
         })
@@ -194,12 +198,9 @@ function useOpenInWorktreePath({
   runtimeEnvironmentId,
   ownerUnresolved,
   workspace
-}: WorktreeOpenInMenuItemsProps): (
-  target: 'file-manager' | 'external-editor',
-  command?: string
-) => Promise<void> {
+}: WorktreeOpenInMenuItemsProps): (entry: OpenInMenuEntry) => Promise<void> {
   return useCallback(
-    async (target, command) => {
+    async ({ target, id, command }) => {
       await openWorktreePath({
         target,
         worktreePath,
@@ -207,6 +208,7 @@ function useOpenInWorktreePath({
         runtimeEnvironmentId,
         ownerUnresolved,
         workspace,
+        openInApplicationId: target === 'external-editor' ? id : undefined,
         command
       })
     },
@@ -223,6 +225,7 @@ export function WorktreeOpenInMenuItems({
   disabled,
   formatLabel
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
+  const t = useTranslate()
   const openInWorktreePath = useOpenInWorktreePath({
     worktreePath,
     connectionId,
@@ -245,14 +248,15 @@ export function WorktreeOpenInMenuItems({
           connectionId,
           runtimeEnvironmentId,
           ownerUnresolved,
-          runtimeSshHost
+          runtimeSshHost,
+          t
         )
         const item = (
           <DropdownMenuItem
             key={entry.id}
             onClick={stopMenuPropagation}
             onSelect={() => {
-              void openInWorktreePath(entry.target, entry.command)
+              void openInWorktreePath(entry)
             }}
             disabled={disabled || availability.disabled}
           >
@@ -294,11 +298,12 @@ export function WorktreeOpenInSubMenu({
   workspace,
   disabled
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={disabled}>
         <FolderOpen className="size-3.5" />
-        {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
+        {t('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent
         className="w-52"
@@ -319,7 +324,7 @@ export function WorktreeOpenInSubMenu({
           onSelect={openOpenInAppsSettings}
           disabled={disabled}
         >
-          {translate('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
+          {t('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
         </DropdownMenuItem>
       </DropdownMenuSubContent>
     </DropdownMenuSub>

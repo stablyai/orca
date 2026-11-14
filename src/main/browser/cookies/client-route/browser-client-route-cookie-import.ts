@@ -6,18 +6,15 @@ import {
   browserCookieImportFailure,
   type BrowserCookieImportFailure
 } from '../../../../shared/browser-cookie-import-failure-copy'
-import {
-  detectInstalledBrowsers,
-  importCookiesFromBrowser,
-  importCookiesFromFile,
-  selectBrowserProfile
-} from '../browser-cookie-import'
+import { detectInstalledBrowsers, selectBrowserProfile } from '../sources/browser-cookie-detection'
+import { importCookiesFromBrowser } from '../browser-cookie-import'
+import { importCookiesFromFile } from '../imports/import-cookie-file'
 import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 
 import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { currentBrowserRoutePartitionBindingStore } from '../../routing/partitions/browser-route-partition-binding-runtime'
 import { resolveBrowserRoutePartitionBinding } from '../../routing/partitions/browser-route-partition-migration'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 
 type ClientRouteCookieImportTarget = {

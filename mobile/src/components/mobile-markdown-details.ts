@@ -16,7 +16,13 @@ const DETAILS_MARKUP =
 const MAX_SECTION_DEPTH = 8
 
 const DETAILS_TAG = /<\/?(?:details|summary)[\s/>]/i
+const DETAILS_SECTION_TAG = /<\/?details[\s/>]/i
 const DETAILS_CLOSE = /^<\/details\s*>$/i
+
+/** Whether the text opens or closes a `<details>` section; a lone `<summary>` (C# doc comments) does neither. */
+export function hasDetailsSectionTag(text: string): boolean {
+  return DETAILS_SECTION_TAG.test(text)
+}
 
 /** One HTML block cut around its `<details>` markup. */
 function detailsPieces(html: string): DetailsPiece[] {

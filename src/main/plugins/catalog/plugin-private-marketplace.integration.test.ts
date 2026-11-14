@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { PluginMarketplaceGitSource } from '../../../shared/plugins/catalog/plugin-marketplace'
-import { getUserPluginsDir } from '../plugin-discovery'
+import { getUserPluginsDir } from '../discovery/plugin-discovery'
 import { readPluginLockfile } from '../installation/plugin-install'
 import { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
@@ -131,7 +131,8 @@ describe('private Git marketplace integration', () => {
     const installer = new PluginMarketplaceInstaller({
       marketplace,
       userDataPath,
-      hostVersion: '1.4.0'
+      hostVersion: '1.4.0',
+      revokeConsent: async () => undefined
     })
 
     const preview = await installer.preview(registered.id, pluginKey)

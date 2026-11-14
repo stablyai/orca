@@ -3,7 +3,7 @@ import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
 
@@ -31,6 +31,7 @@ export type TranscriptPaneOptions = {
   shellForegroundProven?: boolean
   paneRootPid?: number
   onShellForegroundProof?: () => void
+  onWrite?: (data: string) => void
 }
 
 function transcriptLayoutStore(): RuntimeStore {
@@ -87,7 +88,10 @@ export async function createTranscriptPane(
         ...(options.isReattach ? { isReattach: true as const } : {})
       }))
     ),
-    write: () => true,
+    write: (_id: string, data: string) => {
+      options.onWrite?.(data)
+      return true
+    },
     kill: () => true,
     getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {

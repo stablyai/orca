@@ -1,6 +1,6 @@
 import type { CurrentActionSelection } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import React from 'react'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import type { LaunchSource } from '../../../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { SourceControlAgentActionDialogForm } from './SourceControlAgentActionDialogForm'
 import { useSourceControlAgentActionDialog } from './useSourceControlAgentActionDialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type SourceControlAgentActionDialogProps = {
   open: boolean
@@ -33,6 +33,8 @@ export type SourceControlAgentActionDialogProps = {
   savedAgentArgs?: string | null
   worktreeId?: string | null
   groupId?: string | null
+  placementWorkspaceId?: string
+  initialCwd?: string
   connectionId?: string | null
   repoId?: string | null
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -51,7 +53,7 @@ export type SourceControlAgentActionDialogProps = {
   onLaunchAccepted?: () => void
   /** Fires when an accepted launch later failed to deliver its prompt. */
   onLaunchAborted?: () => void
-  onLaunched?: () => void
+  onLaunched?: RunSourceControlAgentActionStartArgs['onLaunched']
   startLabel?: string
   onStart?: RunSourceControlAgentActionStartArgs['onStart']
 }
@@ -65,6 +67,7 @@ export function SourceControlAgentActionDialog(
 function SourceControlAgentActionEditor(
   props: SourceControlAgentActionDialogProps
 ): React.JSX.Element {
+  const t = useTranslate()
   const {
     open,
     actionId,
@@ -73,7 +76,7 @@ function SourceControlAgentActionEditor(
     baseCommandInput,
     savedCommandInputTemplate,
     onOpenSettings,
-    startLabel = translate(
+    startLabel = t(
       'auto.components.right.sidebar.SourceControlAgentActionDialog.startAgent',
       'Start agent'
     ),

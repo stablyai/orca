@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 
 type ModelRegistry = NonNullable<ReturnType<typeof editorModelRegistry.get>>
 

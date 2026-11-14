@@ -25,7 +25,7 @@ import type { BridgePortObservation } from '../../mobile-web-shell/bridge/bridge
 import { captureArguments } from './recording-values'
 import type { RecordingFault } from './recording-fault'
 import type { WriteOrdinal } from './write-ordinal'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 
 export class RecordingCausality {
   readonly parent = new AsyncLocalStorage<Parent>()

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const readRuntimeDirectory = vi.fn()
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-directory-read', () => ({
   readRuntimeDirectory: (...args: unknown[]) => readRuntimeDirectory(...args)
 }))
 vi.mock('../navigation/file-explorer-operation-owner', () => ({

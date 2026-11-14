@@ -9,8 +9,8 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
-import type { RpcClient } from '../transport/rpc-client'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
 import {
   cloudModelNeedsKey,

@@ -1,4 +1,4 @@
-import type { ImportSkipReason } from '../../../shared/filesystem-import-result-types'
+import type { ImportSkipReason } from '../../../shared/file-import/filesystem-import-result'
 
 export type ComposerDropItemResult =
   | {

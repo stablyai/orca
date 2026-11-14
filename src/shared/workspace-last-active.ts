@@ -27,9 +27,13 @@ export function withCleanupVisitEvidence(
   if (lastActiveAt <= candidate.lastActivityAt) {
     return candidate
   }
-  const reasons = getWorkspaceCleanupInactivityReasons(
+  const idleReasons = getWorkspaceCleanupInactivityReasons(
     { isArchived: candidate.reasons.includes('archived'), lastActivityAt: lastActiveAt },
     now
-  ).filter((reason) => candidate.reasons.includes(reason))
+  )
+  // Merged/unchanged come from Git, not age, so a visit keeps them.
+  const reasons = candidate.reasons.filter(
+    (reason) => (reason !== 'archived' && reason !== 'inactive') || idleReasons.includes(reason)
+  )
   return { ...candidate, lastActivityAt: lastActiveAt, reasons }
 }

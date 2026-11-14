@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 
 export type PrTabSheet = 'merge' | 'reviewers' | 'createPr' | 'editTitle' | 'editDescription'
 export type PrTabConfirm = 'close' | 'reopen' | 'unlink'

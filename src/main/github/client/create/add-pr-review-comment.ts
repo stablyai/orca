@@ -1,15 +1,14 @@
+import { githubBodyMediaHeaders } from '../../attachments/body-image-urls'
 import type {
   GitHubCommentResult,
   GitHubPRReviewCommentInput
-} from '../../../../shared/github/comment-types'
-import {
-  ghExecFileAsync,
-  acquire,
-  release,
-  classifyGhError,
-  type LocalGitExecOptions
-} from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
+} from '../../../../shared/github/comments/comment-types'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import { classifyGhError } from '../../api/gh-error-classification'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import { mapReviewCommentResponse } from './../map/review-comment-response'
 import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
 export async function addPRReviewComment(
@@ -31,6 +30,7 @@ export async function addPRReviewComment(
   try {
     const fields = [
       'api',
+      ...githubBodyMediaHeaders(args.body),
       '-X',
       'POST',
       `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${args.prNumber}/comments`,
@@ -97,6 +97,7 @@ export async function addPRReviewCommentReply(
     const { stdout } = await ghExecFileAsync(
       [
         'api',
+        ...githubBodyMediaHeaders(body),
         '-X',
         'POST',
         `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}/comments/${commentId}/replies`,

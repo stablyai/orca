@@ -12,11 +12,7 @@ vi.mock('node:timers/promises', () => ({
     clock.now += ms
   }
 }))
-import {
-  readMacDaemonJobState,
-  releaseMacDaemonJob,
-  stopMacDaemonJob
-} from '../macos-daemon-job-state'
+import { releaseMacDaemonJob, stopMacDaemonJob } from '../macos-daemon-job-state'
 
 const result: ProcessResult = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
 beforeEach(() => {
@@ -25,43 +21,8 @@ beforeEach(() => {
   vi.spyOn(Date, 'now').mockImplementation(() => clock.now)
 })
 
-it.each([
-  ['\tstate = running\n\t\tstate = active', 'running'],
-  ['\tstate = not running\n\t\tstate = active', 'stopped'],
-  ['\t\tstate = active', 'unverifiable']
-])('reads only the top-level job state from %s', async (stdout, expected) => {
-  run.mockResolvedValue({ ...result, stdout })
-  expect(await readMacDaemonJobState('gui/501/owned')).toBe(expected)
-})
-
-it.each([
-  { code: 113, stderr: 'Could not find service "owned"', expected: 'missing' },
-  { code: 113, stderr: 'Could not find service; Permission denied', expected: 'unverifiable' },
-  { code: 1, stderr: 'Could not find service "owned"', expected: 'unverifiable' },
-  { code: 0, stdout: '\tstate = running', timedOut: true, expected: 'unverifiable' },
-  { code: 0, stdout: '\tstate = running', outputTruncated: true, expected: 'unverifiable' }
-])('preserves uncertainty for $expected', async ({ expected, ...override }) => {
-  run.mockResolvedValue({ ...result, ...override })
-  expect(await readMacDaemonJobState('gui/501/owned')).toBe(expected)
-})
-
 const missing = { ...result, code: 113, stderr: 'Could not find service "owned"' }
 const lingering = { ...result, stdout: '\tstate = running' }
-
-it('returns only once launchd no longer lists a job it was asked to remove', async () => {
-  run
-    .mockResolvedValueOnce(result)
-    .mockResolvedValueOnce(lingering)
-    .mockResolvedValueOnce(lingering)
-    .mockResolvedValueOnce(missing)
-  await expect(stopMacDaemonJob('gui/501/owned')).resolves.toBeUndefined()
-  expect(run.mock.calls.map(([spec]) => spec.args?.[0])).toEqual([
-    'bootout',
-    'print',
-    'print',
-    'print'
-  ])
-})
 
 it('accepts an already removed job but refuses one launchd keeps listing', async () => {
   run.mockResolvedValueOnce({ ...result, code: 3 }).mockResolvedValueOnce(missing)

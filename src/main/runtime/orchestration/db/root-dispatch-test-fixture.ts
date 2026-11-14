@@ -1,4 +1,4 @@
-import type { DispatchContextRow } from '../types'
+import type { DispatchContextRow } from './orchestration-records'
 import type { OrchestrationDb } from './orchestration-db'
 
 /** Legacy tests dispatch as an uncapped root; nesting-specific tests supply their own authority. */

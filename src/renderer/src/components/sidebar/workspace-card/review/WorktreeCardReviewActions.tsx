@@ -6,7 +6,7 @@ import { MonitorUp } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { WorktreeCardRowActionsMenu } from '../surface/WorktreeCardRowActionsMenu'
 import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function WorktreeCardReviewActions({
   label,
@@ -27,18 +27,15 @@ export function WorktreeCardReviewActions({
   onUnlink?: () => void
   closeHover: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!onOpenInOrca && !onUnlink) {
     return null
   }
   return (
     <WorktreeCardRowActionsMenu
-      label={translate(
-        'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
-        'More {{value0}} actions',
-        {
-          value0: label
-        }
-      )}
+      label={t('auto.components.sidebar.WorktreeCardMeta.dbe2d18972', 'More {{value0}} actions', {
+        value0: label
+      })}
       open={open}
       onOpenChange={onOpenChange}
     >
@@ -50,7 +47,7 @@ export function WorktreeCardReviewActions({
           }}
         >
           <MonitorUp className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeCardMeta.2c67730e07', 'Open in Orca')}
+          {t('auto.components.sidebar.WorktreeCardMeta.2c67730e07', 'Open in Orca')}
         </DropdownMenuItem>
       ) : null}
       {onUnlink ? (

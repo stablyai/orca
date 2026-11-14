@@ -32,9 +32,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/store/selectors', () => ({
-  getAllWorktreesFromState: () => mocks.state.worktreeRows,
-  getWorktreeMapFromState: () => mocks.state.worktreeMap,
+vi.mock('@/store/slices/worktrees/listing/worktree-catalog-index', () => ({
+  getIndexedAllWorktrees: () => mocks.state.worktreeRows,
+  getIndexedWorktreeMap: () => mocks.state.worktreeMap
+}))
+vi.mock('@/store/workspaces/selection/worktree-on-host-selector', () => ({
   // Match declared hosts even though this fixture indexes worktrees by ID.
   getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) => {
     const rows = mocks.state.worktreeRows.filter(
@@ -44,7 +46,7 @@ vi.mock('@/store/selectors', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 

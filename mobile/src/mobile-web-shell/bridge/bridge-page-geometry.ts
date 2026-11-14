@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { BRIDGE_MAX_SAFE_AREA_INSET } from './bridge-safe-area-insets'
 
 const coordinate = z.number().finite().min(0).max(BRIDGE_MAX_SAFE_AREA_INSET)

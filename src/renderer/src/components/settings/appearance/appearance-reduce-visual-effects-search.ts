@@ -5,7 +5,7 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export const getReduceVisualEffectsEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('settings.appearance.reduceVisualEffects.title', 'Reduce Visual Effects'),
+    title: translate('settings.appearance.reduceVisualEffects.08c854149e', 'Reduce visual effects'),
     description: translate(
       'settings.appearance.reduceVisualEffects.description',
       'Turn off blur behind dialogs and menus, and window translucency after a restart. Helps remote desktops and machines without a GPU.'

@@ -5,9 +5,9 @@ import {
   buildTaskSourceContextFromRepo,
   haveConflictingTaskSourceAccounts,
   normalizeTaskSourceContext,
-  type TaskSourceContext,
-  type TaskProvider
-} from '../../../../../../shared/task-source-context'
+  type TaskSourceContext
+} from '../../../../../../shared/work-items/task-source-context'
+import type { TaskProvider } from '../../../../../../shared/work-items/task-providers'
 import {
   getWorkspaceAttachmentUrlScope,
   matchesWorkspaceAttachmentIdentity,

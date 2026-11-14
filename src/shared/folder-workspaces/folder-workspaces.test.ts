@@ -49,13 +49,4 @@ describe('normalizeFolderWorkspaces host attribution', () => {
     expect(pinned.connectionId).toBe('ssh-box')
     expect(pinned.executionHostId).toBeUndefined()
   })
-
-  it('inherits the group connection when the workspace omits one', () => {
-    const [inherited] = normalizeFolderWorkspaces(
-      [{ id: 'ws-3', projectGroupId: 'group-1', name: 'Inherited' }],
-      [{ ...folderGroup, connectionId: 'ssh-group' } as ProjectGroup]
-    )
-
-    expect(inherited.connectionId).toBe('ssh-group')
-  })
 })

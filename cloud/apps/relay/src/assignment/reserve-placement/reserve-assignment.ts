@@ -676,6 +676,12 @@ export class ReserveAssignment {
     return null
   }
 
+  // The row epoch the ledger reconcile taught this director for the host, or 0; the relay edge
+  // mints above it.
+  rowEpochFloor(identity: Identity): number {
+    return this.rowFloor(identity, this.now()) ?? 0
+  }
+
   // The ledger reconcile demoted this host's seat behind (or level with) a row at `epoch`.
   raiseEpochFloor(identity: Identity, epoch: number): void {
     const key = hostKey(identity)

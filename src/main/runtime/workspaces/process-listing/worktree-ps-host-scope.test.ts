@@ -105,15 +105,6 @@ describe('worktree.ps host coverage', () => {
     ])
   })
 
-  it('names every host the page covers', async () => {
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-
-    const result = await runtime.getWorktreePs(10_000)
-
-    expect(result.hostScope?.hostIds).toEqual(['local', `ssh:${SSH_CONNECTION_ID}`])
-    expect(result.hostScope?.omittedHostIds).toEqual([])
-  })
-
   it('keeps a remote row in the page when the cap cannot hold every local row', async () => {
     const runtime = new OrcaRuntimeService(makeStore() as never)
 
@@ -125,5 +116,15 @@ describe('worktree.ps host coverage', () => {
       `ssh:${SSH_CONNECTION_ID}`
     )
     expect(result.hostScope?.hostIds).toEqual(['local', `ssh:${SSH_CONNECTION_ID}`])
+  })
+
+  it('lists only the named workspace when scoped to one id', async () => {
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const target = `${LOCAL_REPO_ID}::${LOCAL_REPO_PATH}-b`
+
+    const result = await runtime.getWorktreePs(100, true, false, target)
+
+    expect(result.truncated).toBe(false)
+    expect(result.worktrees.map((worktree) => worktree.worktreeId)).toEqual([target])
   })
 })

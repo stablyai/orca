@@ -1,12 +1,12 @@
 import { open, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type {
   RuntimeFileReadResult,
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../shared/runtime-types'
+} from '../../../shared/file-content/runtime-file-read'
 import { isMobileBinaryPath, isSafeMobileRelativePath } from './mobile-file-kind'
 import { joinWorktreeRelativePath } from './paths/runtime-relative-paths'
 import { truncateMobileFilePreview } from '../terminal/artifacts/artifact-integrity'
@@ -27,20 +27,24 @@ import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { resolveLocalFileRequestPath } from '../../ipc/filesystem/access/local-file-access-resolution'
-import type { LocalFileAccess } from '../../../shared/local-file-access'
-import { filePreviewForPath } from '../../../shared/file-preview-kind'
+import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
+import {
+  filePreviewExtension,
+  filePreviewForPath
+} from '../../../shared/file-preview/file-preview-kind'
+import { detectImageFileSignature } from '../../../shared/image-file-signature'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
-} from '../../../shared/node-bounded-file-reader'
-import { isBinaryBuffer } from '../../../shared/binary-buffer'
+} from '../../../shared/file-content/node-bounded-file-reader'
+import { isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import type {
   DocPreviewFileAccessResult,
   DocPreviewFileChunk,
   DocPreviewFileTarget
-} from '../../../shared/doc-preview-file-access'
-import type { LocalFilesystemProvider } from '../../providers/local-filesystem-provider'
+} from '../../../shared/document-preview/doc-preview-file-access'
+import type { LocalFilesystemProvider } from '../../providers/filesystem/local-provider'
 
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
 
@@ -211,15 +215,20 @@ export class RuntimeFileReads {
       const imagePath = await resolveLocalFileRequestPath(filePath, CHAT_IMAGE_ACCESS, store)
       // Paths inside project roots skip the rule's type check.
       const preview = filePreviewForPath(imagePath)
-      if (preview?.kind !== 'image') {
+      const extensionless = filePreviewExtension(imagePath) === ''
+      if (preview?.kind !== 'image' && !extensionless) {
         throw new Error('not_an_image')
       }
-      const { mimeType } = preview
       const buffer = await readPreviewBytes(
         windowsFsPath(imagePath),
         binaryPreviewMaxBytes(maxContentBytes),
         { regularFileOnly: true }
       )
+      const mimeType =
+        preview?.kind === 'image' ? preview.mimeType : detectImageFileSignature(buffer)?.mimeType
+      if (!mimeType) {
+        throw new Error('not_an_image')
+      }
       return assertPreviewWithinTransportBudget(
         { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType },
         maxContentBytes

@@ -1,4 +1,4 @@
-import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '@/components/terminal-pane/agent-task-complete-policy'
+import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '@/components/terminal-pane/notifications/agent-task-complete-policy'
 export { isAgentHookCompletionTrackingEnabled }
 
 type CompletionNotificationSettings = {

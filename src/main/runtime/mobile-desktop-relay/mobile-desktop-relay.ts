@@ -1,14 +1,21 @@
+import { PHONE_RELAY_CONNECT_BUDGET_MS } from '../../../shared/remote-runtime/recipe-vm-wake'
 import { verifyRelayedGitHubAuthority } from './relay-github-authority'
 import { createRelayedBrowserTab } from './relayed-browser-tab-create'
-import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
+import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-items/work-item-target'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { openRemoteRuntimePassthroughSocket } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
-import { RelayLink, type OpenedRelayLink, type RelayedPhone } from './mobile-desktop-relay-link'
-export type { RelayedPhone } from './mobile-desktop-relay-link'
+import {
+  failure,
+  linkKey,
+  RelayLink,
+  unavailable,
+  type OpenedRelayLink,
+  type RelayedPhone
+} from './mobile-desktop-relay-link'
 import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
 import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
@@ -20,7 +27,7 @@ import {
   withRelayedLaunchChatDefault
 } from './relayed-phone-frames'
 
-const RELAY_CONNECT_TIMEOUT_MS = 15_000
+const RELAY_CONNECT_TIMEOUT_MS = PHONE_RELAY_CONNECT_BUDGET_MS
 
 /** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
  * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
@@ -75,7 +82,7 @@ export class MobileDesktopRelay {
       )
       return
     }
-    const link = this.linkFor(phone, environmentId)
+    const link = this.linkFor(phone, environmentId, request.method)
     link.replies.noteForwarded(request.id, {
       browserScreencast:
         request.method === 'status.get'
@@ -193,7 +200,7 @@ export class MobileDesktopRelay {
     this.grants.delete(environmentId)
     for (const link of this.links.values()) {
       if (link.environmentId === environmentId) {
-        this.endLink(link, unavailable('The server connection was reset.'))
+        link.retire(() => this.endLink(link, unavailable('The server connection was reset.')))
       }
     }
   }
@@ -214,13 +221,16 @@ export class MobileDesktopRelay {
     } catch {}
   }
 
-  private linkFor(phone: RelayedPhone, environmentId: string): RelayLink {
+  // The request that opens a link decides whether it may wake a recipe VM behind the server.
+  private linkFor(phone: RelayedPhone, environmentId: string, method: string): RelayLink {
     const existing = this.links.get(linkKey(phone.connectionId, environmentId))
-    if (existing) {
+    if (
+      existing?.carries(method, this.options.hosts, (refusal) => this.endLink(existing, refusal))
+    ) {
       return existing
     }
     const link = new RelayLink(environmentId, phone, this.options.allocateStreamId, (opening) =>
-      this.open(opening)
+      this.open(opening, method)
     )
     link.opened.catch((error: unknown) => {
       this.endLink(
@@ -232,13 +242,14 @@ export class MobileDesktopRelay {
     return link
   }
 
-  private async open(link: RelayLink): Promise<OpenedRelayLink> {
+  private async open(link: RelayLink, openingMethod: string): Promise<OpenedRelayLink> {
     const { phone } = link
-    const host = await this.options.hosts.resolve(link.environmentId)
+    const host = await link.setup.within(link.prepare(this.options.hosts, openingMethod))
     if (!host) {
       throw unavailable('The server is not configured on this computer.')
     }
-    const grants = await this.grants.get(host, phone.deviceId)
+    // One budget covers the whole open, so a phone's open still answers in time.
+    const grants = await link.setup.within(this.grants.get(host, phone.deviceId))
     if (grants.kind === 'update-needed') {
       throw unavailable('The server needs an Orca update to open its workspaces from a phone.')
     }
@@ -273,7 +284,7 @@ export class MobileDesktopRelay {
           },
           onClose: (error) => this.endLink(link, error)
         },
-        { timeoutMs: RELAY_CONNECT_TIMEOUT_MS }
+        { timeoutMs: link.setup.remaining() }
       )
       if (!this.isCurrent(link)) {
         socket.close()
@@ -311,16 +322,4 @@ export class MobileDesktopRelay {
       }
     }
   }
-}
-
-function linkKey(connectionId: string, environmentId: string): string {
-  return `${connectionId}\0${environmentId}`
-}
-
-function unavailable(message: string): RemoteRuntimeClientError {
-  return new RemoteRuntimeClientError('remote_runtime_unavailable', message)
-}
-
-function failure(id: string, code: string, message: string): string {
-  return JSON.stringify({ id, ok: false, error: { code, message }, _meta: { runtimeId: null } })
 }

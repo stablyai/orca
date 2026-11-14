@@ -1,18 +1,19 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   isLockedWorktreeRemovalError,
   isProvenLivePtyRemovalError,
   isProvenLiveStructuredSessionRemovalError,
   type WorktreeForceDeleteReason
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 export type DeleteWorktreeToastCopy = {
   title: string
   description?: string
   isDestructive: boolean
 }
 
-export function getSubmoduleRemovalRefusalCopy(): string {
-  return translate(
+export function getSubmoduleRemovalRefusalCopy(t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.delete.worktree.toast.submodules',
     'This workspace contains submodules, so Git deletes it only with Force Delete. Force Delete also permanently removes anything in those submodules that was never pushed: commits, local branches and stashes.'
   )

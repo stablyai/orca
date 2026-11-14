@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from '../../session-scanner'
-import { isolatedScanRoots, writeJsonlFile } from '../../session-scanner-test-fixtures'
+import {
+  isolatedScanRoots,
+  writeJsonlFile
+} from '../../scanner-fixtures/session-scanner-test-fixtures'
 
 const OMP_STEM = '2026-05-01T10-00-00-000Z_0199a000-0000-7000-8000-000000000002'
 const runtime = { version: '18.12.2' }
@@ -121,16 +124,27 @@ async function writeSharedRootTranscripts(sessionsDir: string): Promise<void> {
 }
 
 describe('scanAiVaultSessions with overlapping Pi and OMP roots', () => {
+  const parentFolder = (sessionsDir: string): string => join(sessionsDir, '..')
   const sameFolder = (sessionsDir: string): string => sessionsDir
   it.each([
-    { layout: 'the same folder', piRoot: sameFolder, scope: {} },
     // PI_CODING_AGENT_DIR=<dir>: Pi walks <dir>, OMP walks <dir>/sessions.
-    { layout: 'a parent folder', piRoot: (dir: string) => join(dir, '..'), scope: {} },
-    // A one-row cap sends the rest through scope recovery: Pi's buckets and OMP's walk.
+    { layout: 'a parent folder', piRoot: parentFolder, scope: {} },
+    // Scope recovery reads Pi's cwd buckets, which sit under the agent folder's sessions/.
     {
-      layout: 'the same folder for a workspace',
-      piRoot: sameFolder,
+      layout: 'a parent folder for a workspace',
+      piRoot: parentFolder,
       scope: { scopePaths: ['/repo/app'], limit: 1 }
+    },
+    // Workspace and Project skip the recency pass for cwd-bucket agents.
+    {
+      layout: 'the same folder for a scope-only workspace',
+      piRoot: sameFolder,
+      scope: { scopePaths: ['/repo/app'], scopeOnly: true }
+    },
+    {
+      layout: 'a parent folder for a scope-only workspace',
+      piRoot: parentFolder,
+      scope: { scopePaths: ['/repo/app'], scopeOnly: true }
     }
   ])('lists each transcript once under its writer when Pi scans $layout', async (testCase) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-pi-omp-shared-'))

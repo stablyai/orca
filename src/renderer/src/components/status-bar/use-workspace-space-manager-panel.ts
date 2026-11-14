@@ -4,10 +4,10 @@ import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-s
 import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
-} from '../../../../shared/worktree/removal'
+} from '../../../../shared/worktree/removal/removal'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { useAppStore } from '../../store'
-import { getWorktreeOnHostFromState } from '../../store/selectors'
+import { getWorktreeOnHostFromState } from '../../store/workspaces/selection/worktree-on-host-selector'
 import { runWorktreeBatchDelete } from '../sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { dismissDeleteWorktreeFailureToast } from '../sidebar/workspace-actions/deletion/delete-worktree-failure-toast'
 import { showWorkspaceListChangedToast } from '../sidebar/worktree-list/listing/stale-workspace-list-toast'

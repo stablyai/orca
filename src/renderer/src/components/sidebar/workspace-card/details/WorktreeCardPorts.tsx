@@ -4,15 +4,17 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import {
   canStopWorkspacePort,
-  getPortOpenBrowserTooltipLabel,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
-  refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser
+  refreshWorkspacePortScanAfterStop
 } from '@/lib/workspace-ports/workspace-port-actions'
+import {
+  getPortOpenBrowserTooltipLabel,
+  resolvePortOpenInOrcaBrowser
+} from '@/lib/workspace-ports/workspace-port-browser-open'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import type { WorkspacePort } from '../../../../../../shared/workspace-ports'
@@ -21,6 +23,7 @@ import {
   WorktreeCardDetailSectionContent
 } from './WorktreeCardDetailSection'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type WorktreeCardPortsProps = {
   ports: WorkspacePort[]
@@ -29,6 +32,7 @@ type WorktreeCardPortsProps = {
 export function WorktreeCardPortsTrigger({
   ports
 }: WorktreeCardPortsProps): React.JSX.Element | null {
+  const t = useTranslate()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   if (ports.length === 0) {
@@ -39,11 +43,10 @@ export function WorktreeCardPortsTrigger({
     <button
       type="button"
       className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-      aria-label={translate(
-        'auto.components.sidebar.WorktreeCardPorts.livePorts',
-        '{{count}} live ports',
-        { count: ports.length, defaultValue_one: '{{count}} live port' }
-      )}
+      aria-label={t('auto.components.sidebar.WorktreeCardPorts.livePorts', '{{count}} live ports', {
+        count: ports.length,
+        defaultValue_one: '{{count}} live port'
+      })}
       onClick={(event) => {
         event.stopPropagation()
         recordFeatureInteraction('ports')
@@ -97,6 +100,7 @@ function PortAction({
 }
 
 function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const localhostLabelRoute = useLocalhostLabelRouteForPort(port)
 
@@ -112,10 +116,10 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
     port.processName ??
     (port.pid
       ? `PID ${port.pid}`
-      : translate('auto.components.sidebar.WorktreeCardPorts.unknownProcess', 'Unknown process'))
+      : t('auto.components.sidebar.WorktreeCardPorts.unknownProcess', 'Unknown process'))
   const address = addressForPort(port)
   const canStop = canStopWorkspacePort(port)
-  const openBrowserLabel = translate(
+  const openBrowserLabel = t(
     'auto.components.sidebar.WorktreeCardPorts.33bc7d7495',
     'Open in Browser'
   )
@@ -261,20 +265,15 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
             <ExternalLink className="size-3" />
           </PortAction>
           <PortAction
-            label={translate(
-              'auto.components.sidebar.WorktreeCardPorts.c8067a829a',
-              'Copy {{value0}}',
-              { value0: address }
-            )}
+            label={t('auto.components.sidebar.WorktreeCardPorts.c8067a829a', 'Copy {{value0}}', {
+              value0: address
+            })}
             onClick={handleCopy}
           >
             <Copy className="size-3" />
           </PortAction>
           <PortAction
-            label={translate(
-              'auto.components.sidebar.WorktreeCardPorts.2f854442ff',
-              'Stop Process'
-            )}
+            label={t('auto.components.sidebar.WorktreeCardPorts.2f854442ff', 'Stop Process')}
             disabled={!canStop}
             onClick={handleStop}
           >
@@ -289,6 +288,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
 export function WorktreeCardPortsDetails({
   ports
 }: WorktreeCardPortsProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (ports.length === 0) {
     return null
   }
@@ -298,7 +298,7 @@ export function WorktreeCardPortsDetails({
       <div className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         <Plug className="size-3" />
         <span>
-          {translate('auto.components.sidebar.WorktreeCardPorts.3240f320d7', 'Live Ports')}{' '}
+          {t('auto.components.sidebar.WorktreeCardPorts.3240f320d7', 'Live Ports')}{' '}
           <span className="font-normal tabular-nums text-muted-foreground/70">
             ({ports.length})
           </span>

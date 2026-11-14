@@ -77,6 +77,7 @@ function renderList(sessions: AiVaultSession[], loading = false) {
         onOpenLog={vi.fn()}
         onRevealLog={vi.fn()}
         onOpenCwd={vi.fn()}
+        onRevealArtifacts={vi.fn()}
         onRequestDelete={vi.fn()}
       />
     </TooltipProvider>

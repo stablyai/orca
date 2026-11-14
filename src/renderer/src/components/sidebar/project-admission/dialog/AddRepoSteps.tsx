@@ -2,15 +2,16 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { addRuntimeSshRepo } from '@/runtime/runtime-ssh-target-management'
-import { connectRuntimeEnvironmentSshTarget } from '@/runtime/runtime-environment-ssh-state'
+import { addRuntimeSshRepo } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
+import { connectRuntimeEnvironmentSshTarget } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import {
   loadServerSshTargets,
   withServerSshStates,
   type RemoteRepoTarget
 } from '../host-selection/add-repo-server-ssh-targets'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { formatSshUserFacingError } from '@/components/settings/ssh/targets/ssh-user-facing-error'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -106,7 +107,7 @@ export function useRemoteRepo(
       } catch (err) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : translate('auto.components.sidebar.AddRepoSteps.3e64e8a70d', 'Connection failed')
         )
       }

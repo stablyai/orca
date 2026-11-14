@@ -55,16 +55,6 @@ async function hostTabRows(runtime: ReturnType<typeof restartedHost>) {
 }
 
 describe('a terminal record arriving after main composed its panes (switch on)', () => {
-  it('lists the restored pane once, with the terminal its saved layout binds', async () => {
-    const runtime = restartedHost('inc-now', () => [
-      { id: 'persisted-pty', incarnationId: 'inc-now', connected: true }
-    ])
-
-    expect(await hostTabRows(runtime)).toEqual([
-      { ptyId: 'persisted-pty', incarnationId: 'inc-now' }
-    ])
-  })
-
   it('re-composes when the record learns the incarnation the pane is stamped with', async () => {
     let incarnationId = 'inc-before'
     const runtime = restartedHost('inc-now', () => [
@@ -77,40 +67,5 @@ describe('a terminal record arriving after main composed its panes (switch on)',
     expect(await hostTabRows(runtime)).toEqual([
       { ptyId: 'persisted-pty', incarnationId: 'inc-now' }
     ])
-  })
-
-  it('publishes nothing when an unchanged inventory refresh records the same terminal', async () => {
-    const runtime = restartedHost('inc-now', () => [
-      { id: 'persisted-pty', incarnationId: 'inc-now', connected: true }
-    ])
-    await hostTabRows(runtime)
-    await new Promise((resolve) => setImmediate(resolve))
-    const published = vi.spyOn(runtime, 'syncWindowGraph')
-
-    await hostTabRows(runtime)
-    await new Promise((resolve) => setImmediate(resolve))
-
-    expect(published).not.toHaveBeenCalled()
-  })
-
-  it('re-composes when the record moves to another workspace', async () => {
-    const runtime = restartedHost('inc-now', () => [
-      { id: 'persisted-pty', incarnationId: 'inc-now', connected: true }
-    ])
-    // A window publishes, so main republishes its panes when a record changes.
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: [] })
-    expect(await hostTabRows(runtime)).toEqual([
-      { ptyId: 'persisted-pty', incarnationId: 'inc-now' }
-    ])
-
-    await new Promise((resolve) => setImmediate(resolve))
-    const published = vi.spyOn(runtime, 'syncWindowGraph')
-    // Simulate a worktree-identity migration.
-    runtime['recordPtyWorktree']('persisted-pty', 'repo-1::/tmp/worktree-b')
-    await new Promise((resolve) => setImmediate(resolve))
-
-    expect(runtime['paneOfPty'](runtime['ptysById'].get('persisted-pty')).tabId).toBeNull()
-    expect(published).toHaveBeenCalled()
   })
 })

@@ -2,7 +2,7 @@
   "version": 1,
   "records": [
     {
-      "file": "src/shared/agent-session/lifecycle/agent-session-rewind.ts",
+      "file": "src/shared/agent-session/lifecycle/rewind/agent-session-rewind.ts",
       "inputs": [],
       "emptyEnv": [],
       "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80",
@@ -72,14 +72,6 @@
       "sourceClosureSha256": "8d76abb09eda86da2b9132b3add2147b7fe32ca5eed2a8ebf33c2670d68095dc",
       "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
-    },
-    {
-      "file": "src/shared/doc-preview-scheme.ts",
-      "inputs": [],
-      "emptyEnv": [],
-      "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
-      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
-      "sourceClosureSha256": "4a3a0dab2fc5b009d4e4e0d6bb5ba49dae08726f3d94fa83c54283f21f8df097"
     },
     {
       "file": "src/shared/node-dist-mirror.ts",

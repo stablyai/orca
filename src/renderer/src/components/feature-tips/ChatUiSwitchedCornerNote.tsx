@@ -3,7 +3,8 @@ import { Trans } from 'react-i18next'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openChatUiFeatureTipSettings } from './chat-ui-here-actions'
 
 const AUTO_DISMISS_MS = 12_000
@@ -15,6 +16,7 @@ export function ChatUiSwitchedCornerNote({
   onClose: () => void
   focusSettings?: boolean
 }): JSX.Element {
+  const t = useTranslate()
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
 
   useLayoutEffect(() => {
@@ -63,17 +65,14 @@ export function ChatUiSwitchedCornerNote({
               <Check className="size-3" />
             </span>
             <CardTitle id="chat-ui-switched-note-heading">
-              {translate(
-                'featureTips.chatUiHere.switchedNoteTitle',
-                'New agents will open in Chat UI'
-              )}
+              {t('featureTips.chatUiHere.switchedNoteTitle', 'New agents will open in Chat UI')}
             </CardTitle>
           </div>
           <Button
             variant="ghost"
             size="icon-xs"
             onClick={onClose}
-            aria-label={translate('featureTips.chatUiHere.dismiss', 'Dismiss')}
+            aria-label={t('featureTips.chatUiHere.dismiss', 'Dismiss')}
           >
             <X className="size-3.5" />
           </Button>
@@ -84,7 +83,7 @@ export function ChatUiSwitchedCornerNote({
           <CardDescription>
             <Trans
               i18n={i18n}
-              defaults={translate(
+              defaults={t(
                 'featureTips.chatUiHere.switchedNoteBody',
                 'Prefer the terminal? Switch back anytime: search <term>Chat UI</term> in Settings.'
               )}
@@ -93,7 +92,7 @@ export function ChatUiSwitchedCornerNote({
           </CardDescription>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onClose}>
-              {translate('featureTips.gotIt', 'Got it')}
+              {t('featureTips.gotIt', 'Got it')}
             </Button>
             <Button
               ref={settingsButtonRef}
@@ -102,7 +101,7 @@ export function ChatUiSwitchedCornerNote({
               className="flex-1"
               onClick={handleOpenSettings}
             >
-              {translate('featureTips.chatUiHere.openSettings', 'Open Settings')}
+              {t('featureTips.chatUiHere.openSettings', 'Open Settings')}
             </Button>
           </div>
         </div>

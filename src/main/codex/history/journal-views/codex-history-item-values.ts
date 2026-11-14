@@ -68,7 +68,7 @@ export function historySourceItem(item: CodexThreadItem): CodexThreadItem | null
     case 'commandExecution': {
       const output = codexCommandOutput(item)
       payload = {
-        ...copyKnown(item, ['command', 'cwd', 'commandActions']),
+        ...copyKnown(item, ['command', 'cwd', 'commandActions', 'source', 'processId']),
         ...toolExecutionMetadata(item),
         ...(output === null ? {} : { aggregatedOutput: output })
       }

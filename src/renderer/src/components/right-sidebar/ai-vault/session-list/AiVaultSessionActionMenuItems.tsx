@@ -11,7 +11,7 @@ import {
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AiVaultSessionSurfaceSwitchMenuItems } from './AiVaultSessionSurfaceSwitchMenuItems'
 import { isAiVaultFolderWorkspaceId } from './ai-vault-session-worktree-affordances'
 
@@ -34,6 +34,7 @@ export function SessionActionMenuItems({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   deleteBlockedReason,
   onDelete
 }: {
@@ -57,13 +58,15 @@ export function SessionActionMenuItems({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRevealArtifacts?: () => void
   // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
   onDelete?: () => void
 }) {
+  const t = useTranslate()
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
-  const hasLocalPathActions = Boolean(onOpenLog || onRevealLog || onOpenCwd)
+  const hasLocalPathActions = Boolean(onOpenLog || onRevealLog || onOpenCwd || onRevealArtifacts)
   // Why: Jump/Resume items act on this conversation; the hand-off starts a new one, so it sits apart.
   const hasItemsAboveHandOff = Boolean(
     onJumpToOriginalPane ||
@@ -73,7 +76,7 @@ export function SessionActionMenuItems({
     onResumeInNewCli ||
     onCopyResume
   )
-  const deleteLabel = translate('auto.components.right.sidebar.AiVaultSessionRow.delete', 'Delete')
+  const deleteLabel = t('auto.components.right.sidebar.AiVaultSessionRow.delete', 'Delete')
   const deleteItem = (
     <Item
       variant="destructive"
@@ -92,7 +95,7 @@ export function SessionActionMenuItems({
       {onJumpToOriginalPane ? (
         <Item onSelect={onJumpToOriginalPane}>
           <LocateFixed className="size-3.5" />
-          {translate(
+          {t(
             'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
             'Jump to Original Pane'
           )}
@@ -102,11 +105,11 @@ export function SessionActionMenuItems({
         <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
           <PanelTopOpen className="size-3.5" />
           {isAiVaultFolderWorkspaceId(jumpWorkspaceId)
-            ? translate(
+            ? t(
                 'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToFolder',
                 'Jump to Folder'
               )
-            : translate(
+            : t(
                 'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
                 'Jump to Worktree'
               )}
@@ -128,7 +131,7 @@ export function SessionActionMenuItems({
       {onCopyResume ? (
         <Item onSelect={onCopyResume}>
           <Copy className="size-3.5" />
-          {translate(
+          {t(
             'auto.components.right.sidebar.AiVaultSessionRow.copyResumeCommand',
             'Copy Resume Command'
           )}
@@ -139,7 +142,7 @@ export function SessionActionMenuItems({
           {hasItemsAboveHandOff ? <Separator /> : null}
           <Item onSelect={onContinueInNewSession}>
             <MessageSquarePlus className="size-3.5" />
-            {translate(
+            {t(
               'components.agentSessionContinuation.handOffToAnotherAgent',
               'Hand Off to Another Agent'
             )}
@@ -152,21 +155,30 @@ export function SessionActionMenuItems({
           {onOpenLog ? (
             <Item onSelect={onOpenLog}>
               <FileJson className="size-3.5" />
-              {translate('auto.components.right.sidebar.AiVaultSessionRow.openLog', 'Open Log')}
+              {t('auto.components.right.sidebar.AiVaultSessionRow.openLog', 'Open Log')}
             </Item>
           ) : null}
           {onRevealLog ? (
             <Item onSelect={onRevealLog}>
               <FolderOpen className="size-3.5" />
-              {translate('auto.components.right.sidebar.AiVaultSessionRow.revealLog', 'Reveal Log')}
+              {t('auto.components.right.sidebar.AiVaultSessionRow.revealLog', 'Reveal Log')}
             </Item>
           ) : null}
           {onOpenCwd ? (
             <Item onSelect={onOpenCwd}>
               <FolderOpen className="size-3.5" />
-              {translate(
+              {t(
                 'auto.components.right.sidebar.AiVaultSessionRow.openWorkingDirectory',
                 'Open Working Directory'
+              )}
+            </Item>
+          ) : null}
+          {onRevealArtifacts ? (
+            <Item onSelect={onRevealArtifacts}>
+              <FolderOpen className="size-3.5" />
+              {t(
+                'auto.components.right.sidebar.AiVaultSessionRow.revealArtifactsFolder',
+                'Reveal Artifacts Folder'
               )}
             </Item>
           ) : null}
@@ -174,17 +186,11 @@ export function SessionActionMenuItems({
       ) : null}
       <Separator />
       <Item onSelect={onCopyId}>
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.copySessionId',
-          'Copy Session ID'
-        )}
+        {t('auto.components.right.sidebar.AiVaultSessionRow.copySessionId', 'Copy Session ID')}
       </Item>
       {onCopyPath ? (
         <Item onSelect={onCopyPath}>
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.copyLogPath',
-            'Copy Log Path'
-          )}
+          {t('auto.components.right.sidebar.AiVaultSessionRow.copyLogPath', 'Copy Log Path')}
         </Item>
       ) : null}
       {onDelete ? (

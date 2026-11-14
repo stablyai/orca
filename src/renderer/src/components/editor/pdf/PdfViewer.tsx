@@ -1,0 +1,273 @@
+import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Image as ImageIcon, RotateCcw, Search, ZoomIn, ZoomOut } from 'lucide-react'
+import * as pdfjsLib from 'pdfjs-dist'
+import type {
+  EventBus,
+  PDFFindController,
+  PDFViewer as PdfJsViewer
+} from 'pdfjs-dist/web/pdf_viewer.mjs'
+import 'pdfjs-dist/web/pdf_viewer.css'
+import PdfFind from './PdfFind'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useAppStore } from '@/store/index'
+import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
+
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { useTranslate } from '@/i18n/use-translate'
+import { createPdfDocumentLoader, type PdfDocumentLoader } from './pdf-document-loader'
+import { createPdfViewerSession } from './pdf-viewer-session'
+import {
+  applyPdfScalePreference,
+  stepPdfScalePreference,
+  type PdfScalePreference
+} from './pdf-scale-preference'
+import { readPdfScalePreference, writePdfScalePreference } from './pdf-scale-preference-storage'
+import { EditorCommandOwnerContext } from '../commands/editor-command-owner-context'
+import { listenForViewerZoomRequests } from '../viewer-viewport/viewer-zoom-request'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
+
+const MIN_SCALE = 0.25
+const MAX_SCALE = 5
+const SCALE_STEP = 1.25
+const SCALE_BOUNDS = { min: MIN_SCALE, max: MAX_SCALE, step: SCALE_STEP }
+
+type PdfViewerProps = {
+  /** Base64 bytes, for git blobs, diffs and the web client. */
+  content: string
+  /** An orca-media URL pdf.js reads by range; wins over `content`. */
+  src?: string
+  /** The file's size, which pdf.js needs to read `src` by range. */
+  byteSize?: number
+  filePath: string
+  // Persist zoom only with owner-qualified identity; diff/conflict callers must not use a path-only key.
+  preferenceKey?: string | null
+  // Omit scroll memory for diff/conflict surfaces that can mount several viewers on the same path.
+  scrollCacheKey?: string | null
+}
+
+export default function PdfViewer(props: PdfViewerProps): JSX.Element {
+  const identity = JSON.stringify([
+    props.filePath,
+    props.preferenceKey ?? null,
+    props.scrollCacheKey ?? null
+  ])
+  return <PdfDocumentViewer key={identity} {...props} />
+}
+
+function PdfDocumentViewer({
+  content,
+  src,
+  byteSize,
+  filePath,
+  preferenceKey = null,
+  scrollCacheKey = null
+}: PdfViewerProps): JSX.Element {
+  const t = useTranslate()
+  const rootRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const viewerDivRef = useRef<HTMLDivElement>(null)
+  const loaderRef = useRef<PdfDocumentLoader | null>(null)
+  const [pdfError, setPdfError] = useState<string | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
+  const [scale, setScale] = useState(1)
+  const keybindings = useAppStore((state) => state.keybindings)
+  const findShortcutLabel = useShortcutLabel('editor.find')
+  const isCommandOwner = useContext(EditorCommandOwnerContext)
+  const eventBusRef = useRef<InstanceType<typeof EventBus> | null>(null)
+  const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null)
+  const pdfViewerRef = useRef<InstanceType<typeof PdfJsViewer> | null>(null)
+  // Retain zoom through viewer rebuilds; durable preferences restore it after remount or restart.
+  const scalePreferenceRef = useRef<PdfScalePreference>('page-width')
+
+  const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
+  const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
+
+  // All zoom entry points must record preferences so content reloads restore the chosen scale.
+  const recordScalePreference = useCallback(
+    (preference: PdfScalePreference) => {
+      scalePreferenceRef.current = preference
+      if (preferenceKey) {
+        writePdfScalePreference(preferenceKey, preference)
+      }
+    },
+    [preferenceKey]
+  )
+
+  useEffect(() => {
+    const container = containerRef.current
+    const viewerDiv = viewerDivRef.current
+    if (!container || !viewerDiv) {
+      return
+    }
+
+    setPdfError(null)
+    scalePreferenceRef.current = preferenceKey
+      ? (readPdfScalePreference(preferenceKey) ?? 'page-width')
+      : 'page-width'
+    const loader = createPdfDocumentLoader({
+      onError: setPdfError,
+      display: (doc) => {
+        const session = createPdfViewerSession({
+          container,
+          viewerDiv,
+          doc,
+          scrollCacheKey,
+          getScalePreference: () => scalePreferenceRef.current,
+          scaleBounds: SCALE_BOUNDS,
+          onScaleChanging: setScale,
+          onWheelZoom: recordScalePreference
+        })
+        eventBusRef.current = session.eventBus
+        findControllerRef.current = session.findController
+        pdfViewerRef.current = session.viewer
+        return () => {
+          try {
+            session.dispose()
+          } finally {
+            eventBusRef.current = null
+            findControllerRef.current = null
+            pdfViewerRef.current = null
+            setFindOpen(false)
+          }
+        }
+      }
+    })
+    loaderRef.current = loader
+    return () => {
+      loaderRef.current = null
+      loader.dispose()
+    }
+  }, [filePath, preferenceKey, recordScalePreference, scrollCacheKey])
+
+  useEffect(() => {
+    loaderRef.current?.load(src ? { url: src, length: byteSize } : { base64: cleanedContent })
+    // Identical bytes still require reload when ownership changes.
+  }, [byteSize, cleanedContent, filePath, preferenceKey, scrollCacheKey, src])
+
+  const closeFindBar = useCallback(() => {
+    const eventBus = eventBusRef.current
+    if (eventBus) {
+      eventBus.dispatch('findbarclose', { source: null })
+    }
+    setFindOpen(false)
+  }, [])
+
+  const stepZoom = useCallback(
+    (direction: 'in' | 'out') => {
+      const viewer = pdfViewerRef.current
+      if (!viewer) {
+        return
+      }
+      const next = stepPdfScalePreference(viewer.currentScale, direction, SCALE_BOUNDS)
+      viewer.currentScale = next.scale
+      recordScalePreference(next.preference)
+    },
+    [recordScalePreference]
+  )
+
+  const zoomIn = useCallback(() => stepZoom('in'), [stepZoom])
+  const zoomOut = useCallback(() => stepZoom('out'), [stepZoom])
+
+  const zoomReset = useCallback(() => {
+    const viewer = pdfViewerRef.current
+    if (!viewer) {
+      return
+    }
+    applyPdfScalePreference(viewer, 'page-width', SCALE_BOUNDS)
+    recordScalePreference('page-width')
+  }, [recordScalePreference])
+
+  useEffect(() => {
+    if (!isCommandOwner) {
+      return
+    }
+    return listenForViewerZoomRequests(
+      (direction) => (direction === 'reset' ? zoomReset() : stepZoom(direction)),
+      rootRef
+    )
+  }, [isCommandOwner, stepZoom, zoomReset])
+
+  const openFind = useCallback(() => setFindOpen(true), [])
+  usePdfViewerFindShortcut({ rootRef, ownsCommands: isCommandOwner, keybindings, openFind })
+
+  const zoomPercent = Math.round(scale * 100)
+
+  return (
+    <div ref={rootRef} className="flex h-full min-h-0 flex-col">
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        <PdfFind isOpen={findOpen} onClose={closeFindBar} eventBusRef={eventBusRef} />
+        {/* PDFViewer needs absolute positioning; isolate pdf.js DOM from Preflight with all:revert, then apply layout on the inner container. */}
+        <div style={{ all: 'revert' }}>
+          <div
+            ref={containerRef}
+            style={{
+              position: 'absolute',
+              inset: '0',
+              overflow: 'auto',
+              background: 'var(--pdf-viewer-bg, #e4e4e7)'
+            }}
+            className="scrollbar-editor dark:[--pdf-viewer-bg:#18181b]"
+          >
+            <div ref={viewerDivRef} className="pdfViewer" />
+          </div>
+        </div>
+        {pdfError ? (
+          <div
+            role="alert"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background p-8 text-sm text-muted-foreground"
+          >
+            <ImageIcon size={40} />
+            <div>{pdfError}</div>
+            <div className="max-w-md break-all text-center text-xs">{filename}</div>
+          </div>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-4 border-t px-4 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+            onClick={zoomOut}
+            disabled={scale <= MIN_SCALE}
+            title={t('auto.components.editor.PdfViewer.fa5d096b00', 'Zoom out')}
+          >
+            <ZoomOut size={14} />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent hover:text-foreground"
+            onClick={zoomReset}
+            title={t('auto.components.editor.PdfViewer.c0119616d6', 'Fit to width')}
+          >
+            <RotateCcw size={14} />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+            onClick={zoomIn}
+            disabled={scale >= MAX_SCALE}
+            title={t('auto.components.editor.PdfViewer.2b6eb1ccd6', 'Zoom in')}
+          >
+            <ZoomIn size={14} />
+          </button>
+          <span className="ml-1 tabular-nums">{zoomPercent}%</span>
+        </div>
+        <button
+          type="button"
+          className="rounded p-1 hover:bg-accent hover:text-foreground"
+          onClick={() => setFindOpen(true)}
+          title={t('auto.components.editor.PdfViewer.069ff59932', 'Find in PDF ({{value0}})', {
+            value0: findShortcutLabel
+          })}
+        >
+          <Search size={14} />
+        </button>
+        <span className="min-w-0 truncate" title={filename}>
+          {filename}
+        </span>
+        <span>{t('auto.components.editor.PdfViewer.3e98d500d2', 'PDF preview')}</span>
+      </div>
+    </div>
+  )
+}

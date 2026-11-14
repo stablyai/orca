@@ -1,5 +1,6 @@
 import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Checkbox } from '../../../ui/checkbox'
 import { VirtualizedList } from '../../../virtualized-list'
 import { useSettingsContentScrollElement } from '../../page/settings-content-scroll-element'
@@ -29,11 +30,11 @@ type SshTargetListProps = {
   onServerChanged: () => void
 }
 
-function groupTitle(group: SshTargetGroup): React.JSX.Element {
+function groupTitle(group: SshTargetGroup, t: Translate = translate): React.JSX.Element {
   if (group.id === 'manual') {
-    return <>{translate('auto.components.settings.SshTargetList.addedInOrca', 'Added in Orca')}</>
+    return <>{t('auto.components.settings.SshTargetList.addedInOrca', 'Added in Orca')}</>
   }
-  return <>{translate('auto.components.settings.SshTargetList.fromConfig', 'From ~/.ssh/config')}</>
+  return <>{t('auto.components.settings.SshTargetList.fromConfig', 'From ~/.ssh/config')}</>
 }
 
 // Virtualize generated configs with over 10k hosts; rendering every card consumed gigabytes of DOM.
@@ -69,6 +70,7 @@ export function SshTargetList({
   onRemove,
   onServerChanged
 }: SshTargetListProps): React.JSX.Element {
+  const t = useTranslate()
   const groups = groupSshTargetsBySource(targets)
   const scrollElement = useSettingsContentScrollElement()
   const isMac = navigator.userAgent.includes('Mac')
@@ -105,11 +107,11 @@ export function SshTargetList({
                 checked={checkState}
                 aria-label={
                   group.id === 'manual'
-                    ? translate(
+                    ? t(
                         'auto.components.settings.SshTargetList.selectManualGroup',
                         'Select all hosts added in Orca'
                       )
-                    : translate(
+                    : t(
                         'auto.components.settings.SshTargetList.selectConfigGroup',
                         'Select all hosts from ~/.ssh/config'
                       )
@@ -117,11 +119,11 @@ export function SshTargetList({
                 onCheckedChange={() => selection.setGroup(ids, checkState !== true)}
               />
               <span className="text-xs font-medium text-foreground">
-                {groupTitle(group)}
+                {groupTitle(group, t)}
                 <span className="ml-1.5 font-normal text-muted-foreground tabular-nums">
                   ·{' '}
                   {group.targets.length < totalBySource[group.id]
-                    ? translate(
+                    ? t(
                         'auto.components.settings.SshTargetList.filteredCount',
                         '{{count}} of {{total}}',
                         { count: group.targets.length, total: totalBySource[group.id] }

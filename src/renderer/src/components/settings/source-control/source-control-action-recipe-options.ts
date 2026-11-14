@@ -11,9 +11,10 @@ import {
   isCustomAgentId,
   listCommitMessageAgentCapabilities
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export const AI_TEXT_ACTION_ID_SET = new Set<string>(AI_TEXT_ACTION_IDS)
 export const SOURCE_CONTROL_TEXT_ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_TEXT_ACTION_IDS)
@@ -25,6 +26,10 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
   conversationName: translate(
     'settings.chat.names.recipeDescription',
     'Generate a short name from the first message in a new chat.'
+  ),
+  dictationCleanup: translate(
+    'settings.voice.cleanup.recipeDescription',
+    'Clean up dictated text before it lands.'
   ),
   commitMessage: translate(
     'auto.components.settings.source.control.action.recipe.options.commitMessage',
@@ -59,6 +64,9 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
     'Start an agent from selected unresolved PR or MR comments.'
   )
 }))
+
+// Their CLIs can't take the read-only tool policy, so they run only naming tasks (source-control-read-only-policy.ts).
+const NAMING_ONLY_TEXT_AGENT_IDS = new Set<string>(['amp', 'muse'])
 
 const FALLBACK_AGENT_ARGS_PLACEHOLDER = '--model sonnet'
 
@@ -107,34 +115,41 @@ export function getAgentCatalogForAction(
     return getAgentCatalog()
   }
   return getAgentCatalog().filter(
-    (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
+    (agent) =>
+      (TEXT_GENERATION_AGENT_ID_SET.has(agent.id) &&
+        !(actionId === 'dictationCleanup' && NAMING_ONLY_TEXT_AGENT_IDS.has(agent.id))) ||
+      agent.id === selectedAgent
   )
 }
 
-function formatSupportedAgentLabels(): string {
+function formatSupportedAgentLabels(t: Translate = translate): string {
   return [
     ...listCommitMessageAgentCapabilities().map((capability) => capability.label),
-    translate(
+    t(
       'auto.components.settings.source.control.action.recipe.options.customCommand',
       'Custom command'
     )
   ].join(', ')
 }
 
-export function getSourceControlActionAgentSupportText(actionId: AiActionId): string | null {
+export function getSourceControlActionAgentSupportText(
+  actionId: AiActionId,
+  t: Translate = translate
+): string | null {
   if (!AI_TEXT_ACTION_ID_SET.has(actionId)) {
     return null
   }
-  return translate(
+  return t(
     'auto.components.settings.source.control.action.recipe.options.supportedAgents',
     'Supported agents for this recipe: {{value0}}.',
-    { value0: formatSupportedAgentLabels() }
+    { value0: formatSupportedAgentLabels(t) }
   )
 }
 
 export function getSourceControlActionAgentWarningText(
   actionId: AiActionId,
-  selectedAgent: TuiAgent | CustomAgentId | null | undefined
+  selectedAgent: TuiAgent | CustomAgentId | null | undefined,
+  t: Translate = translate
 ): string | null {
   if (!AI_TEXT_ACTION_ID_SET.has(actionId)) {
     return null
@@ -145,7 +160,7 @@ export function getSourceControlActionAgentWarningText(
       return null
     }
     const agentLabel = getAgentCatalog().find((agent) => agent.id === selectedAgent)?.label
-    return translate(
+    return t(
       'auto.components.settings.source.control.action.recipe.options.unsupportedSavedAgent',
       '{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.',
       { value0: agentLabel ?? selectedAgent }

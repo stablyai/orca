@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import type { WorktreeMetaUpdateOptions } from '@/store/slices/worktree-helpers'
+import type { WorktreeMetaUpdateOptions } from '@/store/slices/worktrees/metadata/worktree-meta-update-options'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
@@ -37,7 +37,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     }
   }
 })
-vi.mock('@/runtime/runtime-linear-client', () => ({
+vi.mock('@/runtime/linear/runtime-linear-client', () => ({
   linearStatus: vi.fn(async () => ({ connected: false, viewer: null }))
 }))
 import WorktreeMetaDialog from './WorktreeMetaDialog'

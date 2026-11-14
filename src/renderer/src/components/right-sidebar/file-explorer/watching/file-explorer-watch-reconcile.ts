@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { FsChangedPayload } from '../../../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import type { DirCache, TreeNode } from '../tree/file-explorer-types'
 import {
   isPathInsideOrEqual,

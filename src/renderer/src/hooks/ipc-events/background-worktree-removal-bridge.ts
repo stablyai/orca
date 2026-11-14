@@ -9,7 +9,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type HostMarkedRow = Pick<Worktree, 'id' | 'hostId'>
 type AppStoreApi = Pick<typeof useAppStore, 'getState' | 'setState'>

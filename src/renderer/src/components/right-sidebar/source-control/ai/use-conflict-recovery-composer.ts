@@ -5,7 +5,7 @@ import {
   admitSourceControlRecovery,
   sourceControlRecoveryScopeKey
 } from './source-control-recovery-admission'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { SourceControlAiControllerParams } from './controller-types'
 import { buildResolveConflictsPrompt } from '../../../../../../shared/source-control/recovery/source-control-conflict-prompts'
 

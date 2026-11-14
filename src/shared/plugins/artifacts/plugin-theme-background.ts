@@ -2,10 +2,12 @@ import { z } from 'zod'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_THEME_VIDEO_BACKGROUND_SINCE,
   pluginFieldDoc,
   pluginPathFieldDoc
 } from '../manifest/plugin-schema-field-docs'
 import { PLUGIN_THEME_BACKGROUND_RULE_TEXT } from '../images/plugin-image-fields'
+import { PLUGIN_THEME_VIDEO_RULE_TEXT } from '../media/plugin-theme-video-rules'
 import { parsePluginImageUrl } from '../images/plugin-image-url'
 
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
@@ -39,6 +41,15 @@ const backgroundFields = {
       'images/dusk.webp'
     ])
   ),
+  videoPath: pluginRelativePathSchema
+    .optional()
+    .meta(
+      pluginPathFieldDoc(
+        `Looping video played over \`path\` while the window is focused and motion is not reduced; only \`path\` shows otherwise, when the video cannot play, and in releases before ${PLUGIN_THEME_VIDEO_BACKGROUND_SINCE}. ${PLUGIN_THEME_VIDEO_RULE_TEXT}`,
+        PLUGIN_THEME_VIDEO_BACKGROUND_SINCE,
+        ['images/dusk.mp4']
+      )
+    ),
   ...backgroundStyleFields
 }
 
@@ -47,7 +58,7 @@ export const pluginThemeBackgroundSchema = z
   .strictObject(backgroundFields)
   .meta(
     pluginFieldDoc(
-      'One image painted under translucent terminals and chats (Background Opacity below 1). Static; never blurred.',
+      'One image painted under translucent terminals and chats (Background Opacity below 1). Never blurred.',
       NEXT
     )
   )
@@ -57,6 +68,7 @@ export type PluginThemeBackgroundArtifact = z.infer<typeof pluginThemeBackground
 // Why per-field catch: a style value added later falls back to its default instead of dropping the image.
 const tolerantBackgroundSchema = z.object({
   path: backgroundFields.path,
+  videoPath: backgroundFields.videoPath.catch(undefined),
   opacity: backgroundStyleFields.opacity.catch(undefined),
   size: backgroundStyleFields.size.catch(undefined),
   position: backgroundStyleFields.position.catch(undefined)
@@ -70,9 +82,15 @@ export function tolerantPluginThemeBackground(
   return parsed.success ? parsed.data : undefined
 }
 
-/** What main hands the renderer: an `orca-plugin-image` URL main serves only after checking the bytes. */
+const installedImageUrlSchema = z
+  .string()
+  .refine((url) => parsePluginImageUrl(url)?.kind === 'installed')
+
+/** What main hands the renderer: `orca-plugin-image` URLs main serves only after checking the bytes.
+ *  `videoUrl` is optional per field so a bad one leaves the static image. */
 export const pluginThemeBackgroundRegistrationSchema = z.object({
-  url: z.string().refine((url) => parsePluginImageUrl(url)?.kind === 'installed'),
+  url: installedImageUrlSchema,
+  videoUrl: installedImageUrlSchema.optional().catch(undefined),
   ...backgroundStyleFields
 })
 

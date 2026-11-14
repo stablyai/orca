@@ -11,11 +11,12 @@ import {
 import type {
   MarkdownTemplatePickerRequest,
   MarkdownTemplateSelection
-} from '@/lib/markdown-template-picker-request'
-import { subscribeMarkdownTemplatePicker } from '@/lib/markdown-template-picker-request'
-import { translate } from '@/i18n/i18n'
+} from '@/lib/editor/markdown/documents/markdown-template-picker-request'
+import { subscribeMarkdownTemplatePicker } from '@/lib/editor/markdown/documents/markdown-template-picker-request'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function MarkdownTemplatePicker(): JSX.Element {
+  const t = useTranslate()
   const [activeRequest, setActiveRequest] = useState<MarkdownTemplatePickerRequest | null>(null)
   const activeRequestRef = useRef<MarkdownTemplatePickerRequest | null>(null)
   activeRequestRef.current = activeRequest
@@ -53,28 +54,25 @@ export function MarkdownTemplatePicker(): JSX.Element {
           resolveRequest({ type: 'cancel' })
         }
       }}
-      title={translate('auto.components.editor.MarkdownTemplatePicker.1829437fce', 'New Markdown')}
-      description={translate(
+      title={t('auto.components.editor.MarkdownTemplatePicker.1829437fce', 'New Markdown')}
+      description={t(
         'auto.components.editor.MarkdownTemplatePicker.7b458e0b7f',
         'Choose a Markdown template.'
       )}
       contentClassName="w-[520px]"
     >
       <CommandInput
-        placeholder={translate(
+        placeholder={t(
           'auto.components.editor.MarkdownTemplatePicker.22fd4890ad',
           'Search templates...'
         )}
       />
       <CommandList>
         <CommandEmpty>
-          {translate(
-            'auto.components.editor.MarkdownTemplatePicker.df667919ca',
-            'No matching templates.'
-          )}
+          {t('auto.components.editor.MarkdownTemplatePicker.df667919ca', 'No matching templates.')}
         </CommandEmpty>
         <CommandGroup
-          heading={translate(
+          heading={t(
             'auto.components.editor.MarkdownTemplatePicker.newDocumentHeading',
             'New Document'
           )}
@@ -87,16 +85,10 @@ export function MarkdownTemplatePicker(): JSX.Element {
             <FileText className="mt-0.5 size-4 text-muted-foreground" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">
-                {translate(
-                  'auto.components.editor.MarkdownTemplatePicker.6e2e6c04ad',
-                  'Blank Markdown'
-                )}
+                {t('auto.components.editor.MarkdownTemplatePicker.6e2e6c04ad', 'Blank Markdown')}
               </span>
               <span className="block truncate text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.editor.MarkdownTemplatePicker.22cd94426f',
-                  'untitled.md'
-                )}
+                {t('auto.components.editor.MarkdownTemplatePicker.22cd94426f', 'untitled.md')}
               </span>
             </span>
           </CommandItem>

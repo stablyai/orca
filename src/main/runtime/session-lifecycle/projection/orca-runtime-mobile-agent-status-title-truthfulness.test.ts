@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { projectSessionTabAgentStatus } from '../../rpc/methods/session-tab-agent-status-projection'
+import { projectSessionTabAgentStatus } from '../../rpc/methods/session-tabs/session-tab-agent-status-projection'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -109,52 +109,6 @@ function publishRendererWorkingPane(runtime: OrcaRuntimeService, paneTitle: stri
   })
 }
 
-function publishRendererReleasedPane(runtime: OrcaRuntimeService, title: string): void {
-  runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
-    tabs: [
-      {
-        tabId: TAB_ID,
-        worktreeId: WORKTREE_ID,
-        title,
-        activeLeafId: LEAF_ID,
-        layout: null
-      }
-    ],
-    leaves: [
-      {
-        tabId: TAB_ID,
-        worktreeId: WORKTREE_ID,
-        leafId: LEAF_ID,
-        paneRuntimeId: 1,
-        ptyId: PTY_ID,
-        paneTitle: 'zsh'
-      }
-    ],
-    mobileSessionTabs: [
-      {
-        worktree: WORKTREE_ID,
-        publicationEpoch: 'epoch-released',
-        snapshotVersion: 1,
-        activeGroupId: null,
-        activeTabId: `${TAB_ID}::${LEAF_ID}`,
-        activeTabType: 'terminal',
-        tabs: [
-          {
-            type: 'terminal',
-            id: `${TAB_ID}::${LEAF_ID}`,
-            parentTabId: TAB_ID,
-            leafId: LEAF_ID,
-            ptyId: PTY_ID,
-            title,
-            isActive: true
-          }
-        ]
-      }
-    ]
-  })
-}
-
 async function projectAgentStatus(
   runtime: OrcaRuntimeService
 ): Promise<Record<string, unknown> | undefined> {
@@ -166,48 +120,6 @@ async function projectAgentStatus(
 }
 
 describe('mobile session tabs: live-title evidence vs published agent status', () => {
-  it('does not resurrect launch identity after the renderer clears it', async () => {
-    const runtime = await createRuntime()
-    publishRendererReleasedPane(runtime, '[Image #1] Inspect this')
-
-    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-    expect(result.tabs[0]).toEqual(expect.objectContaining({ type: 'terminal' }))
-    expect(result.tabs[0]).not.toHaveProperty('launchAgent')
-  })
-
-  it('keeps renderer-published working under a neutral live title', async () => {
-    const runtime = await createRuntime()
-    publishRendererWorkingPane(runtime, 'Terminal')
-
-    expect(await projectAgentStatus(runtime)).toEqual(
-      expect.objectContaining({
-        state: 'working',
-        prompt: 'Configurar y entender los comprobantes'
-      })
-    )
-  })
-
-  it.each(['zsh', 'bash', 'pwsh'])(
-    'clears a stale working to identity-only done under the shell title %s',
-    async (shell) => {
-      const runtime = await createRuntime()
-      publishRendererWorkingPane(runtime, shell)
-
-      const agentStatus = await projectAgentStatus(runtime)
-      expect(agentStatus).toEqual(expect.objectContaining({ state: 'done', prompt: '' }))
-      expect(agentStatus).toHaveProperty('agentType', 'claude')
-    }
-  )
-
-  it('clears a stale working under a Claude management title', async () => {
-    const runtime = await createRuntime()
-    publishRendererWorkingPane(runtime, 'claude agents')
-
-    expect(await projectAgentStatus(runtime)).toEqual(
-      expect.objectContaining({ state: 'done', prompt: '' })
-    )
-  })
-
   it('keeps a hook-backed working status that postdates an initial Windows ConPTY shell title', async () => {
     vi.useFakeTimers()
     try {

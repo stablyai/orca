@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom'
 import { BarChart3, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const SHOW_DELAY_MS = 1_800
 const ANCHOR_GAP_PX = 10
@@ -38,6 +38,7 @@ export function StatusBarUsageChangeNoticeCard({
   description: ReactNode
   action?: { label: string; onClick: () => void }
 }): React.JSX.Element {
+  const t = useTranslate()
   const [elapsedNoticeKey, setElapsedNoticeKey] = useState<string | null>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
   const [anchorPosition, setAnchorPosition] = useState<AnchorPosition | null>(null)
@@ -133,7 +134,7 @@ export function StatusBarUsageChangeNoticeCard({
                 size="icon"
                 className="size-7 shrink-0"
                 onClick={dismiss}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.status.bar.UsagePercentageDisplayChangeNotice.dismiss',
                   'Dismiss'
                 )}
@@ -153,10 +154,7 @@ export function StatusBarUsageChangeNoticeCard({
                 </Button>
               ) : null}
               <Button variant={action ? 'secondary' : 'default'} size="sm" onClick={dismiss}>
-                {translate(
-                  'auto.components.status.bar.UsagePercentageDisplayChangeNotice.gotIt',
-                  'Got it'
-                )}
+                {t('auto.components.status.bar.UsagePercentageDisplayChangeNotice.gotIt', 'Got it')}
               </Button>
             </div>
           </div>,

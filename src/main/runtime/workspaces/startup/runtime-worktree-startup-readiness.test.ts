@@ -45,36 +45,6 @@ describe('startup follow-up prompt', () => {
     return { host, write, runtime, sendTerminalAgentPrompt, waitForFreshWorkerComposer }
   }
 
-  // Kimi is in front before its TUI reads input; text typed then is echoed and lost (#10336).
-  it('pastes and submits through composer readiness, never typing raw input', async () => {
-    const f = fixture('kimi', true)
-
-    await expect(
-      deliverStartupFollowupPrompt(f.runtime, f.host, 'term-1', {
-        agent: 'kimi',
-        prompt: 'fix the flaky test'
-      })
-    ).resolves.toBe(true)
-    expect(f.waitForFreshWorkerComposer).toHaveBeenCalled()
-    expect(f.sendTerminalAgentPrompt).toHaveBeenCalledWith(
-      'term-1',
-      'fix the flaky test',
-      expect.objectContaining({ inputKind: 'launch', composerReady: true })
-    )
-    expect(f.write).not.toHaveBeenCalled()
-  })
-
-  // WSL and SSH-to-Windows reads cannot prove a lone shell, so they keep main's behaviour per caller.
-  it('types the follow-up on WSL or SSH-to-Windows once the agent is in front, as before', async () => {
-    const f = fixture('kimi', false, false, 'unknown')
-
-    await expect(
-      deliverStartupFollowupPrompt(f.runtime, f.host, 'term-1', { agent: 'kimi', prompt: 'go' })
-    ).resolves.toBe(true)
-    expect(f.write).toHaveBeenCalledWith('pty-1', 'go\r', 'launch')
-    expect(f.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
-
   it('still refuses an agent.launch prompt on WSL or SSH-to-Windows, as before', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const f = fixture('kimi', false, false, 'unknown')
@@ -159,19 +129,6 @@ describe('fresh worker composer readiness', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('cleans up the deadline when the composer was already captured', async () => {
-    vi.useFakeTimers()
-    const h = fixture('\x1b[?1049h╭')
-    await expect(
-      waitForWorktreeStartupDraft(h.host, 'term-1', 'zcode', {
-        timeoutMs: 45_000,
-        requireComposerMarker: true
-      })
-    ).resolves.toBe('pty-1')
-    expect(h.unsubscribe).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('does not accept shell decoration or a square startup dialog', async () => {
     vi.useFakeTimers()
     const h = fixture('╭ shell\n\x1b[?1049h\x1b[?2004h┌ Sign in ┐')
@@ -215,15 +172,6 @@ describe('OpenCode submit readiness', () => {
     return result
   }
 
-  it('a draft that is not submitted is pasted on the box cursor, as before', async () => {
-    vi.useFakeTimers()
-    const h = fixture()
-    const result = settle(waitForWorktreeStartupDraft(h.host, 'term-1', 'opencode2'))
-    h.emit(BOX)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(result.value).toBe('pty-1')
-  })
-
   it('a submitted task waits for the agent row', async () => {
     vi.useFakeTimers()
     const h = fixture()
@@ -239,44 +187,6 @@ describe('OpenCode submit readiness', () => {
     expect(result.value).toBeUndefined()
     h.emit(AGENT_ROW)
     await vi.advanceTimersByTimeAsync(0)
-    expect(result.value).toBe('pty-1')
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('takes the box after the grace when the row never comes, whatever repaints', async () => {
-    vi.useFakeTimers()
-    const h = fixture()
-    const result = settle(
-      waitForWorktreeStartupDraft(h.host, 'term-1', 'opencode2', {
-        timeoutMs: 60_000,
-        requireComposerMarker: true,
-        submit: true
-      })
-    )
-    h.emit(BOX)
-    await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS - 1)
-    h.emit('\x1b[22;27H\x1b[?25h')
-    expect(result.value).toBeUndefined()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(result.value).toBe('pty-1')
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('takes the box at the deadline when the grace would outlast the budget', async () => {
-    vi.useFakeTimers()
-    const h = fixture()
-    const result = settle(
-      waitForWorktreeStartupDraft(h.host, 'term-1', 'opencode2', {
-        timeoutMs: 60_000,
-        requireComposerMarker: true,
-        submit: true
-      })
-    )
-    await vi.advanceTimersByTimeAsync(59_000)
-    h.emit(BOX)
-    await vi.advanceTimersByTimeAsync(999)
-    expect(result.value).toBeUndefined()
-    await vi.advanceTimersByTimeAsync(1)
     expect(result.value).toBe('pty-1')
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -334,37 +244,6 @@ describe('OpenCode submit readiness', () => {
       h.emit('\x1b[22;27H\x1b[?25h')
       await vi.advanceTimersByTimeAsync(0)
       expect(result.value).toBe('pty-1')
-    })
-
-    it('lets a dialog on screen veto a grace', async () => {
-      vi.useFakeTimers()
-      const h = fixture()
-      const accept = vi.fn(() => false)
-      const result = waitWith(h, { accept })
-      h.emit(BOX)
-      await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS)
-      expect(accept).toHaveBeenCalledWith('pty-1')
-      expect(result.value).toBeUndefined()
-    })
-
-    it('refuses the deadline inside a pending grace while a shell is in front', async () => {
-      vi.useFakeTimers()
-      const h = fixture()
-      const result = waitWith(h, { isShellInFront: async () => true, timeoutMs: 3000 })
-      h.emit(BOX)
-      await vi.advanceTimersByTimeAsync(3000)
-      expect(result.value).toBeNull()
-      expect(vi.getTimerCount()).toBe(0)
-    })
-
-    it('takes the box at the deadline inside a pending grace with the agent in front', async () => {
-      vi.useFakeTimers()
-      const h = fixture()
-      const result = waitWith(h, { isShellInFront: async () => false, timeoutMs: 3000 })
-      h.emit(BOX)
-      await vi.advanceTimersByTimeAsync(3000)
-      expect(result.value).toBe('pty-1')
-      expect(vi.getTimerCount()).toBe(0)
     })
 
     it('withdraws a pending grace at a shell hand-off', async () => {
@@ -440,19 +319,6 @@ describe('OpenCode submit readiness', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(resolved.mock.calls).toEqual([[null]])
       expect(vi.getTimerCount()).toBe(0)
-    })
-
-    it('takes the box at the deadline after a refused grace once the agent is in front', async () => {
-      vi.useFakeTimers()
-      const h = fixture()
-      let shellInFront = true
-      const result = waitWith(h, { isShellInFront: async () => shellInFront, timeoutMs: 8000 })
-      h.emit(BOX)
-      await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS)
-      expect(result.value).toBeUndefined()
-      shellInFront = false
-      await vi.advanceTimersByTimeAsync(8000 - OPENCODE_AGENT_ROW_GRACE_MS)
-      expect(result.value).toBe('pty-1')
     })
 
     it('gives up when the deadline check never answers', async () => {

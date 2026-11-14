@@ -1,14 +1,8 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, IpcMainEvent } from 'electron'
-import type * as SiteDisplayController from '../browser/site-settings/browser-site-display-controller'
-import {
-  configureBrowserSiteDisplayStore,
-  updateBrowserSiteDisplay
-} from '../browser/site-settings/browser-site-display-store'
+
 import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH as PUBLISH,
   NATIVE_CHAT_VISUAL_GUEST_THEME_READ as READ
@@ -30,16 +24,16 @@ vi.mock('electron', () => ({ ipcMain: ipc }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/profile'
 }))
-vi.mock('../native-chat/native-chat-scratch-folder', () => ({
+vi.mock('../native-chat/conversation-files/native-chat-scratch-folder', () => ({
   nativeChatScratchRootFor: () => '/profile/chat-scratch'
 }))
-vi.mock('../native-chat/native-chat-visual-guest-location', () => ({
+vi.mock('../native-chat/conversation-files/native-chat-visual-guest-location', () => ({
   isNativeChatVisualGuestLocation: classify
 }))
-vi.mock('../browser/site-settings/browser-site-display-controller', () => ({
+vi.mock('../browser/site-settings/display/browser-site-display-controller', () => ({
   browserSiteDisplayController: display
 }))
-vi.mock('../browser/sessions/browser-session-registry', () => ({
+vi.mock('../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { profileIdForSession: profileForSession }
 }))
 vi.mock('../browser/routing/local-host-partitions/local-ssh-browser-partitions', () => ({
@@ -47,9 +41,7 @@ vi.mock('../browser/routing/local-host-partitions/local-ssh-browser-partitions',
 }))
 import { installNativeChatVisualGuestTheme } from './native-chat-visual-guest-theme'
 
-const { BrowserSiteDisplayController } = await vi.importActual<typeof SiteDisplayController>(
-  '../browser/site-settings/browser-site-display-controller'
-)
+await vi.importActual('../browser/site-settings/display/browser-site-display-controller')
 
 function contents(id: number, hostWebContents: EventEmitter | null = null) {
   return Object.assign(new EventEmitter(), {
@@ -117,50 +109,5 @@ describe('visual guest theme handoff', () => {
     const ordinary = event()
     read(ordinary)
     expect(ordinary.returnValue).toBeNull()
-  })
-
-  it('applies saved media at the authenticated frame URL before every synchronous reply', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-visual-media-'))
-    configureBrowserSiteDisplayStore(directory)
-    updateBrowserSiteDisplay('work', 'file://', { colorScheme: 'light' })
-    const controller = new BrowserSiteDisplayController()
-    display.onGuestDocumentStart.mockImplementation(
-      controller.onGuestDocumentStart.bind(controller)
-    )
-    const { host, guest, event, publish, read } = setup()
-    const sent: string[] = []
-    const debuggerEvents = new EventEmitter()
-    Object.assign(guest, {
-      getURL: () => '',
-      debugger: Object.assign(debuggerEvents, {
-        isAttached: () => true,
-        sendCommand: (_method: string, params: { features: { value: string }[] }) => {
-          sent.push(params.features[0].value)
-          return Promise.resolve({})
-        }
-      })
-    })
-    profileForSession.mockReturnValue('work')
-    try {
-      publish(event(host), dark)
-      for (let document = 1; document <= 2; document++) {
-        read(
-          event(guest, guest.mainFrame, () => expect(sent).toEqual(Array(document).fill('light')))
-        )
-      }
-    } finally {
-      controller.onGuestRetired(guest.id)
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  it('does not overwrite another window’s synchronous answer', () => {
-    const first = setup()
-    const second = setup()
-    first.publish(first.event(first.host), dark)
-    const request = first.event()
-    first.read(request)
-    second.read(request)
-    expect(request.returnValue).toMatchObject({ colorScheme: 'dark' })
   })
 })

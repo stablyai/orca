@@ -36,12 +36,12 @@ import {
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../shared/new-workspace/workspace-source'
 import { getLinkedItemDisplayName } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { reviewStartPointErrorText } from '@/lib/code-host-error-copy'
+import { reviewStartPointErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) {
   const {

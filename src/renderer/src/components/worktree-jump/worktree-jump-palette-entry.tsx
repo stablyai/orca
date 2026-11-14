@@ -2,7 +2,7 @@ import { WorktreeJumpPaletteTaskRow } from './worktree-jump-palette-task-row'
 import type React from 'react'
 import { flushSync } from 'react-dom'
 import { CommandItem } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { PaletteCreateWorktreeRow } from '@/components/cmd-j/PaletteCreateWorktreeRow'
 import type { PaletteListEntry } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
@@ -16,7 +16,8 @@ import {
   WorktreeJumpPaletteBrowserRow,
   WorktreeJumpPaletteSimulatorRow
 } from './worktree-jump-palette-browser-simulator-rows'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { WorktreeJumpPaletteExtraRow } from './worktree-jump-palette-extra-row'
 
 export function WorktreeJumpPaletteEntry({
   entry,
@@ -27,6 +28,7 @@ export function WorktreeJumpPaletteEntry({
   renderKey: string
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   if (entry.type === 'section-header') {
     return (
       <div className="mx-0.5 mt-3 mb-1 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
@@ -57,7 +59,7 @@ export function WorktreeJumpPaletteEntry({
         <span className="truncate">{entry.label}</span>
         {entry.onSeeMore ? (
           <span className="h-6 shrink-0 rounded-md border border-input bg-background px-2 text-xs font-medium leading-6 text-foreground">
-            {translate('worktreeJumpPalette.seeMore', 'See more')}
+            {t('worktreeJumpPalette.seeMore', 'See more')}
           </span>
         ) : null}
       </CommandItem>
@@ -105,6 +107,11 @@ export function WorktreeJumpPaletteEntry({
         renderKey={renderKey}
         controller={controller}
       />
+    )
+  }
+  if (entry.type === 'extra') {
+    return (
+      <WorktreeJumpPaletteExtraRow entry={entry} renderKey={renderKey} controller={controller} />
     )
   }
   if (entry.type === 'simulator-tab') {

@@ -4,12 +4,10 @@ import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-hand
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalResolvePane,
-  RuntimeTerminalShow
-} from '../../../../shared/runtime-types'
-import type {
-  RuntimeTerminalCreate,
+  RuntimeTerminalShow,
   RuntimeTerminalSummary
 } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {
@@ -26,6 +24,7 @@ import {
 import { getTerminalState } from '../wait/terminal-wait-results'
 import { readStructuredWorkerTerminal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { workspaceSessionListsTerminalTab } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
 
 export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {
   protected abstract assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void
@@ -80,6 +79,17 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     ) {
       // Why: pane coordinates restored by a paired client must not cross workspace ownership.
       throw new Error('terminal_not_found')
+    }
+    if (parsed && !leaf && pty && !pty.connected && worktreeId) {
+      // An exited PTY outlives its tab; once the host closed that tab the pane is gone, and a client
+      // must not read the leftover record as a pane the host still owns (#9194).
+      const session = this.getWorkspaceSessionForWorktree(worktreeId)
+      if (
+        session?.tabsByWorktree[worktreeId] &&
+        !workspaceSessionListsTerminalTab(session, worktreeId, parsed.tabId)
+      ) {
+        throw new Error('terminal_not_found')
+      }
     }
     return {
       handle,

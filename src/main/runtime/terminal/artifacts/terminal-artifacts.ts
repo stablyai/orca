@@ -3,10 +3,14 @@ import { RuntimeTerminalFileGrants, type RuntimeTerminalFileGrantHost } from './
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult,
-  RuntimeFileReadResult,
-  RuntimeTerminalPathResolution
-} from '../../../../shared/runtime-file-contracts'
-import { canonicalPathForArtifactComparison, truncateMobileFilePreview } from './artifact-integrity'
+  RuntimeFileReadResult
+} from '../../../../shared/file-content/runtime-file-read'
+import type { RuntimeTerminalPathResolution } from '../../../../shared/terminal/runtime-terminal-file-path'
+import {
+  assertTerminalFileGrantFresh,
+  canonicalPathForArtifactComparison,
+  truncateMobileFilePreview
+} from './artifact-integrity'
 import {
   openLocalTerminalArtifactGrant,
   readLocalTerminalArtifactFileFromHandle,
@@ -145,6 +149,33 @@ export class RuntimeTerminalArtifacts {
       const chunk = await readLocalTerminalArtifactRangeFromHandle(handle, grant, offset, length)
       this.grants.refreshTerminalFileGrant(grant)
       return chunk
+    } finally {
+      await handle.close()
+    }
+  }
+
+  /** A granted file's `files.stat` answer, so a reader can page it and spot a rewrite. */
+  async statTerminalArtifact(
+    worktreeSelector: string,
+    grantId: string,
+    absolutePath: string,
+    clientId?: string
+  ): Promise<{ size: number; isDirectory: false; mtime: number; ctime: number }> {
+    const { grant } = await this.grants.requireTerminalFileGrant(
+      worktreeSelector,
+      grantId,
+      absolutePath,
+      clientId
+    )
+    const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
+    try {
+      const stats = await handle.stat()
+      if (!stats.isFile()) {
+        throw new Error('Cannot read a directory')
+      }
+      assertTerminalFileGrantFresh(grant, stats)
+      this.grants.refreshTerminalFileGrant(grant)
+      return { size: stats.size, isDirectory: false, mtime: stats.mtimeMs, ctime: stats.ctimeMs }
     } finally {
       await handle.close()
     }

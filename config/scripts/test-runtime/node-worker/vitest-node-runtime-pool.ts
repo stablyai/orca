@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import type { PoolOptions, PoolWorker, WorkerRequest } from 'vitest/node'
 import { spawnProcess } from '@orca/process-host'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import {
   decodeNodeRuntimeMessage,
   encodeNodeRuntimeMessage
@@ -10,7 +10,7 @@ import {
 class NodeRuntimeWorker implements PoolWorker {
   readonly name = 'node-runtime'
   readonly cacheFs = true
-  private child: ChildProcessHandle | undefined
+  private child: ChildProcess | undefined
 
   constructor(private readonly options: PoolOptions) {}
 
@@ -125,7 +125,7 @@ class NodeRuntimeWorker implements PoolWorker {
     }
   }
 
-  private get worker(): ChildProcessHandle {
+  private get worker(): ChildProcess {
     if (!this.child) {
       throw new Error('Node Vitest worker is not running')
     }

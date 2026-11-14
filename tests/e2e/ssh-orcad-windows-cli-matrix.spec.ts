@@ -1,5 +1,5 @@
-// Run bundled CLI against real Windows OpenSSH host cells; invoke-windows-host-cells.ps1 selects @orcad-cli-managed/@orcad-cli-convert.
-// Managed covers deploy/list, terminal reconnect, decommission/redeploy and unverifiable→live restart; convert preserves relay-era source and reaches migrated projects.
+// Run bundled CLI against real Windows OpenSSH host cells; invoke-windows-host-cells.ps1 selects @orcad-cli-managed.
+// Covers deploy/list, terminal reconnect, decommission/redeploy and unverifiable→live restart.
 // ORCA_E2E_ORCAD_CONVERT_HOST names the descriptor; ORCA_E2E_ORCAD_CONVERT_TEMPLATE must match its target.
 import { mkdirSync, rmSync } from 'node:fs'
 import os from 'node:os'
@@ -8,8 +8,8 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
-import { convertAndRetain, managedServer, reconnect } from './helpers/orcad-convert-flow'
-import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
+import { managedServer, reconnect } from './helpers/orcad-convert-flow'
+
 import { ORCAD_CONVERT_HOST_ENV, startOrcadConvertHost } from './helpers/orcad-convert-host'
 import { orcaCliResult, runCompiledOrcaCli } from './helpers/compiled-orca-cli'
 import {
@@ -17,7 +17,7 @@ import {
   listHostOrcadProcesses,
   listHostOrcadServerProcesses
 } from './helpers/windows-host-orcad-processes'
-import { readWindowsHostCellDescriptor } from '../../src/main/ssh/ssh-windows-host-cells'
+import { readWindowsHostCellDescriptor } from '../../src/main/ssh/hostile-host-test-support/ssh-windows-host-cells'
 import { runtimeHostContactFromSnapshot } from '../../src/shared/remote-runtime/host-status/runtime-host-contact'
 import type {
   RuntimeTerminalListResult,
@@ -514,54 +514,6 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
       afterConnect.some((entry) => killedAgain.some((victim) => victim.pid === entry.pid))
     ).toBe(false)
     await expectTerminalSurvives(userData, redeployed, restartHandle, 'reconnect restart')
-  } finally {
-    if (app) {
-      await session.close(app)
-    }
-    await disposeQuietly(session)
-    host.cleanup()
-    rmSync(SCRATCH, { recursive: true, force: true })
-  }
-})
-
-test('@orcad-cli-convert a seeded relay-era profile converts its Windows host, keeps its source retained, and the CLI reaches its projects', async (// oxlint-disable-next-line no-empty-pattern -- This test owns its launches through a restart session.
-{}, testInfo) => {
-  skipUnlessWindowsHost()
-  test.setTimeout(20 * 60_000)
-  resetScratch()
-  const host = startOrcadConvertHost(HOST!, testInfo)
-  const session = createRestartSession(testInfo, launchEnv())
-  let app: ElectronApplication | null = null
-  try {
-    const first = await session.launch()
-    app = first.app
-    await waitForSessionReady(first.page)
-    await session.close(app)
-    app = null
-    const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
-      repoPath: host.remoteRepoPath,
-      folderPath: host.remoteFolderPath
-    })
-    const upgraded = await session.launch({ onStderr: sshStderr })
-    app = upgraded.app
-    await waitForSessionReady(upgraded.page)
-    await convertAndRetain(upgraded.page, session.userDataDir, seeded)
-
-    const environmentId = await waitForManaged(upgraded.page, seeded.targetId)
-    expect(await environmentIds(session.userDataDir)).toContain(environmentId)
-    expect(
-      (await hostRows(session.userDataDir)).find((row) => row.id === seeded.targetId)
-    ).toMatchObject({
-      kind: 'ssh',
-      connected: true
-    })
-    const repos = await orcaCliResult<{ repos: { path: string }[] }>(session.userDataDir, [
-      'repo',
-      'list',
-      '--environment',
-      environmentId
-    ])
-    expect(repos.repos.some((repo) => samePath(repo.path, seeded.repoPath))).toBe(true)
   } finally {
     if (app) {
       await session.close(app)

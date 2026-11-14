@@ -8,6 +8,8 @@ export type AgentQuestionAnsweredInferenceRequest = {
   baselineStateStartedAt: number
   baselinePrompt: string
   baselineAgentType: AgentType | undefined
+  /** Codex's skip key, not an answer: Codex reports neither, but only a skip drops a question. */
+  codexSkip?: true
 }
 
 /** True for the ask-the-user-a-question tool across agents: Claude's

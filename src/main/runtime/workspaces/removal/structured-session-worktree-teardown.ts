@@ -7,8 +7,8 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { STILL_LIVE_DETAIL_PREFIX } from '../../../../shared/worktree/removal'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { STILL_LIVE_DETAIL_PREFIX } from '../../../../shared/worktree/removal/removal'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   observeStructuredSession,
   structuredSessionCloseSettled
@@ -21,7 +21,7 @@ import {
 } from '../../agent-session/structured-agent-session-close'
 import type { WorktreePtyHostFence } from './worktree-pty-host-fence'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
 export type StructuredSessionInWorkspace = {
   sessionId: string

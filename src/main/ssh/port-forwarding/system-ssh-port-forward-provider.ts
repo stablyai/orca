@@ -3,7 +3,7 @@ import type { SystemSshBuildArgsOptions } from '../system-transport/system-ssh-a
 import {
   startSystemSshPortForwardProcess,
   systemSshForwardError
-} from '../system-transport/system-ssh-forward-process'
+} from '../system-transport/forwarding/system-ssh-forward-process'
 import type {
   ForwardChannelOpenFailure,
   PortForwardStartOptions,

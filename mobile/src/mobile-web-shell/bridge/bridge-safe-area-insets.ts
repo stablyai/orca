@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 export const BRIDGE_MAX_SAFE_AREA_INSET = 4096
 

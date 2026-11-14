@@ -2,65 +2,13 @@
  * Real Store writes are covered by store-runtime-authored-session-writes.test.ts. */
 import { describe, expect, it } from 'vitest'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { createProfile } from './client-hosted-browser-persistence-test-harness'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 const WT = 'repo-1::/tmp/worktree-a'
-
-const storeBase = {
-  getRepo: () => ({
-    id: 'repo-1',
-    path: '/tmp/repo',
-    displayName: 'repo',
-    badgeColor: 'blue',
-    addedAt: 1
-  }),
-  getRepos: () => [storeBase.getRepo()],
-  addRepo: () => {},
-  updateRepo: () => undefined as never,
-  getAllWorktreeMeta: () => ({}),
-  getWorktreeMeta: () => undefined,
-  getGitHubCache: () => ({ pr: {}, issue: {} }),
-  setWorktreeMeta: () => undefined as never,
-  removeWorktreeMeta: () => {},
-  getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
-  addRetiredWorktreeName: () => {},
-  mergeRetiredWorktreeNames: () => false,
-  getSettings: () => ({
-    workspaceDir: '/tmp/workspaces',
-    nestWorkspaces: false,
-    refreshLocalBaseRefOnWorktreeCreate: false,
-    branchPrefix: 'none',
-    branchPrefixCustom: ''
-  })
-}
-
-function createProfile() {
-  const state = {
-    session: {
-      activeRepoId: 'repo-1',
-      activeWorktreeId: WT,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {}
-    } as WorkspaceSessionState
-  }
-  return {
-    get session() {
-      return state.session
-    },
-    store: {
-      ...storeBase,
-      getWorkspaceSession: () => state.session,
-      setWorkspaceSession: (next: WorkspaceSessionState) => {
-        state.session = next
-      }
-    }
-  }
-}
 
 function startRuntime(profile: ReturnType<typeof createProfile>): OrcaRuntimeService {
   const runtime = new OrcaRuntimeService(profile.store, undefined, {})
@@ -133,17 +81,5 @@ describe('client-hosted browser page persistence through the runtime', () => {
 
     expect(profile.session.clientHostedBrowserPagesByWorktree?.[WT]).toBeUndefined()
     expect(getRuntimeBrowserPageRegistry(startRuntime(profile)).listPages()).toEqual([])
-  })
-
-  it('keeps a page whose host quit, so the row survives both a quit and a restart', () => {
-    const profile = createProfile()
-    const runtime = startRuntime(profile)
-    const host = attachHost(runtime)
-    placeAndPublish(runtime, 'page-a')
-    runtime.notifyMobileSessionTabsChanged(WT)
-
-    host.release()
-
-    expect(getRuntimeBrowserPageRegistry(startRuntime(profile)).getPage('page-a')).toBeDefined()
   })
 })

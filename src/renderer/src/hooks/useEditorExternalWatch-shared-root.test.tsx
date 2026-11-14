@@ -27,12 +27,15 @@ const harness = vi.hoisted(() => {
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
-    getState: () => ({
-      openFiles: harness.openFiles,
-      setExternalMutation: harness.setExternalMutation
-    })
-  })
+  useAppStore: Object.assign(
+    (selector: (state: unknown) => unknown) => selector({ openFiles: harness.openFiles }),
+    {
+      getState: () => ({
+        openFiles: harness.openFiles,
+        setExternalMutation: harness.setExternalMutation
+      })
+    }
+  )
 }))
 vi.mock('./editor-external-watch-targets', async (importOriginal) => ({
   ...(await importOriginal<typeof WatchTargets>()),
@@ -50,9 +53,9 @@ vi.mock('./editor-runtime-file-watch', () => ({
     _target: unknown,
     _onPayload: unknown,
     _onError: unknown,
-    onFirstReady?: () => void
+    onCatchUp?: () => void
   ) => {
-    onFirstReady?.()
+    onCatchUp?.()
     return vi.fn()
   }
 }))
@@ -84,6 +87,8 @@ describe('useEditorExternalWatch resync through the real reconciliation path', (
   let root: Root
   let previousApi: unknown
   let emitFsChanged: (payload: unknown) => void
+  let watchWorktree: ReturnType<typeof vi.fn>
+  let hasSymlinkBelowRoot: ReturnType<typeof vi.fn>
   let reloads: string[]
   const onReload = (event: Event): void => {
     if (event instanceof CustomEvent) {
@@ -103,10 +108,13 @@ describe('useEditorExternalWatch resync through the real reconciliation path', (
     harness.openFiles.splice(0)
     harness.setExternalMutation.mockClear()
     previousApi = (window as unknown as { api?: unknown }).api
+    watchWorktree = vi.fn().mockResolvedValue(undefined)
+    hasSymlinkBelowRoot = vi.fn().mockResolvedValue(false)
     ;(window as unknown as { api: unknown }).api = {
       fs: {
-        watchWorktree: vi.fn().mockResolvedValue(undefined),
+        watchWorktree,
         unwatchWorktree: vi.fn().mockResolvedValue(undefined),
+        hasSymlinkBelowRoot,
         onFsChanged: vi.fn((listener: (payload: unknown) => void) => {
           emitFsChanged = listener
           return vi.fn()
@@ -179,6 +187,35 @@ describe('useEditorExternalWatch resync through the real reconciliation path', (
 
     expect(reloads).toEqual(['folder:a:a.ts'])
     expect(harness.setExternalMutation).not.toHaveBeenCalled()
+  })
+
+  it("reloads a tab reached through a symlinked folder from that folder's own watch", async () => {
+    const workspace = {
+      worktreeId: 'wt',
+      worktreePath: '/w',
+      connectionId: undefined,
+      runtimeEnvironmentId: null
+    }
+    hasSymlinkBelowRoot.mockResolvedValue(true)
+    harness.openFiles.push({
+      ...tab('wt', 'Documents/Tasks/progress.md'),
+      filePath: '/w/Documents/Tasks/progress.md'
+    })
+    await render([workspace], [])
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(watchWorktree).toHaveBeenCalledWith({
+      worktreePath: '/w/Documents/Tasks',
+      connectionId: undefined
+    })
+
+    // Main reports the link's target under the link spelling, keyed by the folder it watched.
+    emitFsChanged({
+      worktreePath: '/w/Documents/Tasks',
+      events: [{ kind: 'update', absolutePath: '/w/Documents/Tasks/progress.md' }]
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(200))
+
+    expect(reloads).toEqual(['wt:Documents/Tasks/progress.md'])
   })
 
   it('keeps a local and an SSH workspace at the same path apart', async () => {

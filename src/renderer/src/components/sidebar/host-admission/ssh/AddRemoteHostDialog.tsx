@@ -1,20 +1,20 @@
 import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { EMPTY_FORM, type EditingTarget } from '../../../settings/ssh/targets/ssh-target-draft'
+import { EMPTY_FORM, type EditingTarget } from '../../../ssh-host-form/ssh-target-draft'
 import type { SshConfigHostSummary } from '../../../../../../shared/ssh-types'
 import { parseHostAccessLink } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   translateHostAccessLinkError,
   translateRemotePairingFailureDescription
-} from '@/lib/remote-pairing-copy'
+} from '@/lib/remote-pairing/remote-pairing-copy'
 import { AddRemoteHostSshConfigPicker } from './AddRemoteHostSshConfigPicker'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { AddRemoteHostServerFormPanel } from './AddRemoteHostServerFormPanel'
 import { AddWslHostDialogBody } from '../wsl/AddWslHostDialogBody'
-import { remoteServerPairingFailureMessage } from '@/lib/remote-server-pairing-error-copy'
+import { remoteServerPairingFailureMessage } from '@/lib/remote-pairing/remote-server-pairing-error-copy'
 import {
   addAllSshConfigHostsToOrca,
   loadSshConfigHostsForPicker,
@@ -35,6 +35,7 @@ export function AddRemoteHostDialog({
   mode,
   onOpenChange
 }: AddRemoteHostDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const open = mode !== null
   // Latch non-null mode so the closing animation cannot flash SSH fields after mode clears.
   const [renderMode, setRenderMode] = useState<AddRemoteHostMode>(mode ?? 'ssh')
@@ -178,7 +179,7 @@ export function AddRemoteHostDialog({
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerResolveFailed',
               'Failed to resolve that SSH config host.'
             )
@@ -191,7 +192,7 @@ export function AddRemoteHostDialog({
     setResolvingConfigAlias(null)
     if (!resolved) {
       toast.error(
-        translate(
+        t(
           'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerResolveFailed',
           'Failed to resolve that SSH config host.'
         )
@@ -205,7 +206,7 @@ export function AddRemoteHostDialog({
     setSshView('form')
     recordFeatureInteraction('ssh')
     toast.success(
-      translate(
+      t(
         'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerFilled',
         'Filled from {{value0}}. Review and Save.',
         { value0: host.alias }
@@ -241,7 +242,7 @@ export function AddRemoteHostDialog({
     const trimmedPairingCode = pairingCode.trim()
     if (!trimmedName || !trimmedPairingCode) {
       toast.error(
-        translate(
+        t(
           'auto.components.sidebar.AddRemoteHostDialog.serverFieldsRequired',
           'Server name and pairing code are required.'
         )
@@ -254,7 +255,7 @@ export function AddRemoteHostDialog({
     }
     if (parsedServerLink.value.endpointKind === 'loopback' && !allowLoopback) {
       toast.error(
-        translate(
+        t(
           'auto.components.sidebar.AddRemoteHostDialog.loopbackBlocked',
           'Enable the SSH tunnel override or create a new link using the other host’s Tailscale or LAN address.'
         )
@@ -285,15 +286,12 @@ export function AddRemoteHostDialog({
       await readRuntimeHostStatusSnapshots()
       toast.success(
         result.updatedExisting
-          ? translate(
+          ? t(
               'auto.components.sidebar.AddRemoteHostDialog.serverAlreadyPaired',
               'This server is already paired as {{value0}}; updated its connection.',
               { value0: result.environment.name }
             )
-          : translate(
-              'auto.components.sidebar.AddRemoteHostDialog.serverSaved',
-              'Remote server added.'
-            )
+          : t('auto.components.sidebar.AddRemoteHostDialog.serverSaved', 'Remote server added.')
       )
       reset()
       onOpenChange(null)
@@ -301,7 +299,7 @@ export function AddRemoteHostDialog({
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.sidebar.AddRemoteHostDialog.serverSaveFailed',
               'Failed to add remote server.'
             )

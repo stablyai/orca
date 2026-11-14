@@ -4,12 +4,13 @@ import { Switch } from '../../ui/switch'
 import {
   isTerminalRenderDesyncSentinelArmed,
   setTerminalRenderDesyncSentinelArmed
-} from '../../terminal-pane/terminal-render-desync-trigger'
-import { translate } from '@/i18n/i18n'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+} from '../../terminal-pane/render-health/terminal-render-desync-trigger'
+import { useTranslate } from '@/i18n/use-translate'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 
-// Use shared orange styling to identify unfinished/staff-only controls.
+// Warning tokens distinguish unfinished controls across themes.
 export function HiddenExperimentalGroup(): React.JSX.Element {
+  const t = useTranslate()
   const isMac = getShortcutPlatform() === 'darwin'
   const [renderDiagnosticsArmed, setRenderDiagnosticsArmed] = useState(
     isTerminalRenderDesyncSentinelArmed
@@ -19,24 +20,27 @@ export function HiddenExperimentalGroup(): React.JSX.Element {
     setRenderDiagnosticsArmed(armed)
   }
   return (
-    <section className="space-y-3 rounded-lg border border-orange-500/40 bg-orange-500/5 p-3">
-      <h4 className="text-sm font-semibold text-orange-500 dark:text-orange-300">
-        {translate(
+    <section className="space-y-3 rounded-lg border border-status-warning-border bg-status-warning-background p-3">
+      <h4 className="text-sm font-semibold text-status-warning-text">
+        {t(
           'auto.components.settings.HiddenExperimentalGroup.f2c81d904a',
           'Hidden experimental settings'
         )}
       </h4>
 
-      <div className="flex items-start justify-between gap-4 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2.5">
+      <div
+        data-settings-row=""
+        className="flex items-start justify-between gap-4 rounded-md border border-status-warning-border bg-status-warning-background px-3 py-2.5"
+      >
         <div className="min-w-0 shrink space-y-0.5">
-          <Label className="text-orange-600 dark:text-orange-300">
-            {translate(
+          <Label>
+            {t(
               'auto.components.settings.HiddenExperimentalGroup.b09f24a51d',
               'Terminal render diagnostics'
             )}
           </Label>
-          <p className="text-xs text-orange-600/80 dark:text-orange-300/80">
-            {translate(
+          <p className="text-xs text-status-warning-text">
+            {t(
               'auto.components.settings.HiddenExperimentalGroup.7c4e18d2f6',
               'Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.',
               {
@@ -47,14 +51,12 @@ export function HiddenExperimentalGroup(): React.JSX.Element {
           </p>
         </div>
         <Switch
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.HiddenExperimentalGroup.b09f24a51d',
             'Terminal render diagnostics'
           )}
           checked={renderDiagnosticsArmed}
-          className="border-orange-500/40 data-[state=unchecked]:bg-orange-500/20"
           onCheckedChange={onRenderDiagnosticsChange}
-          thumbClassName="data-[state=unchecked]:bg-orange-200 dark:data-[state=unchecked]:bg-orange-100"
         />
       </div>
     </section>

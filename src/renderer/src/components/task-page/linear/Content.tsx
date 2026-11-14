@@ -2,18 +2,19 @@ import type { TaskPageComposerActionsModel } from '../use-task-page-composer-act
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
 import { LoaderCircle } from 'lucide-react'
 import { LinearIcon } from '@/components/task-page/task-page-localized-options'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { TaskPageLinearProjectOverview } from './ProjectOverview'
-import { TaskPageLinearProjectList } from './ProjectList'
-import { TaskPageLinearCustomViewList } from './CustomViewList'
-import { TaskPageLinearCustomViewProjects } from './CustomViewProjects'
-import { TaskPageLinearIssueList } from './IssueList'
+import { TaskPageLinearProjectOverview } from './projects/ProjectOverview'
+import { TaskPageLinearProjectList } from './projects/ProjectList'
+import { TaskPageLinearCustomViewList } from './views/CustomViewList'
+import { TaskPageLinearCustomViewProjects } from './views/CustomViewProjects'
+import { TaskPageLinearIssueList } from './issues/IssueList'
 export function TaskPageLinearContent({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     linearStatusReady,
     linearConnected,
@@ -35,7 +36,7 @@ export function TaskPageLinearContent({
       issue={selectedLinearIssue}
       variant="page"
       backLabel={
-        activeLinearIssueContextLabel ?? translate('taskProviders.linear.listLabel', 'Linear list')
+        activeLinearIssueContextLabel ?? t('taskProviders.linear.listLabel', 'Linear list')
       }
       onUse={handleUseLinearItem}
       onOpenIssue={openRelatedLinearIssue}
@@ -50,10 +51,10 @@ export function TaskPageLinearContent({
     <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
       <LinearIcon className="mb-4 size-8 text-muted-foreground/60" />
       <p className="text-base font-medium text-foreground">
-        {translate('auto.components.TaskPage.6d56559467', 'Connect your Linear account')}
+        {t('auto.components.TaskPage.6d56559467', 'Connect your Linear account')}
       </p>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.TaskPage.228b25028f',
           'Browse and start work on your assigned Linear issues directly from here.'
         )}
@@ -64,7 +65,7 @@ export function TaskPageLinearContent({
           setLinearConnectOpen(true)
         }}
       >
-        {translate('auto.components.TaskPage.851017590d', 'Add Linear access')}
+        {t('auto.components.TaskPage.851017590d', 'Add Linear access')}
       </Button>
     </div>
   ) : selectedLinearProject && linearProjectTab === 'overview' ? (

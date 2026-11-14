@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -eq 0 ]; then
+  echo 'Usage: install-ubuntu-apt-packages.sh <package>...' >&2
+  exit 2
+fi
+
+bash "$(dirname "${BASH_SOURCE[0]}")/prepare-ubuntu-apt.sh"
+
+# Bound both routes while allowing large fallback downloads.
+# Run deadlines as root so sudo cannot leave apt in a separate session.
+if sudo timeout --kill-after=10s 45 apt-get update -o Acquire::Languages=none && sudo timeout --kill-after=10s 120 apt-get install -y "$@"; then
+  exit 0
+fi
+
+echo 'Ubuntu package setup failed; trying the same packages through the MIT mirror.' >&2
+for host in archive.ubuntu.com ports.ubuntu.com mirrors.mit.edu; do
+  timeout 5 getent ahosts "$host" || true
+done
+
+bash "$(dirname "${BASH_SOURCE[0]}")/use-ubuntu-apt-mirror.sh"
+bash "$(dirname "${BASH_SOURCE[0]}")/recover-ubuntu-dpkg.sh" || true
+# Unrelated repositories may fail refresh; apt still verifies the requested packages.
+if ! sudo timeout --kill-after=10s 120 apt-get update -o Acquire::Languages=none; then
+  echo 'Index refresh incomplete; attempting the requested packages with available authenticated indexes.' >&2
+fi
+sudo timeout --kill-after=10s 600 apt-get install -y "$@"

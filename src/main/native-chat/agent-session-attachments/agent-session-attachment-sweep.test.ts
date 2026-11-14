@@ -30,16 +30,19 @@ vi.mock('node:fs', async (original) => {
   }
 })
 import type Database from '../../sqlite/sync-database'
-import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../agent-session-journal/database/journal-host-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../agent-session-journal/journal-host-database-test-support'
+} from '../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   claimAgentSessionAttachmentsInTransaction,
   isAgentSessionAttachmentExpiredError,
-  markUnclaimedUploadForSweep
+  markUnclaimedUploadForSweep,
+  listUploadsBeingSwept,
+  finishUploadSweep,
+  pruneAgentSessionAttachmentClaims
 } from './agent-session-attachment-claims'
 import { agentSessionAttachmentStoreRoot } from './agent-session-attachment-references'
 import { AgentSessionAttachmentStore } from './agent-session-attachment-store'
@@ -79,12 +82,25 @@ afterEach(async () => {
   await rm(stateDirectory, { recursive: true, force: true })
 })
 
-function facts(overrides: Partial<AgentSessionAttachmentSweepFacts> = {}) {
+function facts(
+  overrides: Partial<AgentSessionAttachmentSweepFacts> = {}
+): AgentSessionAttachmentSweepFacts {
   return {
-    database: () => db,
-    write: <T>(run: (db: Database.Database) => T) =>
-      overrides.database?.() === null ? undefined : journal.writeAutocommit(run),
-    recordedSessionIds: () => recorded,
+    listBeingSwept: () => listUploadsBeingSwept(db),
+    markForSweep: (uploadId, now) =>
+      journal.writeAutocommit((connection) =>
+        markUnclaimedUploadForSweep(connection, uploadId, now)
+      ),
+    finishSweep: (uploadId) =>
+      journal.writeAutocommit((connection) => finishUploadSweep(connection, uploadId)),
+    pruneClaims: () => {
+      journal.writeAutocommit((connection) =>
+        pruneAgentSessionAttachmentClaims(connection, {
+          root: store.rootDir,
+          recordedSessionIds: recorded
+        })
+      )
+    },
     ...overrides
   }
 }

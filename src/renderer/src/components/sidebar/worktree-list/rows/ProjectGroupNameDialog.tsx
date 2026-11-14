@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ProjectGroupNameDialogProps = {
   open: boolean
@@ -31,6 +31,7 @@ export function ProjectGroupNameDialog({
   onOpenChange,
   onSubmit
 }: ProjectGroupNameDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
   const inputId = useId()
   const [name, setName] = useState(initialName)
@@ -48,8 +49,13 @@ export function ProjectGroupNameDialog({
   if (open !== previousOpenState.open || initialName !== previousOpenState.initialName) {
     setPreviousOpenState({ open, initialName })
     if (open) {
-      setName(initialName)
-      setSubmitting(false)
+      // Preserve edited drafts when the localized suggestion changes.
+      if (!previousOpenState.open || name === previousOpenState.initialName) {
+        setName(initialName)
+      }
+      if (!previousOpenState.open) {
+        setSubmitting(false)
+      }
     }
   }
 
@@ -93,7 +99,7 @@ export function ProjectGroupNameDialog({
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
-              {translate('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
+              {t('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
             </Label>
             <Input
               id={inputId}
@@ -111,7 +117,7 @@ export function ProjectGroupNameDialog({
               className="text-xs"
               onClick={() => onOpenChange(false)}
             >
-              {translate('auto.components.sidebar.ProjectGroupNameDialog.d99a034073', 'Cancel')}
+              {t('auto.components.sidebar.ProjectGroupNameDialog.d99a034073', 'Cancel')}
             </Button>
             <Button
               type="submit"
@@ -120,10 +126,7 @@ export function ProjectGroupNameDialog({
               disabled={!trimmedName || submitting}
             >
               {submitting
-                ? translate(
-                    'auto.components.sidebar.ProjectGroupNameDialog.4a64e78822',
-                    'Saving...'
-                  )
+                ? t('auto.components.sidebar.ProjectGroupNameDialog.4a64e78822', 'Saving...')
                 : confirmLabel}
             </Button>
           </DialogFooter>

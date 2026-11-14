@@ -1,13 +1,13 @@
 import { useState, type MouseEvent } from 'react'
 import type { LinkAction, LinkActionRequest } from '@/components/link-actions/link-action-request'
-import { handleNativeChatWebLink } from '@/components/native-chat/native-chat-web-link-actions'
-import { resolveNativeChatHttpLinkRouting } from '@/components/native-chat/native-chat-link-target-actions'
-import { nativeChatPlainLinkClickBehavior } from '@/components/native-chat/native-chat-link-click-behavior'
-import { isTerminalLinkDirectActivation } from '@/components/terminal-pane/terminal-link-activation'
-import { httpLinkDirectClickDestination } from '@/lib/http-link-destinations'
+import { handleNativeChatWebLink } from '@/components/native-chat/links/actions/native-chat-web-link-actions'
+import { resolveNativeChatHttpLinkRouting } from '@/components/native-chat/links/actions/native-chat-link-target-actions'
+import { nativeChatPlainLinkClickBehavior } from '@/components/native-chat/links/actions/native-chat-link-click-behavior'
+import { isTerminalLinkDirectActivation } from '@/components/terminal-pane/links/gestures/terminal-link-activation'
+import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { useAppStore } from '@/store'
 import type { WorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function useWorkspaceReferenceLinkActions(
   workspaceId: string | undefined,

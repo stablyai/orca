@@ -14,33 +14,45 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { readPrefersReducedTransparency } from '@/hooks/use-reduce-visual-effects'
-import { activeWindowMaterial, rendererWindowMaterialHost } from '@/lib/window-material-runtime'
+import {
+  activeWindowMaterial,
+  rendererWindowMaterialHost
+} from '@/app-shell/appearance/window-material-runtime'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type WindowMaterialSettingProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-function windowMaterialLabel(material: WindowMaterial, host: WindowMaterialHost): string {
+function windowMaterialLabel(
+  material: WindowMaterial,
+  host: WindowMaterialHost,
+  t: Translate = translate
+): string {
   if (material === 'off') {
-    return translate('settings.windowMaterial.off', 'Opaque')
+    return t('settings.windowMaterial.off', 'Opaque')
   }
   if (material === 'translucent') {
-    return translate('settings.windowMaterial.translucent', 'Translucent')
+    return t('settings.windowMaterial.translucent', 'Translucent')
   }
   return host.platform === 'win32'
-    ? translate('settings.windowMaterial.acrylic', 'Acrylic blur')
-    : translate('settings.windowMaterial.blur', 'Blurred')
+    ? t('settings.windowMaterial.acrylic', 'Acrylic blur')
+    : t('settings.windowMaterial.blur', 'Blurred')
 }
 
-function windowMaterialHint(settings: GlobalSettings, host: WindowMaterialHost): string {
-  const description = translate(
+function windowMaterialHint(
+  settings: GlobalSettings,
+  host: WindowMaterialHost,
+  t: Translate = translate
+): string {
+  const description = t(
     'settings.windowMaterial.description',
     'What shows behind translucent terminals. Requires restart.'
   )
   if (selectableWindowMaterials(host).length === 1) {
-    return translate(
+    return t(
       'settings.windowMaterial.windowsUnsupported',
       'Requires Windows 11 version 22H2 or later.'
     )
@@ -49,19 +61,19 @@ function windowMaterialHint(settings: GlobalSettings, host: WindowMaterialHost):
     return description
   }
   if (settings.reduceVisualEffects === true || readPrefersReducedTransparency()) {
-    return translate(
+    return t(
       'settings.windowMaterial.reducedEffects',
       'Off while Reduce Visual Effects or the system Reduce Transparency setting is on.'
     )
   }
   if ((settings.terminalBackgroundOpacity ?? 1) >= 1) {
-    return translate(
+    return t(
       'settings.windowMaterial.needsOpacity',
       'Lower Background Opacity below 1 to see the desktop through terminals.'
     )
   }
   return host.platform === 'linux'
-    ? translate(
+    ? t(
         'settings.windowMaterial.linuxCompositor',
         'Your compositor decides whether to blur it. Requires restart.'
       )
@@ -69,6 +81,7 @@ function windowMaterialHint(settings: GlobalSettings, host: WindowMaterialHost):
 }
 
 function RestartBanner(): React.JSX.Element {
+  const t = useTranslate()
   const [relaunching, setRelaunching] = useState(false)
   const mountedRef = useMountedRef()
 
@@ -90,13 +103,10 @@ function RestartBanner(): React.JSX.Element {
     <div className="flex items-center justify-between gap-3 rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2.5">
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
-          {translate(
-            'auto.components.settings.TerminalWindowSection.c65bb9ce63',
-            'Restart required'
-          )}
+          {t('auto.components.settings.TerminalWindowSection.c65bb9ce63', 'Restart required')}
         </p>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'settings.windowMaterial.restartDescription',
             'Restart Orca to apply the window material change.'
           )}
@@ -111,8 +121,8 @@ function RestartBanner(): React.JSX.Element {
       >
         <RotateCw className={`size-3 ${relaunching ? 'animate-spin' : ''}`} />
         {relaunching
-          ? translate('auto.components.settings.TerminalWindowSection.907131d741', 'Restarting…')
-          : translate('auto.components.settings.TerminalWindowSection.8abdab9f7c', 'Restart now')}
+          ? t('auto.components.settings.TerminalWindowSection.907131d741', 'Restarting…')
+          : t('auto.components.settings.TerminalWindowSection.8abdab9f7c', 'Restart now')}
       </Button>
     </div>
   )
@@ -123,9 +133,10 @@ export function WindowMaterialSetting({
   settings,
   updateSettings
 }: WindowMaterialSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const host = rendererWindowMaterialHost()
   const selectable = selectableWindowMaterials(host)
-  const label = translate('settings.windowMaterial.title', 'Window Material')
+  const label = t('settings.windowMaterial.fc2ba9b528', 'Window material')
   // Why compare resolved values: opacity and Reduce Visual Effects also decide the material.
   const restartPending =
     resolveWindowMaterial(settings, host, readPrefersReducedTransparency()) !==
@@ -135,7 +146,7 @@ export function WindowMaterialSetting({
     <>
       <SettingsRow
         label={label}
-        description={windowMaterialHint(settings, host)}
+        description={windowMaterialHint(settings, host, t)}
         control={
           <Select
             value={hostWindowMaterial(windowMaterialPreference(settings, host.platform), host)}
@@ -153,7 +164,7 @@ export function WindowMaterialSetting({
             <SelectContent>
               {selectable.map((material) => (
                 <SelectItem key={material} value={material}>
-                  {windowMaterialLabel(material, host)}
+                  {windowMaterialLabel(material, host, t)}
                 </SelectItem>
               ))}
             </SelectContent>

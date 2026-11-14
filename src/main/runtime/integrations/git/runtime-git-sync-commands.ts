@@ -1,3 +1,4 @@
+import type { GitCommitAction } from '../../../../shared/git/commands/git-commit-action'
 import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult
@@ -6,7 +7,7 @@ import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { materializeWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
 import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
-import type { LocalGitProvider } from '../../../providers/local-git-provider'
+import type { LocalGitProvider } from '../../../providers/git/local-provider'
 import {
   localGitOptionsForTarget,
   requireRuntimeGitProvider,
@@ -130,6 +131,48 @@ export class RuntimeGitSyncCommands {
     }
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     return requireRuntimeGitProvider(target).commit(target.worktree.path, message)
+  }
+
+  async createRuntimeGitBranch(worktreeSelector: string, name: string, startPoint: string) {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return requireRuntimeGitProvider(target).createBranch(target.worktree.path, name, startPoint)
+  }
+
+  async cherryPickRuntimeGit(worktreeSelector: string, commitId: string) {
+    return this.applyRuntimeCommit(worktreeSelector, 'cherry-pick', commitId)
+  }
+
+  async revertRuntimeGit(worktreeSelector: string, commitId: string) {
+    return this.applyRuntimeCommit(worktreeSelector, 'revert', commitId)
+  }
+
+  private async applyRuntimeCommit(
+    worktreeSelector: string,
+    operation: GitCommitAction,
+    commitId: string
+  ) {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return requireRuntimeGitProvider(target).applyCommit(target.worktree.path, operation, commitId)
+  }
+
+  async sequencerAbortRuntimeGit(worktreeSelector: string, operation: GitCommitAction) {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    await requireRuntimeGitProvider(target).recoverSequencer(
+      target.worktree.path,
+      operation,
+      'abort'
+    )
+    return { ok: true }
+  }
+
+  async sequencerContinueRuntimeGit(worktreeSelector: string, operation: GitCommitAction) {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const result = await requireRuntimeGitProvider(target).recoverSequencer(
+      target.worktree.path,
+      operation,
+      'continue'
+    )
+    return result ?? { ok: true }
   }
 
   async completeRuntimeGitMerge(

@@ -8,34 +8,38 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
-export function buildChecksToolbar({
-  variant,
-  canUseChecksRepoContext,
-  refreshing,
-  rerunning,
-  fixingChecks,
-  canFixBrokenChecks,
-  failedChecksCount,
-  listLength,
-  onRefresh,
-  onFix,
-  onRerun
-}: {
-  variant: 'compact' | 'page'
-  canUseChecksRepoContext: boolean
-  refreshing: boolean
-  rerunning: boolean
-  fixingChecks: boolean
-  canFixBrokenChecks: boolean
-  failedChecksCount: number
-  listLength: number
-  onRefresh: () => void
-  onFix: () => void
-  onRerun: (failedOnly: boolean) => void
-}): {
+export function buildChecksToolbar(
+  {
+    variant,
+    canUseChecksRepoContext,
+    refreshing,
+    rerunning,
+    fixingChecks,
+    canFixBrokenChecks,
+    failedChecksCount,
+    listLength,
+    onRefresh,
+    onFix,
+    onRerun
+  }: {
+    variant: 'compact' | 'page'
+    canUseChecksRepoContext: boolean
+    refreshing: boolean
+    rerunning: boolean
+    fixingChecks: boolean
+    canFixBrokenChecks: boolean
+    failedChecksCount: number
+    listLength: number
+    onRefresh: () => void
+    onFix: () => void
+    onRerun: (failedOnly: boolean) => void
+  },
+  t: Translate = translate
+): {
   refreshAction: React.JSX.Element
   fixBrokenChecksAction: React.JSX.Element | null
   rerunAction: React.JSX.Element | null
@@ -52,13 +56,13 @@ export function buildChecksToolbar({
           className="size-7 shrink-0"
           disabled={!canUseChecksRepoContext || refreshing}
           onClick={onRefresh}
-          aria-label={translate('auto.components.PullRequestPage.5d0f42766d', 'Refresh checks')}
+          aria-label={t('auto.components.PullRequestPage.5d0f42766d', 'Refresh checks')}
         >
           <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {translate('auto.components.PullRequestPage.5d0f42766d', 'Refresh checks')}
+        {t('auto.components.PullRequestPage.5d0f42766d', 'Refresh checks')}
       </TooltipContent>
     </Tooltip>
   )
@@ -80,12 +84,12 @@ export function buildChecksToolbar({
               <Wrench className="size-3" />
             )}
             {variant === 'compact'
-              ? translate('auto.components.PullRequestPage.c808db1dd1', 'Fix checks')
-              : translate('auto.components.PullRequestPage.a4541fd3db', 'Fix broken checks')}
+              ? t('auto.components.PullRequestPage.c808db1dd1', 'Fix checks')
+              : t('auto.components.PullRequestPage.a4541fd3db', 'Fix broken checks')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate(
+          {t(
             'auto.components.PullRequestPage.0fa8b8faec',
             'Start the default AI agent on these checks'
           )}
@@ -108,7 +112,7 @@ export function buildChecksToolbar({
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {translate('auto.components.PullRequestPage.522d9353e1', 'Rerun')}
+            {t('auto.components.PullRequestPage.522d9353e1', 'Rerun')}
             <ChevronDown className="size-3 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -118,11 +122,11 @@ export function buildChecksToolbar({
             onSelect={() => onRerun(true)}
           >
             <RefreshCw className="size-4" />
-            {translate('checks.rerunUnsuccessful', 'Rerun unsuccessful')}
+            {t('checks.rerunUnsuccessful', 'Rerun unsuccessful')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={rerunning} onSelect={() => onRerun(false)}>
             <RefreshCw className="size-4" />
-            {translate('auto.components.PullRequestPage.54cddd1858', 'Rerun all checks')}
+            {t('auto.components.PullRequestPage.54cddd1858', 'Rerun all checks')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -166,6 +170,7 @@ export function ChecksCompactHeader({
   rerunAction: React.JSX.Element | null
   secondaryActions: React.JSX.Element | null
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="border-b border-border/50 px-3 py-2">
       <div className="flex min-w-0 items-start gap-2">
@@ -179,7 +184,7 @@ export function ChecksCompactHeader({
           />
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-medium leading-5 text-foreground">
-              {translate('auto.components.PullRequestPage.94d95cf1f7', 'Checks')}
+              {t('auto.components.PullRequestPage.94d95cf1f7', 'Checks')}
             </div>
             {(listLength > 0 || showSummary) && (
               <div className="truncate text-[11px] leading-4 text-muted-foreground">

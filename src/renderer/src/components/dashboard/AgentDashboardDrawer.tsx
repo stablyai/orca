@@ -2,10 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAppStore } from '@/store'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
-import { isXtermHelperTextarea } from '../terminal-pane/regular-terminal-focus-ownership'
-import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
+import { revealDashboardAgent } from './navigation/reveal-dashboard-agent'
+import { AgentKanbanBoard } from './board/AgentKanbanBoard'
+import { isXtermHelperTextarea } from '../terminal-pane/input/focus/regular-terminal-focus-ownership'
+import type { DashboardRevealAgentArgs as AgentRevealArgs } from '../../../../shared/dashboard-snapshot'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss
@@ -14,10 +14,10 @@ import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../sidebar/workspace-chrome-metrics'
-import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
-import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
-import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
-import { translate } from '@/i18n/i18n'
+import { AgentDashboardSettingsMenu } from './settings/AgentDashboardSettingsMenu'
+import { useLiveDashboardSnapshot } from './snapshot/useLiveDashboardSnapshot'
+import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetry'
+import { useTranslate } from '@/i18n/use-translate'
 import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
@@ -94,6 +94,7 @@ export function AgentDashboardDrawer({
   leftSidebarStyle,
   statusBarVisible
 }: AgentDashboardDrawerProps): React.JSX.Element {
+  const t = useTranslate()
   const open = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -243,7 +244,7 @@ export function AgentDashboardDrawer({
         onPointerDownOutside={guardSidebarInteraction}
         onInteractOutside={guardSidebarInteraction}
       >
-        <SheetTitle className="sr-only">{translate('dashboardPopout.title', 'Agents')}</SheetTitle>
+        <SheetTitle className="sr-only">{t('dashboardPopout.title', 'Agents')}</SheetTitle>
         {/* Closed SheetContent unmounts the live snapshot body, avoiding closed-path derivation. */}
         <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
           <AgentDashboardDrawerBody

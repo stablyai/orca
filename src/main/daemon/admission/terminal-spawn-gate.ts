@@ -2,21 +2,23 @@ import {
   applySpawnAdmission,
   createSpawnAdmissionState,
   decideSpawnAdmission,
-  DEFAULT_SPAWN_ADMISSION_LIMITS,
   pruneUserResumeBuckets,
   releaseLiveAutomatic,
   resolveSpawnCharge,
   settleSpawnAdmission,
+  type SpawnAdmissionState
+} from '../../../shared/terminal/pty/admission/host-spawn-admission'
+import {
+  DEFAULT_SPAWN_ADMISSION_LIMITS,
   TERMINAL_SPAWN_REFUSED_MESSAGE,
   type AutomaticWorkMode,
   type HostPressureLevel,
   type SpawnAdmissionDecision,
   type SpawnAdmissionLimits,
-  type SpawnAdmissionState,
   type SpawnCharge,
   type SpawnRequestFacts
-} from '../../../shared/host-spawn-admission'
-import { withOtherDaemonsAutomaticWork } from '../../../shared/host-automatic-work-budget'
+} from '../../../shared/terminal/pty/admission/spawn-admission-contract'
+import { withOtherDaemonsAutomaticWork } from '../../../shared/terminal/pty/admission/host-automatic-work-budget'
 import { DEFAULT_MAX_HOST_TERMINALS, HostTerminalLedger } from './host-terminal-ledger'
 import { TerminalSpawnDeferredError } from './terminal-spawn-deferred-error'
 import type { LegacyRestoreDetails, LegacyRestoreRecords } from './legacy-restore-records'

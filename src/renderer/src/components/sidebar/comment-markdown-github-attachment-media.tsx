@@ -1,3 +1,4 @@
+import { GitHubBodyImageUrlsContext } from './comment-markdown-github-image-urls'
 import React from 'react'
 
 export function isGitHubUserAttachmentUrl(href: string | undefined): href is string {
@@ -85,11 +86,29 @@ export function GitHubUserAttachmentImage({
   src: string
   alt: string | undefined
 }): React.ReactElement {
-  const [failed, setFailed] = React.useState(false)
+  const imageUrls = React.useContext(GitHubBodyImageUrlsContext)
+  return <AttachmentImage key={src} src={src} candidate={imageUrls?.[src] ?? src} alt={alt} />
+}
+
+function AttachmentImage({
+  src,
+  candidate,
+  alt
+}: {
+  src: string
+  candidate: string
+  alt: string | undefined
+}): React.ReactElement {
+  const [loadedSource, setLoadedSource] = React.useState<string | null>(null)
+  const [failedSource, setFailedSource] = React.useState<string | null>(null)
+  const displaySrc = loadedSource ?? candidate
+  const activeSource = React.useRef(displaySrc)
+  React.useLayoutEffect(() => {
+    activeSource.current = displaySrc
+  }, [displaySrc])
   const label = alt?.trim() || src
 
-  // Private images need GitHub cookies; fallback links open top-level authenticated sessions after inline failures.
-  if (failed) {
+  if (failedSource === displaySrc || (!loadedSource && failedSource && candidate === src)) {
     return <AttachmentFallbackLink href={src}>{label}</AttachmentFallbackLink>
   }
 
@@ -102,10 +121,22 @@ export function GitHubUserAttachmentImage({
       onClick={(e) => e.stopPropagation()}
     >
       <img
-        src={src}
+        key={displaySrc}
+        src={displaySrc}
         alt={alt ?? ''}
         className="my-3 max-h-96 max-w-full rounded-md object-contain outline outline-1 outline-black/10 dark:outline-white/10"
-        onError={() => setFailed(true)}
+        onLoad={() => {
+          if (activeSource.current === displaySrc) {
+            setLoadedSource(displaySrc)
+          }
+        }}
+        onError={() => {
+          if (activeSource.current !== displaySrc) {
+            return
+          }
+          setLoadedSource(null)
+          setFailedSource(displaySrc)
+        }}
       />
     </a>
   )

@@ -1,4 +1,4 @@
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 /** Structured workers have no PTY; register their bearer handle, pane key and host scope as orchestration authority.
  * Random handles and leaves prevent session ids exposed in tab ids from yielding caller-supplied keys that read/consume worker mail. */
 
@@ -21,11 +21,11 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,
   isStructuredWorkerHandle
-} from '../../../../../shared/structured-worker-handle'
+} from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
-} from '../../../../../shared/worker-terminal-host-scope'
+} from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 
 export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 

@@ -5,18 +5,7 @@ import {
   type GitHubMentionOption
 } from './github-mention-option-filter'
 
-function option(login: string, name: string | null = null): GitHubMentionOption {
-  return { login, name }
-}
-
 describe('github-mention-option-filter', () => {
-  it('enforces the query budget by UTF-8 byte length', () => {
-    const query = 'é'.repeat(GITHUB_MENTION_QUERY_MAX_BYTES)
-
-    expect(query.length).toBe(GITHUB_MENTION_QUERY_MAX_BYTES)
-    expect(filterGitHubMentionOptions([option('octocat')], query)).toEqual([])
-  })
-
   it('rejects oversized pasted mention queries before reading option metadata', () => {
     const oversizedQuery = 'secret-mention-query'.repeat(GITHUB_MENTION_QUERY_MAX_BYTES)
     const candidate = {

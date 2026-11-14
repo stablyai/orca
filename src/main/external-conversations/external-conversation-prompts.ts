@@ -10,7 +10,7 @@ import {
   TerminalAgentPromptAnswers,
   type PanePromptTarget,
   type TerminalAgentPromptAnswerRuntime
-} from '../runtime/terminal-agent-prompt-answer'
+} from '../runtime/terminal/input/terminal-agent-prompt-answer'
 import { admitConnectorAgent } from './connector-agents'
 import type { Delivery } from './external-conversation-types'
 

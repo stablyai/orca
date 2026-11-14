@@ -13,7 +13,7 @@ import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports
 import {
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible
-} from '@/runtime/runtime-rpc-client'
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
 import { useAppStore } from '@/store'
 import { WorkspacePortScanner } from './WorkspacePortScanner'

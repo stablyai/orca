@@ -12,7 +12,9 @@ import { __clearNonUtf8AutosavePausesForTests } from '../../autosave/editor-non-
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 
 // "café" saved as Latin-1, decoded as UTF-8.
 const LATIN1 = Buffer.from([0x63, 0x61, 0x66, 0xe9]).toString('utf8')

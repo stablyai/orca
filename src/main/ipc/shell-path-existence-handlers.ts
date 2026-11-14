@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import {
   validatePathExistenceBatch,
   type ShellPathExistence
-} from '../../shared/path-existence-batch'
+} from '../../shared/file-access/path-existence-batch'
 import { pathExists } from './shell-owned-path-target'
 import { guardWslUncPathAccess, WslDistroStoppedError } from '../wsl/filesystem/wsl-unc-access-gate'
 

@@ -16,6 +16,7 @@ export class EmulatorError extends Error {
 }
 
 export type EmulatorErrorCode =
+  | 'emulator_attach_superseded'
   | 'emulator_no_active'
   | 'emulator_device_not_found'
   | 'emulator_helper_failed'

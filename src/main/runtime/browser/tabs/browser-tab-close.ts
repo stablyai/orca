@@ -4,7 +4,7 @@ import {
   retireRuntimeBrowserClientPage
 } from '../client-pages/browser-client-page-close'
 import { BrowserError } from '../../../browser/browser-error'
-import { browserManager } from '../../../browser/browser-manager'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { closeBrowserTabInRenderer } from './browser-tab-renderer-close'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'

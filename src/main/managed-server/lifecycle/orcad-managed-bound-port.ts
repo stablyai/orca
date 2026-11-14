@@ -15,7 +15,7 @@ import {
   execOrcadRemote,
   type OrcadRemoteExecTarget
 } from '../install/orcad-remote-runtime-control'
-import type { OrcadHostTarget, OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTarget, OrcadHostTransport } from '../install/orcad-host-transport'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 
 export type OrcadTunnelPortInput = {

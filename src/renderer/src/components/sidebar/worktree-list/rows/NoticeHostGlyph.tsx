@@ -2,9 +2,9 @@ import React from 'react'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HostRowIcon } from '../../../host-row-icon'
-import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
+import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type NoticeHostGlyphProps = {
   hostId: ExecutionHostId
@@ -17,6 +17,7 @@ export default function NoticeHostGlyph({
   hostLabel,
   keyboardFocusable
 }: NoticeHostGlyphProps): React.JSX.Element | null {
+  const t = useTranslate()
   const host = parseExecutionHostId(hostId)
   // Shared derivation distinguishes unprobed hosts from confirmed unreachable ones.
   const isDisconnected = useRuntimeHostDisconnected(
@@ -28,23 +29,18 @@ export default function NoticeHostGlyph({
   }
 
   const tooltip = isDisconnected
-    ? translate(
-        'auto.components.sidebar.NoticeHostGlyph.hostDisconnected',
-        '{{hostName}} disconnected',
-        { hostName: hostLabel }
-      )
+    ? t('auto.components.sidebar.NoticeHostGlyph.hostDisconnected', '{{hostName}} disconnected', {
+        hostName: hostLabel
+      })
     : host.kind === 'ssh'
-      ? translate(
+      ? t(
           'auto.components.sidebar.NoticeHostGlyph.sshHostProject',
           'Project on SSH host {{hostName}}',
           { hostName: hostLabel }
         )
       : host.kind === 'local'
-        ? translate(
-            'auto.components.sidebar.NoticeHostGlyph.localHostProject',
-            'Project on this host'
-          )
-        : translate(
+        ? t('auto.components.sidebar.NoticeHostGlyph.localHostProject', 'Project on this host')
+        : t(
             'auto.components.sidebar.NoticeHostGlyph.runtimeHostProject',
             'Project on {{hostName}}',
             { hostName: hostLabel }

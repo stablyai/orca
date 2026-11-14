@@ -1,4 +1,4 @@
-import type { LocalGitExecOptions } from '../../../git/repo-default-base-ref'
+import type { LocalGitExecOptions } from '../../../git/refs/resolution/repo-default-base-ref'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -11,7 +11,7 @@ import type {
   AddWorktreeOptions,
   AddWorktreeResult
 } from '../../../git/worktrees/worktree-operation-options'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type {
   RemoteFetchResult,
@@ -28,6 +28,8 @@ import {
   retireGeneratedWorktreeName
 } from '../../../workspaces/removal/retirement/worktree-name-retirement'
 import type { WorktreeCreateTimingRecorder } from '../../../workspaces/creation/worktree-create-timing'
+import { exactNameLateCollision } from '../../../workspaces/creation/worktree-create-exact-name'
+import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
 
 export type RuntimeLocalBaseRefRefresh = {
   /** Awaits the deferred refresh started before naming, if any. */
@@ -133,13 +135,16 @@ export async function createRuntimeLocalGitWorktree(args: {
     args.request.nameWasGenerated === true &&
     Boolean(args.effectiveSanitizedName) &&
     isGeneratedWorktreeCreateName(args.effectiveSanitizedName!)
+  const exactName = args.request.branchIntent === 'create-exact'
   let addResult: AddWorktreeResult
   try {
     addResult = await args.timing.time('git_worktree_add', async () => {
+      // Exact mode skips prepared checkouts so the final write is a non-forcing `worktree add -b`.
       if (
         sparseDirectories.length > 0 ||
         args.checkoutExistingBranch ||
-        args.request.branchIntent === 'open-existing-v2'
+        args.request.branchIntent === 'open-existing-v2' ||
+        exactName
       ) {
         args.timing.recordPreparedCheckout({
           status: 'miss',
@@ -199,7 +204,13 @@ export async function createRuntimeLocalGitWorktree(args: {
         args.effectiveSanitizedName!
       )
     }
-    throw error
+    throw exactName
+      ? await exactNameLateCollision(error, {
+          branchName: args.branchName,
+          worktreePath: args.worktreePath,
+          pathExists: runtimePathExists
+        })
+      : error
   }
   // New worktree is now listable; invalidate scans started before it appeared.
   runWorktreeChangeInvalidators(args.repo.id)

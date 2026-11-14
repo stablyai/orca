@@ -5,19 +5,19 @@ import type {
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { splitFreebuffScreenUpdates } from '../../../../shared/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './terminal-buffer-operations'
-import { observeFreebuffTerminalStatus } from '../../freebuff-terminal-status'
+import { observeFreebuffTerminalStatus } from './freebuff-terminal-status'
 import {
   observeCodexCapacityTerminalStatus,
   observeCodexReconnectFailure
-} from '../../codex-notice-terminal-status'
-import { TrustDialogStatusObserver } from '../../trust-dialog-status-observer'
+} from './codex-notice-terminal-status'
+import { TrustDialogStatusObserver } from './trust-dialog-status-observer'
 import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   detectAgentStatusFromTitle,
   normalizeTerminalTitle
 } from '../../../../shared/agent-status/title/agent-title-status'
-import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
+import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
@@ -47,6 +47,16 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         false
       )
   })
+
+  /** Claims a startup-dialog card choice while the screen still reads as that card; a moved highlight, a new dialog or an earlier claim on this screen fails. */
+  claimStartupDialogChoice(ptyId: string, prompt: string): boolean {
+    const received = this.getPtyOutputSequence(ptyId)
+    // A model behind received output could vouch for a screen Claude has already changed.
+    return (
+      this.headlessTerminals.get(ptyId)?.outputSequence === received &&
+      this.trustDialogStatus.claimChoice(ptyId, prompt, received)
+    )
+  }
 
   // Create emulator state synchronously and chain renderer hydration first so concurrent live bytes cannot be overwritten by a late seed (docs/mobile-prefer-renderer-scrollback.md).
   maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null {

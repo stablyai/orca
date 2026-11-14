@@ -2,7 +2,7 @@ import React from 'react'
 import { CodexResetCredits, CodexResetConfirmation } from './CodexResetCredits'
 import { DropdownMenuItem, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AccountRuntimeToggle, CodexRestartStatusPrompt } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
@@ -28,6 +28,7 @@ export function CodexSwitcherMenu({
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     activeTarget,
     canRedeemReset,
@@ -129,7 +130,7 @@ export function CodexSwitcherMenu({
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
-      ariaLabel={translate(
+      ariaLabel={t(
         'auto.components.status.bar.StatusBar.ba55303942',
         'Open Codex details and account switcher'
       )}
@@ -137,7 +138,7 @@ export function CodexSwitcherMenu({
       accountLabel={
         !hasActiveRuntimeEnvironment
           ? (activeTarget?.label ??
-            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+            t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
       }
       panelFooter={
@@ -167,10 +168,7 @@ export function CodexSwitcherMenu({
           groups={switchGroups}
           value={selectedGroup?.key ?? selectedRuntimeKey}
           onChange={(group) => void handleSelectRuntime(group)}
-          ariaLabel={translate(
-            'auto.components.status.bar.StatusBar.38b5647724',
-            'Codex usage runtime'
-          )}
+          ariaLabel={t('auto.components.status.bar.StatusBar.38b5647724', 'Codex usage runtime')}
         />
       }
       open={open}
@@ -186,7 +184,7 @@ export function CodexSwitcherMenu({
       />
       {open ? <CodexRestartStatusPrompt /> : null}
       <AccountSwitchSection
-        heading={translate('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
+        heading={t('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
         targets={selectedGroup?.targets ?? []}
         panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
         onOpenSettings={() => {
@@ -202,7 +200,7 @@ export function CodexSwitcherMenu({
         {unavailableUsageRows.length > 0 ? (
           <>
             <DropdownMenuLabel className="mt-1">
-              {translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
+              {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
             </DropdownMenuLabel>
             {unavailableUsageRows.map(renderRow)}
           </>

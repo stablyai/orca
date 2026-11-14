@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { MAX_DICTATION_AUDIO_CHUNK_BYTES } from '../../../../src/shared/rpc-contract/speech-params'
+import * as z from 'zod'
+import { MAX_DICTATION_AUDIO_CHUNK_BYTES } from '../../../../src/shared/rpc-contract/speech/speech-params'
 
 // The shell owns microphone PCM and its wake lock; the page owns dictation state/RPCs. Pull from the ring through existing request/reply rather than adding a push frame.
 // Keep verb grant segments lowercase: a camel-cased audio.readChunk would fail manifest grammar and reject the whole bundle.
@@ -19,7 +19,7 @@ export const BRIDGE_AUDIO_PERMISSIONS = ['granted', 'denied', 'undetermined'] as
 
 export type BridgeAudioPermission = (typeof BRIDGE_AUDIO_PERMISSIONS)[number]
 
-// Return interruptions with the existing 500 ms read poll rather than a new verb/push lane; the page applies the native interruption state.
+// Return interruptions with the page's existing read poll rather than a new verb/push lane; the page applies the native interruption state.
 export const BRIDGE_AUDIO_INTERRUPTIONS = ['began', 'ended', 'blocked'] as const
 
 export type BridgeAudioInterruption = (typeof BRIDGE_AUDIO_INTERRUPTIONS)[number]

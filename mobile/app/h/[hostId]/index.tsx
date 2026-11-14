@@ -3,25 +3,34 @@ import { firstParam } from '../../../src/navigation/route-param-reader'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
 import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
 import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+import { useHostDocumentOpenTarget } from '../../../src/mobile-web-shell/use-host-document-open-target'
 
 // Encode decoded hostId so ?, # and whitespace cannot form a pathname the page refuses; shell gates unsupported bundles.
 function HostListScreen() {
   // Use firstParam: encoding String(array) creates a valid segment naming a nonexistent host; an empty array is truthy and otherwise builds /h/.
   const params = useLocalSearchParams<{ hostId?: string | string[] }>()
   const hostId = firstParam(params.hostId)
+  const { routeParams, onRouteParamClear, onPageLocation } = useHostDocumentOpenTarget(hostId)
 
   // Validate through bridge schema: encoding cannot make dot/dot-dot host ids valid.
   const route =
-    hostId === '' ? null : shellScreenRoute({ pathname: `/h/${encodeURIComponent(hostId)}` })
+    hostId === ''
+      ? null
+      : shellScreenRoute({
+          pathname: `/h/${encodeURIComponent(hostId)}`,
+          ...(routeParams === undefined ? {} : { params: routeParams })
+        })
   if (route === null) {
     return <PageRouteUnavailableScreen hostId={hostId} />
   }
   return (
     <MobileWebShellScreen
-      // Remount on host change to discard the old session’s grants.
+      // Remount on host change to discard the old session’s grants; `open` updates the document in place.
       key={hostId}
       hostId={hostId}
       route={route}
+      onRouteParamClear={onRouteParamClear}
+      onPageLocation={onPageLocation}
     />
   )
 }

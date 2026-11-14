@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import type { Stats } from 'node:fs'
-import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../../../shared/file-access/filesystem-path-flavor'
 
 export type DriveListing = {
   resolvedPath: string

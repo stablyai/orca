@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getKeepLocalMainUpToDateTitle } from '@/components/settings/source-control/keep-local-main-up-to-date-setting'
 import { translate } from '@/i18n/i18n'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { LocalBaseRefRefreshResult } from '../../../../../../shared/worktree/base-ref-drift-types'
+import type { LocalBaseRefRefreshResult } from '../../../../../../shared/worktree/base-refs/base-ref-drift-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
 export function localBaseRefRefreshFailureDetail(result: LocalBaseRefRefreshResult): string {
@@ -204,7 +204,7 @@ function runUnshallowInNewTerminalTab(
   }
   // Why lazy: the terminal launchers import the store, which imports this slice.
   void Promise.all([
-    import('@/lib/worktree-activation'),
+    import('@/lib/workspace/activation/worktree-activation'),
     import('@/components/terminal/terminal-tab-create')
   ]).then(
     ([{ activateAndRevealWorktree }, { createNewTerminalTab }]) => {

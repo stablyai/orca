@@ -51,6 +51,7 @@ function deps(overrides: Partial<DesktopBrowserBridgeExecutorDeps> = {}) {
   const dispatched: { method: string; params: Record<string, unknown>; scopeProbe: unknown }[] = []
   const value: DesktopBrowserBridgeExecutorDeps = {
     environmentId: 'env-host',
+    targetId: 'ssh-host',
     hostLabel: 'sandbox',
     resolveWorkspace: rendererScope,
     worktreeIdForPage: (page) => MOUNTED_PAGE_OWNERS[page] ?? null,

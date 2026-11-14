@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { BellRing, Check, Settings, TriangleAlert } from 'lucide-react'
 import type { NotificationDeliveryProbeResult } from '../../../../shared/notification-settings-types'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type MacNotificationPermissionState =
   | 'checking'
@@ -103,10 +103,11 @@ export function MacNotificationPermissionCard({
 }: {
   state: MacNotificationPermissionState | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (state === 'checking') {
     return (
       <section className="rounded-lg border border-border px-4 py-3.5 text-[13px] text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.onboarding.NotificationStep.56b836215c',
           'Checking notification permission…'
         )}
@@ -120,13 +121,13 @@ export function MacNotificationPermissionCard({
         <Check className="mt-0.5 size-4 shrink-0 text-foreground" />
         <div className="min-w-0 space-y-0.5">
           <div className="text-sm font-medium text-foreground">
-            {translate(
+            {t(
               'auto.components.onboarding.NotificationStep.fd84d3e9b8',
               'Notifications are enabled'
             )}
           </div>
           <p className="text-[13px] leading-relaxed text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.onboarding.NotificationStep.4f7bce5644',
               'macOS will alert you when agents finish or terminals need attention.'
             )}
@@ -144,13 +145,13 @@ export function MacNotificationPermissionCard({
             <BellRing className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 space-y-0.5">
               <div className="text-sm font-medium text-foreground">
-                {translate(
+                {t(
                   'auto.components.onboarding.NotificationStep.95d99b52fa',
                   'Allow notifications for Orca'
                 )}
               </div>
               <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.onboarding.mac.notification.permission.card.f696515944',
                   'Click Allow in the macOS dialog.'
                 )}
@@ -165,10 +166,7 @@ export function MacNotificationPermissionCard({
             onClick={() => void window.api.notifications.openSystemSettings()}
           >
             <Settings className="size-3.5" />
-            {translate(
-              'auto.components.onboarding.NotificationStep.4f6a1da718',
-              'Open System Settings'
-            )}
+            {t('auto.components.onboarding.NotificationStep.4f6a1da718', 'Open System Settings')}
           </Button>
         </div>
       </section>
@@ -183,13 +181,13 @@ export function MacNotificationPermissionCard({
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-status-warning" />
             <div className="min-w-0 space-y-0.5">
               <div className="text-sm font-medium text-foreground">
-                {translate(
+                {t(
                   'auto.components.onboarding.NotificationStep.90b5d2e363',
                   'macOS is not delivering Orca notifications'
                 )}
               </div>
               <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.onboarding.mac.notification.permission.card.721d2bedb6',
                   'Turn on Allow notifications for Orca in System Settings.'
                 )}
@@ -203,10 +201,7 @@ export function MacNotificationPermissionCard({
             onClick={() => void window.api.notifications.openSystemSettings()}
           >
             <Settings className="size-3.5" />
-            {translate(
-              'auto.components.onboarding.NotificationStep.4f6a1da718',
-              'Open System Settings'
-            )}
+            {t('auto.components.onboarding.NotificationStep.4f6a1da718', 'Open System Settings')}
           </Button>
         </div>
       </section>

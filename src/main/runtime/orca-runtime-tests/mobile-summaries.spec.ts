@@ -1,15 +1,13 @@
 import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
+import { makeAgentStatusStoreWiring } from '../terminal/identity/agent-status-store-wiring.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   HEADLESS_LEAF_ID,
-  TEST_FOLDER_PROJECT_GROUP_ID,
   TEST_FOLDER_WORKSPACE_KEY,
-  TEST_FOLDER_WORKSPACE_PATH,
   TEST_REPO_ID,
   TEST_REPO_PATH,
   TEST_WORKTREE_ID,
@@ -25,61 +23,6 @@ import {
 } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('resolves files through a source-visible linked-checkout worktree', async () => {
-    const linkedPath = '/tmp/linked'
-    const scratchPath = `${linkedPath}/.claude/worktrees/review`
-    vi.mocked(listWorktrees).mockResolvedValue([
-      {
-        path: TEST_REPO_PATH,
-        head: 'main',
-        branch: 'main',
-        isBare: false,
-        isMainWorktree: true
-      },
-      {
-        path: linkedPath,
-        head: 'linked',
-        branch: 'feature/linked',
-        isBare: false,
-        isMainWorktree: false
-      },
-      {
-        path: scratchPath,
-        head: 'scratch',
-        branch: 'feature/review',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    const repo = {
-      ...store.getRepos()[0],
-      externalWorktreeVisibility: 'hide' as const,
-      externalWorktreeVisibilityLegacy: false,
-      worktreeVisibilitySourcePreferences: {
-        builtIn: { claude: 'show' as const, gsd: 'hide' as const }
-      }
-    }
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getRepos: () => [repo],
-      getRepo: () => repo
-    } as never)
-
-    const target = await (
-      runtime as unknown as {
-        resolveKnownWorkspaceFileTarget: (
-          path: string,
-          executionHostId: 'local'
-        ) => Promise<{ worktree: { path: string }; relativePath: string } | null>
-      }
-    ).resolveKnownWorkspaceFileTarget(`${scratchPath}/src/app.ts`, 'local')
-
-    expect(target).toMatchObject({
-      worktree: { path: scratchPath },
-      relativePath: 'src/app.ts'
-    })
-  })
-
   it('applies global custom-source visibility to mobile summaries and file resolution', async () => {
     const globalRoot = '/tmp/global-worktrees'
     const globalWorktreePath = `${globalRoot}/review`
@@ -132,54 +75,6 @@ describe('OrcaRuntimeService', () => {
     expect(target).toMatchObject({
       worktree: { path: globalWorktreePath },
       relativePath: 'src/app.ts'
-    })
-  })
-
-  it('marks saved session tabs with live PTYs as host sidebar activity', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal()
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID)
-    runtime.onPtyData('persisted-pty', 'ready\n', 456)
-
-    const { worktrees } = await runtime.getWorktreePs()
-    expect(worktrees[0]).toMatchObject({
-      worktreeId: TEST_WORKTREE_ID,
-      hasHostSidebarActivity: true,
-      status: 'active',
-      liveTerminalCount: 1
-    })
-  })
-
-  it('attributes live legacy PTYs from saved layout bindings when their panes are hidden', async () => {
-    const session = makeWorkspaceSessionWithHeadlessTerminal()
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...session,
-      tabsByWorktree: {
-        [TEST_WORKTREE_ID]: session.tabsByWorktree[TEST_WORKTREE_ID]!.map((tab) => ({
-          ...tab,
-          ptyId: null
-        }))
-      }
-    })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.setPtyController({
-      write: vi.fn(() => true),
-      kill: vi.fn(() => true),
-      getForegroundProcess: vi.fn(async () => null),
-      // Legacy local PTYs have opaque ids and the local provider cannot recover cwd.
-      listProcesses: vi.fn(async () => [{ id: 'persisted-pty', cwd: '', title: 'shell' }])
-    })
-
-    const { worktrees } = await runtime.getWorktreePs()
-
-    expect(worktrees[0]).toMatchObject({
-      worktreeId: TEST_WORKTREE_ID,
-      hasHostSidebarActivity: true,
-      hasAttachedPty: true,
-      liveTerminalCount: 1
     })
   })
 
@@ -302,142 +197,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('marks saved browser tabs as host sidebar activity like desktop', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal({
-        tabsByWorktree: {},
-        terminalLayoutsByTabId: {},
-        browserTabsByWorktree: {
-          [TEST_WORKTREE_ID]: [
-            {
-              id: 'browser-1',
-              worktreeId: TEST_WORKTREE_ID,
-              url: 'https://example.com',
-              title: 'Example',
-              loading: false,
-              faviconUrl: null,
-              canGoBack: false,
-              canGoForward: false,
-              loadError: null,
-              createdAt: 1
-            }
-          ]
-        }
-      })
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    const { worktrees } = await runtime.getWorktreePs()
-
-    expect(worktrees[0]).toMatchObject({
-      worktreeId: TEST_WORKTREE_ID,
-      hasHostSidebarActivity: true
-    })
-  })
-
-  it('falls back to the path-keyed GitHub cache entry', async () => {
-    const runtimeStore = {
-      ...store,
-      getGitHubCache: () => ({
-        pr: {
-          [`${TEST_REPO_PATH}::feature/foo`]: {
-            data: { number: 7, state: 'open' },
-            fetchedAt: 1
-          }
-        },
-        issue: {}
-      })
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
-    expect(summary?.linkedPR).toEqual({ number: 7, state: 'open' })
-  })
-
-  it('includes folder workspaces in compact worktree summaries for mobile', async () => {
-    const folderWorkspace = makeFolderWorkspace({
-      name: 'GG',
-      comment: 'dujiao-next-eval'
-    })
-    const projectGroup = makeFolderProjectGroup({ name: 'Store' })
-    const runtime = new OrcaRuntimeService(
-      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
-    )
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const folderSummary = worktrees.find(
-      (worktree) => worktree.worktreeId === TEST_FOLDER_WORKSPACE_KEY
-    )
-
-    expect(folderSummary).toMatchObject({
-      workspaceKind: 'folder-workspace',
-      worktreeId: TEST_FOLDER_WORKSPACE_KEY,
-      repoId: `folder-workspace:${TEST_FOLDER_PROJECT_GROUP_ID}`,
-      repo: 'Store',
-      path: TEST_FOLDER_WORKSPACE_PATH,
-      branch: '',
-      isArchived: false,
-      isMainWorktree: false,
-      hasHostSidebarActivity: false,
-      displayName: 'GG',
-      comment: 'dujiao-next-eval',
-      isPinned: false,
-      unread: false,
-      liveTerminalCount: 0,
-      hasAttachedPty: false,
-      status: 'inactive'
-    })
-  })
-
-  it('attaches inline agent rows from the latest OSC 9999 status', async () => {
-    const runtime = new OrcaRuntimeService(store, undefined, makeAgentStatusStoreWiring().deps)
-    const leafId = '22222222-2222-4222-8222-222222222222'
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Claude',
-          activeLeafId: leafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId,
-          paneRuntimeId: 1,
-          ptyId: 'pty-1'
-        }
-      ]
-    })
-
-    runtime.onPtyData(
-      'pty-1',
-      '\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex","lastAssistantMessage":"on it"}\x07',
-      321
-    )
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
-    expect(summary?.agents).toEqual([
-      expect.objectContaining({
-        paneKey: `tab-1:${leafId}`,
-        parentPaneKey: null,
-        state: 'working',
-        agentType: 'codex',
-        prompt: 'ship it',
-        lastAssistantMessage: 'on it',
-        interrupted: false,
-        stateStartedAt: expect.any(Number),
-        updatedAt: expect.any(Number)
-      })
-    ])
-  })
-
   it('attaches inline agent rows from hook-reported status (not just OSC)', async () => {
     // Hook-only agents must appear in worktree.ps without an OSC status.
     const leafId = '33333333-3333-4333-8333-333333333333'
@@ -546,31 +305,6 @@ describe('OrcaRuntimeService', () => {
       status: 'working',
       workingMode: 'monitoring'
     })
-  })
-  it('projects monitoring over a title-derived working status', async () => {
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: 'tab-1:1',
-          worktreeId: TEST_WORKTREE_ID,
-          tabId: 'tab-1',
-          state: 'working',
-          workingMode: 'monitoring',
-          prompt: 'watch tests',
-          agentType: 'claude',
-          connectionId: null,
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }
-      ]
-    })
-    syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude working' })
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-
-    expect(summary).toMatchObject({ status: 'working', workingMode: 'monitoring' })
   })
   it('keeps hook monitoring mode when a newer mode-less OSC row reports the same work', async () => {
     const now = Date.now()

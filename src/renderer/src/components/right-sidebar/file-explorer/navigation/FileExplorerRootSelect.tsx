@@ -8,10 +8,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import './file-explorer-display-root'
 import type { ExplorerRootOption } from './file-explorer-display-root'
-import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-explorer-display-root'
+import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-listing/file-explorer-display-root'
 
 export type FileExplorerRootSelectProps = {
   options: ExplorerRootOption[]
@@ -26,14 +26,15 @@ export function FileExplorerRootSelect({
   onValueChange,
   disabled
 }: FileExplorerRootSelectProps): React.JSX.Element {
-  const fullRootLabel = translate('fileExplorer.root.full', 'Repository root')
+  const t = useTranslate()
+  const fullRootLabel = t('fileExplorer.root.full', 'Repository root')
   const atRoot = value === FILE_EXPLORER_FULL_ROOT
   const selectedLabel = atRoot
     ? fullRootLabel
     : (options.find((option) => option.value === value)?.label ?? value)
   return (
     <nav
-      aria-label={translate('fileExplorer.root.label', 'Explorer root')}
+      aria-label={t('fileExplorer.root.label', 'Explorer root')}
       className="flex min-w-0 flex-1 items-center"
     >
       {!atRoot && (
@@ -66,7 +67,7 @@ export function FileExplorerRootSelect({
                 size="xs"
                 className="min-w-0"
                 disabled={disabled}
-                aria-label={translate('fileExplorer.root.label', 'Explorer root')}
+                aria-label={t('fileExplorer.root.label', 'Explorer root')}
               >
                 {atRoot && <FolderTree />}
                 <span className="truncate">{selectedLabel}</span>

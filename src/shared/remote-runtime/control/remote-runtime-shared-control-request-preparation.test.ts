@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { federationRelayPrefix } from '../../../main/runtime/orchestration/federation-relay-prefix'
+import { federationRelayPrefix } from '../../../main/runtime/orchestration/federation/relay/federation-relay-prefix'
 import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../remote-runtime-memory-limits'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import {

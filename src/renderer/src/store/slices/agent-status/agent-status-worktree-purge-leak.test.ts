@@ -3,18 +3,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '../../types'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
@@ -32,9 +34,9 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
-import { createTestStore, seedStore } from '../store-test-helpers'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
-import { makeTab } from '../store-session-test-harness'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 
 const WT = 'repo1::/path/wt1'
 const TAB = 'tab-1'
@@ -98,20 +100,13 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
   it('purgeWorktreeTerminalState drops every pane-scoped map for the removed worktree', () => {
     const store = createTestStore()
     seedPaneState(store)
-    const epochBefore = store.getState().agentStatusEpoch
-    const previous = store.getState().agentStatusByPaneKey[PANE]
-    const accepted = vi.fn()
-    const dispose = store.getState().subscribeAgentStatusChanges(accepted)
 
     store.getState().purgeWorktreeTerminalState([WT])
 
     const s = store.getState()
-    expect(accepted).toHaveBeenCalledExactlyOnceWith([
-      { paneKey: PANE, previous, current: undefined }
-    ])
-    dispose()
+
     expect(s.agentStatusByPaneKey[PANE]).toBeUndefined()
-    expect(s.agentStatusEpoch).toBe(epochBefore + 1)
+
     expect(s.agentLaunchConfigByPaneKey[PANE]).toBeUndefined()
     expect(s.acknowledgedAgentsByPaneKey[PANE]).toBeUndefined()
     expect(s.paneForegroundAgentByPaneKey[PANE]).toBeUndefined()

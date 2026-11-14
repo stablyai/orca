@@ -7,7 +7,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   AI_VAULT_SESSION_LIMITS,
   DEFAULT_AI_VAULT_SESSION_LIMIT,
@@ -21,14 +21,16 @@ export function AiVaultSessionLimitMenu({
   sessionLimit: AiVaultSessionLimit
   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const sessionLimitLabel =
     sessionLimit === 'unlimited'
-      ? translate('auto.components.right.sidebar.AiVaultSessionLimitMenu.unlimited', 'Unlimited')
-      : sessionLimit.toLocaleString(getIntlLocale())
+      ? t('auto.components.right.sidebar.AiVaultSessionLimitMenu.unlimited', 'Unlimited')
+      : sessionLimit.toLocaleString(intlLocale)
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
-        {translate(
+        {t(
           'auto.components.right.sidebar.AiVaultSessionLimitMenu.historyDepth',
           'History depth: {{value0}}',
           { value0: sessionLimitLabel }
@@ -36,7 +38,7 @@ export function AiVaultSessionLimitMenu({
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-60">
         <DropdownMenuLabel className="whitespace-normal font-normal leading-4">
-          {translate(
+          {t(
             'auto.components.right.sidebar.AiVaultSessionLimitMenu.performanceWarning',
             'Larger histories can slow the entire app, especially on remote hosts. Unlimited scans all available history.'
           )}
@@ -52,27 +54,24 @@ export function AiVaultSessionLimitMenu({
             <DropdownMenuRadioItem key={limit} value={String(limit)}>
               <span>
                 {limit === 'unlimited'
-                  ? translate(
+                  ? t(
                       'auto.components.right.sidebar.AiVaultSessionLimitMenu.unlimited',
                       'Unlimited'
                     )
-                  : limit.toLocaleString(getIntlLocale())}
+                  : limit.toLocaleString(intlLocale)}
               </span>
               <span className="ml-auto text-[11px] font-normal text-muted-foreground">
                 {limit === DEFAULT_AI_VAULT_SESSION_LIMIT
-                  ? translate(
+                  ? t(
                       'auto.components.right.sidebar.AiVaultSessionLimitMenu.recommended',
                       'Recommended'
                     )
                   : limit === 500
-                    ? translate(
+                    ? t(
                         'auto.components.right.sidebar.AiVaultSessionLimitMenu.mayBeSlower',
                         'May be slower'
                       )
-                    : translate(
-                        'auto.components.right.sidebar.AiVaultSessionLimitMenu.slowest',
-                        'Slowest'
-                      )}
+                    : t('auto.components.right.sidebar.AiVaultSessionLimitMenu.slowest', 'Slowest')}
               </span>
             </DropdownMenuRadioItem>
           ))}

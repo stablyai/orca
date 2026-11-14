@@ -23,7 +23,7 @@ import {
   type UploadBundleResult
 } from './diagnostic-bundle-upload'
 import { setActiveSink, startSpan } from './tracer'
-import { setSecurePathHardeningReporter } from '../../shared/secure-path-hardening-report'
+import { setSecurePathHardeningReporter } from '../../shared/secure-storage/secure-path-hardening-report'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 
 const CI_ENV_VARS = [
@@ -186,17 +186,35 @@ export async function collectDiagnosticBundle(
   meta: Pick<
     CollectBundleOptions,
     'appVersion' | 'platform' | 'arch' | 'osRelease' | 'orcaChannel' | 'lookbackMinutes'
-  >
+  > & { nativeHangCaptureId?: string }
 ): Promise<CollectedBundle> {
   // Flush before collection so the bundle includes the user’s latest action.
   await sink?.flushAsync()
+  const { nativeHangCaptureId, ...bundleMeta } = meta
+  let nativeHangRecord: Record<string, unknown> | undefined
+  if (process.platform === 'darwin' && resolveObservabilityConsent().localFileEnabled) {
+    const [captures, paths] = await Promise.all([
+      import('../hang-watchdog/native-hang-capture-store'),
+      import('../persistence/loading-store/user-data-path')
+    ])
+    const capture = await captures.readNativeHangCapture(
+      captures.nativeHangCaptureDirectory(paths.getCanonicalUserDataPath()),
+      nativeHangCaptureId
+    )
+    nativeHangRecord = capture
+      ? { type: 'native-hang-capture', status: 'complete', ...capture.artifact }
+      : nativeHangCaptureId
+        ? { type: 'native-hang-capture', status: 'unavailable', captureId: nativeHangCaptureId }
+        : undefined
+  }
   return _collectBundle({
     traceFilePath: getTraceFilePath(),
     maxFiles: DEFAULT_MAX_FILES,
     // The daemon writes a separate file; collection does not glob the directory.
     daemonLogFilePath: getDaemonLogFilePath(),
     daemonLogMaxFiles: DAEMON_LOG_MAX_FILES,
-    ...meta
+    ...bundleMeta,
+    nativeHangRecord
   })
 }
 

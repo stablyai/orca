@@ -1,7 +1,7 @@
 import type { MouseEvent } from 'react'
 import { Copy, Globe, ListTodo, MonitorUp, Pencil } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
 import { WorktreeCardDetailSection } from '../details/WorktreeCardDetailSection'
 import { DetailHeader } from '../metadata/WorktreeCardMetadataControls'
@@ -35,14 +35,15 @@ type CardTask = {
 function getCardTasks(
   issue: WorktreeCardIssueDisplay | null | undefined,
   linearIssue: WorktreeCardLinearIssueDisplay | null | undefined,
-  jiraIssue: WorktreeCardJiraIssueDisplay | null | undefined
+  jiraIssue: WorktreeCardJiraIssueDisplay | null | undefined,
+  t?: Translate
 ): CardTask[] {
   const tasks: CardTask[] = []
   if (issue) {
     tasks.push({
       item: { provider: 'github', type: 'issue', number: issue.number, url: issue.url },
       title: issue.title,
-      state: getIssueTaskState(issue.state),
+      state: getIssueTaskState(issue.state, t),
       labels: issue.labels
     })
   }
@@ -56,7 +57,7 @@ function getCardTasks(
         url: linearIssue.url
       },
       title: linearIssue.title,
-      state: getLinearTaskState(linearIssue.stateName, linearIssue.stateType),
+      state: getLinearTaskState(linearIssue.stateName, linearIssue.stateType, t),
       labels: linearIssue.labels
     })
   }
@@ -90,6 +91,7 @@ export function WorktreeCardTaskActions({
   actions: WorktreeCardTaskActionHandlers
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const github = item.provider === 'github'
   const openInOrca = !isCardTask
     ? undefined
@@ -108,43 +110,35 @@ export function WorktreeCardTaskActions({
     <WorktreeCardRowActionsMenu
       label={
         github
-          ? translate(
-              'auto.components.sidebar.WorktreeCardMeta.moreIssueActions',
-              'More issue actions'
-            )
-          : translate(
-              'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
-              'More {{value0}} actions',
-              { value0: workspaceAttachmentProviderLabel(item) }
-            )
+          ? t('auto.components.sidebar.WorktreeCardMeta.moreIssueActions', 'More issue actions')
+          : t('auto.components.sidebar.WorktreeCardMeta.dbe2d18972', 'More {{value0}} actions', {
+              value0: workspaceAttachmentProviderLabel(item)
+            })
       }
       onOpenChange={onOpenChange}
     >
       {url && openInOrca ? (
         <DropdownMenuItem onClick={openInOrca}>
           <MonitorUp className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeCardMeta.2c67730e07', 'Open in Orca')}
+          {t('auto.components.sidebar.WorktreeCardMeta.2c67730e07', 'Open in Orca')}
         </DropdownMenuItem>
       ) : null}
       {url && onOpenIssueInBrowser ? (
         <DropdownMenuItem onClick={() => onOpenIssueInBrowser(url)}>
           <Globe className="size-3.5" />
-          {translate(
-            'auto.components.sidebar.WorktreeCardMeta.openInOrcaBrowser',
-            'Open in Orca browser'
-          )}
+          {t('auto.components.sidebar.WorktreeCardMeta.openInOrcaBrowser', 'Open in Orca browser')}
         </DropdownMenuItem>
       ) : null}
       {onEdit ? (
         <DropdownMenuItem onClick={onEdit}>
           <Pencil className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeCardMeta.807b13b9ec', 'Edit issue')}
+          {t('auto.components.sidebar.WorktreeCardMeta.807b13b9ec', 'Edit issue')}
         </DropdownMenuItem>
       ) : null}
       {url ? (
         <DropdownMenuItem onClick={() => onCopyLink(url)}>
           <Copy className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeCardMeta.copyLink', 'Copy link')}
+          {t('auto.components.sidebar.WorktreeCardMeta.copyLink', 'Copy link')}
         </DropdownMenuItem>
       ) : null}
     </WorktreeCardRowActionsMenu>
@@ -168,7 +162,8 @@ export function WorktreeCardTaskDetailSection({
   onOpenLink: (url: string, event: MouseEvent) => void
   onManageLinks?: (event: MouseEvent) => void
 }): React.JSX.Element | null {
-  const tasks = getCardTasks(issue, linearIssue, jiraIssue)
+  const t = useTranslate()
+  const tasks = getCardTasks(issue, linearIssue, jiraIssue, t)
   if (!tasks.length) {
     return null
   }
@@ -176,7 +171,7 @@ export function WorktreeCardTaskDetailSection({
     <WorktreeCardDetailSection>
       <DetailHeader
         icon={<ListTodo className="size-3" />}
-        label={`${translate('workspace.links.tasks', 'Issues & tasks')} · ${tasks.length}`}
+        label={`${t('workspace.links.tasks', 'Issues & tasks')} · ${tasks.length}`}
         onAddReference={onManageLinks}
       />
       <div className="divide-y divide-border">

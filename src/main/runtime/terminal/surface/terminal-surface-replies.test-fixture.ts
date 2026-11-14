@@ -12,11 +12,12 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import type { RuntimeSyncWindowGraph, RuntimeTerminalShow } from '../../../../shared/runtime-types'
+import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import { applyCommandToSession } from '../../../persistence/terminal-topology/terminal-pane-admission'
+import { applyCommandToSession } from '../../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
 export const SURFACE_TAB_ID = '44444444-4444-4444-8444-444444444444'
