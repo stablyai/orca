@@ -4,7 +4,10 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { GroupHookCheckResult } from '../../../../../../shared/project-group-hooks'
 import { projectGroupHookOwner } from '../../../../../../shared/workspace-hook-owner'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
+import {
+  PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
+  PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
+} from '../../../../../../shared/worktree-runtime-capabilities'
 import { getFolderSourceRepos } from '../../../../../../shared/folder-workspaces/folder-workspace-source-repos'
 import { projectGroupSetupExample } from '../../../../../../shared/project-group-setup-example'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
@@ -14,12 +17,46 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useShallow } from 'zustand/react/shallow'
 import { getFolderWorkspaceAgentLaunchFact } from '@/components/sidebar/workspace-creation/folder/folder-workspace-agent-startup'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
-import { GROUP_SETUP_HOOKS_TEMPLATE } from './repository-hook-settings-draft'
+import { groupHookYamlPresentation } from './repository-hook-settings-draft'
+import type {
+  ProjectGroupHookSupport,
+  ProjectGroupSettingsEntry
+} from '@/hooks/use-supported-group-hook-settings'
 
 export function ProjectGroupHooksSection({
   group
 }: {
+  group: ProjectGroupSettingsEntry
+}): React.JSX.Element | null {
+  return group.hookSupport ? (
+    <GroupHooksEditor group={group} support={group.hookSupport} />
+  ) : (
+    <ObservedGroupHooksSection group={group} />
+  )
+}
+
+function ObservedGroupHooksSection({ group }: { group: ProjectGroup }): React.JSX.Element | null {
+  const owner = projectGroupHookOwner(group)
+  const setup = useFolderSetupSupport(owner, PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY)
+  const archive = useFolderSetupSupport(owner, PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY)
+  return (
+    <GroupHooksEditor
+      group={group}
+      support={{
+        setup: setup === 'supported',
+        archive: archive === 'supported',
+        pending: setup === 'pending' || archive === 'pending'
+      }}
+    />
+  )
+}
+
+function GroupHooksEditor({
+  group,
+  support
+}: {
   group: ProjectGroup
+  support: ProjectGroupHookSupport
 }): React.JSX.Element | null {
   const t = useTranslate()
   const [inspection, setInspection] = useState<GroupHookCheckResult | null>(null)
@@ -30,7 +67,6 @@ export function ProjectGroupHooksSection({
   const owner = projectGroupHookOwner(
     inspection ? { ...group, hookSettings: inspection.hookSettings } : group
   )
-  const support = useFolderSetupSupport(owner, PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY)
   const [repos, groups, platform] = useAppStore(
     useShallow((state) => {
       const facts = getFolderWorkspaceAgentLaunchFact(state, group)
@@ -42,8 +78,9 @@ export function ProjectGroupHooksSection({
     })
   )
   const hostId = getRepoExecutionHostId(group)
+  const canInspect = support.setup && (!support.pending || inspection !== null)
   useEffect(() => {
-    if (support !== 'supported') {
+    if (!canInspect) {
       return
     }
     let cancelled = false
@@ -58,8 +95,8 @@ export function ProjectGroupHooksSection({
     return () => {
       cancelled = true
     }
-  }, [hostId, group.id, support])
-  if (!owner || support !== 'supported') {
+  }, [hostId, group.id, canInspect])
+  if (!owner || !support.setup) {
     return null
   }
   const example = platform
@@ -123,19 +160,25 @@ export function ProjectGroupHooksSection({
       }
     })
   }
+  const yamlPresentation = groupHookYamlPresentation(support.archive)
   const inspectionReady =
     inspection !== null && !inspection.unavailable && inspection.status !== 'error'
   return (
-    <fieldset ref={fieldset} disabled={!inspectionReady || saving} className="min-w-0">
+    <fieldset
+      ref={fieldset}
+      disabled={support.pending || !inspectionReady || saving}
+      className="min-w-0"
+    >
       <RepositoryHooksSection
         repo={owner}
-        showArchive={false}
+        showArchive={yamlPresentation.archive}
+        yamlPresentation={yamlPresentation}
         yamlHooks={inspection?.hooks ?? null}
         hasHooksFile={inspection?.hasHooks ?? false}
         hooksInspectionReady={inspectionReady}
         mayNeedUpdate={inspection?.mayNeedUpdate ?? false}
         copiedTemplate={false}
-        onCopyTemplate={() => void window.api.ui.writeClipboardText(GROUP_SETUP_HOOKS_TEMPLATE)}
+        onCopyTemplate={() => void window.api.ui.writeClipboardText(yamlPresentation.template)}
         setupExample={example}
         onUpdateHookSettings={updateHookSettings}
       />
