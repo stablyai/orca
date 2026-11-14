@@ -116,6 +116,12 @@ describe('resolveChatForkSelection', () => {
     expect(selection).toMatchObject({ agent: 'claude', path: 'recap', openAs: 'chat' })
   })
 
+  it('starts another agent on a host that doesn’t list this chat’s own', () => {
+    const selection = resolve({ picks: { hostId: 'laptop' }, targetAgents: ['codex'] })
+    expect(selection).toMatchObject({ agent: 'codex', path: 'recap' })
+    expect(selection.agentChoices).toContainEqual({ agent: 'claude', enabled: false })
+  })
+
   it('relays the exact copy to another host, and to a terminal on this one', () => {
     expect(resolve({ picks: { hostId: 'laptop' } })).toMatchObject({ path: 'relay' })
     expect(resolve({ picks: { openAs: 'terminal' } })).toMatchObject({

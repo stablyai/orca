@@ -95,7 +95,10 @@ export function resolveChatForkSelection(input: {
   const relaysTo = source.canExport && target?.canImport === true
   // A recap reaches any connected host that starts a chat or a CLI with a first message.
   const recapAllowed = target?.canFirstMessage === true || target?.canLaunchTerminal === true
-  const sameAgentAllowed = (sameHost && source.canCopy) || relaysTo || recapAllowed
+  // Another host starts only the agents it lists, this chat's own included.
+  const listedThere = sameHost || input.targetAgents?.includes(source.agent) === true
+  const sameAgentAllowed =
+    (sameHost && source.canCopy) || ((relaysTo || recapAllowed) && listedThere)
   const others = (input.targetAgents ?? []).filter((agent) => agent !== source.agent)
   const agentChoices = [
     { agent: source.agent, enabled: sameAgentAllowed },
