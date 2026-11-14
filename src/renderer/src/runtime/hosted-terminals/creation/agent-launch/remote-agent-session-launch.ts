@@ -35,9 +35,11 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
   } catch (error) {
     if (
       error instanceof RuntimeRpcCallError &&
-      (error.code === 'agent_session_legacy_required' || error.code === 'method_not_found')
+      (error.code === 'agent_session_legacy_required' ||
+        error.code === 'method_not_found' ||
+        error.code === 'agent_session_operation_invalid')
     ) {
-      // Both refusals prove no dispatch: new host rejected old ownership or old host did not recognize the method.
+      // These refusals prove no dispatch committed: fallback to legacy agent launch is safe.
       return await args.legacy({ skipCompatibilityCheck: true })
     }
     throw error

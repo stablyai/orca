@@ -31,7 +31,12 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
 
 export const AGENT_SESSION_CLAIM_DIGEST_VERSION = 1 as const
 
-export const AGENT_SESSION_OPERATION_FUTURE_SKEW_MS = 5 * 60 * 1000
+/**
+ * Remote execution hosts (such as containerized devboxes, WSL without systemd-timesyncd, or
+ * VMs with clock drift) frequently differ by more than 5 minutes from client clocks.
+ * Allow up to 24 hours of forward skew, matching the backward expiration window.
+ */
+export const AGENT_SESSION_OPERATION_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000
 export const AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS = 24 * 60 * 60 * 1000
 /** Oldest an operation can be when admitted, plus the host tombstone lifetime after admission. */
 export const AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS =
