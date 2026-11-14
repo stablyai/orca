@@ -6,7 +6,7 @@ import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-j
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionMessages } from '../agent-session/view/structured-agent-session-message-projection'
 import type { NativeChatTurnJournal } from './transcript/native-chat-turn-membership'
-import type { AgentSessionOptionsResult } from '../agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../agent-session/options/protocol/agent-session-options-result'
 import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../agent-session/agent-session-fork'
 import { nativeChatTurnMembership } from './transcript/native-chat-turn-membership'
 import type { NativeChatMessage } from './native-chat-types'

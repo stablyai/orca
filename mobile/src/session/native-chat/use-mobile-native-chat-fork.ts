@@ -12,7 +12,7 @@ import {
   decodeAgentSessionAgentsResult,
   type AgentSessionRegisteredAgent
 } from '../../../../src/shared/agent-session/agent-session-registered-agents'
-import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY

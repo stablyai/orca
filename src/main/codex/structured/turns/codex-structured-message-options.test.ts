@@ -1,9 +1,9 @@
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
 } from '../../../../shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionMessageSelection } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
+import { structuredAgentSessionMessageSelection } from '../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import { captureStructuredExecutionOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-execution-options'
 import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 import { describe, expect, it, vi } from 'vitest'

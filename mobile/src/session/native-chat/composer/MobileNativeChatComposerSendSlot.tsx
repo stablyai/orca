@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import type { TextInputInstance } from 'react-native'
 import { isStructuredAgentSessionHostCommand } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
-import { agentSessionInteractionCommand } from '../../../../../src/shared/agent-session/options/agent-session-interaction-mode'
+import { agentSessionInteractionCommand } from '../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'

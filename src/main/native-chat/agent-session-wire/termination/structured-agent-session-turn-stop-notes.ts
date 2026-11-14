@@ -2,7 +2,7 @@
 
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { structuredAgentSessionStopNoteIdentity } from '../operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'

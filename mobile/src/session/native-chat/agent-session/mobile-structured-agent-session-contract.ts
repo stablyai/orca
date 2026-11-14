@@ -29,7 +29,7 @@ import type { NativeChatContextUsageSummary } from '../../../../../src/shared/na
 import type { MobileStructuredInterruptedContinue } from '../composer/use-mobile-structured-interrupted-continue'
 import type { MobileStructuredThreadGoal } from '../input/use-mobile-structured-thread-goal'
 import type { MobileStructuredSends } from '../composer/use-mobile-structured-sends'
-import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
+import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { MobileNativeChatUsageLimit } from '../use-mobile-native-chat-usage-limit'
 
 export type StructuredMobileSession = Omit<

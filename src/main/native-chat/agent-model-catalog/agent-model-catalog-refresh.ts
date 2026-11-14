@@ -1,6 +1,6 @@
 import { resolveAgentModelCatalogAccount } from './agent-model-catalog-account-resolution'
 import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps

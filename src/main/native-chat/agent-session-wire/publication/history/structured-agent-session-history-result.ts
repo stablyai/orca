@@ -1,6 +1,6 @@
 import { withForkMarker, type ForkMarker } from './agent-session-fork-marker'
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { agentSessionProviderHandleChainHead } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { agentSessionProviderHandleChainHead } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentSessionHistoryRequest,

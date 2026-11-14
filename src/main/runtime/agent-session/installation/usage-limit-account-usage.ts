@@ -1,4 +1,4 @@
-import { agentSessionAccountHomePath } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHomePath } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'

@@ -20,7 +20,7 @@ import type { StructuredAgentSessionEventTarget } from '../structured-agent-sess
 import type { StructuredAgentSessionRevisionResolver } from '../structured-agent-session-journal-views'
 import { estimateStructuredAgentSessionItemBytes } from '../structured-agent-session-event-sink-estimate'
 import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const ROW: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'row' }
 

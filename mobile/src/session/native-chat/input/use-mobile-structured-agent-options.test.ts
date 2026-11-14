@@ -1,11 +1,11 @@
-import { structuredAgentSessionOptionStamp } from '../../../../../src/shared/agent-session/options/structured-agent-session-option-state'
+import { structuredAgentSessionOptionStamp } from '../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-option-state'
 import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionResult
 } from '../../../../../src/shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { StructuredAgentSessionMutationResult } from '../agent-session/mobile-structured-agent-session-rpc'
 import { rememberMobileCreatedStructuredSession } from '../agent-session/mobile-created-structured-sessions'
 

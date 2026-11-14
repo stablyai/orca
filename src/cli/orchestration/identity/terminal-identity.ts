@@ -6,7 +6,7 @@ import { hasStructuredSessionMarker } from '../../../shared/structured-session-m
 import {
   injectedSessionAddress,
   readInjectedAgentSessionId
-} from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
+} from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { sessionAddressForHost } from './session-caller-flags'
 
 // --worktree/--terminal name the command's target, possibly on another host; only the caller's cwd scopes inference.

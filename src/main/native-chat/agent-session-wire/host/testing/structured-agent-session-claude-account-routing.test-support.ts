@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { agentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionJournalIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   ClaudeProfileRouter,

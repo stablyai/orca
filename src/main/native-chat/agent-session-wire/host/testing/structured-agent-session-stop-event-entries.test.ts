@@ -23,7 +23,7 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import { structuredQueuePauses } from '../../delivery/structured-agent-session-queued-pause'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 
 let rig: QueuedMessageTestRig
 afterEach(async () => rig.dispose())

@@ -8,7 +8,7 @@ import {
   reusePromptProjection,
   type PromptProjection
 } from './structured-agent-session-actionable-prompts'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 
 import { isHistoricalProviderTimelineItem } from '../../agent-session-timeline/provider-timeline-history'

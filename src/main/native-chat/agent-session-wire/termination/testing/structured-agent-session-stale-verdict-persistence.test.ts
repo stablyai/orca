@@ -2,14 +2,14 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import '../structured-agent-session-dead-generation-settlement'
 import { settleStaleStructuredAgentSessionState } from '../structured-agent-session-stale-state-settlement'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 import {
   PROVEN,

@@ -6,7 +6,7 @@ import {
   agentSessionStoppedHistoryOwed,
   selectStoppedHistory,
   type StoppedHistoryDelivery
-} from '../../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 // Select carried history inside serialized handover to deliver each message once across devices.
 

@@ -1,4 +1,4 @@
-import { agentSessionInteractionCommand } from '../options/agent-session-interaction-mode'
+import { agentSessionInteractionCommand } from '../options/permissions/agent-session-interaction-mode'
 import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {

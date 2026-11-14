@@ -6,7 +6,7 @@ import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionResult
 } from '../../../../../src/shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type {

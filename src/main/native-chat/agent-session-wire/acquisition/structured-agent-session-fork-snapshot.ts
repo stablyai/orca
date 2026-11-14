@@ -1,6 +1,6 @@
 import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
-import { savedRewindKeys } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { savedRewindKeys } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey

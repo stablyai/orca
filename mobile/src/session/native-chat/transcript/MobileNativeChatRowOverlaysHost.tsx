@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
+import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
 import { MobileNativeChatImageViewer } from '../visual/MobileNativeChatImageViewer'

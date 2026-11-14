@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
@@ -8,7 +8,7 @@ import {
   createStructuredAgentSessionOptionState,
   type StructuredAgentSessionOptionState
 } from '../../../../shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionOptionSnapshot } from '../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
+import { structuredAgentSessionOptionSnapshot } from '../../../../shared/agent-session/options/view/structured-agent-session-option-snapshot'
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { CodexAcquisitionWindow } from '../acquisition/codex-structured-acquisition-window'
 import { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'

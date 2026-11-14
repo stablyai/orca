@@ -8,7 +8,7 @@ import type { ProviderTimelineEvent } from '../../native-chat/agent-session-time
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import { AcpHistoryJournalOverlay, type AcpHistoryItem } from './acp-history-journal-overlay'
 import {

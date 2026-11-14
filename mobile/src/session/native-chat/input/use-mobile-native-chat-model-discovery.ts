@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as z from 'zod'
 import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
-import type { CatalogModel } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+import type { CatalogModel } from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels

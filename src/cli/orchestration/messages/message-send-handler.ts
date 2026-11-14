@@ -10,7 +10,7 @@ import {
 import { withResolvedNextCommands } from '../recovery/orchestration-mutation-recovery'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/types'
-import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
+import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { requireWorkerDoneSettlement } from '../workers/orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from '../recovery/mutation-request'

@@ -1,4 +1,4 @@
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 import type {
   ClaudeStructuredLaunch,
   ClaudeStructuredSdkOptions

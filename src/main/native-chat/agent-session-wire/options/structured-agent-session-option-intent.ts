@@ -12,7 +12,7 @@ import type {
   AgentSessionTurnContext,
   TurnOutcome
 } from '../operations/structured-agent-session-turns'
-import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import {
   type savedAgentSessionCatalogModels,
   structuredAgentSessionPickReply

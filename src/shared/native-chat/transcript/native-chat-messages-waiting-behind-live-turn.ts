@@ -3,7 +3,7 @@ import type {
   AgentJournalSubmission
 } from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../agent-session/agent-session-wire'
-import { readAgentJournalTurn } from '../../agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../agent-session/lifecycle/records/agent-session-turn-record'
 import type { NativeChatRole } from '../native-chat-types'
 import { isStructuredAgentSessionCommandTurn } from '../../agent-session/structured-agent-session-command-entry'
 import { runningStructuredAgentSessionTurnScope } from '../../agent-session/view/structured-agent-session-live-turn'

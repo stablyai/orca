@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AgentSessionOptionResult } from '../../../../../src/shared/agent-session/agent-session-wire'
-import { acceptedStructuredSessionSelectionOutcome } from '../../../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
-import type { StructuredSessionSelectionController } from '../../../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
+import { acceptedStructuredSessionSelectionOutcome } from '../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
+import type { StructuredSessionSelectionController } from '../../../../../src/shared/agent-session/options/selection/structured-agent-session-selection-operations'
 import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
   nativeChatModelPillLabel,

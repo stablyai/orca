@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
@@ -13,7 +13,7 @@ import { StructuredAgentSessionStatusFeed } from '../structured-agent-session-st
 
 import type { StructuredAgentSessionStatusSink } from '../structured-agent-session-status-ownership'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const SESSION = 'reenter-session'
 const journals = createTrackedJournalOpener()

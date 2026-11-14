@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +7,7 @@ import type { AgentSessionRecord } from '../../../../../../shared/agent-session/
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { nativeChatScratchFolderFor } from '../../../../../native-chat/conversation-files/native-chat-scratch-folder'
 import { nativeChatVisualRevision } from '../../../../../native-chat/conversation-files/native-chat-visual-file-read'

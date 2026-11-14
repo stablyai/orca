@@ -4,7 +4,7 @@ import {
   agentStatusEvidenceObservedAt
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { mainAgentStatusEqual } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 import { programStatusFacetsEqual } from '../../../../shared/program-status/facet'
 import type {

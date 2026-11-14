@@ -1,4 +1,4 @@
-import { createClaudeCatalogOptions } from '../../agent-session/options/agent-session-option-catalog-claude-codex'
+import { createClaudeCatalogOptions } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import {
   getAgentSessionOptionCatalog,
   mergeCatalogModels,
@@ -7,7 +7,7 @@ import {
 import type {
   AgentSessionOptionCatalog,
   CatalogModel
-} from '../../agent-session/options/agent-session-option-catalog-types'
+} from '../../agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { CommitMessageModelCapability } from '../../source-control/ai/generation/commit-message-agent-spec'
 
