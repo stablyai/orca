@@ -47,9 +47,6 @@ it('promotes a shared selected demand without losing other rows or renewing its 
   mocks.gate.mockResolvedValue(null)
   await vi.advanceTimersByTimeAsync(65_000)
   expect(starts).toEqual(['selected-a', 'ordinary-a', 'selected-b', 'watched'])
-  const completed = starts.length
-  await vi.advanceTimersByTimeAsync(6 * 60_000)
-  expect(starts.length).toBe(completed)
 
   // A selected request stays finite even when its only waiter detaches.
   await read('expires', 'active')

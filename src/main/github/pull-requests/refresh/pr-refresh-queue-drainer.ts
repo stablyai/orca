@@ -169,7 +169,7 @@ export class PRRefreshQueueDrainer {
           )
         }
 
-        const joinedRead = next.hosted?.prepared.pending()
+        let joinedRead = next.hosted?.prepared.pending()
         if (isBackground(next.reason) && !joinedRead) {
           const checkRateLimit = () => prRefreshRateLimitPausedUntil(next.candidate, true)
           const pausedUntil = await (next.hosted
@@ -207,6 +207,8 @@ export class PRRefreshQueueDrainer {
           (await preparePRBranchRead(
             ...candidateReadRequest(next.candidate, next.reason, { watchPRKey: next.watch?.prKey })
           ))
+        // Automatic work joins a read already running for its request; a user's action reads fresh.
+        joinedRead ??= bypassesFreshnessDelay(next.reason) ? undefined : prepared.pending()
         const settle: PRReadSettlement = (outcome, producer) => {
           if (!prepared.isCurrent()) {
             return outcome
@@ -221,7 +223,8 @@ export class PRRefreshQueueDrainer {
             prepared,
             this.queue,
             next.hosted ? { retained: producer.retained } : producer,
-            Boolean(next.hosted) || this.visibility.has(next.key)
+            Boolean(next.hosted) || this.visibility.has(next.key),
+            this.queue.ownsRequest(next.key, requestSequence)
           )
           this.events.observe(next.candidate, settled, aliases)
           // A host job's read also plans the visible row of the same request, under its own claim.

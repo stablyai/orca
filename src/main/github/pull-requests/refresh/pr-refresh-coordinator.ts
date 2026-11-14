@@ -1,3 +1,4 @@
+import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
 import type {
   GitHubPRRefreshCandidate,
@@ -33,7 +34,8 @@ import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evid
 import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import {
   deliverablePRBranchOutcome,
-  setPRBranchReadCompletion
+  setPRBranchReadCompletion,
+  type PRBranchReadResult
 } from '../../client/lookup/pr-branch-read-resources'
 import { hostedPRReadSettlement } from './hosted-pr-read-settlement'
 
@@ -138,8 +140,23 @@ export async function runHostedPRSnapshot(
   }
   const pending = prepared.pending()
   if (pending) {
+    const timeout = new Error('Pull request snapshot wait timed out')
+    let result: PRBranchReadResult
+    try {
+      result = await sharedPromiseSettlementWaiters(pending).wait({
+        signal,
+        ...(acceptRevalidationOnly
+          ? { timeoutMs: Math.max(0, deadline - Date.now()), createTimeoutError: () => timeout }
+          : {}),
+        createAbortError: () => new Error('Pull request wait was cancelled')
+      })
+    } catch (error) {
+      if (error === timeout) {
+        return drainer.hostedJobs.complete(prepared, candidate, null, acceptRevalidationOnly)
+      }
+      throw error
+    }
     // A client that takes receipts gets only the request's current result; another gets its own.
-    const result = await pending
     const outcome = acceptRevalidationOnly
       ? deliverablePRBranchOutcome(prepared, result)
       : result.outcome

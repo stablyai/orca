@@ -123,7 +123,8 @@ export async function runImmediatePRRefresh(
         prepared,
         queue,
         producer,
-        visibility.has(key)
+        visibility.has(key),
+        queue.ownsRequest(key, requestSequence)
       )
       events.observe(candidate, settled, aliases)
       return settled

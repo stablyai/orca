@@ -233,7 +233,8 @@ export class PRRefreshRetryState {
    * it owes and keeps how to re-plan it. A read the exact cache kept also schedules the shared
    * error there; a full read the cache refused still owes its retry through its own claim. A newer
    * read of the request starting retires that retry and its claim, keeping the failure count and
-   * rate gate. Other outcomes, and reads with no demand, pass through.
+   * rate gate. Other outcomes, and reads with no demand, pass through. Only a read that still owns
+   * its request also holds the request's queued background work until that retry.
    */
   settleProducerError(
     outcome: PRRefreshOutcome,
@@ -242,7 +243,8 @@ export class PRRefreshRetryState {
     prepared: PreparedPRBranchRead,
     queue: PRRefreshQueue,
     producer: Parameters<PRReadSettlement>[1] = { retained: true },
-    demand = true
+    demand = true,
+    ownsRequest = true
   ): PRRefreshOutcome {
     if (outcome.kind !== 'upstream-error' || !demand || (!producer.retained && !producer.hold)) {
       return outcome
@@ -299,10 +301,12 @@ export class PRRefreshRetryState {
         timed: Number.isFinite(planned)
       }
     }
-    queue.protectBackgroundUntil(
-      key,
-      Math.max(this.errorGateAt(key, candidate, retryAt), rateLimitedUntil)
-    )
+    if (ownsRequest) {
+      queue.protectBackgroundUntil(
+        key,
+        Math.max(this.errorGateAt(key, candidate, retryAt), rateLimitedUntil)
+      )
+    }
     return result
   }
 }
