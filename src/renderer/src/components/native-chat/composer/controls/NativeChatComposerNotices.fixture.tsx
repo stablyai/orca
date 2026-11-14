@@ -2,7 +2,6 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 import { structuredSessionNotices } from '../../messages/notices/native-chat-structured-session-notices'
 import { structuredAgentSessionReadFailureNotice } from '../../messages/notices/structured-agent-session-read-failure-notice'
-import { translate } from '@/i18n/i18n'
 
 // Captured retained-opening read refusal: history is absent while creation still owns Retry.
 const refusal = {
@@ -96,28 +95,6 @@ export const antigravitySignIn = defineFixture({
           sessionError: null,
           composerError: null
         })}
-      />
-    </div>
-  )
-})
-
-export const forkWhileReplying = defineFixture({
-  width: 360,
-  render: () => (
-    <div className="native-chat-appearance p-4">
-      <NativeChatComposerNotices
-        notices={[
-          {
-            key: 'composer-error',
-            kind: 'error',
-            text: translate(
-              'components.native-chat.fork.commandWorking',
-              'Can’t fork while {{agent}} is replying. Run /fork again when it finishes.',
-              { agent: 'Codex' }
-            ),
-            onDismiss: () => {}
-          }
-        ]}
       />
     </div>
   )
