@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
@@ -26,8 +25,9 @@ const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
 /** A snapshot only counts under the owner it came from, so A's numbers never render as B's. */
 type OwnedUsage = {
-  ownerId: string
+  ownerId: string | null
   rateLimits: RateLimitState | null
+  accounts: ProviderAccountsSnapshot | null
   failure: OwnerUsageFailureReason | null
 }
 
@@ -46,6 +46,8 @@ export function getUsageOwnerHostScope(remoteOwner: RemoteUsageOwner | null): Ru
 
 export type OwnerUsageRateLimits = {
   rateLimits: RateLimitState
+  accounts: ProviderAccountsSnapshot | null
+  accountsUnverifiable: boolean
   /** Null when this device owns the shown usage. */
   remoteOwner: RemoteUsageOwner | null
   /** Forces the owning host to re-read usage; null when this device owns it. */
@@ -53,30 +55,37 @@ export type OwnerUsageRateLimits = {
 }
 
 /** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
-export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLimits {
+export function useOwnerUsageRateLimits(
+  local: RateLimitState,
+  ownerTarget?: RuntimeClientTarget,
+  includeAccounts = false
+): OwnerUsageRateLimits {
   const t = useTranslate()
-  const languageRevision = useUiLanguageRevision()
   // Why: route by the focused workspace's owner, never by the Active Server setting.
-  const { target } = useActiveAccountOwner(LOCAL_TARGET)
+  const activeOwner = useActiveAccountOwner(LOCAL_TARGET)
+  const target = ownerTarget ?? activeOwner.target
   const ownerId = runtimeTargetEnvironmentId(target)
   const ownerName = useAppStore(
     (s) => s.runtimeEnvironments.find((environment) => environment.id === ownerId)?.name ?? null
   )
   const [owned, setOwned] = useState<OwnedUsage | null>(null)
   const ownedRef = useRef<OwnedUsage | null>(null)
+  const usageGeneration = useRef(0)
 
   const apply = useCallback((next: OwnedUsage) => {
+    usageGeneration.current += 1
     ownedRef.current = next
     setOwned(next)
   }, [])
 
   // Why: losing contact must not erase what the host already vouched for.
   const fail = useCallback(
-    (owner: string, failure: OwnerUsageFailureReason) => {
+    (owner: string | null, failure: OwnerUsageFailureReason) => {
       const current = ownedRef.current
       apply({
         ownerId: owner,
         rateLimits: current?.ownerId === owner ? current.rateLimits : null,
+        accounts: current?.ownerId === owner ? current.accounts : null,
         failure
       })
     },
@@ -84,20 +93,31 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   )
 
   const applySnapshot = useCallback(
-    (owner: string, snapshot: ProviderAccountsSnapshot) => {
+    (owner: string | null, snapshot: ProviderAccountsSnapshot) => {
       if (snapshot.rateLimits) {
-        apply({ ownerId: owner, rateLimits: snapshot.rateLimits, failure: null })
+        apply({
+          ownerId: owner,
+          rateLimits: snapshot.rateLimits,
+          accounts: snapshot,
+          failure: null
+        })
       } else {
         // Why: a host that predates published usage answers without it; say so, never spin.
-        fail(owner, 'usage-not-published')
+        apply({
+          ownerId: owner,
+          rateLimits: null,
+          accounts: snapshot,
+          failure: 'usage-not-published'
+        })
       }
     },
-    [apply, fail]
+    [apply]
   )
 
   const ownerIdRef = useRef(ownerId)
   useEffect(() => {
     ownerIdRef.current = ownerId
+    usageGeneration.current += 1
   }, [ownerId])
   // Why: bumping reopens the stream; each open makes the host refresh stale usage.
   const [streamGeneration, setStreamGeneration] = useState(0)
@@ -106,10 +126,20 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
     if (!ownerId) {
       return
     }
+    // Older hosts do not poll usage for a paired stream.
+    const timer = setTimeout(
+      () => setStreamGeneration((value) => value + 1),
+      REMOTE_USAGE_STALE_REOPEN_MS
+    )
+    return () => clearTimeout(timer)
+  }, [ownerId, streamGeneration])
+
+  useEffect(() => {
+    if (!ownerId && !includeAccounts) {
+      return
+    }
     let active = true
     const reopen = (): void => setStreamGeneration((value) => value + 1)
-    // Why: older hosts never poll for a paired stream, so a long-lived one would freeze the meters.
-    const staleTimer = setTimeout(reopen, REMOTE_USAGE_STALE_REOPEN_MS)
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined
     const lost = (): void => {
       if (active) {
@@ -119,7 +149,7 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
       }
     }
     const watcher = watchProviderAccounts(
-      { kind: 'environment', environmentId: ownerId },
+      ownerId ? { kind: 'environment', environmentId: ownerId } : LOCAL_TARGET,
       {
         onSnapshot: (snapshot) => {
           if (active) {
@@ -129,20 +159,21 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
         // Why: timeout, closed stream and RPC failure all mean the owner's usage is unverifiable.
         onError: lost,
         onClosedAfterSnapshot: lost
-      }
+      },
+      { liveLocalUsage: true }
     )
     return () => {
       active = false
-      clearTimeout(staleTimer)
       clearTimeout(reconnectTimer)
       watcher.close()
     }
-  }, [ownerId, streamGeneration, applySnapshot, fail])
+  }, [ownerId, streamGeneration, includeAccounts, applySnapshot, fail])
 
   const refreshRemote = useCallback(async () => {
     if (!ownerId) {
       return
     }
+    const generation = ++usageGeneration.current
     try {
       const snapshot = await callRuntimeRpc<ProviderAccountsSnapshot>(
         { kind: 'environment', environmentId: ownerId },
@@ -150,8 +181,8 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
         { refreshUsage: true },
         { timeoutMs: REMOTE_USAGE_REFRESH_TIMEOUT_MS }
       )
-      // Why: a refresh that outlives an owner switch must not overwrite the new owner's usage.
-      if (ownerIdRef.current === ownerId) {
+      // A stream update, owner switch or newer refresh supersedes this request.
+      if (ownerIdRef.current === ownerId && usageGeneration.current === generation) {
         applySnapshot(ownerId, snapshot)
       }
     } catch {
@@ -169,29 +200,30 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
               t('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server')
           }
         : null,
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-    [ownerId, ownerName, languageRevision, t]
+    [ownerId, ownerName, t]
   )
 
+  const localOwnerLabel = t('stats.usage.localHost', 'This device')
   const ownerState = useMemo<OwnerUsageState>(() => {
-    if (!remoteOwner) {
+    if (!remoteOwner && !includeAccounts) {
       return { kind: 'local' }
     }
-    if (!owned || owned.ownerId !== remoteOwner.environmentId) {
+    const ownerLabel = remoteOwner?.label ?? localOwnerLabel
+    if (!owned || owned.ownerId !== ownerId) {
       return { kind: 'remote-pending' }
     }
     if (owned.failure) {
       return {
         kind: 'remote-unverifiable',
-        ownerLabel: remoteOwner.label,
+        ownerLabel,
         reason: owned.failure,
         lastKnown: owned.rateLimits
       }
     }
     return owned.rateLimits
-      ? { kind: 'remote', ownerLabel: remoteOwner.label, rateLimits: owned.rateLimits }
+      ? { kind: 'remote', ownerLabel, rateLimits: owned.rateLimits }
       : { kind: 'remote-pending' }
-  }, [remoteOwner, owned])
+  }, [remoteOwner, includeAccounts, ownerId, owned, localOwnerLabel])
 
   const rateLimits = useMemo(
     () => resolveOwnerUsageRateLimits(local, ownerState, t),
@@ -199,6 +231,8 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   )
   return {
     rateLimits,
+    accounts: owned?.ownerId === ownerId ? owned.accounts : null,
+    accountsUnverifiable: owned?.ownerId === ownerId && owned.failure !== null,
     remoteOwner,
     refreshRemote: ownerId ? refreshRemote : null
   }

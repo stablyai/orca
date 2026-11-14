@@ -3,9 +3,9 @@ import type {
   CodexRateLimitAccountsState
 } from '../../../../../shared/managed-account-types'
 import type { RateLimitState } from '../../../../../shared/rate-limit-types'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
+import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
@@ -55,17 +55,18 @@ function providerAccountsLoadError(provider: 'Claude' | 'Codex', cause: unknown)
   return new Error(`Could not load ${provider} accounts: ${message}`)
 }
 
-// Local services use one-shot reads/refetch after mutations. Remote accounts.subscribe supplies immediate snapshot and later usage; avoid accounts.list, which can block minutes behind broken-auth usage refresh.
+// Account pickers use local one-shot reads; usage views need the coherent roster and quota stream.
 export function watchProviderAccounts(
   target: RuntimeClientTarget,
   handlers: {
     onSnapshot: (snapshot: ProviderAccountsSnapshot) => void
     onError: (error: unknown) => void
-    /** Remote only: the stream ended after its first snapshot, so later usage is unverifiable. */
+    /** The stream ended after its first snapshot, so later usage is unverifiable. */
     onClosedAfterSnapshot?: () => void
-  }
+  },
+  options: { liveLocalUsage?: boolean } = {}
 ): ProviderAccountsWatcher {
-  if (target.kind === 'local') {
+  if (target.kind === 'local' && !options.liveLocalUsage) {
     let closed = false
     void Promise.allSettled([
       window.api.claudeAccounts.list(),
@@ -123,50 +124,59 @@ export function watchProviderAccounts(
   // Missing first snapshot otherwise looks perpetually loading; surface an error.
   const firstSnapshotTimer = window.setTimeout(() => {
     if (!closed && !receivedSnapshot) {
-      handlers.onError(new Error('Timed out waiting for remote provider accounts.'))
+      handlers.onError(new Error('Timed out waiting for provider accounts.'))
     }
   }, REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS)
 
-  void window.api.runtimeEnvironments
-    .subscribe(
-      {
-        selector: target.environmentId,
-        method: 'accounts.subscribe',
-        timeoutMs: REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS
-      },
-      {
-        onResponse: (response) => {
-          if (closed) {
-            return
+  const onClose = (): void => {
+    if (closed) {
+      return
+    }
+    if (!receivedSnapshot) {
+      handlers.onError(new Error('Provider account subscription closed.'))
+    } else {
+      handlers.onClosedAfterSnapshot?.()
+    }
+  }
+  const onResponse = (response: RuntimeRpcResponse<unknown>): void => {
+    if (closed) {
+      return
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: accounts.subscribe owns this payload on both transports.
+    const typed = response as RuntimeRpcResponse<ProviderAccountsSubscriptionMessage>
+    if (typed.ok === false) {
+      handlers.onError(new RuntimeRpcCallError(typed))
+      return
+    }
+    const message = typed.result
+    if ((message.type === 'ready' || message.type === 'snapshot') && message.snapshot) {
+      receivedSnapshot = true
+      window.clearTimeout(firstSnapshotTimer)
+      handlers.onSnapshot(message.snapshot)
+    } else if (message.type === 'end') {
+      onClose()
+    }
+  }
+  const stream =
+    target.kind === 'local'
+      ? window.api.runtime.subscribe({ method: 'accounts.subscribe', params: null }, onResponse)
+      : window.api.runtimeEnvironments.subscribe(
+          {
+            selector: target.environmentId,
+            method: 'accounts.subscribe',
+            timeoutMs: REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS
+          },
+          {
+            onResponse,
+            onError: (error) => {
+              if (!closed) {
+                handlers.onError(new Error(error.message))
+              }
+            },
+            onClose
           }
-          const typed = response as RuntimeRpcResponse<ProviderAccountsSubscriptionMessage>
-          if (typed.ok === false) {
-            handlers.onError(new RuntimeRpcCallError(typed))
-            return
-          }
-          const message = typed.result
-          if ((message.type === 'ready' || message.type === 'snapshot') && message.snapshot) {
-            receivedSnapshot = true
-            handlers.onSnapshot(message.snapshot)
-          }
-        },
-        onError: (error) => {
-          if (!closed) {
-            handlers.onError(new Error(error.message))
-          }
-        },
-        onClose: () => {
-          if (closed) {
-            return
-          }
-          if (!receivedSnapshot) {
-            handlers.onError(new Error('Remote provider account subscription closed.'))
-          } else {
-            handlers.onClosedAfterSnapshot?.()
-          }
-        }
-      }
-    )
+        )
+  void stream
     .then((handle) => {
       unsubscribe = handle.unsubscribe
       if (closed) {

@@ -557,7 +557,6 @@
 1 src/renderer/src/components/status-bar/icons.tsx
 3 src/renderer/src/components/status-bar/status-bar-density.ts
 2 src/renderer/src/components/status-bar/use-codex-switcher-controller.ts
-1 src/renderer/src/components/status-bar/use-owner-usage-rate-limits.ts
 1 src/renderer/src/components/status-bar/use-provider-account-list.ts
 1 src/renderer/src/components/status-bar/use-resource-usage-actions.ts
 1 src/renderer/src/components/status-bar/use-resource-view-visible.ts
