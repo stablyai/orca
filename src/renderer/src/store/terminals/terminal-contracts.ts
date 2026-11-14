@@ -1,8 +1,10 @@
 import type { AccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  SleepingAgentLaunchConfig,
+  AgentProviderSessionMetadata
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentAccountRestartResumeInput } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
@@ -81,6 +83,7 @@ export type CodexAccountRestart = {
     resumeProviderSession?: AgentProviderSessionMetadata
   } | null
   resultPtyId?: string
+  resultIncarnationId?: string
   condition?: AccountRestartCondition
   error?: string
 }

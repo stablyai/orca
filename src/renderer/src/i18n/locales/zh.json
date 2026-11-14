@@ -4298,6 +4298,7 @@
             "codexRestartBadgeLabel_other": "{{count}} 个 Codex 会话需要重启",
             "codexRestartBannerTitle_other": "{{count}} 个 Codex 会话仍在使用之前的账户。",
             "codexRestartBannerAction_other": "重启会话",
+            "codexRestartMixedTitle_other": "{{count}} 个 Codex 会话需要重启。",
             "codexRestartFailedTitle_other": "{{count}} 个 Codex 会话未能重启。",
             "codexRestartRetry": "重试"
           },

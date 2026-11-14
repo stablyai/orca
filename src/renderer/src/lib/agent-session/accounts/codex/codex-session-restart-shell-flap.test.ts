@@ -117,6 +117,66 @@ describe('spurious shell readings on Codex-launched panes', () => {
       nextAccountId: 'account-b'
     })
   })
+  it.each([
+    ['metadata', 1],
+    ['close', 0],
+    ['replacement', 0]
+  ] as const)(
+    'settles an account scan after a %s update against the current pane',
+    async (update, count) => {
+      const leafId = '00000000-0000-4000-8000-000000000001'
+      const layout = {
+        root: { type: 'leaf' as const, leafId },
+        activeLeafId: leafId,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [leafId]: 'pty-1' }
+      }
+      useAppStore.setState({ terminalLayoutsByTabId: { 'tab-1': layout } })
+      window.api.codexAccounts.listRecordedPaneLanes = vi
+        .fn()
+        .mockResolvedValue({ 'pty-1': 'host' })
+      vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
+        foregroundProcess: 'codex',
+        hasChildProcesses: true
+      })
+      const observed = Promise.withResolvers<void>()
+      const stale =
+        Promise.withResolvers<
+          { ptyId: string; launchAccountId: string; activeAccountId: string }[]
+        >()
+      vi.mocked(window.api.codexAccounts.listStalePanes).mockImplementation(() => {
+        observed.resolve()
+        return stale.promise
+      })
+      const scanning = markLiveCodexSessionsForRestart({
+        owner: focusedOwner(),
+        previousAccountLabel: ACCOUNT_A,
+        nextAccountLabel: ACCOUNT_B
+      })
+      await observed.promise
+      if (update === 'metadata') {
+        useAppStore.getState().setTabLayout('tab-1', {
+          ...layout,
+          buffersByLeafId: { [leafId]: 'retained scrollback' }
+        })
+      } else if (update === 'close') {
+        useAppStore.setState({ tabsByWorktree: {}, ptyIdsByTabId: {}, terminalLayoutsByTabId: {} })
+      } else {
+        useAppStore.setState({
+          ptyIdsByTabId: { 'tab-1': ['successor'] },
+          terminalLayoutsByTabId: {
+            'tab-1': { ...layout, ptyIdsByLeafId: { [leafId]: 'successor' } }
+          }
+        })
+      }
+      stale.resolve([
+        { ptyId: 'pty-1', launchAccountId: 'account-a', activeAccountId: 'account-b' }
+      ])
+      await scanning
+      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(count)
+    }
+  )
+
   it('drops a delayed scan after its originating tab closes', async () => {
     const inspection = Promise.withResolvers<{
       foregroundProcess: string

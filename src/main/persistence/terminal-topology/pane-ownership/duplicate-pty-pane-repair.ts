@@ -17,7 +17,7 @@ import {
 } from '../pane-moves/terminal-leaf-move'
 import type { TerminalTopologyCommitContext } from '../terminal-topology-commit'
 import { keepFrozen } from '../command-application/layout-command-commit'
-import { publishTerminalTopologyPartition } from '../terminal-topology-commit'
+import { publishTerminalTopologyPartition } from './terminal-topology-membership'
 
 export type DuplicatePtyPaneTransfer = {
   worktreeId: string

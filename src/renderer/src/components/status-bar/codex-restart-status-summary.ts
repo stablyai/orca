@@ -36,11 +36,9 @@ export function summarizeCodexRestartStatus(
   }
   const panes = currentCodexRestartPanes(state)
   const tabs = requests.length > 0 ? codexRestartTabIndex(state) : undefined
-  const failures = requests.filter(
-    (r) =>
-      ['failed', 'unresolved'].includes(r.phase) && isCurrentCodexAccountRestart(state, r, tabs)
-  )
-  const stalePtyIds = eligibleCodexRestartPtyIds(state, panes)
+  const currentRequests = requests.filter((r) => isCurrentCodexAccountRestart(state, r, tabs))
+  const failures = currentRequests.filter((r) => ['failed', 'unresolved'].includes(r.phase))
+  const stalePtyIds = eligibleCodexRestartPtyIds(state, panes, currentRequests)
   return {
     stalePtyIds,
     staleSessionCount: stalePtyIds.length,

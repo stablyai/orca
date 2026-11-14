@@ -1,3 +1,4 @@
+import { publishTerminalTopologyPartition } from './pane-ownership/terminal-topology-membership'
 import type { LayoutClientVisibility } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
@@ -20,8 +21,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   applyLayout,
   applyEditorFileRenamesInPartitions,
-  topologyCommitContext,
-  publishTerminalTopologyPartition
+  topologyCommitContext
 } from './terminal-topology-commit'
 import { keepFrozen } from './command-application/layout-command-commit'
 import { applyLayoutRenames } from './command-application/terminal-layout-renames-commit'

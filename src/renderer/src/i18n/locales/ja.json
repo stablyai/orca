@@ -4100,6 +4100,7 @@
             "codexRestartBadgeLabel_other": "{{count}} 件の Codex セッションの再起動が必要です",
             "codexRestartBannerTitle_other": "{{count}} 件の Codex セッションがまだ以前のアカウントを使用しています。",
             "codexRestartBannerAction_other": "セッションを再起動",
+            "codexRestartMixedTitle_other": "{{count}} 件の Codex セッションを再起動する必要があります。",
             "codexRestartFailedTitle_other": "{{count}} 件の Codex セッションを再起動できませんでした。",
             "codexRestartRetry": "再試行"
           },

@@ -237,9 +237,8 @@ export function createCodexAccountRestartActions(
         next[key] = {
           ...nextRequest,
           phase: 'accepted',
-          attemptId: createBrowserUuid(),
-          executorId: undefined,
-          resultPtyId: undefined
+          attemptId: nextRequest.resultPtyId ? nextRequest.attemptId : createBrowserUuid(),
+          executorId: undefined
         }
         return { paneAccountRestarts: next }
       })

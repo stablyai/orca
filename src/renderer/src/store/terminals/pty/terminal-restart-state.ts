@@ -11,9 +11,27 @@ import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 
 // Why: Codex notice cleanup shares this map with Claude switch restarts and must not drop them.
-function dropQueuedCodexRestart(pending: Record<string, PaneAccountRestart>, ptyId: string): void {
-  if (pending[ptyId] === 'codex') {
-    delete pending[ptyId]
+function dropQueuedCodexRestart(
+  pending: Record<string, PaneAccountRestart>,
+  ptyIds: ReadonlySet<string>,
+  cancelUndispatched = false
+): void {
+  for (const ptyId of ptyIds) {
+    if (pending[ptyId] === 'codex') {
+      delete pending[ptyId]
+    }
+  }
+  if (!cancelUndispatched) {
+    return
+  }
+  for (const [key, request] of Object.entries(pending)) {
+    if (
+      isCodexAccountRestart(request) &&
+      ptyIds.has(request.oldPtyId) &&
+      ['accepted', 'claimed', 'deferred'].includes(request.phase)
+    ) {
+      delete pending[key]
+    }
   }
 }
 
@@ -102,6 +120,7 @@ export function createTerminalRestartActions(
         const next = { ...s.codexRestartNoticeByPtyId }
         const nextPendingPaneAccountRestarts = { ...s.paneAccountRestarts }
         const eligible = currentCodexRestartPanes(s)
+        const cancelled = new Set<string>()
         for (const notice of notices) {
           const pane = eligible.get(notice.ptyId)
           if (!pane) {
@@ -111,7 +130,6 @@ export function createTerminalRestartActions(
             notice.origin &&
             (notice.origin.key !== pane.key ||
               notice.origin.tabCreatedAt !== pane.tabCreatedAt ||
-              notice.origin.layout !== s.terminalLayoutsByTabId[pane.tabId] ||
               notice.origin.hostId !== getExecutionHostIdForWorktree(s, pane.worktreeId) ||
               notice.origin.lifetime !== getTerminalNoticeLifetime(notice.ptyId))
           ) {
@@ -133,7 +151,7 @@ export function createTerminalRestartActions(
             )
           ) {
             delete next[notice.ptyId]
-            dropQueuedCodexRestart(nextPendingPaneAccountRestarts, notice.ptyId)
+            cancelled.add(notice.ptyId)
             continue
           }
           next[notice.ptyId] = {
@@ -160,6 +178,7 @@ export function createTerminalRestartActions(
           }
           noticedPtyIds.push(notice.ptyId)
         }
+        dropQueuedCodexRestart(nextPendingPaneAccountRestarts, cancelled, true)
         return {
           codexRestartNoticeByPtyId: next,
           paneAccountRestarts: nextPendingPaneAccountRestarts
@@ -209,7 +228,7 @@ export function createTerminalRestartActions(
         const next = { ...s.codexRestartNoticeByPtyId }
         const nextPendingPaneAccountRestarts = { ...s.paneAccountRestarts }
         delete next[ptyId]
-        dropQueuedCodexRestart(nextPendingPaneAccountRestarts, ptyId)
+        dropQueuedCodexRestart(nextPendingPaneAccountRestarts, new Set([ptyId]))
         return {
           codexRestartNoticeByPtyId: next,
           paneAccountRestarts: nextPendingPaneAccountRestarts
@@ -221,6 +240,7 @@ export function createTerminalRestartActions(
         // Dismissal keeps launch-account provenance but answers prompt/frees input without scheduling restart.
         const next = { ...s.codexRestartNoticeByPtyId }
         const nextPendingPaneAccountRestarts = { ...s.paneAccountRestarts }
+        const cancelled = new Set<string>()
         let changed = false
         for (const ptyId of ptyIds) {
           const notice = next[ptyId]
@@ -229,12 +249,13 @@ export function createTerminalRestartActions(
           }
           const { restartRequested: _restartRequested, ...kept } = notice
           next[ptyId] = { ...kept, dismissed: true }
-          dropQueuedCodexRestart(nextPendingPaneAccountRestarts, ptyId)
+          cancelled.add(ptyId)
           changed = true
         }
         if (!changed) {
           return s
         }
+        dropQueuedCodexRestart(nextPendingPaneAccountRestarts, cancelled, true)
         return {
           codexRestartNoticeByPtyId: next,
           paneAccountRestarts: nextPendingPaneAccountRestarts
@@ -249,7 +270,7 @@ export function createTerminalRestartActions(
         }
         const { restartRequested: _restartRequested, ...kept } = notice
         const nextPendingPaneAccountRestarts = { ...s.paneAccountRestarts }
-        dropQueuedCodexRestart(nextPendingPaneAccountRestarts, ptyId)
+        dropQueuedCodexRestart(nextPendingPaneAccountRestarts, new Set([ptyId]))
         return {
           codexRestartNoticeByPtyId: { ...s.codexRestartNoticeByPtyId, [ptyId]: kept },
           paneAccountRestarts: nextPendingPaneAccountRestarts

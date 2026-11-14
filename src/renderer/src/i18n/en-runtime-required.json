@@ -1191,6 +1191,8 @@
             "codexRestartBannerAction_other": "Restart sessions",
             "codexRestartBannerTitle_one": "{{count}} Codex session still uses the previous account.",
             "codexRestartBannerTitle_other": "{{count}} Codex sessions still use the previous account.",
+            "codexRestartMixedTitle_one": "{{count}} Codex session needs a restart.",
+            "codexRestartMixedTitle_other": "{{count}} Codex sessions need a restart.",
             "codexRestartFailedTitle_one": "{{count}} Codex session didn't restart.",
             "codexRestartFailedTitle_other": "{{count}} Codex sessions didn't restart.",
             "codexSignInError": "Codex sign-in failed. Please try again."

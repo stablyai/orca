@@ -87,7 +87,11 @@ export async function connectIpcPty(
     // Fence before spawning: redeployed relays recycle IDs, so earlier buffered state belongs to a previous PTY lifetime.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
-    if (options.accountRestart && options.shouldContinue && !options.shouldContinue(spawnResult)) {
+    if (
+      (options.accountRestart || options.isAccountRestartCurrent) &&
+      options.shouldContinue &&
+      !options.shouldContinue(spawnResult)
+    ) {
       return
     }
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)

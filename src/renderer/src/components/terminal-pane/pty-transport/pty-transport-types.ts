@@ -204,6 +204,7 @@ export type PtyTransport = {
     /** Consume only at fresh spawn dispatch; main stops the returned predecessor before resolving ownership. Reattach leaves retirement with the caller. */
     claimReplacedPtyId?: () => string | null
     /** Fence dispatch and, for account restarts, acceptance before binding a returned owner. */
+    isAccountRestartCurrent?: () => boolean
     shouldContinue?: (result?: { id: string; incarnationId?: string | null }) => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>

@@ -1,3 +1,5 @@
+import { reconcileTrackedPtyBindingGenerations } from '../../loading-store/terminal-bindings/pty-binding-generations'
+import type { TerminalTopologyCommitContext } from '../terminal-topology-commit'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -75,4 +77,20 @@ export function assignWorkspaceSessionPartition(
   }
   state.workspaceSessionsByHostId = { ...state.workspaceSessionsByHostId, [hostId]: session }
   return 'workspaceSessionsByHostId'
+}
+
+export function publishTerminalTopologyPartition(
+  context: TerminalTopologyCommitContext,
+  hostId: ExecutionHostId,
+  session: WorkspaceSessionState
+): void {
+  if (context.generations) {
+    reconcileTrackedPtyBindingGenerations(
+      context.generations,
+      hostId,
+      context.getSession(hostId),
+      session
+    )
+  }
+  context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, session))
 }

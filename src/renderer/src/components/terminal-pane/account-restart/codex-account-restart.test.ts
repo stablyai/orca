@@ -1,4 +1,14 @@
 import {
+  leaf,
+  sibling,
+  key,
+  notice,
+  seed,
+  receipt,
+  snapshot,
+  mountedSpawnSession
+} from './codex-account-restart.test-fixture'
+import {
   admitTerminalNoticeLifetime,
   retireTerminalNoticeLifetime
 } from '../provider-notices/terminal-notice-lifetime'
@@ -9,18 +19,20 @@ import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/run
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { bindStartFreshSpawn } from '../pty-connection/spawn/fresh-spawn-start'
 import { settleFreshPaneSpawn } from '../pty-connection/spawn/fresh-pane-spawn-settlement'
-import type { PtyTransport } from '../pty-transport/pty-transport-types'
-type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 import { getPaneSpawnDeferral } from '../session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { selectCodexStaleSessionCount } from '@/components/status-bar/codex-restart-status-summary'
+import {
+  selectCodexRestartStatus,
+  selectCodexStaleSessionCount
+} from '@/components/status-bar/codex-restart-status-summary'
 import { codexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
 import {
   continueCodexAccountRestart,
   prepareCodexAccountRestart,
   failCodexAccountRestart,
-  retryCodexAccountRestarts
+  retryCodexAccountRestarts,
+  restartCodexAccountSessions
 } from './codex-account-restart-execution'
 import {
   sweepUnclaimedCodexPaneRestarts,
@@ -42,46 +54,8 @@ vi.mock('@/lib/agent-session/accounts/agent-account-restart-startup', () => ({
   buildPaneAccountRestartStartup: buildStartup
 }))
 
-const leaf = '00000000-0000-4000-8000-000000000001'
-const sibling = '00000000-0000-4000-8000-000000000002'
-const key = `tab:${leaf}`
 const spawn = vi.fn()
 const call = vi.fn()
-const notice = { previousAccountLabel: 'old', nextAccountLabel: 'new' }
-function seed() {
-  useAppStore.setState({
-    tabsByWorktree: {
-      wt: [
-        {
-          id: 'tab',
-          worktreeId: 'wt',
-          createdAt: 1,
-          ptyId: 'old',
-          title: 'Codex',
-          customTitle: null,
-          color: null,
-          sortOrder: 0
-        }
-      ]
-    },
-    ptyIdsByTabId: { tab: ['old', 'sibling'] },
-    terminalLayoutsByTabId: {
-      tab: {
-        root: {
-          type: 'split',
-          direction: 'horizontal',
-          first: { type: 'leaf', leafId: leaf },
-          second: { type: 'leaf', leafId: sibling }
-        },
-        activeLeafId: leaf,
-        expandedLeafId: null,
-        ptyIdsByLeafId: { [leaf]: 'old', [sibling]: 'sibling' }
-      }
-    },
-    codexRestartNoticeByPtyId: { old: notice },
-    paneAccountRestarts: {}
-  })
-}
 function accepted() {
   useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
   const request = useAppStore.getState().claimCodexAccountRestart(key)
@@ -90,90 +64,6 @@ function accepted() {
   }
   return request
 }
-function receipt(
-  request: ReturnType<typeof accepted>,
-  stop: 'not-started' | 'confirmed-retired' | 'unknown',
-  kind: 'original' | 'empty'
-) {
-  return new Error(
-    formatAccountRestartFailure('launch refused', {
-      v: 1,
-      requestId: request.requestId,
-      attemptId: request.attemptId,
-      stop,
-      outcome: 'terminal',
-      current: {
-        kind,
-        bindingGeneration: kind === 'empty' ? 1 : 0,
-        ...(kind === 'original' ? { incarnationId: 'inc-old' } : {})
-      }
-    })
-  )
-}
-function snapshot(
-  owner: { ptyId: string; incarnationId: string } | null,
-  generation = 0,
-  tabCreatedAt = 1
-) {
-  return {
-    ok: true,
-    id: 'resolve',
-    result: {
-      terminal: {
-        handle: 'handle-old',
-        accountRestart: { hostEpoch: 'host', tabCreatedAt, bindingGeneration: generation, owner }
-      }
-    }
-  }
-}
-
-function mountedSpawnSession(
-  request: ReturnType<typeof accepted>,
-  scrollback: Map<string, string>,
-  connect: (options: PtyConnectOptions) => Promise<unknown>,
-  incarnationId?: string
-) {
-  const noop = () => {}
-  return {
-    deps: {
-      tabId: 'tab',
-      worktreeId: 'wt',
-      accountRestartToken: codexAccountRestartToken(request),
-      accountRestart: request.condition,
-      isVisibleRef: { current: false },
-      invalidateRetainedInlineScrollback: (leafId: string) => scrollback.delete(leafId)
-    },
-    pane: { id: 1, leafId: leaf },
-    paneStartup: { command: 'codex resume conversation-1' },
-    remotePtyIncarnationId: incarnationId,
-    disposed: false,
-    tabGeneration: 0,
-    transportStreamGeneration: 1,
-    authoritativeReattachGeneration: 0,
-    pendingSpawnKey: key,
-    cacheKey: key,
-    userRestart: false,
-    runtimeEnvironmentId: null,
-    transport: { connect, getPtyId: (): string | null => null },
-    clearPaneMode2031State: noop,
-    clearHiddenOutputRestoreState: noop,
-    resetFreshSpawnFollowOutput: noop,
-    groundInputModesForNewProcess: noop,
-    prepareFreshShellViewportForSpawn: noop,
-    shouldDeclareHiddenAtSpawn: () => true,
-    captureTransportOutputCallbacks: (onError: (message: string) => void) => ({
-      generation: 1,
-      callbacks: { onError }
-    }),
-    reportError: noop,
-    finishReattachLiveDataDeferral: noop,
-    noteBoundProcessIncarnation: noop,
-    settlePaneAttachAttempt: noop,
-    startFreshSpawn: (_startup?: { command: string }): Promise<string | null> =>
-      Promise.resolve(null)
-  }
-}
-
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   resetDetachedCodexPaneRestartClaimsForTests()
@@ -756,5 +646,164 @@ describe('Codex account continuation', () => {
       'sibling'
     )
     expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+  })
+  it('treats a matching terminal receipt as authoritative even when the diagnostic says timed out', async () => {
+    const request = accepted()
+    await prepareCodexAccountRestart(request)
+    failCodexAccountRestart(
+      codexAccountRestartToken(request),
+      new Error(
+        formatAccountRestartFailure('spawn timed out', {
+          v: 1,
+          requestId: request.requestId,
+          attemptId: request.attemptId,
+          stop: 'confirmed-retired',
+          outcome: 'terminal',
+          current: { kind: 'empty', bindingGeneration: 1 }
+        })
+      )
+    )
+    await retryCodexAccountRestarts(selectCodexRestartStatus(useAppStore.getState()).failures)
+    call.mockResolvedValue(snapshot(null, 1))
+    await sweepUnclaimedCodexPaneRestarts()
+    expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe(
+      'replacement'
+    )
+    expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+  })
+
+  it('adopts its committed replacement on reconciliation before a stalled reply, without creating twice', async () => {
+    vi.useFakeTimers()
+    const pending = Promise.withResolvers<{ id: string; incarnationId: string }>()
+    spawn.mockReturnValue(pending.promise)
+    useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+    const running = sweepUnclaimedCodexPaneRestarts()
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(STALLED_DETACHED_RESTART_MS)
+    const unresolved = selectCodexRestartStatus(useAppStore.getState()).failures[0]
+    const resolved = snapshot(
+      { ptyId: 'committed-replacement', incarnationId: 'inc-replacement' },
+      2
+    )
+    Object.assign(resolved.result.terminal, {
+      ptyId: 'committed-replacement',
+      handle: 'replacement-handle',
+      connected: true,
+      launchToken: unresolved.attemptId
+    })
+    call.mockResolvedValue(resolved)
+    await retryCodexAccountRestarts([unresolved])
+    await sweepUnclaimedCodexPaneRestarts()
+    expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe(
+      'committed-replacement'
+    )
+    expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+    pending.resolve({ id: 'late-obsolete-result', incarnationId: 'inc-other' })
+    await running
+    expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe(
+      'committed-replacement'
+    )
+    expect(spawn).toHaveBeenCalledTimes(1)
+  })
+
+  it('reopens a rotated pending pane instead of silently answering its restart notice', async () => {
+    useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+    useAppStore.getState().updateTabPtyId('tab', 'rotated-owner', 'old')
+    expect(selectCodexRestartStatus(useAppStore.getState()).stalePtyIds).toEqual(['rotated-owner'])
+    await restartCodexAccountSessions(['rotated-owner'], [])
+    call.mockResolvedValue(snapshot({ ptyId: 'rotated-owner', incarnationId: 'inc-rotated' }))
+    await sweepUnclaimedCodexPaneRestarts()
+    expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe(
+      'replacement'
+    )
+  })
+
+  it('cancels an undispatched A-B-A account change while retaining an unknown dispatched outcome', async () => {
+    useAppStore
+      .getState()
+      .markCodexRestartNotices([
+        { ptyId: 'old', previousAccountLabel: 'old', nextAccountLabel: 'new' }
+      ])
+    useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+    useAppStore
+      .getState()
+      .markCodexRestartNotices([
+        { ptyId: 'old', previousAccountLabel: 'new', nextAccountLabel: 'old' }
+      ])
+    await sweepUnclaimedCodexPaneRestarts()
+    expect(spawn).not.toHaveBeenCalled()
+    expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+    seed()
+    const request = accepted()
+    await prepareCodexAccountRestart(request)
+    failCodexAccountRestart(codexAccountRestartToken(request), 'rpc_timeout')
+    useAppStore
+      .getState()
+      .markCodexRestartNotices([
+        { ptyId: 'old', previousAccountLabel: 'new', nextAccountLabel: 'old' }
+      ])
+    expect(selectCodexRestartStatus(useAppStore.getState()).failures).toHaveLength(1)
+  })
+
+  it('starts stale panes when a rootless failure cannot retry, without double-counting either scope', async () => {
+    const state = useAppStore.getState()
+    useAppStore.setState({
+      tabsByWorktree: {
+        wt: [
+          state.tabsByWorktree.wt[0],
+          { ...state.tabsByWorktree.wt[0], id: 'stale-tab', ptyId: 'stale-pty' }
+        ]
+      },
+      ptyIdsByTabId: { tab: ['old'], 'stale-tab': ['stale-pty'] },
+      terminalLayoutsByTabId: {
+        tab: { ...state.terminalLayoutsByTabId.tab, root: null, ptyIdsByLeafId: { legacy: 'old' } },
+        'stale-tab': {
+          root: { type: 'leaf', leafId: sibling },
+          activeLeafId: sibling,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [sibling]: 'stale-pty' }
+        }
+      },
+      codexRestartNoticeByPtyId: { old: notice, 'stale-pty': notice }
+    })
+    useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+    const mixed = selectCodexRestartStatus(useAppStore.getState())
+    expect(mixed.attentionCount).toBe(2)
+    const hydration = Promise.withResolvers<ReturnType<typeof snapshot>>()
+    call.mockImplementation((_target, method) =>
+      method === 'session.tabs.list'
+        ? hydration.promise
+        : Promise.resolve(snapshot({ ptyId: 'stale-pty', incarnationId: 'inc-stale' }))
+    )
+    const action = restartCodexAccountSessions(mixed.stalePtyIds, mixed.failures)
+    await sweepUnclaimedCodexPaneRestarts()
+    expect(
+      useAppStore.getState().terminalLayoutsByTabId['stale-tab'].ptyIdsByLeafId?.[sibling]
+    ).toBe('replacement')
+    hydration.resolve(snapshot(null))
+    await action
+    expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
+  })
+  it('keeps an unknown mounted deferral reconciliation-only instead of registering a fresh wake', async () => {
+    const request = accepted()
+    await prepareCodexAccountRestart(request)
+    const session = mountedSpawnSession(request, new Map(), async () => {
+      failCodexAccountRestart(codexAccountRestartToken(request), 'rpc_timeout', 'deferred')
+      Object.assign(session, { pendingSpawnDeferral: 'paused' })
+      return undefined
+    })
+    Object.assign(session, {
+      enterSpawnDeferredSleep: () => {
+        throw new Error('an unknown attempt must not schedule another create')
+      }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mounted fixture supplies all fresh-spawn members used by the deferral route.
+    bindStartFreshSpawn(session as never)
+    await session.startFreshSpawn()
+    const attention = selectCodexRestartStatus(useAppStore.getState())
+    expect(attention.failures[0].phase).toBe('unresolved')
+    await retryCodexAccountRestarts(attention.failures)
+    await sweepUnclaimedCodexPaneRestarts()
+    expect(spawn).not.toHaveBeenCalled()
   })
 })

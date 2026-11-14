@@ -195,7 +195,10 @@ export type TerminalActions = {
   updateCodexAccountRestart: (
     token: CodexAccountRestartToken,
     patch: Partial<
-      Pick<CodexAccountRestart, 'phase' | 'condition' | 'error' | 'resultPtyId'>
+      Pick<
+        CodexAccountRestart,
+        'phase' | 'condition' | 'error' | 'resultPtyId' | 'resultIncarnationId'
+      >
     > | null
   ) => void
   retryCodexAccountRestart: (token: CodexAccountRestartToken) => void
@@ -209,7 +212,6 @@ export type TerminalActions = {
           key: string
           tabCreatedAt: number
           hostId: string
-          layout: TerminalLayoutSnapshot | undefined
           lifetime?: TerminalNoticeLifetime
         }
       })[]

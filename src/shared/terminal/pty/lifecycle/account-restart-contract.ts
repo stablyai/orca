@@ -24,7 +24,7 @@ export type AccountRestartReceipt = {
   current?: { kind: 'original' | 'empty'; bindingGeneration: number; incarnationId?: string }
 }
 
-import { z } from 'zod'
+import * as z from 'zod'
 const token = z.string().min(1).max(128)
 const generation = z.number().int().nonnegative()
 export const AccountRestartConditionSchema = z.object({

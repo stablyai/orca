@@ -20,7 +20,7 @@ import {
 } from '../pane-admission/terminal-pane-admission'
 import { writeMovedLeafProfileRecords } from '../pane-moves/terminal-leaf-move'
 import { writeRestorable } from './restorable-write'
-import { publishTerminalTopologyPartition } from '../terminal-topology-commit'
+import { publishTerminalTopologyPartition } from '../pane-ownership/terminal-topology-membership'
 import {
   resolveWindowPaneDetach,
   type WindowPaneDetachCommand

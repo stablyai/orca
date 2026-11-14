@@ -1,7 +1,4 @@
-import {
-  reconcileTrackedPtyBindingGenerations,
-  hasPtyBindingGenerations
-} from '../loading-store/terminal-bindings/pty-binding-generations'
+import { hasPtyBindingGenerations } from '../loading-store/terminal-bindings/pty-binding-generations'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -35,7 +32,7 @@ import type {
 import type { SessionHostPartitionOperations } from '../loading-store/workspace-sessions/session-host-partitions'
 import { planTerminalLeafMove, writeMovedLeafProfileRecords } from './pane-moves/terminal-leaf-move'
 import { writeRestorable } from './command-application/restorable-write'
-import { assignWorkspaceSessionPartition } from './pane-ownership/terminal-topology-membership'
+import { publishTerminalTopologyPartition } from './pane-ownership/terminal-topology-membership'
 import {
   commitLayoutCommand,
   commitLayoutCommandsAcrossPartitions,
@@ -296,20 +293,4 @@ function commitPaneChange<T>(
     keepFrozen(hostId, change.session, context)
   )
   return { value: change.value, rollback: restore }
-}
-
-export function publishTerminalTopologyPartition(
-  context: TerminalTopologyCommitContext,
-  hostId: ExecutionHostId,
-  session: WorkspaceSessionState
-): void {
-  if (context.generations) {
-    reconcileTrackedPtyBindingGenerations(
-      context.generations,
-      hostId,
-      context.getSession(hostId),
-      session
-    )
-  }
-  context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, session))
 }

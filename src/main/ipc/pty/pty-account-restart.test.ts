@@ -1,3 +1,5 @@
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
+import { resolveAccountRestartPane } from '../../runtime/terminal/recovery/account-restart-pane-snapshot'
 import { agentSessionOwners } from './pane/agent-session-owners'
 import { accountRestartErrorReceipt } from './pane/account-restart-owner'
 import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
@@ -311,5 +313,24 @@ describe('conditional Codex account restart at the IPC boundary', () => {
     } finally {
       agentSessionOwners.release('provider-owner-elsewhere', 'foreign-generation')
     }
+  })
+  it('never pairs a disconnected foreign endpoint incarnation with the current bound PTY', () => {
+    const h = installRestartHarness()
+    const resolved = resolveAccountRestartPane(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the session, binding-generation and epoch reads used by pane resolution.
+      h.store as unknown as RuntimeStore,
+      paneKey,
+      worktreeId,
+      () => 'local',
+      () => ({
+        handle: 'foreign-handle',
+        tabId,
+        leafId,
+        ptyId: 'foreign-pty',
+        incarnationId: 'inc-foreign',
+        connected: false
+      })
+    )
+    expect(resolved.accountRestart?.owner).toEqual({ ptyId: 'pty-old', incarnationId: 'inc-old' })
   })
 })

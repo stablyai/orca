@@ -35,6 +35,9 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
   ) {
     throw new Error('invalid_account_restart')
   }
+  if (condition) {
+    args.launchToken = condition.attemptId
+  }
   if (condition?.expected.kind === 'endpoint') {
     args.replacesPtyId = condition.expected.ptyId
   }

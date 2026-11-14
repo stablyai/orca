@@ -75,4 +75,11 @@ describe('Codex restart attention population', () => {
     state.terminalLayoutsByTabId.tab.root = null
     expect(summarizeCodexRestartStatus(state).attentionCount).toBe(0)
   })
+  it('does not count a rootless failure twice when hydration supplies its authoritative leaf', () => {
+    const state = population()
+    state.paneAccountRestarts['tab:unresolved'] = { ...failure(), leafId: null }
+    const result = summarizeCodexRestartStatus(state)
+    expect(result.attentionCount).toBe(1)
+    expect(result.stalePtyIds).toEqual([])
+  })
 })

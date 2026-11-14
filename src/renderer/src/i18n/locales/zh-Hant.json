@@ -4582,6 +4582,7 @@
             "codexRestartBadgeLabel_other": "{{count}} 個 Codex 工作階段需要重新啟動",
             "codexRestartBannerTitle_other": "{{count}} 個 Codex 工作階段仍在使用先前的帳戶。",
             "codexRestartBannerAction_other": "重新啟動工作階段",
+            "codexRestartMixedTitle_other": "{{count}} 個 Codex 工作階段需要重新啟動。",
             "codexRestartFailedTitle_other": "{{count}} 個 Codex 工作階段未能重新啟動。",
             "codexRestartRetry": "重試"
           },

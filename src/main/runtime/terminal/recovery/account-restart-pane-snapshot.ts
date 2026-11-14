@@ -1,3 +1,4 @@
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -35,7 +36,8 @@ export function resolveAccountRestartPane(
     throw new Error('terminal_pane_owner_unverified')
   }
   const incarnationId =
-    resolved?.incarnationId ?? session?.terminalPtyIncarnationsByPaneKey?.[paneKey]
+    (resolved?.ptyId === bound ? resolved?.incarnationId : undefined) ??
+    session?.terminalPtyIncarnationsByPaneKey?.[paneKey]
   if (bound && !incarnationId) {
     throw new Error('terminal_pane_owner_unverified')
   }
@@ -54,4 +56,16 @@ export function resolveAccountRestartPane(
       owner: bound && incarnationId ? { ptyId: bound, incarnationId } : null
     }
   }
+}
+
+export function boundLaunchToken(
+  pty: RuntimePtyWorktreeRecord | null | undefined,
+  boundPtyId: string | null | undefined
+): { launchToken?: string } {
+  return pty &&
+    pty.ptyId === boundPtyId &&
+    pty.launchIncarnationId === pty.incarnationId &&
+    pty.launchToken
+    ? { launchToken: pty.launchToken }
+    : {}
 }

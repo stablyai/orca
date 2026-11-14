@@ -1,3 +1,4 @@
+import { publishTerminalTopologyPartition } from '../pane-ownership/terminal-topology-membership'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   CommandOf,
@@ -6,11 +7,7 @@ import type {
 import type { DurableProfileStateMutation } from '../../loading-store/store-runtime-state'
 import { writeRestorable } from './restorable-write'
 import { applyRenamesToSession } from '../pane-admission/terminal-pane-admission'
-import {
-  traced,
-  publishTerminalTopologyPartition,
-  type TerminalTopologyCommitContext
-} from '../terminal-topology-commit'
+import { traced, type TerminalTopologyCommitContext } from '../terminal-topology-commit'
 import { keepFrozen } from './layout-command-commit'
 
 /** Publish routed tab renames in one frame and return per-tab refusals. */

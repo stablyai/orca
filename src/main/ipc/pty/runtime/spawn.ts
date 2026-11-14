@@ -31,6 +31,9 @@ export async function spawnPtyFromRuntimeController(
   ) {
     throw new Error('invalid_account_restart')
   }
+  if (condition) {
+    args.launchToken = condition.attemptId
+  }
   const ctx = createRuntimePtySpawnState(deps, args)
   if (condition) {
     ctx.accountRestartOperation = beginAccountRestartOperation(condition)

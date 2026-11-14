@@ -1,5 +1,5 @@
 import { resolveTerminalPaneWorktreeId } from '../identity/runtime-terminal-pane-identity'
-import { resolveAccountRestartPane } from './account-restart-pane-snapshot'
+import { resolveAccountRestartPane, boundLaunchToken } from './account-restart-pane-snapshot'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrcaRuntimeWithCreateTerminal } from '../launch/terminal-create'
 import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-handle-pane-start'
@@ -68,8 +68,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
         () => this.resolveTerminalPane(paneKey, expectedWorktreeId)
       )
     }
-    // Why: the renderer context menu only knows the stable pane key; main owns
-    // the runtime terminal handle that agents and CLI commands can address.
+    // Main resolves the handle; clients know only the pane key.
     const handle = this.getTerminalHandleForPaneKey(paneKey)
     if (!handle) {
       throw new Error('terminal_not_found')
@@ -100,6 +99,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       leafId: parsed?.leafId ?? record?.leafId ?? '',
       ptyId: record?.ptyId ?? null,
       connected: pty?.connected === true,
+      ...boundLaunchToken(pty, record?.ptyId),
       ...(worktreeId ? { worktreeId } : {}),
       ...this.getPtyExecutionHostMetadata(record?.ptyId ?? pty?.ptyId ?? null)
     }

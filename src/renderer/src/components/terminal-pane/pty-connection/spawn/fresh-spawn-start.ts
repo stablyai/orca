@@ -1,6 +1,6 @@
 import { releaseDeferredCwdFence } from './deferred-cwd-spawn-fence'
 export { releaseDeferredCwdFence } from './deferred-cwd-spawn-fence'
-import { settleFreshPaneSpawn } from './fresh-pane-spawn-settlement'
+import { settleFreshPaneSpawn, accountRestartConnectOptions } from './fresh-pane-spawn-settlement'
 import { continueCodexAccountRestart } from '../../account-restart/codex-account-restart-execution'
 import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { applyTerminalLaunchResult } from '../startup/terminal-launch-result-policy'
@@ -89,6 +89,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     )
     const spawnedRaw = session.transport.connect({
       url: '',
+      ...accountRestartConnectOptions(session, outputCallbacks.generation),
       cols: session.cols,
       rows: session.rows,
       ...(startupOverride?.command ? { command: startupOverride.command } : {}),
@@ -108,14 +109,6 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       // Why: a restart swaps one live session for one, and main stops the old PTY before admission.
       resumeSpawnIntent:
         visibleAtSpawn || session.userRestart || accountToken ? 'user-resume' : 'automatic-restore',
-      ...(session.deps.accountRestart
-        ? {
-            accountRestart:
-              (accountToken
-                ? currentCodexAccountRestart(useAppStore.getState(), accountToken)?.condition
-                : undefined) ?? session.deps.accountRestart
-          }
-        : {}),
       ...(session.userRestart ? { claimReplacedPtyId: session.claimPendingReplacedPtyId } : {}),
       shouldContinue: (result) =>
         (!accountToken || continueCodexAccountRestart(accountToken, result)) &&
@@ -150,6 +143,12 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         if (deferral) {
           accountDeferred = true
           if (accountToken) {
+            const current = currentCodexAccountRestart(useAppStore.getState(), accountToken)
+            if (current?.phase === 'unresolved') {
+              clearPreSignaledSerializer()
+              session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+              return null
+            }
             useAppStore.getState().updateCodexAccountRestart(accountToken, { phase: 'deferred' })
           }
           // Why before the launch-config cleanup below: a deferred launch is postponed, not dead.

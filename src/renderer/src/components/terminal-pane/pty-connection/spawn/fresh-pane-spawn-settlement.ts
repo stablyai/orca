@@ -102,3 +102,23 @@ export function settleFreshPaneSpawn(
     settleSpawnThatLeftPaneUnbound(session)
   })
 }
+
+export function accountRestartConnectOptions(session: ConnectPanePtySession, generation: number) {
+  const token = session.deps.accountRestartToken
+  const request = token ? currentCodexAccountRestart(useAppStore.getState(), token) : null
+  return {
+    ...(request?.resultPtyId
+      ? { sessionId: request.resultPtyId, attachOnlyView: true as const }
+      : session.deps.accountRestart
+        ? { accountRestart: request?.condition ?? session.deps.accountRestart }
+        : {}),
+    ...(token
+      ? {
+          isAccountRestartCurrent: () =>
+            !session.disposed &&
+            generation === session.transportStreamGeneration &&
+            Boolean(currentCodexAccountRestart(useAppStore.getState(), token))
+        }
+      : {})
+  }
+}

@@ -4097,6 +4097,7 @@
             "codexRestartBadgeLabel_other": "Codex 세션 {{count}}개를 다시 시작해야 합니다",
             "codexRestartBannerTitle_other": "Codex 세션 {{count}}개가 아직 이전 계정을 사용하고 있습니다.",
             "codexRestartBannerAction_other": "세션 다시 시작",
+            "codexRestartMixedTitle_other": "Codex 세션 {{count}}개를 다시 시작해야 합니다.",
             "codexRestartFailedTitle_other": "Codex 세션 {{count}}개가 다시 시작되지 않았습니다.",
             "codexRestartRetry": "다시 시도"
           },

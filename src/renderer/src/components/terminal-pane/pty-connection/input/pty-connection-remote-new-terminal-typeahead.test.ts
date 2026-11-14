@@ -118,7 +118,10 @@ type CreatedTerminal = {
   coldRestore?: { scrollback: string; cwd: string }
 }
 
-async function connectNewRemotePane(overrides: Record<string, unknown> = {}) {
+async function connectNewRemotePane(
+  overrides: Record<string, unknown> = {},
+  awaitedMethod = 'terminal.create'
+) {
   const created = createDeferred<CreatedTerminal | Error>()
   const call = runtimeCall.getMockImplementation()
   runtimeCall.mockImplementation(async (request: { method: string }) => {
@@ -166,7 +169,7 @@ async function connectNewRemotePane(overrides: Record<string, unknown> = {}) {
   }
   disposeTransports.push(disposeTransport)
   await vi.waitFor(() =>
-    expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.create' }))
+    expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: awaitedMethod }))
   )
   return {
     pane,
@@ -191,7 +194,7 @@ async function completeAttach(): Promise<void> {
   emitSnapshot(streamId, 'prompt$ ')
 }
 
-async function connectAccountRestart() {
+async function connectAccountRestart(adoptCommitted = false) {
   const useAppStore = restartStore
   const initial = useAppStore.getInitialState()
   const request: CodexAccountRestart = {
@@ -217,6 +220,29 @@ async function connectAccountRestart() {
       expected: { kind: 'empty', bindingGeneration: 1 }
     }
   }
+  if (adoptCommitted) {
+    request.resultPtyId = 'remote:env-1@@terminal-new'
+    request.resultIncarnationId = 'inc-committed'
+    const originalCall = runtimeCall.getMockImplementation()
+    runtimeCall.mockImplementation(async (args: { method: string }) =>
+      args.method === 'terminal.resolvePane'
+        ? {
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'terminal-new',
+                ptyId: 'physical-committed',
+                incarnationId: 'inc-committed',
+                connected: true,
+                worktreeId: 'wt-1',
+                tabId: 'tab-1',
+                leafId: leafIdForPane(1)
+              }
+            }
+          }
+        : originalCall?.(args)
+    )
+  }
   const tab = { id: 'tab-1', ptyId: null, createdAt: 1 }
   const data = Object.fromEntries(
     Object.entries(mockStoreState).filter(([, value]) => typeof value !== 'function')
@@ -236,13 +262,16 @@ async function connectAccountRestart() {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture facade follows the real store after every transition.
     mockStoreState = state as unknown as StoreState
   })
-  const pane = await connectNewRemotePane({
-    startup: { command: 'codex' },
-    accountRestart: request.condition,
-    accountRestartToken: codexAccountRestartToken(request),
-    invalidateRetainedInlineScrollback: vi.fn(),
-    updateTabPtyId: useAppStore.getState().updateTabPtyId
-  })
+  const pane = await connectNewRemotePane(
+    {
+      startup: { command: 'codex' },
+      accountRestart: request.condition,
+      accountRestartToken: codexAccountRestartToken(request),
+      invalidateRetainedInlineScrollback: vi.fn(),
+      updateTabPtyId: useAppStore.getState().updateTabPtyId
+    },
+    adoptCommitted ? 'terminal.resolvePane' : 'terminal.create'
+  )
   pane.created.resolve({ handle: 'terminal-new' })
   await completeAttach()
   await vi.waitFor(() => expect(useAppStore.getState().paneAccountRestarts).toEqual({}))
@@ -289,6 +318,24 @@ describe('a brand-new remote pane through connectPanePty', () => {
     }
     disposeTransports = []
     await restoreTerminalTestGlobals()
+  })
+
+  it('attaches a reconciled account result without creating or replacing the host process', async () => {
+    const pane = await connectAccountRestart(true)
+    try {
+      expect(runtimeCall.mock.calls.filter(([args]) => args.method === 'terminal.create')).toEqual(
+        []
+      )
+      expect(pane.store.getState().tabsByWorktree['wt-1'][0].ptyId).toBe(
+        'remote:env-1@@terminal-new'
+      )
+      pane.type('reconciled conversation\r')
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('reconciled conversation\r'))
+    } finally {
+      pane.disposeTransport()
+      pane.binding.dispose()
+      pane.unsubscribe()
+    }
   })
 
   it('keeps a completed account restart recoverable through the real remote transport', async () => {

@@ -67,6 +67,9 @@ function dispatchDetachedRequest(
     state.updateCodexAccountRestart(token, { phase: 'accepted' })
     return null
   }
+  if (request.resultPtyId && request.resultIncarnationId) {
+    return Promise.resolve({ id: request.resultPtyId, incarnationId: request.resultIncarnationId })
+  }
   const { environmentId } = request
   if (environmentId) {
     return callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(

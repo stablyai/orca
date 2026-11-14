@@ -75,7 +75,11 @@ export const TERMINAL_LIFECYCLE_METHODS = [
                 ...(params.resumeProviderSession
                   ? { resumeProviderSession: params.resumeProviderSession }
                   : {}),
-                ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+                ...(params.accountRestart
+                  ? { launchToken: params.accountRestart.attemptId }
+                  : params.launchToken
+                    ? { launchToken: params.launchToken }
+                    : {}),
                 ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
                 ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
                 terminalImageViewerSupported: terminalImageViewerSupported(context)
@@ -86,7 +90,9 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         const terminal = await runtime.dedupeTerminalCreate(
           pairedDeviceId ?? clientId ?? 'local',
           params.worktree,
-          params.clientMutationId,
+          params.accountRestart
+            ? `account-restart:${params.accountRestart.requestId}:${params.accountRestart.attemptId}`
+            : params.clientMutationId,
           params.reconcileExisting === true,
           (canonicalWorktreeSelector, preAllocatedHandle) =>
             runtime.createTerminal(canonicalWorktreeSelector, {
@@ -104,7 +110,11 @@ export const TERMINAL_LIFECYCLE_METHODS = [
                 ? { resumeProviderSession: params.resumeProviderSession }
                 : {}),
               ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
-              ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+              ...(params.accountRestart
+                ? { launchToken: params.accountRestart.attemptId }
+                : params.launchToken
+                  ? { launchToken: params.launchToken }
+                  : {}),
               ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
               ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
               ...(params.terminalKittyKeyboardProtocol === true

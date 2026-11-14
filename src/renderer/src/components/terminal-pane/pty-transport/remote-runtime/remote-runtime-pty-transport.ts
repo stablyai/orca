@@ -3609,7 +3609,25 @@ export function createRemoteRuntimePtyTransport(
 
     let releasePrewarmedStream: (() => void) | null = null
     try {
-      if (isWebTerminalSurfaceTabId(tabId ?? '')) {
+      if (options.attachOnlyView) {
+        const hostTabId = toHostSessionTabId(tabId ?? '')
+        const terminal = await resolveHostSessionPane(hostTabId)
+        if (
+          !terminal ||
+          terminal.handle !== getRemoteRuntimeTerminalHandle(options.sessionId ?? '') ||
+          terminal.connected === false ||
+          (options.isAccountRestartCurrent && !options.isAccountRestartCurrent()) ||
+          (options.shouldContinue &&
+            !options.shouldContinue({
+              id: toRemoteRuntimePtyId(terminal.handle, createEnvironmentId),
+              incarnationId: terminal.incarnationId
+            }))
+        ) {
+          throw new Error('terminal_pane_owner_changed')
+        }
+        return await adoptResolvedHostPane(terminal, options)
+      }
+      if (isWebTerminalSurfaceTabId(tabId ?? '') && !options.accountRestart) {
         // Commit tab/layout reattach ownership before publishing replacement as a fresh spawn.
         return await attachHostSessionMirror(
           options,
@@ -3673,7 +3691,7 @@ export function createRemoteRuntimePtyTransport(
         ...(options.accountRestart ? { accountRestart: options.accountRestart } : {}),
         ...sectionTrustOptions,
         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
-        clientMutationId: terminalCreateMutationId,
+        clientMutationId: options.accountRestart?.attemptId ?? terminalCreateMutationId,
         ...(commandToSend !== undefined ? { command: commandToSend } : {}),
         ...(startupCommandDeliveryToSend !== undefined
           ? { startupCommandDelivery: startupCommandDeliveryToSend }
@@ -3694,8 +3712,8 @@ export function createRemoteRuntimePtyTransport(
         ...(options.accountRestart ? { spawnIntent: 'user-resume' as const } : {}),
         ...terminalCreateThemeParams(terminalColorQueryReplies),
         ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
-        tabId,
-        leafId,
+        tabId: options.accountRestart?.pane.tabId ?? tabId,
+        leafId: options.accountRestart?.pane.leafId ?? leafId,
         focus: false,
         // Why: transport backs an already-mounted pane; activation is local state, not permission for remote UI reveal.
         presentation: 'background' as const,
@@ -3733,8 +3751,14 @@ export function createRemoteRuntimePtyTransport(
         }
         const result = await createWithUnknownOutcomeRecovery(
           'terminal',
-          (timeoutMs, reconcileExisting) =>
-            callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
+          (timeoutMs, reconcileExisting) => {
+            if (
+              options.accountRestart &&
+              (!options.isAccountRestartCurrent?.() || destroyed || lifecycleEpoch !== epoch)
+            ) {
+              throw new Error('terminal_pane_owner_changed')
+            }
+            return callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
               createEnvironmentId,
               'terminal.create',
               {
@@ -3742,7 +3766,8 @@ export function createRemoteRuntimePtyTransport(
                 ...(reconcileExisting ? { reconcileExisting: true } : {})
               },
               timeoutMs
-            ),
+            )
+          },
           createEnvironmentId,
           epoch
         )

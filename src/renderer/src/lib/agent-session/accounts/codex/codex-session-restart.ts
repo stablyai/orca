@@ -109,7 +109,6 @@ async function scanCodexPanes(
             key: pane.key,
             tabCreatedAt: pane.tabCreatedAt,
             hostId: getExecutionHostIdForWorktree(state, pane.worktreeId),
-            layout: state.terminalLayoutsByTabId[pane.tabId],
             lifetime
           }
         : undefined
