@@ -8,7 +8,10 @@ import {
   type AiVaultExportChatForkRequest,
   type AiVaultExportChatForkResult
 } from '../../rpc-contract/ai-vault/ai-vault-fork-transfer-params'
-import { CHAT_FORK_TRANSFER_CHUNK_BYTES } from './chat-fork-transfer-limits'
+import {
+  CHAT_FORK_TRANSFER_CHUNK_BYTES,
+  chatForkTransferErrorCode
+} from './chat-fork-transfer-limits'
 
 /** One RPC to a host; the relay parses every reply, trusting neither side. */
 export type ChatForkRelayCall = (
@@ -34,7 +37,9 @@ export type ChatForkTranscriptRelayResult = {
 }
 
 /** Copies a chat's cut transcript from the source host to the target host through this client,
- *  holding one chunk at a time. The export is always released; a failed import is cancelled. */
+ *  holding one chunk at a time. The export is always released; a failed import is cancelled.
+ *  An append or commit whose reply is lost is sent once more: the target acknowledges a chunk it
+ *  already holds and replays a commit it already placed, so a retry never duplicates. */
 export async function relayChatForkTranscript(
   input: ChatForkTranscriptRelayInput
 ): Promise<ChatForkTranscriptRelayResult> {
@@ -81,7 +86,9 @@ export async function relayChatForkTranscript(
       }
       signal?.throwIfAborted()
       const { acknowledgedOffset } = AiVaultAppendChatForkImportResultSchema.parse(
-        await targetCall('aiVault.appendChatForkImport', { importId, offset, bytesBase64 })
+        await retryOnce(signal, () =>
+          targetCall('aiVault.appendChatForkImport', { importId, offset, bytesBase64 })
+        )
       )
       if (acknowledgedOffset !== next) {
         throw new Error('chat_fork_transfer_offset_mismatch')
@@ -91,7 +98,7 @@ export async function relayChatForkTranscript(
     }
     signal?.throwIfAborted()
     const placed = AiVaultCommitChatForkImportResultSchema.parse(
-      await targetCall('aiVault.commitChatForkImport', { importId })
+      await retryOnce(signal, () => targetCall('aiVault.commitChatForkImport', { importId }))
     )
     committed = true
     return { exported, importId, placed }
@@ -103,6 +110,18 @@ export async function relayChatForkTranscript(
         ? [settle(() => targetCall('aiVault.cancelChatForkImport', { importId: pendingImport }))]
         : [])
     ])
+  }
+}
+
+/** One more try after a transport failure; a host's own refusal (a known code) is final. */
+async function retryOnce(signal: AbortSignal | undefined, call: () => Promise<unknown>) {
+  try {
+    return await call()
+  } catch (error) {
+    if (chatForkTransferErrorCode(error) || signal?.aborted) {
+      throw error
+    }
+    return call()
   }
 }
 

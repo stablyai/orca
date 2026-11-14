@@ -9,9 +9,13 @@ const SHA = 'a'.repeat(64)
 // Ten bytes moved four at a time: chunks "0123", "4567", "89".
 const SOURCE_BYTES = '0123456789'
 
-function hosts(options: { failAppendAt?: number } = {}) {
+function hosts(
+  options: { failAppendAt?: number; dropReplyAt?: number; dropCommitReply?: boolean } = {}
+) {
   const calls: string[] = []
   const received: string[] = []
+  let placements = 0
+  let dropped = false
   const sourceCall: ChatForkRelayCall = async (method, params) => {
     calls.push(`source ${method}`)
     if (method === 'aiVault.exportChatFork') {
@@ -42,10 +46,23 @@ function hosts(options: { failAppendAt?: number } = {}) {
       if (received.join('').length === options.failAppendAt) {
         throw new Error('disk full')
       }
+      const offset = Number(params.offset)
+      // Like the host: a chunk it already holds is acknowledged, never written twice.
+      if (offset < received.join('').length) {
+        return { acknowledgedOffset: offset + chunk.length }
+      }
       received.push(chunk)
-      return { acknowledgedOffset: Number(params.offset) + chunk.length }
+      if (offset === options.dropReplyAt && !dropped) {
+        dropped = true
+        throw new Error('socket closed')
+      }
+      return { acknowledgedOffset: offset + chunk.length }
     }
     if (method === 'aiVault.commitChatForkImport') {
+      placements += 1
+      if (options.dropCommitReply && placements === 1) {
+        throw new Error('socket closed')
+      }
       return {
         agent: 'claude',
         sessionId: PLACED_SESSION,
@@ -92,5 +109,21 @@ describe('relayChatForkTranscript', () => {
     expect(calls).toContain('source aiVault.releaseChatForkExport')
     expect(calls).toContain('target aiVault.cancelChatForkImport')
     expect(calls).not.toContain('target aiVault.commitChatForkImport')
+  })
+
+  it('resends an append and a commit whose replies were lost, without duplicating either', async () => {
+    const { calls, received, sourceCall, targetCall } = hosts({
+      dropReplyAt: 4,
+      dropCommitReply: true
+    })
+    const result = await relayChatForkTranscript({
+      source: { terminal: { sessionId: SOURCE_SESSION, throughEntryId: 'entry-1' } },
+      targetWorktree: 'id:wt-target',
+      sourceCall,
+      targetCall
+    })
+    expect(received).toEqual(['0123', '4567', '89'])
+    expect(result.placed.sessionId).toBe(PLACED_SESSION)
+    expect(calls).not.toContain('target aiVault.cancelChatForkImport')
   })
 })
