@@ -34,6 +34,9 @@ export const EDGE_CELL_ID = 'edge'
 
 export type EdgeRelayConfig = {
   cellUrl: string
+  // Front doors director/edge.json may map hosts to (ORCA_RELAY_EDGE_FRONT_DOOR_URLS). Absent: none,
+  // and every edge answer is cellUrl exactly as before front doors existed.
+  frontDoorUrls?: ReadonlySet<string>
   // Present: phase 2 (host data in the edge's objects); director → edge admin calls use it.
   adminSigningKey?: Uint8Array
   // Share of hosts (by hash of relayHostId) in the edge cohort, 0-100: the boot default, which a
@@ -147,12 +150,52 @@ export const EDGE_LOCKED_CALLS_MAX = 8
 // this director already has EDGE_LOCKED_CALLS_MAX pushes in flight) and nothing changed: the host
 // stays where it is and moves on a later ask.
 export class EdgeMoveDeferredError extends Error {
-  constructor(reason: 'units_held' | 'push_failed' | 'edge_busy') {
+  constructor(readonly reason: 'units_held' | 'push_failed' | 'edge_busy') {
     super(`relay_edge_move_deferred:${reason}`)
   }
 }
 
 type Identity = { userId: string; relayHostId: string }
+
+// How a host's own ask may use a front door (EdgeAssignments.moveToEdge).
+// - frontDoor: the origin director/edge.json maps this ask to; undefined is the edge's own URL.
+// - byCountry: mapped by the ask's country (not only by host id), so its object is placed in apac.
+// - switchable: this ask is a real reconnect, so a host already on the edge may change origin (at
+//   a newer epoch). The shipped desktop sends `reconnect: true` without `regionCorrection` only
+//   from its drain path (a drain or a lost control), which adopts a new origin at once. It also
+//   sends `reconnect: true` with `regionCorrection: issue-window` from its hourly region refresh
+//   while connected (the new epoch would only be deferred, leaving the control on the old origin
+//   while phones move) and from its initial open, which cannot be told apart from it. Neither
+//   switches; a fresh desktop switches at its first drain (≤ 6.5 h, the edge's control lease).
+//
+// Operating rule (mixed versions): an older director answers the edge URL at whatever epoch the
+// row has, so with both versions serving, one host can see two URLs at one epoch. Both reach the
+// same object, but phones keep the first. So: deploy the image everywhere with
+// ORCA_RELAY_EDGE_FRONT_DOOR_URLS unset; set the env, then the flag, only once every serving
+// revision is new; to roll back, remove frontDoor and wait for mapped hosts to move back (their
+// next drain) before rolling back the env or the image. Env skew matters as much: a director
+// whose ORCA_RELAY_EDGE_FRONT_DOOR_URLS lacks a recorded URL answers the edge URL and clears the
+// record, so every serving revision must carry the same list.
+//
+// A switch is written ahead as pending (relay_edge_host_regions.pending_epoch) before its push is
+// sent, and every later front-door-aware ask of the host finishes it first, so a push that timed
+// out after landing never leaves the director answering below the edge's epoch. Only directors
+// with the env set read it: unset the env or roll the image back only with no pending row left
+// (SELECT count(*) FROM relay_edge_host_regions WHERE pending_epoch IS NOT NULL).
+// Phones (edgeAssignment) do not finish a pending switch: until the host's next ask does, they are
+// answered the row's epoch and may get WRONG_CELL from an edge already past it, then re-resolve.
+export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: boolean }
+
+// Thrown out of the switch's first transaction (nothing written): the pending switch must be
+// committed on its own before any push is sent (EdgeAssignments.moveToEdgeWithFrontDoor).
+class FrontDoorSwitchIntent extends Error {
+  constructor(
+    readonly epoch: number,
+    readonly cellUrl: string | undefined
+  ) {
+    super('relay_edge_front_door_switch_intent')
+  }
+}
 
 type EpochSource = {
   seatsOf(userId: string, relayHostId: string): Array<{ epoch: number }>
@@ -277,6 +320,7 @@ export class EdgeAssignments {
   // re-place the host on a cell it is not connected to.
   async edgeAssignment(identity: Identity): Promise<RelayAssignment | null> {
     if (!this.seeded) return null
+    if (this.config.frontDoorUrls !== undefined) { return await this.edgeAssignmentWithFrontDoor(identity) }
     const row = (
       await this.database.query(
         `SELECT cell_id, assignment_epoch, lease_expires_at FROM relay_assignments
@@ -288,13 +332,50 @@ export class EdgeAssignments {
     return this.answer(identity, integer(row, 'assignment_epoch'), integer(row, 'lease_expires_at'))
   }
 
+  // As edgeAssignment, plus the front door the host's own ask recorded: its phones dial the host's
+  // origin, never a different one at the same epoch.
+  private async edgeAssignmentWithFrontDoor(identity: Identity): Promise<RelayAssignment | null> {
+    const row = (
+      await this.database.query(
+        `SELECT a.cell_id, a.assignment_epoch, a.lease_expires_at, r.cell_url
+         FROM relay_assignments a
+         LEFT JOIN relay_edge_host_regions r ON r.user_id = a.user_id AND r.relay_host_id = a.relay_host_id
+         WHERE a.user_id = ? AND a.relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return null }
+    return this.answer(
+      identity,
+      integer(row, 'assignment_epoch'),
+      integer(row, 'lease_expires_at'),
+      this.allowedFrontDoor(row.cell_url)
+    )
+  }
+
+  // A recorded front door still on the boot list, else undefined (the edge's own URL).
+  private allowedFrontDoor(recorded: unknown): string | undefined {
+    return typeof recorded === 'string' && this.config.frontDoorUrls?.has(recorded) === true ? recorded : undefined
+  }
+
   // The host's own ask: moves its row to the edge, minting a strictly newer epoch only when the cell
   // changes (phones accept a move only with a newer epoch; re-asks must not flap the epoch).
   // Every committed answer also records the region the cohort was judged for (relay_edge_host_
   // regions), so the evacuation sweep can drain one region's hosts: always on a move, and on a kept
   // host only when the region changed (or was never recorded). Written last, under the assignment
   // row lock, so its row lock is held only to the commit.
-  async moveToEdge(identity: Identity, mapFloor: number, region?: RelayRegion): Promise<RelayAssignment> {
+  //
+  // Front doors (`route`, only with config.frontDoorUrls): see EdgeRoute. The answered origin is
+  // recorded next to the region, and phones read it (edgeAssignment).
+  async moveToEdge(
+    identity: Identity,
+    mapFloor: number,
+    region?: RelayRegion,
+    route?: EdgeRoute
+  ): Promise<RelayAssignment> {
+    if (this.config.frontDoorUrls !== undefined && route !== undefined) {
+      return await this.moveToEdgeWithFrontDoor(identity, mapFloor, region, route)
+    }
     const now = this.now()
     const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
     const recordRegion = async (transaction: RelayDatabase, onlyIfChanged = false) => {
@@ -380,6 +461,225 @@ export class EdgeAssignments {
     })
   }
 
+  private async moveToEdgeWithFrontDoor(
+    identity: Identity,
+    mapFloor: number,
+    region: RelayRegion | undefined,
+    route: EdgeRoute
+  ): Promise<RelayAssignment> {
+    try {
+      return await this.frontDoorAttempt(identity, mapFloor, region, route)
+    } catch (error) {
+      if (!(error instanceof FrontDoorSwitchIntent)) { throw error }
+      // Write-ahead: the switch's epoch is recorded as pending, committed, before its push is sent.
+      // From then on every ask of this host (any shape) first completes it (frontDoorAttempt), so
+      // the director never answers an epoch below one the edge may hold.
+      await this.recordPendingSwitch(identity, region, error.epoch, error.cellUrl)
+      try {
+        return await this.frontDoorAttempt(identity, mapFloor, region, route)
+      } catch (retryError) {
+        // Nothing was pending to finish (another director moved the row meanwhile, e.g. while
+        // directors read different edge.json generations) and this ask wants a switch again:
+        // busy, and the host re-asks once the directors agree.
+        if (retryError instanceof FrontDoorSwitchIntent) { throw new EdgeMoveBusyError() }
+        throw retryError
+      }
+    }
+  }
+
+  // Its own short transaction under the assignment row lock. Only while the row is on the edge
+  // below the pending epoch: a host that moved meanwhile has nothing to complete.
+  private async recordPendingSwitch(
+    identity: Identity,
+    region: RelayRegion | undefined,
+    epoch: number,
+    cellUrl: string | undefined
+  ): Promise<void> {
+    await this.database.transaction(async (transaction) => {
+      let rows: SqlRow[]
+      try {
+        rows = await transaction.queryLocked(
+          `SELECT cell_id, assignment_epoch FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+          [identity.userId, identity.relayHostId],
+          { failIfUnavailable: true }
+        )
+      } catch (error) {
+        if (error instanceof Error && error.message === 'database_lock_unavailable') {
+          throw new EdgeMoveBusyError()
+        }
+        throw error
+      }
+      const row = rows[0]
+      if (!row || text(row, 'cell_id') !== EDGE_CELL_ID || integer(row, 'assignment_epoch') >= epoch) {
+        return
+      }
+      await transaction.query(
+        `INSERT INTO relay_edge_host_regions
+         (user_id, relay_host_id, region, recorded_at, cell_url, pending_epoch, pending_cell_url)
+         VALUES (?, ?, ?, ?, NULL, ?, ?)
+         ON CONFLICT (user_id, relay_host_id) DO UPDATE
+           SET pending_epoch = excluded.pending_epoch, pending_cell_url = excluded.pending_cell_url`,
+        [identity.userId, identity.relayHostId, region ?? RELAY_DEFAULT_REGION, this.now(), epoch, cellUrl ?? null]
+      )
+    })
+  }
+
+  private async frontDoorAttempt(
+    identity: Identity,
+    mapFloor: number,
+    region: RelayRegion | undefined,
+    route: EdgeRoute
+  ): Promise<RelayAssignment> {
+    const now = this.now()
+    const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+    const chosen = this.allowedFrontDoor(route.frontDoor)
+    const viaFrontDoor = chosen !== undefined
+    // apac only for a host mapped by its country: a host listed by id (dogfood, a VPN) may be anywhere.
+    const placeApac = viaFrontDoor && route.byCountry === true
+    const record = async (transaction: RelayDatabase, cellUrl: string | undefined, onlyIfChanged = false) => {
+      // Every committed answer here also clears any pending switch (completed, or left behind).
+      await transaction.query(
+        `INSERT INTO relay_edge_host_regions
+         (user_id, relay_host_id, region, recorded_at, cell_url, pending_epoch, pending_cell_url)
+         VALUES (?, ?, ?, ?, ?, NULL, NULL)
+         ON CONFLICT (user_id, relay_host_id) DO UPDATE
+           SET region = excluded.region, recorded_at = excluded.recorded_at, cell_url = excluded.cell_url,
+               pending_epoch = NULL, pending_cell_url = NULL
+           ${
+             onlyIfChanged
+               ? `WHERE relay_edge_host_regions.region IS DISTINCT FROM excluded.region
+                    OR relay_edge_host_regions.cell_url IS DISTINCT FROM excluded.cell_url
+                    OR relay_edge_host_regions.pending_epoch IS NOT NULL`
+               : ''
+           }`,
+        [identity.userId, identity.relayHostId, region ?? RELAY_DEFAULT_REGION, now, cellUrl ?? null]
+      )
+    }
+    return await this.database.transaction(async (transaction) => {
+      let rows: SqlRow[]
+      try {
+        rows = await transaction.queryLocked(
+          `SELECT * FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+          [identity.userId, identity.relayHostId],
+          { failIfUnavailable: true }
+        )
+      } catch (error) {
+        if (error instanceof Error && error.message === 'database_lock_unavailable') {
+          throw new EdgeMoveBusyError()
+        }
+        throw error
+      }
+      const row = rows[0]
+      if (!row) {
+        const epoch = mapFloor + 1
+        const inserted = await transaction.query(
+          `INSERT INTO relay_assignments
+           (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at, last_activity_at,
+            reserved_controls, reserved_splices, reserved_invites, pending_installs,
+            pending_confirmations, migration_leases)
+           VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0)
+           ON CONFLICT (user_id, relay_host_id) DO NOTHING
+           RETURNING assignment_epoch`,
+          [identity.userId, identity.relayHostId, EDGE_CELL_ID, epoch, leaseExpiresAt, now]
+        )
+        if (inserted.length === 1) {
+          const pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor: placeApac })
+          await record(transaction, chosen)
+          return this.answer(identity, pushed, leaseExpiresAt, chosen)
+        }
+        const winner = (
+          await transaction.query(
+            `SELECT a.cell_id, a.assignment_epoch, a.lease_expires_at, r.cell_url
+             FROM relay_assignments a
+             LEFT JOIN relay_edge_host_regions r ON r.user_id = a.user_id AND r.relay_host_id = a.relay_host_id
+             WHERE a.user_id = ? AND a.relay_host_id = ?`,
+            [identity.userId, identity.relayHostId]
+          )
+        )[0]
+        if (!winner || text(winner, 'cell_id') !== EDGE_CELL_ID) { throw new EdgeMoveBusyError() }
+        return this.answer(
+          identity,
+          integer(winner, 'assignment_epoch'),
+          integer(winner, 'lease_expires_at'),
+          this.allowedFrontDoor(winner.cell_url)
+        )
+      }
+      if (text(row, 'cell_id') === EDGE_CELL_ID) {
+        const rowEpoch = integer(row, 'assignment_epoch')
+        const recordRow = (
+          await transaction.query(
+            `SELECT cell_url, pending_epoch, pending_cell_url FROM relay_edge_host_regions
+             WHERE user_id = ? AND relay_host_id = ?`,
+            [identity.userId, identity.relayHostId]
+          )
+        )[0]
+        const pendingEpoch =
+          recordRow?.pending_epoch === null || recordRow?.pending_epoch === undefined ? undefined : integer(recordRow, 'pending_epoch')
+        if (pendingEpoch !== undefined && pendingEpoch > rowEpoch) {
+          // A switch whose push was (or may have been) sent: the edge may hold pendingEpoch. Finish
+          // it before anything else, whatever this ask's shape: push the same epoch again (answered
+          // `applied` or `unchanged`; an edge further ahead is minted above by pushOnto), then commit.
+          const target = this.allowedFrontDoor(recordRow?.pending_cell_url)
+          await transaction.query(
+            `UPDATE relay_assignments SET assignment_epoch = ?, lease_expires_at = ?, last_activity_at = ?
+             WHERE user_id = ? AND relay_host_id = ?`,
+            [pendingEpoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
+          )
+          let pushed: number
+          try {
+            pushed = await this.pushOnto(transaction, identity, pendingEpoch, region, { devices: false })
+          } catch (error) {
+            // Not done: answering the row's epoch could be below the edge's. The host re-asks.
+            if (error instanceof EdgeMoveDeferredError) { throw new EdgeMoveBusyError() }
+            throw error
+          }
+          await record(transaction, target)
+          console.warn(
+            JSON.stringify({
+              event: 'orca_relay_edge_front_door_switched',
+              to: target === undefined ? 'edge' : 'front_door',
+              assignmentEpoch: pushed
+            })
+          )
+          return this.answer(identity, pushed, leaseExpiresAt, target)
+        }
+        // A recorded front door that left the boot list is the edge's own URL (what phones are told).
+        const recorded = this.allowedFrontDoor(recordRow?.cell_url)
+        // Sticky: only a real reconnect changes origin (route.switchable).
+        if (!route.switchable || chosen === recorded) {
+          await transaction.query(
+            `UPDATE relay_assignments SET lease_expires_at = ?, last_activity_at = ?
+             WHERE user_id = ? AND relay_host_id = ?`,
+            [leaseExpiresAt, now, identity.userId, identity.relayHostId]
+          )
+          await record(transaction, recorded, true)
+          return this.answer(identity, rowEpoch, leaseExpiresAt, recorded)
+        }
+        // A switch: leave this transaction with nothing written, record it as pending, then finish it.
+        throw new FrontDoorSwitchIntent(Math.max(rowEpoch, mapFloor) + 1, chosen)
+      }
+      if (requestUnits(row) > 0) { throw new EdgeMoveDeferredError('units_held') }
+      const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1
+      await transaction.query(
+        `UPDATE relay_assignments
+         SET cell_id = ?, assignment_epoch = ?, lease_expires_at = ?, last_activity_at = ?
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [EDGE_CELL_ID, epoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
+      )
+      const pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor: placeApac })
+      await record(transaction, chosen)
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_edge_moved',
+          fromCellId: text(row, 'cell_id'),
+          assignmentEpoch: pushed,
+          ...(viaFrontDoor ? { frontDoor: true } : {})
+        })
+      )
+      return this.answer(identity, pushed, leaseExpiresAt, chosen)
+    })
+  }
+
   // Pushes the row just written (epoch `epoch`, still uncommitted) with the host's devices. An edge
   // that already holds a newer or different epoch (an earlier push whose move never committed)
   // names it; the row is re-minted above it once. Any failure rolls the move back (503, retry).
@@ -387,16 +687,22 @@ export class EdgeAssignments {
     transaction: RelayDatabase,
     identity: Identity,
     epoch: number,
-    region: RelayRegion | undefined
+    region: RelayRegion | undefined,
+    options: { viaFrontDoor?: boolean; devices?: boolean } = {}
   ): Promise<number> {
     if (!this.admin) return epoch
-    const devices = (
-      await transaction.query(
-        `SELECT ${DEVICE_COLUMNS.join(', ')} FROM relay_devices
-         WHERE user_id = ? AND relay_host_id = ? ORDER BY relay_device_id`,
-        [identity.userId, identity.relayHostId]
-      )
-    ).map(deviceRow)
+    // Without devices (an epoch bump of a host already on the edge): the edge keeps its own set,
+    // which is the source of truth while the host is there.
+    const devices =
+      options.devices === false
+        ? undefined
+        : (
+            await transaction.query(
+              `SELECT ${DEVICE_COLUMNS.join(', ')} FROM relay_devices
+               WHERE user_id = ? AND relay_host_id = ? ORDER BY relay_device_id`,
+              [identity.userId, identity.relayHostId]
+            )
+          ).map(deviceRow)
     let assignmentEpoch = epoch
     for (let attempt = 0; attempt < 2; attempt += 1) {
       let result
@@ -405,8 +711,8 @@ export class EdgeAssignments {
           ...identity,
           cellId: EDGE_CELL_ID,
           assignmentEpoch,
-          devices,
-          locationHint: edgeLocationHint(region)
+          ...(devices === undefined ? {} : { devices }),
+          locationHint: edgeLocationHint(region, options.viaFrontDoor)
         })
       } catch (error) {
         if (error instanceof EdgeAdminUnavailableError) throw new EdgeMoveDeferredError('push_failed')
@@ -542,11 +848,11 @@ export class EdgeAssignments {
     return await fenceEdge(this.database, this.admin, { ...identity, cellId, assignmentEpoch }, attempts, this.now())
   }
 
-  private answer(identity: Identity, assignmentEpoch: number, leaseExpiresAt: number): RelayAssignment {
+  private answer(identity: Identity, assignmentEpoch: number, leaseExpiresAt: number, frontDoor?: string): RelayAssignment {
     return {
       ...identity,
       cellId: EDGE_CELL_ID,
-      cellUrl: this.config.cellUrl,
+      cellUrl: frontDoor ?? this.config.cellUrl,
       assignmentEpoch,
       leaseExpiresAt
     }

@@ -732,6 +732,14 @@ export const POSTGRES_SCHEMA_MIGRATIONS = [
   // The cap the cell last reported enforcing; see cell-connection-cap.ts. Nullable with no default,
   // so the rewrite is catalog-only, and a director that predates it neither reads nor clears it.
   `ALTER TABLE relay_cell_connection_limits ADD COLUMN IF NOT EXISTS reported_hard_cap BIGINT`,
+  // The front door a relay edge host was answered with (edge-relay.ts); NULL is the edge's own URL.
+  // Nullable with no default, so catalog-only on a small table; older directors neither read nor
+  // write it (their upsert leaves it as it was).
+  `ALTER TABLE relay_edge_host_regions ADD COLUMN IF NOT EXISTS cell_url TEXT`,
+  // A front-door switch recorded before its push is sent (edge-relay.ts): the epoch the edge may
+  // hold, and the origin it switches to (NULL: the edge's own URL). Same catalog-only shape.
+  `ALTER TABLE relay_edge_host_regions ADD COLUMN IF NOT EXISTS pending_epoch BIGINT`,
+  `ALTER TABLE relay_edge_host_regions ADD COLUMN IF NOT EXISTS pending_cell_url TEXT`,
   // Deferrable DROP: one boot must win ACCESS EXCLUSIVE against continuous writes; restarting 28 directors would repeat the lock queue. Once absent, catalog precheck skips it.
   `-- schema-deferrable: one boot has to win ACCESS EXCLUSIVE on a table written ~475/s
    DROP INDEX IF EXISTS relay_assignment_activity_expiry`,
@@ -1475,7 +1483,10 @@ async function applySchema(database: RelayDatabase): Promise<void> {
   for (const [table, column, definition] of [
     ['relay_control_capabilities', 'idle_regional_rehome', 'BIGINT NOT NULL DEFAULT 0'],
     ['relay_region_rehome_attempts', 'source_generation', 'BIGINT NOT NULL DEFAULT 0'],
-    ['relay_cell_connection_limits', 'reported_hard_cap', 'BIGINT']
+    ['relay_cell_connection_limits', 'reported_hard_cap', 'BIGINT'],
+    ['relay_edge_host_regions', 'cell_url', 'TEXT'],
+    ['relay_edge_host_regions', 'pending_epoch', 'BIGINT'],
+    ['relay_edge_host_regions', 'pending_cell_url', 'TEXT']
   ]) {
     const columns = await database.query('SELECT name FROM pragma_table_info(?)', [table])
     if (!columns.some((existing) => existing.name === column)) {

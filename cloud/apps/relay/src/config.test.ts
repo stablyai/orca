@@ -385,6 +385,27 @@ describe('relay edge configuration', () => {
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://relay.example.com' })).toThrow()
   })
 
+  it('parses the front door allowlist and refuses non-origins, http, the edge URL and the director URL', () => {
+    const env = {
+      ...directorEnvironment(),
+      ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com',
+      ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY: 'edge-admin-key-with-at-least-32-bytes!!'
+    }
+    expect(loadRelayConfig(env).edge?.frontDoorUrls).toBeUndefined()
+    expect(loadRelayConfig({ ...env, ORCA_RELAY_EDGE_FRONT_DOOR_URLS: '' }).edge?.frontDoorUrls).toBeUndefined()
+    expect(
+      loadRelayConfig({ ...env, ORCA_RELAY_EDGE_FRONT_DOOR_URLS: ' https://cn.relay.example.com , ' }).edge?.frontDoorUrls
+    ).toEqual(new Set(['https://cn.relay.example.com']))
+    for (const bad of [
+      'https://cn.relay.example.com/x',
+      'http://cn.relay.example.com',
+      'https://edge.relay.example.com',
+      'https://relay.example.com'
+    ]) {
+      expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_FRONT_DOOR_URLS: bad })).toThrow()
+    }
+  })
+
   it('loads the IP country table at boot, and fails the boot when it cannot', () => {
     const env = {
       ...directorEnvironment(),

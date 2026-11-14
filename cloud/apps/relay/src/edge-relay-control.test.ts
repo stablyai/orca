@@ -116,6 +116,22 @@ describe('edge runtime control object', () => {
     control.stop()
   })
 
+  it('a bad frontDoor written over a good one keeps the good one; the rest of the write applies', async () => {
+    const google = fakeGoogle()
+    const control = startEdgeControl({ fetch: google.fetchImpl, autoStart: false })
+    const door = { url: 'https://cn.relay.example.com', countries: ['CN'] }
+    google.store(2, { mode: 'on', frontDoor: door })
+    await control.poll()
+    expect(control.flags()).toEqual({ mode: 'on', frontDoor: door })
+    google.store(3, { mode: 'off', frontDoor: { url: 'http://typo.example.com' } })
+    await control.poll()
+    expect(control.flags()).toEqual({ mode: 'off', frontDoor: door })
+    google.store(4, { mode: 'on' })
+    await control.poll()
+    expect(control.flags()).toEqual({ mode: 'on' })
+    control.stop()
+  })
+
   it('logs a throwing listener and still applies the flags', async () => {
     const google = fakeGoogle()
     const control = startEdgeControl({ fetch: google.fetchImpl, autoStart: false })

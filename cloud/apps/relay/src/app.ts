@@ -62,6 +62,7 @@ import {
   mayBeOnEdge,
   type EdgeAssignments
 } from './edge-relay.js'
+import { edgeRoute } from './edge-relay-route.js'
 import { requestCountry } from './ip-country.js'
 import {
   DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
@@ -531,7 +532,9 @@ export function createRelayApp(
             mapEpochFloor(operations.shadowSeats, identity, Date.now()),
             operations.reservePlacement?.rowEpochFloor(identity) ?? 0
           ),
-          requestedRegion
+          requestedRegion,
+          // Only with front doors configured (ORCA_RELAY_EDGE_FRONT_DOOR_URLS); else as before.
+          edgeRoute(edge.config, claims.relayHostId, requestedRegion, country, body.data)
         )
       } catch (error) {
         if (error instanceof EdgeMoveDeferredError) {
