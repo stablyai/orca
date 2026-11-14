@@ -9,11 +9,15 @@ export function sliceTerminalOrigins(
   start = 0,
   end = Infinity
 ): TerminalOriginRuns {
-  return runs.flatMap((run) => {
+  const sliced: TerminalOriginRun[] = []
+  for (const run of runs) {
     const left = Math.max(start, run.start)
     const right = Math.min(end, run.end)
-    return right > left ? [{ start: left - start, end: right - start, origin: run.origin }] : []
-  })
+    if (right > left) {
+      sliced.push({ start: left - start, end: right - start, origin: run.origin })
+    }
+  }
+  return sliced
 }
 
 export function terminalOriginAt(

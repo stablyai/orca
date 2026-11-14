@@ -52,16 +52,6 @@ export class HeadlessOriginLineEdits {
     private readonly assign: (line: OriginBufferLine, state: OriginLineState) => void
   ) {}
 
-  collect(state: OriginLineAttachment, index: number, codepoint: boolean): boolean {
-    if (!state.editing) {
-      return false
-    }
-    if (codepoint) {
-      this.erase(state, index)
-    }
-    return true
-  }
-
   erase(state: OriginLineAttachment, index: number): void {
     const erased = (state.erased ??= [])
     const last = erased.at(-1)

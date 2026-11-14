@@ -52,10 +52,6 @@ export class HeadlessOriginBuffers {
     }
     this.lists.add(list)
     const get = list.get
-    list.get = (index) => {
-      const line = get.call(list, index)
-      return line ? this.attachLine(line) : undefined
-    }
     const set = list.set
     list.set = (index, line) => {
       set.call(list, index, this.attachLine(line))
@@ -104,7 +100,10 @@ export class HeadlessOriginBuffers {
       })
     }
     for (let i = 0; i < list.length; i++) {
-      list.get(i)
+      const line = get.call(list, i)
+      if (line) {
+        this.attachLine(line)
+      }
     }
   }
 }

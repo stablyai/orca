@@ -108,7 +108,12 @@ export function applyTerminalLineControls(
       text: latestRedraw,
       cursorColumn: latestRedraw.length,
       hadControl: carriageIndex !== -1,
-      ...(origins ? { origins: sliceTerminalOrigins(origins, carriageIndex + 1) } : {})
+      ...(origins
+        ? {
+            origins:
+              carriageIndex === -1 ? origins : sliceTerminalOrigins(origins, carriageIndex + 1)
+          }
+        : {})
     }
   }
 

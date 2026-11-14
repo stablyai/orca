@@ -1,4 +1,5 @@
 import type { IBufferCell, Terminal } from '@xterm/headless'
+import type { HeadlessContentOrigins } from './headless-content-origins'
 import {
   getTerminalLineOrigins,
   setTerminalLineOrigins,
@@ -88,7 +89,7 @@ export type OriginLineMethods = Pick<
   | 'copyCellsFrom'
 >
 export type OriginLineAttachment = OriginLineState & {
-  owner: object
+  owner: HeadlessContentOrigins
   originals: OriginLineMethods
   editing: boolean
   recordSets: boolean

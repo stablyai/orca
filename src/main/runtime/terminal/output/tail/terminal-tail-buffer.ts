@@ -111,7 +111,9 @@ export function appendNormalizedToTailBuffer(
     setTerminalLineOrigins(
       newlyCompletedLines,
       pieceOrigins.map((runs, index) =>
-        sliceTerminalOrigins(runs, 0, newlyCompletedLines[index]!.length)
+        newlyCompletedLines[index]!.length === pieces[index]!.length
+          ? runs
+          : sliceTerminalOrigins(runs, 0, newlyCompletedLines[index]!.length)
       )
     )
   }

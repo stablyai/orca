@@ -1,7 +1,11 @@
 import type { Terminal } from '@xterm/headless'
 import { HeadlessOriginCellSnapshots } from './headless-origin-cell-snapshots'
 import { HeadlessOriginBuffers } from './headless-origin-buffers'
-import { captureOriginLineMethods, createOriginLineHooks } from './headless-origin-line-hooks'
+import {
+  captureOriginLineMethods,
+  ORIGIN_LINE_HOOKS,
+  REQUIRED_ORIGIN_LINE_HOOKS
+} from './headless-origin-line-hooks'
 import { HeadlessOriginLineEdits, replaceOriginCells } from './headless-origin-line-edits'
 import {
   terminalOriginAt,
@@ -24,39 +28,12 @@ import {
 
 /** Certificates follow the editor's actual line identities; no second screen or global patch. */
 export class HeadlessContentOrigins {
-  private readonly cells = new HeadlessOriginCellSnapshots((line) => this.state(line))
+  readonly cells = new HeadlessOriginCellSnapshots((line) => this.state(line))
   private sharedOriginals?: OriginLineMethods
-  private readonly edits = new HeadlessOriginLineEdits(
+  readonly edits = new HeadlessOriginLineEdits(
     (line) => this.state(line),
     (line, state) => this.assign(line, state)
   )
-  private readonly hooks = createOriginLineHooks({
-    loadCell: (line, index, cell) => this.cells.load(line, index, cell),
-    setCell: (line, index, cell) => this.setCell(line, index, cell),
-    setCellFromCodepoint: (line, index, code, width, attrs) => {
-      const state = readOriginLineAttachment(line)!
-      state.originals.setCellFromCodepoint.call(line, index, code, width, attrs)
-      if (!this.edits.collect(state, index, true)) {
-        this.printed(line, index, width, code)
-      }
-    },
-    addCodepointToCell: (line, index, code, width) => this.combined(line, index, code, width),
-    set: (line, index, cell) => {
-      readOriginLineAttachment(line)!.originals.set.call(line, index, cell)
-      this.writeCell(line, index)
-    },
-    insertCells: (line, position, count, fill) => this.edits.insert(line, position, count, fill),
-    deleteCells: (line, position, count, fill) => this.edits.remove(line, position, count, fill),
-    replaceCells: (line, start, end, fill, protect) =>
-      this.edits.replace(line, start, end, fill, protect),
-    fill: (line, cell, protect) => this.edits.fill(line, cell, protect),
-    resize: (line, cols, cell) => this.edits.resize(line, cols, cell),
-    copyFrom: (line, source, blank) => this.copyFrom(line, source, blank),
-    clone: (line, blank) => this.clone(line, blank),
-    copyCellsFrom: (line, source, from, to, count, reverse) =>
-      this.copyCells(line, source, from, to, count, reverse)
-  })
-  private readonly requiredHooks = (({ set: _set, ...hooks }) => hooks)(this.hooks)
   private readonly attachments: HeadlessOriginBuffers
   private pending?: {
     line: OriginBufferLine
@@ -144,7 +121,7 @@ export class HeadlessContentOrigins {
     })
   }
 
-  private printed(line: OriginBufferLine, index: number, width: number, code: number): void {
+  printed(line: OriginBufferLine, index: number, width: number, code: number): void {
     if (width === 0) {
       return
     }
@@ -158,7 +135,7 @@ export class HeadlessContentOrigins {
     }
   }
 
-  private combined(line: OriginBufferLine, index: number, code: number, width: number): void {
+  combined(line: OriginBufferLine, index: number, code: number, width: number): void {
     const combine = readOriginLineAttachment(line)!.originals.addCodepointToCell
     const pending = this.pending
     if (
@@ -209,7 +186,7 @@ export class HeadlessContentOrigins {
     this.assign(line, { runs: state.runs, components })
   }
 
-  private writeCell(
+  writeCell(
     line: OriginBufferLine,
     index: number,
     runs?: TerminalOriginRuns,
@@ -233,7 +210,7 @@ export class HeadlessContentOrigins {
     })
   }
 
-  private setCell(line: OriginBufferLine, index: number, cell: OriginCell): void {
+  setCell(line: OriginBufferLine, index: number, cell: OriginCell): void {
     const state = readOriginLineAttachment(line)!
     const origin = this.cells.get(cell)
     state.originals.setCell.call(line, index, cell)
@@ -251,7 +228,7 @@ export class HeadlessContentOrigins {
     }
   }
 
-  private copyFrom(line: OriginBufferLine, source: OriginBufferLine, blank?: boolean): void {
+  copyFrom(line: OriginBufferLine, source: OriginBufferLine, blank?: boolean): void {
     const state = this.state(source)
     readOriginLineAttachment(line)!.originals.copyFrom.call(line, source, blank)
     this.assign(line, {
@@ -260,7 +237,7 @@ export class HeadlessContentOrigins {
     })
   }
 
-  private clone(line: OriginBufferLine, blank?: boolean): OriginBufferLine {
+  clone(line: OriginBufferLine, blank?: boolean): OriginBufferLine {
     const result = this.attachLine(
       readOriginLineAttachment(line)!.originals.clone.call(line, blank)
     )
@@ -272,7 +249,7 @@ export class HeadlessContentOrigins {
     return result
   }
 
-  private copyCells(
+  copyCells(
     line: OriginBufferLine,
     source: OriginBufferLine,
     from: number,
@@ -300,7 +277,7 @@ export class HeadlessContentOrigins {
       editing: false,
       recordSets: true
     })
-    Object.assign(line, originals.set ? this.hooks : this.requiredHooks)
+    Object.assign(line, originals.set ? ORIGIN_LINE_HOOKS : REQUIRED_ORIGIN_LINE_HOOKS)
     return line
   }
 }

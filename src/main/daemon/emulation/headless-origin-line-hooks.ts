@@ -1,11 +1,8 @@
-import type { OriginBufferLine, OriginLineMethods } from './headless-content-origin-lines'
-
-type OriginLineHandlers = {
-  [K in keyof OriginLineMethods]: (
-    line: OriginBufferLine,
-    ...args: Parameters<OriginLineMethods[K]>
-  ) => ReturnType<OriginLineMethods[K]>
-}
+import {
+  readOriginLineAttachment,
+  type OriginBufferLine,
+  type OriginLineMethods
+} from './headless-content-origin-lines'
 
 const LINE_METHOD_NAMES = [
   'loadCell',
@@ -23,50 +20,57 @@ const LINE_METHOD_NAMES = [
   'copyCellsFrom'
 ] as const
 
-/** One method target per emulator; original methods are captured before any hook is installed. */
-export function createOriginLineHooks(handlers: OriginLineHandlers): OriginLineMethods {
-  return {
-    loadCell(this: OriginBufferLine, index, cell) {
-      return handlers.loadCell(this, index, cell)
-    },
-    setCell(this: OriginBufferLine, index, cell) {
-      handlers.setCell(this, index, cell)
-    },
-    setCellFromCodepoint(this: OriginBufferLine, index, code, width, attrs) {
-      handlers.setCellFromCodepoint(this, index, code, width, attrs)
-    },
-    addCodepointToCell(this: OriginBufferLine, index, code, width) {
-      handlers.addCodepointToCell(this, index, code, width)
-    },
-    set(this: OriginBufferLine, index, cell) {
-      handlers.set(this, index, cell)
-    },
-    insertCells(this: OriginBufferLine, position, count, fill) {
-      handlers.insertCells(this, position, count, fill)
-    },
-    deleteCells(this: OriginBufferLine, position, count, fill) {
-      handlers.deleteCells(this, position, count, fill)
-    },
-    replaceCells(this: OriginBufferLine, start, end, fill, protect) {
-      handlers.replaceCells(this, start, end, fill, protect)
-    },
-    fill(this: OriginBufferLine, cell, protect) {
-      handlers.fill(this, cell, protect)
-    },
-    resize(this: OriginBufferLine, cols, cell) {
-      return handlers.resize(this, cols, cell)
-    },
-    copyFrom(this: OriginBufferLine, source, blank) {
-      handlers.copyFrom(this, source, blank)
-    },
-    clone(this: OriginBufferLine, blank) {
-      return handlers.clone(this, blank)
-    },
-    copyCellsFrom(this: OriginBufferLine, source, from, to, count, reverse) {
-      handlers.copyCellsFrom(this, source, from, to, count, reverse)
+/** Shared implementations are installed only on rows attached to an emulator. */
+export const ORIGIN_LINE_HOOKS: OriginLineMethods = {
+  loadCell(this: OriginBufferLine, index, cell) {
+    return readOriginLineAttachment(this)!.owner.cells.load(this, index, cell)
+  },
+  setCell(this: OriginBufferLine, index, cell) {
+    readOriginLineAttachment(this)!.owner.setCell(this, index, cell)
+  },
+  setCellFromCodepoint(this: OriginBufferLine, index, code, width, attrs) {
+    const state = readOriginLineAttachment(this)!
+    state.originals.setCellFromCodepoint.call(this, index, code, width, attrs)
+    if (state.editing) {
+      state.owner.edits.erase(state, index)
+    } else {
+      state.owner.printed(this, index, width, code)
     }
+  },
+  addCodepointToCell(this: OriginBufferLine, index, code, width) {
+    readOriginLineAttachment(this)!.owner.combined(this, index, code, width)
+  },
+  set(this: OriginBufferLine, index, cell) {
+    const state = readOriginLineAttachment(this)!
+    state.originals.set.call(this, index, cell)
+    state.owner.writeCell(this, index)
+  },
+  insertCells(this: OriginBufferLine, position, count, fill) {
+    readOriginLineAttachment(this)!.owner.edits.insert(this, position, count, fill)
+  },
+  deleteCells(this: OriginBufferLine, position, count, fill) {
+    readOriginLineAttachment(this)!.owner.edits.remove(this, position, count, fill)
+  },
+  replaceCells(this: OriginBufferLine, start, end, fill, protect) {
+    readOriginLineAttachment(this)!.owner.edits.replace(this, start, end, fill, protect)
+  },
+  fill(this: OriginBufferLine, cell, protect) {
+    readOriginLineAttachment(this)!.owner.edits.fill(this, cell, protect)
+  },
+  resize(this: OriginBufferLine, cols, cell) {
+    return readOriginLineAttachment(this)!.owner.edits.resize(this, cols, cell)
+  },
+  copyFrom(this: OriginBufferLine, source, blank) {
+    readOriginLineAttachment(this)!.owner.copyFrom(this, source, blank)
+  },
+  clone(this: OriginBufferLine, blank) {
+    return readOriginLineAttachment(this)!.owner.clone(this, blank)
+  },
+  copyCellsFrom(this: OriginBufferLine, source, from, to, count, reverse) {
+    readOriginLineAttachment(this)!.owner.copyCells(this, source, from, to, count, reverse)
   }
 }
+export const { set: _optionalSetHook, ...REQUIRED_ORIGIN_LINE_HOOKS } = ORIGIN_LINE_HOOKS
 
 export function captureOriginLineMethods(
   line: OriginBufferLine,
