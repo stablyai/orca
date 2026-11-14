@@ -244,6 +244,22 @@ export function ClaudeSwitcherForOwner({
     signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
   }))
   const signedOutRows = rows.filter((row) => row.signInId)
+  const renderAccountUsage = (
+    active: boolean,
+    inactiveUsage: (typeof rows)[number]['inactiveUsage']
+  ): React.ReactNode => {
+    // Why: inactiveClaudeAccounts omits the active account, so its Left and Reset stayed blank.
+    // A paired server's row must not reuse this desktop's Claude limits.
+    if (active && !hasActiveRuntimeEnvironment && claude) {
+      return <InlineUsageBars limits={claude} isFetching={claude.status === 'fetching'} />
+    }
+    if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
+      return <InlineUsageSkeleton />
+    }
+    return inactiveUsage?.rateLimits ? (
+      <InlineUsageBars limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
+    ) : null
+  }
   const renderRow = ({
     target,
     inactiveUsage,
@@ -278,11 +294,7 @@ export function ClaudeSwitcherForOwner({
         ) : undefined
       }
     >
-      {signInId ? null : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-        <InlineUsageSkeleton />
-      ) : inactiveUsage?.rateLimits ? (
-        <InlineUsageBars limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
-      ) : null}
+      {signInId ? null : renderAccountUsage(target.active, inactiveUsage)}
     </AccountSwitchRowItem>
   )
 
