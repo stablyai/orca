@@ -17,4 +17,6 @@ export type StructuredAgentSessionConversationCopyInput = {
   identity: AgentSessionJournalIdentity
   providerSessionId: string
   accountHome: AgentSessionAccountHome
+  /** The copy's own worktree when it differs from the source chat's; absent, the source's. */
+  destinationCwd?: string
 }

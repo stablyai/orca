@@ -37,6 +37,10 @@ vi.mock(
 )
 
 import { AI_VAULT_METHODS } from './ai-vault'
+import {
+  AiVaultAppendChatForkImportParams,
+  AiVaultExportChatForkParams
+} from '../../../../../shared/rpc-contract/ai-vault/ai-vault-fork-transfer-params'
 
 import '../../../../../shared/rpc-contract/ai-vault/ai-vault-params'
 import { agentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -264,5 +268,34 @@ describe('aiVault.listSessions handler + shared cache', () => {
       'runtime:remote-server:claude:sess-1:/tmp/t.jsonl'
     )
     expect(runtimeResponse.result.issues[0]?.executionHostId).toBe('runtime:remote-server')
+  })
+})
+
+describe('chat fork transfer params', () => {
+  const sessionId = '6f1c2a8e-3b4d-4c5e-8f60-718293a4b5c6'
+
+  it('never accepts a transcript path or a non-uuid session for an export', () => {
+    for (const terminal of [
+      { sessionId, throughEntryId: 'entry-1', filePath: '/home/user/.ssh/id_ed25519' },
+      { sessionId: '../../secrets', throughEntryId: 'entry-1' }
+    ]) {
+      expect(AiVaultExportChatForkParams.safeParse({ terminal }).success).toBe(false)
+    }
+    expect(
+      AiVaultExportChatForkParams.safeParse({ terminal: { sessionId, throughEntryId: 'entry-1' } })
+        .success
+    ).toBe(true)
+  })
+
+  it('refuses an import chunk larger than one transfer chunk', () => {
+    const chunk = { importId: sessionId, offset: 0 }
+    expect(
+      AiVaultAppendChatForkImportParams.safeParse({ ...chunk, bytesBase64: 'A'.repeat(349_540) })
+        .success
+    ).toBe(false)
+    expect(
+      AiVaultAppendChatForkImportParams.safeParse({ ...chunk, bytesBase64: 'A'.repeat(349_536) })
+        .success
+    ).toBe(true)
   })
 })

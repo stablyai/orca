@@ -9,7 +9,7 @@ import { useAppStore } from '../../store/index'
 import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
-import { NativeChatSubagentTranscripts } from './subagents/NativeChatSubagentTranscripts'
+import { NativeChatForkableTranscripts } from './messages/actions/NativeChatTerminalForkProvider'
 import { closeNativeChatSubagentOnEscape } from './subagents/native-chat-open-subagent'
 import {
   useNativeChatInteractiveSendReveal,
@@ -351,7 +351,8 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatSubagentTranscripts
+          <NativeChatForkableTranscripts
+            fork={{ agent, sessionId, transcriptPath, terminalTabId, messages: session.messages }}
             find={find}
             paneKey={paneKey}
             ref={messageListRef}

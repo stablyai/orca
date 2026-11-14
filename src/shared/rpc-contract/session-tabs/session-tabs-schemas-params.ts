@@ -153,9 +153,15 @@ export const SetTabProps = WorktreeTabSelector.extend({
 
 export const CreateTerminalTab = WorktreeTabSelector.extend({
   sourceChatFork: z
-    .object({ sessionId: z.string().min(1) })
+    .object({
+      sessionId: z.string().min(1),
+      // A terminal Claude chat's fork stops at this transcript entry; absent, a chat session's fork.
+      throughEntryId: z.string().min(1).max(512).optional()
+    })
     .strict()
     .optional(),
+  // A chat another host exported and this host placed (aiVault.commitChatForkImport).
+  sourceChatImport: z.object({ importId: z.uuid() }).strict().optional(),
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
   command: z.string().optional(),
@@ -194,7 +200,14 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   // Retry the same in-flight create on double-tap/reconnect instead of spawning another terminal.
   clientMutationId: z.string().min(1).max(128).optional()
 }).superRefine((value, context) => {
-  if (value.sourceChatFork) {
+  if (value.sourceChatFork && value.sourceChatImport) {
+    context.addIssue({
+      code: 'custom',
+      path: ['sourceChatImport'],
+      message: 'A fork has one source'
+    })
+  }
+  if (value.sourceChatFork || value.sourceChatImport) {
     if (!value.clientMutationId) {
       context.addIssue({
         code: 'custom',

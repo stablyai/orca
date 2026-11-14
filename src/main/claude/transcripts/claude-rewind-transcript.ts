@@ -28,6 +28,7 @@ export async function materializeClaudeConversationTranscript(input: {
   rewind?: true
   destinationDirectory?: string
   title?: string
+  rewriteCwd?: string
   signal?: AbortSignal
 }): Promise<ConversationCopy | null> {
   input.signal?.throwIfAborted()
@@ -43,6 +44,7 @@ export async function materializeClaudeConversationTranscript(input: {
     throughEntryId: input.throughEntryId,
     checkpoint: input.checkpoint,
     title: input.title,
+    ...(input.rewriteCwd ? { rewriteCwd: input.rewriteCwd } : {}),
     destinationDirectory,
     temporaryPath
   }

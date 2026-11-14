@@ -43,12 +43,13 @@ export function MobileNativeChatResponseActions({
         />
       ) : null}
       {fork && offer !== 'hidden' ? (
-        <ForkButton offer={offer} onFork={() => fork.fork(message)} />
+        <ForkButton offer={offer} onFork={() => fork.openSheet(message)} />
       ) : null}
     </View>
   )
 }
 
+/** One fork action under a response: beside this chat, or into a new worktree. */
 function ForkButton({
   offer,
   onFork

@@ -77,7 +77,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       opts.clientNavigationId && opts.supportsSplitGroupPlacement === false
         ? undefined
         : requestedAfterTabId
-    if (opts.sourceChatFork) {
+    if (opts.sourceChatFork || opts.sourceChatImport) {
       return this.createMobileChatForkTerminal({
         workspace,
         worktreeId,

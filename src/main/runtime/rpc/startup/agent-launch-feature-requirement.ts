@@ -11,6 +11,7 @@ type TerminalCreateLaunchFields = {
   launchConfig?: unknown
   resumeProviderSession?: unknown
   sourceChatFork?: unknown
+  sourceChatImport?: unknown
 }
 
 /**
@@ -26,6 +27,7 @@ export function terminalCreateFeatureRequirement(
     params.launchConfig !== undefined ||
     params.resumeProviderSession !== undefined ||
     params.sourceChatFork !== undefined ||
+    params.sourceChatImport !== undefined ||
     recognizeAgentLaunchCommand(params.command) !== null
   return agentLaunch ? ACCOUNTS : NONE
 }
