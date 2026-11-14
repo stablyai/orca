@@ -1,4 +1,7 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import {
+  acceptedAgentStatuses,
+  AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -15,7 +18,6 @@ import { useWorktreeActivityStatuses } from './use-worktree-activity-statuses'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 
