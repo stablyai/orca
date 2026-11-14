@@ -51,7 +51,8 @@ describe('orchestration worker release recovery', () => {
     )
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
       handle === 'term_worker'
-        ? ({
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies only the authority fields worker start reads.
+          ({
             terminalHandle: handle,
             paneKey: workerPaneKey,
             processIncarnation: workerIncarnation,
