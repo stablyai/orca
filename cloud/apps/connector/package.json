@@ -19,10 +19,10 @@
   "dependencies": {
     "@discordjs/rest": "2.6.3",
     "@discordjs/ws": "2.0.4",
-    "@hono/node-server": "^2.1.5",
+    "@hono/node-server": "^2.1.6",
     "@orca-cloud/cloud-database": "workspace:*",
     "@orca-cloud/connector-contract": "workspace:*",
-    "hono": "^4.13.13",
+    "hono": "^4.13.16",
     "jose": "^6.2.13",
     "zod": "^4.6.7"
   },
