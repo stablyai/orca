@@ -7233,7 +7233,8 @@
           "d1113f4660": "Failed to open browser",
           "unknownProcess": "Unknown process",
           "livePorts_one": "{{count}} live port",
-          "livePorts_other": "{{count}} live ports"
+          "livePorts_other": "{{count}} live ports",
+          "workspaceLink": "Workspace link"
         },
         "WorktreeContextMenu": {
           "c39c37676a": "Create a group and move this project into it.",
@@ -8083,6 +8084,12 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "WorktreeWorkspaceUrlField": {
+          "label": "Link",
+          "placeholder": "https://app.test/admin",
+          "hint": "Opened from the card, the status bar, and the Open Workspace Link shortcut.",
+          "invalid": "Enter a full http:// or https:// link."
         }
       },
       "shared": {
@@ -24649,6 +24656,7 @@
       "worktreeNavigateDown": "Next worktree",
       "workspaceCreate": "Create worktree",
       "workspaceRename": "Rename worktree",
+      "workspaceOpenUrl": "Open Workspace Link",
       "voiceDictation": "Dictation",
       "sidebarExplorerToggle": "Show Explorer",
       "sidebarFocusWorktreeList": "Focus worktree list",

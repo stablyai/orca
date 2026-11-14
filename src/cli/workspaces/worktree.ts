@@ -1,16 +1,14 @@
 import { withFolderSetupSupportWarning } from './folder-setup-support-warning'
-import { withWorktreeSelectorRecovery } from './worktree-selector-recovery'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord,
-  RuntimeWorktreeSetResult,
   RuntimeWorktreeCreateResult
 } from '../../shared/runtime-worktree-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
-import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
+import { removeIfFolderWorkspace } from './folder-workspace-mutations'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow } from './workspace-format'
 import { printResult } from '../output/command-result-output'
 import {
@@ -21,7 +19,6 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
-  getOptionalStringFlagAllowingEmpty,
   getPresentStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
@@ -33,8 +30,8 @@ import {
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { parseCliAgent, readCliAgentLaunch } from '../agents/agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
-import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
-import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
+import { printLineageSummary } from './worktree-lineage-summary'
+import { resolveCreateParentFields } from './worktree-parent-fields'
 import { callNamingParentEnvironment } from './worktree-parent-environment'
 import { annotatePsRows, annotateShown } from './worktree-address-annotation'
 import { refuseCurrentForRemoval } from './worktree-removal-current-refusal'
@@ -51,7 +48,6 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-import { getWorktreeReadFlags } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import {
   getOptionalSetupDecision,
@@ -63,6 +59,7 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../references/reference-input'
+import { worktreeSetHandler } from './worktree-set'
 
 function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
   const agent = getPresentStringFlag(flags, 'agent')
@@ -217,52 +214,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printLineageSummary(created.result, json)
     printResult(created, json, formatWorktreeShow)
   },
-  'worktree set': async ({ flags, client, cwd, json }) => {
-    assertWorktreeParentFlagsCompatible(
-      flags,
-      'Choose either --parent-worktree or --no-parent, not both.'
-    )
-    const parentSelector = getOptionalStringFlag(flags, 'parent-worktree')
-    const readFlags = getWorktreeReadFlags(flags)
-    const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
-      allowNull: true
-    })
-    const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
-    if (await setIfFolderWorkspace(client, flags, worktree, json)) {
-      return
-    }
-    await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
-    const parentFields = await resolveSetParentFields(flags, cwd, client)
-    const pending = callNamingParentEnvironment<RuntimeWorktreeSetResult>(client, 'worktree.set', {
-      worktree,
-      displayName: getOptionalStringFlag(flags, 'display-name'),
-      ...reviewLinks,
-      ...linearIssueLink,
-      // An explicit empty value clears the stored comment.
-      comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),
-      workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
-      ...readFlags,
-      ...parentFields,
-      noParent: flags.get('no-parent') === true
-    })
-    const result = await withWorktreeSelectorRecovery(
-      pending,
-      parentSelector
-        ? [
-            `Orca could not find the worktree selector "${worktree}" or the parent selector "${parentSelector}". The server did not identify which selector failed.`,
-            'Check both selectors with orca worktree show --worktree <selector> --json.'
-          ]
-        : []
-    )
-    if (!json) {
-      for (const warning of result.result.warnings ?? []) {
-        console.error(`warning: ${warning.message}`)
-      }
-      printSetParentLine(result.result.worktree, parentFields)
-    }
-    printResult(result, json, formatWorktreeShow)
-  },
+  'worktree set': worktreeSetHandler,
   'worktree rm': async ({ flags, client, cwd, json }) => {
     await refuseCurrentForRemoval(flags, cwd, client)
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
