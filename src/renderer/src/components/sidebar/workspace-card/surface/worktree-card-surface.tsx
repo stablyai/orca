@@ -2,6 +2,8 @@ import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { cn } from '@/lib/class-names'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { AutoRenameFailedDialog } from '../identity/AutoRenameFailedDialog'
 import WorktreeContextMenu from '../../workspace-actions/context-menu/WorktreeContextMenu'
 import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
@@ -10,6 +12,8 @@ import type { WorktreeCardController } from '../controller/use-worktree-card-con
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
 import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
+import { useWorkspaceDeleteConfirmationArmed } from '../../workspace-actions/deletion/workspace-delete-confirmation'
+import { WorkspaceDeleteConfirmNotice } from '../../workspace-actions/deletion/WorkspaceDeleteConfirmNotice'
 
 /** Shape, inset and transitions every sidebar card row shares; inactive rows add `worktree-sidebar-card-hover`. */
 export const WORKTREE_CARD_SURFACE_CLASS_NAME =
@@ -70,6 +74,8 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   )
   const { cardStyle } = geometryFor(frame.statusLane)
   const titleOnlyCard = frame.singleLine
+  const worktreeIdentity = getWorktreeHostIdentity(worktree)
+  const deleteArmed = useWorkspaceDeleteConfirmationArmed(worktreeIdentity) && !affiliateListMode
 
   const cardBody = (
     <div
@@ -133,6 +139,12 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       ) : (
         parentCardContent
       )}
+      {deleteArmed && !isDeleting ? (
+        <WorkspaceDeleteConfirmNotice
+          identity={worktreeIdentity}
+          isFolder={parseWorkspaceKey(worktree.id)?.type === 'folder'}
+        />
+      ) : null}
 
       {lineageChildren ? (
         <div
