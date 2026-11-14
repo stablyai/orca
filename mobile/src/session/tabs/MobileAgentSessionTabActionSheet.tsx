@@ -1,4 +1,4 @@
-import { ActionSheetModal } from '../../components/ActionSheetModal'
+import { ActionSheetModal } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { getMobileNativeChatCliForkActions } from '../native-chat/history/mobile-native-chat-cli-fork'
 import { useMobileAllowAutoCloseActions, workerSubjectOf } from './mobile-worker-auto-close'

@@ -1,3 +1,4 @@
+import type * as NewWorkspaceRepositoriesModule from '../../../new-workspace/creation/runtime/use-new-workspace-repositories'
 import { hookScreenMount } from '../mounted-screen-tree'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
@@ -10,9 +11,9 @@ export function newWorkspaceRepositoryMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'workspace.repositories': ({ client, effect }) => {
-      const useRepositories = modules.load<
-        typeof import('../../../components/use-new-workspace-repositories')
-      >('mobile/src/components/use-new-workspace-repositories.ts').useNewWorkspaceRepositories
+      const useRepositories = modules.load<typeof NewWorkspaceRepositoriesModule>(
+        'mobile/src/new-workspace/creation/runtime/use-new-workspace-repositories.ts'
+      ).useNewWorkspaceRepositories
       let state: ReturnType<typeof useRepositories> | undefined
       let visible = true
       const screen = hookScreenMount(() => {

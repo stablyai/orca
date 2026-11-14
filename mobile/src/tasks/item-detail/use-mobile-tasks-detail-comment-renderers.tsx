@@ -1,6 +1,6 @@
 import type { TaskCreateActionsModel } from '../task-list/use-mobile-tasks-task-create-actions'
 import { MessageBox } from '../../components/composer-input/MessageBox'
-import { MobileMarkdown } from '../../components/MobileMarkdown'
+import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { Pressable, Text, View } from 'react-native'
 import type { ReactNode } from 'react'
 import type { DetailComment } from '../mobile-tasks-provider-detail-types'

@@ -13,7 +13,7 @@ import {
   loadHostSidebarWidth,
   saveHostSidebarWidth
 } from '../../src/storage/preferences'
-import { HostProtocolGate } from '../../src/components/HostProtocolGate'
+import { HostProtocolGate } from '../../src/components/host-connection/HostProtocolGate'
 import { HostScreen } from '../../src/host-screen/HostScreen'
 import { HostStack } from '../../src/navigation/host-stack'
 import { HostSidebarRevealContext } from '../../src/layout/host-sidebar-reveal'

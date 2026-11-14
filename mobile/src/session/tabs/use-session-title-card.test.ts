@@ -6,7 +6,7 @@ import { useSessionTitleCard } from './use-session-title-card'
 import {
   useAnchoredDetailCard,
   type DetailCardMeasure
-} from '../../components/use-anchored-detail-card'
+} from '../../components/detail-cards/use-anchored-detail-card'
 
 vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ width: 400, height: 800 })
