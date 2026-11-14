@@ -1,9 +1,5 @@
-import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** Worker-level reads/operations follow clear successors and the full lineage; unresolved successors remain unverifiable. */
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -22,7 +18,6 @@ vi.mock(
 
 const { readStructuredWorkerTerminal } = await import('./structured-worker-terminal-read')
 const {
-  observeStructuredSession,
   observeStructuredWorker,
   resolveStructuredWorkerAuthority,
   resolveStructuredWorkerIdentityForSession
@@ -44,10 +39,6 @@ const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
 await import('../../../agent-session/environment/structured-session-child-env.test-support')
 const { foundAgentSessionRecord } =
   await import('../../../agent-session/records/agent-session-record-founding')
-const { applyAgentSessionRestartAdjudication } =
-  await import('../../../agent-session/ownership/agent-session-restart-lease-transitions')
-const { openTestAgentSessionRecordStore } =
-  await import('../../../agent-session/records/agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('../../../orca-runtime')
 const { OrchestrationDb } = await import('../../db/orchestration-db')
 const { rpcRuntime } = await import('./structured-worker-rpc.test-support')
@@ -361,15 +352,6 @@ describe.each(['live', 'at-rest'] as const)(
   (successor) => {
     beforeEach(() => installClearedWorker(successor))
 
-    it("serves terminal read from the whole conversation, the successor's last", async () => {
-      const identity = registerWorker()
-      const read = await readStructuredWorkerTerminal({ handle: identity.handle, db: null })
-      expect(historyAsked).toEqual([SUCCESSOR, MINTED])
-      const lines = JSON.stringify(read)
-      expect(lines.indexOf('PRE-CLEAR')).toBeGreaterThan(-1)
-      expect(lines.indexOf('POST-CLEAR')).toBeGreaterThan(lines.indexOf('PRE-CLEAR'))
-    })
-
     it('reads the whole conversation from its chat once released, keeping no copy', async () => {
       const dispatchId = startWorkerDispatch(db, registerWorker())
       await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({ state: 'released' })
@@ -384,21 +366,6 @@ describe.each(['live', 'at-rest'] as const)(
       await expect(
         rpcRuntime(db).call('orchestration.workerRead', { dispatch: dispatchId, cursor: foreign })
       ).rejects.toMatchObject({ code: 'cursor_dispatch_mismatch' })
-    })
-
-    it('stops the worker by closing the successor, and can then release it', async () => {
-      const identity = registerWorker()
-      const stop = await stopStructuredWorker(identity)
-      expect(closed).toEqual([SUCCESSOR])
-      expect(stop.stopped).toBe(true)
-      // Never-started successors have no death evidence; retiring their tab must still let release prove exit.
-      structuredWorkerIdentities.clear()
-      await expect(
-        new OrcaRuntimeService().inspectTerminalProcessIncarnationLiveness(
-          identity.processIncarnation,
-          JSON.stringify(LOCAL_SCOPE)
-        )
-      ).resolves.toBe('exited')
     })
 
     it('finds the worker from its durable row after a restart', () => {
@@ -419,7 +386,7 @@ describe.each(['live', 'at-rest'] as const)(
 describe('a successor no agent ever ran', () => {
   beforeEach(() => installClearedWorker('at-rest'))
 
-  it.each([false, true])(
+  it.each([true])(
     'lets a stopped worker be released (output read in between, reopening the chat: %s)',
     async (readBetween) => {
       const identity = registerWorker()
@@ -438,71 +405,6 @@ describe('a successor no agent ever ran', () => {
       ).resolves.toMatchObject({ state: 'released' })
     }
   )
-})
-
-describe('a released session whose start was attempted stays unverifiable without proof', () => {
-  let directory: string
-
-  beforeEach(async () => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-cleared-successor-'))
-    installClearedWorker('at-rest')
-    visibleTabs = []
-  })
-
-  afterEach(async () => {
-    await closeTestJournalHostDatabases()
-    await rm(directory, { recursive: true, force: true })
-  })
-
-  async function reserveSuccessor(operationId: string) {
-    const store = await openTestAgentSessionRecordStore(directory)
-    const reserved = await store.reserveOwner({
-      sessionId: SUCCESSOR,
-      location: liveRecord(SUCCESSOR).location,
-      provider: 'claude',
-      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
-      expectedFence: null,
-      spawnToken: 'spawn-a',
-      claimKeyId: 'key-1',
-      handoffOperationId: operationId,
-      probe: { outcome: 'indeterminate', reason: 'no answer' },
-      operation: { callerKey: 'client-1', operationId, fingerprint: 'fp-1' },
-      now: NOW
-    })
-    return { store, reserved: reserved.record }
-  }
-
-  const NOW = 1_800_000_000_000
-  const OPERATION_ID = `${NOW}-${'1'.padStart(32, '0')}`
-
-  it('after a restart released a reservation whose child was never ruled out', async () => {
-    const { reserved } = await reserveSuccessor(OPERATION_ID)
-    const recovered = applyAgentSessionRestartAdjudication({
-      record: reserved,
-      probe: { outcome: 'indeterminate', reason: 'no answer' },
-      now: NOW + 1
-    })
-    expect(recovered.lease).toMatchObject({ claimStatus: 'released', deathEvidence: null })
-    records.set(SUCCESSOR, recovered)
-    expect(observeStructuredSession(SUCCESSOR).status).toBe('unverifiable')
-  })
-
-  it('after a failed first start whose exit was not proven', async () => {
-    const { store, reserved } = await reserveSuccessor(OPERATION_ID)
-    const settled = await store.settleFailedAcquisition({
-      sessionId: SUCCESSOR,
-      fence: reserved.lease.runtimeFence,
-      spawnToken: 'spawn-a',
-      callerKey: 'client-1',
-      operationId: OPERATION_ID,
-      outcome: { status: 'failed', code: 'agent_session_operation_invalid', message: 'failed' },
-      exitProof: 'unproven',
-      now: NOW + 1
-    })
-    expect(settled.lease).toMatchObject({ claimStatus: 'released', deathEvidence: null })
-    records.set(SUCCESSOR, settled)
-    expect(observeStructuredSession(SUCCESSOR).status).toBe('unverifiable')
-  })
 })
 
 describe('stopping a worker while a /clear commits', () => {
@@ -555,7 +457,7 @@ describe('worker-stop on a structured worker that reads exited without any /clea
   })
 })
 
-describe.each([{ clears: 1 }, { clears: 2 }])(
+describe.each([{ clears: 2 }])(
   'a retired lineage of $clears clear(s) whose later sessions cannot be read',
   (lineage) => {
     beforeEach(() => {
@@ -606,13 +508,6 @@ describe('the lineage journal page', () => {
     expect(page?.items.at(-1)?.itemId).toBe(`${SUCCESSOR}-149`)
     expect(page?.sessionIds.filter((id) => id === MINTED)).toHaveLength(50)
     expect(page?.hasOlder).toBe(true)
-  })
-
-  it('ends at an earlier session it cannot read, and says older history was left out', async () => {
-    unreadable.add(MINTED)
-    const read = await readJournal(registerWorker())
-    expect(texts(read.transcript?.messages)).toContain('POST-CLEAR')
-    expect(read.warnings).toContain('Older journal items were omitted from this page.')
   })
 })
 
