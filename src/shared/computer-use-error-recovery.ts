@@ -87,7 +87,8 @@ export function computerUseErrorRecoveryData(
       )
     case 'screen_locked':
       return recoverWith(
-        'Nothing is missing and nothing was sent. Ask the user to wake and unlock the Mac, then retry.'
+        'Nothing is missing. Ask the user to wake and unlock the Mac.',
+        'Then run `orca computer get-app-state --app <app> --json` and check whether an earlier action already took effect before retrying it.'
       )
     case 'element_not_found':
       return recoverWith(

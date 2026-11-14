@@ -5141,6 +5141,11 @@ private func runPermissionCheck(
     initialPermission: PermissionKind? = nil,
     copy: PermissionWindowCopy
 ) {
+    // Why: a queued or cached-denial launch can start after the screen locks; Settings would open for nothing.
+    if SessionLockProbe.isLocked() {
+        fputs("\(SessionLockProbe.lockedMessage)\n", stderr)
+        exit(0)
+    }
     let app = NSApplication.shared
     let delegate = PermissionRuntime(initialPermission: initialPermission, copy: copy)
     app.delegate = delegate
@@ -5196,14 +5201,14 @@ private func handleRequest(
         }
         return ["id": request.id, "ok": true, "result": ["ok": true]]
     }
-    if request.method != "handshake" && request.method != "listApps" && SessionLockProbe.isLocked() {
-        let error = ProviderError.screenLocked
-        return ["id": request.id, "ok": false, "error": ["code": error.code, "message": error.message]]
-    }
 
     do {
         lock.lock()
         defer { lock.unlock() }
+        // Checked after waiting for the lock, since the screen can lock while another request runs.
+        if request.method != "handshake" && request.method != "listApps" && SessionLockProbe.isLocked() {
+            throw ProviderError.screenLocked
+        }
         let result = try provider.handle(method: request.method, params: request.params ?? [:])
         return ["id": request.id, "ok": true, "result": result]
     } catch let error as ProviderError {
