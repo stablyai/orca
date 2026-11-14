@@ -1,20 +1,22 @@
 import { EventEmitter } from 'node:events'
 import { Socket } from 'node:net'
 import { afterEach, expect, it, vi } from 'vitest'
-import { spawnProcess } from '@orca/process-host'
+import { spawnOwnedProcess } from '@orca/process-host'
 import { DaemonProviderProcesses } from './daemon-provider-processes'
 
-vi.mock('@orca/process-host', () => ({ spawnProcess: vi.fn() }))
+vi.mock('@orca/process-host', () => ({ spawnOwnedProcess: vi.fn() }))
 afterEach(() => vi.restoreAllMocks())
 
 it.each([10, 100])('drains %i live roots without rescanning retained outcomes', async (count) => {
   const children: EventEmitter[] = []
-  vi.mocked(spawnProcess).mockImplementation(() => {
+  vi.mocked(spawnOwnedProcess).mockImplementation((_spec, ownership) => {
     const child = Object.assign(new EventEmitter(), { pid: 42, kill: vi.fn(() => true) })
     children.push(child)
-    queueMicrotask(() => child.emit('spawn'))
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This held-child fixture supplies the PID, events and kill method used by the provider registry.
-    return child as never
+    const held = child as never
+    ownership.onChild(held)
+    queueMicrotask(() => child.emit('spawn'))
+    return held
   })
   const owner = new Socket()
   vi.spyOn(owner, 'write').mockReturnValue(true)
@@ -60,10 +62,12 @@ it('retains known no-starts before publishing and never replaces a live nonce on
     )
     expect(published).toEqual([{ pid: null, code: null, signal: null, processless: true }])
     const child = Object.assign(new EventEmitter(), { pid: 43, kill: vi.fn(() => true) })
-    vi.mocked(spawnProcess).mockImplementation(() => {
-      queueMicrotask(() => child.emit('spawn'))
+    vi.mocked(spawnOwnedProcess).mockImplementation((_spec, ownership) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Registry fixture supplies its held-child PID/events/kill.
-      return child as never
+      const held = child as never
+      ownership.onChild(held)
+      queueMicrotask(() => child.emit('spawn'))
+      return held
     })
     const liveSpec = { ...spec, nonce: 'b'.repeat(64) }
     await providers.spawn(liveSpec, owner)

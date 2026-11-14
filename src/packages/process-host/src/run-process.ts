@@ -1,9 +1,4 @@
-import {
-  spawn as nodeSpawn,
-  spawnSync as nodeSpawnSync,
-  type ChildProcess,
-  type ChildProcessWithoutNullStreams
-} from 'node:child_process'
+import { spawnSync as nodeSpawnSync, type ChildProcess } from 'node:child_process'
 import { resolveSpawn, type ResolvedSpawn } from './spawn-resolution'
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 import { inFlightWindowsTreeKill } from './windows-tree-kill'
@@ -12,26 +7,14 @@ import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
 
-import type { PipedProcessSpec, ProcessSpec, ProcessResult } from './process-spec'
+import type { ProcessSpec, ProcessResult } from './process-spec'
+import { spawnProcess } from './spawn-process'
+export { spawnProcess, spawnOwnedProcess } from './spawn-process'
 import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
 // Bound waits for children that ignore termination and never emit close.
 const PROCESS_EXIT_GRACE_MS = 2_000
 // An unverifiable, silent tree must not leave barrier callers pending forever.
 const BARRIER_UNVERIFIED_EXIT_GRACE_MS = 10_000
-
-/** Callers own stream error handling; unhandled stream errors can crash the host process. */
-export function spawnProcess(spec: PipedProcessSpec): ChildProcessWithoutNullStreams
-export function spawnProcess(spec: ProcessSpec): ChildProcess
-export function spawnProcess(spec: ProcessSpec): ChildProcess {
-  const resolved = resolveSpawn(spec, process.platform)
-  // uv_spawn blocks the calling thread; measure that block for diagnostics.
-  const spawnStartedAt = hasSpawnObserver() ? performance.now() : null
-  const child = nodeSpawn(resolved.file, [...resolved.args], resolved.options)
-  if (spawnStartedAt !== null) {
-    notifySpawnObserver(resolved.file, resolved.args, performance.now() - spawnStartedAt)
-  }
-  return child
-}
 
 /** Nonzero exits resolve; spawn errors reject. Tail capture preserves final diagnostics. */
 export function runProcess(

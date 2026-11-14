@@ -1,3 +1,5 @@
+import { createServer, type Socket } from 'node:net'
+import { setSpawnObserver } from '@orca/process-host/spawn-observer'
 import { runLocalSourceControlPlan } from '../text-generation/execution/source-control-local-process'
 import { runCodexProcessWithHomeLock } from '../text-generation/execution/source-control-local-generation'
 import { stopSupervisedChildProcess } from './supervised-child-process-stop'
@@ -12,7 +14,10 @@ import { DaemonClient } from '../daemon/transport/client/daemon-client'
 import { HostedProviderChild } from './hosted-provider-child'
 import { createProviderSpawnSpec } from './provider-process-supervisor'
 import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
-import type { HostedProviderState } from '../daemon/protocol/daemon-provider-process-protocol'
+import type {
+  HostedProviderOutcome,
+  HostedProviderState
+} from '../daemon/protocol/daemon-provider-process-protocol'
 import { ProviderOwnerListener } from './provider-owner-channels'
 import { createSupervisorOutputGate } from './provider-supervisor-output-gate.test-support'
 
@@ -54,6 +59,7 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
     await server.shutdown()
     client.disconnect()
     children.clear()
+    setSpawnObserver(null)
     vi.restoreAllMocks()
     await rm(directory, { recursive: true, force: true })
   })
@@ -62,7 +68,8 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
     source: string,
     lifetime: 'session' | 'one-shot' = 'one-shot',
     cwd?: string,
-    instrument?: (source: string) => string
+    instrument?: (source: string) => string,
+    environment: NodeJS.ProcessEnv = {}
   ) {
     const spec = createProviderSpawnSpec(
       {
@@ -70,7 +77,7 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
         args: ['-e', source],
         cwd: cwd ?? directory
       },
-      { PATH: process.env.PATH, PROVIDER_ENV: 'from-gui' },
+      { PATH: process.env.PATH, PROVIDER_ENV: 'from-gui', ...environment },
       process.platform,
       { lifetime }
     )
@@ -89,6 +96,180 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
     guardSupervisedProviderGroup(child, { site: 'hosted-provider-fixture', supervised: true })
     return child
   }
+
+  function generate(
+    source: string,
+    environment: NodeJS.ProcessEnv = {},
+    instrument?: (source: string) => string
+  ) {
+    const created = Promise.withResolvers<HostedProviderChild>()
+    const result = runCodexProcessWithHomeLock(directory, () =>
+      runLocalSourceControlPlan({
+        plan: { binary: 'codex', args: [], label: 'Codex', stdinPayload: null },
+        cwd: directory,
+        env: undefined,
+        operation: 'commit-message',
+        spawnAgent: () => {
+          const child = launch(source, 'one-shot', undefined, instrument, environment)
+          created.resolve(child)
+          return Object.assign(child, { supervised: true })
+        }
+      })
+    )
+    return { created: created.promise, result }
+  }
+
+  it('settles native no-start before refusal and releases the Codex home for a hosted reply', async () => {
+    const timeline: string[] = []
+    const outcomes: HostedProviderOutcome[] = []
+    const retained: HostedProviderState[] = []
+    let nonce = ''
+    const observe = client.onProviderExit.bind(client)
+    vi.spyOn(client, 'onProviderExit').mockImplementation((id, listener, reconnected) => {
+      nonce = id
+      return observe(
+        id,
+        (outcome) => {
+          timeline.push('outcome')
+          outcomes.push(outcome)
+          listener(outcome)
+        },
+        reconnected
+      )
+    })
+    const request = client.request.bind(client)
+    vi.spyOn(client, 'request').mockImplementation(async function <T>(
+      ...args: Parameters<typeof request>
+    ): Promise<T> {
+      if (args[0] === 'queryProvider') {
+        const state = await request<HostedProviderState>('queryProvider', {
+          nonce,
+          acknowledge: false
+        })
+        retained.push(state)
+      }
+      try {
+        return await request<T>(...args)
+      } catch (error) {
+        if (args[0] === 'spawnProvider') {
+          timeline.push('refusal')
+        }
+        throw error
+      }
+    })
+    const first = generate('throw new Error("must never launch")', {
+      NONSECRET_LIMIT: 'x'.repeat(8 * 1024 * 1024)
+    })
+    const child = await first.created
+    const closes: unknown[][] = []
+    const exits: unknown[][] = []
+    child.on('close', (...args) => closes.push(args))
+    child.on('exit', (...args) => exits.push(args))
+    await expect(child.ready).rejects.toThrow()
+    expect(child.spawnAbsenceKnown).toBe(true)
+    expect(await first.result).toMatchObject({ success: false })
+    await request('ping', {})
+    expect(timeline).toEqual(['outcome', 'refusal'])
+    expect(outcomes).toEqual([{ pid: null, code: null, signal: null, processless: true }])
+    expect(retained).toContainEqual({ state: 'exited', outcome: outcomes[0] })
+    expect(closes).toEqual([[null, null]])
+    expect(exits).toEqual([])
+    expect(child.rootAbsent).toBe(true)
+    expect(await generate('process.stdout.write("next hosted reply")').result).toMatchObject({
+      success: true,
+      rawOutput: 'next hosted reply'
+    })
+  })
+
+  it('retains an actual writer after a throwing observer until held termination releases its home', async () => {
+    const request = client.request.bind(client)
+    const gatePath = join(directory, 'startup-gate.sock')
+    const gateConnected = Promise.withResolvers<void>()
+    const gateSockets = new Set<Socket>()
+    const gate = createServer((socket) => {
+      gateSockets.add(socket)
+      gateConnected.resolve()
+    })
+    await new Promise<void>((resolve, reject) => {
+      gate.once('error', reject)
+      gate.listen(gatePath, resolve)
+    })
+    const releaseSignals = Promise.withResolvers<void>()
+    const signalPending = Promise.withResolvers<void>()
+    let nonce = ''
+    const outcomes: HostedProviderOutcome[] = []
+    const observe = client.onProviderExit.bind(client)
+    vi.spyOn(client, 'onProviderExit').mockImplementation((id, listener, reconnected) => {
+      nonce = id
+      return observe(
+        id,
+        (outcome) => {
+          outcomes.push(outcome)
+          listener(outcome)
+        },
+        reconnected
+      )
+    })
+    vi.spyOn(client, 'request').mockImplementation(async function <T>(
+      ...args: Parameters<typeof request>
+    ): Promise<T> {
+      if (args[0] === 'signalProvider') {
+        signalPending.resolve()
+        await releaseSignals.promise
+      }
+      return request<T>(...args)
+    })
+    setSpawnObserver(() => {
+      setSpawnObserver(null)
+      throw Object.assign(new Error('Nonsecret post-spawn observer failure'), { code: 'E2BIG' })
+    })
+    const first = generate(
+      'process.stdout.write("writer")',
+      {},
+      (source) =>
+        `require('node:net').connect(${JSON.stringify(gatePath)}).once('data', () => {${source}}).on('error', () => process.exit(1))`
+    )
+    try {
+      const child = await first.created
+      const closes: unknown[][] = []
+      child.on('close', (...args) => closes.push(args))
+      await expect(child.ready).rejects.toThrow('Provider supervisor could not start')
+      await signalPending.promise
+      await gateConnected.promise
+      const state = await request<HostedProviderState>('queryProvider', { nonce })
+      expect(state.state).toBe('live')
+      if (state.state !== 'live') {
+        throw new Error('Actual writer was lost')
+      }
+      expect(() => process.kill(state.pid, 0)).not.toThrow()
+      expect(child.spawnAbsenceKnown).toBe(false)
+      expect(child.rootAbsent).toBe(false)
+      expect(outcomes).toEqual([])
+      expect(closes).toEqual([])
+      let nextStarted = false
+      const next = generate('process.stdout.write("reply after real exit")')
+      void next.created.then(() => {
+        nextStarted = true
+      })
+      await request('ping', {})
+      expect(nextStarted).toBe(false)
+      releaseSignals.resolve()
+      expect(await first.result).toMatchObject({ success: false })
+      expect(await next.result).toMatchObject({ success: true, rawOutput: 'reply after real exit' })
+      expect(outcomes[0]).toMatchObject({ pid: state.pid, processless: false })
+      expect(child.rootAbsent).toBe(true)
+      expect(child.spawnAbsenceKnown).toBe(false)
+      expect(closes).toHaveLength(1)
+      expect(() => process.kill(state.pid, 0)).toThrow()
+    } finally {
+      setSpawnObserver(null)
+      releaseSignals.resolve()
+      for (const socket of gateSockets) {
+        socket.destroy()
+      }
+      await new Promise<void>((resolve) => gate.close(() => resolve()))
+    }
+  })
 
   it.each(['shutdown', 'endpoint'] as const)(
     'settles a %s no-start before its refusal and releases the Codex home',

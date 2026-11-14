@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
-import { spawnProcess } from '@orca/process-host'
+import { spawnOwnedProcess } from '@orca/process-host'
 import type { Socket } from 'node:net'
 import { encodeNdjson } from '../../../shared/main-process-ndjson-framer'
 import type {
@@ -77,15 +77,44 @@ export class DaemonProviderProcesses {
     ) {
       refuse('Invalid provider launch')
     }
-    // The current GUI supplies its matching supervisor; the host supplies only its pinned runtime.
-    const child = spawnProcess({
-      program: process.execPath,
-      args: ['-e', spec.source, '--', ...spec.args],
-      cwd: spec.cwd,
-      env: spec.env,
-      detached: true,
-      stdio: 'ignore'
+    let resolveReady!: (value: { pid: number }) => void
+    let rejectReady!: (error: Error) => void
+    const ready = new Promise<{ pid: number }>((resolve, reject) => {
+      resolveReady = resolve
+      rejectReady = reject
     })
+    // A later observer can throw before this method returns its readiness promise.
+    void ready.catch(() => {})
+    try {
+      // The GUI supplies its matching supervisor; the host supplies only its pinned runtime.
+      spawnOwnedProcess(
+        {
+          program: process.execPath,
+          args: ['-e', spec.source, '--', ...spec.args],
+          cwd: spec.cwd,
+          env: spec.env,
+          detached: true
+        },
+        {
+          onChild: (child) => this.ownChild(spec.nonce, child, owner, resolveReady, rejectReady),
+          onNoStart: () => refuse('Provider supervisor could not start')
+        }
+      )
+      return await ready
+    } catch {
+      const failure = new Error('Provider supervisor could not start')
+      rejectReady(failure)
+      throw failure
+    }
+  }
+
+  private ownChild(
+    nonce: string,
+    child: ChildProcess,
+    owner: Socket,
+    resolveReady: (value: { pid: number }) => void,
+    rejectReady: (error: Error) => void
+  ): void {
     let resolveClosed = (): void => {}
     const entry: ProviderEntry = {
       child,
@@ -94,41 +123,34 @@ export class DaemonProviderProcesses {
         resolveClosed = resolve
       })
     }
-    this.live.set(spec.nonce, entry)
-    this.onLiveChanged()
+    this.live.set(nonce, entry)
     const finish = (outcome: HostedProviderOutcome): void => {
-      if (this.live.get(spec.nonce) !== entry) {
+      if (this.live.get(nonce) !== entry) {
         return
       }
-      this.live.delete(spec.nonce)
-      this.retainOutcome(spec.nonce, entry.owner, outcome)
+      this.live.delete(nonce)
+      this.retainOutcome(nonce, entry.owner, outcome)
       this.onLiveChanged()
     }
     child.once('exit', (code, signal) =>
-      finish({
-        pid: child.pid ?? null,
-        code,
-        signal,
-        processless: false
-      })
+      finish({ pid: child.pid ?? null, code, signal, processless: false })
     )
     child.once('close', () => resolveClosed())
-    return new Promise((resolve, reject) => {
-      child.once('spawn', () => resolve({ pid: child.pid! }))
-      child.once('error', (error: NodeJS.ErrnoException) => {
-        // Do not relay errors containing launch payloads, environment or private source.
-        if (child.pid === undefined) {
-          finish({
-            pid: null,
-            code: null,
-            signal: null,
-            processless: true,
-            ...(typeof error.code === 'string' ? { spawnErrorCode: error.code } : {})
-          })
-        }
-        reject(new Error('Provider supervisor could not start'))
-      })
+    child.once('spawn', () => resolveReady({ pid: child.pid! }))
+    child.once('error', (error: NodeJS.ErrnoException) => {
+      // Do not relay errors containing launch payloads, environment or private source.
+      if (child.pid === undefined) {
+        finish({
+          pid: null,
+          code: null,
+          signal: null,
+          processless: true,
+          ...(typeof error.code === 'string' ? { spawnErrorCode: error.code } : {})
+        })
+      }
+      rejectReady(new Error('Provider supervisor could not start'))
     })
+    this.onLiveChanged()
   }
 
   query(nonce: string, owner: Socket, acknowledge = false): HostedProviderState {
