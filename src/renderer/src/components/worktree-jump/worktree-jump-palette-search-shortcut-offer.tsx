@@ -51,16 +51,32 @@ function SearchShortcutOfferPrompt({
     setFailed(false)
     try {
       const outcome = await setSearchShortcutChoice(choice)
-      if (choice === 'accepted' && (outcome === 'applied' || outcome === 'unconfirmed')) {
+      if (
+        choice === 'accepted' &&
+        (outcome === 'applied' || outcome === 'unconfirmed' || outcome === 'superseded')
+      ) {
         // The footer unmounts with the new snapshot, so confirmation and Undo move to a toast.
-        toast.success(t('searchShortcutOptIn.acceptedToast', '{{key}} now opens Search', keys), {
+        const title =
+          outcome === 'superseded'
+            ? t(
+                'searchShortcutOptIn.supersededToast',
+                '{{key}} was just assigned to another shortcut',
+                keys
+              )
+            : t('searchShortcutOptIn.acceptedToast', '{{key}} now opens Search', keys)
+        toast.success(title, {
           description:
             outcome === 'unconfirmed'
               ? t(
                   'searchShortcutOptIn.unconfirmed',
                   "The save wasn't confirmed. Check Settings › Shortcuts after restarting Orca."
                 )
-              : undefined,
+              : outcome === 'superseded'
+                ? t(
+                    'searchShortcutOptIn.supersededDetail',
+                    'Your later change was kept. See Settings › Shortcuts.'
+                  )
+                : undefined,
           action: {
             label: t('searchShortcutOptIn.undo', 'Undo'),
             onClick: () => void setSearchShortcutChoice('dismissed').catch(() => undefined)

@@ -9,6 +9,7 @@ import {
 } from '../../shared/keybindings'
 import { getUserKeybindingsPath } from './keybinding-file'
 import { KeybindingService } from './keybinding-service'
+import { toSearchShortcutPluginOwners } from '../../shared/keybindings/search-shortcut-plugin-owners'
 
 describe('KeybindingService profile defaults', () => {
   let home: string
@@ -278,11 +279,13 @@ describe('KeybindingService Search shortcut opt-in', () => {
   // Stands in for the profile store's in-memory settings value.
   let stored: 'accepted' | 'dismissed' | null
   const cmdK = { key: 'k', code: 'KeyK', meta: true, control: false, alt: false, shift: false }
-  const plugin = { actionId: 'plugin:acme.tools/open' as const, title: 'Open tools' }
+  // Active plugin command keys; null means no plugin command is registered.
+  let pluginKeys: string[] | null
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'orca-kb-optin-'))
     stored = null
+    pluginKeys = null
   })
 
   afterEach(() => {
@@ -296,6 +299,9 @@ describe('KeybindingService Search shortcut opt-in', () => {
       legacyOverrides?: Record<string, string[]>
     } = {}
   ): KeybindingService {
+    if (options.pluginBindings) {
+      pluginKeys = options.pluginBindings
+    }
     return new KeybindingService({
       homePath: home,
       platform: 'darwin',
@@ -308,7 +314,18 @@ describe('KeybindingService Search shortcut opt-in', () => {
           stored = choice
         }),
       getSearchShortcutPluginOwners: () =>
-        options.pluginBindings ? [{ ...plugin, defaultBindings: options.pluginBindings }] : []
+        toSearchShortcutPluginOwners(
+          pluginKeys
+            ? [
+                {
+                  pluginKey: 'acme.tools',
+                  id: 'open',
+                  title: 'Open tools',
+                  keybindings: pluginKeys.map((key) => ({ key }))
+                }
+              ]
+            : []
+        )
     })
   }
 
@@ -369,6 +386,11 @@ describe('KeybindingService Search shortcut opt-in', () => {
       { platforms: { darwin: { 'plugin:acme.tools/open': ['Mod+K'] } } },
       ['Mod+Shift+F7']
     ],
+    [
+      'plugin with no manifest key assigned Cmd+K',
+      { platforms: { darwin: { 'plugin:acme.tools/open': ['Mod+K'] } } },
+      []
+    ],
     ['malformed file', '{ not json', undefined]
   ])('refuses without saving: %s', async (_name, document, pluginBindings) => {
     write(document)
@@ -390,6 +412,55 @@ describe('KeybindingService Search shortcut opt-in', () => {
     rmSync(getUserKeybindingsPath(home))
     const restarted = openLegacy({ legacyOverrides: {} })
     expect((await restarted.setSearchShortcutChoice('accepted')).outcome).toBe('applied')
+  })
+
+  it('clears the import-fallback flag in the snapshot returned by the write that persisted it', async () => {
+    write('{ not json')
+    const service = openLegacy({ legacyOverrides: { 'tab.close': ['Mod+Shift+F9'] } })
+    write({})
+    expect(service.reload().searchShortcut?.fileError).toBe(true)
+    const written = service.setActionBindings('tab.close', ['Mod+Shift+F8'])
+    expect(written.searchShortcut).toEqual({ choice: null })
+    expect((await service.setSearchShortcutChoice('accepted')).outcome).toBe('applied')
+  })
+
+  it.each([
+    [
+      'an explicit Cmd+K action edit',
+      (service: KeybindingService) => {
+        service.setActionBindings('terminal.clear', ['Mod+K'])
+      }
+    ],
+    [
+      'a plugin registered on Cmd+K',
+      () => {
+        pluginKeys = ['Mod+K']
+      }
+    ]
+  ])('reports superseded and keeps %s that lands during the save', async (_name, edit) => {
+    let release: () => void = () => undefined
+    let service: KeybindingService | null = null
+    service = openLegacy({
+      persist: (choice) =>
+        new Promise<void>((resolve) => {
+          release = () => {
+            stored = choice
+            resolve()
+          }
+        })
+    })
+    const pending = service.setSearchShortcutChoice('accepted')
+    await Promise.resolve()
+    await Promise.resolve()
+    edit(service)
+    release()
+    const result = await pending
+    expect(result.outcome).toBe('superseded')
+    expect(result.snapshot.searchShortcut).toEqual({ choice: 'accepted' })
+    if (pluginKeys === null) {
+      expect(result.snapshot.overrides['terminal.clear']).toEqual(['Mod+K'])
+      expect(result.snapshot.overrides['worktree.palette']).toEqual(['Mod+J'])
+    }
   })
 
   it('keeps legacy shortcuts when the save is rejected before commit', async () => {

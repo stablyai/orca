@@ -25772,6 +25772,11 @@
     "groupLabel": "Search shortcut",
     "footerQuestion": "Use {{key}} for Search?",
     "footerDetail": "{{key}} in terminals will stop clearing. {{legacyKey}} keeps working.",
-    "notNow": "Not now"
+    "notNow": "Not now",
+    "unconfirmed": "The save wasn't confirmed. Check Settings › Shortcuts after restarting Orca.",
+    "acceptedTaken": "{{key}} is also assigned to {{actions}}. Change that shortcut to use {{key}} for Search, or undo.",
+    "acceptedCustom": "Search uses a custom shortcut, and {{key}} no longer clears terminals. Undo restores {{legacyKey}} and {{key}} clear.",
+    "supersededToast": "{{key}} was just assigned to another shortcut",
+    "supersededDetail": "Your later change was kept. See Settings › Shortcuts."
   }
 }

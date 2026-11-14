@@ -1,4 +1,3 @@
-import { pluginCommandKeybindingActionId } from '../plugins/contributions/plugin-command-actions'
 import { getLegacySearchBindings } from './definitions'
 import { getEffectiveKeybindingsForAction } from './effective'
 import { findKeybindingConflicts } from './formatting'
@@ -21,11 +20,14 @@ export type SearchShortcutPluginOwner = {
   defaultBindings: readonly string[]
 }
 
+export type SearchShortcutOwner = { actionId: KeybindingActionId; title?: string }
+
 export type SearchShortcutOffer =
   | { kind: 'eligible' }
-  | { kind: 'accepted' }
+  // Later edits may win over an accepted choice; report what Search actually got.
+  | { kind: 'accepted'; searchOnModK: boolean; owners: SearchShortcutOwner[] }
   | { kind: 'custom-search' }
-  | { kind: 'conflict'; owners: { actionId: KeybindingActionId; title?: string }[] }
+  | { kind: 'conflict'; owners: SearchShortcutOwner[] }
   // Explicit choices aren't authoritative (unreadable file or failed legacy import), so preflight can't run.
   | { kind: 'file-error' }
   // New profiles, and legacy profiles whose Search already has Mod+K.
@@ -70,14 +72,14 @@ export function planSearchShortcutOptInForSnapshot(
   if (!snapshot.searchShortcut) {
     return { kind: 'none' }
   }
-  if (snapshot.searchShortcut.choice === 'accepted') {
-    return { kind: 'accepted' }
-  }
   if (
     snapshot.searchShortcut.fileError ||
     snapshot.diagnostics.some((diagnostic) => diagnostic.code === 'readFailed')
   ) {
-    return { kind: 'file-error' }
+    // Explicit state is unknown; an accepted choice is still live and undoable.
+    return snapshot.searchShortcut.choice === 'accepted'
+      ? { kind: 'accepted', searchOnModK: true, owners: [] }
+      : { kind: 'file-error' }
   }
   return planSearchShortcutOptIn(
     snapshot.platform,
@@ -94,36 +96,15 @@ function searchHasModK(platform: NodeJS.Platform, overrides: KeybindingOverrides
   )
 }
 
-/** Preflight for a legacy-cohort profile; only an `eligible` result may be persisted. */
-export function planSearchShortcutOptIn(
+function findModKOwners(
   platform: NodeJS.Platform,
   explicitOverrides: KeybindingOverrides,
-  choice: SearchShortcutChoice | null,
-  pluginOwners: readonly SearchShortcutPluginOwner[] = []
-): SearchShortcutOffer {
-  if (choice === 'accepted') {
-    return { kind: 'accepted' }
-  }
-  const legacy = resolveKeybindingOverrides(
-    platform,
-    explicitOverrides,
-    getLegacySearchBindings(platform)
-  )
-  if (searchHasModK(platform, legacy)) {
-    return { kind: 'none' }
-  }
-  if (Object.hasOwn(explicitOverrides, SEARCH_ACTION)) {
-    return { kind: 'custom-search' }
-  }
-  const optedIn = resolveKeybindingOverrides(
-    platform,
-    explicitOverrides,
-    getSearchOptInBindings(platform)
-  )
+  searchOnModK: boolean,
+  pluginOwners: readonly SearchShortcutPluginOwner[]
+): SearchShortcutOwner[] {
   const identity = getKeybindingConflictIdentity(SEARCH_BINDING, platform)
-  const owners: { actionId: KeybindingActionId; title?: string }[] = []
-  const searchYieldsModK = !searchHasModK(platform, optedIn)
-  if (searchYieldsModK) {
+  const owners: SearchShortcutOwner[] = []
+  if (!searchOnModK) {
     const coreOwners = new Set<KeybindingActionId>()
     for (const conflict of findKeybindingConflicts(
       platform,
@@ -149,22 +130,46 @@ export function planSearchShortcutOptIn(
       owners.push({ actionId: plugin.actionId, title: plugin.title })
     }
   }
-  return owners.length > 0 || searchYieldsModK ? { kind: 'conflict', owners } : { kind: 'eligible' }
+  return owners
 }
 
-export function toSearchShortcutPluginOwners(
-  commands: readonly {
-    pluginKey: string
-    id: string
-    title: string
-    keybindings: readonly { key: string }[]
-  }[]
-): SearchShortcutPluginOwner[] {
-  return commands
-    .filter((command) => command.keybindings.length > 0)
-    .map((command) => ({
-      actionId: pluginCommandKeybindingActionId(command.pluginKey, command.id),
-      title: command.title,
-      defaultBindings: command.keybindings.map((keybinding) => keybinding.key)
-    }))
+/** Preflight for a legacy-cohort profile; only an `eligible` result may be persisted. */
+export function planSearchShortcutOptIn(
+  platform: NodeJS.Platform,
+  explicitOverrides: KeybindingOverrides,
+  choice: SearchShortcutChoice | null,
+  pluginOwners: readonly SearchShortcutPluginOwner[] = []
+): SearchShortcutOffer {
+  const optedIn = (): boolean =>
+    searchHasModK(
+      platform,
+      resolveKeybindingOverrides(platform, explicitOverrides, getSearchOptInBindings(platform))
+    )
+  if (choice === 'accepted') {
+    const searchOnModK = optedIn()
+    return {
+      kind: 'accepted',
+      searchOnModK,
+      owners: findModKOwners(platform, explicitOverrides, searchOnModK, pluginOwners)
+    }
+  }
+  const legacy = resolveKeybindingOverrides(
+    platform,
+    explicitOverrides,
+    getLegacySearchBindings(platform)
+  )
+  if (searchHasModK(platform, legacy)) {
+    return { kind: 'none' }
+  }
+  if (Object.hasOwn(explicitOverrides, SEARCH_ACTION)) {
+    return { kind: 'custom-search' }
+  }
+  const searchOnModK = optedIn()
+  const owners = findModKOwners(platform, explicitOverrides, searchOnModK, pluginOwners)
+  return owners.length > 0 || !searchOnModK ? { kind: 'conflict', owners } : { kind: 'eligible' }
+}
+
+/** True when an accepted choice actually gave Search Mod+K with no other owner. */
+export function searchShortcutOptInIsEffective(offer: SearchShortcutOffer): boolean {
+  return offer.kind === 'accepted' && offer.searchOnModK && offer.owners.length === 0
 }

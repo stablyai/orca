@@ -1,14 +1,17 @@
 import {
-  getLegacyProfileSearchDefaults,
   LEGACY_TAB_SWITCH_BINDINGS,
-  planSearchShortcutOptInForSnapshot,
   type KeybindingActionId,
   type KeybindingFileSnapshot,
   type KeybindingOverrides,
   type SearchShortcutChoice,
-  type SearchShortcutChoiceResult,
-  type SearchShortcutPluginOwner
+  type SearchShortcutChoiceResult
 } from '../../shared/keybindings'
+import {
+  getLegacyProfileSearchDefaults,
+  planSearchShortcutOptInForSnapshot,
+  searchShortcutOptInIsEffective,
+  type SearchShortcutPluginOwner
+} from '../../shared/keybindings/search-shortcut-opt-in'
 import {
   ensureKeybindingFile,
   getUserKeybindingsPath,
@@ -98,17 +101,17 @@ export class KeybindingService {
     actionId: KeybindingActionId,
     bindings: string[] | null
   ): KeybindingFileSnapshot {
-    this.snapshot = this.withSearchShortcut(
-      writeKeybindingOverride(
-        this.configPath,
-        this.platform,
-        actionId,
-        bindings,
-        this.defaultOverrides,
-        this.fallbackOverrides
-      )
+    const written = writeKeybindingOverride(
+      this.configPath,
+      this.platform,
+      actionId,
+      bindings,
+      this.defaultOverrides,
+      this.fallbackOverrides
     )
+    // The write persisted the fallback choices, so the returned snapshot must not still flag them.
     this.fallbackOverrides = {}
+    this.snapshot = this.withSearchShortcut(written)
     return this.snapshot
   }
 
@@ -155,10 +158,19 @@ export class KeybindingService {
     this.searchShortcutChoice = this.readSearchShortcutChoice()
     this.defaultOverrides = this.buildDefaultOverrides()
     const snapshot = this.reload()
-    if (!failed) {
-      return { snapshot, outcome: 'applied' }
+    if (failed) {
+      return {
+        snapshot,
+        outcome: this.searchShortcutChoice === choice ? 'unconfirmed' : 'unchanged'
+      }
     }
-    return { snapshot, outcome: this.searchShortcutChoice === choice ? 'unconfirmed' : 'unchanged' }
+    // Action and plugin edits aren't serialized behind the save, so judge the result, not the preflight.
+    const superseded =
+      choice === 'accepted' &&
+      !searchShortcutOptInIsEffective(
+        planSearchShortcutOptInForSnapshot(snapshot, this.getSearchShortcutPluginOwners())
+      )
+    return { snapshot, outcome: superseded ? 'superseded' : 'applied' }
   }
 
   private buildDefaultOverrides(): KeybindingOverrides {

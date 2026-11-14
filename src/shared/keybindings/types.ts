@@ -163,8 +163,11 @@ export type SearchShortcutChoice = 'accepted' | 'dismissed'
 
 export type SearchShortcutChoiceResult = {
   snapshot: KeybindingFileSnapshot
-  /** `unconfirmed`: the save failed after possibly committing; live shortcuts follow the stored in-memory choice. */
-  outcome: 'applied' | 'unchanged' | 'unconfirmed' | 'refused'
+  /**
+   * `unconfirmed`: the save failed after possibly committing; live shortcuts follow the stored in-memory choice.
+   * `superseded`: saved, but an edit that landed during the save took Mod+K, and that later edit is kept.
+   */
+  outcome: 'applied' | 'superseded' | 'unchanged' | 'unconfirmed' | 'refused'
 }
 
 export type PlatformBindings = {

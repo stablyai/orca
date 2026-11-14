@@ -1,9 +1,7 @@
 import { app } from 'electron'
 import { KeybindingService } from '../../keybindings/keybinding-service'
-import {
-  parseSearchShortcutChoice,
-  toSearchShortcutPluginOwners
-} from '../../../shared/keybindings/search-shortcut-opt-in'
+import { parseSearchShortcutChoice } from '../../../shared/keybindings/search-shortcut-opt-in'
+import { toSearchShortcutPluginOwners } from '../../../shared/keybindings/search-shortcut-plugin-owners'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'
 import { createCodexSessionMigrationScheduler } from '../../codex/history/backfill/codex-session-migration-scheduler'
 import { startCodexSessionBackfillInBackground } from '../../codex/history/backfill/codex-session-backfill'

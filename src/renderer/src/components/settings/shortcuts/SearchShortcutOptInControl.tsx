@@ -14,6 +14,10 @@ import type {
   SearchShortcutChoice,
   SearchShortcutChoiceResult
 } from '../../../../../shared/keybindings/types'
+import {
+  searchShortcutOptInIsEffective,
+  type SearchShortcutOwner
+} from '../../../../../shared/keybindings/search-shortcut-opt-in'
 import { localizeKeybindingDefinition } from './keybinding-title-copy'
 
 export function SearchShortcutOptInControl({
@@ -40,7 +44,8 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
     try {
       const outcome = await setSearchShortcutChoice(choice)
       if (mountedRef.current) {
-        setNotice(outcome === 'applied' ? null : outcome)
+        // A superseded save is explained by the row's own accepted-but-taken description.
+        setNotice(outcome === 'applied' || outcome === 'superseded' ? null : outcome)
       }
     } catch (error) {
       console.error('Failed to save Search shortcut choice:', error)
@@ -59,7 +64,7 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
     <SettingsRow
       id="search-shortcut-opt-in"
       label={
-        accepted
+        searchShortcutOptInIsEffective(state.offer)
           ? t('searchShortcutOptIn.acceptedTitle', 'Search uses {{key}}', keys)
           : t('searchShortcutOptIn.title', 'Use {{key}} for Search', keys)
       }
@@ -107,29 +112,35 @@ function describeOffer(
   const keys = { key: state.searchKeyLabel, legacyKey: state.legacyKeyLabel }
   switch (state.offer.kind) {
     case 'accepted':
-      return t(
-        'searchShortcutOptIn.acceptedDetail',
-        '{{key}} no longer clears terminals. {{legacyKey}} still opens Search.',
-        keys
-      )
+      if (state.offer.owners.length > 0) {
+        return t(
+          'searchShortcutOptIn.acceptedTaken',
+          '{{key}} is also assigned to {{actions}}. Change that shortcut to use {{key}} for Search, or undo.',
+          { ...keys, actions: ownerTitles(state.offer.owners) }
+        )
+      }
+      return state.offer.searchOnModK
+        ? t(
+            'searchShortcutOptIn.acceptedDetail',
+            '{{key}} no longer clears terminals. {{legacyKey}} still opens Search.',
+            keys
+          )
+        : t(
+            'searchShortcutOptIn.acceptedCustom',
+            'Search uses a custom shortcut, and {{key}} no longer clears terminals. Undo restores {{legacyKey}} and {{key}} clear.',
+            keys
+          )
     case 'custom-search':
       return t(
         'searchShortcutOptIn.customSearch',
         'Search uses a custom shortcut. Change it in the Switch worktree row below.'
       )
-    case 'conflict': {
-      const actions = state.offer.owners
-        .map(({ actionId, title }) => {
-          const definition = getKeybindingDefinition(actionId)
-          return definition ? localizeKeybindingDefinition(definition).title : (title ?? actionId)
-        })
-        .join(', ')
+    case 'conflict':
       return t(
         'searchShortcutOptIn.conflict',
         '{{key}} is assigned to {{actions}}. Change that shortcut first.',
-        { ...keys, actions }
+        { ...keys, actions: ownerTitles(state.offer.owners) }
       )
-    }
     case 'file-error':
       return t(
         'searchShortcutOptIn.fileError',
@@ -148,4 +159,13 @@ function describeOffer(
             keys
           )
   }
+}
+
+function ownerTitles(owners: readonly SearchShortcutOwner[]): string {
+  return owners
+    .map(({ actionId, title }) => {
+      const definition = getKeybindingDefinition(actionId)
+      return definition ? localizeKeybindingDefinition(definition).title : (title ?? actionId)
+    })
+    .join(', ')
 }
