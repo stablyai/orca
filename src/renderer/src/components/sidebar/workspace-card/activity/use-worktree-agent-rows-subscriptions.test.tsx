@@ -276,7 +276,7 @@ it.each([100, 1000])(
   "host-scoped compact card skips its %i sleeping roots on other workspaces' writes",
   (count) => {
     const roots = Array.from({ length: count }, (_, i) => makePaneKey(`tab-wide-${i}`, LEAF))
-    const rootKeys = new Set(roots)
+    const rootKeys = new Set<string>(roots)
     const other = makePaneKey('tab-other', LEAF)
     const tabOf = (paneKey: string) => paneKey.slice(0, paneKey.indexOf(':'))
     const update = (paneKey: string, worktreeId: string) => ({
