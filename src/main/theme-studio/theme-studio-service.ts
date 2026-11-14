@@ -115,15 +115,21 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
     return { ...session.status(), label, ...extra, report }
   }
 
-  /** The open draft, or one started from what Orca paints now. */
-  async function ensureDraft(): Promise<ThemeStudioDraft> {
+  /** Applies `change` to the open draft, or to one started from what Orca paints now; a refused
+   *  change leaves no draft behind. */
+  async function commitChange<T>(
+    label: string,
+    change: (draft: ThemeStudioDraft) => { draft: ThemeStudioDraft } & T
+  ): Promise<T> {
     requireWindow()
-    if (session.draft) {
-      return session.draft
+    const open = session.draft
+    const started = open ? null : await currentDraft()
+    const result = change(open ?? started?.draft ?? session.requireDraft())
+    if (started) {
+      session.begin(started.draft, started.label)
     }
-    const { draft, label } = await currentDraft()
-    session.begin(draft, label)
-    return draft
+    session.commit(result.draft, label)
+    return result
   }
 
   async function edit(params: z.infer<typeof ThemeStudioEditParams>): Promise<ThemeStudioMutation> {
@@ -147,34 +153,33 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
   }
 
   async function patch(change: ThemeStudioPatch, label: string): Promise<ThemeStudioMutation> {
-    const { draft, changed } = applyThemeStudioPatch(await ensureDraft(), change)
-    session.commit(draft, label)
+    const { changed } = await commitChange(label, (draft) => applyThemeStudioPatch(draft, change))
     return mutation(label, { changed })
   }
 
   async function adjust(
     params: z.infer<typeof ThemeStudioAdjustParams>
   ): Promise<ThemeStudioMutation> {
-    const draft = await ensureDraft()
-    const next: ThemeStudioDraft = { ...draft }
-    const changed: Partial<Record<ThemeStudioMode, string[]>> = {}
-    const skipped: Partial<Record<ThemeStudioMode, string[]>> = {}
-    for (const mode of params.modes) {
-      const variant = draft[mode]
-      if (!variant) {
-        continue
-      }
-      const adjusted = adjustThemeStudioVariant(variant, params.adjustment, params.only)
-      next[mode] = adjusted.variant
-      changed[mode] = adjusted.changed
-      if (adjusted.skipped.length) {
-        skipped[mode] = adjusted.skipped
-      }
-    }
     const label = `Adjust ${Object.entries(params.adjustment)
       .map(([key, value]) => `${key} ${value}`)
       .join(', ')}`
-    session.commit(next, label)
+    const { changed, skipped } = await commitChange(label, (draft) => {
+      const next: ThemeStudioDraft = { ...draft }
+      const changedKeys: Partial<Record<ThemeStudioMode, string[]>> = {}
+      const skippedKeys: Partial<Record<ThemeStudioMode, string[]>> = {}
+      for (const mode of params.modes) {
+        const variant = draft[mode]
+        if (variant) {
+          const adjusted = adjustThemeStudioVariant(variant, params.adjustment, params.only)
+          next[mode] = adjusted.variant
+          changedKeys[mode] = adjusted.changed
+          if (adjusted.skipped.length) {
+            skippedKeys[mode] = adjusted.skipped
+          }
+        }
+      }
+      return { draft: next, changed: changedKeys, skipped: skippedKeys }
+    })
     return mutation(label, { changed, ...(Object.keys(skipped).length ? { skipped } : {}) })
   }
 
