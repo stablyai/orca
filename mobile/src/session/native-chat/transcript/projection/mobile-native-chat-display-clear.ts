@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import * as z from 'zod'
+import { runKeyedSerializedOperation } from '../../../../../../src/shared/concurrency/keyed-serialized-operations'
 import { sha256 } from '@noble/hashes/sha256'
 import { bytesToHex } from '@noble/hashes/utils'
 import {
@@ -45,6 +46,7 @@ type Preview = { text: string | null; turnStartedAt: number | null }
 const digest = (text: string) => bytesToHex(sha256(text))
 const boundaries = new Map<string, DisplayClear | null>()
 const pending = new Map<string, Promise<void>>()
+const saves = new Map<string, Promise<void>>()
 const listeners = new Set<() => void>()
 const keyFor = (identity: string) => `${chatTranscriptStoreKey(identity)}:display-clear`
 
@@ -118,21 +120,23 @@ async function save(
   boundary: DisplayClear,
   expected?: DisplayClear
 ): Promise<void> {
-  if (expected && boundaries.get(identity) !== expected) {
-    return
-  }
-  const store = readPageDeviceStore()
-  if (store?.available()) {
-    const result = await store.write('cache', [
-      { key: keyFor(identity), value: encodeDeviceStoreValue(boundary) }
-    ])
-    if (!result.written) {
-      throw new Error('chat_display_clear_not_saved')
+  await runKeyedSerializedOperation(saves, identity, async () => {
+    if (expected && boundaries.get(identity) !== expected) {
+      return
     }
-  }
-  if (!expected || boundaries.get(identity) === expected) {
-    publish(identity, boundary)
-  }
+    const store = readPageDeviceStore()
+    if (store?.available()) {
+      const result = await store.write('cache', [
+        { key: keyFor(identity), value: encodeDeviceStoreValue(boundary) }
+      ])
+      if (!result.written) {
+        throw new Error('chat_display_clear_not_saved')
+      }
+    }
+    if (!expected || boundaries.get(identity) === expected) {
+      publish(identity, boundary)
+    }
+  })
 }
 
 export function mobileNativeChatMessagesAfterDisplayClear(
