@@ -440,6 +440,7 @@ it('reuses completed full maintenance until the install store changes, and scope
 it('skips repeated no-worker cleanup only after completion and invalidates it for every worker generation', async () => {
   const { refreshWorkerRegistration } = await import('./browser-extension-worker-registration')
   const clearStorageData = vi.fn(async () => {})
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worker registration cleanup only calls the provided clearStorageData method.
   const session = { clearStorageData } as unknown as Electron.Session
   const prepared = {
     extensionId: 'b'.repeat(32),

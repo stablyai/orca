@@ -100,11 +100,11 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     { url: string; options: Electron.LoadURLOptions }
   >()
   const captureInitialNavigation = (_event: Electron.Event, guest: Electron.WebContents): void => {
-    const arguments_ =
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Electron WebContents exposes getLastWebPreferences at runtime; its public type omits it.
-      (
-        guest as Electron.WebContents & { getLastWebPreferences: () => Electron.WebPreferences }
-      ).getLastWebPreferences()?.additionalArguments ?? []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Electron WebContents exposes getLastWebPreferences at runtime; its public type omits it.
+    const nativeGuest = guest as Electron.WebContents & {
+      getLastWebPreferences: () => Electron.WebPreferences
+    }
+    const arguments_ = nativeGuest.getLastWebPreferences()?.additionalArguments ?? []
     const marker = arguments_.find((argument) => pendingInitialNavigation.has(argument))
     if (!marker) {
       return
