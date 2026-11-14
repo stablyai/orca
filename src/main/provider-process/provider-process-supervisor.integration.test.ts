@@ -1,4 +1,5 @@
-import { mkdtemp, rm, writeFile, readdir } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile, readdir, readFile } from 'node:fs/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Readable } from 'node:stream'
@@ -116,7 +117,14 @@ describe.runIf(process.platform !== 'win32')('direct provider ownership', () => 
       const records = fs.readdirSync(process.env.ORCA_TEST_JOURNAL).filter(f => f.endsWith('.json'))
       const record = JSON.parse(fs.readFileSync(path.join(process.env.ORCA_TEST_JOURNAL, records[0]), 'utf8'))
       process.stdout.write(JSON.stringify({ pid: process.pid, leader: record.leader.pid, owner: record.owner.pid,
-        argv: process.argv.slice(1), env: process.env }) + '\n')
+        argv: process.argv.slice(1), env: {
+          ORCA_TEST_JOURNAL: process.env.ORCA_TEST_JOURNAL,
+          ORCA_TEST_LITERAL: process.env.ORCA_TEST_LITERAL,
+          NODE_OPTIONS: process.env.NODE_OPTIONS, PWD: process.env.PWD,
+          SHLVL: process.env.SHLVL, _: process.env._,
+          ELECTRON_RUN_AS_NODE: process.env.ELECTRON_RUN_AS_NODE,
+          ORCA_PROVIDER_SUPERVISOR_SPEC: process.env.ORCA_PROVIDER_SUPERVISOR_SPEC
+        } }) + '\n')
       process.stderr.write('final stderr\n')
       process.stdout.write('final stdout\n')
     `,
@@ -231,6 +239,32 @@ describe.runIf(process.platform !== 'win32')('direct provider ownership', () => 
     run.child.kill('SIGUSR2')
     await expect(run.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' })
     expect(run.output()).not.toContain('usr2 reached CLI')
+  })
+
+  it('allows the full native TERM grace after a delayed watcher receives the request', async () => {
+    const run = launch(
+      String.raw`
+      process.on('SIGTERM', () => setTimeout(() => {
+        process.stdout.write('final result\n'); process.exit(0)
+      }, 800))
+      process.stdout.write('ready\n')
+      setInterval(() => {}, 60000)
+    `,
+      { sigtermGraceMs: 1_000 }
+    )
+    await run.untilOutput('ready')
+    const directory = join(state.root, 'provider-processes')
+    const [name] = await readdir(directory)
+    const { watcher } = JSON.parse(await readFile(join(directory, name), 'utf8'))
+    process.kill(watcher.pid, 'SIGSTOP')
+    try {
+      run.child.kill('SIGTERM')
+      await delay(500)
+    } finally {
+      process.kill(watcher.pid, 'SIGCONT')
+    }
+    await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+    expect(run.output()).toBe('ready\nfinal result\n')
   })
 
   it('distinguishes native exec ENOENT from a CLI exit 127', async () => {
