@@ -13,6 +13,7 @@ import {
   type NativeChatSubagentView
 } from './native-chat-open-subagent'
 import { NativeChatSubagentSheet } from './NativeChatSubagentSheet'
+import { NativeChatInSubagentSheet } from './native-chat-subagent-sheet-context'
 import { NativeChatSubagentSheetHost } from './NativeChatSubagentSheetLayer'
 
 /** Where focus goes once the sheet closes: what opened it, else its roster entry or strip row, else the composer. */
@@ -105,7 +106,12 @@ export function NativeChatSubagentTranscripts({
   return (
     <NativeChatToolRunWindowProvider isVisible={isVisible} find={find}>
       <div ref={mainRef} className="relative flex min-h-0 flex-1 flex-col">
-        <NativeChatMessageList {...props} isVisible={isVisible} subagentView={main} />
+        {/* Paused under the sheet, as when hidden: its scroll stays where the reader left it. */}
+        <NativeChatMessageList
+          {...props}
+          isVisible={isVisible && shown === null}
+          subagentView={main}
+        />
       </div>
       {shown && openId !== null ? (
         <NativeChatSubagentSheet
@@ -116,20 +122,22 @@ export function NativeChatSubagentTranscripts({
         >
           {/* `/btw` forks from the conversation, never from a subagent's rows. */}
           <NativeChatSideChatForkPointContext value={undefined}>
-            <NativeChatMessageList
-              key={openId}
-              session={props.session}
-              journalItems={props.journalItems}
-              journalSubmissions={props.journalSubmissions}
-              journalLatestTurn={props.journalLatestTurn}
-              subagentRoster={props.subagentRoster}
-              subagentView={shown}
-              isVisible={isVisible}
-              isWorking={false}
-              expandSignal={props.expandSignal}
-              structuredAttachments={props.structuredAttachments}
-              runtimeContext={props.runtimeContext}
-            />
+            <NativeChatInSubagentSheet value>
+              <NativeChatMessageList
+                key={openId}
+                session={props.session}
+                journalItems={props.journalItems}
+                journalSubmissions={props.journalSubmissions}
+                journalLatestTurn={props.journalLatestTurn}
+                subagentRoster={props.subagentRoster}
+                subagentView={shown}
+                isVisible={isVisible}
+                isWorking={false}
+                expandSignal={props.expandSignal}
+                structuredAttachments={props.structuredAttachments}
+                runtimeContext={props.runtimeContext}
+              />
+            </NativeChatInSubagentSheet>
           </NativeChatSideChatForkPointContext>
         </NativeChatSubagentSheet>
       ) : null}

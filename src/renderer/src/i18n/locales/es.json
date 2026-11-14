@@ -19537,7 +19537,9 @@
         "needsYou": "Te necesita",
         "agentNeedsYou": "{{name}} te necesita",
         "mainNeedsYou": "El agente principal te necesita",
-        "show": "Mostrar"
+        "show": "Mostrar",
+        "backTo": "Volver a {{value0}}",
+        "mainAgent": "Agente principal"
       },
       "queuedMessages": {
         "alreadySent": "Este mensaje ya se envió.",

@@ -71,6 +71,9 @@ export function NativeChatSubagentSheetHeader({
                 variant="muted-field-icon"
                 size="xs"
                 className="-ml-1.5 min-w-0 max-w-40 shrink"
+                aria-label={t('components.native-chat.subagents.backTo', 'Back to {{value0}}', {
+                  value0: labelOf(parentId)
+                })}
                 onClick={() => onOpen(parentId)}
               >
                 <ChevronLeft aria-hidden />
@@ -141,36 +144,35 @@ export function NativeChatSubagentSheetHeader({
               </span>
             ) : null}
           </div>
-          {state ? (
-            <div
-              aria-live="polite"
-              className="min-w-0 truncate pl-[18px] text-xs text-chat-foreground-faint tabular-nums"
-            >
-              {sayNativeChatSubagentStateHeading(state)}
-              {entry?.startedAt !== undefined ? (
-                // Ticking digits stay out of live announcements.
-                <span
-                  aria-hidden={counting || undefined}
-                  className="hidden @xs/subagent-sheet:inline"
-                >
-                  {' · '}
-                  <SubagentElapsed
-                    startedAt={entry.startedAt}
-                    settledAt={entry.settledAt ?? null}
-                    counting={counting}
-                  />
-                </span>
-              ) : null}
-              {typeof entry?.tokens === 'number' ? (
-                <span
-                  aria-hidden={counting || undefined}
-                  className="hidden @sm/subagent-sheet:inline"
-                >
-                  {` · ${say('tokens', { value0: formatSubagentTokens(entry.tokens) })}`}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
+          {/* Keeps its height without a known state, so the header never shrinks between subagents. */}
+          <div
+            aria-live="polite"
+            className="h-4 min-w-0 truncate pl-[18px] text-xs text-chat-foreground-faint tabular-nums"
+          >
+            {state ? sayNativeChatSubagentStateHeading(state) : null}
+            {entry?.startedAt !== undefined ? (
+              // Ticking digits stay out of live announcements.
+              <span
+                aria-hidden={counting || undefined}
+                className="hidden @xs/subagent-sheet:inline"
+              >
+                {' · '}
+                <SubagentElapsed
+                  startedAt={entry.startedAt}
+                  settledAt={entry.settledAt ?? null}
+                  counting={counting}
+                />
+              </span>
+            ) : null}
+            {typeof entry?.tokens === 'number' ? (
+              <span
+                aria-hidden={counting || undefined}
+                className="hidden @sm/subagent-sheet:inline"
+              >
+                {` · ${say('tokens', { value0: formatSubagentTokens(entry.tokens) })}`}
+              </span>
+            ) : null}
+          </div>
         </div>
         <div className="flex h-6 shrink-0 items-center gap-1">
           {controls.stop}
@@ -186,30 +188,38 @@ export function NativeChatSubagentSheetHeader({
           </Button>
         </div>
       </div>
-      {waiting !== undefined && waiting !== agentId ? (
-        <div className="px-4 pt-3">
-          <div
-            role="status"
-            className="mx-auto flex w-full max-w-[46rem] items-center gap-2 rounded-[10px] border border-status-warning py-1.5 pr-1.5 pl-3 text-xs text-chat-foreground-strong"
-          >
-            <span className="min-w-0 flex-1 truncate">
-              {waiting === null
-                ? t('components.native-chat.subagents.mainNeedsYou', 'Main agent needs you')
-                : t('components.native-chat.subagents.agentNeedsYou', '{{name}} needs you', {
-                    name: labelOf(waiting)
-                  })}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              onClick={() => controls.showWaiting(waiting)}
-            >
-              {t('components.native-chat.subagents.show', 'Show')}
-            </Button>
-          </div>
-        </div>
-      ) : null}
+    </div>
+  )
+}
+
+/** Pinned atop a sheet's rows while another agent's prompt waits: who, and the way to it. */
+export function NativeChatSubagentNeedsYouLine({
+  label,
+  onShow
+}: {
+  /** The waiting subagent's name; null for the main agent. */
+  label: string | null
+  onShow: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    // The sheet's body pads 12px above; the line pins over it and paints it, like the rows' backdrop.
+    <div className="sticky -top-3 z-10 -mt-3 bg-chat-sheet pt-3 pb-1">
+      <div
+        role="status"
+        className="flex items-center gap-2 rounded-[10px] border border-status-warning py-1.5 pr-1.5 pl-3 text-xs text-chat-foreground-strong"
+      >
+        <span className="min-w-0 flex-1 truncate">
+          {label === null
+            ? t('components.native-chat.subagents.mainNeedsYou', 'Main agent needs you')
+            : t('components.native-chat.subagents.agentNeedsYou', '{{name}} needs you', {
+                name: label
+              })}
+        </span>
+        <Button type="button" variant="outline" size="xs" onClick={onShow}>
+          {t('components.native-chat.subagents.show', 'Show')}
+        </Button>
+      </div>
     </div>
   )
 }

@@ -113,7 +113,11 @@ export function NativeChatSubagentSheet({
         className="@container/subagent-sheet absolute inset-x-0 bottom-0 z-40 flex max-h-full flex-col overflow-hidden rounded-t-[14px] border-t border-chat-composer-border bg-chat-sheet [--chat-pane:var(--chat-sheet)] shadow-[0_-10px_30px_rgba(0,0,0,0.25)] outline-none animate-in slide-in-from-bottom duration-[220ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:animate-none"
       >
         {children}
-        <div ref={host?.setPromptSlot} className="contents" />
+        {/* At most half the sheet, so a tall prompt scrolls inside; the rows' gutter keeps its edges on theirs. */}
+        <div
+          ref={host?.setPromptSlot}
+          className="flex max-h-1/2 min-h-0 shrink-0 flex-col scrollbar-sleek overflow-y-auto px-4 pb-3 [scrollbar-gutter:stable_both-edges] empty:hidden"
+        />
       </div>
     </>,
     element

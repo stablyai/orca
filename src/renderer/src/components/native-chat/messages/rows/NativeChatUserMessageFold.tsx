@@ -69,11 +69,15 @@ export function NativeChatUserMessageFold({
         data-native-chat-user-message-folded={folded ? '' : undefined}
         className={cn(
           className,
-          folded && 'max-h-44 overflow-hidden mask-b-from-[calc(100%-1.75rem)]'
+          folded &&
+            (foldLines === undefined
+              ? 'max-h-44 overflow-hidden mask-b-from-[calc(100%-1.75rem)]'
+              : // Clamps whole lines, ending the last with an ellipsis, across the text's paragraphs.
+                'overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical]')
         )}
         style={{
           ...(unkerned ? NATIVE_CHAT_UNKERNED_CSS : undefined),
-          ...(folded && foldLines !== undefined ? { maxHeight: `${foldLines}lh` } : undefined)
+          ...(folded && foldLines !== undefined ? { WebkitLineClamp: foldLines } : undefined)
         }}
         // Tabbing to a link under the fold scrolls the preview to it; the top returns once focus leaves.
         onBlur={(event) => {

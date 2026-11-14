@@ -19882,7 +19882,9 @@
         "needsYou": "Braucht dich",
         "agentNeedsYou": "{{name}} braucht dich",
         "mainNeedsYou": "Haupt-Agent braucht dich",
-        "show": "Anzeigen"
+        "show": "Anzeigen",
+        "backTo": "Zurück zu {{value0}}",
+        "mainAgent": "Haupt-Agent"
       },
       "rewind": {
         "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",

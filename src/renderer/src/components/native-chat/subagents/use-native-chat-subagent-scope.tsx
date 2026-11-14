@@ -30,7 +30,10 @@ import {
   nativeChatSubagentEndingMessage,
   type NativeChatSubagentAside
 } from './native-chat-subagent-ending'
-import { NativeChatSubagentSheetHeader } from './NativeChatSubagentSheetHeader'
+import {
+  NativeChatSubagentNeedsYouLine,
+  NativeChatSubagentSheetHeader
+} from './NativeChatSubagentSheetHeader'
 import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
 import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
 
@@ -158,14 +161,30 @@ export function useNativeChatSubagentScope({
     [agentId, conversationTurns, messages]
   )
   const open = view?.open
+  const sheetWaiting = view?.sheet?.waiting
   return {
     agentId,
     open,
     /** Leads a subagent's transcript: what the main agent asked of it. */
     lead:
-      agentId !== null && handoff?.prompt ? (
-        <NativeChatSubagentPrompt agentId={agentId} prompt={handoff.prompt} />
-      ) : null,
+      agentId === null ? null : (
+        <>
+          {sheetWaiting !== undefined && sheetWaiting !== agentId && view?.sheet ? (
+            <NativeChatSubagentNeedsYouLine
+              label={
+                sheetWaiting === null
+                  ? null
+                  : (entries.get(sheetWaiting)?.label ??
+                    t('components.native-chat.subagents.unnamed', 'Subagent'))
+              }
+              onShow={() => view.sheet?.showWaiting(sheetWaiting)}
+            />
+          ) : null}
+          {handoff?.prompt ? (
+            <NativeChatSubagentPrompt agentId={agentId} prompt={handoff.prompt} />
+          ) : null}
+        </>
+      ),
     /** Drawn above a subagent's own transcript in its sheet. */
     header:
       agentId !== null && open && view?.sheet ? (

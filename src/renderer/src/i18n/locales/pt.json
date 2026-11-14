@@ -21096,7 +21096,9 @@
         "needsYou": "Precisa de você",
         "agentNeedsYou": "{{name}} precisa de você",
         "mainNeedsYou": "O agente principal precisa de você",
-        "show": "Mostrar"
+        "show": "Mostrar",
+        "backTo": "Voltar para {{value0}}",
+        "mainAgent": "Agente principal"
       },
       "drop": {
         "title": "Solte para anexar a este chat",

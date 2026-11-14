@@ -19577,7 +19577,9 @@
         "needsYou": "需要你處理",
         "agentNeedsYou": "{{name}} 需要你處理",
         "mainNeedsYou": "主代理程式需要你處理",
-        "show": "查看"
+        "show": "查看",
+        "backTo": "返回 {{value0}}",
+        "mainAgent": "主代理程式"
       },
       "rewind": {
         "unsupported": "此聊天無法返回到更早的訊息。",

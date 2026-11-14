@@ -19860,7 +19860,9 @@
         "needsYou": "Yanıtınız gerekiyor",
         "agentNeedsYou": "{{name}} yanıtınızı bekliyor",
         "mainNeedsYou": "Ana ajan yanıtınızı bekliyor",
-        "show": "Göster"
+        "show": "Göster",
+        "backTo": "{{value0}} öğesine dön",
+        "mainAgent": "Ana ajan"
       },
       "rewind": {
         "unsupported": "Bu sohbette önceki bir mesaja dönülemiyor.",

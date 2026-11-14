@@ -19946,7 +19946,9 @@
         "needsYou": "Vous attend",
         "agentNeedsYou": "{{name}} vous attend",
         "mainNeedsYou": "L’agent principal vous attend",
-        "show": "Afficher"
+        "show": "Afficher",
+        "backTo": "Retour à {{value0}}",
+        "mainAgent": "Agent principal"
       },
       "drop": {
         "messageTitle": "Déposez pour joindre à ce message",

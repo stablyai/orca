@@ -1,4 +1,5 @@
 import { useContext } from 'react'
+import { NativeChatInSubagentSheet } from '../../subagents/native-chat-subagent-sheet-context'
 import { cn } from '@/lib/class-names'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
@@ -64,8 +65,11 @@ export function NativeChatAssistantMessageRow({
   const words = nativeChatAgentRowWords(message, t)
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
   // a turn they belong to its holder, which may draw only images when folding hid its words.
+  // A subagent's sheet is read-only history: its rows offer no turn actions.
+  const inSheet = useContext(NativeChatInSubagentSheet)
   const showControls =
     !isSystem &&
+    !inSheet &&
     (endsResponse ?? (words.length > 0 && !continuesTurn)) &&
     (words.length > 0 || hasImages) &&
     activeTurnIsWorking !== true

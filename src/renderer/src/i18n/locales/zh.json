@@ -19432,8 +19432,10 @@
         "close": "关闭",
         "needsYou": "需要你处理",
         "agentNeedsYou": "{{name}} 需要你处理",
-        "mainNeedsYou": "主智能体需要你处理",
-        "show": "查看"
+        "mainNeedsYou": "主代理需要你处理",
+        "show": "查看",
+        "backTo": "返回 {{value0}}",
+        "mainAgent": "主代理"
       },
       "drop": {
         "messageTitle": "拖放以附加到此消息",

@@ -19167,7 +19167,9 @@
         "needsYou": "対応が必要",
         "agentNeedsYou": "{{name}} が対応を待っています",
         "mainNeedsYou": "メイン Agent が対応を待っています",
-        "show": "表示"
+        "show": "表示",
+        "backTo": "{{value0}} に戻る",
+        "mainAgent": "メイン Agent"
       },
       "drop": {
         "messageTitle": "ドロップしてこのメッセージに添付",

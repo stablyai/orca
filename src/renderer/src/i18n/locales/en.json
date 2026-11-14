@@ -21183,7 +21183,8 @@
         "needsYou": "Needs you",
         "agentNeedsYou": "{{name}} needs you",
         "mainNeedsYou": "Main agent needs you",
-        "show": "Show"
+        "show": "Show",
+        "backTo": "Back to {{value0}}"
       },
       "rewind": {
         "unsupported": "This chat can't go back to an earlier message.",

@@ -98,7 +98,23 @@ function session(state: State): NativeChatLiveSession {
     row('a1-1', 'a1', bash('rg -n "annotate" src', 'src/browser-core.ts:212: annotate()')),
     row('a1-2', 'a1', [{ type: 'text', text: 'Now the renderer call path `callRuntimeRpc`.' }]),
     row('a1-3', 'a1', bash('rg -n callRuntimeRpc src/renderer', '41 matches')),
-    row('a1-4', 'a1', [{ type: 'text', text: 'Now browser-core.ts (navigation/input methods).' }]),
+    row('a1-4', 'a1', [
+      { type: 'text', text: 'Now browser-core.ts (navigation/input methods).' },
+      {
+        type: 'subagent-group',
+        groupId: 'a1-turn',
+        agents: [
+          {
+            id: 'a4',
+            label: 'Trace grab hook wiring',
+            state: 'working',
+            tokens: 12_400,
+            startedAt: T0 + 60_000,
+            agentType: 'Explore'
+          }
+        ]
+      }
+    ]),
     row('a4-1', 'a4', [{ type: 'text', text: 'Checking the grab hook wiring.' }], 'a1')
   ]
   return {
@@ -118,11 +134,14 @@ function Pane({
   paneKey,
   state = 'working',
   waiting,
+  tallPrompt = false,
   height = 620
 }: {
   paneKey: string
   state?: State
   waiting?: string | null
+  /** The waiting approval carries a long plan, as a plan approval does. */
+  tallPrompt?: boolean
   height?: number
 }) {
   return (
@@ -155,6 +174,14 @@ function Pane({
           <NativeChatSubagentSheetPromptSlot agentId={waiting ?? undefined}>
             <NativeChatApprovalCard
               approval={{
+                ...(tallPrompt
+                  ? {
+                      detail: Array.from(
+                        { length: 30 },
+                        (_, step) => `${step + 1}. Read and map the grab hook call site ${step + 1}`
+                      ).join('\n')
+                    }
+                  : {}),
                 title: 'Allow curl -s localhost:9222/json?',
                 options: [
                   { label: 'Allow', send: 'accept' },
@@ -207,6 +234,13 @@ export const completed = sheet('completed', { state: 'completed' })
 export const failed = sheet('failed', { state: 'failed' })
 export const stopped = sheet('stopped', { state: 'stopped' })
 export const needsYouHere = sheet('needsYouHere', { waiting: 'a1', width: 1000 })
+export const needsYouHere360 = sheet('needsYouHere360', { waiting: 'a1', width: 360 })
+export const needsYouHere560 = sheet('needsYouHere560', { waiting: 'a1' })
+export const shortPaneTallApproval = sheet('shortTall', {
+  waiting: 'a1',
+  tallPrompt: true,
+  height: 380
+})
 export const mainNeedsYou = sheet('mainNeedsYou', { waiting: null })
 export const otherNeedsYou = sheet('otherNeedsYou', { waiting: 'a2' })
 export const nested = sheet('nested', { agentId: 'a4' })

@@ -1,6 +1,20 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { createPortal } from 'react-dom'
-import { openNativeChatSubagent, useNativeChatOpenSubagent } from './native-chat-open-subagent'
+import {
+  closeNativeChatSubagentOnEscape,
+  openNativeChatSubagent,
+  useNativeChatOpenSubagent
+} from './native-chat-open-subagent'
+import { NativeChatInSubagentSheet } from './native-chat-subagent-sheet-context'
 
 export type NativeChatSubagentSheetHostValue = {
   paneKey: string
@@ -32,10 +46,61 @@ export function NativeChatSubagentSheetPromptSlot({
 }): React.ReactNode {
   const host = useContext(NativeChatSubagentSheetHost)
   const openId = useNativeChatOpenSubagent(host?.paneKey ?? '')?.agentId
-  const slot = host?.promptSlot
-  return slot && agentId !== undefined && agentId === openId
-    ? createPortal(children, slot)
-    : children
+  const slot = host?.promptSlot ?? null
+  const inSheet = slot !== null && agentId !== undefined && agentId === openId
+  // One portal box for the card's whole life: moving the box, not the card, keeps a half-typed answer.
+  const [box] = useState(() => {
+    const element = document.createElement('div')
+    element.className = 'contents'
+    return element
+  })
+  const anchorRef = useRef<HTMLDivElement | null>(null)
+  // Placed as the anchor mounts, before the card's own layout effects ask for focus.
+  const placeAtAnchor = useCallback(
+    (anchor: HTMLDivElement | null) => {
+      anchorRef.current = anchor
+      if (anchor && box.parentNode === null) {
+        anchor.appendChild(box)
+      }
+    },
+    [box]
+  )
+  useLayoutEffect(() => {
+    const target = inSheet ? slot : anchorRef.current
+    if (target && box.parentNode !== target) {
+      target.appendChild(box)
+    }
+  }, [box, inSheet, slot])
+  useLayoutEffect(() => () => box.remove(), [box])
+  const paneKey = host?.paneKey
+  return (
+    <>
+      <div ref={placeAtAnchor} className="contents" />
+      {createPortal(
+        <NativeChatInSubagentSheet value={inSheet}>
+          <div
+            className="contents"
+            onKeyDownCapture={(event) => {
+              if (
+                !inSheet ||
+                paneKey === undefined ||
+                event.key !== 'Escape' ||
+                event.nativeEvent.isComposing
+              ) {
+                return
+              }
+              // A card's own Esc cancels or folds its prompt; in the sheet Esc only goes up or closes.
+              event.stopPropagation()
+              closeNativeChatSubagentOnEscape(event, paneKey)
+            }}
+          >
+            {children}
+          </div>
+        </NativeChatInSubagentSheet>,
+        box
+      )}
+    </>
+  )
 }
 
 /** Wraps a chat pane's content: a subagent sheet portals in above it and the content goes inert under it. */

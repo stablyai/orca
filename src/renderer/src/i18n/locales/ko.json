@@ -19164,7 +19164,9 @@
         "needsYou": "확인 필요",
         "agentNeedsYou": "{{name}}에서 확인이 필요합니다",
         "mainNeedsYou": "메인 에이전트에서 확인이 필요합니다",
-        "show": "보기"
+        "show": "보기",
+        "backTo": "{{value0}}(으)로 돌아가기",
+        "mainAgent": "메인 에이전트"
       },
       "drop": {
         "messageTitle": "놓아서 이 메시지에 첨부",
