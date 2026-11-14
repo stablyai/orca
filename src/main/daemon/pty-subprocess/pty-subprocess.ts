@@ -15,6 +15,7 @@ import {
 import { createDaemonPtySubprocessHandle } from './subprocess-handle'
 import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { WindowsPwshNotFoundNotices } from '../../providers/shell-launch/windows/pwsh-not-found-notice'
 
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 
@@ -33,6 +34,7 @@ export type PtySubprocessOptions = {
   terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  terminalWindowsPwshNotFoundNotices?: WindowsPwshNotFoundNotices
   onCreationDisposition?: (disposition: PtyCreationDisposition) => void
   assertCreateAllowed?: () => void
   isCanceled?: () => boolean
@@ -69,7 +71,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   try {
     const size = normalizePtySize(opts.cols, opts.rows)
     const env = createDaemonPtyEnvironment(opts)
-    const launch = createPtyShellLaunchPlan(opts, env)
+    const launch = await createPtyShellLaunchPlan(opts, env)
 
     await preflightPtySpawn({
       validationCwd: launch.validationCwd,

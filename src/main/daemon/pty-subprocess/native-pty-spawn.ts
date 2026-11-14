@@ -9,6 +9,7 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from '../../providers/shell-launch/macos/tcc-login-shell'
 import type { WindowsShellSpawnAttempt } from '../../providers/shell-launch/windows/shell-fallback-chain'
+import { forgetWindowsPowerShellAfterLaunchFailure } from '../../providers/shell-launch/windows/powershell-search'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 import { wrapPtySpawnInTerminalScope } from '../process-scopes/terminal-scopes-runtime'
 import { spawnConptyWithInputReader, type ConptyStartupEvents } from './conpty-startup-input-reader'
@@ -149,6 +150,7 @@ export async function spawnNativeDaemonPty(args: {
     if (process.platform !== 'win32') {
       throw primaryErr
     }
+    forgetWindowsPowerShellAfterLaunchFailure(args.shellPath)
     for (const attempt of args.windowsFallbackAttempts.slice(1)) {
       try {
         const spawned = await spawnAt(

@@ -22,7 +22,10 @@ type WindowsShellPathHydrationOptions = {
   hydrate?: () => Promise<HydrationResult>
   merge?: (segments: string[]) => string[]
   resolveGitBashPath?: (shell: string) => string | null
-  resolvePowerShellChain?: (family: 'powershell.exe' | 'pwsh.exe') => string[]
+  resolvePowerShellChain?: (
+    family: 'powershell.exe' | 'pwsh.exe',
+    settingKey: string
+  ) => string[] | Promise<string[]>
   warn?: (error: unknown) => void
 }
 
@@ -32,7 +35,9 @@ export function createWindowsShellPathHydration(options: WindowsShellPathHydrati
   const merge = options.merge ?? mergePathSegments
   const resolveGitBashPath = options.resolveGitBashPath ?? resolveWindowsGitBashShellPath
   const resolvePowerShellChain =
-    options.resolvePowerShellChain ?? resolveWindowsPowerShellSpawnChain
+    options.resolvePowerShellChain ??
+    ((family: 'powershell.exe' | 'pwsh.exe', settingKey: string) =>
+      resolveWindowsPowerShellSpawnChain(family, { settingKey }))
   const warn =
     options.warn ??
     ((error: unknown) => {
@@ -41,10 +46,12 @@ export function createWindowsShellPathHydration(options: WindowsShellPathHydrati
   let generation = 0
   let ready = Promise.resolve()
 
-  const setConfiguredShell = (
+  // PowerShell paths come from an async cached search; a newer request wins over a slower one.
+  const setConfiguredShell = async (
     shell: string | null | undefined,
-    implementation?: WindowsPowerShellImplementation
-  ): void => {
+    implementation: WindowsPowerShellImplementation | undefined,
+    requestGeneration: number
+  ): Promise<void> => {
     const requestedShell = shell?.trim() || 'powershell.exe'
     const basename = pathWin32.basename(requestedShell).toLowerCase()
     const shellFamily: WindowsPowerShellShellFamily =
@@ -58,7 +65,13 @@ export function createWindowsShellPathHydration(options: WindowsShellPathHydrati
       configure(requestedShell, resolveGitBashPath(requestedShell), null)
       return
     }
-    const spawnChain = resolvePowerShellChain(effectivePowerShell)
+    const spawnChain = await resolvePowerShellChain(
+      effectivePowerShell,
+      `${requestedShell}|${implementation ?? ''}`
+    )
+    if (requestGeneration !== generation) {
+      return
+    }
     const profileShell = spawnChain[0] ?? 'cmd.exe'
     const fallbackShell = spawnChain.slice(1).find((candidate) => {
       const candidateBasename = pathWin32.basename(candidate).toLowerCase()
@@ -70,13 +83,15 @@ export function createWindowsShellPathHydration(options: WindowsShellPathHydrati
   return {
     configure: (shell, implementation?: WindowsPowerShellImplementation) => {
       generation += 1
-      setConfiguredShell(shell, implementation)
+      const configured = setConfiguredShell(shell, implementation, generation)
+      ready = ready.then(() => configured)
     },
     hydrate: (shell, implementation?: WindowsPowerShellImplementation) => {
       generation += 1
       const requestGeneration = generation
-      setConfiguredShell(shell, implementation)
+      const configured = setConfiguredShell(shell, implementation, requestGeneration)
       ready = ready.then(async () => {
+        await configured
         if (requestGeneration !== generation) {
           return
         }

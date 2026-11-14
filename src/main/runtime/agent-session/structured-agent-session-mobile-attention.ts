@@ -118,7 +118,7 @@ export function createStructuredAttentionMobileDelivery(
       }
       const { title, body } = buildNotificationOptions(
         request,
-        getRuntimeDesktopSurface().translateNotification
+        getRuntimeDesktopSurface().translate
       )
       // Apply the desktop fan-out preferences to phone delivery too.
       const desktopAllowed = isNotificationSourceEnabled(

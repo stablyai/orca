@@ -12,6 +12,8 @@ import { PI_PROCESS_OWNER_ENV_KEYS } from '../../pty/shell-startup/pi-process-ow
 import { planCodexNoDaemonLaunch } from '../../pty/shell-startup/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../agent-launch/trust/agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../providers/pty/provider-contract'
+import { buildWindowsPwshNotFoundNotices } from '../../providers/shell-launch/windows/pwsh-not-found-notice'
+import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 import { getStartupTerminalIngressIntent } from '../terminal-startup-color-query-replies'
 import { CODEX_HOME_ENV_KEYS } from './host-env/codex-home'
@@ -249,6 +251,9 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       spawnOptions.terminalWindowsPowerShellImplementation = input.getSettings
         ? (input.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
         : undefined
+      spawnOptions.terminalWindowsPwshNotFoundNotices = buildWindowsPwshNotFoundNotices(
+        getRuntimeDesktopSurface().translate
+      )
     }
   }
   return { spawnOptions, env, launchCommand }

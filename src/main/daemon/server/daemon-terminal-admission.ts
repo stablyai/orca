@@ -126,6 +126,7 @@ export class DaemonTerminalAdmission {
         terminalShellArgs: payload.terminalShellArgs,
         terminalWindowsWslDistro: payload.terminalWindowsWslDistro,
         terminalWindowsPowerShellImplementation: payload.terminalWindowsPowerShellImplementation,
+        terminalWindowsPwshNotFoundNotices: payload.terminalWindowsPwshNotFoundNotices,
         shellReadySupported: payload.shellReadySupported,
         historySeedChunks,
         startupIngress: parsePtyStartupIngressIntent(payload.startupIngress),

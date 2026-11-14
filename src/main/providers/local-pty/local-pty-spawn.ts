@@ -64,7 +64,7 @@ export async function spawnLocalPty(
     if (plan instanceof DeferredLocalPtyLaunchPlan) {
       const available = await plan.availability
       throwIfCanceled()
-      plan = plan.finish(available)
+      plan = await plan.finish(available)
     }
     throwIfCanceled()
     // Daemon-off (the daemon failed to start) a restore spawns here: same E9 hold as the daemon's.

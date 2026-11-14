@@ -5,6 +5,7 @@ import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
 import type { TerminalSpawnGate } from '../admission/terminal-spawn-gate'
+import type { WindowsPwshNotFoundNotices } from '../../providers/shell-launch/windows/pwsh-not-found-notice'
 
 export type TerminalHostOptions = {
   spawnSubprocess: (opts: {
@@ -21,6 +22,7 @@ export type TerminalHostOptions = {
     terminalShellArgs?: string[]
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+    terminalWindowsPwshNotFoundNotices?: WindowsPwshNotFoundNotices
     onCreationDisposition?: (disposition: PtyCreationDisposition) => void
     assertCreateAllowed?: () => void
     isCanceled?: () => boolean

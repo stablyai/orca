@@ -59,12 +59,13 @@ export type PtyShellLaunchPlan = {
   startupAgentRecognition: RecognizedAgentProcess | null
 }
 
-export function createPtyShellLaunchPlan(
+export async function createPtyShellLaunchPlan(
   opts: PtySubprocessOptions,
   env: Record<string, string>
-): PtyShellLaunchPlan {
+): Promise<PtyShellLaunchPlan> {
   const resolvedWslContext = resolveWslSessionContext(opts)
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
+  const requestedShell = shellPath
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
@@ -111,12 +112,17 @@ export function createPtyShellLaunchPlan(
     ) {
       env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
     }
-    windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
+    windowsFallbackAttempts = await buildWindowsPowerShellSpawnAttempts({
       shellPath,
       cwd: spawnCwd,
       defaultCwd: resolveSafePtyDefaultCwd(),
       wslContext: resolvedWslContext,
-      startupCommand: opts.command
+      startupCommand: opts.command,
+      // The daemon outlives app restarts; the terminal env carries main's current PATH.
+      env,
+      requestedShell,
+      powerShellImplementation: opts.terminalWindowsPowerShellImplementation,
+      pwshNotFoundNotices: opts.terminalWindowsPwshNotFoundNotices
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {

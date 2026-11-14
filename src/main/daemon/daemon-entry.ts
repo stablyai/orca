@@ -5,6 +5,7 @@ import { startDaemon, type DaemonHandle } from './server/daemon-main'
 import { createPtySubprocess } from './pty-subprocess/pty-subprocess'
 import { warmWindowsConptyOnce } from './pty-subprocess/windows-conpty-warmup'
 import { warmPwshAvailabilityCache } from '../pty/shell-startup/pwsh'
+import { warmWindowsPwshSearch } from '../providers/shell-launch/windows/powershell-search'
 import { createDaemonFileLog, createNoopDaemonFileLog } from './observability/daemon-file-log'
 import { PROTOCOL_VERSION } from './protocol/daemon-protocol-version'
 import { detectOwnCgroupScopeUnit, ownFreshDaemonScope } from './process-scopes/daemon-cgroup-scope'
@@ -237,6 +238,8 @@ async function main(): Promise<void> {
   daemonLog.log('ready')
 
   warmWindowsConptyOnce()
+  // After ready, so the search's disk probes never compete with the daemon coming up.
+  warmWindowsPwshSearch()
   // Log native-addon availability without stderr and pay dlopen cost before the first teardown.
   if (process.platform === 'win32') {
     daemonLog.log('windows-process-table', { native: isWindowsProcessTableAvailable() })

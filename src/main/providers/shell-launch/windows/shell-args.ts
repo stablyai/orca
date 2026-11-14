@@ -81,14 +81,26 @@ function getPowerShellRestoreCwdCommand(cwd: string): string {
   ].join('\n')
 }
 
+/** Translated text must stay one literal echo: caret-escape cmd operators and drop quotes and line breaks. */
+function escapeCmdEchoText(text: string): string {
+  return text
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/"/g, "'")
+    .replace(/([\^&|<>()%!])/g, '^$1')
+}
+
 function getPowerShellEncodedCommand(
   cwd: string,
-  startupCommand?: string
+  startupCommand?: string,
+  startupNotice?: string
 ): {
   encodedCommand: string
   startupCommandDeliveredInShellArgs?: boolean
 } {
-  const bootstrap = `${getPowerShellOsc133Bootstrap()}${getPowerShellRestoreCwdCommand(cwd)}`
+  const notice = startupNotice
+    ? `Write-Host ${quoteStartupArg(startupNotice, 'powershell')} -ForegroundColor Yellow\n`
+    : ''
+  const bootstrap = `${notice}${getPowerShellOsc133Bootstrap()}${getPowerShellRestoreCwdCommand(cwd)}`
   if (!startupCommand || startupCommand.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
     return { encodedCommand: encodePowerShellCommand(bootstrap) }
   }
@@ -126,7 +138,9 @@ export function resolveWindowsShellLaunchArgs(
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
   startupCommand?: string,
-  codexLaunchPreflightCommand?: string
+  codexLaunchPreflightCommand?: string,
+  /** Printed by the shell itself so ConPTY's screen model stays in sync. */
+  startupNotice?: string
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = msysDrivePathToWindows(cwd)
@@ -135,6 +149,7 @@ export function resolveWindowsShellLaunchArgs(
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
     const startupCommands = [
       CMD_UTF8_SETUP_COMMAND,
+      ...(startupNotice ? [`echo ${escapeCmdEchoText(startupNotice)}`] : []),
       ...(codexLaunchPreflightCommand ? [CMD_CODEX_LAUNCH_PREFLIGHT] : []),
       ...(shellArgStartupCommand ? [shellArgStartupCommand] : [])
     ]
@@ -147,7 +162,7 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-    const powerShellCommand = getPowerShellEncodedCommand(nativeCwd, startupCommand)
+    const powerShellCommand = getPowerShellEncodedCommand(nativeCwd, startupCommand, startupNotice)
     // Windows status requires OSC 133 prompt/readline hooks after profiles; encoded delivery follows powershell-osc133-bootstrap.ts MDE review.
     return {
       shellArgs: ['-NoLogo', '-NoExit', '-EncodedCommand', powerShellCommand.encodedCommand],
