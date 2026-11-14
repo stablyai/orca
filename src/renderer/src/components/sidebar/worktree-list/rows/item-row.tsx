@@ -5,10 +5,10 @@ import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
+import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/selection/active-workspace'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { ActiveSurfaceVariant } from '../../workspace-card/controller/worktree-card-model'
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import type { LineageRowFrame } from '../listing/lineage-row-projection'
@@ -140,6 +140,7 @@ export function renderWorktreeItemRow(
         lineageChildCount={itemRow.lineageChildCount}
         lineageChildWorktreeIds={itemRow.lineageChildWorktreeIds}
         lineageCollapsed={itemRow.lineageCollapsed}
+        lineageDescendantIdentities={itemRow.lineageDescendantIdentities}
         onLineageToggle={
           itemRow.lineageGroupKey ? ctx.getLineageToggleHandler(itemRow.lineageGroupKey) : undefined
         }

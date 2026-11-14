@@ -2,7 +2,7 @@ import type {
   RemoteFetchResult,
   RemoteTrackingBase
 } from '../repositories/runtime-remote-fetch-controller'
-import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-ref-drift-types'
+import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'

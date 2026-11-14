@@ -49,7 +49,10 @@ function createSourceProfile() {
   )
   const insert = db.prepare("INSERT INTO profile_state_documents VALUES (?, ?, 1, 1, 0, 'hash')")
   insert.run('repos', JSON.stringify([{ id: 'repo-1', path: '/src/app' }]))
-  insert.run('settings', JSON.stringify({ theme: 'dark' }))
+  insert.run(
+    'settings',
+    JSON.stringify({ theme: 'dark', aiVaultSearch: { enabled: true, historyDays: null } })
+  )
   insert.run('sshTargets', JSON.stringify([{ id: 'ssh-1' }]))
   insert.run('workspaceSession', JSON.stringify({ tabsByWorktree: { a: [] } }))
   insert.run('sshRemotePtyLeases', JSON.stringify([{ ptyId: 'p' }]))

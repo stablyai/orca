@@ -1,5 +1,5 @@
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

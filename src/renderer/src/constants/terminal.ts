@@ -48,6 +48,8 @@ export type SplitTerminalPaneDetail = {
   telemetrySource?: TerminalPaneSplitSource
   newLeafId?: string
   ptyId?: string
+  /** An agent's split: the new pane leaves the user's active pane and keyboard focus alone. */
+  activate?: false
 }
 
 export type RequestActiveTerminalPaneSplitDetail = {

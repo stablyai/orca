@@ -1,7 +1,7 @@
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import { pruneGitWorktrees } from '../../git/worktrees/removal/worktree-prune-guard'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal'
+import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal/removal'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { formatWorktreeRemovalError, isOrphanedWorktreeError } from '../../ipc/worktree-logic'
 import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
@@ -12,6 +12,7 @@ import {
 import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
 import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 
 type LocalPartialRemovalRecoveryArgs = {
   error: unknown
@@ -107,15 +108,19 @@ export async function removeStaleLocalWorktreeRegistration(
 export async function recoverPartialLocalWorktreeRemoval(
   args: LocalPartialRemovalRecoveryArgs
 ): Promise<RemoveWorktreeResult | undefined> {
+  throwIfSignalAborted(args.signal)
   // Reject Git locks before recovery can recursively delete files.
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
-  if (!(await isRecoverablePartialRemovalFailure(args))) {
+  const recoverable = await isRecoverablePartialRemovalFailure(args)
+  throwIfSignalAborted(args.signal)
+  if (!recoverable) {
     return undefined
   }
 
   // Release watcher handles before recursively finishing Git’s partial removal; abort if closing fails.
   await args.closeWatcher(args.canonicalWorktreePath)
+  throwIfSignalAborted(args.signal)
   try {
     await removeLocalWorktreePath(
       args.canonicalWorktreePath,
@@ -123,6 +128,7 @@ export async function recoverPartialLocalWorktreeRemoval(
       args.signal
     )
   } catch (error) {
+    throwIfSignalAborted(args.signal)
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
   const { branch, head } = args.registeredWorktree

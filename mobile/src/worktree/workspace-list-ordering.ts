@@ -5,13 +5,16 @@ import {
   buildWorkspaceRowComparator,
   recentActivityWithCreateGrace
 } from '../../../src/shared/workspace-view/workspace-row-sort'
-import { compareCodePoints, compareSidebarText } from '../../../src/shared/sidebar-list/text-order'
+import {
+  compareCodePoints,
+  compareSidebarText
+} from '../../../src/shared/sidebar-list/sorting/text-order'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 import {
   compareSmartStamps,
   recentStamp,
   type StampOrderRow
-} from '../../../src/shared/sidebar-list/stamp-order'
+} from '../../../src/shared/sidebar-list/sorting/stamp-order'
 
 function finiteOr(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isFinite(value) ? value : fallback

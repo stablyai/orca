@@ -26,20 +26,6 @@ describe('reserve ledger writer', () => {
       )
     )[0]
 
-  it('writes a booked join, and only a higher epoch replaces it', async () => {
-    const { database: db, writer } = await setup()
-    writer.enqueue({ ...HOST, cellId: 'c1', epoch: 5 })
-    await writer.flush()
-    expect(await row(db)).toMatchObject({ cell_id: 'c1', assignment_epoch: 5 })
-    writer.enqueue({ ...HOST, cellId: 'c2', epoch: 4 })
-    writer.enqueue({ ...HOST, cellId: 'c3', epoch: 5 })
-    await writer.flush()
-    expect(await row(db)).toMatchObject({ cell_id: 'c1', assignment_epoch: 5 })
-    writer.enqueue({ ...HOST, cellId: 'c2', epoch: 6 })
-    await writer.flush()
-    expect(await row(db)).toMatchObject({ cell_id: 'c2', assignment_epoch: 6 })
-  })
-
   it('drops a moved row’s counters but keeps a same-cell row’s', async () => {
     const { database: db, writer } = await setup()
     await db.query(

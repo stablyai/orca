@@ -1,4 +1,4 @@
-import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-environments/orchestration-environment-transport'
+import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-environments/requests/orchestration-environment-transport'
 import type { RuntimeConstructionDependencies } from '../../runtime/construction/runtime-construction-dependencies'
 import type { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 

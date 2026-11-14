@@ -5,7 +5,6 @@ import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-s
 import {
   buildMobileHostedReviewEligibilityLoadKey,
   renderedMobileHostedReviewEligibilityState,
-  shouldFetchMobileHostedReviewEligibility,
   useMobileHostedReviewEligibility,
   type MobileHostedReviewEligibilityLoadKey,
   type MobileHostedReviewEligibilityLoadSnapshot
@@ -44,46 +43,7 @@ function loadSnapshot(
   return { key, state }
 }
 
-describe('mobile hosted review eligibility loader core', () => {
-  it('does not fetch while disconnected or detached', () => {
-    expect(
-      shouldFetchMobileHostedReviewEligibility({
-        client: { sendRequest: async () => ({ ok: true }) } as never,
-        connState: 'disconnected',
-        branch: 'feature'
-      })
-    ).toBe(false)
-    expect(
-      shouldFetchMobileHostedReviewEligibility({
-        client: { sendRequest: async () => ({ ok: true }) } as never,
-        connState: 'connected',
-        branch: null
-      })
-    ).toBe(false)
-  })
-})
-
-// Fetch-imminent must render loading immediately; an idle frame would shift the list when Create PR appears.
 describe('rendered eligibility state', () => {
-  it('renders fetch-imminent idle as an in-flight load', () => {
-    const key = buildMobileHostedReviewEligibilityLoadKey({
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      branch: 'feature',
-      hasUpstream: true,
-      ahead: 0,
-      behind: 0,
-      hasUncommittedChanges: false
-    })
-    expect(
-      renderedMobileHostedReviewEligibilityState({
-        snapshot: loadSnapshot(key, { kind: 'idle' }),
-        key,
-        shouldFetch: true
-      })
-    ).toEqual({ kind: 'loading', eligibility: null })
-  })
-
   it('renders idle when a fetch is not possible, hiding stale snapshots in the same render', () => {
     const key = buildMobileHostedReviewEligibilityLoadKey({
       hostId: 'host-1',

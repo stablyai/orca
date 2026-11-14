@@ -1,4 +1,4 @@
-import { compareFolderWorkspacesForDisplay } from '../../../src/shared/sidebar-list/folder-workspace-lanes'
+import { compareFolderWorkspacesForDisplay } from '../../../src/shared/sidebar-list/folders/folder-workspace-lanes'
 import type { Worktree } from './workspace-list-types'
 
 function folderDisplayOrder(w: Worktree) {

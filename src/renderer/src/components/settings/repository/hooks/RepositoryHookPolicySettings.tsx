@@ -176,6 +176,7 @@ function getCommandSourceLabel(policy: HookCommandSourcePolicy, t: Translate = t
 export function RepositoryHookCommandSourceSetting({
   searchQuery,
   selectedPolicy,
+  setupOnly = false,
   yamlState,
   yamlHooks,
   copiedTemplate,
@@ -186,6 +187,7 @@ export function RepositoryHookCommandSourceSetting({
 }: {
   searchQuery: string
   selectedPolicy: HookCommandSourcePolicy
+  setupOnly?: boolean
   yamlState: string
   yamlHooks: OrcaHooks | null
   copiedTemplate: boolean
@@ -279,6 +281,7 @@ export function RepositoryHookCommandSourceSetting({
           </div>
         </div>
         <RepositoryHooksYamlStatus
+          setupOnly={setupOnly}
           yamlState={yamlState}
           yamlHooks={yamlHooks}
           copiedTemplate={copiedTemplate}

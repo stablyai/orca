@@ -14,7 +14,7 @@ import type {
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
-  PRRefreshOutcome
+  PRSnapshotReply
 } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type {
@@ -52,7 +52,7 @@ export type GithubPullRequestApi = {
     candidate: GitHubPRRefreshCandidate
     reason?: GitHubPRRefreshReason
     userRefresh?: boolean
-  }) => Promise<PRRefreshOutcome>
+  }) => Promise<PRSnapshotReply>
   enqueuePRRefresh: (args: {
     candidate: GitHubPRRefreshCandidate
     reason: GitHubPRRefreshReason

@@ -13,6 +13,7 @@ import { FilledBellIcon } from '../identity/worktree-card-glyphs'
 import { checksLabel } from '../review/workspace-review-check-label'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
+import { laneStatusWithLineage } from './worktree-card-lineage-lane-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import {
@@ -35,6 +36,8 @@ type WorktreeCardStatusSlotProps = {
   showStatus: boolean
   showUnreadAction: boolean
   isUnread: boolean
+  /** A collapsed descendant's needs-you, failed or working state; replaces a quieter own status. */
+  lineageStatus?: WorktreeStatus | null
   unreadTooltip: string
   onToggleUnread: React.MouseEventHandler<HTMLButtonElement>
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
@@ -61,9 +64,10 @@ const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
 const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
 // The whole sleeping row is dimmed; extra glyph tint would double-dim it.
 const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
-// Overlay unread without widening the status lane; ring-sidebar separates the dot from busy glyphs.
+// Overlay unread on the glyph's corner without widening the lane; the ring separates it from busy glyphs.
+// Blue, not amber: the lane already spends yellow and orange on working, pending checks and needs-you.
 const newCardUnreadAlertClassName =
-  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
+  'pointer-events-none absolute right-0 bottom-0 size-[6px] rounded-full bg-unread ring-2 ring-worktree-sidebar'
 
 function overlayNewCardUnreadStatus(
   status: React.JSX.Element,
@@ -125,6 +129,7 @@ export function WorktreeCardStatusSlot({
   showStatus,
   showUnreadAction,
   isUnread,
+  lineageStatus = null,
   unreadTooltip,
   onToggleUnread,
   onPointerDown,
@@ -139,7 +144,7 @@ export function WorktreeCardStatusSlot({
   const t = useTranslate()
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
-  const status = useWorktreeActivityStatus(worktreeId)
+  const status = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
   const { isSleeping, vmRuntime, vmWaking } = useAppStore(
     useShallow((state) => ({

@@ -18,6 +18,7 @@ import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestrat
 import { readExactWorkerOutput } from './output/worker-output'
 import { exposeWorkerTerminalResource } from './release/worker-terminal-resource-presentation'
 import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import { failedWorkerStartHasOutput } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
 import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
 import {
@@ -109,8 +110,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       const dispatch = db.getDispatchContextById(params.dispatch)
       const worker = db.getWorkerDispatch(params.dispatch)
       const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
-      // A start that never got a terminal has only its failure, on any host.
-      if (worker?.state === 'failed' && !terminalHandle) {
+      // A start that never ran in a terminal has only its failure, on any host.
+      if (worker?.state === 'failed' && !failedWorkerStartHasOutput(db, worker, dispatch)) {
         throw new OrchestrationError(
           'worker_never_started',
           `Worker Dispatch ${params.dispatch} never started: ${worker.last_error ?? 'its start failed'}`
@@ -284,7 +285,6 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           residualResources: []
         }
       }
-      const worker = abandoned.worker
       if (abandoned.disposition === 'abandoned') {
         // Only the worker's own Dispatch settles the worker; a side task's parked mail stays.
         releaseStructuredWorkerSession(
@@ -297,7 +297,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       }
       return {
         dispatchId: params.dispatch,
-        state: worker.state,
+        state: abandoned.worker.state,
         alreadySettled: abandoned.disposition !== 'abandoned',
         // Kept for --json readers: this attempt was no longer current, as main reported it.
         stale: abandoned.superseded || abandoned.disposition === 'already_settled',
@@ -306,7 +306,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           abandoned.disposition === 'abandoned'
             ? 'Possibly-live resources were retained; no process was stopped or deleted.'
             : `The worker was already ${worker.state}; its terminal was left open and no process changed.`,
-        residualResources: JSON.parse(worker.residual_resources) as unknown[]
+        residualResources: JSON.parse(abandoned.worker.residual_resources) as unknown[]
       }
     }
   })

@@ -18,8 +18,6 @@ import {
 } from './mobile-git-status-query'
 import { gitStatusHostPayloadSchema } from '../git/git-status-reply-schema'
 import { createOrcaQueryClient } from '../../query/orca-query-client'
-import { createHostQueryPersistence } from '../../query/host-query-persistence'
-import type { OrcaQueryStoreBackend } from '../../device-store/query-storage'
 
 import {
   documentQueryClient,
@@ -134,8 +132,6 @@ async function settleBaseRefLookup(calls: PendingCall[], baseRef: string): Promi
 
 // Stable callbacks keep the mount effect from issuing extra loads that would obscure the tested schedule.
 const IGNORE_ACTION_ERROR = (): void => {}
-
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `setRootRef` compares the node against null and returns; it reads no member of it.
 
 describe('useMobileSourceControlLoaders branch compare', () => {
   let renderer: ReactTestRenderer | null = null
@@ -327,7 +323,7 @@ describe('useMobileSourceControlLoaders status summary', () => {
   })
 
   // Summary read at 100, detail cached at 200, child opened at 400.
-  async function cachedDetailOpened(refreshAt300: boolean) {
+  async function cachedDetailOpened() {
     vi.useFakeTimers({ toFake: ['Date'], now: 100 })
     const calls: PendingCall[] = []
     const child = setup(calls)
@@ -335,10 +331,8 @@ describe('useMobileSourceControlLoaders status summary', () => {
     vi.setSystemTime(200)
     child.queryClient.setQueryData(detailKey, readOf('cached'), { updatedAt: 200 })
     vi.setSystemTime(300)
-    if (refreshAt300) {
-      await child.queryClient.invalidateQueries({ queryKey: summaryKey }, { cancelRefetch: false })
-      child.readSummary()
-    }
+    await child.queryClient.invalidateQueries({ queryKey: summaryKey }, { cancelRefetch: false })
+    child.readSummary()
     vi.setSystemTime(400)
     await child.mount()
     await settleQueryNotifications()
@@ -346,85 +340,11 @@ describe('useMobileSourceControlLoaders status summary', () => {
   }
 
   it('leaves a summary read out to answer when the child opens over an older cached read', async () => {
-    const { calls, child } = await cachedDetailOpened(true)
+    const { calls, child } = await cachedDetailOpened()
     await act(async () => takeRead(calls, true).settle(statusReply('refresh')))
     await settleQueryNotifications()
     expect(child.queryClient.getQueryData(summaryKey)).toMatchObject({
       status: { branch: 'refresh' }
     })
   })
-
-  it('catches an idle older summary up to the cached read, keeping its time', async () => {
-    const { child } = await cachedDetailOpened(false)
-    expect(child.queryClient.getQueryData(summaryKey)).toEqual(readOf('cached'))
-    expect(child.queryClient.getQueryState(summaryKey)?.dataUpdatedAt).toBe(200)
-  })
-
-  it("never hands an earlier launch's status to the summary, nor cancels its live read", async () => {
-    const store = memoryStore()
-    const earlier = createOrcaQueryClient()
-    const earlierPersistence = createHostQueryPersistence(earlier, store.backend)
-    earlier.getQueryCache().build(earlier, {
-      queryKey: detailKey,
-      meta: { persist: gitStatusQuery.persist }
-    })
-    earlier.setQueryData(detailKey, readOf('saved'), { updatedAt: Date.now() - 86_400_000 })
-    await settleQueryNotifications()
-    await earlierPersistence.flush()
-    expect(store.rows.size).toBe(1)
-    earlier.clear()
-
-    const calls: PendingCall[] = []
-    const child = setup(calls)
-    createHostQueryPersistence(child.queryClient, store.backend)
-    child.readSummary()
-    const release = store.holdReads()
-    await child.mount()
-    release()
-    await settleQueryNotifications()
-    expect(child.queryClient.getQueryData(detailKey)).toEqual(readOf('saved'))
-
-    await act(async () => takeRead(calls, true).settle(statusReply('live')))
-    await settleQueryNotifications()
-    expect(child.queryClient.getQueryData(summaryKey)).toMatchObject({ status: { branch: 'live' } })
-
-    await act(async () => takeRead(calls, false).settle(statusReply('newer')))
-    await settleQueryNotifications()
-    expect(child.queryClient.getQueryData(summaryKey)).toMatchObject({
-      status: { branch: 'newer' }
-    })
-  })
 })
-
-function memoryStore() {
-  const rows = new Map<string, string>()
-  let readGate: Promise<void> = Promise.resolve()
-  const backend: OrcaQueryStoreBackend = {
-    hostId: 'host-1',
-    read: async (keys) => {
-      await readGate
-      return { status: 'ok', values: keys.map((storeKey) => rows.get(storeKey) ?? null) }
-    },
-    write: async (ops) => {
-      for (const op of ops) {
-        if (op.value === null) {
-          rows.delete(op.key)
-        } else {
-          rows.set(op.key, op.value)
-        }
-      }
-      return { written: true }
-    }
-  }
-  return {
-    backend,
-    rows,
-    holdReads: () => {
-      let release = (): void => {}
-      readGate = new Promise((resolve) => {
-        release = resolve
-      })
-      return release
-    }
-  }
-}

@@ -33,7 +33,6 @@ import {
   neverThrowingStructuredAgentSessionLogger
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from '../../agent-session/records/agent-session-record-store-slot'
-import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../../agent-hooks/first-work/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-rename-runtime'
 import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
@@ -76,7 +75,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true,
-    includeAgentWait = false
+    includeAgentWait = false,
+    worktreeId?: string
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
@@ -86,13 +86,12 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       sourceDefaultsSupported
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
-    const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
-      platformByRepoId
+      platformByRepoId,
+      worktreeId
     })
-
     const getSummary = createRuntimeWorktreePsSummaryLookup(
       summaries,
       buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
@@ -121,7 +120,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
         summaries,
-        repoById,
+        repoById: new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo])),
         ptysById: this.ptysById,
         tabs: this.tabs,
         paneOf: (pty) => this.paneOfPty(pty),
@@ -211,7 +210,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   }
 
   /** Admission needs only the ledger; a later chat host must reuse this store. */
-  async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
+  async openAgentSessionRecordStore() {
     const { store } = await openAgentSessionRecordStoreOnce({
       stateDirectory: getProfileUserDataPath(),
       legacySessionTabIds: this.legacyStructuredSessionTabIds,

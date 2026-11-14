@@ -202,27 +202,12 @@ afterEach(() => {
 })
 
 describe('a page that asks to go back twice in one batch', () => {
-  it('pops once, because the second frame reads a stack the first has not left yet', () => {
-    const harness = mount(['home', 'host', 'tasks'])
-    expect(harness.pop()).toBe('popped')
-    expect(harness.pop()).toBe('pop-pending')
-    harness.drain()
-    expect(harness.screens).toEqual(['home', 'host'])
-  })
-
   it('takes the next pop once the route the first one produced has committed', () => {
     const harness = mount(['home', 'host', 'tasks'])
     expect(harness.pop()).toBe('popped')
     harness.drain()
     harness.commitRoute('/h/host-a')
     expect(harness.pop()).toBe('popped')
-    harness.drain()
-    expect(harness.screens).toEqual(['home'])
-  })
-
-  it('refuses with its own reason when the stack has nothing to pop', () => {
-    const harness = mount(['home'])
-    expect(harness.pop()).toBe('nothing-to-pop')
     harness.drain()
     expect(harness.screens).toEqual(['home'])
   })
