@@ -27,6 +27,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   // Gated on the phone by agent-session.thread-goal.phone.v1.
   'agentSession.threadGoal',
   'agentSession.commands',
+  // The `/mcp` sheet; phones offer it where the host advertises agent-session.mcp.v1.
+  'agentSession.mcp',
   'agentSession.history',
   'agentSession.currentRequests',
   'agentSession.subscribe',

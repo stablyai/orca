@@ -1,4 +1,5 @@
 import type {
+  McpServerStatus,
   PermissionMode,
   Query,
   SDKControlInterruptResponse
@@ -93,6 +94,88 @@ export function runClaudeControl<T>(
   })
 }
 
+export type ClaudeMcpAuthentication = {
+  authUrl?: string
+  /** True when the CLI listens for the browser's redirect and finishes sign-in itself. */
+  callbackExpected?: boolean
+}
+
+export type ClaudeMcpControls = {
+  status: () => Promise<McpServerStatus[]>
+  /** Waits for the server to connect. */
+  reconnect: (name: string) => Promise<void>
+  /** Persists like the TUI's toggle. */
+  toggle: (name: string, enabled: boolean) => Promise<void>
+  authenticate: (name: string) => Promise<ClaudeMcpAuthentication>
+  /** Exchanges the code but leaves the server needing a reconnect. */
+  submitOAuthCallbackUrl: (name: string, callbackUrl: string) => Promise<void>
+}
+
+/** mcp_authenticate's reply; only the fields the panel acts on. */
+function readClaudeMcpAuthentication(reply: unknown): ClaudeMcpAuthentication {
+  if (typeof reply !== 'object' || reply === null) {
+    return {}
+  }
+  const authUrl = 'authUrl' in reply ? reply.authUrl : undefined
+  const callbackExpected = 'callbackExpected' in reply ? reply.callbackExpected : undefined
+  return {
+    ...(typeof authUrl === 'string' ? { authUrl } : {}),
+    ...(typeof callbackExpected === 'boolean' ? { callbackExpected } : {})
+  }
+}
+
+// mcpAuthenticate and mcpSubmitOAuthCallbackUrl exist at runtime but are absent from Query's
+// declaration.
+function claudeQueryMcpAuthenticator(query: Query): ((name: string) => unknown) | null {
+  const authenticate = 'mcpAuthenticate' in query ? query.mcpAuthenticate : null
+  return typeof authenticate === 'function'
+    ? (name): unknown => authenticate.call(query, name)
+    : null
+}
+
+function claudeQueryMcpCallbackSubmitter(
+  query: Query
+): ((name: string, callbackUrl: string) => unknown) | null {
+  const submit = 'mcpSubmitOAuthCallbackUrl' in query ? query.mcpSubmitOAuthCallbackUrl : null
+  return typeof submit === 'function'
+    ? (name, callbackUrl): unknown => submit.call(query, name, callbackUrl)
+    : null
+}
+
+const missingClaudeControl = (subtype: string): Promise<never> =>
+  Promise.reject(new ClaudeControlRequestError(subtype, `this SDK exposes no ${subtype} request`))
+
+function createClaudeMcpControls(query: Query): ClaudeMcpControls {
+  const authenticate = claudeQueryMcpAuthenticator(query)
+  const submitCallback = claudeQueryMcpCallbackSubmitter(query)
+  return {
+    status: () => runClaudeControl('mcp_status', () => query.mcpServerStatus(), 15_000),
+    reconnect: (name) =>
+      runClaudeControl('mcp_reconnect', () => query.reconnectMcpServer(name), 30_000),
+    toggle: (name, enabled) =>
+      runClaudeControl('mcp_toggle', () => query.toggleMcpServer(name, enabled), 30_000),
+    authenticate: (name) =>
+      runClaudeControl(
+        'mcp_authenticate',
+        () =>
+          authenticate
+            ? Promise.resolve(authenticate(name))
+            : missingClaudeControl('mcp_authenticate'),
+        15_000
+      ).then(readClaudeMcpAuthentication),
+    // The token exchange happens inside this request.
+    submitOAuthCallbackUrl: (name, callbackUrl) =>
+      runClaudeControl(
+        'mcp_oauth_callback_url',
+        () =>
+          submitCallback
+            ? Promise.resolve(submitCallback(name, callbackUrl))
+            : missingClaudeControl('mcp_oauth_callback_url'),
+        30_000
+      ).then(() => {})
+  }
+}
+
 export type ClaudeControlSurface = {
   interrupt: (
     options?: ClaudeControlOptions & { cancelQueued?: boolean }
@@ -115,6 +198,8 @@ export type ClaudeControlSurface = {
   /** Names `sessionId` as the user's rename; refused once the CLI has moved to another session. */
   renameSession: (title: string, sessionId: string, options?: ClaudeControlOptions) => Promise<void>
   generateSessionTitle?: (description: string) => Promise<unknown>
+  /** The `/mcp` panel's requests; test connections leave it out. */
+  mcp?: ClaudeMcpControls
 }
 
 type InterruptingQuery = {
@@ -126,6 +211,7 @@ type InterruptingQuery = {
 export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
   const title = 'generateSessionTitle' in query ? query.generateSessionTitle : null
   return {
+    mcp: createClaudeMcpControls(query),
     ...(typeof title === 'function'
       ? {
           generateSessionTitle: (description: string) =>

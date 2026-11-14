@@ -48,12 +48,3 @@ export function useHostStructuredAgent(
   )
   return useAppViewExternalStore(subscribeHostStructuredAgents, read, read)
 }
-
-/** `reported` is the session's options answer: absent before it lands and from an older host. */
-export function useStructuredAgentAcceptsImages(
-  target: RuntimeClientTarget,
-  agent: string,
-  reported: boolean | undefined
-): boolean {
-  return structuredAgentAcceptsImages(useHostStructuredAgent(target, agent), agent, reported)
-}

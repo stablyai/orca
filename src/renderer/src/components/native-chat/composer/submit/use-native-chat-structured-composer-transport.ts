@@ -1,8 +1,14 @@
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
+import { openNativeChatMcpServersModal } from '@/components/native-chat/mcp/native-chat-mcp-servers-modal'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from '@/components/native-chat/composer/submit/structured-composer-command-error-text'
-import { useStructuredAgentAcceptsImages } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
+import {
+  structuredAgentAcceptsImages,
+  useHostStructuredAgent
+} from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import type { NativeChatOptionPickerRequest } from '@/components/native-chat/session/options/controls/native-chat-option-picker-request'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
@@ -92,14 +98,30 @@ export function useNativeChatStructuredComposerTransport(args: {
   const { revealLatest: onSubmitted, captureRevealLatest: captureAdmittedReveal } = args.reveal
   const { transportEnabled } = args
   const sendBlockedReason = args.sendBlockedReason ?? null
-  const acceptsImages = useStructuredAgentAcceptsImages(
-    props.target,
+  const hostAgent = useHostStructuredAgent(props.target, props.agent)
+  const acceptsImages = structuredAgentAcceptsImages(
+    hostAgent,
     props.agent,
     controller.acceptsImages
   )
+  // The local runtime is this build; a paired host must say it answers agentSession.mcp.
+  const remoteManagesMcp =
+    useStructuredAgentSessionHostCapabilityState(
+      props.target.kind === 'local' ? null : props.target,
+      AGENT_SESSION_MCP_RUNTIME_CAPABILITY
+    ) === 'supported'
+  const managesMcp =
+    hostAgent?.capabilities.mcpServers === true &&
+    (props.target.kind === 'local' || remoteManagesMcp)
   const { fork, sideChat } = forks
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
+    const mcpPanel = managesMcp
+      ? {
+          open: () =>
+            openNativeChatMcpServersModal({ sessionId: props.sessionId, target: props.target })
+        }
+      : undefined
     // A held host takes no turn; pausing or clearing a goal starts none.
     const changeThreadGoal = threadGoal?.hostChanges
       ? (change: AgentSessionThreadGoalChange) =>
@@ -120,6 +142,7 @@ export function useNativeChatStructuredComposerTransport(args: {
                 })
             }
           : undefined,
+      mcpPanel,
       fork: nativeChatForkCommand(fork, controller.isWorking),
       capturePresentation: controller.capturePresentation,
       ...(sideChat ? { sideChat } : {}),
@@ -162,7 +185,8 @@ export function useNativeChatStructuredComposerTransport(args: {
             conversationCommands: controller.conversationCommands,
             compactInstructions: controller.compactInstructions,
             runConversationCommand: controller.runConversationCommand,
-            ...(changeThreadGoal ? { changeThreadGoal } : {})
+            ...(changeThreadGoal ? { changeThreadGoal } : {}),
+            ...(mcpPanel ? { openMcpPanel: mcpPanel.open } : {})
           },
           onSent
         ).then(localizeStructuredComposerOutcome),
@@ -205,6 +229,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   }, [
     acceptsImages,
     controller,
+    managesMcp,
     fork,
     sideChat,
     worktreeId,
