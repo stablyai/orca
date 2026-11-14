@@ -21,7 +21,7 @@ import {
   MOBILE_NATIVE_CHAT_VISUAL_LINK_WINDOW_MS
 } from './mobile-native-chat-visual-host-document'
 import { parseExecutionHostId } from '../../../../../src/shared/execution-host'
-import { openExternalLink } from '../../../platform/external-link'
+import { openExternalLink } from '../../../platform/external-links/external-link'
 
 export type MobileNativeChatVisualFrameProps = {
   html: string
