@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { MobilePrSidebarController } from '../review/use-mobile-pr-sidebar-controller'
+import type { MobilePrSidebarController } from '../review/pull-request/use-mobile-pr-sidebar-controller'
 import type { MobileSourceControlLoaders } from '../changes/use-mobile-source-control-loaders'
 
 type Params = {

@@ -1,6 +1,6 @@
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Text, View } from 'react-native'
-import { INLINE_TEXT_SELECTION } from '../../../../components/inline-text-selection'
+import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { MobileNativeChatLongPressContent as Content } from '../message-content/MobileNativeChatLongPressContent'
 import { splitNativeChatBlocks } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { nativeChatToolRunViewedImages } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-viewed-images'

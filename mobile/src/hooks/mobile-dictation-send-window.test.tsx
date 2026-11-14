@@ -6,7 +6,7 @@ import {
   createFakeRpcClient,
   type FakeRpcClient,
   type SentRequest
-} from '../mobile-web-shell/bridge-host-test-fakes'
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import type {
   DictationCapture,
   DictationCaptureChunk

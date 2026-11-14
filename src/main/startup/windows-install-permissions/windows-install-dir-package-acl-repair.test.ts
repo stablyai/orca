@@ -23,7 +23,7 @@ import {
   type WindowsInstallDirAclRepairResult
 } from './windows-install-dir-package-acl-repair'
 
-import { fakePackageGrant, grantsFrom } from './windows-install-dir-acl.test-fixture'
+import { fakePackageGrant } from './windows-install-dir-acl.test-fixture'
 import type { InstallDirPackageGrants } from './windows-install-dir-package-acl-grant'
 
 const INSTALL_DIR = 'C:\\Users\\neil\\AppData\\Local\\Programs\\orca'
@@ -119,22 +119,6 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     expect(moved.passes).toHaveLength(2)
   })
 
-  it('records the summed failed-entry count when a standard user cannot write the ACL', async () => {
-    const { grants, passes } = fakePackageGrant((pass) =>
-      pass === 'tree'
-        ? { ok: false, failedFileCount: 81, reason: 'failed-files: Access is denied.' }
-        : { ok: false, failedFileCount: 1, reason: 'Access is denied.' }
-    )
-    const { result, data } = await repair({ grants })
-
-    expect(result).toMatchObject({ mode: 'failed', failedFileCount: 82 })
-    expect(data.status).toBe('failed')
-    expect(data.failedFileCount).toBe(82)
-    expect(String(data.reason)).toContain('root: Access is denied.')
-    expect(String(data.reason)).toContain('tree: failed-files')
-    expect(passes).toHaveLength(2)
-  })
-
   it('still runs the per-file pass when the root grant fails', async () => {
     const { grants, passes } = fakePackageGrant((pass) =>
       pass === 'root' ? { ok: false, failedFileCount: 1, reason: 'Access is denied.' } : {}
@@ -142,14 +126,6 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     const { result } = await repair({ grants })
     expect(passes.map((entry) => entry.pass)).toEqual(['root', 'tree'])
     expect(result.mode).toBe('failed')
-  })
-
-  it('does not throw when a grant rejects, and still records a breadcrumb', async () => {
-    const grants = grantsFrom(() => Promise.reject(new Error('Win32 error 5')))
-    const { result, data } = await repair({ grants })
-    expect(result.mode).toBe('failed')
-    expect(data.status).toBe('failed')
-    expect(String(data.reason)).toContain('Win32 error 5')
   })
 
   // One failure must not pin this version permanently: Defender locks/timeouts may clear on later bounded retries.

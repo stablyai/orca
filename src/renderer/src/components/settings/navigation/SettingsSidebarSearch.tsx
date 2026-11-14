@@ -8,7 +8,7 @@ import { RepoIconGlyph } from '../../repo/repo-icon'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { HighlightedText } from '../../worktree-jump/worktree-jump-palette-primitives'
+import { HighlightedText } from '../../worktree-jump/rows/worktree-jump-palette-row-content'
 import {
   getSettingsSearchTitleMatchRanges,
   type SettingsSearchResult
