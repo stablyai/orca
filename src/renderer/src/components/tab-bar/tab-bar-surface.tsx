@@ -300,6 +300,7 @@ export function renderTabBarSurface(
               />
             </>
           ) : null}
+          {showStaticCreateMenuItems ? props.newTabMenuFooter : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

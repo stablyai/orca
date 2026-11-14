@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
@@ -29,6 +30,8 @@ export type TabBarProps = {
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
   newTabMenuOrder?: 'default' | 'markdown-first'
+  /** Rows closing the "+" menu; rendered only while it is open. */
+  newTabMenuFooter?: ReactNode
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void

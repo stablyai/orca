@@ -9,10 +9,12 @@ import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import {
   refineLocalLaunchPlatform,
   resolveExecutionHostAgentStartupShell,
+  resolveNamedExecutionHostPlatform,
   resolveWorktreeExecutionHostPlatform
 } from '@/runtime/hosts/platform/execution-host-facts'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { useAppStore } from '@/store/index'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 
 export type AgentLaunchExecutionContext = {
   /** `undefined` means rival host rows disagree, which is not evidence of a remote. */
@@ -54,12 +56,16 @@ export function resolveAgentLaunchExecutionContext(
     store.allWorktrees?.().find((entry) => entry.id === args.worktreeId)
   )?.path
   // Why: the agent runs on the workspace's execution host, so its OS and shell decide quoting (#22204).
-  const fact = resolveWorktreeExecutionHostPlatform(
-    store,
-    args.worktreeId,
-    workspacePath,
-    args.workspaceExecutionHostId
-  )
+  const fact =
+    args.worktreeId === FLOATING_TERMINAL_WORKTREE_ID && args.workspaceExecutionHostId
+      ? // Why: no row places the floating workspace, so only the launch can name its host.
+        resolveNamedExecutionHostPlatform(store, args.workspaceExecutionHostId)
+      : resolveWorktreeExecutionHostPlatform(
+          store,
+          args.worktreeId,
+          workspacePath,
+          args.workspaceExecutionHostId
+        )
   if (fact.kind === 'withheld') {
     return { unavailable: fact }
   }

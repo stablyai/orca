@@ -33,6 +33,8 @@ import '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { launchOnceHostAnswered, routeNewTabLaunch } from './launch-agent-in-new-tab-host-agents'
 import type { AgentTabLaunchOutcome } from './launch-agent-in-new-tab-host-agents'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { floatingWorkspaceHostExecutionFacts } from '@/components/floating-terminal/floating-workspace-host-terminal'
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -249,9 +251,14 @@ function openAgentInNewTab(
       promptDeliveryResult: launched.promptDeliveryResult
     }
   }
+  const floatingHostFacts =
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+      ? floatingWorkspaceHostExecutionFacts(store, args.workspaceExecutionHostId)
+      : null
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
+    ...(floatingHostFacts ? { executionFacts: floatingHostFacts } : {}),
     ...(initialCwd?.trim() ? { startupCwd: initialCwd } : {}),
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...(activate === false ? { activate: false } : {}),
