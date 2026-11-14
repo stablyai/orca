@@ -2,6 +2,7 @@ import { BrowserWindow, Menu, webContents as electronWebContents } from 'electro
 import type { Session, WebContents } from 'electron'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { setupGuestShortcutForwarding } from '../../../browser/guest-lifecycle/input/shortcuts/browser-guest-shortcut-forwarding'
+import { isTrustedBrowserRenderer } from '../../../ipc/browser/browser-renderer-trust'
 import { buildEditableContextMenuTemplate } from '../../../window/editing/editable-context-menu'
 import { isAllowedPluginFrameNavigation } from './plugin-frame-request-policy'
 
@@ -37,6 +38,7 @@ export function installPluginFrameGuestPolicies(
     browserTabId: `plugin-frame:${guest.id}`,
     guest,
     resolveRenderer: () => (host.isDestroyed() ? null : host),
+    isLocalRenderer: isTrustedBrowserRenderer,
     getKeybindings,
     browserPage: false
   })
