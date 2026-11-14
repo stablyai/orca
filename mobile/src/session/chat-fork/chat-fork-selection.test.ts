@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  chatForkRoute,
   resolveChatForkSelection,
   type ChatForkHost,
   type ChatForkSource,
@@ -10,6 +9,7 @@ import {
 const source: ChatForkSource = {
   hostId: 'desk',
   agent: 'claude',
+  surface: 'chat',
   usageLimited: false,
   canCopy: true,
   canExport: true,
@@ -18,9 +18,34 @@ const source: ChatForkSource = {
 }
 
 const hosts: ChatForkHost[] = [
-  { hostId: 'desk', status: 'ready', canImport: true, canFirstMessage: true },
-  { hostId: 'laptop', status: 'ready', canImport: true, canFirstMessage: true },
-  { hostId: 'old', status: 'needs-update', canImport: false, canFirstMessage: true }
+  {
+    hostId: 'desk',
+    status: 'ready',
+    canImport: true,
+    canFirstMessage: true,
+    canLaunchTerminal: true
+  },
+  {
+    hostId: 'laptop',
+    status: 'ready',
+    canImport: true,
+    canFirstMessage: true,
+    canLaunchTerminal: true
+  },
+  {
+    hostId: 'chat-only',
+    status: 'ready',
+    canImport: false,
+    canFirstMessage: true,
+    canLaunchTerminal: false
+  },
+  {
+    hostId: 'old',
+    status: 'needs-update',
+    canImport: false,
+    canFirstMessage: false,
+    canLaunchTerminal: false
+  }
 ]
 
 function resolve(overrides: Partial<Parameters<typeof resolveChatForkSelection>[0]> = {}) {
@@ -35,10 +60,11 @@ function resolve(overrides: Partial<Parameters<typeof resolveChatForkSelection>[
 }
 
 describe('resolveChatForkSelection', () => {
-  it('starts a chat whose history cannot be copied with another agent’s recap', () => {
-    const selection = resolve({ source: { ...source, agent: 'codex', canCopy: false } })
-    expect(selection.agent).toBe('claude')
-    expect(selection.agentChoices).toContainEqual({ agent: 'codex', enabled: false })
+  it('forks a chat whose history cannot be copied into the same agent as a recap', () => {
+    const selection = resolve({
+      source: { ...source, agent: 'codex', canCopy: false, canExport: false }
+    })
+    expect(selection).toMatchObject({ agent: 'codex', path: 'recap', sameAgentRecap: true })
   })
 
   it('defaults to a copy of this chat beside it, on this host, with the same agent', () => {
@@ -82,13 +108,72 @@ describe('resolveChatForkSelection', () => {
     })
   })
 
-  it('switches to another agent on another host when this host cannot export the chat', () => {
+  it('recaps the same agent on another host when this host cannot export the chat', () => {
     const selection = resolve({
       source: { ...source, canExport: false },
       picks: { hostId: 'laptop', agent: 'claude' }
     })
-    expect(selection.agent).toBe('codex')
-    expect(selection.agentChoices).toContainEqual({ agent: 'claude', enabled: false })
+    expect(selection).toMatchObject({ agent: 'claude', path: 'recap', openAs: 'chat' })
+  })
+
+  it('relays the exact copy to another host, and to a terminal on this one', () => {
+    expect(resolve({ picks: { hostId: 'laptop' } })).toMatchObject({ path: 'relay' })
+    expect(resolve({ picks: { openAs: 'terminal' } })).toMatchObject({
+      path: 'relay',
+      openAs: 'terminal',
+      subagentOffered: false,
+      ready: true
+    })
+  })
+
+  it('opens a terminal chat as its own kind, and copies it exactly as a chat', () => {
+    const terminal = { ...source, surface: 'terminal' as const, canSubagent: false }
+    expect(resolve({ source: terminal })).toMatchObject({ path: 'same', openAs: 'terminal' })
+    expect(resolve({ source: terminal, picks: { openAs: 'chat' } })).toMatchObject({
+      path: 'relay',
+      openAs: 'chat'
+    })
+  })
+
+  it('recaps onto a host that can’t import, and offers only the kinds it can start', () => {
+    const workspace: ChatForkWorkspace = {
+      kind: 'existing',
+      hostId: 'chat-only',
+      worktreeId: 'wt',
+      name: 'wt'
+    }
+    const selection = resolve({ picks: { hostId: 'chat-only', workspace, openAs: 'terminal' } })
+    expect(selection).toMatchObject({
+      agent: 'claude',
+      path: 'recap',
+      openAs: 'chat',
+      surfaces: { chat: true, terminal: false },
+      recapScope: 'history',
+      ready: true
+    })
+  })
+
+  it('opens another agent as a recap in a terminal, with the context picked', () => {
+    const selection = resolve({
+      picks: { agent: 'codex', openAs: 'terminal', recapScope: 'current' }
+    })
+    expect(selection).toMatchObject({
+      path: 'recap',
+      openAs: 'terminal',
+      recapScope: 'current',
+      sameAgentRecap: false
+    })
+  })
+
+  it('blocks Fork when the agent can open as neither kind', () => {
+    const selection = resolve({
+      source: { ...source, agent: 'codex', canCopy: false, canExport: false },
+      hosts: hosts.map((host) =>
+        host.hostId === 'desk' ? { ...host, canLaunchTerminal: false } : host
+      ),
+      targetAgents: ['claude']
+    })
+    expect(selection).toMatchObject({ openAs: null, ready: false })
   })
 
   it('keeps a picked host that can no longer take the fork, and blocks Fork', () => {
@@ -110,13 +195,5 @@ describe('resolveChatForkSelection', () => {
       }
     })
     expect(selection.workspace).toEqual({ kind: 'this' })
-  })
-})
-
-describe('chatForkRoute', () => {
-  it('copies, relays or recaps by host and agent', () => {
-    expect(chatForkRoute(source, { hostId: 'desk', agent: 'claude' })).toBe('copy')
-    expect(chatForkRoute(source, { hostId: 'laptop', agent: 'claude' })).toBe('relay')
-    expect(chatForkRoute(source, { hostId: 'desk', agent: 'codex' })).toBe('recap')
   })
 })

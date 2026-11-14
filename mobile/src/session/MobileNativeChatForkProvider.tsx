@@ -66,12 +66,14 @@ export function MobileNativeChatForkProvider({
       agent: TuiAgent,
       forkFrom: StructuredAgentSessionForkSource,
       mode: MobileWorktreeForkMode,
-      recap?: string
+      recap?: string,
+      openIn?: Parameters<typeof forkMobileStructuredChatIntoWorktree>[0]['openIn']
     ) => {
       const current = latestController.current
       return forkMobileStructuredChatIntoWorktree({
         mode,
         recap,
+        openIn,
         terminal: current.activeSessionTab?.type === 'terminal',
         sourceLabel: current.activeSessionTab?.title || undefined,
         client: current.client,

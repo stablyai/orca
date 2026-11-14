@@ -61,9 +61,13 @@ export function useMobileChatForkSheet(input: {
       if (!message || busyRef.current || !agent || !isTuiAgent(agent)) {
         return
       }
-      // A copy beside this chat or into a new worktree has its own prompts; close first for them.
-      const keepOpen = target.workspace.kind === 'existing'
-      const kind = target.agent === agent ? 'copy' : 'recap'
+      // The sheet's own paths beside this chat, and a new worktree's prompts, close it first; a fork
+      // copied or launched through this sheet keeps it open to show progress.
+      const ownPath =
+        target.path === 'same' || (target.path === 'recap' && target.openAs === 'chat')
+      const keepOpen =
+        target.workspace.kind === 'existing' || (target.workspace.kind === 'this' && !ownPath)
+      const kind = target.path === 'recap' ? 'recap' : 'copy'
       const started = fork.forkWith(
         message,
         async (_agent, forkFrom) => {
@@ -140,6 +144,7 @@ export function useMobileChatForkSheet(input: {
     client: controller.client,
     capabilities,
     agent,
+    surface: terminal ? 'terminal' : 'chat',
     usageLimited: controller.nativeChatController.nativeChatUsageLimit !== null,
     // A workspace routed to another server exports from there; this phone can't reach it directly.
     canExport:

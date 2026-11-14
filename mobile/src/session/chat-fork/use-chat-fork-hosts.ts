@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
 import { AI_VAULT_CHAT_FORK_IMPORT_CAPABILITY } from '../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
+import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { supportsMobileExistingAgentLaunch } from '../agent-launch/mobile-existing-agent-launch'
 import { hostPickerOptions } from '../../host-catalog/selection/use-connected-host-picker'
 import { selectConnectableHostProfiles } from '../../host-catalog/host-catalog-selection'
 import type { HostProfile } from '../../host-catalog/host-profile'
@@ -15,6 +17,7 @@ export type ChatForkHostRow = ChatForkHost & {
   subtitle?: string
   client: RpcClient | null
   current: boolean
+  capabilities: readonly string[] | undefined
 }
 
 const NO_HOSTS: readonly HostProfile[] = []
@@ -42,17 +45,20 @@ export function useChatForkHosts(input: {
       subtitle: options.get(input.currentHostId)?.subtitle,
       client: input.currentClient,
       current: true,
+      capabilities: input.currentCapabilities,
       ...capabilityFlags(input.currentCapabilities)
     }
     const others = otherIds.map((hostId): ChatForkHostRow => {
       const entry = clients.find((candidate) => candidate.hostId === hostId)
       const connected = entry?.state === 'connected'
       const caps = connected ? capabilities.get(entry.client) : undefined
+      const flags = capabilityFlags(caps)
+      // A host that can't import an exact copy still takes a recap, as a chat or in a terminal.
       const status: ChatForkHostStatus = !connected
         ? 'offline'
         : !caps
           ? 'checking'
-          : caps.includes(AI_VAULT_CHAT_FORK_IMPORT_CAPABILITY)
+          : flags.canImport || flags.canFirstMessage || flags.canLaunchTerminal
             ? 'ready'
             : 'needs-update'
       return {
@@ -62,7 +68,8 @@ export function useChatForkHosts(input: {
         subtitle: options.get(hostId)?.subtitle,
         client: connected ? entry.client : null,
         current: false,
-        ...capabilityFlags(caps)
+        capabilities: caps,
+        ...flags
       }
     })
     return [current, ...others]
@@ -79,11 +86,15 @@ export function useChatForkHosts(input: {
 
 function capabilityFlags(
   capabilities: readonly string[] | undefined
-): Pick<ChatForkHost, 'canImport' | 'canFirstMessage'> {
+): Pick<ChatForkHost, 'canImport' | 'canFirstMessage' | 'canLaunchTerminal'> {
   return {
     canImport: capabilities?.includes(AI_VAULT_CHAT_FORK_IMPORT_CAPABILITY) === true,
     canFirstMessage:
-      capabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) === true
+      capabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) === true,
+    // Without a surface an older host might open the agent as a chat instead.
+    canLaunchTerminal:
+      supportsMobileExistingAgentLaunch(capabilities) &&
+      capabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true
   }
 }
 

@@ -16,6 +16,7 @@ import type { WorktreeCreateIdempotencyProbe } from '../new-workspace/creation/w
 import { createMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'
 import { sessionTabCreateTerminal } from './tabs/mobile-session-tab-write-operations'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
+import type { ChatForkLaunchOutcome } from './chat-fork/chat-fork-workspace-launch'
 
 /** A worktree you drive, or a background subagent that reports back to the chat it came from. */
 export type MobileWorktreeForkMode = 'worktree' | 'subagent'
@@ -122,6 +123,8 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   sourceLabel?: string
   /** Another agent's fork: the new chat starts from this recap instead of a copy. */
   recap?: string
+  /** Opens the fork in the created worktree instead: a relayed copy, or a recap in a terminal. */
+  openIn?: (client: RpcClient, worktreeId: string) => Promise<ChatForkLaunchOutcome>
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   showToast: (message: string, durationMs?: number) => void
   openWorktree: (worktreeId: string, name: string, warning?: string) => void
@@ -149,7 +152,8 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   if (!base) {
     return
   }
-  const subagent = input.mode === 'subagent' && input.terminal !== true && !input.recap
+  const subagent =
+    input.mode === 'subagent' && input.terminal !== true && !input.recap && !input.openIn
   const task = subagent ? await askMobileSubagentTask() : null
   if (subagent && !task) {
     return
@@ -178,6 +182,23 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   }))
   if ('error' in created) {
     report(created.error)
+    return
+  }
+  if (input.openIn) {
+    const outcome = await input
+      .openIn(client, created.worktreeId)
+      .catch((): ChatForkLaunchOutcome => ({ kind: 'unconfirmed' }))
+    input.openWorktree(created.worktreeId, created.name, created.warning)
+    if (outcome.kind === 'unconfirmed') {
+      report(mobileWorktreeForkCopy.unconfirmed(agentName))
+    } else if (outcome.kind === 'failed') {
+      report(
+        mobileWorktreeForkCopy.failed(
+          agentName,
+          outcome.message || mobileWorktreeForkCopy.unsupported()
+        )
+      )
+    }
     return
   }
   if (input.terminal && !input.recap) {

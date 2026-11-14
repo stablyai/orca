@@ -1,4 +1,11 @@
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
+import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/context/chat-fork-recap'
+import {
+  chatForkPath,
+  chatForkSurfaceChoice,
+  type ChatForkPath,
+  type ChatForkSurface
+} from '../../../../src/shared/native-chat/chat-fork-path'
 
 /** Where the fork opens: beside this chat, a new sibling worktree, or a workspace already there. */
 export type ChatForkWorkspace =
@@ -18,13 +25,17 @@ export type ChatForkHost = {
   status: ChatForkHostStatus
   /** Takes a copied transcript (aiVault import). */
   canImport: boolean
-  /** Starts a chat with a first message, which carries another agent's recap. */
+  /** Starts a chat with a first message, which carries a recap. */
   canFirstMessage: boolean
+  /** Starts an agent's CLI in a terminal with a first prompt (agent.launch with a surface). */
+  canLaunchTerminal: boolean
 }
 
 export type ChatForkSource = {
   hostId: string
   agent: TuiAgent
+  /** The chat's own kind: a chat session, or a terminal running the agent's CLI. */
+  surface: ChatForkSurface
   /** The agent has hit its usage limit: another agent is the useful default. */
   usageLimited: boolean
   /** The chat's history can be copied for the same agent (a terminal chat only for Claude). */
@@ -41,6 +52,8 @@ export type ChatForkPicks = {
   workspace?: ChatForkWorkspace
   agent?: TuiAgent
   runAs?: ChatForkRunAs
+  openAs?: ChatForkSurface
+  recapScope?: ChatForkRecapScope
 }
 
 export type ChatForkSelection = {
@@ -51,23 +64,17 @@ export type ChatForkSelection = {
   /** Null when no agent on the chosen host can take this fork. */
   agent: TuiAgent | null
   runAs: ChatForkRunAs
+  /** Null when the agent can open as neither kind on the chosen host. */
+  openAs: ChatForkSurface | null
+  surfaces: Readonly<Record<ChatForkSurface, boolean>>
+  path: ChatForkPath
+  recapScope: ChatForkRecapScope
+  /** Set when the same agent gets a recap because no exact copy reaches this host or kind. */
+  sameAgentRecap: boolean
   agentChoices: readonly { agent: TuiAgent; enabled: boolean }[]
   newWorktreeOffered: boolean
   subagentOffered: boolean
   ready: boolean
-}
-
-/** How a selection forks: an exact copy here, a copy relayed to another host, or a recap for another agent. */
-export type ChatForkRoute = 'copy' | 'relay' | 'recap'
-
-export function chatForkRoute(
-  source: Pick<ChatForkSource, 'hostId' | 'agent'>,
-  selection: { hostId: string; agent: TuiAgent }
-): ChatForkRoute {
-  if (selection.agent !== source.agent) {
-    return 'recap'
-  }
-  return selection.hostId === source.hostId ? 'copy' : 'relay'
 }
 
 /** The sheet's fields: the person's picks where still valid, defaults everywhere else. */
@@ -85,13 +92,14 @@ export function resolveChatForkSelection(input: {
   const sameHost = hostId === source.hostId
   const target = input.hosts.find((host) => host.hostId === hostId)
   const hostReady = sameHost || target?.status === 'ready'
-  const sameAgentAllowed =
-    source.canCopy && (sameHost || (source.canExport && target?.canImport === true))
-  const otherAgentAllowed = target?.canFirstMessage === true
+  const relaysTo = source.canExport && target?.canImport === true
+  // A recap reaches any connected host that starts a chat or a CLI with a first message.
+  const recapAllowed = target?.canFirstMessage === true || target?.canLaunchTerminal === true
+  const sameAgentAllowed = (sameHost && source.canCopy) || relaysTo || recapAllowed
   const others = (input.targetAgents ?? []).filter((agent) => agent !== source.agent)
   const agentChoices = [
     { agent: source.agent, enabled: sameAgentAllowed },
-    ...others.map((agent) => ({ agent, enabled: otherAgentAllowed }))
+    ...others.map((agent) => ({ agent, enabled: recapAllowed }))
   ]
   const enabled = (agent: TuiAgent | undefined): agent is TuiAgent =>
     agentChoices.some((choice) => choice.agent === agent && choice.enabled)
@@ -103,8 +111,28 @@ export function resolveChatForkSelection(input: {
       : sameAgentAllowed
         ? source.agent
         : firstOther
-  const subagentOffered =
-    sameHost && agent === source.agent && source.canSubagent && source.canNewWorktree
+  const sameAgent = agent === source.agent
+  const relays = sameAgent && relaysTo
+  const surfaces = chatForkSurfaces({
+    source,
+    own: sameHost && sameAgent && source.canCopy,
+    relays,
+    target,
+    chatAgent: agent !== null && (input.targetAgents === null || input.targetAgents.includes(agent))
+  })
+  const openAs = chatForkSurfaceChoice({
+    sourceSurface: source.surface,
+    picked: picks.openAs,
+    available: surfaces
+  })
+  const path = chatForkPath({
+    sameAgent,
+    sameHost,
+    sameSurface: openAs === source.surface,
+    cutsHere: source.canCopy,
+    relays
+  })
+  const subagentOffered = path === 'same' && sameHost && source.canSubagent && source.canNewWorktree
   const runAs: ChatForkRunAs =
     subagentOffered && (picks.runAs ?? (preset === 'subagent' ? 'subagent' : 'open')) === 'subagent'
       ? 'subagent'
@@ -117,10 +145,35 @@ export function resolveChatForkSelection(input: {
     workspace,
     agent,
     runAs,
+    openAs,
+    surfaces,
+    path,
+    recapScope: picks.recapScope ?? 'history',
+    sameAgentRecap: sameAgent && path === 'recap',
     agentChoices,
     newWorktreeOffered,
     subagentOffered,
-    ready: hostReady && agent !== null && workspace !== null
+    ready: hostReady && agent !== null && workspace !== null && openAs !== null
+  }
+}
+
+/** The kinds a fork can open as: the chat's own kind for its exact copy here; either kind for a
+ *  copy relayed from this host (Claude resumes it as a chat or in its CLI); a chat where the host
+ *  starts that agent's chat with a first message; a terminal where it launches CLIs with a prompt. */
+function chatForkSurfaces(input: {
+  source: ChatForkSource
+  own: boolean
+  relays: boolean
+  target: ChatForkHost | undefined
+  chatAgent: boolean
+}): Record<ChatForkSurface, boolean> {
+  const { source, own, relays, target } = input
+  return {
+    chat:
+      (own && source.surface === 'chat') ||
+      relays ||
+      (target?.canFirstMessage === true && input.chatAgent),
+    terminal: (own && source.surface === 'terminal') || relays || target?.canLaunchTerminal === true
   }
 }
 

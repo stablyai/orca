@@ -3461,7 +3461,17 @@
         "busy": "{{host}} is copying other chats. Wait a moment, then fork again.",
         "targetUnsupported": "That workspace can’t take a copied chat. Pick a local workspace on that host.",
         "sourceUnavailable": "This chat’s saved history wasn’t found on this host, so it can’t be copied.",
-        "relayFailed": "Couldn’t copy the chat to {{host}}. {{detail}}"
+        "relayFailed": "Couldn’t copy the chat to {{host}}. {{detail}}",
+        "openAs": "Open as",
+        "openAsChat": "Chat",
+        "openAsTerminal": "Terminal (CLI)",
+        "openAsNone": "This agent can’t open on this host",
+        "terminalUnavailable": "Update Orca on this host to fork into a terminal",
+        "chatUnavailable": "This agent doesn’t open as a chat on this host",
+        "context": "Context",
+        "contextCurrent": "Current context (since the last compact or clear)",
+        "contextHistory": "Full history up to here",
+        "recapNoCopy": "An exact copy can’t reach this host or kind, so {{agent}} starts with a recap of this chat up to here."
       }
     },
     "hostOutage": {

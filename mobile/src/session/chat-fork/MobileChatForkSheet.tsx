@@ -25,6 +25,9 @@ import {
 } from './chat-fork-selection'
 import {
   chatForkHostNote,
+  chatForkOpenAsLabel,
+  chatForkOpenAsNote,
+  chatForkRecapScopeLabel,
   chatForkRunAsLabel,
   chatForkWorkspaceLabel,
   MobileChatForkPickers,
@@ -89,12 +92,19 @@ export function MobileChatForkSheet(props: {
     if (!agent || !workspace || !selection.ready || props.busy) {
       return
     }
+    if (!selection.openAs) {
+      return
+    }
     props.onConfirm({
       hostId: selection.hostId,
       hostLabel: host?.label ?? selection.hostId,
+      hostCapabilities: host?.capabilities,
       workspace,
       agent,
-      runAs: selection.runAs
+      runAs: selection.runAs,
+      path: selection.path,
+      openAs: selection.openAs,
+      recapScope: selection.recapScope
     })
   }
   const usageLimitNote =
@@ -106,10 +116,16 @@ export function MobileChatForkSheet(props: {
         )
       : null
   const recapNote =
-    !usageLimitNote && agent && agent !== source.agent
-      ? t('chat.fork.sheet.recapNote', '{{agent}} starts with a recap of this chat up to here.', {
-          agent: TUI_AGENT_DISPLAY_NAMES[agent]
-        })
+    !usageLimitNote && agent && selection.path === 'recap'
+      ? selection.sameAgentRecap
+        ? t(
+            'chat.fork.sheet.recapNoCopy',
+            'An exact copy can’t reach this host or kind, so {{agent}} starts with a recap of this chat up to here.',
+            { agent: TUI_AGENT_DISPLAY_NAMES[agent] }
+          )
+        : t('chat.fork.sheet.recapNote', '{{agent}} starts with a recap of this chat up to here.', {
+            agent: TUI_AGENT_DISPLAY_NAMES[agent]
+          })
       : null
   // iOS can't present a picker's Modal while the sheet's is closing; both share one host instead.
   return (
@@ -170,6 +186,29 @@ export function MobileChatForkSheet(props: {
             onPress={() => setView('agent')}
           />
         </ListGroup>
+        <SectionHeader title={t('chat.fork.sheet.openAs', 'Open as')} />
+        <ListGroup>
+          <ListRow
+            title={chatForkOpenAsLabel(selection.openAs, t)}
+            subtitle={chatForkOpenAsNote(selection, t)}
+            navigates
+            disabled={props.busy || selection.openAs === null}
+            onPress={() => setView('openAs')}
+          />
+        </ListGroup>
+        {selection.path === 'recap' ? (
+          <>
+            <SectionHeader title={t('chat.fork.sheet.context', 'Context')} />
+            <ListGroup>
+              <ListRow
+                title={chatForkRecapScopeLabel(selection.recapScope, t)}
+                navigates
+                disabled={props.busy}
+                onPress={() => setView('context')}
+              />
+            </ListGroup>
+          </>
+        ) : null}
         {usageLimitNote || recapNote ? (
           <Text style={styles.notice}>{usageLimitNote ?? recapNote}</Text>
         ) : null}

@@ -3,10 +3,12 @@ import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { PickerModal, type PickerOption } from '../../components/sheets/PickerModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { ChatForkPicks, ChatForkSelection, ChatForkWorkspace } from './chat-fork-selection'
+import type { ChatForkSurface } from '../../../../src/shared/native-chat/chat-fork-path'
+import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/context/chat-fork-recap'
 import type { ChatForkHostRow } from './use-chat-fork-hosts'
 import type { ChatForkWorkspaceRow } from './use-chat-fork-target'
 
-export type ChatForkPickerView = 'host' | 'workspace' | 'agent' | 'runAs'
+export type ChatForkPickerView = 'host' | 'workspace' | 'agent' | 'runAs' | 'openAs' | 'context'
 
 type Translate = ReturnType<typeof useMobileTranslation>
 
@@ -41,7 +43,35 @@ export function chatForkRunAsLabel(runAs: ChatForkSelection['runAs'], t: Transla
     : t('chat.fork.sheet.runOpen', 'Open it')
 }
 
-/** The sheet's four pickers; one shows at a time, in place of the form. */
+export function chatForkOpenAsLabel(openAs: ChatForkSurface | null, t: Translate): string {
+  return openAs === 'chat'
+    ? t('chat.fork.sheet.openAsChat', 'Chat')
+    : openAs === 'terminal'
+      ? t('chat.fork.sheet.openAsTerminal', 'Terminal (CLI)')
+      : t('chat.fork.sheet.openAsNone', 'This agent can’t open on this host')
+}
+
+/** Why a kind isn't offered, when one isn't. */
+export function chatForkOpenAsNote(selection: ChatForkSelection, t: Translate): string | undefined {
+  if (!selection.surfaces.terminal && selection.surfaces.chat) {
+    return t(
+      'chat.fork.sheet.terminalUnavailable',
+      'Update Orca on this host to fork into a terminal'
+    )
+  }
+  if (!selection.surfaces.chat && selection.surfaces.terminal) {
+    return t('chat.fork.sheet.chatUnavailable', 'This agent doesn’t open as a chat on this host')
+  }
+  return undefined
+}
+
+export function chatForkRecapScopeLabel(scope: ChatForkRecapScope, t: Translate): string {
+  return scope === 'current'
+    ? t('chat.fork.sheet.contextCurrent', 'Current context (since the last compact or clear)')
+    : t('chat.fork.sheet.contextHistory', 'Full history up to here')
+}
+
+/** The sheet's pickers; one shows at a time, in place of the form. */
 export function MobileChatForkPickers(props: {
   view: ChatForkPickerView | null
   hosts: readonly ChatForkHostRow[]
@@ -94,6 +124,14 @@ export function MobileChatForkPickers(props: {
       )
     }
   ]
+  const openAsOptions: PickerOption[] = (['chat', 'terminal'] as const).map((surface) => ({
+    value: surface,
+    label: chatForkOpenAsLabel(surface, t),
+    disabled: !selection.surfaces[surface]
+  }))
+  const contextOptions: PickerOption<ChatForkRecapScope>[] = (['history', 'current'] as const).map(
+    (scope) => ({ value: scope, label: chatForkRecapScopeLabel(scope, t) })
+  )
   const workspaceValue = !selection.workspace
     ? ''
     : selection.workspace.kind === 'existing'
@@ -137,6 +175,27 @@ export function MobileChatForkPickers(props: {
         options={runAsOptions}
         selected={selection.runAs}
         onSelect={(runAs) => props.onPick({ runAs })}
+        onClose={props.onClose}
+      />
+      <PickerModal
+        visible={view === 'openAs'}
+        title={t('chat.fork.sheet.openAs', 'Open as')}
+        options={openAsOptions}
+        selected={selection.openAs ?? ''}
+        onSelect={(value) => {
+          const openAs = openAsOptions.find((option) => option.value === value)?.value
+          if (openAs === 'chat' || openAs === 'terminal') {
+            props.onPick({ openAs })
+          }
+        }}
+        onClose={props.onClose}
+      />
+      <PickerModal
+        visible={view === 'context'}
+        title={t('chat.fork.sheet.context', 'Context')}
+        options={contextOptions}
+        selected={selection.recapScope}
+        onSelect={(recapScope) => props.onPick({ recapScope })}
         onClose={props.onClose}
       />
     </>
