@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { AutomationService } from './automation-service'
 import { AutomationRunLaunchError } from './launch/automation-launch'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))
 
@@ -119,7 +120,7 @@ async function failingLaunches(errors: Error[]) {
       available: () => true
     }
   })
-  const rows = []
+  const rows: (AutomationRun | undefined)[] = []
   for (const [index] of errors.entries()) {
     const automation = store.createAutomation({
       name: `Nightly ${index}`,
