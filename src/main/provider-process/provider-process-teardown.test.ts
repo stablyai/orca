@@ -100,37 +100,26 @@ describe('terminateProviderProcessTree', () => {
   )
 })
 
-it('counts the writer group kill, but never a supervisor-only kill, without an exit report', async () => {
+it('records a held provider kill without claiming unobserved descendants exited', async () => {
   const target = child()
-  const snapshot = {
-    rootPgid: 1234,
-    capturedAtMs: 1,
-    descendants: [{ pid: 5678, ppid: 1234, pgid: 5678, startedAt: 'now' }]
-  }
-  const deps = {
-    site: 'writer-kill-proof',
-    platform: 'linux' as const,
-    supervised: true,
-    captureDescendants: async () => snapshot,
-    terminateDescendants: async () => 'unverifiable' as const,
-    signalProcessGroup: vi.fn(),
-    signalProcess: vi.fn()
-  }
-  await expect(terminateWithEvidence(target, deps)).resolves.toEqual({
-    tree: 'unverifiable',
-    killDelivered: true
-  })
   await expect(
-    terminateWithEvidence(child(), { ...deps, captureDescendants: async () => null })
-  ).resolves.toBeNull()
-  await expect(
-    terminateWithEvidence(child(), {
-      ...deps,
-      signalProcessGroup: () => {
-        throw new Error('denied')
-      }
+    terminateWithEvidence(target, {
+      site: 'writer-kill-proof',
+      platform: 'linux',
+      supervised: true,
+      captureDescendants: async () => null
     })
-  ).resolves.toBe('unverifiable')
+  ).resolves.toEqual({ tree: null, killDelivered: true })
+
+  target.kill.mockReturnValue(false)
+  await expect(
+    terminateWithEvidence(target, {
+      site: 'writer-kill-proof',
+      platform: 'linux',
+      supervised: true,
+      captureDescendants: async () => null
+    })
+  ).resolves.toBeNull()
 })
 
 it.each([true, false])(

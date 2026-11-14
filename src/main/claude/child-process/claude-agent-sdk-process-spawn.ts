@@ -1,5 +1,5 @@
 import { withOrcaClaudeChatEntrypoint } from '../../../shared/agent-launch/startup/claude-chat-entrypoint'
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { ProviderChild } from '../../provider-process/provider-child'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
@@ -11,10 +11,10 @@ import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-e
 
 export type ClaudeCodeProcessSpawn = {
   /** SDK spawn hook; Orca retains process ownership. */
-  spawn: (options: ClaudeAgentSdkSpawnOptions) => ChildProcessWithoutNullStreams
-  readonly child: ChildProcessWithoutNullStreams | null
+  spawn: (options: ClaudeAgentSdkSpawnOptions) => ProviderChild
+  readonly child: ProviderChild | null
   readonly managed: ManagedProviderProcess | null
-  /** Supervisor pid on POSIX; lease ownership also requires start time and spawn token. */
+  /** Provider pid on POSIX; lease ownership also requires start time and spawn token. */
   readonly pid: number | undefined
   /** The spawn spec's verdict, so the close ladder never re-decides it. False until the SDK spawns. */
   readonly supervised: boolean
@@ -32,7 +32,7 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
 
 /** Subscribes alongside the SDK's reader: an earlier listener would drain output it never sees. */
 function observeStdoutWithReader(
-  stdout: ChildProcessWithoutNullStreams['stdout'],
+  stdout: ProviderChild['stdout'],
   onStdout: (chunk: Buffer | string) => void
 ): void {
   const onSubscribe = (event: string | symbol): void => {
@@ -47,7 +47,7 @@ function observeStdoutWithReader(
 }
 
 // Orca owns the child for PID-based exit proof and Windows .cmd quoting.
-// POSIX supervisors stop Claude if Orca dies; Windows spawns Claude directly.
+// POSIX owner watchers stop Claude if Orca dies; Windows spawns Claude directly.
 export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,

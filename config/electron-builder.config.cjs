@@ -43,6 +43,10 @@ const {
   finalizePackagedWaylandClipboard
 } = require('./wayland-clipboard-resources.cjs')
 const {
+  ensureBundledProviderExec,
+  finalizePackagedProviderExec
+} = require('./provider-exec-resources.cjs')
+const {
   writeMacBuildCompatibility
 } = require('./scripts/desktop-distribution/macos/mac-build-compatibility.cjs')
 const {
@@ -396,7 +400,8 @@ module.exports = {
     context,
     mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
     ensureWaylandClipboard = ensureBundledWaylandClipboard,
-    orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from)
+    orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from),
+    ensureProviderExec = ensureBundledProviderExec
   ) => {
     // The template is the server every SSH host gets, so a dark test template must never ship.
     assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir, orcadTemplateDir])
@@ -407,6 +412,9 @@ module.exports = {
     assertMobileWebBundleBuilt(mobileWebBundleDir)
     if (context.electronPlatformName === 'linux') {
       ensureWaylandClipboard(context.arch)
+    }
+    if (context.electronPlatformName !== 'win32') {
+      ensureProviderExec(context.electronPlatformName, context.arch)
     }
   },
   afterPack: async (context) => {
@@ -477,6 +485,7 @@ module.exports = {
       // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
       // so a cross-built slice could ship the host's pty.node and only fail at runtime.
       finalizePackagedWaylandClipboard(resourcesDir)
+      finalizePackagedProviderExec(resourcesDir, 'linux')
       verifyLinuxGlibcFloor(context.appOutDir, { targetArch })
     }
     verifyPackagedMainRuntimeDeps(resourcesDir)
@@ -551,6 +560,11 @@ module.exports = {
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-process-footprint'),
         'orca-process-footprint',
+        context.packager
+      )
+      await signMacStandaloneHelper(
+        finalizePackagedProviderExec(resourcesDir, 'darwin'),
+        'orca-provider-exec',
         context.packager
       )
       await packageMacTerminalHost(join(resourcesDir, '..', '..'), context)
@@ -676,6 +690,11 @@ module.exports = {
       {
         from: 'native/process-footprint-macos/.build/release/orca-process-footprint',
         to: 'MacOS/orca-process-footprint'
+      },
+      // Nested executables belong in Contents/MacOS, where afterPack signs them before the app.
+      {
+        from: 'native/provider-exec/.build/darwin-${arch}/orca-provider-exec',
+        to: 'MacOS/orca-provider-exec'
       }
     ],
     target: [
@@ -716,6 +735,10 @@ module.exports = {
       {
         from: 'native/wayland-clipboard/.build/${arch}/orca-wayland-clipboard',
         to: 'bin/orca-wayland-clipboard'
+      },
+      {
+        from: 'native/provider-exec/.build/linux-${arch}/orca-provider-exec',
+        to: 'bin/orca-provider-exec'
       },
       {
         from: 'resources/linux/bin/orca-ide',

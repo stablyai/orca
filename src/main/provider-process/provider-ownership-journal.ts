@@ -1,0 +1,222 @@
+import { constants } from 'node:fs'
+import { mkdir, lstat, open, opendir, rename, unlink } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { hostname } from 'node:os'
+import { join, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
+import { z } from 'zod'
+import { getAppEnvironment } from '../../shared/app-environment'
+import { readPosixProcessRow, type ProcessRowRead } from './provider-process-row-read'
+import {
+  proveProviderProcessIdentity,
+  sweepOrphanedProviderGroup,
+  providerGroupAbsent,
+  type ProviderGroupIdentity
+} from './provider-group-orphan-guard'
+import { PROVIDER_GROUP_REAP_TIMEOUT_MS } from './provider-process-supervisor'
+
+const row = z.object({
+  pid: z.number().int().min(2),
+  ppid: z.number().int().min(0),
+  pgid: z.number().int().min(1),
+  startedAt: z.string().min(1).max(255),
+  startResolution: z.enum(['clock-tick', 'microsecond', 'second'])
+})
+const recordSchema = z.object({
+  version: z.literal(1),
+  nonce: z.string().uuid(),
+  hostname: z.string().max(255),
+  statePath: z.string().max(4096),
+  bootId: z.string().min(1).max(255),
+  owner: row,
+  leader: row,
+  watcher: row,
+  pgid: z.number().int().min(2)
+})
+const startups = new Map<string, Promise<void>>()
+const MAX_RECORD_BYTES = 16_384
+let ownerIdentity: ReturnType<typeof proveProviderProcessIdentity> | undefined
+
+export function providerOwnershipDirectory(): string {
+  return join(getAppEnvironment().getPath('userData'), 'provider-processes')
+}
+
+export async function waitForProviderGroupReap(
+  pgid: number,
+  timeoutMs = PROVIDER_GROUP_REAP_TIMEOUT_MS
+): Promise<boolean> {
+  const deadline = performance.now() + timeoutMs
+  while (!providerGroupAbsent(pgid)) {
+    if (performance.now() >= deadline) {
+      return false
+    }
+    await delay(25)
+  }
+  return true
+}
+
+/** One shared recovery scan per runtime state directory; a failed scan remains retryable. */
+export function recoverProviderOwnership(directory: string, bootId: string): Promise<void> {
+  const path = resolve(directory)
+  let startup = startups.get(path)
+  if (!startup) {
+    startup = scanOwnership(path, bootId).catch((error) => {
+      startups.delete(path)
+      throw error
+    })
+    startups.set(path, startup)
+  }
+  return startup
+}
+
+async function scanOwnership(directory: string, bootId: string): Promise<void> {
+  await mkdir(directory, { recursive: true, mode: 0o700 })
+  const info = await lstat(directory)
+  if (
+    !info.isDirectory() ||
+    (info.mode & 0o077) !== 0 ||
+    (process.getuid && info.uid !== process.getuid())
+  ) {
+    throw new Error('Provider ownership directory is not private')
+  }
+  const owners = new Map<number, Promise<ProcessRowRead>>()
+  const localHostname = hostname()
+  const dir = await opendir(directory)
+  for await (const entry of dir) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) {
+      continue
+    }
+    const path = join(directory, entry.name)
+    const record = await readRecord(path)
+    if (!record || record.hostname !== localHostname || record.statePath !== directory) {
+      continue
+    }
+    if (record.bootId !== bootId) {
+      await unlink(path).catch(() => {})
+      continue
+    }
+    if (
+      record.leader.pid !== record.pgid ||
+      record.leader.pgid !== record.pgid ||
+      record.watcher.pgid !== record.pgid
+    ) {
+      continue
+    }
+    let ownerRead = owners.get(record.owner.pid)
+    if (!ownerRead) {
+      ownerRead = readPosixProcessRow(record.owner.pid)
+      owners.set(record.owner.pid, ownerRead)
+    }
+    const owner = await ownerRead
+    if (
+      owner === 'unverifiable' ||
+      (owner &&
+        (record.owner.startResolution !== owner.startResolution ||
+          record.owner.startedAt === owner.startedAt))
+    ) {
+      continue
+    }
+    const swept = await sweepOrphanedProviderGroup(record)
+    if (
+      (swept === 'absent' || swept === 'killed') &&
+      (await waitForProviderGroupReap(record.pgid))
+    ) {
+      await unlink(path).catch(() => {})
+    }
+  }
+}
+
+async function readRecord(path: string): Promise<z.infer<typeof recordSchema> | null> {
+  try {
+    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW)
+    try {
+      const info = await file.stat()
+      if (
+        !info.isFile() ||
+        info.size > MAX_RECORD_BYTES ||
+        (info.mode & 0o077) !== 0 ||
+        (process.getuid && info.uid !== process.getuid())
+      ) {
+        return null
+      }
+      const buffer = Buffer.alloc(info.size + 1)
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
+      if (bytesRead > info.size) {
+        return null
+      }
+      const parsed = recordSchema.safeParse(
+        JSON.parse(buffer.subarray(0, bytesRead).toString('utf8'))
+      )
+      return parsed.success ? parsed.data : null
+    } finally {
+      await file.close()
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function publishProviderOwnership(
+  directory: string,
+  bootId: string,
+  leaderPid: number,
+  watcherPid: number
+): Promise<{ identity: ProviderGroupIdentity; remove: () => Promise<void> }> {
+  await recoverProviderOwnership(directory, bootId)
+  ownerIdentity ??= proveProviderProcessIdentity(process.pid)
+  const [owner, leader, watcher] = await Promise.all([
+    ownerIdentity,
+    proveProviderProcessIdentity(leaderPid),
+    proveProviderProcessIdentity(watcherPid)
+  ])
+  if (!owner) {
+    ownerIdentity = undefined
+  }
+  if (
+    !owner ||
+    !leader ||
+    !watcher ||
+    leader.ppid !== process.pid ||
+    leader.pgid !== leaderPid ||
+    watcher.ppid !== leaderPid ||
+    watcher.pgid !== leaderPid ||
+    watcherPid === leaderPid
+  ) {
+    throw new Error('Cannot establish provider process ownership before launch')
+  }
+  const identity: ProviderGroupIdentity = { leader, watcher, pgid: leaderPid }
+  const nonce = randomUUID()
+  const path = join(directory, `${nonce}.json`)
+  const pending = `${path}.pending`
+  const record = {
+    version: 1,
+    nonce,
+    hostname: hostname(),
+    statePath: resolve(directory),
+    bootId,
+    owner,
+    ...identity
+  }
+  const file = await open(pending, 'wx', 0o600)
+  try {
+    await file.writeFile(JSON.stringify(record))
+    await file.sync()
+  } finally {
+    await file.close()
+  }
+  await rename(pending, path)
+  const dir = await open(directory, 'r')
+  try {
+    await dir.sync()
+  } finally {
+    await dir.close()
+  }
+  return {
+    identity,
+    remove: async () => {
+      if (providerGroupAbsent(leaderPid)) {
+        await unlink(path).catch(() => {})
+      }
+    }
+  }
+}

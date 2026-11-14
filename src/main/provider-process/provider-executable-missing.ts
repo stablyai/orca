@@ -26,6 +26,10 @@ export function providerSpawnAbsence(
   command: string,
   cwd?: string
 ): ProviderSpawnAbsence | null {
+  if (typeof error === 'object' && error !== null && 'providerSpawnAbsence' in error) {
+    const absence = error.providerSpawnAbsence
+    return absence === 'executable' || absence === 'launchFolder' ? absence : null
+  }
   if (
     typeof error !== 'object' ||
     error === null ||
@@ -89,6 +93,14 @@ export function providerLaunchFolderMissing(error: unknown): boolean {
       'providerLaunchFolderMissing' in inner && inner.providerLaunchFolderMissing === true
         ? true
         : undefined
+    ) ?? false
+  )
+}
+
+export function providerLaunchFailed(error: unknown): boolean {
+  return (
+    findInErrorChain(error, (inner) =>
+      'providerLaunchFailed' in inner && inner.providerLaunchFailed === true ? true : undefined
     ) ?? false
   )
 }

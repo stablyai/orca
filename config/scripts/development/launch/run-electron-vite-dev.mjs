@@ -46,6 +46,7 @@ import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-l
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
 import { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
+import { buildDevProviderExec } from '../../native-build/posix/build-provider-exec.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -478,6 +479,10 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
 
 if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
+}
+
+if (!isHelpOrVersion) {
+  buildDevProviderExec()
 }
 
 // Inject fake CLI to test Ctrl+C tree teardown without real electron-vite dependency.

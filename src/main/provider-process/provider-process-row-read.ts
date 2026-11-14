@@ -1,5 +1,12 @@
 import { readFile } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
+import { loadLibprocAddon } from '../../shared/libproc-addon'
+import {
+  readFreshNativeTable,
+  registerNativeRequest,
+  isNativeReaderHealthy
+} from '../../shared/libproc-native-reads'
+import { monotonicNow, DEADLINE_PASSED } from '../../shared/deadline-settle-notifier'
 import { runPsInProcess } from '../../shared/libproc-process-table'
 import {
   parseProcessTable,
@@ -10,7 +17,7 @@ const PROCESS_ROW_TIMEOUT_MS = 2_000
 
 /** Linux /proc starts use clock ticks; ps lstart requires second-boundary PID-reuse checks. */
 export type ProviderProcessRow = Pick<ProcessTableRow, 'pid' | 'ppid' | 'pgid' | 'startedAt'> & {
-  startResolution: 'clock-tick' | 'second'
+  startResolution: 'clock-tick' | 'microsecond' | 'second'
 }
 
 /** `null`: no such process. `'unverifiable'`: the read failed, which proves nothing. */
@@ -20,7 +27,7 @@ export function readPosixProcessRow(
   pid: number,
   platform: NodeJS.Platform = process.platform
 ): Promise<ProcessRowRead> {
-  return platform === 'linux' ? readLinuxProcStatRow(pid) : readPsProcessRow(pid)
+  return platform === 'linux' ? readLinuxProcStatRow(pid) : readDarwinProcessRow(pid)
 }
 
 /** Parses /proc/<pid>/stat; the comm field can hold spaces and parentheses, so cut past ") ". */
@@ -45,11 +52,43 @@ async function readLinuxProcStatRow(pid: number): Promise<ProcessRowRead> {
   }
 }
 
+async function readDarwinProcessRow(pid: number): Promise<ProcessRowRead> {
+  const addon = loadLibprocAddon()
+  if (addon && isNativeReaderHealthy()) {
+    try {
+      const rows = await readFreshNativeTable(
+        addon,
+        { command: false, pids: [pid] },
+        registerNativeRequest(),
+        monotonicNow() + PROCESS_ROW_TIMEOUT_MS
+      )
+      if (rows !== DEADLINE_PASSED && rows !== 'stalled' && rows !== null) {
+        const row = rows.find((entry) => entry.pid === pid)
+        if (!row) {
+          return null
+        }
+        if (row.startUsec !== undefined) {
+          return {
+            pid,
+            ppid: row.ppid,
+            pgid: row.pgid,
+            startedAt: `microsecond:${row.startSec}:${row.startUsec}`,
+            startResolution: 'microsecond'
+          }
+        }
+      }
+    } catch {
+      // Older native readers still have the bounded ps fallback.
+    }
+  }
+  return readPsProcessRow(pid)
+}
+
 async function readPsProcessRow(pid: number): Promise<ProcessRowRead> {
   try {
     const args = ['-o', 'pid=,ppid=,pgid=,lstart=', '-p', String(pid)]
     // Stable locale makes repeated start markers comparable.
-    const env = { ...process.env, LANG: 'C', LC_ALL: 'C' }
+    const env = { ...process.env, LANG: 'C', LC_ALL: 'C', TZ: 'UTC0' }
     const result =
       (await runPsInProcess(args, {
         env,
@@ -65,7 +104,10 @@ async function readPsProcessRow(pid: number): Promise<ProcessRowRead> {
       }))
     const row = parseProcessTable(result.stdout).find((entry) => entry.pid === pid)
     if (row) {
-      return { ...row, startResolution: 'second' }
+      const startedAtMs = Date.parse(`${row.startedAt} UTC`)
+      return Number.isFinite(startedAtMs)
+        ? { ...row, startedAt: new Date(startedAtMs).toISOString(), startResolution: 'second' }
+        : 'unverifiable'
     }
     // ps exits 1 with no rows for a pid that does not exist; anything else is a failed read.
     return !result.timedOut && result.code === 1 ? null : 'unverifiable'

@@ -8,10 +8,7 @@ import { spawnManagedProviderProcess } from '../../provider-process/managed-prov
 import type { ProviderProcessClosePolicy } from '../../provider-process/provider-process-close'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
-import {
-  providerStderrForDisplay,
-  supervisedProviderSpawnFailure
-} from '../../provider-process/provider-spawn-failure-report'
+import { providerLaunchFailed } from '../../provider-process/provider-executable-missing'
 
 // Allow cold network-backed listings; timed-out pickers retain their existing catalog.
 export const AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS = 15_000
@@ -88,8 +85,7 @@ export async function runAgentModelCatalogListing(
   const output = createOutputSink(
     options.maxOutputBytes ?? AGENT_MODEL_CATALOG_PROBE_MAX_OUTPUT_BYTES
   )
-  const stderrDetail = (): string =>
-    providerStderrForDisplay(managed.stderrTail()).trim().slice(0, STDERR_DETAIL_MAX_CHARS)
+  const stderrDetail = (): string => managed.stderrTail().trim().slice(0, STDERR_DETAIL_MAX_CHARS)
   let timer: ReturnType<typeof setTimeout> | undefined
   let partialTimer: ReturnType<typeof setTimeout> | undefined
   let onAbort = (): void => {}
@@ -157,18 +153,13 @@ export async function runAgentModelCatalogListing(
       child.stdout.on('error', () => {})
       child.stdin.on('error', () => {})
       child.on('error', (error) => {
-        if (child.pid === undefined) {
+        if (child.pid === undefined || providerLaunchFailed(error)) {
           fail(`${launch.command} could not start: ${error.message}`, 'spawn')
         }
       })
       // close follows stdout drainage; exit may arrive before the final bytes.
       child.on('close', (code: number | null) => {
-        const spawnFailure = managed.supervised
-          ? supervisedProviderSpawnFailure(code, managed.stderrTail())
-          : null
-        if (spawnFailure) {
-          fail(`${launch.command} could not start: ${spawnFailure.error.message}`, 'spawn')
-        } else if (code === 0) {
+        if (code === 0) {
           resolve(output.text())
         } else {
           const detail = stderrDetail()

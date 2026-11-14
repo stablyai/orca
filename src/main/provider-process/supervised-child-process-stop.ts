@@ -1,4 +1,6 @@
-import type { ChildProcess } from 'node:child_process'
+import type { Writable } from 'node:stream'
+import type { EventEmitter } from 'node:events'
+import type { ProviderChild } from './provider-child'
 import {
   closeProviderProcess,
   rootOnlyProviderClosePolicy,
@@ -7,10 +9,8 @@ import {
 import type { ProviderCloseRequest } from './provider-process-supervisor'
 import { terminateProviderProcessTree } from './provider-process-teardown'
 
-type SupervisedChild = Pick<
-  ChildProcess,
-  'pid' | 'kill' | 'stdin' | 'exitCode' | 'signalCode' | 'once'
->
+type SupervisedChild = Pick<ProviderChild, 'pid' | 'kill' | 'exitCode' | 'signalCode'> &
+  Pick<EventEmitter, 'once'> & { stdin?: Writable | null }
 
 /** Allow the supervisor its full stop before forcing tree teardown for this root-only child. */
 export async function stopSupervisedChildProcess(

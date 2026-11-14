@@ -13,6 +13,7 @@ import {
   ORCAD_TEMPLATE_TARGETS_DIR,
   ORCAD_VERSION_FILENAME,
   compareCodeUnits,
+  isOrcadExecutableArtifact,
   isOrcadMobileWebAssetPath,
   orcadArtifactFilenames,
   orcadTemplateCommonFilenames,
@@ -159,10 +160,6 @@ export async function assembleOrcadArtifact(args: {
   }
 }
 
-function isExecutableArtifact(filename: string): boolean {
-  return /(?:^|\/)(?:rg|spawn-helper)$/.test(filename)
-}
-
 function artifactSources(
   templateDir: string,
   target: NodeRuntimeTarget,
@@ -190,7 +187,7 @@ function artifactSources(
           : templateDir,
       ...filename.split('/')
     ),
-    executable: isExecutableArtifact(filename)
+    executable: isOrcadExecutableArtifact(filename)
   }))
   if (!targetManifest.browserName) {
     return required

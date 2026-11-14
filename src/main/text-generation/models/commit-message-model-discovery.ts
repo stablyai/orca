@@ -12,7 +12,6 @@ import {
 } from '../../../shared/claude-background-run-isolation'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../../codex-cli/codex-home-process-lock'
-import { supervisedProviderSpawnFailure } from '../../provider-process/provider-spawn-failure-report'
 import {
   finalizeModelDiscoveryOutput,
   planModelDiscovery,
@@ -214,18 +213,6 @@ async function discoverModelsOnce(
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
         listing?.fail(new Error(`${spec.label} app-server exited`))
-        const spawnFailure = outputLimitExceeded
-          ? null
-          : supervisedProviderSpawnFailure(code, stderr)
-        if (spawnFailure?.thrown) {
-          console.error('[commit-message] Failed to spawn model discovery:', spawnFailure.error)
-          finish(startFailure(spawnFailure.error))
-          return
-        }
-        if (spawnFailure) {
-          onError(spawnFailure.error)
-          return
-        }
         if (!settled && !outputLimitExceeded) {
           failedExit = { exitCode: code, stdout, stderr }
         }

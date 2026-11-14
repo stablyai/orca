@@ -12,11 +12,6 @@ import {
   PROVIDER_SUPERVISOR_MAX_STOP_MS
 } from '../../provider-process/provider-process-supervisor'
 
-// The orphan guard's process reads add timers of their own; the timer audit below is the session's.
-vi.mock('../../provider-process/provider-group-orphan-guard', () => ({
-  guardSupervisedProviderGroup: () => false
-}))
-
 const STUB_SERVER_SOURCE = `
 const config = JSON.parse(process.env.STUB_CONFIG)
 // A wedged server ignores SIGTERM and its stdin end, so only SIGKILL ends it.

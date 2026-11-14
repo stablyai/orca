@@ -1,11 +1,10 @@
 import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 
 const mocks = vi.hoisted(() => ({
@@ -87,30 +86,24 @@ describe('managed provider process', () => {
     await expect(managed.close()).resolves.toMatchObject({ root: 'exited' })
   })
 
-  // Direct (Windows) and supervised (POSIX) spawns: Node names what it spawned, never the folder.
-  it.each(['win32', 'linux'] as const)(
-    'names a deleted working folder, not the CLI, when a real %s spawn fails there',
-    async (platform) => {
-      const parent = mkdtempSync(join(tmpdir(), 'orca-provider-cwd-'))
-      try {
-        // Found on PATH, so only the missing folder can fail the spawn.
-        const managed = spawnManagedProviderProcess(
-          { command: basename(process.execPath), args: ['-e', ''], cwd: join(parent, 'deleted') },
-          {
-            platform,
-            policy: () => ({ gracefulExitMs: PROVIDER_SUPERVISOR_MAX_STOP_MS, forcedExitMs: 50 }),
-            inheritedEnv: { PATH: dirname(process.execPath) },
-            site: 'fixture-provider-missing-cwd'
-          }
-        )
-        await managed.exitPromise
-        expect(managed.executableMissing).toBe(false)
-        expect(managed.spawnAbsence).toBe('launchFolder')
-      } finally {
-        rmSync(parent, { recursive: true, force: true })
-      }
+  it('names a deleted working folder without blaming the direct-launch CLI', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'orca-provider-cwd-'))
+    try {
+      const managed = spawnManagedProviderProcess(
+        { command: basename(process.execPath), args: ['-e', ''], cwd: join(parent, 'deleted') },
+        {
+          platform: 'win32',
+          inheritedEnv: { PATH: dirname(process.execPath) },
+          site: 'fixture-provider-missing-cwd'
+        }
+      )
+      await managed.exitPromise
+      expect(managed.executableMissing).toBe(false)
+      expect(managed.spawnAbsence).toBe('launchFolder')
+    } finally {
+      rmSync(parent, { recursive: true, force: true })
     }
-  )
+  })
 
   it('keeps the agent session that launched Orca out of a provider child', () => {
     vi.stubEnv('CODEX_THREAD_ID', 'parent-thread')

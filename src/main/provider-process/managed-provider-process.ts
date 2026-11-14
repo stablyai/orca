@@ -1,6 +1,5 @@
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
-import { spawnProcess } from '@orca/process-host'
+import type { ProviderChild } from './provider-child'
+import { spawnProviderProcess, type ProviderProcessSpawner } from './provider-process-spawn'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
 import type { ProviderProcessLaunch } from './provider-process-launch'
 import { processEnvWithoutAgentSession } from '../../shared/agent-launch/startup/parent-agent-session-env'
@@ -16,8 +15,6 @@ import {
 } from './provider-process-teardown'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { providerSpawnAbsence, type ProviderSpawnAbsence } from './provider-executable-missing'
-import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
-import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import {
   acceptProviderWriterClose,
   closeProviderProcess,
@@ -40,7 +37,7 @@ type ManagedProviderProcessOptions = {
   site: string
   /** Defaults to the root-only policy; only a provider with its own reaper overrides it. */
   policy?: (supervised: boolean) => ProviderProcessClosePolicy
-  spawnImpl?: PipedProcessSpawner
+  spawnImpl?: ProviderProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
   /** Defaults to accepting root exit or delivered writer termination without descendant proof. */
@@ -55,7 +52,7 @@ type ManagedProviderProcessOptions = {
 }
 
 export type ManagedProviderProcess = {
-  child: ChildProcessWithoutNullStreams
+  child: ProviderChild
   supervised: boolean
   /** The spawn failed before a process existed: absence is proven, but no exit was observed. */
   readonly processless: boolean
@@ -112,15 +109,7 @@ export function spawnManagedProviderProcess(
       `Supervised provider graceful exit must wait at least ${PROVIDER_SUPERVISOR_MAX_STOP_MS} ms; received ${policy.gracefulExitMs} ms`
     )
   }
-  const child = (options.spawnImpl ?? spawnProcess)({
-    program: spec.program,
-    args: spec.args,
-    cwd: spec.cwd,
-    env: spec.env,
-    detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
-  })
-  guardSupervisedProviderGroup(child, { site: options.site, supervised: spec.supervised })
+  const child = spawnProviderProcess(spec, options.spawnImpl)
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
   let spawnFailed = false
@@ -191,17 +180,17 @@ export function spawnManagedProviderProcess(
     }
     // A direct spawn error names what this process spawned: the supervisor, when there is one.
     if (spawnError) {
-      const direct = providerSpawnAbsence(spawnError, spec.program, launch.cwd)
+      const direct = providerSpawnAbsence(
+        spawnError,
+        child.spawnAbsenceKnown ? launch.command : spec.program,
+        launch.cwd
+      )
       // A missing supervisor is Orca's own binary (e.g. mid-update), never the agent's CLI.
-      absence = spec.supervised && direct === 'executable' ? null : direct
+      absence =
+        spec.supervised && !child.spawnAbsenceKnown && direct === 'executable' ? null : direct
       return absence
     }
-    const reported = observed ? supervisedProviderSpawnFailure(observed.code, stderrTail) : null
-    if (!reported) {
-      return null
-    }
-    absence = providerSpawnAbsence(reported.error, launch.command, launch.cwd)
-    return absence
+    return null
   }
   const terminateTree = (): Promise<ProviderProcessTeardownVerdict> =>
     terminateProviderProcessTree(child, {
