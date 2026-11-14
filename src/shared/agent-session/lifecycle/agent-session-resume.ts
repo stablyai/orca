@@ -36,6 +36,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'zcode',
   'dsh',
   'jcode',
+  'loop',
   'kiro',
   'hermes'
 ] as const satisfies readonly TuiAgent[]
@@ -267,7 +268,8 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
-    case 'jcode': {
+    case 'jcode':
+    case 'loop': {
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
