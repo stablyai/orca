@@ -3,7 +3,9 @@ import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 import type { EdgeAdmin, EdgeAssignBody } from './edge-admin-client.js'
 import { edgeLocationHint } from './edge-admin-client.js'
 import { edgeFrontDoorFor, parseEdgeControl, type EdgeControlFlags } from './edge-relay-control.js'
-import { EDGE_CELL_ID, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
+import { EDGE_CELL_ID, EdgeAssignments, EdgeMoveDeferredError, type EdgeRelayConfig } from './edge-relay.js'
+import { edgeRoute } from './edge-relay-route.js'
+import { EdgeAdminUnavailableError } from './edge-admin-client.js'
 
 const EDGE_URL = 'https://edge.relay.example.test'
 const DOOR = 'https://cn.relay.example.test'
@@ -24,7 +26,7 @@ describe('director/edge.json frontDoor', () => {
     expect(parse({ mode: 'on', rolloutPermille: 5 })?.flags).toEqual({ mode: 'on', rolloutPermille: 5 })
   })
 
-  it('a bad value voids the whole object', () => {
+  it('a bad frontDoor drops only that key (reported); the rest of the object applies', () => {
     for (const frontDoor of [
       { url: 'http://cn.relay.example.test' },
       { url: `${DOOR}/path` },
@@ -33,10 +35,20 @@ describe('director/edge.json frontDoor', () => {
       { url: DOOR, hosts: ['short'] },
       { url: DOOR, extra: true },
       { countries: ['CN'] },
-      'yes'
+      'yes',
+      null
     ]) {
-      expect(parse({ mode: 'on', frontDoor })).toBeNull()
+      expect(parse({ mode: 'off', regionExcludeCountries: { 'us-central1': ['cn'] }, frontDoor })).toEqual({
+        flags: { mode: 'off', regionExcludeCountries: { 'us-central1': ['CN'] } },
+        ignoredKeys: ['frontDoor']
+      })
     }
+    // Any other bad value still voids the whole object.
+    expect(parse({ mode: 'sideways', frontDoor: { url: DOOR } })).toBeNull()
+  })
+
+  it('a trailing slash on the URL is the same origin', () => {
+    expect(parse({ frontDoor: { url: `${DOOR}/`, hosts: [HOST] } })?.flags.frontDoor).toEqual({ url: DOOR, hosts: [HOST] })
   })
 
   it('an image without the key ignores it (reported as unknown), which keeps image rollback safe', () => {
@@ -56,11 +68,13 @@ describe('edgeFrontDoorFor', () => {
 
   it('maps by ask country or by host id; an unknown country only by host id', () => {
     const f = flags({ url: DOOR, countries: ['CN'], hosts: [HOST] })
-    expect(edgeFrontDoorFor(f, urls, OTHER, 'us-central1', 'CN')).toBe(DOOR)
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'us-central1', 'CN')).toEqual({ url: DOOR, byCountry: true })
     expect(edgeFrontDoorFor(f, urls, OTHER, 'us-central1', 'US')).toBeUndefined()
     expect(edgeFrontDoorFor(f, urls, OTHER, 'us-central1', null)).toBeUndefined()
-    expect(edgeFrontDoorFor(f, urls, HOST, 'us-central1', null)).toBe(DOOR)
-    expect(edgeFrontDoorFor(f, urls, HOST, 'us-central1', 'US')).toBe(DOOR)
+    // Listed by id: mapped anywhere, but not by country (so not placed in apac).
+    expect(edgeFrontDoorFor(f, urls, HOST, 'us-central1', null)).toEqual({ url: DOOR, byCountry: false })
+    expect(edgeFrontDoorFor(f, urls, HOST, 'us-central1', 'US')).toEqual({ url: DOOR, byCountry: false })
+    expect(edgeFrontDoorFor(f, urls, HOST, 'us-central1', 'CN')).toEqual({ url: DOOR, byCountry: true })
   })
 
   it('maps nobody without the flag, without the boot list, or for a URL not on it', () => {
@@ -75,7 +89,7 @@ describe('edgeFrontDoorFor', () => {
     expect(edgeFrontDoorFor(f, urls, OTHER, 'us-central1', 'CN')).toBeUndefined()
     expect(edgeFrontDoorFor(f, urls, HOST, 'us-central1', 'CN')).toBeUndefined()
     // Another region's exclusion does not apply.
-    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN')).toBe(DOOR)
+    expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN')).toEqual({ url: DOOR, byCountry: true })
     // Excluding unknown countries keeps an unknown-country listed host off the front door too.
     const unknown = flags({ url: DOOR, hosts: [HOST] }, { regionExcludeUnknownCountry: { 'us-central1': true } })
     expect(edgeFrontDoorFor(unknown, urls, HOST, 'us-central1', null)).toBeUndefined()
@@ -97,7 +111,7 @@ describe('EdgeAssignments with front doors', () => {
   })
   const identity = { userId: 'user-1', relayHostId: HOST }
 
-  async function setup(frontDoorUrls?: ReadonlySet<string>) {
+  async function setup(frontDoorUrls?: ReadonlySet<string>, fail?: { next: boolean }) {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const database = await openInMemoryRelayDatabase()
     databases.push(database)
@@ -105,6 +119,7 @@ describe('EdgeAssignments with front doors', () => {
     const admin = {
       assign: async (body: EdgeAssignBody) => {
         pushes.push(body)
+        if (fail?.next) throw new EdgeAdminUnavailableError('status_503')
         return { outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }
       }
     } as unknown as EdgeAdmin
@@ -126,8 +141,8 @@ describe('EdgeAssignments with front doors', () => {
 
   it('no boot list: answers, pushes and records exactly as before, whatever the route says', async () => {
     const { edge, pushes, recordedUrl } = await setup()
-    const first = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, reconnect: true })
-    const again = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, reconnect: true })
+    const first = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })
+    const again = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })
     expect([first.cellUrl, again.cellUrl]).toEqual([EDGE_URL, EDGE_URL])
     expect([first.assignmentEpoch, again.assignmentEpoch]).toEqual([1, 1])
     expect(pushes.map((p) => p.locationHint)).toEqual(['enam'])
@@ -137,7 +152,7 @@ describe('EdgeAssignments with front doors', () => {
 
   it('a first move through the front door answers it, places the object in apac and records it for phones', async () => {
     const { edge, pushes, recordedUrl } = await setup(new Set([DOOR]))
-    const moved = await edge.moveToEdge(identity, 3, 'us-central1', { frontDoor: DOOR, reconnect: false })
+    const moved = await edge.moveToEdge(identity, 3, 'us-central1', { frontDoor: DOOR, byCountry: true, switchable: false })
     expect(moved).toMatchObject({ cellId: EDGE_CELL_ID, cellUrl: DOOR, assignmentEpoch: 4 })
     expect(pushes).toHaveLength(1)
     expect(pushes[0]).toMatchObject({ assignmentEpoch: 4, locationHint: 'apac' })
@@ -148,36 +163,36 @@ describe('EdgeAssignments with front doors', () => {
 
   it('a host already on the edge switches only on a reconnect ask, at a newer epoch, pushed without devices', async () => {
     const { edge, pushes, recordedUrl } = await setup(new Set([DOOR]))
-    await edge.moveToEdge(identity, 0, 'us-central1', { reconnect: false })
+    await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
     expect(pushes).toHaveLength(1)
     // Mapped now, but not reconnecting: sticky, same epoch, no push.
-    const kept = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, reconnect: false })
+    const kept = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: false })
     expect(kept).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 1 })
     expect(pushes).toHaveLength(1)
     // Reconnecting: switch.
-    const switched = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, reconnect: true })
+    const switched = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })
     expect(switched).toMatchObject({ cellUrl: DOOR, assignmentEpoch: 2 })
     expect(pushes).toHaveLength(2)
     expect(pushes[1]).toMatchObject({ assignmentEpoch: 2, cellId: EDGE_CELL_ID })
     expect('devices' in pushes[1]!).toBe(false)
     expect(await recordedUrl()).toBe(DOOR)
     // Re-asks keep it, with no further epoch.
-    const again = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, reconnect: true })
+    const again = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })
     expect(again).toMatchObject({ cellUrl: DOOR, assignmentEpoch: 2 })
     expect(pushes).toHaveLength(2)
     // Flag removed (rollback): kept until the next reconnect, then back to the edge at a newer epoch.
-    expect(await edge.moveToEdge(identity, 0, 'us-central1', { reconnect: false })).toMatchObject({ cellUrl: DOOR, assignmentEpoch: 2 })
-    expect(await edge.moveToEdge(identity, 0, 'us-central1', { reconnect: true })).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 3 })
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })).toMatchObject({ cellUrl: DOOR, assignmentEpoch: 2 })
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { switchable: true })).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 3 })
     expect(await recordedUrl()).toBeNull()
     expect((await edge.edgeAssignment(identity))?.cellUrl).toBe(EDGE_URL)
   })
 
   it('a recorded front door dropped from the boot list is answered as the edge URL', async () => {
     const { database, edge } = await setup(new Set([DOOR]))
-    await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, reconnect: false })
+    await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: false })
     await database.query(`UPDATE relay_edge_host_regions SET cell_url = 'https://gone.relay.example.test'`)
     expect((await edge.edgeAssignment(identity))?.cellUrl).toBe(EDGE_URL)
-    expect(await edge.moveToEdge(identity, 0, 'us-central1', { reconnect: false })).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 1 })
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 1 })
   })
 
   it('a move off a cell through the front door mints above the cell epoch and records it', async () => {
@@ -189,7 +204,7 @@ describe('EdgeAssignments with front doors', () => {
        VALUES (?, ?, 'us-c1', 7, 0, 0, 0, 0, 0, 0, 0, 0)`,
       [identity.userId, identity.relayHostId]
     )
-    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, reconnect: false })).toMatchObject({
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: false })).toMatchObject({
       cellUrl: DOOR,
       assignmentEpoch: 8
     })
@@ -199,9 +214,86 @@ describe('EdgeAssignments with front doors', () => {
 
   it('an older director (no route argument) keeps answering the edge URL and leaves the record alone', async () => {
     const { edge, recordedUrl } = await setup(new Set([DOOR]))
-    await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, reconnect: false })
+    await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: false })
     // The pre-front-door path: same epoch, its own URL, record untouched.
     expect(await edge.moveToEdge(identity, 0, 'us-central1')).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 1 })
     expect(await recordedUrl()).toBe(DOOR)
+  })
+
+  it('a host listed only by id keeps the location hint of its region', async () => {
+    const { edge, pushes } = await setup(new Set([DOOR]))
+    await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, byCountry: false, switchable: false })
+    expect(pushes[0]!.locationHint).toBe('enam')
+  })
+
+  it('a switch whose push fails keeps the host on the edge, unswitched, and never falls through', async () => {
+    const fail = { next: false }
+    const { database, edge, pushes, recordedUrl } = await setup(new Set([DOOR]), fail)
+    await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
+    fail.next = true
+    const kept = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })
+    expect(kept).toMatchObject({ cellId: EDGE_CELL_ID, cellUrl: EDGE_URL, assignmentEpoch: 1 })
+    expect(pushes).toHaveLength(2)
+    const row = (await database.query(`SELECT cell_id, assignment_epoch FROM relay_assignments`))[0]!
+    expect([row.cell_id, Number(row.assignment_epoch)]).toEqual([EDGE_CELL_ID, 1])
+    expect(await recordedUrl()).toBeNull()
+    // A first move whose push fails is still deferred as before (the host is not on the edge yet).
+    await database.query(`DELETE FROM relay_assignments`)
+    await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
+      EdgeMoveDeferredError
+    )
+    // The edge is back: the next real reconnect switches.
+    fail.next = false
+    await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).toMatchObject({
+      cellUrl: DOOR,
+      assignmentEpoch: 2
+    })
+  })
+
+  it('a recorded front door dropped from the boot list causes no epoch bump, and the record is cleared', async () => {
+    const { database, edge, pushes, recordedUrl } = await setup(new Set([DOOR]))
+    await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: false })
+    await database.query(`UPDATE relay_edge_host_regions SET cell_url = 'https://gone.relay.example.test'`)
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { switchable: true })).toMatchObject({
+      cellUrl: EDGE_URL,
+      assignmentEpoch: 1
+    })
+    expect(pushes).toHaveLength(1)
+    expect(await recordedUrl()).toBeNull()
+  })
+})
+
+describe('edgeRoute (which asks may switch)', () => {
+  const base: EdgeRelayConfig = {
+    cellUrl: EDGE_URL,
+    rolloutPercent: 0,
+    allowHosts: new Set(),
+    denyHosts: new Set(),
+    regions: new Set(['us-central1']),
+    control: () => ({ mode: 'on', frontDoor: { url: DOOR, countries: ['CN'] } })
+  }
+
+  it('is absent without the boot list', () => {
+    expect(edgeRoute(base, HOST, 'us-central1', 'CN', { reconnect: true })).toBeUndefined()
+  })
+
+  it('switches only on reconnect without regionCorrection (the desktop drain path)', () => {
+    const config = { ...base, frontDoorUrls: new Set([DOOR]) }
+    expect(edgeRoute(config, HOST, 'us-central1', 'CN', { reconnect: true })).toEqual({
+      frontDoor: DOOR,
+      byCountry: true,
+      switchable: true
+    })
+    // The hourly region refresh (and the initial open), both issue-window while connected.
+    expect(edgeRoute(config, HOST, 'us-central1', 'CN', { reconnect: true, regionCorrection: { v: 1, action: 'issue-window' } })?.switchable).toBe(false)
+    expect(edgeRoute(config, HOST, 'us-central1', 'CN', {})?.switchable).toBe(false)
+    expect(edgeRoute(config, HOST, 'us-central1', 'US', { reconnect: true })).toEqual({ switchable: true })
+    // No region asked: the default region's exclusion applies.
+    const excluded = {
+      ...config,
+      control: () => ({ mode: 'on' as const, frontDoor: { url: DOOR, countries: ['CN'] }, regionExcludeCountries: { 'us-central1': ['CN'] } })
+    }
+    expect(edgeRoute(excluded, HOST, undefined, 'CN', { reconnect: true })).toEqual({ switchable: true })
   })
 })

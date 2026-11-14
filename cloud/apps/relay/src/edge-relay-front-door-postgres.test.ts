@@ -52,13 +52,13 @@ describePostgres('relay edge front door on PostgreSQL', () => {
     )
     // The edge cell row is not needed for these paths; mark the director ready without seeding it.
     ;(edge as unknown as { seeded: boolean }).seeded = true
-    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, reconnect: false })).toMatchObject({
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: false })).toMatchObject({
       cellId: EDGE_CELL_ID,
       cellUrl: DOOR,
       assignmentEpoch: 1
     })
     expect(await edge.edgeAssignment(identity)).toMatchObject({ cellUrl: DOOR, assignmentEpoch: 1 })
-    expect(await edge.moveToEdge(identity, 0, 'us-central1', { reconnect: true })).toMatchObject({
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { switchable: true })).toMatchObject({
       cellUrl: EDGE_URL,
       assignmentEpoch: 2
     })

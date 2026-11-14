@@ -62,7 +62,7 @@ import {
   mayBeOnEdge,
   type EdgeAssignments
 } from './edge-relay.js'
-import { EDGE_CONTROL_DEFAULTS, edgeFrontDoorFor } from './edge-relay-control.js'
+import { edgeRoute } from './edge-relay-route.js'
 import { requestCountry } from './ip-country.js'
 import {
   DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
@@ -534,18 +534,7 @@ export function createRelayApp(
           ),
           requestedRegion,
           // Only with front doors configured (ORCA_RELAY_EDGE_FRONT_DOOR_URLS); else as before.
-          edge.config.frontDoorUrls === undefined
-            ? undefined
-            : {
-                frontDoor: edgeFrontDoorFor(
-                  edge.config.control?.() ?? EDGE_CONTROL_DEFAULTS,
-                  edge.config.frontDoorUrls,
-                  claims.relayHostId,
-                  requestedRegion ?? RELAY_DEFAULT_REGION,
-                  country
-                ),
-                reconnect: Boolean(body.data.reconnect)
-              }
+          edgeRoute(edge.config, claims.relayHostId, requestedRegion, country, body.data)
         )
       } catch (error) {
         if (error instanceof EdgeMoveDeferredError) {

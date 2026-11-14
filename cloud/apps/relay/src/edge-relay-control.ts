@@ -39,9 +39,11 @@ export type EdgeControlFlags = {
   regionExcludeUnknownCountry?: Partial<Record<RelayRegion, boolean>>
   // A host on the edge whose ask comes from one of `countries`, or whose id is in `hosts`, is
   // answered with `url` (a front door in ORCA_RELAY_EDGE_FRONT_DOOR_URLS) instead of the edge's
-  // own URL. Sticky: a host switches only on a reconnect ask or a move onto the edge, at a newer
-  // epoch (edge-relay.ts). A region's country exclusion wins: an excluded host is never answered
-  // it. Absent: no host is newly mapped, and mapped hosts return to the edge URL on reconnect.
+  // own URL. Sticky: a host switches only on a real reconnect or a move onto the edge, at a newer
+  // epoch (EdgeRoute in edge-relay.ts, which also states the mixed-version operating rule). A
+  // region's country exclusion wins: an excluded host is never answered it. Absent: no host is
+  // newly mapped, and mapped hosts return to the edge URL on their next reconnect. A bad value
+  // drops only this key (reported in ignoredKeys); the rest of the object still applies.
   frontDoor?: EdgeFrontDoorFlag
 }
 
@@ -64,7 +66,9 @@ const EdgeControlFlagsSchema = z.object({
     .partialRecord(regionKey, z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/)).max(250))
     .optional(),
   regionExcludeUnknownCountry: z.partialRecord(regionKey, z.boolean()).optional(),
-  frontDoor: z
+  frontDoor: z.unknown().optional()
+})
+const EdgeFrontDoorSchema = z
     .object({
       // A bare https origin; that it is an allowed front door is checked against the boot list.
       url: z.string().refine((url) => URL.canParse(url) && new URL(url).protocol === 'https:' && new URL(url).origin === url),
@@ -72,8 +76,15 @@ const EdgeControlFlagsSchema = z.object({
       hosts: z.array(z.string().regex(/^[A-Za-z0-9_-]{16}$/)).max(1_000).optional()
     })
     .strict()
-    .optional()
-})
+// A trailing slash is the same origin, not a typo.
+function parseFrontDoor(value: unknown): EdgeFrontDoorFlag | null {
+  const normalized =
+    value !== null && typeof value === 'object' && 'url' in value && typeof value.url === 'string'
+      ? { ...value, url: value.url.replace(/\/$/, '') }
+      : value
+  const parsed = EdgeFrontDoorSchema.safeParse(normalized)
+  return parsed.success ? parsed.data : null
+}
 const KNOWN_FLAG_KEYS = new Set(Object.keys(EdgeControlFlagsSchema.shape))
 const EdgeControlObjectSchema = z.object({
   v: z.literal(1),
@@ -97,7 +108,7 @@ export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => {
   const named = body !== null && typeof body === 'object' && 'flags' in body ? body.flags : {}
   const ignoredKeys =
     named !== null && typeof named === 'object'
-      ? Object.keys(named).filter((key) => !KNOWN_FLAG_KEYS.has(key)).sort()
+      ? Object.keys(named).filter((key) => !KNOWN_FLAG_KEYS.has(key))
       : []
   const {
     mode,
@@ -106,8 +117,11 @@ export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => {
     regionRolloutPermille,
     regionExcludeCountries,
     regionExcludeUnknownCountry,
-    frontDoor
+    frontDoor: rawFrontDoor
   } = parsed.data.flags
+  const frontDoor = rawFrontDoor === undefined ? undefined : parseFrontDoor(rawFrontDoor)
+  if (frontDoor === null) ignoredKeys.push('frontDoor')
+  ignoredKeys.sort()
   return {
     flags: {
       mode,
@@ -116,7 +130,7 @@ export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => {
       ...(regionRolloutPermille === undefined ? {} : { regionRolloutPermille }),
       ...(regionExcludeCountries === undefined ? {} : { regionExcludeCountries }),
       ...(regionExcludeUnknownCountry === undefined ? {} : { regionExcludeUnknownCountry }),
-      ...(frontDoor === undefined ? {} : { frontDoor })
+      ...(frontDoor === undefined || frontDoor === null ? {} : { frontDoor })
     },
     ignoredKeys
   }
@@ -209,17 +223,17 @@ export function edgeCountryExcluded(flags: EdgeControlFlags, region: RelayRegion
 
 // The front door a host's ask maps to, or undefined for the edge's own URL. `frontDoorUrls`: the
 // boot allowlist (a flag naming any other URL maps nobody). `country` null: unknown, which only a
-// host listed by id can be mapped with.
+// host listed by id can be mapped with. `byCountry`: the ask's country matched (not only the id).
 export function edgeFrontDoorFor(
   flags: EdgeControlFlags,
   frontDoorUrls: ReadonlySet<string> | undefined,
   relayHostId: string,
   region: RelayRegion,
   country: string | null
-): string | undefined {
+): { url: string; byCountry: boolean } | undefined {
   const door = flags.frontDoor
   if (door === undefined || frontDoorUrls?.has(door.url) !== true) return undefined
   if (edgeCountryExcluded(flags, region, country)) return undefined
-  if (door.hosts?.includes(relayHostId) === true) return door.url
-  return country !== null && door.countries?.includes(country) === true ? door.url : undefined
+  const byCountry = country !== null && door.countries?.includes(country) === true
+  return byCountry || door.hosts?.includes(relayHostId) === true ? { url: door.url, byCountry } : undefined
 }

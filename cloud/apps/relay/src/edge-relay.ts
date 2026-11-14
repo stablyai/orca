@@ -157,6 +157,27 @@ export class EdgeMoveDeferredError extends Error {
 
 type Identity = { userId: string; relayHostId: string }
 
+// How a host's own ask may use a front door (EdgeAssignments.moveToEdge).
+// - frontDoor: the origin director/edge.json maps this ask to; undefined is the edge's own URL.
+// - byCountry: mapped by the ask's country (not only by host id), so its object is placed in apac.
+// - switchable: this ask is a real reconnect, so a host already on the edge may change origin (at
+//   a newer epoch). The shipped desktop sends `reconnect: true` without `regionCorrection` only
+//   from its drain path (a drain or a lost control), which adopts a new origin at once. It also
+//   sends `reconnect: true` with `regionCorrection: issue-window` from its hourly region refresh
+//   while connected (the new epoch would only be deferred, leaving the control on the old origin
+//   while phones move) and from its initial open, which cannot be told apart from it. Neither
+//   switches; a fresh desktop switches at its first drain (≤ 6.5 h, the edge's control lease).
+//
+// Operating rule (mixed versions): an older director answers the edge URL at whatever epoch the
+// row has, so with both versions serving, one host can see two URLs at one epoch. Both reach the
+// same object, but phones keep the first. So: deploy the image everywhere with
+// ORCA_RELAY_EDGE_FRONT_DOOR_URLS unset; set the env, then the flag, only once every serving
+// revision is new; to roll back, remove frontDoor and wait for mapped hosts to move back (their
+// next drain) before rolling back the env or the image.
+export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: boolean }
+
+class FrontDoorSwitchDeferredError extends Error {}
+
 type EpochSource = {
   seatsOf(userId: string, relayHostId: string): Array<{ epoch: number }>
   recentlyLeftOf(userId: string, relayHostId: string, now: number): Array<{ epoch: number }>
@@ -325,17 +346,13 @@ export class EdgeAssignments {
   // host only when the region changed (or was never recorded). Written last, under the assignment
   // row lock, so its row lock is held only to the commit.
   //
-  // Front doors (`route`, only with config.frontDoorUrls): `route.frontDoor` is the origin the
-  // flags map this ask to (undefined: the edge's own URL). It is recorded next to the region, and
-  // phones read it (edgeAssignment). A host already on the edge switches only on a reconnect ask,
-  // so a host toggling a VPN never flaps; the switch mints a newer epoch and pushes it without
-  // devices (the edge keeps its own), because a connected desktop and its phones ignore a different
-  // URL at the same epoch.
+  // Front doors (`route`, only with config.frontDoorUrls): see EdgeRoute. The answered origin is
+  // recorded next to the region, and phones read it (edgeAssignment).
   async moveToEdge(
     identity: Identity,
     mapFloor: number,
     region?: RelayRegion,
-    route?: { frontDoor?: string; reconnect: boolean }
+    route?: EdgeRoute
   ): Promise<RelayAssignment> {
     if (this.config.frontDoorUrls !== undefined && route !== undefined) {
       return await this.moveToEdgeWithFrontDoor(identity, mapFloor, region, route)
@@ -429,12 +446,32 @@ export class EdgeAssignments {
     identity: Identity,
     mapFloor: number,
     region: RelayRegion | undefined,
-    route: { frontDoor?: string; reconnect: boolean }
+    route: EdgeRoute
+  ): Promise<RelayAssignment> {
+    try {
+      return await this.frontDoorAttempt(identity, mapFloor, region, route)
+    } catch (error) {
+      if (!(error instanceof FrontDoorSwitchDeferredError)) throw error
+      // The edge did not take the switch's epoch: nothing committed. The host is on the edge and
+      // must stay there (falling through to the cell lanes would place it without an export or a
+      // fence), so it is kept on its current origin and epoch, and switches on a later reconnect.
+      console.warn(JSON.stringify({ event: 'orca_relay_edge_front_door_switch_deferred', reason: error.message }))
+      return await this.frontDoorAttempt(identity, mapFloor, region, { ...route, switchable: false })
+    }
+  }
+
+  private async frontDoorAttempt(
+    identity: Identity,
+    mapFloor: number,
+    region: RelayRegion | undefined,
+    route: EdgeRoute
   ): Promise<RelayAssignment> {
     const now = this.now()
     const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
     const chosen = this.allowedFrontDoor(route.frontDoor)
     const viaFrontDoor = chosen !== undefined
+    // apac only for a host mapped by its country: a host listed by id (dogfood, a VPN) may be anywhere.
+    const placeApac = viaFrontDoor && route.byCountry === true
     const record = async (transaction: RelayDatabase, cellUrl: string | undefined, onlyIfChanged = false) => {
       await transaction.query(
         `INSERT INTO relay_edge_host_regions (user_id, relay_host_id, region, recorded_at, cell_url)
@@ -476,7 +513,7 @@ export class EdgeAssignments {
           [identity.userId, identity.relayHostId, EDGE_CELL_ID, epoch, leaseExpiresAt, now]
         )
         if (inserted.length === 1) {
-          const pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor })
+          const pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor: placeApac })
           await record(transaction, chosen)
           return this.answer(identity, pushed, leaseExpiresAt, chosen)
         }
@@ -504,16 +541,17 @@ export class EdgeAssignments {
             [identity.userId, identity.relayHostId]
           )
         )[0]?.cell_url
-        const recorded = typeof recordedRaw === 'string' ? recordedRaw : undefined
-        // Sticky between reconnects: only a host that is reconnecting anyway changes origin.
-        if (!route.reconnect || chosen === recorded) {
+        // A recorded front door that left the boot list is the edge's own URL (what phones are told).
+        const recorded = this.allowedFrontDoor(recordedRaw)
+        // Sticky: only a real reconnect changes origin (route.switchable).
+        if (!route.switchable || chosen === recorded) {
           await transaction.query(
             `UPDATE relay_assignments SET lease_expires_at = ?, last_activity_at = ?
              WHERE user_id = ? AND relay_host_id = ?`,
             [leaseExpiresAt, now, identity.userId, identity.relayHostId]
           )
           await record(transaction, recorded, true)
-          return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt, this.allowedFrontDoor(recorded))
+          return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt, recorded)
         }
         const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1
         await transaction.query(
@@ -521,7 +559,14 @@ export class EdgeAssignments {
            WHERE user_id = ? AND relay_host_id = ?`,
           [epoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
         )
-        const pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor, devices: false })
+        let pushed: number
+        try {
+          pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor: placeApac, devices: false })
+        } catch (error) {
+          // Rolls this transaction back; moveToEdgeWithFrontDoor keeps the host unswitched.
+          if (error instanceof EdgeMoveDeferredError) throw new FrontDoorSwitchDeferredError(error.message)
+          throw error
+        }
         await record(transaction, chosen)
         console.warn(
           JSON.stringify({
@@ -540,7 +585,7 @@ export class EdgeAssignments {
          WHERE user_id = ? AND relay_host_id = ?`,
         [EDGE_CELL_ID, epoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
       )
-      const pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor })
+      const pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor: placeApac })
       await record(transaction, chosen)
       console.warn(
         JSON.stringify({
