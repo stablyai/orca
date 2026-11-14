@@ -33,11 +33,13 @@ describe('PR refresh owner liveness', () => {
     registry.delete(1)
     destroyed.mockReturnValue(true)
     webContentsFromIdMock.mockClear()
+    visibility.prune()
     expect(visibility.has(refreshKey(candidate))).toBe(true)
     expect(visibility.windowCount).toBe(1)
     expect(webContentsFromIdMock.mock.calls).toEqual([[1], [2], [3]])
     registry.delete(3)
     webContentsFromIdMock.mockClear()
+    visibility.prune()
     expect(visibility.has(refreshKey(candidate))).toBe(false)
     expect(webContentsFromIdMock.mock.calls).toEqual([[3]])
     expect(visibility.windowCount).toBe(0)
@@ -56,13 +58,13 @@ describe('PR refresh owner liveness', () => {
     visibility.report([{ ...candidate, isSelected: true }], 2, 1)
     visibility.report([candidate], 1, 2)
     visibility.update({ ...candidate, cachedFetchedAt: 3, cachedHeadOid: 'new-head' })
-    expect(visibility.report([], 1, 1)).toBe(false)
+    expect(visibility.report([], 1, 1)).toBeNull()
     expect(visibility.candidate(key, candidate)).toMatchObject({
       isSelected: true,
       cachedFetchedAt: 3,
       cachedHeadOid: 'new-head'
     })
-    expect(visibility.report([candidate], 3, 1)).toBe(true)
+    expect(visibility.report([candidate], 3, 1)).not.toBeNull()
     expect(visibility.candidate(key, candidate)).toMatchObject({
       isSelected: false,
       cachedFetchedAt: 3,
@@ -73,6 +75,7 @@ describe('PR refresh owner liveness', () => {
     expect(visibility.has(key)).toBe(true)
     expect(visibility.candidate(key, candidate)).toMatchObject({ isSelected: true })
     registry.delete(2)
+    visibility.prune()
     expect(visibility.has(key)).toBe(false)
   })
 })

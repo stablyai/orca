@@ -20,7 +20,7 @@ import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/termina
 import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
-import { acquireWebviewsDragPassthrough } from '../../browser-pane/host-guest/webview-drag-passthrough'
+import { acquireWebviewsDragPassthrough } from '../../browser-pane/host-guest/drag/webview-drag-passthrough'
 import { handleTerminalWebLinkClick } from '../links/http/terminal-web-link-click'
 import { createTerminalPaneCreatedHandler } from './terminal-pane-created-handler'
 import { createTerminalPaneClosedHandler } from './terminal-pane-closed-handler'
