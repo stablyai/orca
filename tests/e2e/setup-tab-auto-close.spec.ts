@@ -6,7 +6,7 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeWorktreeCreateResult } from '../../src/shared/runtime-types'
 
 // "Close Setup Tab When It Succeeds" must close a Setup tab even when its workspace was never shown.
