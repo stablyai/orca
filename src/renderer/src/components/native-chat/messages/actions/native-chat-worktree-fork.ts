@@ -86,7 +86,7 @@ export function nativeChatWorktreeForkPlan(
 }
 
 /** What the subagent is asked to do, plus where to send its report: back into this chat. */
-async function subagentFirstMessage(
+export async function nativeChatSubagentFirstMessage(
   task: string,
   report: { target: RuntimeClientTarget; sessionId: string; label: string }
 ): Promise<string> {
@@ -99,22 +99,14 @@ async function subagentFirstMessage(
     : task
 }
 
-/** Creates the fork's worktree, nested under its source, then opens the copied chat there.
- *  A subagent starts on its task in the background and you stay in this chat; the source is never touched. */
-export async function runNativeChatWorktreeFork(input: {
+/** Creates a fork's worktree nested under its source and says so; null (already reported) when it can't. */
+export async function createNativeChatForkWorktree(input: {
   sourceWorktreeId: string
   base: NativeChatWorktreeForkBase
   agent: TuiAgent
-  throughItemId: string
-  request: NativeChatForkRowAction['request']
   name?: string
   displayName?: string
-  mode?: NativeChatWorktreeForkMode
-  /** Your message, left unsent in the fork's composer. */
-  draft?: string
-  /** With mode subagent: its task, and the chat it reports back to. */
-  subagent?: { task: string; target: RuntimeClientTarget; sessionId: string; label: string }
-}): Promise<boolean> {
+}): Promise<string | null> {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(input.sourceWorktreeId)
   const branch = nativeChatWorktreeForkSourceBranch(input.sourceWorktreeId)
@@ -125,7 +117,7 @@ export async function runNativeChatWorktreeFork(input: {
         'This chat’s workspace is not a git worktree, so it can’t fork into a new one.'
       )
     )
-    return false
+    return null
   }
   let created: Awaited<ReturnType<typeof createForkWorktree>>
   try {
@@ -149,7 +141,7 @@ export async function runNativeChatWorktreeFork(input: {
       ),
       { description: error instanceof Error ? error.message : undefined }
     )
-    return false
+    return null
   }
   toast.message(
     translate('components.native-chat.fork.worktree.created', 'Created {{name}}', {
@@ -159,15 +151,40 @@ export async function runNativeChatWorktreeFork(input: {
       description: `${created.path}${created.branch ? ` · ${shortBranch(created.branch)}` : ''}`
     }
   )
+  return created.id
+}
+
+/** Creates the fork's worktree, nested under its source, then opens the copied chat there.
+ *  A subagent starts on its task in the background and you stay in this chat; the source is never touched. */
+export async function runNativeChatWorktreeFork(input: {
+  sourceWorktreeId: string
+  base: NativeChatWorktreeForkBase
+  agent: TuiAgent
+  throughItemId: string
+  request: NativeChatForkRowAction['request']
+  name?: string
+  displayName?: string
+  mode?: NativeChatWorktreeForkMode
+  /** Your message, left unsent in the fork's composer. */
+  draft?: string
+  /** With mode subagent: its task, and the chat it reports back to. */
+  subagent?: { task: string; target: RuntimeClientTarget; sessionId: string; label: string }
+}): Promise<boolean> {
+  const createdId = await createNativeChatForkWorktree(input)
+  if (createdId === null) {
+    return false
+  }
   const subagent = input.mode === 'subagent' ? input.subagent : undefined
   if (!subagent) {
-    activateAndRevealWorktree(created.id, { sidebarRevealBehavior: 'auto' })
+    activateAndRevealWorktree(createdId, { sidebarRevealBehavior: 'auto' })
   }
   const draft = subagent ? undefined : input.draft
   const outcome = await input.request(
     input.throughItemId,
-    subagent ? { question: await subagentFirstMessage(subagent.task, subagent) } : undefined,
-    { worktreeId: created.id },
+    subagent
+      ? { question: await nativeChatSubagentFirstMessage(subagent.task, subagent) }
+      : undefined,
+    { worktreeId: createdId },
     ...(draft ? [draft] : [])
   )
   // A launch failure is already reported; a fork that never started says so here.

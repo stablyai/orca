@@ -1,7 +1,10 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { buildAiVaultCopiedSessionStartupForWorktree } from '@/lib/agent-session/resume/history/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/agent-session/resume/history/launch-ai-vault-session-and-reveal'
@@ -94,27 +97,50 @@ export async function launchNativeChatTerminalFork(input: {
         )
       )
     }
-    const startup = buildAiVaultCopiedSessionStartupForWorktree(
-      {
-        state,
-        worktreeId,
-        session: {
-          agent: 'claude',
-          sessionId: forked.sessionId,
-          ...(forked.filePath ? { filePath: forked.filePath } : {}),
-          cwd: worktree?.path ?? '',
-          codexHome: null,
-          executionHostId
-        }
-      },
-      'claude'
-    )
-    const tabId = await launchAiVaultSessionAndReveal({ agent: 'claude', worktreeId, ...startup })
-    if (tabId && input.draft) {
-      leaveDraftInNewTab(tabId, input.draft)
-    }
+    await resumeClaudeCopyInNewTerminalTab({
+      worktreeId,
+      sessionId: forked.sessionId,
+      ...(forked.filePath ? { filePath: forked.filePath } : {}),
+      cwd: worktree?.path ?? '',
+      executionHostId,
+      ...(input.draft ? { draft: input.draft } : {})
+    })
   } catch (error) {
     failure(error)
   }
   return {}
+}
+
+/** Resumes a copied Claude conversation, already placed on `executionHostId`, in a new terminal tab. */
+export async function resumeClaudeCopyInNewTerminalTab(input: {
+  worktreeId: string
+  sessionId: string
+  filePath?: string
+  cwd: string
+  executionHostId: ExecutionHostId
+  draft?: string
+}): Promise<void> {
+  const startup = buildAiVaultCopiedSessionStartupForWorktree(
+    {
+      state: useAppStore.getState(),
+      worktreeId: input.worktreeId,
+      session: {
+        agent: 'claude',
+        sessionId: input.sessionId,
+        ...(input.filePath ? { filePath: input.filePath } : {}),
+        cwd: input.cwd,
+        codexHome: null,
+        executionHostId: input.executionHostId
+      }
+    },
+    'claude'
+  )
+  const tabId = await launchAiVaultSessionAndReveal({
+    agent: 'claude',
+    worktreeId: input.worktreeId,
+    ...startup
+  })
+  if (tabId && input.draft) {
+    leaveDraftInNewTab(tabId, input.draft)
+  }
 }
