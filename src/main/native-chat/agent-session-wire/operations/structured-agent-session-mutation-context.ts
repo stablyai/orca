@@ -18,6 +18,7 @@ import type { StructuredAgentSessionStartClaim } from '../startup/structured-age
 import type { StructuredAgentSessionStartFlights } from '../startup/structured-agent-session-start-flight'
 import type { StructuredAgentSessionStartupAttempts } from '../startup/structured-agent-session-startup-attempt'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
+import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostDeps,
@@ -36,6 +37,7 @@ export type StructuredAgentSessionMutationContext = {
   publishChildWork: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   /** Republish held-work changes without journal rows. */
   publishWorkChanged: (sessionId: string) => void
+  sealEventSink: (sessionId: string) => void
   captureChildWorkStops: (sessionId: string, handleIds: readonly string[]) => CapturedChildWorkStops
   /** Includes running child work without records. */
   childWorkOpen: (sessionId: string) => boolean
@@ -44,14 +46,17 @@ export type StructuredAgentSessionMutationContext = {
   /** Open within the caller’s existing serialization. */
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
   /** Claim inside serialization; await the result outside. */
-  claimAgent: (sessionId: string, telemetryCallerKey?: string) => StructuredAgentSessionStartClaim
+  claimAgent: (
+    sessionId: string,
+    telemetryCallerKey?: string
+  ) => Promise<StructuredAgentSessionStartClaim>
   startFlights: Pick<StructuredAgentSessionStartFlights, 'get'>
   startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'readiness'>
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   trackProviderOperation?: <T>(operation: Promise<T>) => Promise<T>
   /** Join without starting a child, inside existing serialization. */
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
-  readStopping: (sessionId: string) => boolean
+  readStopping: (sessionId: string) => Promise<boolean>
   wakeDelivery: (sessionId: string) => void
   /** Stop the provider child inside serialization, retaining the conversation. */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>
@@ -96,6 +101,12 @@ export function runStructuredAgentSessionMutation<TValue>(
       hostStructuredAgentSessionCurrentWork(
         { store: context.deps.store, sessions: context.sessions },
         envelope.sessionId
+      ),
+    readWork: (operation) =>
+      readHostStructuredAgentSessionWork(
+        { store: context.deps.store, sessions: context.sessions },
+        envelope.sessionId,
+        operation
       ),
     prepareSession,
     publish: (journal) => context.publish(envelope.sessionId, journal),

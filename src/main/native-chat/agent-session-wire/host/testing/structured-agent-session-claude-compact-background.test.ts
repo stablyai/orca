@@ -7,13 +7,16 @@ import {
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   CALLER,
   declareClaudeCapabilities,
   fixture
-} from './structured-agent-session-claude-stop-contract-test-fixture'
-import { eventually, openTurn } from './structured-agent-session-claude-stop-contract-test-actions'
+} from './structured-agent-session-claude-stop-contract.test-fixture'
+import {
+  eventually,
+  openTurn
+} from './structured-agent-session-claude-stop-contract-test-actions.test-fixture'
 
 declareClaudeCapabilities()
 

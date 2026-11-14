@@ -1,4 +1,4 @@
-import { continuingStructuredAgentSessionInput } from '../delivery/structured-agent-session-handing-over'
+import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import {
@@ -207,19 +207,24 @@ export function failedStructuredAgentSessionStart(): Extract<
   }
 }
 
-export function structuredAgentSessionStartStillQueued(
+export async function structuredAgentSessionStartStillQueued(
   session: Pick<StructuredAgentSessionHostSession, 'journal'> | undefined,
   startedFor: string | undefined
-): boolean {
+): Promise<boolean> {
   if (startedFor === undefined) {
     return true
   }
-  const entry = session?.journal.submission(startedFor)
+  if (!session) {
+    return false
+  }
+  const entry = await session.journal.reads.submission(startedFor)
+  const input = structuredAgentSessionHandingOver(session.journal).get(startedFor)?.input
   return (
-    session !== undefined &&
     entry !== undefined &&
     (isQueuedAgentJournalSubmission(entry) ||
-      continuingStructuredAgentSessionInput(session.journal, startedFor))
+      (entry.dispatchState === 'pending' &&
+        input?.unadmitted === true &&
+        input.signal?.aborted !== true))
   )
 }
 

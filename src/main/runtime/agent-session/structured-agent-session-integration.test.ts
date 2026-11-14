@@ -1,3 +1,5 @@
+import { readTestJournalItems } from '../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { scriptedCodexCatalogSession } from './model-catalog/scripted-codex-model-catalog.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -21,10 +23,8 @@ import type { RpcRequest, RpcResponse } from '../rpc/core'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { NativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../rpc/methods/structured-sessions/structured-agent-session'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
@@ -326,11 +326,12 @@ describe('a structured codex session over agentSession.*', () => {
     ).sessions.get(SESSION)!.journal
     const appendEntered = Promise.withResolvers<void>()
     const appendGate = Promise.withResolvers<void>()
-    const originalAppend = journal.appendItem.bind(journal)
-    vi.spyOn(journal, 'appendItem').mockImplementationOnce(async (...args) => {
+    const originalAppend = journal.appendSteps.bind(journal)
+    vi.spyOn(journal, 'appendSteps').mockImplementationOnce(async (...args) => {
+      const committed = await originalAppend(...args)
       appendEntered.resolve()
       await appendGate.promise
-      return originalAppend(...args)
+      return committed
     })
 
     let stopped = false
@@ -348,13 +349,13 @@ describe('a structured codex session over agentSession.*', () => {
       identity: JOURNAL_IDENTITY,
       stateDirectory: root
     })
-    expect(reopened.snapshot().items.map(textOf)).toContain('Final text before shutdown.')
+    expect((await readTestJournalItems(reopened)).map(textOf)).toContain(
+      'Final text before shutdown.'
+    )
     expect(
-      reopened
-        .snapshot()
-        .items.some(
-          (item) => item.body?.kind === 'status' && item.body.turnLifecycle?.state === 'running'
-        )
+      (await readTestJournalItems(reopened)).some(
+        (item) => item.body?.kind === 'status' && item.body.turnLifecycle?.state === 'running'
+      )
     ).toBe(false)
   })
 })

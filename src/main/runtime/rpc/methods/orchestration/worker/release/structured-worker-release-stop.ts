@@ -1,3 +1,4 @@
+import { requireRunningStructuredWorker } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { WorkerTerminalResourceRow } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
@@ -23,7 +24,30 @@ export async function stopStructuredWorkerForRelease(args: {
     structured,
     runtime,
     resource.auto_release_at
-      ? () => db.admitWorkerChatReleaseClose(resource.id, (row) => runtime.isWorkerAgentInTurn(row))
+      ? (work) => {
+          const current = db.getWorkerTerminalResource(resource.id)
+          if (
+            current?.owner_dispatch_id !== resource.owner_dispatch_id ||
+            current.terminal_handle !== structured.handle ||
+            current.pane_key !== structured.paneKey ||
+            current.process_incarnation !== structured.processIncarnation
+          ) {
+            return false
+          }
+          const sameSubject = (() => {
+            try {
+              return requireRunningStructuredWorker(structured).sessionId === work.sessionId
+            } catch {
+              return false
+            }
+          })()
+          const admitted = db.admitWorkerChatReleaseClose(
+            resource.id,
+            () => !sameSubject || work.state !== 'idle',
+            !sameSubject || work.state === 'unknown'
+          )
+          return sameSubject && admitted
+        }
       : undefined
   )
   if (!stop.stopped) {

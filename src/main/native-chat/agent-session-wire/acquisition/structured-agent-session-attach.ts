@@ -1,4 +1,4 @@
-import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
+import type { JournalSqlForkCopy } from '../../agent-session-journal/journal-sql-fork-copy'
 import type { NativeCopyOrigin } from '../../agent-session-journal/context-epochs/journal-history-origin'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 // Store CAS and idempotency rows make retried create/ensure replay instead of reserving another owner.
@@ -37,7 +37,7 @@ import {
   computeAgentSessionPayloadFingerprint
 } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { AdoptedTranscriptSource } from '../../agent-session-journal/history-import/adopted-transcript-source'
 import { structuredAgentSessionRefusalMessage } from '../operations/structured-agent-session-refusal-message'
 
@@ -55,7 +55,8 @@ export type AgentSessionAttachParams = {
     sessionId: string
     itemId: string
     revalidate: () => Promise<void>
-    prepared: JournalReplacementItem[]
+    prepared: JournalSqlForkCopy
+    withAdmission: <T>(run: () => Promise<T>) => Promise<T>
     historyOrigin?: NativeCopyOrigin
   }
   options?: Readonly<Record<string, string>>
@@ -174,7 +175,7 @@ export async function attachJournal(input: {
   const journal = await input.openConversation(input.record)
   return {
     journal,
-    unconfirmedClientMessageIds: journal.inputOrder.recoveredUnknownIds()
+    unconfirmedClientMessageIds: (await journal.reads.input({ kind: 'recovered-unknown-ids' })).ids
   }
 }
 

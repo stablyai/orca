@@ -106,6 +106,7 @@ export type ClaudeDispatchWaiter = {
 }
 
 export type ClaudeSession = {
+  historyCatchUp?: AbortController
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
   /** Latest main-chain message seen on the live stream, mid-turn included. */

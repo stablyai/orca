@@ -94,7 +94,7 @@ function foldStoppedHistoryCarried(
 }
 
 /** Malformed/unknown joins mean no answered turn, distinct from legacy rows lacking the field. */
-function readAnsweredTurn(value: unknown): AgentJournalAnsweredTurn | null {
+export function readAnsweredTurn(value: unknown): AgentJournalAnsweredTurn | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }

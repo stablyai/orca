@@ -14,8 +14,8 @@ import { CODEX_STRUCTURED_AGENT } from '../../../../../codex/structured/launch/c
 import type { StructuredAgentSessionAdapter } from '../../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { StructuredAgentRegistry } from '../../../../../native-chat/agent-session-wire/providers/structured-agent-registry'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { interruptedRestart } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-restart-interruption-test-harness'
-import { HOST_TEST_NOW as NOW } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { interruptedRestart } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-restart-interruption.test-fixture'
+import { HOST_TEST_NOW as NOW } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import {
   call,
   clearStructuredHostStub
