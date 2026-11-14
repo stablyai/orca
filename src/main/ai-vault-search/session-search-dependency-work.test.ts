@@ -32,7 +32,7 @@ it('updates an archived Codex title while retaining its neighboring conversation
   })
   const titles = () =>
     harness.read((db) =>
-      db.prepare('SELECT title,count(*) AS n FROM sessions GROUP BY title ORDER BY title').all()
+      db.prepare('SELECT session_id,title FROM sessions ORDER BY session_id').all()
     )
   try {
     await mkdir(root, { recursive: true })
@@ -54,7 +54,10 @@ it('updates an archived Codex title while retaining its neighboring conversation
         .join('')
     )
     await subject.start()
-    expect(titles()).toEqual([{ title: 'Original title', n: 2 }])
+    expect(titles()).toEqual([
+      { session_id: '019f0000-1111-7222-8333-000000000001', title: 'Original title' },
+      { session_id: '019f0000-1111-7222-8333-444444444444', title: 'Original title' }
+    ])
     await appendFile(
       index,
       `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Changed archive title' })}\n`
@@ -63,8 +66,8 @@ it('updates an archived Codex title while retaining its neighboring conversation
     clock.advance(20000)
     await subject.settled()
     expect(titles()).toEqual([
-      { title: 'Changed archive title', n: 1 },
-      { title: 'Original title', n: 1 }
+      { session_id: '019f0000-1111-7222-8333-000000000001', title: 'Original title' },
+      { session_id: '019f0000-1111-7222-8333-444444444444', title: 'Changed archive title' }
     ])
     await writeFile(
       index,
@@ -78,7 +81,10 @@ it('updates an archived Codex title while retaining its neighboring conversation
     notifySessionSearchFileChange(index)
     clock.advance(20000)
     await subject.settled()
-    expect(titles()).toEqual([{ title: 'Replacement title', n: 2 }])
+    expect(titles()).toEqual([
+      { session_id: '019f0000-1111-7222-8333-000000000001', title: 'Replacement title' },
+      { session_id: '019f0000-1111-7222-8333-444444444444', title: 'Replacement title' }
+    ])
   } finally {
     await subject.close()
     await harness.cleanup()
