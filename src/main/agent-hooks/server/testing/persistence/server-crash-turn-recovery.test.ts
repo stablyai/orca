@@ -202,3 +202,97 @@ it('retains a visible interrupted conversation when a restored PTY is proven abs
     { prompt: 'unfinished work', mainAgent: { state: 'done', outcome: 'interruption' } }
   ])
 })
+
+const childHeldIdentity = {
+  paneKey: PANE,
+  source: 'codex' as const,
+  providerSession: { key: 'session_id' as const, id: 'child-held-thread' }
+}
+
+async function openChildHeldRestore(connectionId: string | null): Promise<AgentHookServer> {
+  const before = await openServer()
+  before.ingestRemote(
+    {
+      ...childHeldIdentity,
+      hookEventName: 'Stop',
+      payload: {
+        agentType: 'codex',
+        state: 'working',
+        prompt: 'delegate the review',
+        lastAssistantMessage: 'lead summary',
+        mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 2_000_000_000_500 },
+        subagents: [{ id: 'child', state: 'working', startedAt: 2_000_000_000_100 }]
+      }
+    },
+    connectionId
+  )
+  expect(before.flushStatusPersistSync()).toBe(true)
+  return openServer()
+}
+
+it('marks child work cut off by process loss without dropping the lead reply', async () => {
+  const restored = await openChildHeldRestore(null)
+  await retireRestoredStatusesWithDeadTerminals({
+    server: restored,
+    probePtyLiveness: async () => false,
+    isLocalExecutionHost: () => true,
+    getBoundPtyIdForPaneKey: () => undefined,
+    getPersistedPtyIdForPaneKey: () => 'lost-pty'
+  })
+  expect(restored.getPublicStatusSnapshotForPane(PANE)).toMatchObject([
+    {
+      state: 'done',
+      lastAssistantMessage: 'lead summary',
+      mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: 2_000_000_000_500 }
+    }
+  ])
+})
+
+it('marks child work unconfirmed when an idle resume reopens the thread', async () => {
+  const restored = await openChildHeldRestore('ssh-a')
+  restored.ingestRemote(
+    {
+      ...childHeldIdentity,
+      hookEventName: 'SessionStart',
+      payload: { state: 'done', agentType: 'codex', prompt: '', sessionBoundary: true }
+    },
+    'ssh-a'
+  )
+  expect(restored.getPublicStatusSnapshotForPane(PANE)).toMatchObject([
+    {
+      state: 'done',
+      lastAssistantMessage: 'lead summary',
+      mainAgent: { state: 'done', outcome: 'unconfirmed', stateStartedAt: 2_000_000_000_500 }
+    }
+  ])
+})
+
+it('keeps the saved completion time when a remote host replays an older cached start', async () => {
+  const before = await openServer()
+  before.ingestRemote(
+    {
+      ...childHeldIdentity,
+      hookEventName: 'Stop',
+      turnEndedAt: 2_000_000_000_900,
+      turnEndDisposition: 'identified',
+      payload: { state: 'done', agentType: 'codex', prompt: 'remote work' }
+    },
+    'ssh-a'
+  )
+  expect(before.flushStatusPersistSync()).toBe(true)
+  const restored = await openServer()
+  restored.ingestRemote(
+    {
+      ...childHeldIdentity,
+      hookEventName: 'SessionStart',
+      isReplay: true,
+      turnEndedAt: 1_999_000_000_000,
+      turnEndDisposition: 'identified',
+      payload: { state: 'done', agentType: 'codex', prompt: '', sessionBoundary: true }
+    },
+    'ssh-a'
+  )
+  expect(restored.getPublicStatusSnapshotForPane(PANE)).toMatchObject([
+    { prompt: 'remote work', turnEndedAt: 2_000_000_000_900 }
+  ])
+})

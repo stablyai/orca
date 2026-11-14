@@ -2,6 +2,7 @@ import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { sameAgentStatusTerminalOwner } from '../../../agent-status/identity/agent-status-terminal-owner'
 import { seedCodexStateFromSnapshot } from './codex-state'
+import { settleUnfinishedMainAgent } from '../../../agent-status/lifecycle/main-agent-status'
 import type { ParsedAgentStatusPayload } from '../../../agent-status/contracts/agent-status-types'
 
 /** Opening the same conversation must not replace its saved turn with an empty idle boundary. */
@@ -21,6 +22,8 @@ export function codexResumedTurn(
     event.payload.prompt.length !== 0 ||
     previous?.payload.agentType !== 'codex' ||
     previous.providerSessionOnly ||
+    // A remote host's cached start restates its own older row; the replay branch keeps ours.
+    (event.isReplay === true && !!event.connectionId) ||
     (previous.payload.state !== 'done' && (!previous.restoredUnconfirmed || event.isReplay)) ||
     !previous.providerSession?.id ||
     previous.providerSession.id !== event.providerSession?.id ||
@@ -38,10 +41,11 @@ export function codexResumedTurn(
           prompt: previous.payload.prompt,
           model: event.payload.model ?? previous.payload.model,
           lastAssistantMessage: previous.payload.lastAssistantMessage,
-          mainAgent:
-            previous.payload.mainAgent?.state === 'done'
-              ? previous.payload.mainAgent
-              : { state: 'done', outcome: 'unconfirmed', stateStartedAt: Date.now() }
+          mainAgent: settleUnfinishedMainAgent(
+            previous.payload.mainAgent,
+            'unconfirmed',
+            Date.now()
+          )
         }
   state.codexLeadStateByPaneKey.delete(event.paneKey)
   seedCodexStateFromSnapshot(state, event.paneKey, payload)
