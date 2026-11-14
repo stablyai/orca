@@ -415,8 +415,8 @@ it.each(['ipc', 'runtime'] as const)(
     runtime.acquireFileWatcherRemoval = acquireWatcherRemoval
     const signal = worktreeRemovalLifetime.signal
     removeWorktreeMock.mockImplementation(async (_repo, _path, _force, options) => {
-      expect(options.checkoutDeleteSignal).toBeUndefined()
-      expect(options.signal).toBeUndefined()
+      expect(options).not.toHaveProperty('checkoutDeleteSignal', expect.anything())
+      expect(options).not.toHaveProperty('signal', expect.anything())
       await worktreeRemovalLifetime.close()
       expect(signal.aborted).toBe(true)
       return {}
