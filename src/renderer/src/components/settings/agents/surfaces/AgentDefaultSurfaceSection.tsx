@@ -204,7 +204,10 @@ export function AgentDefaultSurfaceSection({
       ?.querySelector('[data-settings-scroll-list]')
       ?.querySelector<HTMLElement>('[data-agent-opens-as]')
     row?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'nearest' })
-    list?.focus({ preventScroll: true })
+    const choice =
+      row?.querySelector<HTMLElement>('[role="radiogroup"] [aria-checked="true"]') ??
+      row?.querySelector<HTMLElement>('[role="radiogroup"] [role="radio"]')
+    ;(choice ?? list)?.focus({ preventScroll: true })
   }
   if (presentation === 'switch') {
     return (

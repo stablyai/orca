@@ -38,22 +38,23 @@ export function AgentDetectionCatalog({
   const installedBody = useRef<HTMLDivElement>(null)
   const availableBody = useRef<HTMLDivElement>(null)
   const [hosts] = useState(() => new Map<TuiAgent, RowHost>())
-  const [expandedByAgent, setExpandedByAgent] = useState<Partial<Record<TuiAgent, boolean>>>(() =>
-    Object.fromEntries([
-      ...detectedAgents.map((agent) => [
-        agent.id,
-        agentCatalogRowInitiallyExpanded(getRowProps(agent, true))
-      ]),
-      ...undetectedAgents.map((agent) => [
-        agent.id,
-        agentCatalogRowInitiallyExpanded(getRowProps(agent, false))
-      ])
-    ])
-  )
+  const [expandedByAgent, setExpandedByAgent] = useState<Partial<Record<TuiAgent, boolean>>>({})
   const sections = [
     { agents: detectedAgents, installed: true },
     { agents: undetectedAgents, installed: false }
   ]
+  const rows = sections.flatMap(({ agents, installed }) =>
+    agents.map((agent) => ({ agent, row: getRowProps(agent, installed) }))
+  )
+  const arriving = rows.filter(({ agent }) => !Object.hasOwn(expandedByAgent, agent.id))
+  if (arriving.length > 0) {
+    setExpandedByAgent({
+      ...expandedByAgent,
+      ...Object.fromEntries(
+        arriving.map(({ agent, row }) => [agent.id, agentCatalogRowInitiallyExpanded(row)])
+      )
+    })
+  }
   useLayoutEffect(() => {
     for (const { agents, installed } of sections) {
       const parent = (installed ? installedBody : availableBody).current
@@ -156,26 +157,21 @@ export function AgentDetectionCatalog({
           />
         ))}
         {/* A stable portal target preserves drafts and pending writes when a row changes cards. */}
-        {sections.flatMap(({ agents, installed }) =>
-          agents.map((agent) => {
-            const row = getRowProps(agent, installed)
-            return (
-              <AgentCatalogRowHost
-                key={agent.id}
-                registry={hosts}
-                row={{
-                  ...row,
-                  expanded: expandedByAgent[agent.id] ?? agentCatalogRowInitiallyExpanded(row),
-                  onExpandedChange: (expanded) =>
-                    setExpandedByAgent((previous) => ({
-                      ...previous,
-                      [agent.id]: expanded
-                    }))
-                }}
-              />
-            )
-          })
-        )}
+        {rows.map(({ agent, row }) => (
+          <AgentCatalogRowHost
+            key={agent.id}
+            registry={hosts}
+            row={{
+              ...row,
+              expanded: expandedByAgent[agent.id] ?? false,
+              onExpandedChange: (expanded) =>
+                setExpandedByAgent((previous) => ({
+                  ...previous,
+                  [agent.id]: expanded
+                }))
+            }}
+          />
+        ))}
       </section>
 
       {detectionPending && !detectionFailed && (

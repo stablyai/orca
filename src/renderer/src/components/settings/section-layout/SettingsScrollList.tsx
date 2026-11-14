@@ -56,7 +56,7 @@ export function SettingsScrollList({
         maxHeight: SETTINGS_LIST_MAX_HEIGHT,
         maskImage:
           edges.top || edges.bottom
-            ? `linear-gradient(to bottom, ${edges.top ? 'transparent, black 24px' : 'black 0px'}, ${edges.bottom ? 'black calc(100% - 24px), transparent' : 'black 100%'})`
+            ? `linear-gradient(to bottom, ${edges.top ? 'transparent, black 16px' : 'black 0px'}, ${edges.bottom ? 'black calc(100% - 16px), transparent' : 'black 100%'})`
             : undefined
       }}
     >

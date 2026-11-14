@@ -115,8 +115,56 @@ it('keeps a pending save attached to the same editor when membership changes', a
   await waitFor(() => expect(input.readOnly).toBe(true))
   view.rerender(catalog(true, save))
   expect(screen.getByDisplayValue('/custom/claude')).toBe(input)
+  expect(screen.getByRole('region', { name: 'Installed agents' }).contains(input)).toBe(true)
   expect(input.readOnly).toBe(true)
   await act(async () => finish())
   await waitFor(() => expect(input.readOnly).toBe(false))
   expect(save).toHaveBeenCalledWith('/custom/claude')
 })
+
+it.each([
+  { initial: undefined, later: '/later/claude', expected: 'false' },
+  { initial: '/seed/claude', later: undefined, expected: 'true' }
+])(
+  'latches an asynchronously arriving row before later command settings change: $expected',
+  async ({ initial, later, expected }) => {
+    const pane = (
+      stage: 'pending' | 'installed' | 'available',
+      cmdOverride: string | undefined
+    ) => (
+      <StrictMode>
+        <TooltipProvider>
+          <AgentDetectionCatalog
+            detectedAgents={stage === 'installed' ? [claude] : []}
+            undetectedAgents={stage === 'available' ? [claude] : []}
+            detectionPending={stage === 'pending'}
+            detectionFailed={false}
+            isRefreshing={false}
+            activeServerEnvironmentId={null}
+            activeServerName={null}
+            onRefresh={vi.fn()}
+            getRowProps={() => ({ ...row(vi.fn()), cmdOverride })}
+          />
+        </TooltipProvider>
+      </StrictMode>
+    )
+    const view = render(pane('pending', initial))
+    await act(async () => {
+      await Promise.resolve()
+      view.rerender(pane('installed', initial))
+    })
+    expect(screen.getByRole('button', { name: 'Claude' }).getAttribute('aria-expanded')).toBe(
+      expected
+    )
+    view.rerender(pane('installed', later))
+    expect(screen.getByRole('button', { name: 'Claude' }).getAttribute('aria-expanded')).toBe(
+      expected
+    )
+    view.rerender(pane('available', later))
+    const available = screen.getByRole('region', { name: 'Agents available to install' })
+    expect(available.contains(screen.getByRole('button', { name: 'Claude' }))).toBe(true)
+    expect(screen.getByRole('button', { name: 'Claude' }).getAttribute('aria-expanded')).toBe(
+      expected
+    )
+  }
+)

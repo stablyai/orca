@@ -1,6 +1,7 @@
 import { useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { getAgentSettingsRowId } from '../agents-search'
 import { AgentCatalogRow, type AgentCatalogRowViewProps } from './AgentCatalogRow'
 import {
   createAgentCatalogRowHost,
@@ -14,7 +15,11 @@ export function AgentCatalogRowHost({
   registry: Map<TuiAgent, RowHost>
   row: AgentCatalogRowViewProps
 }): React.ReactPortal {
-  const [host] = useState(createAgentCatalogRowHost)
+  const [host] = useState(() => {
+    const rowHost = createAgentCatalogRowHost()
+    rowHost.element.id = getAgentSettingsRowId(row.agentId)
+    return rowHost
+  })
   useLayoutEffect(() => {
     registry.set(row.agentId, host)
     return () => {
