@@ -22,7 +22,7 @@ import {
 } from '../../../../../../../shared/native-chat/chat-fork-path'
 import type { ChatForkRecapScope } from '../../../../../../../shared/agent-session/context/chat-fork-recap'
 import {
-  defaultNativeChatForkAgent,
+  nativeChatForkAgent,
   nativeChatForkHostChoices,
   nativeChatForkSubagentAllowed,
   nativeChatForkSurfaces,
@@ -76,15 +76,15 @@ export function useNativeChatForkWindowState(
     pickedExisting ?? (hostPick === sourceHostId ? source.worktreeId : null),
     source.agent
   )
-  const agent =
-    agentPick && agents.includes(agentPick)
-      ? agentPick
-      : defaultNativeChatForkAgent({
-          sourceAgent: source.agent,
-          usageLimited: source.usageLimited,
-          available: agents,
-          preferred: isTuiAgent(preferred) ? preferred : null
-        })
+  // A picked agent outlives the detection a host or workspace change restarts; Enter waits for it.
+  const { agent, settled } = nativeChatForkAgent({
+    picked: agentPick,
+    sourceAgent: source.agent,
+    usageLimited: source.usageLimited,
+    available: agents,
+    preferred: isTuiAgent(preferred) ? preferred : null,
+    detecting
+  })
   const hostChoices = nativeChatForkHostChoices({ sourceHostId, hosts })
   const host =
     hostChoices.find((choice) => choice.id === hostPick && !choice.disabled) ??
@@ -144,11 +144,10 @@ export function useNativeChatForkWindowState(
   })
   const runAs: NativeChatForkRunAs = subagentAllowed ? runAsPick : 'open'
   const slug = slugifyForWorkspaceName(name)
-  // At a usage limit the default agent is only known once detection answers; Enter waits for it.
   const ready =
     !host.disabled &&
     openAs !== null &&
-    !(detecting && source.usageLimited) &&
+    settled &&
     (workspace.kind !== 'existing' || existingId !== null) &&
     (workspace.kind !== 'new-worktree' || slug.length > 0) &&
     (runAs !== 'subagent' || task.trim().length > 0)

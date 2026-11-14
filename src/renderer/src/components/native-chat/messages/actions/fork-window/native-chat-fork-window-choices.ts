@@ -56,6 +56,24 @@ export function defaultNativeChatForkAgent(input: {
   return others[0] ?? input.sourceAgent
 }
 
+/** The person's agent while the host has it, or until detection answers; else the default. The
+ *  choice is settled once the host has answered for any agent other than the chat's own. */
+export function nativeChatForkAgent(input: {
+  picked: TuiAgent | null
+  sourceAgent: TuiAgent
+  usageLimited: boolean
+  available: readonly TuiAgent[]
+  preferred?: TuiAgent | null
+  detecting: boolean
+}): { agent: TuiAgent; settled: boolean } {
+  const { picked, detecting } = input
+  if (picked && (detecting || input.available.includes(picked))) {
+    return { agent: picked, settled: !detecting || picked === input.sourceAgent }
+  }
+  // At a usage limit the default agent is only known once detection answers.
+  return { agent: defaultNativeChatForkAgent(input), settled: !(detecting && input.usageLimited) }
+}
+
 /** The source host first, then every other host. A connected host can always take a recap, so
  *  only an offline one is blocked; one that can't import an exact copy gets a recap instead. */
 export function nativeChatForkHostChoices(input: {

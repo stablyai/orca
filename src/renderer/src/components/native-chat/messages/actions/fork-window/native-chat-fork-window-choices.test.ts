@@ -7,6 +7,7 @@ import {
 } from '../../../../../../../shared/native-chat/chat-fork-path'
 import {
   defaultNativeChatForkAgent,
+  nativeChatForkAgent,
   nativeChatForkHostChoices,
   nativeChatForkSurfaces
 } from './native-chat-fork-window-choices'
@@ -53,6 +54,35 @@ describe('defaultNativeChatForkAgent', () => {
         available: ['claude-agent-teams', 'codex']
       })
     ).toBe('codex')
+  })
+})
+
+describe('nativeChatForkAgent', () => {
+  it('keeps a picked agent while another host detects its agents, and holds Enter until it answers', () => {
+    const pick: Pick<Parameters<typeof nativeChatForkAgent>[0], 'picked' | 'sourceAgent'> = {
+      picked: 'codex',
+      sourceAgent: 'claude'
+    }
+    expect(
+      nativeChatForkAgent({ ...pick, usageLimited: false, available: ['claude'], detecting: true })
+    ).toEqual({
+      agent: 'codex',
+      settled: false
+    })
+    expect(
+      nativeChatForkAgent({
+        ...pick,
+        usageLimited: false,
+        available: ['claude', 'codex'],
+        detecting: false
+      })
+    ).toEqual({ agent: 'codex', settled: true })
+    expect(
+      nativeChatForkAgent({ ...pick, usageLimited: false, available: ['claude'], detecting: false })
+    ).toEqual({
+      agent: 'claude',
+      settled: true
+    })
   })
 })
 
