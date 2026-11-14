@@ -1,3 +1,4 @@
+import { reenterPackagedElectron } from '../runtime/packaged-cli-interpreter'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
@@ -268,7 +269,7 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
         'Use either --allow-public or --refuse-public, not both.'
       )
     }
-    const result = await installServeService({
+    const options = {
       command: optionalString(flags.get('command')),
       // Validate before launchd can loop on a bad value and trip the supervisor brake.
       port: getOptionalServePort(flags),
@@ -277,7 +278,9 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
       allowPublic: flags.get('allow-public') === true,
       refusePublic: flags.get('refuse-public') === true,
       dryRun: flags.get('dry-run') === true
-    })
+    }
+    reenterPackagedElectron()
+    const result = await installServeService(options)
     emit(result, json, formatServeServiceInstall)
   },
   'serve service status': async ({ json }) => {

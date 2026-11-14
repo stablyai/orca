@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './runtime/packaged-cli-interpreter'
 import {
   findCommandSpec,
   isCommandGroup,

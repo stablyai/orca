@@ -20,12 +20,56 @@ fi
 
 CONTENTS="$APP_PATH/Contents"
 ELECTRON="$CONTENTS/MacOS/Orca"
-# The unpacked entrypoint runs directly in Electron's Node mode.
 CLI="$CONTENTS/Resources/app.asar.unpacked/out/cli/index.js"
 
 export ORCA_NODE_OPTIONS="${NODE_OPTIONS-}"
 export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
+
+function plist_version() {
+	local file=$1 key=$2 line found=0 remaining=256
+	REPLY=
+	[ -r "$file" ] || return 1
+	while IFS= read -r line; do
+		[ "$remaining" -gt 0 ] || return 1
+		remaining=$((remaining - 1))
+		if [[ $line == *"<key>$key</key>"* ]]; then
+			found=1
+			line=${line#*</key>}
+		fi
+		if [ "$found" -eq 1 ]; then
+			if [[ $line =~ ^[[:space:]]*\<string\>([0-9]{1,3}\.[0-9]{1,3}(\.[0-9]{1,3})?)\</string\>[[:space:]]*$ ]]; then
+				REPLY=${BASH_REMATCH[1]}
+				return 0
+			fi
+			[[ $line =~ ^[[:space:]]*$ ]] || return 1
+		fi
+	done < "$file"
+	return 1
+}
+
+function supports_packaged_node() {
+	local minimum current index required actual
+	plist_version "$NODE_CONTENTS/Info.plist" LSMinimumSystemVersion || return 1
+	IFS=. read -r -a minimum <<< "$REPLY"
+	plist_version /System/Library/CoreServices/SystemVersion.plist ProductVersion || return 1
+	IFS=. read -r -a current <<< "$REPLY"
+	for index in 0 1 2; do
+		required=$((10#${minimum[$index]:-0}))
+		actual=$((10#${current[$index]:-0}))
+		[ "$actual" -gt "$required" ] && return 0
+		[ "$actual" -lt "$required" ] && return 1
+	done
+	return 0
+}
+
+NODE_CONTENTS="$CONTENTS/Helpers/Orca Agents.app/Contents"
+NODE="$NODE_CONTENTS/MacOS/Orca Agents"
+if [ -x "$NODE" ] && supports_packaged_node; then
+	export ORCA_CLI_ELECTRON_EXECUTABLE="$ELECTRON"
+	unset ELECTRON_RUN_AS_NODE
+	exec "$NODE" "$CLI" "$@"
+fi
 
 ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"

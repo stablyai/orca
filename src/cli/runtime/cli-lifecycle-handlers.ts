@@ -1,3 +1,4 @@
+import { reenterPackagedElectron } from './packaged-cli-interpreter'
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { CommandHandler } from '../dispatch/dispatch'
@@ -138,6 +139,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     }
     const port = getOptionalServePort(flags)
     const pairingAddressValue = flags.get('pairing-address')
+    reenterPackagedElectron()
     const exitCode = await serveOrcaApp({
       json,
       port,
