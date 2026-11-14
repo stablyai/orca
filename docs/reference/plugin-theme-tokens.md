@@ -64,7 +64,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--chat-selection` | Selected text in chat; may be translucent, it paints over the chat | no | `--text-link` (else Orca's link blue) mixed into the chat background, up to 30% light and 40% dark, as deep as keeps selected text 4.5:1 (never under 15%) |
 | `--chat-selection-foreground` | Text inside a chat selection | no | same as `--foreground` |
 | `--text-link` | Links in Markdown previews, editors and agent chat | no | Orca's built-in color |
-| `--editor-selection` | Selected text in the code editor; may be translucent, it paints over `--editor-surface`. An unfocused editor shows it at half its opacity | no | `--ring` at 30% opacity |
+| `--editor-selection` | Selected text in the code editor; keep it translucent so find matches show through. An unfocused editor shows it at half its opacity | no | `--ring` at 30% opacity |
 | `--diff-added` | Added-line hue: Monaco overview ruler and chat diff text | no | same as `--git-decoration-added` |
 | `--diff-added-background` | Added lines in diffs | no | light: `--diff-added` at 13% opacity; dark: `--diff-added` at 16% opacity |
 | `--diff-added-emphasis` | Added characters within a changed line | no | light: `--diff-added` at 15% opacity; dark: `--diff-added` at 20% opacity |

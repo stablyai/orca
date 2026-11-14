@@ -74,7 +74,7 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--chat-selection-foreground': 'Text inside a chat selection',
   '--text-link': 'Links in Markdown previews, editors and agent chat',
   '--editor-selection':
-    'Selected text in the code editor; may be translucent, it paints over `--editor-surface`. An unfocused editor shows it at half its opacity',
+    'Selected text in the code editor; keep it translucent so find matches show through. An unfocused editor shows it at half its opacity',
   '--diff-added': 'Added-line hue: Monaco overview ruler and chat diff text',
   '--diff-added-background': 'Added lines in diffs',
   '--diff-added-emphasis': 'Added characters within a changed line',
