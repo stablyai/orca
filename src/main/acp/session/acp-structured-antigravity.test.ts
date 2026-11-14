@@ -46,8 +46,8 @@ async function nativeOptionsRig({
           resume: {
             sessionId: PROVIDER_SESSION,
             key: 'acp:antigravity:saved',
-            mayBeUnsaved: () => false,
-            unannouncedLosses: () => []
+            mayBeUnsaved: async () => false,
+            lossKeys: []
           }
         }
       : undefined,

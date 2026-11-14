@@ -10,24 +10,24 @@ import {
   body,
   reopenWithRawRows,
   serializedPageBytes
-} from './agent-session-history-contract-test-fixture'
+} from './agent-session-history-contract.test-fixture'
 
 describe('pre-existing oversized identities', () => {
   // Legacy oversized tombstone IDs cannot fit any outbound page.
   const HUGE_ITEM_ID = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
 
   it('answers an unfittable pre-existing removal with a bounded reset instead of an unsendable page', async () => {
-    const seq = fixture.journal.cursor().sequence
+    const seq = 1
     const reopened = await reopenWithRawRows([
       { kind: 'item', itemId: HUGE_ITEM_ID, revision: 1, seq: seq + 1, body: body('big') },
       { kind: 'tombstone', itemId: HUGE_ITEM_ID, revision: 2, seq: seq + 2 }
     ])
 
     for (const sequence of [seq, seq + 1]) {
-      const result = readAgentSessionHistory(reopened, {
+      const result = await readAgentSessionHistory(reopened, {
         sessionId: 'session-1',
         direction: 'after',
-        cursor: { epoch: reopened.epoch, sequence },
+        cursor: { epoch: reopened.cursor().epoch, sequence },
         limit: 40
       })
       expect(result.ok).toBe(false)
@@ -46,7 +46,7 @@ describe('pre-existing oversized identities', () => {
       }
       expect(liveCursor.sequence).toBeGreaterThanOrEqual(seq + 2)
 
-      const resumed = readAgentSessionHistory(reopened, {
+      const resumed = await readAgentSessionHistory(reopened, {
         sessionId: 'session-1',
         direction: 'after',
         cursor: liveCursor,
@@ -57,7 +57,7 @@ describe('pre-existing oversized identities', () => {
   })
 
   it('charges removal ids into the page budget and splits catch-up instead of overflowing', async () => {
-    const seq = fixture.journal.cursor().sequence
+    const seq = 1
     const removalIds = Array.from(
       { length: 30 },
       (_, index) => `codex:thread-1:${'r'.repeat(250 * 1024)}:${index}`
@@ -72,12 +72,12 @@ describe('pre-existing oversized identities', () => {
     )
 
     const seen = new Set<string>()
-    let cursor = { epoch: reopened.epoch, sequence: seq }
+    let cursor = { epoch: reopened.cursor().epoch, sequence: seq }
     let guard = 0
     while (true) {
       guard += 1
       expect(guard).toBeLessThan(30)
-      const result = readAgentSessionHistory(reopened, {
+      const result = await readAgentSessionHistory(reopened, {
         sessionId: 'session-1',
         direction: 'after',
         cursor,
@@ -101,12 +101,12 @@ describe('pre-existing oversized identities', () => {
   })
 
   it('bounds the truncation marker id for a live oversized-id item', async () => {
-    const seq = fixture.journal.cursor().sequence
+    const seq = 1
     const reopened = await reopenWithRawRows([
       { kind: 'item', itemId: HUGE_ITEM_ID, revision: 1, seq: seq + 1, body: body('big') }
     ])
 
-    const tail = readAgentSessionHistory(reopened, {
+    const tail = await readAgentSessionHistory(reopened, {
       sessionId: 'session-1',
       direction: 'tail',
       limit: 40
@@ -123,10 +123,10 @@ describe('pre-existing oversized identities', () => {
     expect(marker?.itemId).toBe(boundJournalKeyComponent(HUGE_ITEM_ID))
     expect(marker?.itemId.length).toBeLessThan(2048)
 
-    const forward = readAgentSessionHistory(reopened, {
+    const forward = await readAgentSessionHistory(reopened, {
       sessionId: 'session-1',
       direction: 'after',
-      cursor: { epoch: reopened.epoch, sequence: seq },
+      cursor: { epoch: reopened.cursor().epoch, sequence: seq },
       limit: 40
     })
     if (!forward.ok) {
@@ -147,7 +147,10 @@ describe('identity bounding at admission', () => {
       turnId: 'T'.repeat(5 * 1024 * 1024),
       ordinal: 1
     }
-    const start = { epoch: fixture.journal.epoch, sequence: fixture.journal.cursor().sequence }
+    const start = {
+      epoch: fixture.journal.cursor().epoch,
+      sequence: fixture.journal.cursor().sequence
+    }
     const appended = await fixture.journal.appendItem(oversized, body('bounded'), {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
@@ -158,7 +161,7 @@ describe('identity bounding at admission', () => {
     const beforeTombstone = fixture.journal.cursor()
     await fixture.journal.appendTombstone(oversized, { fence: 1 })
 
-    const created = readAgentSessionHistory(fixture.journal, {
+    const created = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor: start,
@@ -172,7 +175,7 @@ describe('identity bounding at admission', () => {
     )
     expect(created.page.removedItemIds).toEqual([appended.itemId])
 
-    const removal = readAgentSessionHistory(fixture.journal, {
+    const removal = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor: beforeTombstone,

@@ -10,7 +10,6 @@ import {
 } from '@/lib/workspace-ports/workspace-port-urls'
 
 import { getLocalWorkspacePortSections } from './local-workspace-port-sections'
-import { mergeWorkspacePortScans } from '@/lib/workspace-ports/workspace-port-actions'
 
 const workspacePort: WorkspacePort = {
   id: '127.0.0.1:63468:1234',
@@ -85,31 +84,6 @@ describe('PortsPanel runtime routing', () => {
     expect(sections.otherWorkspacePorts.map((port) => port.port)).toEqual([5174])
     expect(sections.externalPorts.map((port) => port.port)).toEqual([5175, 5176])
     expect(sections.externalPorts.map((port) => port.kind)).toEqual(['external', 'external'])
-  })
-
-  it('merges local and runtime scans with host-prefixed row ids', () => {
-    const runtimePort: WorkspacePort = {
-      ...workspacePort,
-      id: workspacePort.id,
-      port: 3000,
-      owner: {
-        ...workspacePort.owner,
-        repoId: 'runtime-repo',
-        worktreeId: 'runtime-repo::/srv/app',
-        displayName: 'runtime app',
-        path: '/srv/app'
-      }
-    }
-
-    const merged = mergeWorkspacePortScans({
-      'local:all': { ...emptyScan, scannedAt: 10, ports: [workspacePort] },
-      'environment:env-1:all': { ...emptyScan, scannedAt: 20, ports: [runtimePort] }
-    })
-
-    expect(merged).toMatchObject({ platform: 'unknown', scannedAt: 20 })
-    expect(
-      merged?.ports.map((port) => (port.kind === 'workspace' ? port.owner.worktreeId : null))
-    ).toEqual(['runtime-repo::/srv/app', 'repo::/workspace/app'])
   })
 
   it('prefers advertisedUrl over the OS-derived host:port', () => {

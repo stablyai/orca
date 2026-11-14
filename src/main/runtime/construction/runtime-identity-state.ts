@@ -1,4 +1,5 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
+import * as savedChatOpen from '../agent-session/records/local-agent-session-record-store-startup-open'
 import type { SessionTitlePublisher } from '../session-tabs/session-title-publisher'
 import { randomUUID } from 'node:crypto'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
@@ -151,6 +152,18 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   protected structuredAgentSessionInventoryUnverifiable = false
 
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
+
+  protected structuredAgentSessionStartupOpen?: savedChatOpen.AgentSessionRecordStoreStartupOpen
+
+  /** Starts the saved-chat open early; the next startup restoration consumes this attempt. */
+  beginStructuredAgentSessionStartupOpen(
+    maintenanceAfter: Promise<void>,
+    open?: savedChatOpen.AgentSessionRecordStoreStartupOpen
+  ): void {
+    const legacyTabIds = this.legacyStructuredSessionTabIds
+    this.structuredAgentSessionStartupOpen =
+      open ?? savedChatOpen.startLocalAgentSessionRecordStoreOpen(legacyTabIds, maintenanceAfter)
+  }
 
   protected mobileSessionTabsChangeSequence = 0
 

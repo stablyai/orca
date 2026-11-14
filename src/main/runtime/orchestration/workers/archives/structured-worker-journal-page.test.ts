@@ -29,13 +29,17 @@ vi.mock(
   '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
   () => ({
     getStructuredAgentSessionHost: () => ({
-      history: async (request: AgentSessionHistoryRequest, scope?: AgentSessionHistoryScope) =>
-        readStructuredAgentSessionHistoryResult({
+      history: async (request: AgentSessionHistoryRequest, scope?: AgentSessionHistoryScope) => {
+        const read = await readStructuredAgentSessionHistoryResult({
           journal: host.journal!,
           record: null,
           request,
-          scope
+          scope,
+          // No live owner: the rows alone.
+          capture: async (rows) => ({ value: (await rows(undefined)).result, work: undefined })
         })
+        return read?.result
+      }
     })
   })
 )

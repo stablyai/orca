@@ -8,7 +8,7 @@ vi.mock('../../output/command-result-output', () => ({ printResult: vi.fn() }))
 vi.mock('../../terminals/terminal-selector', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from '../orchestration-handlers'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { printResult } from '../../output/command-result-output'
 
 function staleHandleError(): RuntimeClientError {

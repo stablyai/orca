@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -54,7 +55,7 @@ export function registerJournalDispatchReasonBoundTests(): void {
       reason,
       fence: 1
     })
-    return journal.snapshot().submissions[0]?.reason ?? null
+    return (await readTestJournalSubmissions(journal))[0]?.reason ?? null
   }
 
   beforeEach(async () => {

@@ -16,17 +16,15 @@ import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-j
 
 import { createStructuredChatNamingHandler } from '../../native-chat/structured-chat-naming'
 
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 import {
+  ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
 } from '../agent-session/records/agent-session-record-store-test-harness'
 
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../agent-session/structured-agent-session-runtime'
 
 import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 

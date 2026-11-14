@@ -41,7 +41,7 @@ export function translateHistoryTurn(
   turn: AcpIdentifiedHistoryTurn,
   check: () => void = () => {}
 ): AcpHistoryItem[] {
-  const overlay = new AcpHistoryJournalOverlay('history-snapshot')
+  const overlay = new AcpHistoryJournalOverlay()
   const translator = new AcpHistoryTranslator({
     sessionId: scope.providerSessionId,
     dialect: scope.dialect,

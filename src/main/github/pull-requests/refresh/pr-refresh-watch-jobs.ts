@@ -2,6 +2,7 @@ import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import { prChecksDone } from '../../../../shared/github/pull-requests/refresh/pr-quiet-refresh'
 export { prChecksDone } from '../../../../shared/github/pull-requests/refresh/pr-quiet-refresh'
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
@@ -32,6 +33,11 @@ const PR_WATCH_SKIPPED_RETRY_MS = 15 * 60_000
 
 export function prWatchQueueKey(job: PRWatchJob): string {
   return job.headSha ? `sha-checks::${job.prKey}::${job.headSha}` : `watch::${job.prKey}`
+}
+
+/** Only a complete final read ends a closed PR watch. */
+export function prWatchSettled(pr: PRInfo): boolean {
+  return (pr.state === 'merged' || pr.state === 'closed') && prChecksDone(pr)
 }
 
 /** A watch's next read: the background cadence, or none once the PR has settled. */

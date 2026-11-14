@@ -12,7 +12,7 @@
     "outDir": "./node_modules/.cache/phone-host-contract-types"
   },
   "files": [
-    "src/components/MobilePRSidebar.tsx",
+    "src/source-control/review/pull-request/MobilePRSidebar.tsx",
     "src/mobile-web-shell/bridge-host-test-fakes.ts",
     "src/transport/connection/stable-logical-rpc-client.ts",
     "src/mobile-web-shell/bridge/bridge-port-pair-test-harness.ts",
@@ -32,11 +32,11 @@
     "src/test-support/rpc-recording/golden-recording.ts",
     "src/test-support/rpc-recording/scenario-input.ts",
     "src/host-screen/sidebar-feed/host-sidebar-feed-sections.ts",
-    "src/worktree/workspace-list-sections.ts",
-    "src/worktree/worktree-catalog-snapshot-client.ts",
-    "src/worktree/worktree-host-context-labels.ts",
-    "src/worktree/workspace-view-settings.ts",
-    "src/session/native-chat/transcript/mobile-native-chat-projection.ts"
+    "src/worktree/workspace-list/workspace-list-sections.ts",
+    "src/worktree/catalog/worktree-catalog-snapshot-client.ts",
+    "src/worktree/row-presentation/worktree-host-context-labels.ts",
+    "src/worktree/workspace-list/workspace-view-settings.ts",
+    "src/session/native-chat/transcript/projection/mobile-native-chat-projection.ts"
   ],
   "include": ["**/*.d.ts"],
   "exclude": ["node_modules"]

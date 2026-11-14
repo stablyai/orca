@@ -7,7 +7,6 @@ import {
   AGENT_MODEL_MAX_LENGTH
 } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
 import type {
   StructuredAgentSessionProviderChild,
@@ -26,7 +25,7 @@ import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/i
 export function structuredAgentSessionStatusSummary({
   sessionId,
   session,
-  journal,
+  lastActivityAt,
   record,
   state,
   stopping,
@@ -45,7 +44,7 @@ export function structuredAgentSessionStatusSummary({
     child?: StructuredAgentSessionProviderChild | null
     restartResume?: AgentSessionStatusSummary['restartResume']
   }
-  journal: AgentSessionJournal
+  lastActivityAt: number
   record: AgentSessionConversationView | null
   state: StructuredAgentSessionStatusState
   starting?: boolean
@@ -97,7 +96,7 @@ export function structuredAgentSessionStatusSummary({
     ...structuredSummaryHostProgram(record),
     ...structuredSummaryConversationNaming(record, namingFailure),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
-    updatedAt: journal.lastActivityAt() || now()
+    updatedAt: lastActivityAt || now()
   }
 }
 

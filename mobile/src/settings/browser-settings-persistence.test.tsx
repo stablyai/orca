@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import BrowserSettingsScreen from './browser-settings-screen'
-import { PickerModal } from '../components/PickerModal'
+import { PickerModal } from '../components/sheets/PickerModal'
 import {
   loadBrowserDrawing,
   loadTerminalLinkOpenMode,
@@ -35,7 +35,7 @@ vi.mock('lucide-react-native', () => ({
   Globe: 'Icon',
   Network: 'Icon'
 }))
-vi.mock('../components/PickerModal', () => ({ PickerModal: () => null }))
+vi.mock('../components/sheets/PickerModal', () => ({ PickerModal: () => null }))
 vi.mock('../storage/preferences', () => ({
   DEFAULT_TERMINAL_LINK_OPEN_MODE: 'orca-browser',
   DEFAULT_BROWSER_DRAWING: 'host',

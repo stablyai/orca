@@ -7,7 +7,7 @@ import { normalizeCommandPositionals, parseArgs } from '../../arguments/args'
 import { specPaths } from '../../discovery/command-spec'
 import type { HandlerContext } from '../../dispatch/dispatch'
 import type { RuntimeClient } from '../../runtime/client'
-import { RuntimeRpcFailureError } from '../../runtime/types'
+import { RuntimeRpcFailureError } from '../../runtime/connection/types'
 import { createPluginFromTemplate } from '../authoring/plugin-create'
 import { PLUGIN_VIEW_HANDLERS, type PluginShotReply } from './plugin-view'
 

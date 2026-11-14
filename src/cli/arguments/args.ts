@@ -1,4 +1,4 @@
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { unknownCommandData, unknownFlagData } from '../discovery/command-suggestion'
 import { specPaths, type CommandSpec } from '../discovery/command-spec'
 import {

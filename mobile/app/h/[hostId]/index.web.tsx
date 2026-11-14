@@ -1,4 +1,4 @@
-import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
+import { WorkspaceDetailPlaceholder } from '../../../src/worktree/row-presentation/WorkspaceDetailPlaceholder'
 import { HostScreen } from '../../../src/host-screen/HostScreen'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { usePageOwnsHostArea } from '../../../src/mobile-web-shell/page-owns-host-area'

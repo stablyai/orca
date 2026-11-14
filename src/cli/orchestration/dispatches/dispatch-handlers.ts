@@ -1,7 +1,7 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printOrchestrationReceipt } from '../agent-view'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { orchestrationMigrationData } from '../../../shared/orchestration/orchestration-rpc-contract'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
