@@ -1,34 +1,26 @@
 import { useId } from 'react'
-import {
-  PR_AUTO_REFRESH_CADENCES,
-  type PRAutoRefreshCadence
-} from '../../../../../shared/review-refresh-policy'
+import { Info } from 'lucide-react'
+import type { PRAutoRefreshCadence } from '../../../../../shared/review-refresh-policy'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import {
   getPRAutoRefreshCadenceHint,
   getPRAutoRefreshCadenceLabel,
   getPRAutoRefreshDescription,
-  getPRAutoRefreshHostNote,
   getPRAutoRefreshTitle,
   PR_AUTO_REFRESH_KEYWORDS
 } from './pr-auto-refresh-search'
 
 export type PRAutoRefreshControlProps = {
-  /** null while a remote host has not answered yet. */
   cadence: PRAutoRefreshCadence | null
   onChange: (cadence: PRAutoRefreshCadence) => void
-  /** The paired host whose timers this changes; null when it is this device. */
   remoteHostName: string | null
-  /** The paired host is an older Orca without this setting: shown as Default and not changeable. */
   unsupported?: boolean
   disabled?: boolean
 }
 
-/** Presentational half of the setting: the segmented control plus the two lines that tell the user
- *  what the choice does (actual cadence) and whose behaviour it changes (host scope). */
 export function PRAutoRefreshControl({
   cadence,
   onChange,
@@ -40,29 +32,21 @@ export function PRAutoRefreshControl({
   const title = getPRAutoRefreshTitle(t)
   const description = getPRAutoRefreshDescription(t)
   const hintId = useId()
-  const hostNoteId = useId()
   const unavailable = disabled || unsupported || cadence === null
-  // An older host has nothing this setting applies to, so the scope note would mislead.
-  const hostNote = remoteHostName && !unsupported ? remoteHostName : null
-  const hint = unsupported
+  // Keep saved Minimal cadence intact; it belongs to the Less often choice.
+  const selected = unsupported ? 'default' : cadence === 'minimal' ? 'reduced' : cadence
+  const hint = selected === null ? null : getPRAutoRefreshCadenceHint(selected, t)
+  const disabledReason = unsupported
     ? t(
         'auto.components.settings.GitPane.prAutoRefreshUnsupportedHost',
-        '{{host}} runs an older Orca without this setting, so it refreshes at Default. Update Orca on that server to change it.',
+        'Update Orca on {{host}} to change this',
         {
           host:
             remoteHostName ??
             t('auto.components.settings.GitPane.prAutoRefreshUnknownHost', 'the selected server')
         }
       )
-    : cadence === null
-      ? remoteHostName
-        ? t(
-            'auto.components.settings.GitPane.prAutoRefreshReading',
-            'Reading the current setting from {{host}}…',
-            { host: remoteHostName }
-          )
-        : null
-      : getPRAutoRefreshCadenceHint(cadence, t)
+    : undefined
   return (
     <SearchableSetting
       title={title}
@@ -71,47 +55,52 @@ export function PRAutoRefreshControl({
       className="max-w-none"
     >
       <SettingsRow
-        label={title}
-        description={description}
-        alignTop
+        className="max-sm:flex-col max-sm:items-start"
+        label={
+          <>
+            {title}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t(
+                    'auto.components.settings.GitPane.prAutoRefreshAbout',
+                    'About PR Updates'
+                  )}
+                  className="inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <Info className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {description}
+              </TooltipContent>
+            </Tooltip>
+          </>
+        }
+        description={
+          <span id={hintId} aria-live="polite" className="block min-h-4">
+            {hint}
+          </span>
+        }
         control={
-          <div className="flex max-w-[24rem] flex-col items-end gap-1.5 text-right">
-            <SettingsSegmentedControl<PRAutoRefreshCadence>
-              value={cadence ?? 'default'}
-              onChange={(next) => {
-                if (!unsupported && cadence !== null && next !== cadence) {
-                  onChange(next)
-                }
-              }}
-              ariaLabel={title}
-              ariaDescribedBy={cn(hint && hintId, hostNote && hostNoteId) || undefined}
-              size="sm"
-              options={PR_AUTO_REFRESH_CADENCES.map((value) => ({
-                value,
-                label: getPRAutoRefreshCadenceLabel(value, t),
-                disabled: unavailable
-              }))}
-            />
-            {hint ? (
-              <p
-                id={hintId}
-                aria-live="polite"
-                className="select-text text-balance text-xs text-muted-foreground"
-                data-testid="pr-auto-refresh-hint"
-              >
-                {hint}
-              </p>
-            ) : null}
-            {hostNote ? (
-              <p
-                id={hostNoteId}
-                className="select-text text-balance text-xs text-foreground/80"
-                data-testid="pr-auto-refresh-host-note"
-              >
-                {getPRAutoRefreshHostNote(hostNote, t)}
-              </p>
-            ) : null}
-          </div>
+          <SettingsSegmentedControl<PRAutoRefreshCadence | ''>
+            value={selected ?? ''}
+            onChange={(next) => {
+              if (!unavailable && next && next !== selected) {
+                onChange(next)
+              }
+            }}
+            ariaLabel={title}
+            ariaDescribedBy={hint ? hintId : undefined}
+            size="sm"
+            options={(['default', 'reduced', 'off'] as const).map((value) => ({
+              value,
+              label: getPRAutoRefreshCadenceLabel(value, t),
+              disabled: unavailable,
+              tooltip: disabledReason
+            }))}
+          />
         }
       />
     </SearchableSetting>

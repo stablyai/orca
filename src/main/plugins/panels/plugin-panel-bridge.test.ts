@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginWorkerHandle } from '../workers/parent-process/plugin-host-process-types'
 import { PluginPanelBridge } from './plugin-panel-bridge'
 

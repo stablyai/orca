@@ -32,10 +32,10 @@ export function NativeChatQuestionOption({
   return (
     // The tile wraps the row and its preview, so the preview reads as part of the picked option.
     // One root whether or not the preview shows, so selecting never remounts the focused row.
-    // p-px leaves a 1px gap between the inset focus ring and the tile's border.
+    // The focus ring goes on the tile, not the row, so a shown preview sits inside it instead of under it.
     <div
       className={cn(
-        'rounded-[10px] border p-px transition-colors',
+        'rounded-[10px] border transition-colors has-[>button:focus-visible]:ring-2 has-[>button:focus-visible]:ring-inset has-[>button:focus-visible]:ring-chat-focus-ring',
         selected ? 'border-primary bg-foreground/8' : 'border-question-option-border'
       )}
     >
@@ -62,9 +62,9 @@ export function NativeChatQuestionOption({
         }}
         aria-pressed={selected}
         data-native-chat-prompt-card-focus-target={initialFocus || undefined}
-        // Focus is an inset ring, never the selected fill, so the row that opens focused does not read as picked.
+        // Focus is the tile's ring, never the selected fill, so the row that opens focused does not read as picked.
         className={cn(
-          'flex w-full items-start gap-3 rounded-[8px] px-3 py-2.5 text-left text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-chat-focus-ring disabled:pointer-events-none',
+          'flex w-full items-start gap-3 rounded-[9px] px-3 py-2.5 text-left text-foreground transition-colors focus-visible:outline-none disabled:pointer-events-none',
           !selected && 'hover:bg-foreground/5'
         )}
       >

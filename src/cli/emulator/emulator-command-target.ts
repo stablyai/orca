@@ -1,5 +1,5 @@
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
 import { getOptionalStringFlag } from '../arguments/flags'
 import {

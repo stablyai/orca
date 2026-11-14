@@ -76,6 +76,14 @@
     "failed": "Failed to open the file."
   },
   "sidebar": {
+    "worktreeCardsUpdateNotice": {
+      "newLabel": "New",
+      "title": "Worktree cards",
+      "exampleChildren": "1 child",
+      "statusCaption": "Title flags agents that need you",
+      "childrenCaption": "Parents sum up child worktrees",
+      "dismiss": "Dismiss"
+    },
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
       "description": "The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.",
@@ -747,6 +755,7 @@
         "fontKeywordTypeface": "typeface",
         "fontKeywordTypography": "typography",
         "inheritFont": "Same as IDE font",
+        "systemFont": "System font",
         "fontPreviewLabel": "Chat font preview",
         "fontPreview": "The quick brown fox jumps over the lazy dog.",
         "title": "Chat UI",
@@ -1003,6 +1012,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Installed agents",
+      "availableRegion": "Agents available to install",
       "permissionsTitle": "Permissions",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",
@@ -1453,7 +1464,9 @@
       "useExample": "Use this example",
       "description": "Scripts that run in this folder when a workspace is created. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
       "invalidSetup": "The file is present, but Orca could not find a valid setup script.",
-      "supportedKeys": "Define only the supported keys: `scripts` and `setup`."
+      "supportedKeys": "Define only the supported keys: `scripts` and `setup`.",
+      "supportedArchiveKeys": "Define only the supported keys: `scripts`, `setup`, and `archive`.",
+      "invalidArchive": "The file is present, but Orca could not find a valid setup or archive script."
     }
   },
   "menu": {
@@ -2682,9 +2695,9 @@
         "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
-        "titleOne": "macOS just interrupted an agent",
-        "titleMany": "macOS interrupted your agents {{count}}×",
-        "subtitle": "Full Disk Access stops these file prompts.",
+        "titleOne": "macOS just showed a file prompt",
+        "titleMany": "macOS showed {{count}} file prompts",
+        "subtitle": "Full Disk Access stops these prompts.",
         "enable": "Turn on Full Disk Access",
         "close": "Close",
         "dismiss": "Don't show again"
@@ -8964,19 +8977,16 @@
           "fdbcd676b0": "GitHub API budget",
           "074f7aa0d6": "Default compare base",
           "prAutoRefreshUpdateFailed": "Could not update PR auto-refresh on this host.",
-          "prAutoRefreshDefault": "Default",
-          "prAutoRefreshReduced": "Reduced",
-          "prAutoRefreshMinimal": "Minimal",
-          "prAutoRefreshOff": "Off",
-          "prAutoRefreshTitle": "PR Auto-Refresh",
-          "prAutoRefreshDescription": "How often pull request and checks status is re-read on a timer. Pushing and refreshing manually always read at once, and returning to the window reads anything older than its Default interval. On a server, this also sets the timers of connected clients; clients on older Orca versions keep their Default timer.",
-          "prAutoRefreshEveryMinute": "every minute",
-          "prAutoRefreshEveryMinutes": "every {{minutes}} min",
-          "prAutoRefreshHint": "{{mode}}: up to {{open}} for the open workspace and {{visible}} for other visible ones; settled pull requests are read less often.",
-          "prAutoRefreshHintOff": "{{mode}}: no routine timed refresh. Checks a chat is following are still read {{watch}}. Orca also reads when you push or refresh manually, and when you return to the window to data older than its Default interval.",
-          "prAutoRefreshHostNote": "Applies to {{host}} and every client connected to it.",
-          "prAutoRefreshReading": "Reading the current setting from {{host}}…",
-          "prAutoRefreshUnsupportedHost": "{{host}} runs an older Orca without this setting, so it refreshes at Default. Update Orca on that server to change it.",
+          "prAutoRefreshDefault": "Automatic",
+          "prAutoRefreshReduced": "Less often",
+          "prAutoRefreshOff": "Manual",
+          "prAutoRefreshAbout": "About PR Updates",
+          "prAutoRefreshHintAutomatic": "Keeps pull requests and checks up to date.",
+          "prAutoRefreshHintLessOften": "Checks GitHub less often. Useful if you hit GitHub rate limits.",
+          "prAutoRefreshTitle": "PR Updates",
+          "prAutoRefreshDescription": "How often Orca checks GitHub for pull request and CI changes.",
+          "prAutoRefreshHintOff": "Updates when you push or click Refresh.",
+          "prAutoRefreshUnsupportedHost": "Update Orca on {{host}} to change this",
           "prAutoRefreshUnknownHost": "the selected server"
         },
         "HiddenExperimentalGroup": {
@@ -14832,11 +14842,6 @@
             "locallyResolvedConflictOfKind": "Conflict resolved locally ({{kind}})",
             "locallyResolvedConflict": "Conflict resolved locally",
             "pushesToForkTarget": "Pushes to fork {{target}}",
-            "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
-            "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
-            "mergedReviewHeadMoved": "{{review}} is merged, but Orca could not confirm that it includes this branch’s current commits.",
-            "mergedReviewNothingLeft": "{{review}} is merged and includes this branch’s committed changes.",
-            "mergedReviewSafeToDelete": "{{review}} is merged and includes this branch’s committed changes. Ignored files may still be lost when deleting this workspace.",
             "abortRebaseConfirmTitle": "Abort rebase?",
             "abortMergeConfirmTitle": "Abort merge?",
             "abortRebaseConfirmDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
@@ -18180,7 +18185,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome extensions",
+                        "title": "Bring your Chrome extensions",
+                        "everydayTitle": "Your everyday browser tools, in Orca",
                         "body": "Install from the Chrome Web Store and pin them next to the address bar.",
                         "action": "Open Web Store",
                         "secondaryAction": "Got it"
@@ -20706,7 +20712,8 @@
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
-        "forkedFrom": "Forked from"
+        "forkedFrom": "Forked from",
+        "forkedFromUnknown": "Forked from another chat"
       },
       "composer": {
         "send": "Send",
@@ -21547,9 +21554,14 @@
         "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
         "failedDetail": "Your chat is unchanged. Try again.",
         "commandDescription": "Fork this chat from its latest response",
-        "commandWorking": "Wait for the response to finish, then fork.",
+        "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
         "commandNothing": "There’s no response to fork yet.",
-        "commandTakesNoText": "Send /fork on its own, then write in the new chat."
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat.",
+        "mark": "Fork ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Fork: {{name}}",
+        "sourceTooltip": "Fork of {{name}}",
+        "unknownSourceTooltip": "Fork of another chat"
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",

@@ -1,9 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Store } from '../persistence/loading-store/store'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from '../persistence/persistence-test-harness'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import { _resetWorktreeRemovalLifetimeForTests } from '../workspaces/removal/worktree-removal-lifetime'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { holdRemovalMetadata } from '../workspaces/removal/worktree-removal-lifetime.test-fixtures'
+import { readWorktreeRemovalRecords } from '../workspaces/removal/worktree-removal-records'
+import { _resetPendingWorktreeRemovalsForTests } from '../workspaces/removal/worktree-background-removal'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
 
 const { state, foundation, runtime, i18n, launch } = vi.hoisted(() => ({
   state: {
-    store: { freezeWritesAsync: vi.fn(async () => {}) },
+    profileShutdownCheckpoint: null as Promise<void> | null,
+    store: {
+      flushPendingOrThrowAsync: vi.fn(async () => {}),
+      flushFinalOrThrowAsync: vi.fn(async () => {}),
+      freezeWritesAsync: vi.fn(async () => {})
+    },
     profileStateAdmission: initialAdmission(),
     desktopActivationGate: initialActivationGate(),
     mainProcessI18nReady: Promise.resolve()
@@ -39,46 +58,64 @@ const options = {
   handleMacAppActivation: () => {}
 }
 
+const stubStore = state.store
+
+afterEach(async () => {
+  await closeTestStores()
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  _resetPendingWorktreeRemovalsForTests()
+})
+
 beforeEach(() => {
+  state.store = stubStore
+  _resetWorktreeRemovalLifetimeForTests()
   vi.clearAllMocks()
   state.profileStateAdmission = { release: vi.fn() }
   state.desktopActivationGate = null
+  state.profileShutdownCheckpoint = null
 })
 
-describe('startup persistence lifetime', () => {
-  it('awaits writer release after a later startup phase fails', async () => {
-    const failure = new Error('runtime startup failed')
-    const admission = state.profileStateAdmission
-    runtime.mockRejectedValueOnce(failure)
-    let release = () => {}
-    state.store.freezeWritesAsync.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          release = resolve
-        })
-    )
-    const ready = initializeMainProcessReady(options)
-    const rejected = expect(ready).rejects.toBe(failure)
-    await vi.waitFor(() => expect(state.store.freezeWritesAsync).toHaveBeenCalledOnce())
+it('persists successful removal metadata after the early startup checkpoint before releasing its profile', async () => {
+  vi.useFakeTimers()
+  const directory = await mkdtemp(join(tmpdir(), 'orca-startup-final-save-'))
+  const dataFile = join(directory, 'orca-data.json')
+  const profile = createSqliteTestStore(Store, { dataFile })
+  const target = hostWorktreeTarget({ id: 'repo::feature', hostId: 'local' })
+  profile.setWorktreeMeta(target, { displayName: 'Pending workspace' })
+  await profile.flushPendingOrThrowAsync({ fullCheckpoint: true })
+  const checkpoint = Promise.withResolvers<void>()
+  state.store = {
+    flushPendingOrThrowAsync: vi.fn(async () => {
+      await profile.flushPendingOrThrowAsync({ fullCheckpoint: true })
+      checkpoint.resolve()
+    }),
+    flushFinalOrThrowAsync: vi.fn(() => profile.flushFinalOrThrowAsync()),
+    freezeWritesAsync: vi.fn(() => profile.freezeWritesAsync())
+  }
+  const admission = state.profileStateAdmission
+  const pending = await holdRemovalMetadata(directory, () => profile.removeWorktreeMeta(target))
+  const failure = new Error('runtime startup failed')
+  runtime.mockRejectedValueOnce(failure)
+  const rejected = expect(initializeMainProcessReady(options)).rejects.toBe(failure)
+  try {
+    await checkpoint.promise
+    expect(
+      JSON.parse(readPersistedStateJson(dataFile)).worktreeMeta['repo::feature']
+    ).toMatchObject({ displayName: 'Pending workspace' })
+    expect(state.store.flushFinalOrThrowAsync).not.toHaveBeenCalled()
     expect(admission?.release).not.toHaveBeenCalled()
-    release()
+    pending.release()
     await rejected
+    await pending.result
+    expect(
+      JSON.parse(readPersistedStateJson(dataFile)).worktreeMeta['repo::feature']
+    ).toBeUndefined()
+    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
     expect(admission?.release).toHaveBeenCalledOnce()
-    expect(state.profileStateAdmission).toBeUndefined()
-    expect(launch).not.toHaveBeenCalled()
-  })
-
-  it('keeps the original startup failure when cleanup also fails', async () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const failure = new Error('foundation failed')
-    foundation.mockRejectedValueOnce(failure)
-    state.store.freezeWritesAsync.mockRejectedValueOnce(new Error('close failed'))
-    try {
-      await expect(initializeMainProcessReady(options)).rejects.toBe(failure)
-      expect(log).toHaveBeenCalledOnce()
-      expect(state.profileStateAdmission?.release).not.toHaveBeenCalled()
-    } finally {
-      log.mockRestore()
-    }
-  })
+  } finally {
+    pending.release()
+    await closeTestStores()
+    await rm(directory, { recursive: true, force: true })
+  }
 })

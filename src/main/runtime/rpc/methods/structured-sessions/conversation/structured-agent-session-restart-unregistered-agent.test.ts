@@ -5,17 +5,14 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionProviderHandleRoot } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { AgentSessionResumeMarker } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import { agentSessionProviderHandleRoot } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import type { AgentSessionResumeMarker } from '../../../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../../../ipc/desktop-renderer-runtime-capabilities'
-import {
-  closeTestJournalHostDatabase,
-  openTestJournalHostDatabase
-} from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { claudeAndCodexDeclared } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { closeTestJournalHostDatabase } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { claudeAndCodexDeclared } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { StructuredAgentRegistry } from '../../../../../native-chat/agent-session-wire/providers/structured-agent-registry'
 import { StructuredAgentSessionAdapterRouter } from '../../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-router'
 import { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -24,7 +21,8 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import { AgentSessionRecoveryCapsule } from '../../../../agent-session/records/agent-session-recovery-capsule'
 import {
   openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
+  seedTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
 } from '../../../../agent-session/records/agent-session-record-store-test-harness'
 import {
   call,
@@ -121,7 +119,7 @@ it.each(['empty', 'claude-codex'] as const)(
       store,
       agents,
       adapter: router,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestAgentSessionDatabase(root),
       recoveryCapsule: capsule,
       claimKeyId: 'key-1',
       probeOwner: async () => ({ outcome: 'pid-absent' }),

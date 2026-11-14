@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   setPRAutoRefreshCadenceForHost,
   type PRAutoRefreshCadence
@@ -6,6 +6,7 @@ import {
 import { useHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { PRAutoRefreshControl } from './PRAutoRefreshControl'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 function Interactive({
   initial,
@@ -20,28 +21,71 @@ function Interactive({
   )
 }
 
+function Frame({ children }: { children: ReactNode }): React.JSX.Element {
+  return (
+    <div className="settings-view-shell p-5">
+      <SettingsGroup title="Source Control">{children}</SettingsGroup>
+    </div>
+  )
+}
+
 const width = 760
 
-/** Settings host is this device: no scope note, the hint shows today's cadence. */
 export const localDefault = defineFixture({
   width,
-  render: () => <Interactive initial="default" remoteHostName={null} />
+  render: () => (
+    <Frame>
+      <Interactive initial="default" remoteHostName={null} />
+    </Frame>
+  )
 })
 
 export const localReduced = defineFixture({
   width,
-  render: () => <Interactive initial="reduced" remoteHostName={null} />
+  render: () => (
+    <Frame>
+      <Interactive initial="reduced" remoteHostName={null} />
+    </Frame>
+  )
 })
 
 export const localOff = defineFixture({
   width,
-  render: () => <Interactive initial="off" remoteHostName={null} />
+  render: () => (
+    <Frame>
+      <Interactive initial="off" remoteHostName={null} />
+    </Frame>
+  )
 })
 
-/** A paired server is selected at the top of Settings: the control says whose timers change. */
 export const remoteMinimal = defineFixture({
   width,
-  render: () => <Interactive initial="minimal" remoteHostName="Boston build server" />
+  render: () => (
+    <Frame>
+      <Interactive initial="minimal" remoteHostName="dev-box" />
+    </Frame>
+  )
+})
+
+export const narrow = defineFixture({
+  width: 360,
+  render: () => (
+    <Frame>
+      <Interactive initial="reduced" remoteHostName={null} />
+    </Frame>
+  )
+})
+
+export const info = defineFixture({
+  width,
+  render: () => (
+    <Frame>
+      <Interactive initial="default" remoteHostName={null} />
+    </Frame>
+  ),
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('[aria-label="About PR Updates"]')?.focus()
+  }
 })
 
 const EXTERNAL_CHANGE_HOST = 'fixture-boston'
@@ -64,27 +108,36 @@ function SubscribedRemote(): React.JSX.Element {
 export const remoteExternalChange = defineFixture({
   width,
   setup: () => setPRAutoRefreshCadenceForHost(EXTERNAL_CHANGE_HOST, 'default'),
-  render: () => <SubscribedRemote />,
+  render: () => (
+    <Frame>
+      <SubscribedRemote />
+    </Frame>
+  ),
   interact: () => setPRAutoRefreshCadenceForHost(EXTERNAL_CHANGE_HOST, 'off')
 })
 
 export const remoteReading = defineFixture({
   width,
   render: () => (
-    <PRAutoRefreshControl cadence={null} onChange={() => {}} remoteHostName="Boston build server" />
+    <Frame>
+      <PRAutoRefreshControl cadence={null} onChange={() => {}} remoteHostName="dev-box" />
+    </Frame>
   )
 })
 
-/** The paired server is an older Orca that has no such setting: shown as Default, not changeable,
- *  with the reason in place of the cadence hint and no scope note. */
 export const remoteOlderHost = defineFixture({
   width,
   render: () => (
-    <PRAutoRefreshControl
-      cadence={null}
-      unsupported
-      onChange={() => {}}
-      remoteHostName="Boston build server"
-    />
-  )
+    <Frame>
+      <PRAutoRefreshControl
+        cadence={null}
+        unsupported
+        onChange={() => {}}
+        remoteHostName="dev-box"
+      />
+    </Frame>
+  ),
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('[role="radio"]')?.focus()
+  }
 })

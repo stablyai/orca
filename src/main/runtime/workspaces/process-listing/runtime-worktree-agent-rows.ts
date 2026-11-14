@@ -3,6 +3,7 @@ import {
   isAgentStatusFresh
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 
+import { runtimeWorktreeAgentRowForked } from './runtime-worktree-agent-row-fork'
 import type {
   RuntimeWorktreeAgentRow,
   RuntimeWorktreePsSummary
@@ -58,6 +59,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
   const { rowSources } = args
   const now = Date.now()
   const rowsBySummary = new Map<RuntimeWorktreePsSummary, RuntimeWorktreeAgentRow[]>()
+  const forked = runtimeWorktreeAgentRowForked()
   for (const source of rowSources.values()) {
     const { worktreeId } = source
     if (!worktreeId) {
@@ -84,6 +86,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
       taskTitle: orchestration?.taskTitle ?? null,
       displayName: orchestration?.displayName ?? null,
       ...(conversationName ? { conversationName } : {}),
+      ...(conversationName && forked(source.tabId) ? { conversationForked: true as const } : {}),
       lastAssistantMessage: source.lastAssistantMessage,
       toolName: source.toolName,
       toolInput: source.toolInput,

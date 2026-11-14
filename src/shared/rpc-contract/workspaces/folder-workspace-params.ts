@@ -112,7 +112,9 @@ export const FolderWorkspaceSelector = z.object({
 })
 
 export const FolderWorkspaceDelete = FolderWorkspaceSelector.extend({
-  requireUniqueId: RequireUniqueId
+  requireUniqueId: RequireUniqueId,
+  runHooks: z.boolean().optional(),
+  allowFailedArchiveHook: z.boolean().optional()
 })
 
 export const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [

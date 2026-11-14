@@ -2,7 +2,7 @@ import { isAgentSessionRefusalError } from '../../../../shared/agent-session/fai
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
-} from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
@@ -64,7 +64,12 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
   plan: ReadyOperationPlan<T>,
   run: (selection: ReadyOperationSelection) => Promise<AgentSessionMutationResult<T>>,
   options: {
-    beforeAgent?: (row: AgentSessionRecord | null) => AgentSessionMutationSessionPreparation | null
+    beforeAgent?: (
+      row: AgentSessionRecord | null
+    ) =>
+      | AgentSessionMutationSessionPreparation
+      | null
+      | Promise<AgentSessionMutationSessionPreparation | null>
     goal?: boolean
     needsAgent?: (record: AgentSessionRecord | null) => boolean
   } = {}
@@ -98,9 +103,11 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
         let recorded: boolean
         try {
           recorded =
-            context.deps.store.readCommandReceipt(
-              commandReceiptScope(callerKey, plan.operationIdScope),
-              envelope.clientOperationId
+            (
+              await context.deps.store.readCommandReceipt(
+                commandReceiptScope(callerKey, plan.operationIdScope),
+                envelope.clientOperationId
+              )
             ).verdict !== 'absent'
         } catch (error) {
           context.deps.logger.warn('reading a command receipt failed', {
@@ -158,7 +165,7 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
             return { result: await run({ ok: true, child: null, replay: true }) }
           }
           const turn = mutationReplayContext(request, journal, current.record)
-          const answer = replayRecordedOperation(
+          const answer = await replayRecordedOperation(
             { envelope, plan: { ...plan, replay: plan.replay } },
             turn,
             current.decision.row
@@ -184,7 +191,7 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
           return opened
         }
         const current = context.deps.store.requireWritableRecord(envelope.sessionId)
-        const checked = options.beforeAgent?.(current)
+        const checked = await options.beforeAgent?.(current)
         if (checked && !checked.ok) {
           return checked
         }
@@ -216,13 +223,14 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
           result: await run({ ok: true, child: child.child, deadline, signal: authority?.signal })
         }
       }
-      context.deliveryOrder.reconcile(
+      // Queued sends reserve their places first so this operation stays behind them.
+      await context.deliveryOrder.reconcile(
         envelope.sessionId,
         context.sessions.get(envelope.sessionId)?.journal
       )
       const place = context.deliveryOrder.reserve(envelope.sessionId)
       return {
-        start: child.child ? null : context.claimAgent(envelope.sessionId, callerKey),
+        start: child.child ? null : await context.claimAgent(envelope.sessionId, callerKey),
         child: child.child,
         readiness: child.readiness,
         place

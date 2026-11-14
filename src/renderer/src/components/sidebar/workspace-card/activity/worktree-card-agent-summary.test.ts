@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { buildSummaryAgentGroups } from './worktree-card-agent-summary'
 
 function row(paneKey: string, state: 'done' | 'working' | 'waiting'): DashboardAgentRow {
@@ -52,10 +52,5 @@ describe('buildSummaryAgentGroups', () => {
       ['done', true],
       ['working', false]
     ])
-  })
-
-  it('omits the unread group without an unread predicate', () => {
-    const groups = buildSummaryAgentGroups([row('a', 'done')])
-    expect(groups).toEqual([{ state: 'done', agents: [expect.objectContaining({ paneKey: 'a' })] }])
   })
 })

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
+import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 const API_VERSION = '2022-11-28'
 export const MAX_RELEASE_BODY_LENGTH = 120_000
 const TRUNCATION_NOTICE =
   '\n\n---\nRelease notes were truncated because GitHub release bodies are limited to 125,000 characters.'
+const FULL_SHA = /^[a-f0-9]{40}$/
 const DESKTOP_RELEASE_TAG_PATTERN = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/
 
 export function parseDesktopReleaseTag(tag) {
@@ -111,11 +113,82 @@ export function truncateReleaseBody(body, maxLength = MAX_RELEASE_BODY_LENGTH) {
   return `${body.slice(0, availableLength).trimEnd()}${TRUNCATION_NOTICE}`
 }
 
+async function readTagObject({ base, tag, token, fetchImpl }) {
+  const ref = await githubJson(fetchImpl, `${base}/git/ref/tags/${encodeURIComponent(tag)}`, token)
+  const object = ref?.object
+  if (
+    ref?.ref !== `refs/tags/${tag}` ||
+    !FULL_SHA.test(object?.sha ?? '') ||
+    (object.type !== 'tag' && object.type !== 'commit')
+  ) {
+    throw new Error(`Missing exact remote tag ${tag}`)
+  }
+  return object
+}
+
+// The existing tag owns source identity. Peel the captured object ID, never the tag name again,
+// so every source read describes the same immutable object.
+async function verifyReleaseSource(identity) {
+  const { base, tag, token, targetCommitish, sourceSha, fetchImpl } = identity
+  const object = await readTagObject(identity)
+  let commitSha = object.sha
+  if (object.type === 'tag') {
+    const annotated = await githubJson(fetchImpl, `${base}/git/tags/${object.sha}`, token)
+    if (annotated?.sha !== object.sha || annotated.object?.type !== 'commit') {
+      throw new Error(`Remote tag ${tag} does not point directly at a release commit`)
+    }
+    commitSha = annotated.object.sha
+  }
+  const commit = await githubJson(fetchImpl, `${base}/git/commits/${commitSha}`, token)
+  if (
+    commit?.sha !== commitSha ||
+    commitSha !== targetCommitish ||
+    (commitSha !== sourceSha &&
+      !(commit.parents?.length === 1 && commit.parents[0]?.sha === sourceSha))
+  ) {
+    throw new Error(`Remote tag ${tag} does not match the approved release source and checkout`)
+  }
+  return object.sha
+}
+
+async function assertTagUnchanged(identity, tagObject, phase) {
+  if ((await readTagObject(identity)).sha !== tagObject) {
+    throw new Error(`Remote tag ${identity.tag} changed ${phase}`)
+  }
+}
+
+// Mirror electron-builder's publisher: default first page, first exact or bare-version match.
+// A default-branch target must never leave an untagged or shadowed draft the uploader would miss.
+async function verifyUploaderDraft({ base, tag, token, release, fetchImpl, sleep }) {
+  if (!Number.isInteger(release?.id) || release.draft !== true || release.tag_name !== tag) {
+    throw new Error(`Expected an exact-tag draft for ${tag}`)
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const page = await githubJson(fetchImpl, `${base}/releases`, token)
+    if (!Array.isArray(page)) {
+      throw new Error('GitHub releases response was not an array')
+    }
+    const selected = page.find((item) => item?.tag_name === tag || item?.tag_name === tag.slice(1))
+    if (selected) {
+      if (selected.id !== release.id || selected.tag_name !== tag || selected.draft !== true) {
+        throw new Error(`Uploader would not select the prepared draft ${tag}`)
+      }
+      return
+    }
+    if (attempt < 2) {
+      await sleep(1000)
+    }
+  }
+  throw new Error(`Prepared draft ${tag} is not visible to the uploader`)
+}
+
 export async function createDraftRelease({
   repo,
   tag,
   token,
   targetCommitish,
+  sourceSha,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   fetchImpl = fetch,
   log = console.log
 }) {
@@ -135,9 +208,23 @@ export async function createDraftRelease({
   const releases = await fetchRepoReleases(repo, token, fetchImpl)
   const existingRelease = releases.find((release) => release?.tag_name === tag)
   if (existingRelease && existingRelease.draft !== true) {
-    log(`Release ${tag} already exists and is published.`)
-    return
+    // Fail rather than succeed: downstream builds must never run without a prepared draft.
+    throw new Error(`Release ${tag} is already published; refusing to prepare a draft.`)
   }
+  if (!FULL_SHA.test(sourceSha ?? '') || !FULL_SHA.test(targetCommitish)) {
+    throw new Error('Approved source and checkout must be full commit SHAs')
+  }
+  const base = `https://api.github.com/repos/${repo}`
+  const identity = { base, tag, token, targetCommitish, sourceSha, fetchImpl }
+  const tagObject = await verifyReleaseSource(identity)
+  const repository = await githubJson(fetchImpl, base, token)
+  if (typeof repository?.default_branch !== 'string' || !repository.default_branch) {
+    throw new Error('Repository default branch is missing')
+  }
+  // API metadata only: GitHub ignores target_commitish for an existing tag, and a release-SHA target
+  // needs workflow authority GITHUB_TOKEN cannot get (403 in run 43573545467).
+  const targetMetadata = repository.default_branch
+  let preparedRelease
 
   const previousTag = latestPreviousPublishedDesktopReleaseTag(releases, tag)
   const generateNotesBody = {
@@ -174,9 +261,14 @@ export async function createDraftRelease({
       token
     )
     if (currentRelease?.draft !== true) {
-      log(`Release ${tag} was published while notes were generated; leaving it unchanged.`)
-      return
+      throw new Error(
+        `Release ${tag} was published while notes were generated; leaving it unchanged.`
+      )
     }
+    if (currentRelease.tag_name !== tag || currentRelease.id !== existingRelease.id) {
+      throw new Error(`Draft identity changed for ${tag}`)
+    }
+    await assertTagUnchanged(identity, tagObject, 'during draft preparation')
     // PATCH has no conditional/version guard; if publication wins the GET/PATCH race, restore the published body.
     const patchedRelease = await githubJson(
       fetchImpl,
@@ -184,14 +276,15 @@ export async function createDraftRelease({
       token,
       {
         method: 'PATCH',
-        body: JSON.stringify({ body })
+        body: JSON.stringify({ body, target_commitish: targetMetadata })
       }
     )
     if (patchedRelease?.draft !== true) {
       const publishedBody = typeof currentRelease.body === 'string' ? currentRelease.body : ''
       if (publishedBody === body) {
-        log(`Release ${tag} was published while notes were patched; its body is unchanged.`)
-        return
+        throw new Error(
+          `Release ${tag} was published while notes were patched; its body is unchanged.`
+        )
       }
       // Rollback only our exact body or it can clobber a newer edit.
       const releaseBeforeRollback = await githubJson(
@@ -200,10 +293,9 @@ export async function createDraftRelease({
         token
       )
       if (releaseBeforeRollback?.body !== body) {
-        log(
+        throw new Error(
           `Release ${tag} was published and its body changed again while notes were patched; leaving the newer body in place.`
         )
-        return
       }
       await githubJson(
         fetchImpl,
@@ -214,14 +306,16 @@ export async function createDraftRelease({
           body: JSON.stringify({ body: publishedBody })
         }
       )
-      log(
+      throw new Error(
         `Release ${tag} was published while notes were patched; restored its published body and left the generated notes unapplied.`
       )
-      return
     }
+    preparedRelease = patchedRelease
   } else {
-    // Set target_commitish to detached release-bump commit; default branch creates an untagged draft that electron-builder misses, publishing incomplete assets to /latest.
-    const createdRelease = await githubJson(
+    await assertTagUnchanged(identity, tagObject, 'during draft preparation')
+    // #21835: a default-branch target without the tag yields an untagged draft electron-builder misses.
+    // The tag was verified above and the uploader check below refuses that shape.
+    preparedRelease = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases`,
       token,
@@ -229,7 +323,7 @@ export async function createDraftRelease({
         method: 'POST',
         body: JSON.stringify({
           tag_name: tag,
-          target_commitish: targetCommitish,
+          target_commitish: targetMetadata,
           name,
           body,
           draft: true,
@@ -238,12 +332,10 @@ export async function createDraftRelease({
         })
       }
     )
-    if (createdRelease?.draft !== true || createdRelease?.tag_name !== tag) {
-      throw new Error(
-        `GitHub created ${createdRelease?.draft ? 'draft' : 'published'} release ${createdRelease?.tag_name ?? '<missing>'} instead of draft ${tag}`
-      )
-    }
   }
+
+  await verifyUploaderDraft({ base, tag, token, release: preparedRelease, fetchImpl, sleep })
+  await assertTagUnchanged(identity, tagObject, 'after draft preparation')
 
   if (generatedBody.length !== body.length) {
     log(
@@ -254,6 +346,7 @@ export async function createDraftRelease({
       `${existingRelease ? 'Updated' : 'Created'} draft release ${tag} with generated notes (${body.length} chars).`
     )
   }
+  return { tagObject, releaseSha: targetCommitish }
 }
 
 async function main() {
@@ -261,7 +354,13 @@ async function main() {
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
   const targetCommitish = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-  await createDraftRelease({ repo, tag, token, targetCommitish })
+  const sourceSha = process.env.SOURCE_SHA
+  const prepared = await createDraftRelease({ repo, tag, token, targetCommitish, sourceSha })
+  if (process.env.GITHUB_OUTPUT) {
+    // publish-release re-reads the tag against these before undrafting.
+    const output = `tag_object=${prepared.tagObject}\nrelease_sha=${prepared.releaseSha}\n`
+    appendFileSync(process.env.GITHUB_OUTPUT, output)
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

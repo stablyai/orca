@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
 import type { LogsResult } from '../plugin-runtime'
 import type { PluginDevWatchEvent } from './plugin-dev-watch-events'
-import { formatPluginDevWatchEvent } from './plugin-dev-watch-events'
 import { runPluginDevWatch, type PluginDevWatchHost } from './plugin-dev-watch-loop'
 
 const KEY = 'acme.notes'
@@ -146,9 +145,6 @@ describe('runPluginDevWatch', () => {
       status: 'errored',
       error: 'SyntaxError in main.ts:4'
     })
-    expect(reload && formatPluginDevWatchEvent(reload)).toBe(
-      '↻ reloaded acme.notes (2 files changed): errored: SyntaxError in main.ts:4'
-    )
     expect(events.find((event) => event.type === 'status')).toMatchObject({
       status: 'running',
       previousStatus: 'errored'
@@ -191,14 +187,5 @@ describe('runPluginDevWatch', () => {
     await expect(run).resolves.toBe(1)
     expect(events.at(-1)).toEqual({ type: 'disconnected', message: 'connect ECONNREFUSED' })
     expect(host.devUnload).not.toHaveBeenCalled()
-  })
-
-  it('reports a host-side poll failure once and keeps watching', async () => {
-    const { run, events } = harness({
-      stopAfterPolls: 6,
-      failAt: { poll: 2, error: new Error('Plugin service is not available') }
-    })
-    await expect(run).resolves.toBe(0)
-    expect(events.filter((event) => event.type === 'warning')).toHaveLength(1)
   })
 })

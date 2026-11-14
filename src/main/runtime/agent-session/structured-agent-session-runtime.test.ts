@@ -13,8 +13,13 @@ import { seedTestAgentSessionRecordStore } from './records/agent-session-record-
 import { nativeChatScratchFolderFor } from '../../native-chat/conversation-files/native-chat-scratch-folder'
 import { foundAgentSessionRecord } from './records/agent-session-record-founding'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { onStructuredAgentSessionsHeldChanged } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { openAgentSessionRecordStoreOnce } from './records/agent-session-record-store-slot'
+import {
+  journalSqlReaderPath,
+  journalSqlWorkerPath
+} from '../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 
 const HOST_ID = 'local'
 
@@ -55,6 +60,15 @@ describe('structured agent-session runtime install', () => {
     fullAccessAgents: readonly string[],
     logger = recordingStructuredAgentSessionLogger().logger
   ) {
+    await openAgentSessionRecordStoreOnce({
+      stateDirectory: stateDirectory!,
+      hostId: HOST_ID,
+      logger,
+      legacySessionTabIds: [],
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceTick: () => {}
+    })
     return await ensureStructuredAgentSessionHost({
       logger,
       stateDirectory: stateDirectory!,
@@ -83,7 +97,9 @@ describe('structured agent-session runtime install', () => {
       }
     })
     try {
-      await installOver([])
+      const host = await installOver(['codex'])
+      expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe('full-access')
+      expect((await host.readOptions('old-codex')).current.permissionMode).toBe('full-access')
     } finally {
       stopListening()
     }

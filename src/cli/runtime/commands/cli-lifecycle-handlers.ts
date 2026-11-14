@@ -1,0 +1,174 @@
+import { reenterPackagedElectron } from '../app-launch/packaged-cli-interpreter'
+import { spawn } from 'node:child_process'
+import { resolve } from 'node:path'
+import type { CommandHandler } from '../../dispatch/dispatch'
+import { formatCliStatus, formatCliStatus as formatStatus } from '../status/cli-status-format'
+import { printResult } from '../../output/command-result-output'
+import { RuntimeClientError } from '../connection/types'
+import { serveOrcaApp } from '../launch'
+import { getOptionalServeBind } from './serve-bind-flag'
+import { stripElectronRunAsNode } from '../orca-app-executable'
+import { resolveCliStatusCaller } from '../status/status-caller'
+import { getServeSuperviseValidationError } from '../serve/supervision/serve-supervised-service'
+import { getOptionalServePort } from './serve-port-flag'
+import { resolveLaunchUserDataPath } from '../profile/launch-user-data-path'
+import { getServeOptionValidationError } from '../../../shared/serve-option-validation'
+
+function envRecord(): Record<string, string> {
+  // Inherited ELECTRON_RUN_AS_NODE would force nested Electron children into plain Node mode.
+  const env = stripElectronRunAsNode(process.env)
+  return Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+  )
+}
+
+function withTeammateModeAuto(args: string[]): string[] {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]
+    if (arg === '--teammate-mode' || arg.startsWith('--teammate-mode=')) {
+      return args
+    }
+  }
+  return ['--teammate-mode', 'auto', ...args]
+}
+
+async function runClaudeAgentTeams(env: Record<string, string>, args: string[]): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn('claude', withTeammateModeAuto(args), {
+      stdio: 'inherit',
+      env
+    })
+    child.once('error', reject)
+    child.once('exit', (code, signal) => {
+      if (typeof code === 'number') {
+        resolve(code)
+        return
+      }
+      resolve(signal ? 1 : 0)
+    })
+  })
+}
+
+export const CORE_HANDLERS: Record<string, CommandHandler> = {
+  'claude-teams': async ({ client, rawArgs }) => {
+    if (process.platform === 'win32') {
+      throw new RuntimeClientError(
+        'unsupported_platform',
+        'Claude Agent Teams native panes are not supported on Windows.'
+      )
+    }
+    const paneKey = process.env.ORCA_PANE_KEY
+    if (!paneKey) {
+      throw new RuntimeClientError(
+        'invalid_environment',
+        'orca claude-teams must be run inside an Orca terminal.'
+      )
+    }
+    const inheritedEnv = envRecord()
+    const response = await client.call<{
+      launch: { env: Record<string, string>; envToDelete?: string[] }
+    }>('agentTeams.prepareLaunch', {
+      paneKey,
+      env: inheritedEnv,
+      prepareAuth: true
+    })
+    for (const key of response.result.launch.envToDelete ?? []) {
+      delete inheritedEnv[key]
+    }
+    process.exitCode = await runClaudeAgentTeams(
+      {
+        ...inheritedEnv,
+        ...response.result.launch.env
+      },
+      rawArgs ?? []
+    )
+  },
+  open: async ({ client, json }) => {
+    const result = await client.openOrca()
+    printResult(result, json, formatCliStatus)
+  },
+  serve: async ({ flags, json }) => {
+    if (flags.get('reclaim-stale-lock') === true) {
+      const dataRoot = flags.get('data-root')
+      // Why refuse rather than default: a missing value would point a destructive command elsewhere.
+      if (flags.has('data-root') && (typeof dataRoot !== 'string' || !dataRoot.trim())) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--data-root expects a directory. Usage: orca serve --reclaim-stale-lock [--data-root <dir>] [--yes] [--json]'
+        )
+      }
+      // Why lazy: only this mode needs orcad's lock code, and every other command skips loading it.
+      const { printOrcadStaleLockReclaimResult, reclaimStaleOrcadInstanceLock } =
+        await import('../../../main/orcad/instance-lock/orcad-stale-lock-reclaim.js')
+      const result = await reclaimStaleOrcadInstanceLock(
+        typeof dataRoot === 'string' ? resolve(dataRoot) : resolveLaunchUserDataPath(),
+        // This CLI's own binary is no command to give a user; `orca serve` is.
+        { yes: flags.get('yes') === true, hintRuntime: null }
+      )
+      printOrcadStaleLockReclaimResult(result, json)
+      process.exitCode = result.exitCode
+      return
+    }
+    const projectRootValue = flags.get('project-root')
+    const projectRoot = typeof projectRootValue === 'string' ? projectRootValue : null
+    const noPairing = flags.get('no-pairing') === true
+    const mobilePairing = flags.get('mobile-pairing') === true
+    const grantDesktopControl = flags.get('grant-desktop-control') === true
+    const allowPublic = flags.get('allow-public') === true
+    const refusePublic = flags.get('refuse-public') === true
+    const recipeJson = flags.get('recipe-json') === true
+    const force = flags.get('force') === true
+    const supervise = flags.get('supervise') === true
+    const superviseError = getServeSuperviseValidationError({ supervise, recipeJson })
+    if (superviseError) {
+      throw new RuntimeClientError('invalid_argument', superviseError)
+    }
+    const bind = getOptionalServeBind(flags) ?? null
+    const validationError = getServeOptionValidationError({
+      bind,
+      noPairing,
+      mobilePairing,
+      grantDesktopControl,
+      allowPublic,
+      refusePublic,
+      recipeJson,
+      projectRoot
+    })
+    if (validationError) {
+      throw new RuntimeClientError('invalid_argument', validationError)
+    }
+    const port = getOptionalServePort(flags)
+    const pairingAddressValue = flags.get('pairing-address')
+    reenterPackagedElectron()
+    const exitCode = await serveOrcaApp({
+      json,
+      port,
+      bind,
+      pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
+      noPairing,
+      mobilePairing,
+      grantDesktopControl,
+      recipeJson,
+      projectRoot,
+      ...(allowPublic ? { allowPublic: true } : {}),
+      ...(refusePublic ? { refusePublic: true } : {}),
+      ...(force ? { force: true } : {}),
+      ...(supervise ? { supervise: true } : {})
+    })
+    process.exitCode = exitCode
+  },
+  status: async ({ client, json }) => {
+    const result = await client.getCliStatus()
+    if (!json && !result.result.runtime.reachable) {
+      process.exitCode = 1
+    }
+    const caller = result.result.runtime.reachable
+      ? await resolveCliStatusCaller(client)
+      : undefined
+    printResult(
+      caller === undefined ? result : { ...result, result: { ...result.result, caller } },
+      json,
+      formatStatus
+    )
+  }
+}

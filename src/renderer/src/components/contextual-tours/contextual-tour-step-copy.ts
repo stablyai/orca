@@ -117,7 +117,7 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
   'browser-extensions-intro': () => ({
     title: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.title',
-      'Chrome extensions'
+      'Bring your Chrome extensions'
     ),
     body: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.body',

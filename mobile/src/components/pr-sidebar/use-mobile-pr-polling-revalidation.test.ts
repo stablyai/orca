@@ -16,9 +16,9 @@ import {
 import {
   prBranchReviewQuery,
   type PrQueryScope
-} from '../../source-control/review/mobile-pr-queries'
-import type { PrBranchReview } from '../../source-control/review/mobile-pr-sidebar-state'
-import { useMobilePrPolling } from './use-mobile-pr-polling'
+} from '../../source-control/review/pull-request/mobile-pr-queries'
+import type { PrBranchReview } from '../../source-control/review/pull-request/mobile-pr-sidebar-state'
+import { useMobilePrPolling } from '../../source-control/review/pull-request/use-mobile-pr-polling'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')

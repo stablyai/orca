@@ -1,6 +1,6 @@
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 
 // Keep typical snapshot pages below the remote reply limit; retry smaller when needed.

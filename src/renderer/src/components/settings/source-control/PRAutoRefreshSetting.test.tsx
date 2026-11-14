@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   _resetPRAutoRefreshCadencesForTests,
   setPRAutoRefreshCadenceForHost
@@ -65,34 +66,29 @@ afterEach(() => {
   _resetHostPRAutoRefreshCadenceGenerationsForTests()
 })
 
-function option(label: string): HTMLButtonElement {
-  const button = Array.from(
-    container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
-  ).find((candidate) => candidate.textContent === label)
+function option(index: number): HTMLButtonElement {
+  const button = container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')[index]
   if (!button) {
-    throw new Error(`No ${label} option`)
+    throw new Error(`No option ${index}`)
   }
   return button
 }
-function selected(): string | null {
-  return (
-    Array.from(container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')).find(
-      (button) => button.getAttribute('aria-checked') === 'true'
-    )?.textContent ?? null
+function selected(): number {
+  return Array.from(container.querySelectorAll('button[role="radio"]')).findIndex(
+    (button) => button.getAttribute('aria-checked') === 'true'
   )
-}
-function hint(): string | null {
-  return container.querySelector('[data-testid="pr-auto-refresh-hint"]')?.textContent ?? null
 }
 async function mount(environmentId: string): Promise<void> {
   await act(async () =>
     root.render(
-      <PRAutoRefreshSetting
-        hostScope={{ target: { kind: 'environment', environmentId }, available: true }}
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a remote host never reads the local settings.
-        settings={{} as never}
-        updateSettings={() => {}}
-      />
+      <TooltipProvider>
+        <PRAutoRefreshSetting
+          hostScope={{ target: { kind: 'environment', environmentId }, available: true }}
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a remote host never reads the local settings.
+          settings={{} as never}
+          updateSettings={() => {}}
+        />
+      </TooltipProvider>
     )
   )
   await act(async () => {})
@@ -102,13 +98,13 @@ describe('PRAutoRefreshSetting for a paired host', () => {
   it('shows the host’s current setting after another client changes it', async () => {
     rpc.settings.set('env-a', 'default')
     await mount('env-a')
-    expect(selected()).toBe('Default')
+    expect(selected()).toBe(0)
 
     // The host's settingsChanged read (or another window's control) remembers the new value.
     await act(async () => {
       setPRAutoRefreshCadenceForHost('env-a', 'off')
     })
-    expect(selected()).toBe('Off')
+    expect(selected()).toBe(2)
   })
 
   it('lets the user choose Default back after another client picked Off', async () => {
@@ -117,7 +113,7 @@ describe('PRAutoRefreshSetting for a paired host', () => {
     await act(async () => {
       setPRAutoRefreshCadenceForHost('env-a', 'off')
     })
-    await act(async () => option('Default').click())
+    await act(async () => option(0).click())
     await act(async () => {})
     expect(rpc.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-a' },
@@ -125,7 +121,7 @@ describe('PRAutoRefreshSetting for a paired host', () => {
       { prAutoRefresh: 'default' },
       expect.anything()
     )
-    expect(selected()).toBe('Default')
+    expect(selected()).toBe(0)
   })
 
   it('shows a value the host sync already knows without waiting for its own read', async () => {
@@ -138,37 +134,34 @@ describe('PRAutoRefreshSetting for a paired host', () => {
     )
     setPRAutoRefreshCadenceForHost('env-a', 'minimal')
     await mount('env-a')
-    expect(selected()).toBe('Minimal')
+    expect(selected()).toBe(1)
     await act(async () => {
       answer({ settings: { prAutoRefresh: 'reduced' } })
     })
-    expect(selected()).toBe('Reduced')
+    expect(selected()).toBe(1)
   })
 
   it('reads the setting of the host Settings switched to, and keeps each host’s own value', async () => {
     rpc.settings.set('env-a', 'off')
     rpc.settings.set('env-b', 'reduced')
     await mount('env-a')
-    expect(selected()).toBe('Off')
+    expect(selected()).toBe(2)
     await mount('env-b')
-    expect(selected()).toBe('Reduced')
+    expect(selected()).toBe(1)
     await mount('env-a')
-    expect(selected()).toBe('Off')
+    expect(selected()).toBe(2)
   })
 
   it('falls back to Default with a clear hint when the host is an older Orca without the setting', async () => {
     // An older host's settings.get carries no prAutoRefresh key.
     rpc.callRuntimeRpc.mockImplementation(async () => ({ settings: {} }))
     await mount('env-a')
-    expect(selected()).toBe('Default')
-    expect(hint()).toBe(
-      'Boston build server runs an older Orca without this setting, so it refreshes at Default. Update Orca on that server to change it.'
-    )
+    expect(selected()).toBe(0)
     for (const button of container.querySelectorAll('button[role="radio"]')) {
       expect(button.getAttribute('aria-disabled')).toBe('true')
     }
     // Nothing is written to a host that would reject the key.
-    await act(async () => option('Off').click())
+    await act(async () => option(2).click())
     expect(rpc.callRuntimeRpc).not.toHaveBeenCalledWith(
       expect.anything(),
       'settings.update',

@@ -9,11 +9,11 @@ import {
   markPRCommentThreadResolved,
   restorePRCommentThreadSnapshot
 } from '@/lib/source-control/review/comments/pr-comment-thread-resolution'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
-import { resolveGitLabMRDiscussionForChecks } from '../gitlab-review-client'
+import { resolveGitLabMRDiscussionForChecks } from '../review-data/gitlab-review-client'
 import { checksPanelReviewStableKey, clearPendingPRCommentAiAck } from './pr-comments-ai-launch-ack'
 import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 import { translate } from '@/i18n/i18n'

@@ -1,6 +1,6 @@
 import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type { HostReadIntent } from '../../query/host-read-intent'
-import type { GitHubPrForBranchOutcome } from './github-pr-read-reply-schema'
+import type { GitHubPrForBranchOutcome } from './github-operations/github-pr-read-reply-schema'
 
 /** A PR read; `retryAfterMs` asks for another read that soon while the host revalidates, and
  *  `revalidationOnly` says the host sent no answer at all, so nothing shown may change. */

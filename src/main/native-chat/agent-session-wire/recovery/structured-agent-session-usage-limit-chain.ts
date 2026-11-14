@@ -7,14 +7,10 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isStructuredAgentSessionCommandEntry } from '../../../../shared/agent-session/structured-agent-session-command-entry'
 import type { AgentSessionUsageLimit } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { restoreJournal } from '../../agent-session-journal/replay/journal-open'
-import { renderJournalStatus } from '../../agent-session-journal/projection/journal-public-read'
-import { journalInputOrder } from '../../agent-session-journal/input-order/journal-input-order'
-import { journalItemExecutionFence } from '../../agent-session-journal/projection/journal-item-provenance'
-import type Database from '../../../sqlite/sync-database'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
+import { journalSqlReads } from '../../agent-session-journal/journal-sql-reads'
 import {
-  latestNativeChatUsageLimitCut,
   nativeChatUsageLimitOfRow,
   type NativeChatUsageLimitCut
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
@@ -192,18 +188,10 @@ export function hostUsageLimitCut(
 }
 
 /** Reads a chat's saved conversation without opening it, as main does for unopened chats. */
-export function readSavedUsageLimitCut(
-  db: Database.Database,
+export async function readSavedUsageLimitCut(
+  database: JournalSqlDatabase,
   id: string
-): HostUsageLimitCut | null {
-  const load = restoreJournal(db, id)
-  if (!load || load.newer || load.damage) {
-    return null
-  }
-  const snapshot = renderJournalStatus(load.state, journalInputOrder(load.state))
-  return hostUsageLimitCut(
-    snapshot,
-    latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions),
-    (itemId) => journalItemExecutionFence(load.state, itemId)
-  )
+): Promise<HostUsageLimitCut | null> {
+  const epoch = await database.ensureSessionEpoch(id)
+  return epoch === null ? null : journalSqlReads(database.readers, id).usageLimitCut()
 }

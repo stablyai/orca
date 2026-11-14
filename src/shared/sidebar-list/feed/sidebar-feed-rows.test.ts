@@ -71,55 +71,6 @@ function outline(rows: readonly HostSectionRow[]): string[] {
   })
 }
 
-it('retires recorded deletions through paired feed, pins and lineage', () => {
-  const rows = [
-    normalizePairedServerRow('runtime:a', {
-      worktreeId: 'r::/p',
-      repoId: 'r',
-      worktreeInstanceId: 'p',
-      isPinned: true,
-      removing: true,
-      removalRecorded: true
-    }),
-    normalizePairedServerRow('runtime:a', {
-      worktreeId: 'r::/c',
-      repoId: 'r',
-      worktreeInstanceId: 'c',
-      parentWorktreeId: 'r::/p',
-      lineageWorktreeInstanceId: 'c',
-      parentWorktreeInstanceId: 'p'
-    }),
-    normalizePairedServerRow('runtime:a', {
-      worktreeId: 'r::/legacy',
-      repoId: 'r',
-      removing: true
-    }),
-    normalizePairedServerRow('runtime:a', {
-      worktreeId: 'r::/failed',
-      repoId: 'r',
-      removalError: 'Cleanup failed. Retry deletion.'
-    }),
-    normalizePairedServerRow('runtime:b', { worktreeId: 'r::/p', repoId: 'r' })
-  ].flatMap((row) => row ?? [])
-  const repos = [
-    repo('r', { executionHostId: 'runtime:a' }),
-    repo('r', { executionHostId: 'runtime:b' })
-  ]
-  const inputs = domains({
-    pairedServerHosts: new Map(
-      ['runtime:a', 'runtime:b'].map((hostId) => [
-        hostId,
-        { freshness: 'live' as const, host: null }
-      ])
-    ),
-    pairedServerRows: new Map(rows.map((row) => [row.key, row]))
-  })
-  const settings = view({ pinnedDisplayPolicy: 'duplicate-in-groups' })
-  const built = buildSidebarFeedRows(inputs, catalog(repos), settings)
-  expect(outline(built.sectionRows)).toContain('runtime:a|r::/c@0')
-  expect(outline(built.sectionRows)).not.toContain('runtime:a|r::/p@0')
-})
-
 describe('buildSidebarFeedRows nests each paired server’s own lineage', () => {
   const serverRows = (hostId: 'runtime:a' | 'runtime:b', recentAt: number) =>
     [

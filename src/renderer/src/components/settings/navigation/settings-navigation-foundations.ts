@@ -9,6 +9,7 @@ import type {
   SettingsNavTarget
 } from '@/components/settings/navigation/settings-navigation-types'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
+import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
 import { parseSettingsTitleTargetId } from '../section-layout/settings-target-highlight'
 
 export const SETTINGS_NAV_GROUPS = [
@@ -168,6 +169,7 @@ function hasNestedScroller(target: HTMLElement, container: HTMLElement): boolean
 }
 
 export function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | null): void {
+  cancelSettingsListReveal()
   // Whole-pane swaps need inner scrolling only when the pane exceeds the viewport.
   const target = getSettingsScrollTarget(targetId, container)
   if (!target) {

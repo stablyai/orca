@@ -33,7 +33,7 @@ import {
   readAllAutomationRuns,
   readAutomationRunsPage
 } from './automation-runs-paging'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   getOptionalWorktreeSelector,
   resolveCurrentWorktreeSelector

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { directWire, directWireTracker } from '../../transport/rpc/direct-rpc-wire-test-harness'
 import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
-import { fetchPRForBranch } from './github-pr-rpc'
-import { loadPrBranchReview, type PrBranchReview } from './mobile-pr-sidebar-state'
-import type { WorktreeGitHubPRLink } from './mobile-pr-link'
+import { fetchPRForBranch } from './github-operations/github-pr-rpc'
+import { loadPrBranchReview, type PrBranchReview } from './pull-request/mobile-pr-sidebar-state'
+import type { WorktreeGitHubPRLink } from './creation/mobile-pr-link'
 
 const pr = {
   number: 7,

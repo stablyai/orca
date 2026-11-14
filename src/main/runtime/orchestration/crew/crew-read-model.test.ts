@@ -6,7 +6,7 @@ import { buildCrewSnapshot } from './crew-party-snapshot'
 import { CrewReadModel } from './crew-read-model'
 import { subscribeCrew } from './crew-stream'
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
 import { fixture } from './crew-read-model.test-fixture'
 

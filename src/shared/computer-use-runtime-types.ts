@@ -10,6 +10,7 @@ export const COMPUTER_ERROR_CODES = {
   provider_incompatible: 'provider_incompatible',
   unsupported_capability: 'unsupported_capability',
   permission_denied: 'permission_denied',
+  screen_locked: 'screen_locked',
   element_not_found: 'element_not_found',
   element_not_clickable: 'element_not_clickable',
   element_not_enabled: 'element_not_enabled',
@@ -23,6 +24,10 @@ export const COMPUTER_ERROR_CODES = {
 } as const
 
 export type ComputerErrorCode = keyof typeof COMPUTER_ERROR_CODES
+
+// Keep in sync with SessionLockProbe.lockedMessage in the macOS helper.
+export const COMPUTER_SCREEN_LOCKED_MESSAGE =
+  "The Mac's screen is locked or asleep, so Orca can't see or control windows. Wake and unlock the Mac, then retry."
 
 export type ComputerAppQuery = string
 

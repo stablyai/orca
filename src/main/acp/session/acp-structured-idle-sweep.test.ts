@@ -1,17 +1,18 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { closeProviderTimelineRigs } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
   restTestSend,
   sweepOnce,
   type RestTestRig
-} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import { StructuredAgentRegistry } from '../../native-chat/agent-session-wire/providers/structured-agent-registry'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS as IDLE_MS } from '../../native-chat/agent-session-wire/termination/structured-agent-session-idle-sweep'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
@@ -34,7 +35,11 @@ async function openChat(agent: 'omp' | 'grok', replay?: GrokFixtureReplay) {
         scripted.on('session/prompt', (frame) => scripted.reply(frame, { stopReason: 'end_turn' }))
       }
     },
-    deps: { onEvent: (event) => hostRig?.host.handleAdapterEvent(event) }
+    deps: {
+      onEvent: (event) => hostRig?.host.handleAdapterEvent(event),
+      onDispatchSettledLate: (settlement) => void hostRig?.host.settleLateDispatch(settlement),
+      now: () => hostRig?.clock.now ?? 0
+    }
   })
   const rig = await createRestTestRig({
     adapter: acp.adapter,
@@ -63,12 +68,16 @@ async function openChat(agent: 'omp' | 'grok', replay?: GrokFixtureReplay) {
 async function sendAndFinish(rig: RestTestRig, text: string, completed: number) {
   expect(await rig.host.send(REST_TEST_CALLER, restTestSend(text))).toMatchObject({ ok: true })
   await waitFor(async () => {
-    const turns = (await rig.host.journalSnapshot(SESSION)).items.flatMap(
-      (item) => readAgentJournalTurn(item.body) ?? []
-    )
+    const snapshot = await readTestHostJournal(rig.host, SESSION)
+    const turns = snapshot.items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
     expect(turns).toHaveLength(completed)
     expect(turns.every((turn) => turn.state === 'completed')).toBe(true)
+    expect(snapshot.submissions).toHaveLength(completed)
+    expect(
+      snapshot.submissions.every((submission) => submission.dispatchState === 'accepted')
+    ).toBe(true)
   })
+  await rig.host.drainStatusWrites()
 }
 
 it('retains an aged OMP child after recorded parent completion, accepts another send, and closes explicitly', async () => {
@@ -95,6 +104,7 @@ it('retains an aged OMP child after recorded parent completion, accepts another 
     expect(rig.host.hasSession(SESSION)).toBe(false)
   } finally {
     await acp.adapter.closeAll()
+    await closeProviderTimelineRigs()
     await rig.dispose()
   }
 })
@@ -110,6 +120,7 @@ it('still retires an idle ACP child whose provider has no extra idle confirmatio
     expect(rig.host.hasSession(SESSION)).toBe(false)
   } finally {
     await acp.adapter.closeAll()
+    await closeProviderTimelineRigs()
     await rig.dispose()
   }
 })

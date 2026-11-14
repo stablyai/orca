@@ -98,7 +98,7 @@ export class PRRefreshAdmission {
   /** Charges a read's start to the list budget and active pacing, once it really starts. */
   chargeBudget(entry: PRRefreshQueueEntry): void {
     if (entry.bypassBackgroundBudget !== true && isBudgetedBackground(entry.reason)) {
-      this.pacing.noteBackgroundStart(entry)
+      this.pacing.noteBackgroundStart()
       this.watchJobs.noteBudgetedStart(entry)
     }
     if (usesActiveRefreshPacing(entry)) {

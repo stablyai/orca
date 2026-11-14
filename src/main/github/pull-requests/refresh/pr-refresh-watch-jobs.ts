@@ -2,6 +2,7 @@ import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import { prChecksDone } from '../../../../shared/github/pull-requests/refresh/pr-quiet-refresh'
 export { prChecksDone } from '../../../../shared/github/pull-requests/refresh/pr-quiet-refresh'
 import {
@@ -11,7 +12,6 @@ import {
   type PRAutoRefreshCadence
 } from '../../../../shared/review-refresh-policy'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
-import { isSelectedBudgetedPRRefresh } from './pr-refresh-pacing'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 
 export type PRWatchJob = NonNullable<PRRefreshQueueEntry['watch']>
@@ -47,6 +47,11 @@ export type PRWatchPlan =
 
 export function prWatchQueueKey(job: PRWatchJob): string {
   return job.headSha ? `sha-checks::${job.prKey}::${job.headSha}` : `watch::${job.prKey}`
+}
+
+/** Only a complete final read ends a closed PR watch. */
+export function prWatchSettled(pr: PRInfo): boolean {
+  return (pr.state === 'merged' || pr.state === 'closed') && prChecksDone(pr)
 }
 
 /** The cadence every CI-line watch read follows, current head and earlier heads alike: a chat asked
@@ -151,10 +156,7 @@ export class PRWatchJobRunner {
   }
 
   noteBudgetedStart(entry: PRRefreshQueueEntry): void {
-    // Selected list reads have their own reserved turn; preserve the watch/list alternation.
-    if (!isSelectedBudgetedPRRefresh(entry)) {
-      this.lastBudgetedStartWasWatch = entry.watch !== undefined
-    }
+    this.lastBudgetedStartWasWatch = entry.watch !== undefined
   }
 
   /** Re-ranks watch entries before each pick, so aging needs no change to the queue's order. */

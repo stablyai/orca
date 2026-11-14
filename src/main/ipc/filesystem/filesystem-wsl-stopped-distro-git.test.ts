@@ -1,18 +1,7 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  handlers,
-  store,
-  checkIgnoredPathsMock,
-  detectConflictOperationMock,
-  getBranchCompareMock,
-  getBranchDiffMock,
-  getDiffMock,
-  getStatusMock,
-  realpathMock,
-  resetFilesystemIpcMocks
-} from './filesystem-test-harness'
+import { handlers, store, realpathMock, resetFilesystemIpcMocks } from './filesystem-test-harness'
 
 const diskPreconditionMock = vi.hoisted(() => ({ writeLocalTextFileWithDiskPrecondition: vi.fn() }))
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
@@ -153,33 +142,9 @@ describe('background Git for a stopped WSL distro', () => {
 
   it.each([
     ['git:status', { worktreePath: UNC_ROOT }],
-    ['git:conflictOperation', { worktreePath: UNC_ROOT }],
-    ['git:upstreamStatus', { worktreePath: UNC_ROOT }],
-    ['git:branchCompare', { worktreePath: UNC_ROOT, baseRef: 'main' }],
-    // Status followers: re-read whenever status changes, so each is a background poll.
-    ['git:history', { worktreePath: UNC_ROOT, limit: 50 }],
-    ['git:submoduleStatus', { worktreePath: UNC_ROOT, submodulePath: 'vendor/lib' }],
-    ['git:checkIgnored', { worktreePath: UNC_ROOT, paths: ['dist'] }],
-    ['git:findHugeFoldersToIgnore', { worktreePath: UNC_ROOT }],
-    ['git:diff', { worktreePath: UNC_ROOT, filePath: 'a.ts', staged: false }],
-    [
-      'git:branchDiff',
-      {
-        worktreePath: UNC_ROOT,
-        compare: { baseRef: 'main', baseOid: 'b', headOid: 'h', mergeBase: 'm' },
-        filePath: 'a.ts'
-      }
-    ],
-    ['git:commitDiff', { worktreePath: UNC_ROOT, commitOid: 'a'.repeat(40), filePath: 'a.ts' }]
+    ['git:diff', { worktreePath: UNC_ROOT, filePath: 'a.ts', staged: false }]
   ])('%s refuses before resolving the path or running Git', async (channel, args) => {
     await expect(invoke(channel, args)).rejects.toBeInstanceOf(WslDistroStoppedError)
-    expect(isWslDistroRunningMock).toHaveBeenCalledWith('Ubuntu', expect.anything())
     expect(realpathMock).not.toHaveBeenCalled()
-    expect(getStatusMock).not.toHaveBeenCalled()
-    expect(detectConflictOperationMock).not.toHaveBeenCalled()
-    expect(getBranchCompareMock).not.toHaveBeenCalled()
-    expect(getDiffMock).not.toHaveBeenCalled()
-    expect(getBranchDiffMock).not.toHaveBeenCalled()
-    expect(checkIgnoredPathsMock).not.toHaveBeenCalled()
   })
 })

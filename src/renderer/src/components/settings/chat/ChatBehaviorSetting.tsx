@@ -12,7 +12,7 @@ import { ChatPermissionSetting } from './ChatPermissionSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { NativeChatIdleStopSetting } from './NativeChatIdleStopSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import {
   nativeChatMarksNewMessages,
   nativeChatScrollsToLatestOnSend

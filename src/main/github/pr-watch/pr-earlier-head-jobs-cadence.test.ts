@@ -6,10 +6,6 @@ const mocks = vi.hoisted(() => ({
   pending: vi.fn(() => [{ headSha: 'old-head', movedAt: 1, expiresAt: null }])
 }))
 vi.mock('../pull-requests/refresh/pr-refresh-coordinator', () => ({ schedulePRWatchRead: vi.fn() }))
-vi.mock('./pr-check-event-tables', () => ({
-  readPRPendingHeads: mocks.pending,
-  deletePRPendingHead: vi.fn()
-}))
 vi.mock('./pr-head-check-read', () => ({ readPRHeadCheckRollup: mocks.read }))
 
 import { PREarlierHeadJobs } from './pr-earlier-head-jobs'
@@ -28,9 +24,9 @@ it.each([
   async (cadence, interval) => {
     setPRAutoRefreshCadence(cadence)
     const jobs = new PREarlierHeadJobs({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the table reads are mocked above, so the database handle is never dereferenced.
-      database: { db: {} } as never,
-      apply: () => false,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read-only probe only requests pending heads.
+      database: { read: async () => mocks.pending() } as never,
+      apply: async () => false,
       logger: { warn: vi.fn() },
       now: () => 1_000
     })
