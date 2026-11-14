@@ -79,7 +79,7 @@ export const FILE_METHODS = [
       runtime.openMobileFile(
         params.worktree,
         params.relativePath,
-        params.navigation,
+        params.navigation ?? 'caller',
         ...(params.line === undefined ? [] : [{ line: params.line, column: params.column }])
       )
   }),
@@ -92,7 +92,7 @@ export const FILE_METHODS = [
         params.worktree,
         params.relativePath,
         params.staged === true,
-        params.navigation,
+        params.navigation ?? 'caller',
         ...(params.oldPath ? ([params.oldPath] as const) : [])
       )
   }),
