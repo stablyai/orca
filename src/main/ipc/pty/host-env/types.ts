@@ -27,6 +27,7 @@ export type BuildPtyHostEnvOptions = {
   agentStatusHooksEnabled: boolean
   claudeSubagentNavigationEnabled?: boolean
   terminalInlineImages?: boolean
+  claudeCodeScrollRegions?: boolean
   /** Per-agent opt-out; disabled agents must not receive managed extensions. */
   disabledTuiAgents?: Iterable<unknown> | null
   networkProxySettings?: NetworkProxySettings
