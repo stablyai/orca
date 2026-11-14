@@ -3,11 +3,13 @@ import { useAppMenuSelectionActions } from '@/hooks/app-commands/useAppMenuSelec
 import { AgentKanbanBoard } from '../dashboard/board/AgentKanbanBoard'
 import { useDashboardSnapshot } from './snapshot/useDashboardSnapshot'
 import { useAgentDashboardTelemetry } from '../dashboard/board/use-agent-dashboard-telemetry'
+import { useDashboardPopoutCloseShortcut } from './use-dashboard-popout-close-shortcut'
 
 export function DashboardPopoutRoot(): React.JSX.Element {
   // The pop-out has no App shell to translate Edit-menu IPC into terminal ownership events.
   useAppMenuPaste()
   useAppMenuSelectionActions()
+  useDashboardPopoutCloseShortcut()
   useAgentDashboardTelemetry('popout')
   const snapshot = useDashboardSnapshot()
   return <AgentKanbanBoard snapshot={snapshot} />
