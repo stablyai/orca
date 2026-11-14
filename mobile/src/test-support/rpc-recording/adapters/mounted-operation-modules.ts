@@ -1,217 +1,265 @@
-import { aiVaultResumeMountAdapters } from './ai-vault-resume-mount-adapters'
+import { aiVaultResumeMountAdapters } from './agents/ai-vault-resume-mount-adapters'
 import {
   agentHistoryMountAdapters,
   agentHistoryMountExposures
-} from './agent-history-mount-adapters'
+} from './agents/agent-history-mount-adapters'
 import {
   agentHistoryScreenMountAdapters,
   agentHistoryScreenMountExposures
-} from './agent-history-screen-mount-adapters'
-import { browserMountAdapters } from './browser-mount-adapters'
-import { clientEventStreamMountAdapters } from './client-event-stream-mount-adapters'
-import { clipboardImageMountAdapters } from './clipboard-image-mount-adapters'
-import { codexResetCreditMountAdapters } from './codex-reset-credit-mount-adapters'
-import { desktopNotificationStreamMountAdapters } from './desktop-notification-stream-mount-adapters'
-import { dictationMountAdapters } from './dictation-mount-adapters'
-import { diffReviewActionMountAdapters } from './diff-review-action-mount-adapters'
-import { diffReviewMountAdapters } from './diff-review-mount-adapters'
+} from './agents/agent-history-screen-mount-adapters'
+import { browserMountAdapters } from './device-capabilities/browser-mount-adapters'
+import { clientEventStreamMountAdapters } from './connectivity/client-event-stream-mount-adapters'
+import { clipboardImageMountAdapters } from './device-capabilities/clipboard-image-mount-adapters'
+import { codexResetCreditMountAdapters } from './workspaces-settings/codex-reset-credit-mount-adapters'
+import { desktopNotificationStreamMountAdapters } from './device-capabilities/desktop-notification-stream-mount-adapters'
+import { dictationMountAdapters } from './device-capabilities/dictation-mount-adapters'
+import { diffReviewActionMountAdapters } from './source-control/diff-review-action-mount-adapters'
+import { diffReviewMountAdapters } from './source-control/diff-review-mount-adapters'
 import {
   fileExplorerScreenMountAdapters,
   fileExplorerScreenMountExposures
-} from './file-explorer-screen-mount-adapters'
-import { fileInventoryMountAdapters } from './file-inventory-mount-adapters'
-import { fileTapOpenMountAdapters } from './file-tap-open-mount-adapters'
-import { fileRequestMountAdapters } from './file-request-mount-adapters'
-import { githubPrMountAdapters } from './github-pr-mount-adapters'
-import { hostScreenMountAdapters } from './host-screen-mount-adapters'
-import { hostWorktreeActionMountAdapters } from './host-worktree-action-mount-adapters'
-import { hostedReviewMountAdapters } from './hosted-review-mount-adapters'
-import { mobileWebBundleMountAdapters } from './mobile-web-bundle-mount-adapters'
-import { nativeChatPagingMountAdapters } from './native-chat-paging-mount-adapters'
-import { nativeChatWriteMountAdapters } from './native-chat-write-mount-adapters'
-import { newTabAgentMountAdapters } from './new-tab-agent-mount-adapters'
+} from './files/file-explorer-screen-mount-adapters'
+import { fileInventoryMountAdapters } from './files/file-inventory-mount-adapters'
+import { fileTapOpenMountAdapters } from './files/file-tap-open-mount-adapters'
+import { fileRequestMountAdapters } from './files/file-request-mount-adapters'
+import { githubPrMountAdapters } from './source-control/github-pr-mount-adapters'
+import { hostScreenMountAdapters } from './connectivity/host-screen-mount-adapters'
+import { hostWorktreeActionMountAdapters } from './workspaces-settings/host-worktree-action-mount-adapters'
+import { hostedReviewMountAdapters } from './source-control/hosted-review-mount-adapters'
+import { mobileWebBundleMountAdapters } from './connectivity/mobile-web-bundle-mount-adapters'
+import { nativeChatPagingMountAdapters } from './agents/native-chat-paging-mount-adapters'
+import { nativeChatWriteMountAdapters } from './agents/native-chat-write-mount-adapters'
+import { newTabAgentMountAdapters } from './agents/new-tab-agent-mount-adapters'
 import {
   notificationTestScreenMountAdapters,
   notificationTestScreenMountExposures
-} from './notification-test-screen-mount-adapters'
-import { newWorkspaceMountAdapters } from './new-workspace-mount-adapters'
-import { newWorkspaceRepositoryMountAdapters } from './new-workspace-repository-mount-adapters'
-import { pairingJournalMountAdapters } from './pairing-journal-mount-adapters'
-import { prSidebarMountAdapters } from './pr-sidebar-mount-adapters'
-import { relayCredentialMountAdapters } from './relay-credential-mount-adapters'
-import { sessionNotesMountAdapters } from './session-notes-mount-adapters'
-import { sessionScreenReadMountAdapters } from './session-screen-read-mount-adapters'
-import { sessionScreenTabMountAdapters } from './session-screen-tab-mount-adapters'
-import { sessionStartupMountAdapters } from './session-startup-mount-adapters'
-import { sessionTabMountAdapters } from './session-tab-mount-adapters'
-import { sessionTerminalCreateMountAdapters } from './session-terminal-create-mount-adapters'
-import { sessionTerminalDisplayModeMountAdapters } from './session-terminal-display-mode-mount-adapters'
-import { sessionTerminalGestureMountAdapters } from './session-terminal-gesture-mount-adapters'
-import { sessionTerminalInputMountAdapters } from './session-terminal-input-mount-adapters'
-import { settingsMountAdapters, settingsMountExposures } from './settings-mount-adapters'
-import { sourceControlMountAdapters } from './source-control-mount-adapters'
+} from './device-capabilities/notification-test-screen-mount-adapters'
+import { newWorkspaceMountAdapters } from './workspaces-settings/new-workspace-mount-adapters'
+import { newWorkspaceRepositoryMountAdapters } from './workspaces-settings/new-workspace-repository-mount-adapters'
+import { pairingJournalMountAdapters } from './connectivity/pairing-journal-mount-adapters'
+import { prSidebarMountAdapters } from './source-control/pr-sidebar-mount-adapters'
+import { relayCredentialMountAdapters } from './connectivity/relay-credential-mount-adapters'
+import { sessionNotesMountAdapters } from './sessions/session-notes-mount-adapters'
+import { sessionScreenReadMountAdapters } from './sessions/session-screen-read-mount-adapters'
+import { sessionScreenTabMountAdapters } from './sessions/session-screen-tab-mount-adapters'
+import { sessionStartupMountAdapters } from './sessions/session-startup-mount-adapters'
+import { sessionTabMountAdapters } from './sessions/session-tab-mount-adapters'
+import { sessionTerminalCreateMountAdapters } from './sessions/session-terminal-create-mount-adapters'
+import { sessionTerminalDisplayModeMountAdapters } from './sessions/session-terminal-display-mode-mount-adapters'
+import { sessionTerminalGestureMountAdapters } from './sessions/session-terminal-gesture-mount-adapters'
+import { sessionTerminalInputMountAdapters } from './sessions/session-terminal-input-mount-adapters'
+import {
+  settingsMountAdapters,
+  settingsMountExposures
+} from './workspaces-settings/settings-mount-adapters'
+import { sourceControlMountAdapters } from './source-control/source-control-mount-adapters'
 import {
   sourceControlScreenReadMountAdapters,
   sourceControlScreenReadMountExposures
-} from './source-control-screen-read-mount-adapters'
-import { structuredAgentLaunchMountAdapters } from './structured-agent-launch-mount-adapters'
-import { taskItemChecksStatusMountAdapters } from './task-item-checks-status-mount-adapters'
-import { taskItemConversationMountAdapters } from './task-item-conversation-mount-adapters'
-import { taskItemDetailMountAdapters } from './task-item-detail-mount-adapters'
-import { taskItemHostedMetadataMountAdapters } from './task-item-hosted-metadata-mount-adapters'
-import { taskItemMetadataMountAdapters } from './task-item-metadata-mount-adapters'
-import { tasksLinearWorkspaceMountAdapters } from './tasks-linear-workspace-mount-adapters'
-import { taskListMountAdapters } from './task-list-mount-adapters'
-import { taskMountAdapters } from './task-mount-adapters'
-import { taskProjectBoardLoadMountAdapters } from './task-project-board-load-mount-adapters'
-import { taskProjectRowCommentMountAdapters } from './task-project-row-comment-mount-adapters'
-import { taskProjectRowFieldMountAdapters } from './task-project-row-field-mount-adapters'
-import { taskProjectRowMergeMountAdapters } from './task-project-row-merge-mount-adapters'
-import { taskProjectRowReadMountAdapters } from './task-project-row-read-mount-adapters'
+} from './source-control/source-control-screen-read-mount-adapters'
+import { structuredAgentLaunchMountAdapters } from './agents/structured-agent-launch-mount-adapters'
+import { taskItemChecksStatusMountAdapters } from './tasks/task-item-checks-status-mount-adapters'
+import { taskItemConversationMountAdapters } from './tasks/task-item-conversation-mount-adapters'
+import { taskItemDetailMountAdapters } from './tasks/task-item-detail-mount-adapters'
+import { taskItemHostedMetadataMountAdapters } from './tasks/task-item-hosted-metadata-mount-adapters'
+import { taskItemMetadataMountAdapters } from './tasks/task-item-metadata-mount-adapters'
+import { tasksLinearWorkspaceMountAdapters } from './tasks/tasks-linear-workspace-mount-adapters'
+import { taskListMountAdapters } from './tasks/task-list-mount-adapters'
+import { taskMountAdapters } from './tasks/task-mount-adapters'
+import { taskProjectBoardLoadMountAdapters } from './tasks/task-project-board-load-mount-adapters'
+import { taskProjectRowCommentMountAdapters } from './tasks/task-project-row-comment-mount-adapters'
+import { taskProjectRowFieldMountAdapters } from './tasks/task-project-row-field-mount-adapters'
+import { taskProjectRowMergeMountAdapters } from './tasks/task-project-row-merge-mount-adapters'
+import { taskProjectRowReadMountAdapters } from './tasks/task-project-row-read-mount-adapters'
 import {
   tasksRouteScreenMountAdapters,
   tasksRouteScreenMountExposures
-} from './tasks-route-screen-mount-adapters'
-import { taskWorkspaceHookMountAdapters } from './task-workspace-hook-mount-adapters'
-import { taskWorkspaceSenderMountAdapters } from './task-workspace-sender-mount-adapters'
-import { terminalMountAdapters } from './terminal-mount-adapters'
-import { transportStatusMountAdapters } from './transport-status-mount-adapters'
-import { workspaceSettingsMounts } from './workspace-settings-mounts'
-import { worktreeCatalogMountAdapters } from './worktree-catalog-mount-adapters'
-import type { MountedOperationModule } from '../mounted-operation-module'
+} from './tasks/tasks-route-screen-mount-adapters'
+import { taskWorkspaceHookMountAdapters } from './tasks/task-workspace-hook-mount-adapters'
+import { taskWorkspaceSenderMountAdapters } from './tasks/task-workspace-sender-mount-adapters'
+import { terminalMountAdapters } from './sessions/terminal-mount-adapters'
+import { transportStatusMountAdapters } from './connectivity/transport-status-mount-adapters'
+import { workspaceSettingsMounts } from './workspaces-settings/workspace-settings-mounts'
+import { worktreeCatalogMountAdapters } from './workspaces-settings/worktree-catalog-mount-adapters'
+import type { MountedOperationModule } from '../module-mounting/mounted-operation-module'
 
-/** Keep domain registration inside its seam to avoid engine edits or golden moves; adapter-seam.test.ts checks directory parity. */
+/** Keep domain registration inside its seam to avoid engine edits or golden moves. */
 export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   {
-    source: 'agent-history-mount-adapters.ts',
+    source: 'agents/agent-history-mount-adapters.ts',
     mounts: agentHistoryMountAdapters,
     exposes: agentHistoryMountExposures
   },
   {
-    source: 'agent-history-screen-mount-adapters.ts',
+    source: 'agents/agent-history-screen-mount-adapters.ts',
     mounts: agentHistoryScreenMountAdapters,
     exposes: agentHistoryScreenMountExposures
   },
-  { source: 'ai-vault-resume-mount-adapters.ts', mounts: aiVaultResumeMountAdapters },
-  { source: 'browser-mount-adapters.ts', mounts: browserMountAdapters },
-  { source: 'client-event-stream-mount-adapters.ts', mounts: clientEventStreamMountAdapters },
-  { source: 'clipboard-image-mount-adapters.ts', mounts: clipboardImageMountAdapters },
-  { source: 'codex-reset-credit-mount-adapters.ts', mounts: codexResetCreditMountAdapters },
+  { source: 'agents/ai-vault-resume-mount-adapters.ts', mounts: aiVaultResumeMountAdapters },
+  { source: 'device-capabilities/browser-mount-adapters.ts', mounts: browserMountAdapters },
   {
-    source: 'desktop-notification-stream-mount-adapters.ts',
+    source: 'connectivity/client-event-stream-mount-adapters.ts',
+    mounts: clientEventStreamMountAdapters
+  },
+  {
+    source: 'device-capabilities/clipboard-image-mount-adapters.ts',
+    mounts: clipboardImageMountAdapters
+  },
+  {
+    source: 'workspaces-settings/codex-reset-credit-mount-adapters.ts',
+    mounts: codexResetCreditMountAdapters
+  },
+  {
+    source: 'device-capabilities/desktop-notification-stream-mount-adapters.ts',
     mounts: desktopNotificationStreamMountAdapters
   },
-  { source: 'dictation-mount-adapters.ts', mounts: dictationMountAdapters },
-  { source: 'diff-review-action-mount-adapters.ts', mounts: diffReviewActionMountAdapters },
-  { source: 'diff-review-mount-adapters.ts', mounts: diffReviewMountAdapters },
+  { source: 'device-capabilities/dictation-mount-adapters.ts', mounts: dictationMountAdapters },
   {
-    source: 'file-explorer-screen-mount-adapters.ts',
+    source: 'source-control/diff-review-action-mount-adapters.ts',
+    mounts: diffReviewActionMountAdapters
+  },
+  { source: 'source-control/diff-review-mount-adapters.ts', mounts: diffReviewMountAdapters },
+  {
+    source: 'files/file-explorer-screen-mount-adapters.ts',
     mounts: fileExplorerScreenMountAdapters,
     exposes: fileExplorerScreenMountExposures
   },
-  { source: 'file-inventory-mount-adapters.ts', mounts: fileInventoryMountAdapters },
-  { source: 'file-tap-open-mount-adapters.ts', mounts: fileTapOpenMountAdapters },
-  { source: 'file-request-mount-adapters.ts', mounts: fileRequestMountAdapters },
-  { source: 'github-pr-mount-adapters.ts', mounts: githubPrMountAdapters },
-  { source: 'host-screen-mount-adapters.ts', mounts: hostScreenMountAdapters },
+  { source: 'files/file-inventory-mount-adapters.ts', mounts: fileInventoryMountAdapters },
+  { source: 'files/file-tap-open-mount-adapters.ts', mounts: fileTapOpenMountAdapters },
+  { source: 'files/file-request-mount-adapters.ts', mounts: fileRequestMountAdapters },
+  { source: 'source-control/github-pr-mount-adapters.ts', mounts: githubPrMountAdapters },
+  { source: 'connectivity/host-screen-mount-adapters.ts', mounts: hostScreenMountAdapters },
   {
-    source: 'host-worktree-action-mount-adapters.ts',
+    source: 'workspaces-settings/host-worktree-action-mount-adapters.ts',
     mounts: hostWorktreeActionMountAdapters
   },
-  { source: 'hosted-review-mount-adapters.ts', mounts: hostedReviewMountAdapters },
-  { source: 'mobile-web-bundle-mount-adapters.ts', mounts: mobileWebBundleMountAdapters },
-  { source: 'native-chat-paging-mount-adapters.ts', mounts: nativeChatPagingMountAdapters },
-  { source: 'native-chat-write-mount-adapters.ts', mounts: nativeChatWriteMountAdapters },
-  { source: 'new-tab-agent-mount-adapters.ts', mounts: newTabAgentMountAdapters },
-  { source: 'new-workspace-mount-adapters.ts', mounts: newWorkspaceMountAdapters },
+  { source: 'source-control/hosted-review-mount-adapters.ts', mounts: hostedReviewMountAdapters },
   {
-    source: 'new-workspace-repository-mount-adapters.ts',
+    source: 'connectivity/mobile-web-bundle-mount-adapters.ts',
+    mounts: mobileWebBundleMountAdapters
+  },
+  { source: 'agents/native-chat-paging-mount-adapters.ts', mounts: nativeChatPagingMountAdapters },
+  { source: 'agents/native-chat-write-mount-adapters.ts', mounts: nativeChatWriteMountAdapters },
+  { source: 'agents/new-tab-agent-mount-adapters.ts', mounts: newTabAgentMountAdapters },
+  {
+    source: 'workspaces-settings/new-workspace-mount-adapters.ts',
+    mounts: newWorkspaceMountAdapters
+  },
+  {
+    source: 'workspaces-settings/new-workspace-repository-mount-adapters.ts',
     mounts: newWorkspaceRepositoryMountAdapters
   },
   {
-    source: 'notification-test-screen-mount-adapters.ts',
+    source: 'device-capabilities/notification-test-screen-mount-adapters.ts',
     mounts: notificationTestScreenMountAdapters,
     exposes: notificationTestScreenMountExposures
   },
-  { source: 'pairing-journal-mount-adapters.ts', mounts: pairingJournalMountAdapters },
-  { source: 'pr-sidebar-mount-adapters.ts', mounts: prSidebarMountAdapters },
-  { source: 'relay-credential-mount-adapters.ts', mounts: relayCredentialMountAdapters },
-  { source: 'session-notes-mount-adapters.ts', mounts: sessionNotesMountAdapters },
+  { source: 'connectivity/pairing-journal-mount-adapters.ts', mounts: pairingJournalMountAdapters },
+  { source: 'source-control/pr-sidebar-mount-adapters.ts', mounts: prSidebarMountAdapters },
   {
-    source: 'session-screen-read-mount-adapters.ts',
+    source: 'connectivity/relay-credential-mount-adapters.ts',
+    mounts: relayCredentialMountAdapters
+  },
+  { source: 'sessions/session-notes-mount-adapters.ts', mounts: sessionNotesMountAdapters },
+  {
+    source: 'sessions/session-screen-read-mount-adapters.ts',
     mounts: sessionScreenReadMountAdapters
   },
-  { source: 'session-screen-tab-mount-adapters.ts', mounts: sessionScreenTabMountAdapters },
-  { source: 'session-startup-mount-adapters.ts', mounts: sessionStartupMountAdapters },
-  { source: 'session-tab-mount-adapters.ts', mounts: sessionTabMountAdapters },
   {
-    source: 'session-terminal-create-mount-adapters.ts',
+    source: 'sessions/session-screen-tab-mount-adapters.ts',
+    mounts: sessionScreenTabMountAdapters
+  },
+  { source: 'sessions/session-startup-mount-adapters.ts', mounts: sessionStartupMountAdapters },
+  { source: 'sessions/session-tab-mount-adapters.ts', mounts: sessionTabMountAdapters },
+  {
+    source: 'sessions/session-terminal-create-mount-adapters.ts',
     mounts: sessionTerminalCreateMountAdapters
   },
   {
-    source: 'session-terminal-display-mode-mount-adapters.ts',
+    source: 'sessions/session-terminal-display-mode-mount-adapters.ts',
     mounts: sessionTerminalDisplayModeMountAdapters
   },
   {
-    source: 'session-terminal-gesture-mount-adapters.ts',
+    source: 'sessions/session-terminal-gesture-mount-adapters.ts',
     mounts: sessionTerminalGestureMountAdapters
   },
   {
-    source: 'session-terminal-input-mount-adapters.ts',
+    source: 'sessions/session-terminal-input-mount-adapters.ts',
     mounts: sessionTerminalInputMountAdapters
   },
   {
-    source: 'settings-mount-adapters.ts',
+    source: 'workspaces-settings/settings-mount-adapters.ts',
     mounts: settingsMountAdapters,
     exposes: settingsMountExposures
   },
-  { source: 'source-control-mount-adapters.ts', mounts: sourceControlMountAdapters },
+  { source: 'source-control/source-control-mount-adapters.ts', mounts: sourceControlMountAdapters },
   {
-    source: 'source-control-screen-read-mount-adapters.ts',
+    source: 'source-control/source-control-screen-read-mount-adapters.ts',
     mounts: sourceControlScreenReadMountAdapters,
     exposes: sourceControlScreenReadMountExposures
   },
   {
-    source: 'structured-agent-launch-mount-adapters.ts',
+    source: 'agents/structured-agent-launch-mount-adapters.ts',
     mounts: structuredAgentLaunchMountAdapters
   },
   {
-    source: 'task-item-checks-status-mount-adapters.ts',
+    source: 'tasks/task-item-checks-status-mount-adapters.ts',
     mounts: taskItemChecksStatusMountAdapters
   },
-  { source: 'task-item-conversation-mount-adapters.ts', mounts: taskItemConversationMountAdapters },
-  { source: 'task-item-detail-mount-adapters.ts', mounts: taskItemDetailMountAdapters },
   {
-    source: 'task-item-hosted-metadata-mount-adapters.ts',
+    source: 'tasks/task-item-conversation-mount-adapters.ts',
+    mounts: taskItemConversationMountAdapters
+  },
+  { source: 'tasks/task-item-detail-mount-adapters.ts', mounts: taskItemDetailMountAdapters },
+  {
+    source: 'tasks/task-item-hosted-metadata-mount-adapters.ts',
     mounts: taskItemHostedMetadataMountAdapters
   },
-  { source: 'task-item-metadata-mount-adapters.ts', mounts: taskItemMetadataMountAdapters },
-  { source: 'task-list-mount-adapters.ts', mounts: taskListMountAdapters },
+  { source: 'tasks/task-item-metadata-mount-adapters.ts', mounts: taskItemMetadataMountAdapters },
+  { source: 'tasks/task-list-mount-adapters.ts', mounts: taskListMountAdapters },
   {
-    source: 'tasks-linear-workspace-mount-adapters.ts',
+    source: 'tasks/tasks-linear-workspace-mount-adapters.ts',
     mounts: tasksLinearWorkspaceMountAdapters
   },
-  { source: 'task-mount-adapters.ts', mounts: taskMountAdapters },
+  { source: 'tasks/task-mount-adapters.ts', mounts: taskMountAdapters },
   {
-    source: 'task-project-board-load-mount-adapters.ts',
+    source: 'tasks/task-project-board-load-mount-adapters.ts',
     mounts: taskProjectBoardLoadMountAdapters
   },
   {
-    source: 'task-project-row-comment-mount-adapters.ts',
+    source: 'tasks/task-project-row-comment-mount-adapters.ts',
     mounts: taskProjectRowCommentMountAdapters
   },
-  { source: 'task-project-row-field-mount-adapters.ts', mounts: taskProjectRowFieldMountAdapters },
-  { source: 'task-project-row-merge-mount-adapters.ts', mounts: taskProjectRowMergeMountAdapters },
-  { source: 'task-project-row-read-mount-adapters.ts', mounts: taskProjectRowReadMountAdapters },
   {
-    source: 'tasks-route-screen-mount-adapters.ts',
+    source: 'tasks/task-project-row-field-mount-adapters.ts',
+    mounts: taskProjectRowFieldMountAdapters
+  },
+  {
+    source: 'tasks/task-project-row-merge-mount-adapters.ts',
+    mounts: taskProjectRowMergeMountAdapters
+  },
+  {
+    source: 'tasks/task-project-row-read-mount-adapters.ts',
+    mounts: taskProjectRowReadMountAdapters
+  },
+  {
+    source: 'tasks/tasks-route-screen-mount-adapters.ts',
     mounts: tasksRouteScreenMountAdapters,
     exposes: tasksRouteScreenMountExposures
   },
-  { source: 'task-workspace-hook-mount-adapters.ts', mounts: taskWorkspaceHookMountAdapters },
-  { source: 'task-workspace-sender-mount-adapters.ts', mounts: taskWorkspaceSenderMountAdapters },
-  { source: 'terminal-mount-adapters.ts', mounts: terminalMountAdapters },
-  { source: 'transport-status-mount-adapters.ts', mounts: transportStatusMountAdapters },
-  { source: 'workspace-settings-mounts.ts', mounts: workspaceSettingsMounts },
-  { source: 'worktree-catalog-mount-adapters.ts', mounts: worktreeCatalogMountAdapters }
+  { source: 'tasks/task-workspace-hook-mount-adapters.ts', mounts: taskWorkspaceHookMountAdapters },
+  {
+    source: 'tasks/task-workspace-sender-mount-adapters.ts',
+    mounts: taskWorkspaceSenderMountAdapters
+  },
+  { source: 'sessions/terminal-mount-adapters.ts', mounts: terminalMountAdapters },
+  {
+    source: 'connectivity/transport-status-mount-adapters.ts',
+    mounts: transportStatusMountAdapters
+  },
+  { source: 'workspaces-settings/workspace-settings-mounts.ts', mounts: workspaceSettingsMounts },
+  {
+    source: 'workspaces-settings/worktree-catalog-mount-adapters.ts',
+    mounts: worktreeCatalogMountAdapters
+  }
 ]

@@ -34,9 +34,12 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   // Forwards the port across a physical-client cutover.
   { file: 'src/transport/connection/stable-logical-rpc-client.ts', references: 2 },
   // Names the port as the recording oracle's sender contract; a non-test file for the same reason.
-  { file: 'src/test-support/rpc-recording/recording-scenario.ts', references: 1 },
+  { file: 'src/test-support/rpc-recording/scenarios/recording-scenario.ts', references: 1 },
   // Record names once per logical call above physical replay and below asynchronous wrappers.
-  { file: 'src/test-support/rpc-recording/scripted-rpc-transport.ts', references: 7 }
+  {
+    file: 'src/test-support/rpc-recording/scripted-transport/scripted-rpc-transport.ts',
+    references: 7
+  }
 ]
 
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */

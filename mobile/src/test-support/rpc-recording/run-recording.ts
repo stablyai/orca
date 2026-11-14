@@ -1,8 +1,8 @@
-import { recordingStep, requireCheckpointClock } from './recording-step'
-import { materializeScenario } from './scenario-execution-mode'
-import { RecordingFault } from './recording-fault'
-import { recordUnhandledRejections } from './unhandled-recording'
-import { captureValue, type Settlement, type RecordedValue } from './recording-values'
+import { recordingStep, requireCheckpointClock } from './execution/recording-step'
+import { materializeScenario } from './scenarios/scenario-execution-mode'
+import { RecordingFault } from './execution/recording-fault'
+import { recordUnhandledRejections } from './execution/unhandled-recording'
+import { captureValue, type Settlement, type RecordedValue } from './goldens/recording-values'
 import type {
   MountAdapter,
   Recording,
@@ -10,9 +10,12 @@ import type {
   RecordingScheduler,
   MountedOperation,
   Observation
-} from './recording-scenario'
-import { ScriptedRpcTransport, type ScriptedClientWrapper } from './scripted-rpc-transport'
-import { createWriteOrdinal } from './write-ordinal'
+} from './scenarios/recording-scenario'
+import {
+  ScriptedRpcTransport,
+  type ScriptedClientWrapper
+} from './scripted-transport/scripted-rpc-transport'
+import { createWriteOrdinal } from './execution/write-ordinal'
 
 export async function runRecording(
   scenario: RecordingScenario,

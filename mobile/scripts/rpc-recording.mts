@@ -12,9 +12,9 @@ import { createRequire } from 'node:module'
 import { readdirSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { derivedGoldens } from '../src/test-support/rpc-recording/derived-goldens.ts'
-import { RECORDING_DRIVERS } from '../src/test-support/rpc-recording/recording-drivers.ts'
-import { readScenarios } from '../src/test-support/rpc-recording/scenario-input.ts'
+import { derivedGoldens } from '../src/test-support/rpc-recording/goldens/derived-goldens.ts'
+import { RECORDING_DRIVERS } from '../src/test-support/rpc-recording/scenarios/recording-drivers.ts'
+import { readScenarios } from '../src/test-support/rpc-recording/scenarios/scenario-input.ts'
 
 // Corpus takes 150–290s; allow ten minutes or old 120s budget kills it with misleading truncated failures.
 const RECORDING_TIMEOUT_MS = 600_000

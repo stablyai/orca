@@ -16,7 +16,7 @@ import { diffGoldenSets, formatChangeMarkdown, formatChangeText } from './rpc-di
 import {
   decodeGoldenFile,
   type DecodedGolden
-} from '../src/test-support/rpc-recording/golden-difference.ts'
+} from '../src/test-support/rpc-recording/goldens/golden-difference.ts'
 
 const GOLDENS = 'mobile/rpc-foundation/goldens'
 // The corpus is ~16 MB; the default 8 MB capture would clip the batch read.
