@@ -35,7 +35,7 @@ import {
   hasFullAgentSessionContext,
   type AgentSessionContinuationContextMode,
   type AgentSessionContinuationRequest
-} from '@/lib/agent-session/context/agent-session-continuation'
+} from '../../../../shared/agent-session/context/agent-session-continuation'
 import { launchAgentSessionContinuation } from '@/lib/agent-session/launch/continuation/launch-agent-session-continuation'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'

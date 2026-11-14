@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { buildBoundedSessionTranscript } from './agent-session-fork-context'
+import { buildBoundedSessionTranscript } from '../../../../../shared/agent-session/context/agent-session-fork-context'
 
 export async function copyAgentSessionContext(
   capturedText: string,

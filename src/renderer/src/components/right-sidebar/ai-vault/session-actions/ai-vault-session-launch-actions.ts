@@ -46,7 +46,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '../../../../../../shared/agent-session/context/agent-session-continuation'
 
 export function useAiVaultSessionLaunchActions({
   activeWorktree,
