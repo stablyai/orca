@@ -29,10 +29,12 @@ jobs:
           persist-credentials: false
       - name: Enforce release policy
         uses: actions/github-script@v8
+        env:
+          RELEASE_PUSH_ACTOR_ID: ${{ vars.RELEASE_PUSH_ACTOR_ID }}
         with:
           script: |
             const { pathToFileURL } = await import("node:url")
             const { enforceReleasePolicy } = await import(
               pathToFileURL(`${process.env.GITHUB_WORKSPACE}/config/scripts/release/workflow-contracts/release-policy.mjs`).href
             )
-            await enforceReleasePolicy({ github, context, core })
+            await enforceReleasePolicy({ github, context, core, releaseCreatorId: process.env.RELEASE_PUSH_ACTOR_ID })
