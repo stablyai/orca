@@ -89,7 +89,7 @@ const configs = new WeakMap<object, EdgeConfig>()
 
 function positiveInt(name: string, value: string | undefined): number {
   const parsed = Number(value)
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {throw new Error(`relay_edge_config_${name}`)}
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`relay_edge_config_${name}`)
   return parsed
 }
 
@@ -97,20 +97,20 @@ function positiveInt(name: string, value: string | undefined): number {
 // running with a silently wrong backend: the spike backend skips credential and epoch checks.
 export function edgeConfig(env: Env): EdgeConfig {
   const cached = configs.get(env)
-  if (cached) {return cached}
+  if (cached) return cached
   const backend = env.EDGE_BACKEND ?? 'postgres'
-  if (backend !== 'object' && backend !== 'postgres' && backend !== 'spike') {throw new Error('relay_edge_config_backend')}
+  if (backend !== 'object' && backend !== 'postgres' && backend !== 'spike') throw new Error('relay_edge_config_backend')
   // Phase 2: assignments arrive only through signed director pushes.
   if (backend === 'object' && (!env.ADMIN_SIGNING_KEY || env.ADMIN_SIGNING_KEY.length < 32 || !env.ADMIN_ISSUER)) {
     throw new Error('relay_edge_config_admin')
   }
-  if (backend === 'postgres' && !env.HYPERDRIVE) {throw new Error('relay_edge_config_hyperdrive')}
+  if (backend === 'postgres' && !env.HYPERDRIVE) throw new Error('relay_edge_config_hyperdrive')
   if (backend === 'spike' && env.SPIKE_DEBUG !== '1' && env.SPIKE_ADMIN !== '1') {
     throw new Error('relay_edge_config_spike_backend_outside_spike')
   }
-  if (!env.RELAY_JWKS_URL && !env.RELAY_JWKS) {throw new Error('relay_edge_config_jwks')}
-  if (env.RELAY_JWKS_URL && !env.RELAY_AUTH_ISSUER) {throw new Error('relay_edge_config_issuer')}
-  if (!env.RELAY_JWT_AUDIENCE) {throw new Error('relay_edge_config_audience')}
+  if (!env.RELAY_JWKS_URL && !env.RELAY_JWKS) throw new Error('relay_edge_config_jwks')
+  if (env.RELAY_JWKS_URL && !env.RELAY_AUTH_ISSUER) throw new Error('relay_edge_config_issuer')
+  if (!env.RELAY_JWT_AUDIENCE) throw new Error('relay_edge_config_audience')
   const ingress = ingressConfig(env)
   const config: EdgeConfig = {
     backend,
@@ -123,13 +123,13 @@ export function edgeConfig(env: Env): EdgeConfig {
     ...ingress
   }
   // Shipped desktops close a control that is silent for 75 s; a ping must arrive well inside it.
-  if (config.pingIntervalMs >= config.silenceTimeoutMs) {throw new Error('relay_edge_config_ping_interval')}
+  if (config.pingIntervalMs >= config.silenceTimeoutMs) throw new Error('relay_edge_config_ping_interval')
   configs.set(env, config)
   if (config.ingressProblems.length > 0) {
     // Never thrown: this runs on every request and in every object's alarms. A secret landing
     // before its vars (or one bad range) switches that ingress mode off, loudly, and nothing else.
     console.error(JSON.stringify({ event: 'relay_edge_ingress_config_invalid', problems: config.ingressProblems }))
-    for (const problem of config.ingressProblems) {metric(env, 'ingress_config_invalid', 1, problem)}
+    for (const problem of config.ingressProblems) metric(env, 'ingress_config_invalid', 1, problem)
   }
   return config
 }
@@ -151,7 +151,7 @@ function ingressConfig(env: Env): Pick<EdgeConfig, 'ingressSecrets' | 'ingressTo
   const tokens = list(env.INGRESS_TOKENS)
   const origins = list(env.INGRESS_ORIGINS)
   const cidrs = list(env.INGRESS_SOURCE_CIDRS)
-  if (tokens.length + origins.length + cidrs.length === 0) {return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems }}
+  if (tokens.length + origins.length + cidrs.length === 0) return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems }
   const sourceCidrs = cidrs.map(parseCidr)
   const originOk = (o: string) => URL.canParse(o) && new URL(o).protocol === 'https:' && new URL(o).origin === o
   const tokenProblems = [
@@ -161,6 +161,6 @@ function ingressConfig(env: Env): Pick<EdgeConfig, 'ingressSecrets' | 'ingressTo
     sourceCidrs.some((c) => c === null) ? 'cidr_invalid' : '',
     sourceCidrs.some((c) => c !== null && c.bits < (c.v6 ? MIN_PREFIX.v6 : MIN_PREFIX.v4)) ? 'cidr_too_broad' : ''
   ].filter(Boolean)
-  if (tokenProblems.length > 0) {return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems.concat(tokenProblems) }}
+  if (tokenProblems.length > 0) return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems.concat(tokenProblems) }
   return { ingressSecrets, ingressToken: { tokens, origins, sourceCidrs: sourceCidrs as Cidr[] }, ingressProblems: problems }
 }

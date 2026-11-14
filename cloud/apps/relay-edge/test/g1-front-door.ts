@@ -38,7 +38,7 @@ import {
 
 const required = (name: string) => {
   const value = process.env[name]?.replace(/\/$/, '')
-  if (!value) {throw new Error(`${name} is required`)}
+  if (!value) throw new Error(`${name} is required`)
   return value
 }
 const FRONT = required('G1_FRONT_DOOR')
@@ -74,8 +74,8 @@ const G4 = {
 
 async function main(): Promise<void> {
   const key = (await importJWK((JSON.parse(readFileSync(KEYS, 'utf8')) as { privateJwk: JWK }).privateJwk, 'ES256')) as KeyLike
-  if (PHASES.has('g1')) {await g1(key)}
-  if (PHASES.has('g4')) {await g4(key)}
+  if (PHASES.has('g1')) await g1(key)
+  if (PHASES.has('g4')) await g4(key)
 }
 
 async function g1(key: KeyLike): Promise<void> {
@@ -121,7 +121,7 @@ async function g1(key: KeyLike): Promise<void> {
   const main = desktop(ACCOUNT, FRONT, host, jwt, { appVersion: 'g1-front-door' })
   const ack = await main.connect().catch((e: Error) => e)
   record('G1.5 control upgrade and host proof over the front door origin', !(ack instanceof Error), ack instanceof Error ? errorText(ack) : `generation=${ack.generation} in ${Date.now() - started} ms`)
-  if (ack instanceof Error) {return}
+  if (ack instanceof Error) return
 
   // G1.6 Pairing and data through two hops.
   const invite = await main.client.createInvite('g1-phone')
@@ -132,7 +132,7 @@ async function g1(key: KeyLike): Promise<void> {
     .catch((e: Error) => e)
   const sizes = [32, 64 * 1024, 1024 * 1024]
   const echoStart = Date.now()
-  for (const size of sizes) {invitePhone.ws.send(randomBytes(size))}
+  for (const size of sizes) invitePhone.ws.send(randomBytes(size))
   await waitFor(() => invitePhone.state.frames.length === sizes.length, 20_000)
   record(
     'G1.6 phone invite, credential install, frames 32 B / 64 KiB / 1 MiB echo unchanged',
@@ -188,7 +188,7 @@ async function g1(key: KeyLike): Promise<void> {
   if (PREAUTH_PROBES > 0) {
     const probeHost = newHost().relayHostId
     const statuses: number[] = []
-    for (let i = 0; i < PREAUTH_PROBES; i++) {statuses.push(await preauthStatus(FRONT, probeHost))}
+    for (let i = 0; i < PREAUTH_PROBES; i++) statuses.push(await preauthStatus(FRONT, probeHost))
     record('G1.10 pre-auth probes through the front door (informational)', statuses.includes(426), `first=${statuses[0]} limitedFrom=${statuses.indexOf(429)} last=${statuses.at(-1)}`)
   }
 }
@@ -285,14 +285,14 @@ async function g4(key: KeyLike): Promise<void> {
     failure = `; first failure: ${errorText(acks[firstFail])} (raw retry: ${classify(answer, EDGE_SERVER)}:${answer.status})`
   }
   const holdStart = Date.now()
-  while (Date.now() - holdStart < G4.holdMs && desktops.every((d) => d.events.closes.length === 0)) {await sleep(1000)}
+  while (Date.now() - holdStart < G4.holdMs && desktops.every((d) => d.events.closes.length === 0)) await sleep(1000)
   const closed = desktops.filter((d) => d.events.closes.length > 0)
   record(
     `G4.2 ${G4.sockets} parallel control sockets through the front door, held ${Math.round(G4.holdMs / 1000)} s`,
     pushes.every((p) => p.outcome === 'applied') && opened === G4.sockets && closed.length === 0,
     `pushed=${pushes.filter((p) => p.outcome === 'applied').length} opened=${opened} in ${openMs} ms; closed during hold=${closed.length}${closed.length ? ` codes=${closed.map((d) => d.events.closes[0]).join(',')}` : ''}${failure}`
   )
-  for (const d of desktops) {d.client.closeNow()}
+  for (const d of desktops) d.client.closeNow()
 }
 
 main()
@@ -300,6 +300,6 @@ main()
   .finally(() => {
     const failed = results.filter((r) => !r.ok)
     console.log(`\n${results.length - failed.length}/${results.length} passed`)
-    if (process.env.G1_OUT) {writeFileSync(process.env.G1_OUT, JSON.stringify({ at: new Date().toISOString(), holdMs: HOLD_MS, results }, null, 2))}
+    if (process.env.G1_OUT) writeFileSync(process.env.G1_OUT, JSON.stringify({ at: new Date().toISOString(), holdMs: HOLD_MS, results }, null, 2))
     process.exit(failed.length ? 1 : 0)
   })

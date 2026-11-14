@@ -11,7 +11,7 @@ import { metric, requestPlace } from './metrics'
 // ingress saw it. IPv6 callers are keyed by their /64, which one subscriber usually holds whole.
 export function sourceKey(request: Request, ingress?: Ingress | null): string {
   const ip = (ingress?.clientIp ?? request.headers.get('cf-connecting-ip'))?.trim() ?? ''
-  if (!ip.includes(':')) {return ip || 'unknown'}
+  if (!ip.includes(':')) return ip || 'unknown'
   const [head, tail = ''] = ip.split('::')
   const left = head ? head.split(':') : []
   const right = ip.includes('::') && tail ? tail.split(':') : []
@@ -25,10 +25,10 @@ export function sourceKey(request: Request, ingress?: Ingress | null): string {
 // Counted per source per colo by the Rate Limiting binding. Fails open: a limiter outage must not
 // refuse live users. Without a binding (local spike runs) nothing is limited.
 export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | 'data', ingress?: Ingress | null): Promise<boolean> {
-  if (!env.PREAUTH_LIMITER) {return true}
+  if (!env.PREAUTH_LIMITER) return true
   try {
     const { success } = await env.PREAUTH_LIMITER.limit({ key: `${kind}:${sourceKey(request, ingress)}` })
-    if (!success) {metric(env, 'preauth_limited', 1, kind, [], '', requestPlace(request, ingress))}
+    if (!success) metric(env, 'preauth_limited', 1, kind, [], '', requestPlace(request, ingress))
     return success
   } catch {
     return true
