@@ -76,7 +76,7 @@ describe('projectForkMarker', () => {
 })
 
 describe('ForkMarkerSubscriptions', () => {
-  it("re-delivers a fork's divider when its source's own source is renamed", () => {
+  it("re-delivers a fork's divider when its source's own source is renamed", async () => {
     const root: NamedRecord = { sessionId: 'root', provider: 'codex', conversationName: 'Annotate' }
     const records = store(
       root,
@@ -105,14 +105,27 @@ describe('ForkMarkerSubscriptions', () => {
       submissions: [],
       items: []
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: marker delivery reads only the journal's items.
-    const journal = { itemsRead: () => snapshot } as unknown as AgentSessionJournal
-    const markers = new ForkMarkerSubscriptions(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: delivery calls only emit.
-      () => ({ emit: (_target: Subscriber, event: unknown) => emitted.push(event) }) as never,
+    const journalFields = {
+      identity: { sessionId: 'child' },
+      cursor: () => snapshot.cursor,
+      reads: { forkMarkerGroup: async () => snapshot }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: marker delivery reads only these journal members.
+    const journal = journalFields as unknown as AgentSessionJournal
+    const deliveries: Promise<void>[] = []
+    const port = {
+      isActive: () => true,
+      emit: async (_target: Subscriber, event: unknown) => {
+        emitted.push(event)
+      }
+    }
+    const markers: ForkMarkerSubscriptions = new ForkMarkerSubscriptions(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: delivery calls only isActive and emit.
+      () => port as never,
       () => [subscriber],
       () => 0,
-      () => journal
+      () => journal,
+      (target, read) => deliveries.push(markers.refresh(target, read))
     )
     markers.add(subscriber)
 
@@ -120,6 +133,7 @@ describe('ForkMarkerSubscriptions', () => {
     root.conversationName = 'Annotate v2'
     markers.refreshSources(() => journal, ['root'])
     markers.refreshSources(() => journal, ['unrelated'])
+    await Promise.all(deliveries)
     markers.delete(subscriber)
 
     expect(emitted).toHaveLength(1)
