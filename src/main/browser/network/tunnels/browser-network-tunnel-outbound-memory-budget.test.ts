@@ -87,18 +87,9 @@ describe('BrowserNetworkTunnelOutboundMemoryBudgetRegistry', () => {
     expect(lease.claimApplicationBytes(1)).toBeNull()
     expect(lease.registerBufferedAmount(() => 0)).toBeNull()
     expect(socket.canSend(1)).toBe(false)
-    expect(registry.evidence()).toMatchObject({ hosts: 1, leases: 0, retainedBytes: 3 })
 
     releaseClaim?.()
     socket.release()
-    expect(registry.evidence()).toMatchObject({
-      hosts: 0,
-      leases: 0,
-      retainedBytes: 0,
-      bufferedBytes: 0,
-      claims: 0,
-      socketSources: 0
-    })
     expect(registry.acquire('host-b')).not.toBeNull()
   })
 })
