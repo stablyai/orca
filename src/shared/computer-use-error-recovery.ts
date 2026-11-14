@@ -14,6 +14,7 @@ export function computerUseErrorRecoveryData(
     case 'app_not_found':
       return recoverWith(
         'Run `orca computer list-apps --json` and retry with the exact app name or bundle ID.',
+        'If the app is not running, start it with `orca computer launch-app <app>` (macOS and Windows), which leaves the user in the app they are using; on Linux ask the user to.',
         'If the target is a website or web app such as Gmail, choose the desktop browser app/window that contains it; `orca computer` app selectors refer to desktop apps, not website names.',
         'Do not retry the same `orca computer ... --app <web app>` command unchanged.',
         'If the desired browser is not listed, start it with `orca computer launch-app <browser>` so it opens in the background (macOS and Windows); on Linux ask the user to start it. Then retry `orca computer list-apps --json` and `orca computer list-windows --app <browser> --json`.'
