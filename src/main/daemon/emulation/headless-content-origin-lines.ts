@@ -109,7 +109,7 @@ export function attachOriginLineState(line: OriginBufferLine, state: OriginLineA
 }
 
 /** Build coordinates from xterm's own translation, including wide and combined glyphs. */
-export function readOriginScreenLines(terminal: Terminal, owner: object): string[] {
+export function readOriginScreenLines(terminal: Terminal, owner: HeadlessContentOrigins): string[] {
   const core = originTerminalCore(terminal)
   const buffer = terminal.buffer.active
   const lines: string[] = []
