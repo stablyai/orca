@@ -7,6 +7,7 @@ import { providerSessionLocatorIdentifies } from '../../../shared/agent-session/
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
 import { AgentIdentityWorkerClient, type AgentIdentityClient } from './agent-identity-worker-client'
+import { SavedAgentKeyIds } from './saved-agent-key-ids'
 import { AgentIdentityDemand, type KeyDemand } from './agent-identity-demand'
 import type { ReverseLookupUnavailable } from './agent-identity-worker-protocol'
 
@@ -98,6 +99,7 @@ export class PaneAgentIdentities {
   private readonly placesById = new Map<string, Set<string>>()
   private readonly canonicalBySubject = new Map<string, RowAgentIdentity>()
   private readonly keyStrings = new WeakMap<AgentProviderKey, string>()
+  private readonly savedIds: SavedAgentKeyIds
   private readonly demand: AgentIdentityDemand
 
   constructor(
@@ -111,6 +113,7 @@ export class PaneAgentIdentities {
       createClient,
       () => this.invalidateSettled()
     )
+    this.savedIds = new SavedAgentKeyIds(this.demand, (key) => this.keyString(key))
   }
 
   /** Changes whenever the store authority ends; a caller compares it across its own awaits. */
@@ -182,6 +185,12 @@ export class PaneAgentIdentities {
     return this.demand.lookup(`idsOfProviderSession\0${providerSessionId}`, (client, path) =>
       client.idsOfProviderSession(path, providerSessionId)
     )
+  }
+
+  /** Each saved key's id, in order, null for none, linking nothing; at most one store question
+   *  per new key and authority. Undefined when the store cannot answer now. */
+  idsOfKeys(keys: readonly AgentProviderKey[]): Promise<(OrcaSessionId | null)[] | undefined> {
+    return this.savedIds.idsOf(keys)
   }
 
   /** Keeps the indexes and demand subscriptions exact: `place` is a legacy row key or a

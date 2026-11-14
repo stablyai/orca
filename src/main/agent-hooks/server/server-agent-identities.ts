@@ -9,12 +9,13 @@ import {
   type ProviderSessionSighting,
   type SettledAgentIdentityPlace
 } from '../identity/pane-agent-identities'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentSessionRecord
-} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentProviderKey } from '../identity/agent-provider-key'
-import { sleepingRecordOfKey } from '../identity/sleeping-agent-records'
+import {
+  sleepingRecordIds,
+  sleepingRecordOfKey,
+  type SleepingAgentSighting
+} from '../identity/sleeping-agent-records'
 import {
   isReverseLookupUnavailable,
   type ReverseLookupUnavailable
@@ -29,11 +30,6 @@ import {
 } from '../identity/agent-identity-worker-client'
 import { AgentHookServerState } from './server-state'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
-
-type SleepingAgentSighting = Pick<
-  SleepingAgentSessionRecord,
-  'agent' | 'providerSession' | 'connectionId'
->
 
 /** One terminal agent conversation's own transcript, as the payload naming it reported it. */
 export type TerminalAgentTranscriptSource = {
@@ -219,6 +215,30 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     if (live) {
       return live
     }
+    const sleeping = await this.sleepingTerminalAgent(id, readSleeping, authority, known)
+    return sleeping && 'record' in sleeping
+      ? { key: sleeping.key, providerSession: sleeping.record.providerSession, authority }
+      : sleeping
+  }
+
+  /** Each saved sleeping record's terminal agent id, in order, null for one never named; one
+   *  store question for keys this authority has not answered. Undefined when it cannot answer. */
+  sleepingTerminalAgentIds(
+    records: readonly SleepingAgentSighting[]
+  ): Promise<(OrcaSessionId | null)[] | undefined> {
+    return sleepingRecordIds(records, process.platform === 'win32', (keys) =>
+      this.agentIdentities.idsOfKeys(keys)
+    )
+  }
+
+  /** The saved sleeping record naming terminal agent `id`'s conversation, by its provider key;
+   *  null when none does, undefined when the store cannot answer now. */
+  async sleepingTerminalAgent<T extends SleepingAgentSighting>(
+    id: string,
+    readSleeping: () => Readonly<Record<string, T>>,
+    authority = this.agentIdentities.authority(),
+    known?: TerminalAgentTranscriptSource
+  ): Promise<{ key: AgentProviderKey; record: T } | ReverseLookupUnavailable | null | undefined> {
     const linked =
       known?.authority === authority
         ? { key: known.key }
@@ -237,10 +257,7 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       return null
     }
     const record = sleepingRecordOfKey(readSleeping(), key, windows)
-    if (record) {
-      return { key, providerSession: record.providerSession, authority }
-    }
-    return null
+    return record ? { key, record } : null
   }
 
   private liveTranscriptSource(

@@ -330,6 +330,12 @@ export function handleAgentIdentityRequest(
           ok: true,
           value: opened.idsOfProviderSession(request.providerSessionId)
         }
+      case 'idsOfKeys':
+        return {
+          id: request.id,
+          ok: true,
+          value: request.keys.map((key) => opened.lookup(key) ?? '')
+        }
     }
   } catch (error) {
     // A store that failed to open is reopened by the next request, never rebuilt.

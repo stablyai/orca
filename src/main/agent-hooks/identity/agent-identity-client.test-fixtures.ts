@@ -17,6 +17,7 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
   identifyRequests = 0
   hasRequests = 0
   providerKeyRequests = 0
+  idsOfKeysRequests = 0
   /** When set, `identify` waits for `release()` before answering. */
   hold = false
   /** Answers the next N identify requests as unavailable after running their SQL. */
@@ -78,6 +79,17 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
     }
     return response.ok && Array.isArray(response.value)
       ? response.value.filter(isOrcaSessionId)
+      : undefined
+  }
+
+  async idsOfKeys(
+    path: string,
+    keys: AgentProviderKey[]
+  ): Promise<(OrcaSessionId | null)[] | undefined> {
+    this.idsOfKeysRequests++
+    const response = handleAgentIdentityRequest({ id: 0, kind: 'idsOfKeys', path, keys })
+    return response.ok && Array.isArray(response.value)
+      ? response.value.map((id) => (isOrcaSessionId(id) ? id : null))
       : undefined
   }
 

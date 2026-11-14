@@ -14,6 +14,7 @@ import {
   type WithAnnotatedHostScope
 } from '../hosts/omitted-host-scope-selectors'
 import {
+  AGENT_LIST_STATES,
   AGENT_READ_MAX_LIMIT,
   type AgentConversationRow,
   type AgentListResult,
@@ -22,7 +23,6 @@ import {
   type AgentReadTool,
   type AgentShowResult
 } from '../../shared/agent-conversations/agent-conversation-contracts'
-import { AGENT_STATUS_STATES } from '../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/orca-session-address-prefix'
 import {
@@ -33,10 +33,10 @@ import {
 export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
   'agent list': async ({ flags, client, cwd, json }) => {
     const state = getOptionalStringFlag(flags, 'state')
-    if (state !== undefined && !AGENT_STATUS_STATES.some((known) => known === state)) {
+    if (state !== undefined && !AGENT_LIST_STATES.some((known) => known === state)) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `--state must be one of: ${AGENT_STATUS_STATES.join(', ')}.`
+        `--state must be one of: ${AGENT_LIST_STATES.join(', ')}.`
       )
     }
     const selector = await getOptionalWorktreeSelector(flags, 'worktree', cwd, client)
@@ -126,7 +126,7 @@ function formatAgentRow(row: AgentConversationRow): string {
 function formatAgentList(result: WithAnnotatedHostScope<AgentListResult>): string {
   const scope = result.hostScope
   const lines = [
-    result.agents.length === 0 ? 'No open agents.' : result.agents.map(formatAgentRow).join('\n\n')
+    result.agents.length === 0 ? 'No agents.' : result.agents.map(formatAgentRow).join('\n\n')
   ]
   // Agents on hosts this one does not list are reached by running there or with --environment.
   if (!scope || scope.omittedHostIds.length > 0) {

@@ -49,6 +49,10 @@ export class MemoryAgentIdentityClient implements AgentIdentityClient {
       .map(([, id]) => id)
   }
 
+  async idsOfKeys(path: string, keys: AgentProviderKey[]): Promise<(OrcaSessionId | null)[]> {
+    return keys.map((key) => this.ids.get(JSON.stringify([path, key])) ?? null)
+  }
+
   readonly isRetiring = false
 
   retired(): Promise<void> {

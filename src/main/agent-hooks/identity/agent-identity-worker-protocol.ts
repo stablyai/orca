@@ -7,6 +7,7 @@ export type AgentIdentityWorkerRequest =
   | { id: number; kind: 'has'; path: string; orcaSessionId: string }
   | { id: number; kind: 'providerKeyOf'; path: string; orcaSessionId: string }
   | { id: number; kind: 'idsOfProviderSession'; path: string; providerSessionId: string }
+  | { id: number; kind: 'idsOfKeys'; path: string; keys: AgentProviderKey[] }
 
 /** A reverse lookup this file can't serve by index: a newer build's read-only file without one.
  *  Not a store failure, so it neither closes the store nor starts the failure backoff. */
@@ -17,7 +18,8 @@ export function isReverseLookupUnavailable(value: unknown): value is ReverseLook
   return isRecord(value) && value.unavailable === 'reverse-index'
 }
 
-/** `identify` answers the committed id, or null for an unlinked key in a read-only file. */
+/** `identify` answers the committed id, or null for an unlinked key in a read-only file;
+ *  `idsOfKeys` answers each key's linked id in order, '' for none, and links nothing. */
 export type AgentIdentityWorkerResponse =
   | {
       id: number

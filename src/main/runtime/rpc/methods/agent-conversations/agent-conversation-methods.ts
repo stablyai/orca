@@ -11,7 +11,7 @@ import type {
 } from '../../../../../shared/agent-conversations/agent-conversation-contracts'
 import {
   agentConversationPlaces,
-  projectAgentConversationList
+  listAgentConversations
 } from '../../../agent-conversations/agent-conversation-list'
 import { resolveAgentConversation } from '../../../agent-conversations/agent-conversation-address'
 import { readAgentConversation } from '../../../agent-conversations/agent-conversation-read'
@@ -27,7 +27,7 @@ export const AGENT_CONVERSATION_METHODS = [
     permission: 'workspace',
     params: AgentListParams,
     handler: async (params, { runtime }): Promise<AgentListResult> =>
-      projectAgentConversationList(await runtime.getWorktreePs(AGENT_LIST_WORKTREE_LIMIT), params)
+      listAgentConversations(runtime, AGENT_LIST_WORKTREE_LIMIT, params)
   }),
   defineMethod({
     name: 'agent.show',

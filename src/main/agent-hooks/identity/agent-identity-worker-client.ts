@@ -40,6 +40,8 @@ export type AgentIdentityClient = {
     path: string,
     providerSessionId: string
   ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined>
+  /** Each key's linked id in order, null for none; links nothing. */
+  idsOfKeys(path: string, keys: AgentProviderKey[]): Promise<(OrcaSessionId | null)[] | undefined>
   /** Terminated but not yet exited: a replacement must wait for `retired()`. */
   readonly isRetiring: boolean
   retired(): Promise<void>
@@ -117,6 +119,16 @@ export class AgentIdentityWorkerClient implements AgentIdentityClient {
       return REVERSE_LOOKUP_UNAVAILABLE
     }
     return Array.isArray(value) ? value.filter(isOrcaSessionId) : undefined
+  }
+
+  async idsOfKeys(
+    path: string,
+    keys: AgentProviderKey[]
+  ): Promise<(OrcaSessionId | null)[] | undefined> {
+    const value = await this.request((id) => ({ id, kind: 'idsOfKeys', path, keys }))
+    return Array.isArray(value) && value.length === keys.length
+      ? value.map((id) => (isOrcaSessionId(id) ? id : null))
+      : undefined
   }
 
   get isRetiring(): boolean {

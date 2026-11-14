@@ -2,8 +2,9 @@ import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
 import { agentProviderKeyOf } from './pane-agent-identities'
+import type { OrcaSessionId } from '../../../shared/orca-session-address'
 
-type SleepingAgentSighting = Pick<
+export type SleepingAgentSighting = Pick<
   SleepingAgentSessionRecord,
   'agent' | 'providerSession' | 'connectionId'
 >
@@ -39,29 +40,53 @@ function isGuestTranscriptPath(path: string | undefined): boolean {
   )
 }
 
+/** The conversation a saved sleeping record names. On Windows a distro-less record with a guest
+ *  path names no key: its WSL distro is unknown, and it is not a native agent's. */
+export function sleepingRecordKey(
+  record: SleepingAgentSighting,
+  windows: boolean
+): AgentProviderKey | null {
+  return windows && isGuestTranscriptPath(record.providerSession.transcriptPath)
+    ? null
+    : agentProviderKeyOf({
+        agent: record.agent,
+        providerSession: record.providerSession,
+        connectionId: record.connectionId ?? null
+      })
+}
+
+/** Each record's id through `idsOfKeys`, in order; null for one naming no key. */
+export async function sleepingRecordIds(
+  records: readonly SleepingAgentSighting[],
+  windows: boolean,
+  idsOfKeys: (keys: AgentProviderKey[]) => Promise<(OrcaSessionId | null)[] | undefined>
+): Promise<(OrcaSessionId | null)[] | undefined> {
+  const keys = records.map((record) => sleepingRecordKey(record, windows))
+  const asked = keys.filter((key): key is AgentProviderKey => key !== null)
+  const ids = asked.length > 0 ? await idsOfKeys(asked) : []
+  if (!ids) {
+    return undefined
+  }
+  let next = 0
+  return keys.map((key) => (key ? (ids[next++] ?? null) : null))
+}
+
 /** The saved sleeping record naming `key`'s conversation, found through its provider session id
  *  and its full key. On Windows a distro-less WSL record of the same provider conversation also
  *  reads as native, so a native key never takes one with a guest path. */
-export function sleepingRecordOfKey(
-  records: Readonly<Record<string, SleepingAgentSighting>>,
+export function sleepingRecordOfKey<T extends SleepingAgentSighting>(
+  records: Readonly<Record<string, T>>,
   key: AgentProviderKey,
   windows: boolean
-): SleepingAgentSighting | null {
+): T | null {
   for (const [paneKey, record] of sleepingByProviderSession(records).get(key.providerSessionId) ??
     []) {
-    if (
-      records[paneKey] !== record ||
-      (windows && isGuestTranscriptPath(record.providerSession.transcriptPath))
-    ) {
+    if (records[paneKey] !== record) {
       continue
     }
-    const recordKey = agentProviderKeyOf({
-      agent: record.agent,
-      providerSession: record.providerSession,
-      connectionId: record.connectionId ?? null
-    })
+    const recordKey = sleepingRecordKey(record, windows)
     if (recordKey && sameProviderKey(recordKey, key)) {
-      return record
+      return records[paneKey]!
     }
   }
   return null

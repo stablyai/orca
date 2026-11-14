@@ -9,7 +9,8 @@ const AGENT_ID_FLAG_HELP =
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'agent list': {
-    state: '--state <state>        Only agents in this state: working, blocked, waiting or done'
+    state:
+      '--state <state>        Only agents in this state: working, blocked, waiting, done or asleep'
   },
   'agent show': { id: AGENT_ID_FLAG_HELP },
   'agent read': {

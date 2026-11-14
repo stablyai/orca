@@ -8,9 +8,9 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca agent list [--worktree <selector>] [--state <state>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'state'],
     notes: [
-      "Lists the agents open in this Orca host's workspaces: chats and terminal agents alike, each with its `orca_session_id:` ID. A terminal agent shows no ID until it first reports to Orca.",
+      "Lists the agents in this Orca host's workspaces: chats and terminal agents alike, each with its `orca_session_id:` ID. A terminal agent whose workspace is asleep, or whose tab hasn't reopened since a wake, is listed as asleep; listing never wakes it. A terminal agent shows no ID until it first reports to Orca.",
       'A chat keeps its ID across /clear; a terminal agent gets a new one when /clear starts a new conversation.',
-      '--state keeps agents in one state: working, blocked, waiting or done.',
+      '--state keeps agents in one state: working, blocked, waiting, done or asleep.',
       'Agents on other hosts are not listed here; the output names those hosts and the `--environment` that lists them.'
     ],
     examples: ['orca agent list --json', 'orca agent list --worktree active --state working']
@@ -23,7 +23,7 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['id'],
     notes: [
       '<id> is the `orca_session_id:` ID from `orca agent list` or Copy Orca Session ID.',
-      'An agent resumed in two panes shows both; one that is not open shows none.'
+      'An agent resumed in two panes shows both; a terminal agent that is asleep shows its saved place as asleep; a chat that is not open shows none.'
     ],
     examples: ['orca agent show orca_session_id:claude_1234 --json']
   },
