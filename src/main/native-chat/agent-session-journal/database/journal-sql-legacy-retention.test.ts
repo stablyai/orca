@@ -1,12 +1,11 @@
 import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { acquireOrcadInstanceLock } from '../../../orcad/instance-lock/orcad-instance-lock'
 import { openJournalDatabase } from './journal-database'
 import { journalDatabasePath } from './journal-host-database'
-import { journalLegacyFileIdentity } from './journal-legacy-source-receipt'
 import { JournalSqlDatabase } from './journal-sql-database'
 import { publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { publishJournalOutcomeEpoch } from '../outcomes/journal-outcome-epoch.test-fixture'
@@ -91,6 +90,17 @@ async function saveRetirement(root: string, phase: string, manifest?: unknown) {
   })
 }
 
+function fileIdentity(filename: string) {
+  const file = statSync(filename, { bigint: true })
+  return {
+    dev: String(file.dev),
+    ino: String(file.ino),
+    size: String(file.size),
+    mtimeNs: String(file.mtimeNs),
+    ctimeNs: String(file.ctimeNs)
+  }
+}
+
 const identity = {
   sessionId: 'empty',
   workspaceId: 'folder',
@@ -165,8 +175,8 @@ it('retains surviving companions from a previously prepared partial retirement',
   await writeFile(`${filename}-wal`, '')
   await writeFile(`${filename}-shm`, 'retained shared memory')
   const saved = await saveRetirement(root, 'prepared', {
-    '-wal': journalLegacyFileIdentity(`${filename}-wal`),
-    '-shm': journalLegacyFileIdentity(`${filename}-shm`)
+    '-wal': fileIdentity(`${filename}-wal`),
+    '-shm': fileIdentity(`${filename}-shm`)
   })
   const reopened = await open(root, errors)
   await reopened.startMaintenance()
