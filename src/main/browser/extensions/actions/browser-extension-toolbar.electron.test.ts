@@ -194,6 +194,11 @@ describe('extension toolbar, action popup and tab activation in a real Electron 
         return status.done === true
       })
       .toBe(true)
+      .catch((error: unknown) => {
+        throw new Error(`Toolbar fixture status: ${JSON.stringify(readStatus())}\n${stderr}`, {
+          cause: error
+        })
+      })
     const status = readStatus()
     const page1 = status['page-1-tab']
     const page2 = status['page-2-tab']

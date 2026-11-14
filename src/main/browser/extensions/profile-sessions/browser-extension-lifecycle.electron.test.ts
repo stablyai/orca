@@ -113,6 +113,14 @@ async function runPhase(phase: Phase): Promise<FixtureStatus> {
       return status.done === true
     })
     .toBe(true)
+    .catch((error: unknown) => {
+      throw new Error(
+        `Lifecycle ${phase} status: ${JSON.stringify(readStatus(phase))}\n${stderr}`,
+        {
+          cause: error
+        }
+      )
+    })
   await exited
   return readStatus(phase)
 }

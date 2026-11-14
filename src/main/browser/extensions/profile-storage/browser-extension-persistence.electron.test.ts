@@ -114,6 +114,14 @@ function pollStatus(phase: string, ready: (status: FixtureStatus) => boolean) {
       return ready(status)
     })
     .toBe(true)
+    .catch((error: unknown) => {
+      throw new Error(
+        `Persistence ${phase} status: ${JSON.stringify(readStatus(phase))}\n${stderr}`,
+        {
+          cause: error
+        }
+      )
+    })
 }
 
 beforeAll(async () => {
