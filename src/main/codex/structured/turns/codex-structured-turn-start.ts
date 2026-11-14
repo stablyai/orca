@@ -90,7 +90,6 @@ export async function startCodexTurn(
     throw error
   }
   let steered = steerable(runningTurnId) ? await steerCodexTurn(host, runningTurnId, input) : null
-  // Retry steering once if another turn opened during the refused request.
   const runningSince = steered ? undefined : [...(host.activeTurnIds ?? [])].at(-1)
   if (steerable(runningSince) && runningSince !== runningTurnId) {
     steered = await steerCodexTurn(host, runningSince, input)
@@ -105,7 +104,7 @@ export async function startCodexTurn(
   let inputChoices: Readonly<Record<string, string | undefined>> = {}
   let requestControls: Record<string, string> = {}
   let enqueued = false
-  let discardSettingsAttempt: (() => void) | undefined
+  let settingsAttempt: { discard: () => void; acknowledge: () => void } | undefined
   const enqueue = (
     permission: Parameters<Parameters<typeof admitCodexTurnPermission>[2]>[0],
     body = input.body,
@@ -162,7 +161,7 @@ export async function startCodexTurn(
     }
     host.appliedTurnOptions = known
     host.appliedTurnInputOptions = knownInput
-    discardSettingsAttempt = host.appliedSettings?.attempt(requested)
+    settingsAttempt = host.appliedSettings?.attempt(requested)
     enqueued = true
     host.dispatchEchoes.expect(
       input.clientMessageId,
@@ -230,7 +229,7 @@ export async function startCodexTurn(
       checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
     }
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
-      discardSettingsAttempt?.()
+      settingsAttempt?.discard()
       host.appliedTurnOptions = previousApplied
       host.appliedTurnInputOptions = previousInput
       if (previousOptions) {
@@ -242,6 +241,7 @@ export async function startCodexTurn(
     }
     throw error
   }
+  settingsAttempt?.acknowledge()
   host.appliedTurnOptions = { ...previousApplied, ...requested }
   host.appliedTurnInputOptions = codexMessageInputOptions(
     inputChoices,

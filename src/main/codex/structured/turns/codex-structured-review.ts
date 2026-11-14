@@ -34,13 +34,14 @@ export async function reviewCodexStructuredSession(
     }
     session.appliedTurnOptions = known
     session.appliedTurnInputOptions = knownInput
-    const discard = session.appliedSettings?.attempt(choices)
+    const attempt = session.appliedSettings?.attempt(choices)
     try {
       await session.connection.request(
         'thread/settings/update',
         { threadId: session.threadId, ...choices },
         { timeoutMs }
       )
+      attempt?.acknowledge()
       session.appliedTurnOptions = { ...session.appliedTurnOptions, ...choices }
       session.appliedTurnInputOptions = { ...session.appliedTurnInputOptions, ...choices }
     } catch (error) {
@@ -48,7 +49,7 @@ export async function reviewCodexStructuredSession(
         isCodexAppServerRequestError(error) ||
         codexMethodUnavailable(error, 'thread/settings/update')
       ) {
-        discard?.()
+        attempt?.discard()
         session.appliedTurnOptions = previousApplied
         session.appliedTurnInputOptions = previousInput
       }

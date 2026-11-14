@@ -8,6 +8,7 @@ import {
   acquireReadyCodexForTest
 } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
+import { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -463,65 +464,87 @@ it('uses acknowledged startup settings despite a synthetic mismatched readback',
   }
 })
 
-it('corrects captured settings after an applied update loses its reply', async () => {
-  let model = 'gpt-live'
-  let effort = 'medium'
-  let loseReply = true
-  const reviewed: { model: string; effort: string }[] = []
-  const codex = fakeCodex({
-    'thread/settings/update': (params) => {
-      model = String(params?.model)
-      effort = String(params?.effort)
-      if (loseReply) {
-        loseReply = false
-        throw new Error('settings reply timed out')
+it.each([10, 100])(
+  'settles a lost settings reply before %i later reviews without growing work',
+  async (count) => {
+    const attempts = vi.spyOn(CodexAppliedSettings.prototype, 'attempt')
+    let model = 'gpt-live'
+    let effort = 'medium'
+    let loseReply = true
+    const reviewed: { model: string; effort: string }[] = []
+    const codex = fakeCodex({
+      'thread/settings/update': (params) => {
+        model = String(params?.model)
+        effort = String(params?.effort)
+        if (loseReply) {
+          loseReply = false
+          throw new Error('settings reply timed out')
+        }
+        return {}
+      },
+      'review/start': () => {
+        reviewed.push({ model, effort })
+        return { turn: { id: 'review-native' } }
       }
-      return {}
-    },
-    'review/start': () => {
-      reviewed.push({ model, effort })
-      return { turn: { id: 'review-native' } }
-    }
-  })
-  const adapter = adapterFor(codex)
-  try {
-    await acquireReadyCodexForTest(adapter, {
-      identity: identityFor(SESSION),
-      fence: 7,
-      spawnToken: 'spawn-9'
     })
-    const command = { ...COMMAND, name: 'review' as const, review: { type: 'custom' as const } }
-    expect(
-      await adapter.review({
-        sessionId: SESSION,
+    const adapter = adapterFor(codex)
+    try {
+      await acquireReadyCodexForTest(adapter, {
+        identity: identityFor(SESSION),
         fence: 7,
-        command,
-        executionOptions: { model: 'gpt-review', effort: 'high' }
+        spawnToken: 'spawn-9'
       })
-    ).toMatchObject({ state: 'rejected' })
-    expect(reviewed).toEqual([])
-    expect(
-      await adapter.review({
-        sessionId: SESSION,
-        fence: 7,
-        command,
-        executionOptions: { model: 'gpt-live', effort: 'medium' }
-      })
-    ).toMatchObject({ state: 'accepted' })
-    expect(
-      codex.connections[0]!.calls.filter(
-        ({ method }) => method === 'thread/settings/update' || method === 'review/start'
-      ).map(({ method, params }) => ({ method, model: params?.model, effort: params?.effort }))
-    ).toEqual([
-      { method: 'thread/settings/update', model: 'gpt-review', effort: 'high' },
-      { method: 'thread/settings/update', model: 'gpt-live', effort: 'medium' },
-      { method: 'review/start', model: undefined, effort: undefined }
-    ])
-    expect(reviewed).toEqual([{ model: 'gpt-live', effort: 'medium' }])
-  } finally {
-    await adapter.closeAll()
+      const command = { ...COMMAND, name: 'review' as const, review: { type: 'custom' as const } }
+      expect(
+        await adapter.review({
+          sessionId: SESSION,
+          fence: 7,
+          command,
+          executionOptions: { model: 'gpt-review', effort: 'high' }
+        })
+      ).toMatchObject({ state: 'rejected' })
+      expect(reviewed).toEqual([])
+      expect(
+        await adapter.review({
+          sessionId: SESSION,
+          fence: 7,
+          command,
+          executionOptions: { model: 'gpt-live', effort: 'medium' }
+        })
+      ).toMatchObject({ state: 'accepted' })
+      expect(
+        codex.connections[0]!.calls.filter(
+          ({ method }) => method === 'thread/settings/update' || method === 'review/start'
+        ).map(({ method, params }) => ({ method, model: params?.model, effort: params?.effort }))
+      ).toEqual([
+        { method: 'thread/settings/update', model: 'gpt-review', effort: 'high' },
+        { method: 'thread/settings/update', model: 'gpt-live', effort: 'medium' },
+        { method: 'review/start', model: undefined, effort: undefined }
+      ])
+      expect(reviewed).toEqual([{ model: 'gpt-live', effort: 'medium' }])
+      // One uncertain write needs one corrective write; acknowledged repeats need neither.
+      for (let index = 0; index < count; index += 1) {
+        expect(
+          await adapter.review({
+            sessionId: SESSION,
+            fence: 7,
+            command,
+            executionOptions: { model: 'gpt-live', effort: 'medium' }
+          })
+        ).toMatchObject({ state: 'accepted' })
+        expect(attempts.mock.contexts.at(-1)?.hasPendingUpdates()).toBe(false)
+      }
+      expect(attempts).toHaveBeenCalledTimes(2)
+      expect(
+        codex.connections[0]!.calls.filter(({ method }) => method === 'thread/settings/update')
+      ).toHaveLength(2)
+      expect(reviewed).toHaveLength(count + 1)
+    } finally {
+      attempts.mockRestore()
+      await adapter.closeAll()
+    }
   }
-})
+)
 
 it('cleans the main thread terminals with one native operation and no subagent interruption', async () => {
   const codex = fakeCodex()
