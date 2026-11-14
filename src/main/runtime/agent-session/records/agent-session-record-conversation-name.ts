@@ -77,13 +77,11 @@ export async function compareAndSetAgentSessionRecordName(
   ) => Promise<AgentSessionRecord>,
   name: string | null,
   expected: string | null,
-  contextId: string | null = null,
-  applicable?: (record: AgentSessionRecord) => boolean
+  contextId: string | null = null
 ): Promise<AgentSessionRecord | null> {
   let matched = false
   const record = await mutate((current) => {
     matched =
-      (applicable?.(current) ?? true) &&
       current.conversationNameSource !== 'user' &&
       (current.conversationName ?? null) === expected &&
       (current.providerContextBoundary?.operationId ?? null) === contextId
@@ -96,6 +94,5 @@ export type CompareAndSetConversationName = (
   sessionId: string,
   name: string | null,
   expected: string | null,
-  contextId?: string | null,
-  applicable?: (record: AgentSessionRecord) => boolean
+  contextId?: string | null
 ) => Promise<AgentSessionRecord | null>

@@ -6,7 +6,7 @@ import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
-import type { MobileNativeChatSendOrigin } from '../../transcript/mobile-native-chat-pending-echo'
+import type { MobileNativeChatSendOrigin } from '../../transcript/sending/mobile-native-chat-pending-echo'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { AgentJournalSkillRef } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {

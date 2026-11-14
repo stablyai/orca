@@ -75,7 +75,15 @@ export function latestUsageLimitContinueIdentity(snapshot: {
   items: readonly AgentJournalRenderItem[]
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
 }): UsageLimitContinueIdentity | undefined {
-  const cut = latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+  return usageLimitContinueIdentity(
+    latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+  )
+}
+
+/** A cut's automatic-continue identity, when its reset time is known. */
+export function usageLimitContinueIdentity(
+  cut: NativeChatUsageLimitCut | null
+): UsageLimitContinueIdentity | undefined {
   return cut?.resetsAt !== undefined && Number.isFinite(cut.resetsAt)
     ? { turnItemId: cut.turnItemId, resetsAt: cut.resetsAt }
     : undefined

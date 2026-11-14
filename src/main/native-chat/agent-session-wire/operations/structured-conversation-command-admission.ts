@@ -4,14 +4,11 @@ import {
 } from '../../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionCapabilities } from '../../../../shared/agent-session/agent-session-capabilities'
-import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { readContextStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
-import type { StructuredAgentSessionCurrentWorkJournal } from '../observations/structured-agent-session-work-evidence'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import {
   refuse,
@@ -36,11 +33,8 @@ export function compactionChildWork(
 export type ConversationCommandAdmissionContext = {
   sessionId: string
   fence: number
-  journal: StructuredAgentSessionCurrentWorkJournal & {
-    itemsRead: () => Pick<ReturnType<AgentSessionJournal['itemsRead']>, 'items'>
-  }
-  /** Without host projection, assume the generation at fence is live. */
-  currentWork?: () => StructuredAgentSessionCurrentWork | null
+  journal: AgentSessionJournal
+  readWork?: JournalWorkReader
   adapter: Pick<StructuredAgentSessionAdapter, 'backgroundTaskStops'>
 }
 
@@ -57,34 +51,23 @@ export function conversationCommandInFlight(): AgentSessionWireRefusal {
 
 /** Cite only visible child work and available Stop controls.
  * At-rest ignores dead-generation turns; at handover, later queued messages wait for this command. */
-export function conversationCommandBlocked(
+export async function conversationCommandBlocked(
   ctx: ConversationCommandAdmissionContext,
   record: AgentSessionRecord,
   childWork: ConversationCommandChildWork | null,
   admission?: 'at-rest' | 'handover'
-): AgentSessionWireRefusal | null {
-  const { items, submissions } = agentSessionCurrentContextRows(
-    ctx.journal.itemsRead().items,
-    ctx.journal.inputOrder.recoverableSubmissions()
-  )
+): Promise<AgentSessionWireRefusal | null> {
   if (record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded') {
     return blocked('rewindUnconfirmed', 'agent_session_rewind:outcome-unknown')
   }
   if (record.lease.handoffStage || record.lease.handoffOperationId) {
     return blocked('handoffInFlight', 'Wait for the session handoff to finish.')
   }
-  const work = contextStructuredAgentSessionCurrentWork(ctx)
-  if (admission !== 'at-rest' && work.activeTurnId()) {
+  const { state: work } = await readContextStructuredAgentSessionWork(ctx, { kind: 'state' })
+  if (admission !== 'at-rest' && work.activeTurn) {
     return blocked('turnActive', 'Wait for the current turn to finish before using this command.')
   }
-  if (
-    items.some(
-      (item) =>
-        (item.body.kind === 'approval' || item.body.kind === 'question') &&
-        item.body.resolution.state === 'pending' &&
-        work.isCurrentItem(item.itemId)
-    )
-  ) {
+  if (work.commandAdmission.promptPending) {
     return blocked(
       'promptPending',
       'Resolve the pending question or approval before using this command.'
@@ -101,10 +84,9 @@ export function conversationCommandBlocked(
   }
   // Match the Working indicator; at handover, later messages wait for this command.
   if (
-    submissions.some(
-      (entry) =>
-        !(admission === 'handover' && isQueuedAgentJournalSubmission(entry)) && work.owesSend(entry)
-    )
+    admission === 'handover'
+      ? work.commandAdmission.handoverOwesSend
+      : work.commandAdmission.owesSend
   ) {
     return blocked(
       'messagesUnsettled',

@@ -1,18 +1,19 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, it } from 'vitest'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 
 import {
   fixture,
   CALLER,
   laneDrained
-} from './structured-agent-session-claude-stop-contract-test-fixture'
+} from './structured-agent-session-claude-stop-contract.test-fixture'
 import {
   ask,
   cancelCard,
   cardResolution,
   openTurn,
   statusTexts
-} from './structured-agent-session-claude-stop-contract-test-actions'
+} from './structured-agent-session-claude-stop-contract-test-actions.test-fixture'
 
 it('dismisses a plan card on its Cancel: Claude is told to wait for the user, and keeps running', async () => {
   const connection = fixture.claude.connections[0]!
@@ -34,7 +35,7 @@ it('dismisses a plan card on its Cancel: Claude is told to wait for the user, an
   expect(JSON.stringify(reply)).not.toMatch(/keep planning|ExitPlanMode again/i)
   expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
   expect(connection.closed).toBe(false)
-  const cards = (await fixture.host.journalSnapshot(SESSION)).items.filter(
+  const cards = (await readTestHostJournal(fixture.host, SESSION)).items.filter(
     (item) => item.body.kind === 'approval'
   )
   expect(cards).toHaveLength(1)

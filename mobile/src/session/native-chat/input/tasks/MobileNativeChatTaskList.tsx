@@ -12,8 +12,11 @@ import { nativeChatTaskListCopy } from './native-chat-task-list-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
 import { useMobileNativeChatOpenedDetail } from '../../visual/mobile-native-chat-opened-detail'
-import { toolStyles as styles, toolType } from '../../transcript/mobile-native-chat-tool-styles'
-import { useMobileNativeChatDisclosure } from '../../transcript/mobile-native-chat-disclosure-store'
+import {
+  toolStyles as styles,
+  toolType
+} from '../../transcript/tool-results/mobile-native-chat-tool-styles'
+import { useMobileNativeChatDisclosure } from '../../transcript/viewport/mobile-native-chat-disclosure-store'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 
 /** Content plus occurrence is the only identity the providers give these entries. */

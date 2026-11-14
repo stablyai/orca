@@ -166,6 +166,11 @@ const emojiShortcodeDatasetResource = {
   to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 }
 const commonExtraResources = [
+  {
+    from: 'node_modules/node-pty/build/Release',
+    to: 'bin',
+    filter: ['journal-file-lock', 'journal-file-lock.exe']
+  },
   relayExtraResource,
   orcadTemplateExtraResource,
   orcadTemplateNodeModulesExtraResource,
@@ -367,6 +372,8 @@ module.exports = {
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/agent-identity-worker-entry.js',
     'out/main/session-search-worker-entry.js',
+    'out/main/journal-sql-worker-entry.js',
+    'out/main/journal-sql-reader-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',
@@ -406,6 +413,17 @@ module.exports = {
     if (context.electronPlatformName === 'linux') {
       ensureWaylandClipboard(context.arch)
     }
+    return import('./scripts/native-build/build-journal-file-lock.mjs').then(
+      ({ buildJournalFileLock }) => {
+        const lockName =
+          context.electronPlatformName === 'win32' ? 'journal-file-lock.exe' : 'journal-file-lock'
+        buildJournalFileLock(
+          join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release', lockName),
+          context.arch === 3 ? 'arm64' : 'x64',
+          { glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false }
+        )
+      }
+    )
   },
   afterPack: async (context) => {
     const resourcesDir =
@@ -535,6 +553,11 @@ module.exports = {
     })
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     if (context.electronPlatformName === 'darwin') {
+      await signMacStandaloneHelper(
+        join(resourcesDir, 'bin', 'journal-file-lock'),
+        'journal file lock',
+        context.packager
+      )
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),

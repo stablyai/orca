@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useMobileSessionDictation } from './use-mobile-session-dictation'
 import { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
-import { useMobileNativeChatReadability } from './native-chat/transcript/use-mobile-native-chat-readability'
+import { useMobileNativeChatReadability } from './native-chat/transcript/viewport/use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './native-chat/composer/field/use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './native-chat/composer/delivery/use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './native-chat/conversation/mobile-native-chat-scope-key'

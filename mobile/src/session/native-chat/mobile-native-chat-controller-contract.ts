@@ -28,7 +28,7 @@ import type { MobileStructuredQueuedMessageControls } from './input/queued-messa
 import type { MobileStructuredThreadGoal } from './input/tasks/use-mobile-structured-thread-goal'
 import type { MobileStructuredBackgroundTasks } from './input/tasks/use-mobile-structured-background-tasks'
 import type { MobileStructuredInterruptedContinue } from './composer/delivery/use-mobile-structured-interrupted-continue'
-import type { MobileNativeChatPendingMessage } from './transcript/mobile-native-chat-pending-echo'
+import type { MobileNativeChatPendingMessage } from './transcript/sending/mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './conversation/use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/session-options/MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'

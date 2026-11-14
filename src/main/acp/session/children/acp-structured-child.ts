@@ -18,6 +18,7 @@ export type AcpStructuredChild = Pick<
   | 'closeRequested'
   | 'failureClose'
   | 'journalClosed'
+  | 'historyCatchUp'
   | 'ended'
   | 'exitObservedAt'
 > & {

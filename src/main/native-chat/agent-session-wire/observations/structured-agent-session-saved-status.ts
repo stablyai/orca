@@ -109,10 +109,7 @@ export class StructuredAgentSessionSavedStatus {
     const entry = { edge }
     this.queued.set(sessionId, entry)
     const write = this.deps()
-      .store.transitionHandoff(sessionId, (record) => {
-        const { lastTurn: _previous, ...rest } = record
-        return lastTurn ? { ...rest, lastTurn } : _previous ? rest : record
-      })
+      .store.updateRecord(sessionId, { kind: 'last-turn', lastTurn })
       .then(
         () => {},
         (error: unknown) => {
@@ -169,7 +166,9 @@ export function createSavedStructuredStatusGroup(
     }
     const summary = savedStructuredAgentSessionStatus(record, markerAt)
     published.set(record.sessionId, { summary, firstInputSubmissionKey: null })
-    sink(summary, record.location, publisher)
+    if (summary.status !== null) {
+      sink(summary, record.location, publisher)
+    }
     broadcast({ type: 'status', session: summary })
   }
   return (visit) => {

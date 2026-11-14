@@ -75,6 +75,7 @@ export const ORCAD_NODE_PTY_JS_ARTIFACTS = [
 export function orcadNodePtySlotFiles(target: string): string[] {
   if (isWindowsTarget(target)) {
     return [
+      'journal-file-lock.exe',
       'conpty.node',
       'conpty_console_list.node',
       'conpty/conpty.dll',
@@ -85,7 +86,9 @@ export function orcadNodePtySlotFiles(target: string): string[] {
       'winpty-agent.exe'
     ]
   }
-  return target.startsWith('darwin-') ? ['pty.node', 'spawn-helper'] : ['pty.node']
+  return target.startsWith('darwin-')
+    ? ['journal-file-lock', 'pty.node', 'spawn-helper']
+    : ['journal-file-lock', 'pty.node']
 }
 
 export function orcadNodePtyNativeArtifacts(target: string): string[] {
@@ -240,6 +243,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'command-path-directory-worker-entry.js' },
   // Worker thread that reads other apps' SQLite (the OpenCode binder and history) off the event loop.
   { filename: ORCAD_FOREIGN_SQLITE_READER_ENTRY },
+  { filename: 'journal-sql-worker-entry.js' },
+  { filename: 'journal-sql-reader-entry.js' },
   // Terminal agent identity SQL runs in this worker thread, off the hook server's loop.
   { filename: 'agent-identity-worker-entry.js' },
   { filename: ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY },

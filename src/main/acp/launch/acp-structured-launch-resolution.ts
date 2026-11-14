@@ -23,7 +23,6 @@ import type { AgentSessionAccountHome } from '../../../shared/agent-session/life
 import type { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
-import type { JournalLoad } from '../../native-chat/agent-session-journal/replay/journal-open'
 import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -33,8 +32,10 @@ import {
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
-import { nothingExchangedOn } from '../session/acp-structured-resume-history'
-import { acpUnannouncedLosses } from '../session/start/acp-session-reopen-failure'
+import {
+  nothingExchangedOn,
+  type AcpSavedSessionReads
+} from '../session/acp-structured-resume-history'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
 export type AcpStructuredLaunch = StructuredAgentCommand & {
@@ -52,15 +53,14 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
     sessionId: string
     key: string
     /** A chat-created session with no exchanged turn may never have been saved. */
-    mayBeUnsaved: () => boolean
-    /** Lost conversations whose warning rows are missing; read after startup succeeds. */
-    unannouncedLosses: () => string[]
+    mayBeUnsaved: () => Promise<boolean>
+    /** The writer decides which lost conversations still need warning rows. */
+    lossKeys: readonly string[]
   } | null
 }
 
 export type AcpStructuredLaunchPartDeps = {
-  /** Reads without opening the journal. */
-  readJournal: (sessionId: string) => JournalLoad | null
+  savedSession: AcpSavedSessionReads
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
   inheritedEnv?: NodeJS.ProcessEnv
@@ -206,15 +206,16 @@ export function acpStructuredLaunchPart(
           ? {
               sessionId: head.handle.nativeId,
               key: agentSessionProviderHandleKey(head.handle),
-              mayBeUnsaved: () =>
+              mayBeUnsaved: async () =>
                 head.origin === 'created' &&
-                nothingExchangedOn(deps.readJournal, identity.sessionId, head.handle.nativeId),
-              unannouncedLosses: () =>
-                acpUnannouncedLosses(
-                  deps.readJournal,
+                (await nothingExchangedOn(
+                  deps.savedSession,
                   identity.sessionId,
-                  record.providerHandleChain
-                )
+                  head.handle.nativeId
+                )),
+              lossKeys: record.providerHandleChain.flatMap((link) =>
+                link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
+              )
             }
           : null
       },
