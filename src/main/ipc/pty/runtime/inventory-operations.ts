@@ -2,6 +2,7 @@ import { getPtyIdsForHost } from '../provider/ownership-state'
 import { getProvider, localProvider, registeredPtyProviders } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 
@@ -73,12 +74,13 @@ export async function listProcessesFromRuntimeController(
 
 /** Exit proof needs the provider that owns local PTYs, so it waits out startup and names who answered. */
 export async function listLocalProcessesForExitProofFromRuntimeController(
-  deps: PtyRuntimeControllerDeps
+  deps: Pick<PtyRuntimeControllerDeps, 'getLocalPtyProviderStartupPromise'>,
+  readProvider: () => Pick<IPtyProvider, 'listProcesses'> = () => localProvider
 ): Promise<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }> {
   await deps.getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
-  const provider = localProvider
+  const provider = readProvider()
   const processes = await provider.listProcesses()
-  if (provider !== localProvider) {
+  if (provider !== readProvider()) {
     throw new Error('The local PTY provider changed while listing; its answer proves nothing.')
   }
   return { processes, inProcessOwner: provider instanceof LocalPtyProvider }

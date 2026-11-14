@@ -52,4 +52,25 @@ describe('output reference for a worker whose process is gone', () => {
       })
     }
   )
+
+  it('points a stopped chat worker at its journal, not at terminal output', () => {
+    expect(
+      deriveWorkerOutputReferenceFromSavedState({
+        resource: { host_scope: local, resume_session: null },
+        structuredWorker: {
+          handle: 'structured-worker-1',
+          sessionId: 'chat-session-1',
+          agent: 'codex',
+          paneKey: 'tab_chat:leaf',
+          processIncarnation: 'structured:chat-session-1',
+          worktreeId: 'repo::wt',
+          hostScope: { kind: 'local', hostId: 'local' }
+        }
+      })
+    ).toEqual({
+      kind: 'structured_journal',
+      status: 'captured',
+      content: { version: 3, agent: 'codex', processIncarnation: 'structured:chat-session-1' }
+    })
+  })
 })

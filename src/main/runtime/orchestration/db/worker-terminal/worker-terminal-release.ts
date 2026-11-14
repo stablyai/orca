@@ -108,8 +108,8 @@ export function settleDeadWorkerTerminalRelease(
       WorkerTerminalResourceRow,
       'owner_dispatch_id' | 'host_scope' | 'release_state' | 'retained_reason'
     >
-    /** Saved-state reference, written only when the owner has no archive yet. */
-    output: {
+    /** Where the output lives, read from this transaction's row; called only when the owner has no archive yet. */
+    output: (resource: WorkerTerminalResourceRow) => {
       kind: WorkerTerminalArchiveKind
       content: string
       archiveSource: string
@@ -158,12 +158,13 @@ export function settleDeadWorkerTerminalRelease(
       this.db.exec('COMMIT')
       return { disposition: 'retained', resource }
     }
-    if (recordsOutput) {
+    const output = recordsOutput ? params.output(resource) : null
+    if (output) {
       this.storeWorkerTerminalArchive({
         dispatchId: resource.owner_dispatch_id,
         resourceId: resource.id,
-        kind: params.output.kind,
-        content: params.output.content
+        kind: output.kind,
+        content: output.content
       })
     }
     this.db
@@ -178,8 +179,8 @@ export function settleDeadWorkerTerminalRelease(
          WHERE id = ? AND process_incarnation = ? AND ${WORKER_TERMINAL_RELEASABLE_ROW_SQL}`
       )
       .run(
-        recordsOutput ? params.output.archiveSource : null,
-        recordsOutput ? params.output.archiveStatus : null,
+        output?.archiveSource ?? null,
+        output?.archiveStatus ?? null,
         params.resourceId,
         params.processIncarnation
       )

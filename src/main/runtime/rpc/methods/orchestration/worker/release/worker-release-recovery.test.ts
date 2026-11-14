@@ -10,6 +10,14 @@ import { reconcileRequestedWorkerTerminalReleases } from '../../../../../orchest
 import { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { recordWorkerResumeSession } from '../../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
+import { LocalPtyProvider } from '../../../../../../providers/local-pty/local-pty-provider'
+import { exitListeners } from '../../../../../../providers/local-pty/local-pty-provider-state'
+import type { IPtyProvider } from '../../../../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../../../../providers/pty/process-info'
+import { listLocalProcessesForExitProofFromRuntimeController } from '../../../../../../ipc/pty/runtime/inventory-operations'
+import { observeInProcessWorkerExits } from '../../../../../../ipc/pty/runtime/controller'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../../../../terminal/lifecycle/pty-controller-inventory-budget'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -28,6 +36,7 @@ describe('orchestration worker release recovery', () => {
 
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  const workerIncarnation = 'pty-worker:11111111-1111-4111-8111-111111111111'
 
   function setup(): void {
     db = new OrchestrationDb(':memory:')
@@ -38,14 +47,14 @@ describe('orchestration worker release recovery', () => {
       handle === 'term_coord' ? coordinatorPaneKey : handle === 'term_worker' ? workerPaneKey : null
     )
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-      handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
+      handle === 'term_worker' ? workerIncarnation : null
     )
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
       handle === 'term_worker'
         ? ({
             terminalHandle: handle,
             paneKey: workerPaneKey,
-            processIncarnation: 'runtime_test:term_worker:1',
+            processIncarnation: workerIncarnation,
             hostScope: { kind: 'local', hostId: 'local' }
           } as never)
         : null
@@ -99,6 +108,7 @@ describe('orchestration worker release recovery', () => {
   }
 
   afterEach(() => {
+    observeInProcessWorkerExits(undefined)
     if (dbOpen) {
       dbOpen = false
       db.close()
@@ -184,26 +194,16 @@ describe('orchestration worker release recovery', () => {
     expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
   })
 
-  const currentIncarnation = 'pty-worker:11111111-1111-4111-8111-111111111111'
-
   /** A current worker whose terminal is gone; the local owner answers with `listing`. */
   function loseWorkerTerminal(
-    listing: () => Promise<{ processes: never[]; inProcessOwner: boolean }>
+    listing: () => Promise<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }>
   ): void {
-    vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
-      handle === 'term_worker' ? currentIncarnation : null
-    )
-    vi.mocked(runtime.getOrchestrationDispatchAuthority).mockImplementation((handle) =>
-      handle === 'term_worker'
-        ? ({
-            terminalHandle: handle,
-            paneKey: workerPaneKey,
-            processIncarnation: currentIncarnation,
-            hostScope: { kind: 'local', hostId: 'local' }
-          } as never)
-        : null
-    )
-    runtime.setPtyController({ listLocalProcessesForExitProof: listing } as never)
+    runtime.setPtyController({
+      write: () => false,
+      kill: () => false,
+      getForegroundProcess: async () => null,
+      listLocalProcessesForExitProof: listing
+    })
   }
 
   function goneAfterSettle(): void {
@@ -211,43 +211,49 @@ describe('orchestration worker release recovery', () => {
     vi.spyOn(runtime, 'resolveTerminalHandleByProcessIncarnation').mockReturnValue(null)
   }
 
-  it('releases a requested worker whose exited terminal is gone, keeping its transcript readable', async () => {
+  function saveSession(resourceId: string, sessionId: string): string {
+    const transcriptPath = path.join(os.tmpdir(), `${sessionId}.jsonl`)
+    recordWorkerResumeSession(db, resourceId, {
+      paneKey: workerPaneKey,
+      processIncarnation: workerIncarnation,
+      connectionId: null,
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: sessionId, transcriptPath },
+      observedAt: 0
+    })
+    return transcriptPath
+  }
+
+  it('releases a requested worker whose exited terminal is gone, keeping its newest saved transcript', async () => {
     setup()
-    loseWorkerTerminal(async () => ({ processes: [], inProcessOwner: false }))
+    const listing = deferred<{ processes: never[]; inProcessOwner: boolean }>()
+    loseWorkerTerminal(() => listing.promise)
     const { dispatchId } = await startSettledWorker()
-    const resource = db.getWorkerTerminalResourceByOwner(dispatchId)!
-    const transcriptPath = path.join(os.tmpdir(), 'claude-session-1.jsonl')
-    db.db.prepare('UPDATE worker_terminal_resources SET resume_session = ? WHERE id = ?').run(
-      JSON.stringify({
-        agent: 'claude',
-        providerSession: {
-          key: 'session_id',
-          id: 'claude-session-1',
-          transcriptPath
-        },
-        connectionId: null
-      }),
-      resource.id
-    )
+    const resourceId = db.getWorkerTerminalResourceByOwner(dispatchId)!.id
+    saveSession(resourceId, 'claude-session-a')
     goneAfterSettle()
 
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({
+    const release = call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() =>
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
+    )
+    // A /clear lands while the exit proof is pending; the archive must name the newer conversation.
+    const transcriptPath = saveSession(resourceId, 'claude-session-b')
+    listing.resolve({ processes: [], inProcessOwner: false })
+
+    await expect(release).resolves.toMatchObject({
       state: 'released',
       processAction: 'none',
       archive: { source: 'transcript', status: 'captured' }
     })
     expect(JSON.parse(db.getWorkerTerminalArchive(dispatchId)!.content)).toMatchObject({
       agent: 'claude',
-      sessionId: 'claude-session-1',
+      sessionId: 'claude-session-b',
       transcriptPath
     })
     await expect(
       call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({
-      state: 'already_released'
-    })
+    ).resolves.toMatchObject({ state: 'already_released' })
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
@@ -295,25 +301,93 @@ describe('orchestration worker release recovery', () => {
     expect(db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
   })
 
-  it('needs this process to have seen the exit before its own provider proves it', async () => {
+  it('lets this process vouch only for worker exits its own terminals reported', async () => {
     setup()
-    loseWorkerTerminal(async () => ({ processes: [], inProcessOwner: true }))
+    const inProcess = new LocalPtyProvider()
+    loseWorkerTerminal(() =>
+      listLocalProcessesForExitProofFromRuntimeController(
+        { getLocalPtyProviderStartupPromise: () => undefined },
+        () => inProcess
+      )
+    )
+    observeInProcessWorkerExits(runtime)
     const { dispatchId } = await startSettledWorker()
     goneAfterSettle()
+    const reportExit = (incarnationId: string) => {
+      for (const listener of exitListeners) {
+        listener({ id: 'pty-worker', code: 0, incarnationId })
+      }
+    }
 
-    // An empty in-process list cannot speak for a worker another owner may still run.
+    // A reused PTY id that exited under another incarnation says nothing about this worker.
+    reportExit('33333333-3333-4333-8333-333333333333')
     await expect(
       call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({
-      state: 'release_unknown'
-    })
-    runtime.recordInProcessPtyExit(currentIncarnation)
+    ).resolves.toMatchObject({ state: 'release_unknown' })
+
+    reportExit('11111111-1111-4111-8111-111111111111')
     await expect(
       call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({
-      state: 'released',
-      processAction: 'none'
-    })
+    ).resolves.toMatchObject({ state: 'released', processAction: 'none' })
+  })
+
+  it('cannot prove a recorded worker exited until local terminals finish starting', async () => {
+    setup()
+    let finishStartup!: () => void
+    const startup = new Promise<void>((resolve) => (finishStartup = resolve))
+    let serving: Pick<IPtyProvider, 'listProcesses'> = new LocalPtyProvider()
+    loseWorkerTerminal(() =>
+      listLocalProcessesForExitProofFromRuntimeController(
+        { getLocalPtyProviderStartupPromise: () => startup },
+        () => serving
+      )
+    )
+    const scope = JSON.stringify({ kind: 'local', hostId: 'local' })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const pending = runtime.inspectTerminalProcessIncarnationLiveness(workerIncarnation, scope)
+      await vi.advanceTimersByTimeAsync(PTY_CONTROLLER_LIST_TIMEOUT_MS)
+      await expect(pending).resolves.toBe('unverifiable')
+    } finally {
+      vi.useRealTimers()
+    }
+
+    serving = {
+      listProcesses: async () => [
+        {
+          id: 'pty-worker',
+          incarnationId: '11111111-1111-4111-8111-111111111111',
+          cwd: '',
+          title: ''
+        }
+      ]
+    }
+    finishStartup()
+    await expect(
+      runtime.inspectTerminalProcessIncarnationLiveness(workerIncarnation, scope)
+    ).resolves.toBe('live')
+    serving = { listProcesses: async () => [] }
+    await expect(
+      runtime.inspectTerminalProcessIncarnationLiveness(workerIncarnation, scope)
+    ).resolves.toBe('exited')
+  })
+
+  it('does not let an in-process fallback speak for a worker it never ran', async () => {
+    setup()
+    // Daemon startup failed open and left this process's own provider serving, with nothing listed.
+    const fallback = new LocalPtyProvider()
+    loseWorkerTerminal(() =>
+      listLocalProcessesForExitProofFromRuntimeController(
+        { getLocalPtyProviderStartupPromise: () => Promise.resolve() },
+        () => fallback
+      )
+    )
+    await expect(
+      runtime.inspectTerminalProcessIncarnationLiveness(
+        workerIncarnation,
+        JSON.stringify({ kind: 'local', hostId: 'local' })
+      )
+    ).resolves.toBe('unverifiable')
   })
 
   it('records one recovery attempt when reconciliation joins an interactive release', async () => {
