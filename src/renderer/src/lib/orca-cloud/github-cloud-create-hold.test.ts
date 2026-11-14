@@ -99,7 +99,7 @@ describe('GH-CREATE-SHEET create on a paired host, Claude not set up (FAIL-CLOSE
       startCloudWorkspaceFromGitHub({
         repoUrl: 'https://github.com/acme/web',
         fullName: 'acme/web',
-        prompt: '',
+        name: '',
         agent: 'claude'
       })
     ).resolves.toBe(true)

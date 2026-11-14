@@ -126,7 +126,7 @@ const create = () =>
   startCloudWorkspaceFromGitHub({
     repoUrl: 'https://github.com/acme/web',
     fullName: 'acme/web',
-    prompt: '',
+    name: '',
     agent: 'claude'
   })
 const HELD = () => toWebTerminalSurfaceTabId('h1')
