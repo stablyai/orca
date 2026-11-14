@@ -12,6 +12,7 @@ import {
 } from '../acp/process/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { acpPrivateTempConnect } from '../acp/launch/acp-private-temp'
+import { acpSessionStartMeta } from '../acp/launch/acp-session-meta'
 import type { ConnectAcpAgent } from '../acp/process/acp-structured-connection'
 import {
   resolveAcpLaunchInvocation,
@@ -222,12 +223,14 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       await connection.authenticate(method)
       publish(current, { phase: 'verifying' })
       // Authentication alone does not prove a chat can start.
-      const started = await connection.start({ cwd, mcpServers: [] }).catch((error: unknown) => {
-        const plain = error instanceof AcpAgentError && error.code === -32603
-        throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
-          ? new AntigravitySignInSentence(SESSION_FAILED)
-          : error
-      })
+      const started = await connection
+        .start({ cwd, mcpServers: [], ...acpSessionStartMeta(spec) })
+        .catch((error: unknown) => {
+          const plain = error instanceof AcpAgentError && error.code === -32603
+          throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
+            ? new AntigravitySignInSentence(SESSION_FAILED)
+            : error
+        })
       owned.sessionId = started.sessionId
       current.pending = undefined
       publishModels(accountHome, started, !connection.exited)
@@ -263,7 +266,6 @@ function ownFlow(owner: string, flowId: string): Flow {
   }
   return current
 }
-
 /** Await cleanup so the next chat start can acquire the launch gate. */
 export async function cancelAntigravityChatSignIn(
   owner: string,
@@ -306,7 +308,6 @@ export async function completeAntigravityChatSignIn(
   }
   return readAntigravityChatSignInStatus(owner).flow
 }
-
 export const subscribeAntigravityChatSignIn = (onChange: () => void): (() => void) =>
   antigravityChatSignIn.subscribe(onChange)
 
