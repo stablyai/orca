@@ -28,6 +28,8 @@ type Props = {
   onAfterClose?: () => void
   children: ReactNode
   dragContentToDismiss?: boolean
+  /** False holds the sheet up while it works: Back, the backdrop and drags leave it in place. */
+  dismissible?: boolean
   contentScrollable?: boolean
   // Stable outer frame keeps docked input above keyboard while results reflow; content-sized sheets move it on every list change.
   fillAvailable?: boolean

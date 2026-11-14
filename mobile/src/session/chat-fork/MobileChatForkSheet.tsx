@@ -59,9 +59,9 @@ export function MobileChatForkSheet(props: {
     currentClient: source.client,
     currentCapabilities: source.capabilities
   })
-  const pickedHost = hosts.find((host) => host.hostId === picks.hostId && host.status === 'ready')
+  const pickedHost = hosts.find((host) => host.hostId === picks.hostId)
   const targetHost = pickedHost ?? hosts[0]
-  const targetClient = targetHost?.client ?? null
+  const targetClient = targetHost?.status === 'ready' ? targetHost.client : null
   const workspaces = useChatForkWorkspaceRows(
     targetClient,
     targetHost?.hostId ?? source.hostId,
@@ -85,7 +85,7 @@ export function MobileChatForkSheet(props: {
       ...(next.workspace && next.workspace.kind !== 'new' ? { runAs: 'open' as const } : {})
     }))
   const confirm = (): void => {
-    if (!agent || !workspace || props.busy) {
+    if (!agent || !workspace || !selection.ready || props.busy) {
       return
     }
     props.onConfirm({
@@ -114,6 +114,8 @@ export function MobileChatForkSheet(props: {
     <>
       <BottomDrawer
         visible={props.visible && view === null}
+        // A copy to another workspace can't be stopped; the sheet shows its progress until it ends.
+        dismissible={!props.busy}
         onClose={props.onClose}
         onAfterClose={() => {
           if (!props.visible) {
@@ -124,7 +126,11 @@ export function MobileChatForkSheet(props: {
         <View style={styles.header}>
           <SheetHeader
             title={t('chat.fork.sheet.title', 'Fork chat')}
-            leading={{ label: t('common.cancel', 'Cancel'), onPress: props.onClose }}
+            leading={{
+              label: t('common.cancel', 'Cancel'),
+              onPress: props.onClose,
+              disabled: props.busy
+            }}
           />
         </View>
         <SectionHeader title={t('chat.fork.sheet.host', 'Host')} />
