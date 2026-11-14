@@ -11,7 +11,10 @@ import {
 } from 'react'
 import { createMembershipStore } from '../../../../../../src/shared/collections/membership-store'
 import type { TextInputInstance } from 'react-native'
-import { MobileNativeChatBackgroundTasks } from '../../input/tasks/MobileNativeChatBackgroundTasks'
+import {
+  MobileNativeChatBackgroundTasks,
+  type MobileNativeChatBackgroundTasksSource
+} from '../../input/tasks/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../../input/tasks/MobileNativeChatDockedTaskList'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTaskList } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list'
@@ -20,7 +23,6 @@ import {
   mobileNativeChatChordHeadId,
   type MobileNativeChatQueuedMessagesProps
 } from '../../input/queued-messages/MobileNativeChatQueuedMessages'
-import type { MobileStructuredBackgroundTasks } from '../../input/tasks/use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../../input/queued-messages/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../../input/queued-messages/mobile-queued-head-light'
 import type { MobileWaitingAgentMail } from '../../transcript/agent-messages/MobileWaitingAgentMailActions'
@@ -70,7 +72,7 @@ export function useMobileNativeChatComposerTray({
     agentMailEditable?: (messageId: string) => boolean
   }
   taskList: NativeChatTaskList | null
-  backgroundTasks: MobileStructuredBackgroundTasks | null
+  backgroundTasks: MobileNativeChatBackgroundTasksSource | null
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
   // Held here, not in the list, so a chat switch mid-preview mounts the new list already lit.
