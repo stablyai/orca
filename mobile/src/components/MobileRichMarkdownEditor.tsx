@@ -10,12 +10,12 @@ import {
   useState,
   type ForwardedRef
 } from 'react'
-import { View } from 'react-native'
+import { View, type HostInstance } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { openExternalLink } from '../platform/external-link'
+import { openExternalLink } from '../platform/external-links/external-link'
 import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
 import { TextInputModal } from './TextInputModal'
 import {
@@ -62,7 +62,7 @@ function MobileRichMarkdownEditorWebInner(
 ) {
   const t = useMobileTranslation()
   const colorScheme = useMobileColorScheme()
-  const hostRef = useRef<View>(null)
+  const hostRef = useRef<HostInstance>(null)
   const documentRef = useRef<RichMarkdownWebDocument | null>(null)
   // Document reports ready synchronously during mount before documentRef exists; queue controller content/editable calls until handle arrives or editor stays empty.
   const beforeMountRef = useRef<((send: RichMarkdownEditorApi) => void)[]>([])

@@ -102,6 +102,12 @@ export const WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY =
 export const WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY =
   'worktree.run-approved-setup.v1' as const
 
+// Hosts that run a folder project's setup and archive scripts when its workspaces are created and removed.
+export const WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY = 'worktree.folder-setup.v1' as const
+
+// Hosts that support setup settings, trust and creation for project-group folder workspaces.
+export const PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY = 'projectGroup.folder-setup.v1' as const
+
 // Hosts that honor branchIntent 'create-exact': the unsuffixed new branch, or a coded refusal.
 export const WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY =
   'worktree.create.exact-name.v1' as const
@@ -135,6 +141,8 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY,
   WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY,
   WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY,
+  WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY,
+  PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY,
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? [] : [WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY])
 ] as const

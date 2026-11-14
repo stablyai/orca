@@ -5,6 +5,8 @@ import type { AgentStatusState } from '../../agent-status/contracts/agent-status
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
+export { agentProviderSessionsEqual } from './agent-provider-session-equality'
+
 export const RESUMABLE_TUI_AGENTS = [
   'claude',
   'codebuddy',
@@ -196,23 +198,6 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
     ...(effort ? { effort } : {}),
     ...(permissionMode ? { permissionMode } : {})
   }
-}
-
-/** Compare the provider-owned values that identify the CLI resume target.
- *  Pi-family transcript resumes use file identity; other agents use provider ids. */
-export function agentProviderSessionsEqual(
-  agent: string | undefined,
-  left: AgentProviderSessionMetadata | undefined,
-  right: AgentProviderSessionMetadata | undefined
-): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right
-  }
-  return (
-    left.key === right.key &&
-    left.id === right.id &&
-    ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
-  )
 }
 
 export function extractAgentProviderSession(

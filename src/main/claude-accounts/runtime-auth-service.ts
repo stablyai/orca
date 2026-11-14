@@ -5,29 +5,24 @@ import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-run
 import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
-import { ClaudeProfileRouter } from './claude-profile-router'
-import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
+import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
+import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
 import {
   installClaudeObservedConfigDirs,
   installClaudeProfileRouter,
   installClaudeWslProfileRouter
-} from './claude-profile-installed-router'
-import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
+} from './profiles/routing/claude-profile-installed-router'
+import { ClaudeObservedConfigDirs } from './profiles/routing/claude-observed-config-dirs'
 import {
   getSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
-} from './runtime-selection'
+} from './selection/runtime-selection'
 import type {
   ClaudeLaunchAuthOptions,
   ClaudeRuntimeAuthPreparation
 } from './runtime-auth/runtime-auth-types'
 import { claudePinnedLaunchError } from '../../shared/claude/claude-pinned-launch-error'
 import { prepareClaudePinnedAccountLaunch } from './claude-pinned-account-launch'
-
-export type {
-  ClaudeLaunchAuthOptions,
-  ClaudeRuntimeAuthPreparation
-} from './runtime-auth/runtime-auth-types'
 
 /** `readPath` exposes a guest configDir to the host through UNC on WSL. */
 export type ClaudeAccountFolder = { configDir: string; readPath: string }

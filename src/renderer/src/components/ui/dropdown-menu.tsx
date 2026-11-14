@@ -11,6 +11,19 @@ import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
 import { useMenuPointerHighlight } from './menu-pointer-highlight'
 import { MENU_SURFACE_CLASS } from './menu-surface'
+import {
+  MENU_ITEM_INDICATOR_CLASS,
+  MENU_LABEL_CLASS,
+  MENU_SHORTCUT_CLASS,
+  MENU_SUB_TRIGGER_CHEVRON_CLASS,
+  MenuDensityProvider,
+  menuIndicatorItemVariants,
+  menuItemVariants,
+  menuSeparatorVariants,
+  menuSubTriggerVariants,
+  useMenuDensity,
+  type MenuDensity
+} from './menu-item'
 import { PortalContainerContext, usePortalContainer } from './portal-container-context'
 
 const DropdownMenuCloseContext = React.createContext<() => void>(() => {})
@@ -61,9 +74,12 @@ function DropdownMenuContent({
   sideOffset = 4,
   portalContainer,
   style,
+  density = 'default',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
   portalContainer?: HTMLElement | null
+  /** Row density for every row in this menu; a row's own `density` overrides it. */
+  density?: MenuDensity
   // Radix consumes this at its opening focus scope but omits it from the public Menu props.
   onOpenAutoFocus?: (event: Event) => void
 }) {
@@ -74,23 +90,27 @@ function DropdownMenuContent({
     <PortalContainerContext value={container}>
       <DropdownMenuPrimitive.Portal container={container ?? undefined}>
         <OverlayFocusScope value={scope}>
-          <DropdownMenuPrimitive.Content
-            data-slot="dropdown-menu-content"
-            sideOffset={sideOffset}
-            className={cn(
-              'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',
-              MENU_SURFACE_CLASS,
-              'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
-              className
-            )}
-            // Disable native dragging: titlebar drag regions intercept menu clicks regardless of z-index.
-            style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            {...props}
-            onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
-            {...pointerHighlight}
-            ref={focusScopeRef}
-            onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-          />
+          <MenuDensityProvider value={density}>
+            <DropdownMenuPrimitive.Content
+              data-slot="dropdown-menu-content"
+              sideOffset={sideOffset}
+              className={cn(
+                'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',
+                MENU_SURFACE_CLASS,
+                'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+                className
+              )}
+              // Disable native dragging: titlebar drag regions intercept menu clicks regardless of z-index.
+              style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              {...props}
+              onCloseAutoFocus={(event) =>
+                handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)
+              }
+              {...pointerHighlight}
+              ref={focusScopeRef}
+              onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+            />
+          </MenuDensityProvider>
         </OverlayFocusScope>
       </DropdownMenuPrimitive.Portal>
     </PortalContainerContext>
@@ -101,23 +121,23 @@ function DropdownMenuItem({
   className,
   inset,
   variant = 'default',
+  density,
   onPointerMove,
   onPointerLeave,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   inset?: boolean
-  /** `launch`: rows in the shared agent menu. */
+  /** `launch`: rows in the shared agent menu; at least 36px tall in either density. */
   variant?: 'default' | 'destructive' | 'launch'
+  density?: MenuDensity
 }) {
+  const rowDensity = useMenuDensity(density)
   return (
     <DropdownMenuPrimitive.Item
       data-slot="dropdown-menu-item"
       data-inset={inset}
       data-variant={variant}
-      className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[search-default]:bg-black/8 dark:data-[search-default]:bg-white/14 data-[context-menu-open]:bg-black/8 dark:data-[context-menu-open]:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 aria-disabled:opacity-40 data-[inset]:pl-8 data-[current=true]:bg-accent data-[current=true]:data-[disabled]:opacity-100 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:*:[svg]:text-destructive! data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:py-1 data-[variant=launch]:text-[12px] data-[variant=launch]:leading-4 data-[variant=launch]:font-medium",
-        className
-      )}
+      className={cn(menuItemVariants({ density: rowDensity, menu: 'dropdown' }), className)}
       onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}
       onPointerLeave={keepFocusWhileMenuCloses(onPointerLeave)}
       {...props}
@@ -129,19 +149,20 @@ function DropdownMenuCheckboxItem({
   className,
   children,
   checked,
+  density,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem> & {
+  density?: MenuDensity
+}) {
+  const rowDensity = useMenuDensity(density)
   return (
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
-      className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md py-1 pr-2.5 pl-8 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        className
-      )}
+      className={cn(menuIndicatorItemVariants({ density: rowDensity }), className)}
       checked={checked}
       {...props}
     >
-      <span className="pointer-events-none absolute left-2.5 flex size-3.5 items-center justify-center">
+      <span className={MENU_ITEM_INDICATOR_CLASS}>
         <DropdownMenuPrimitive.ItemIndicator>
           <CheckIcon className="size-3.5" />
         </DropdownMenuPrimitive.ItemIndicator>
@@ -160,18 +181,19 @@ function DropdownMenuRadioGroup({
 function DropdownMenuRadioItem({
   className,
   children,
+  density,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & {
+  density?: MenuDensity
+}) {
+  const rowDensity = useMenuDensity(density)
   return (
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
-      className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md py-1 pr-2.5 pl-8 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        className
-      )}
+      className={cn(menuIndicatorItemVariants({ density: rowDensity }), className)}
       {...props}
     >
-      <span className="pointer-events-none absolute left-2.5 flex size-3.5 items-center justify-center">
+      <span className={MENU_ITEM_INDICATOR_CLASS}>
         <DropdownMenuPrimitive.ItemIndicator>
           <CircleIcon className="size-2 fill-current" />
         </DropdownMenuPrimitive.ItemIndicator>
@@ -192,10 +214,7 @@ function DropdownMenuLabel({
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn(
-        'px-2.5 pt-[5px] pb-[3px] text-2xs font-semibold text-muted-foreground data-[inset]:pl-8',
-        className
-      )}
+      className={cn(MENU_LABEL_CLASS, className)}
       {...props}
     />
   )
@@ -203,12 +222,16 @@ function DropdownMenuLabel({
 
 function DropdownMenuSeparator({
   className,
+  density,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Separator> & {
+  density?: MenuDensity
+}) {
+  const rowDensity = useMenuDensity(density)
   return (
     <DropdownMenuPrimitive.Separator
       data-slot="dropdown-menu-separator"
-      className={cn('mx-2.5 my-[5px] h-px bg-black/10 dark:bg-white/12', className)}
+      className={cn(menuSeparatorVariants({ density: rowDensity }), className)}
       {...props}
     />
   )
@@ -218,10 +241,7 @@ function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<'spa
   return (
     <span
       data-slot="dropdown-menu-shortcut"
-      className={cn(
-        'ml-auto shrink-0 whitespace-nowrap pl-4 tracking-normal text-muted-foreground',
-        className
-      )}
+      className={cn(MENU_SHORTCUT_CLASS, className)}
       {...props}
     />
   )
@@ -231,40 +251,35 @@ function DropdownMenuSub({ ...props }: React.ComponentProps<typeof DropdownMenuP
   return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />
 }
 
-const dropdownMenuSubTriggerVariants = cva(
-  "flex cursor-default items-center gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 font-normal outline-hidden select-none data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground",
-  {
-    variants: {
-      variant: {
-        default:
-          'focus:bg-black/8 dark:focus:bg-white/14 data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
-        'launch-row':
-          'gap-0 rounded-[7px] p-0 text-xs leading-5 font-medium focus:bg-accent focus:text-accent-foreground focus-within:bg-accent focus-within:text-accent-foreground data-[search-default]:bg-accent data-[search-default]:text-accent-foreground has-[[data-context-menu-open]]:bg-accent has-[[data-context-menu-open]]:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
-      }
-    },
-    defaultVariants: { variant: 'default' }
-  }
-)
-
 function DropdownMenuSubTrigger({
   className,
   inset,
   children,
   hideChevron,
   variant = 'default',
+  density,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
   inset?: boolean
+  density?: MenuDensity
   // Why: collision-flipped submenus open leftward, where a right-pointing chevron misleads.
   hideChevron?: boolean
-  variant?: 'default' | 'launch-row'
+  variant?: 'default' | 'launch-row' | 'header-chip'
 }) {
+  const rowDensity = useMenuDensity(density)
   return (
     <DropdownMenuPrimitive.SubTrigger
       data-slot="dropdown-menu-sub-trigger"
       data-variant={variant}
       data-inset={inset}
-      className={cn(dropdownMenuSubTriggerVariants({ variant }), className)}
+      className={cn(
+        menuSubTriggerVariants({
+          density: rowDensity,
+          variant,
+          menu: 'dropdown'
+        }),
+        className
+      )}
       {...props}
     >
       {hideChevron ? (
@@ -272,7 +287,7 @@ function DropdownMenuSubTrigger({
       ) : (
         <>
           {children}
-          <ChevronRightIcon className="ml-auto size-3.5 text-current opacity-70" />
+          <ChevronRightIcon className={MENU_SUB_TRIGGER_CHEVRON_CLASS} />
         </>
       )}
     </DropdownMenuPrimitive.SubTrigger>
@@ -291,40 +306,46 @@ function DropdownMenuSubContent({
   alignOffset = -5,
   scrollable = false,
   variant = 'default',
+  density,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent> & {
   portalContainer?: HTMLElement | null
+  /** Defaults to the parent menu's density. */
+  density?: MenuDensity
   scrollable?: boolean
   variant?: 'default' | 'picker'
 }) {
   const container = usePortalContainer(portalContainer)
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
+  const subDensity = useMenuDensity(density)
   return (
     <PortalContainerContext value={container}>
       <DropdownMenuPrimitive.Portal container={container ?? undefined}>
         <OverlayFocusScope value={scope}>
-          <DropdownMenuPrimitive.SubContent
-            data-slot="dropdown-menu-sub-content"
-            data-variant={variant}
-            // Level the first submenu row with its trigger (border + padding).
-            alignOffset={alignOffset}
-            className={cn(
-              'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden',
-              MENU_SURFACE_CLASS,
-              'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
-              dropdownMenuSubContentVariants({ variant }),
-              scrollable &&
-                'max-h-(--radix-dropdown-menu-content-available-height) overflow-x-hidden overflow-y-auto scrollbar-sleek',
-              className
-            )}
-            // Disable native dragging where submenu content overlaps the titlebar.
-            style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            {...props}
-            {...pointerHighlight}
-            ref={focusScopeRef}
-            onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-          />
+          <MenuDensityProvider value={subDensity}>
+            <DropdownMenuPrimitive.SubContent
+              data-slot="dropdown-menu-sub-content"
+              data-variant={variant}
+              // Level the first submenu row with its trigger (border + padding).
+              alignOffset={alignOffset}
+              className={cn(
+                'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden',
+                MENU_SURFACE_CLASS,
+                'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+                dropdownMenuSubContentVariants({ variant }),
+                scrollable &&
+                  'max-h-(--radix-dropdown-menu-content-available-height) overflow-x-hidden overflow-y-auto scrollbar-sleek',
+                className
+              )}
+              // Disable native dragging where submenu content overlaps the titlebar.
+              style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              {...props}
+              {...pointerHighlight}
+              ref={focusScopeRef}
+              onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+            />
+          </MenuDensityProvider>
         </OverlayFocusScope>
       </DropdownMenuPrimitive.Portal>
     </PortalContainerContext>

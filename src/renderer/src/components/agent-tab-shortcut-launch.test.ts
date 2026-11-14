@@ -12,14 +12,14 @@ const mocks = vi.hoisted(() => {
       settings: { floatingTerminalEnabled: true },
       floatingWorkspacePanelOpen: true
     },
-    launchAgentInNewTab: vi.fn(),
+    launchAgentInNewTabWithOutcome: vi.fn(),
     cancelFocusIntent: vi.fn()
   }
 })
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: mocks.launchAgentInNewTab
+  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTabWithOutcome
 }))
 vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-intent', () => ({
   captureNativeChatComposerFocusIntent: () => ({
@@ -49,7 +49,9 @@ function pendingDetection(): {
 describe('launchFloatingWorkspaceAgentShortcut while detection is pending', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 't' } })
+    mocks.launchAgentInNewTabWithOutcome.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 't' }
+    })
     mocks.state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: 'group-a' }
     mocks.state.floatingWorkspacePanelOpen = true
   })
@@ -61,7 +63,7 @@ describe('launchFloatingWorkspaceAgentShortcut while detection is pending', () =
 
     await detection.settle('claude')
 
-    expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith(
+    expect(mocks.launchAgentInNewTabWithOutcome).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         agent: 'claude',
         worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -77,7 +79,7 @@ describe('launchFloatingWorkspaceAgentShortcut while detection is pending', () =
 
     await detection.settle('claude')
 
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(mocks.launchAgentInNewTabWithOutcome).not.toHaveBeenCalled()
     expect(mocks.cancelFocusIntent).toHaveBeenCalledTimes(1)
   })
 })

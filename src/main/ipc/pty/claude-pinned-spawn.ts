@@ -2,8 +2,8 @@ import { isClaudeLaunchCommand } from './host-env/fresh-spawn-routing'
 import { claudePinnedLaunchError } from '../../../shared/claude/claude-pinned-launch-error'
 import { markPinnedClaudePtySpawned } from '../../claude-accounts/claude-pinned-pty-registry'
 import type { PrepareClaudeAuth } from './host-env/types'
-import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
-import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 
 type ClaudeLaunchShape = {
   preAdoptedStablePane: boolean

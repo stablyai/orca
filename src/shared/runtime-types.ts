@@ -6,6 +6,7 @@ export {
   type ComputerAppInfo,
   type ComputerAppQuery,
   type ComputerErrorCode,
+  type ComputerLaunchAppResult,
   type ComputerListAppsResult,
   type ComputerListWindowsResult,
   type ComputerProviderCapabilities,

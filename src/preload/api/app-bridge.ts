@@ -9,8 +9,11 @@ import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
   type KeyboardLayoutChangeEvent
 } from '../../shared/keyboard-layout-events'
-import { prepareAndInvokeAppRestart } from '../renderer-restart-wiring'
-import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../preload-runtime-support'
+import { prepareAndInvokeAppRestart } from '../renderer/restart/renderer-restart-wiring'
+import {
+  awaitBeforeUnloadCheckpoint,
+  startupDiagnosticsEnabled
+} from '../renderer/renderer-runtime'
 import type { PreloadApi } from '../api-types'
 
 export const appApi = {
@@ -82,8 +85,10 @@ export const appApi = {
     ipcRenderer.on('app:structuredAgentSessionsHeldChanged', listener)
     return () => ipcRenderer.removeListener('app:structuredAgentSessionsHeldChanged', listener)
   },
-  recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
-    ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
+  recoverLegacyWorkerTerminalsForRendererStartup: (options?: {
+    afterReconnect?: boolean
+  }): Promise<void> =>
+    ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup', options),
   startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
     startupDiagnosticsEnabled
       ? ipcRenderer.invoke('app:startupDiagnostic', event, details)

@@ -3,9 +3,10 @@ import { toast } from 'sonner'
 import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { AppState } from '@/store/types'
-import { worktreeGitCopyHostId } from '@/lib/worktree-git-copy'
+import { worktreeGitCopyHostId } from '@/lib/workspace/ownership/worktree-git-copy'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
@@ -51,6 +52,14 @@ function createEnvironmentNameSelector(environmentId: string | null) {
   }
 }
 
+function openBranchWorkspace(workspace: BranchWorkspace): void {
+  activateAndRevealWorktree(workspace.id, {
+    navigationIntent: 'user-open',
+    executionHostId: workspace.hostId,
+    clearSidebarFilters: false
+  })
+}
+
 /** One workspace's branch picker; every surface that switches branches in place renders this. */
 export function WorkspaceBranchPicker({
   worktreeId,
@@ -90,11 +99,6 @@ export function WorkspaceBranchPicker({
   const changedCount = useMemo(
     () => (showDirtyBlocker ? new Set(entries.map((entry) => entry.path)).size : 0),
     [entries, showDirtyBlocker]
-  )
-  const onOpenWorkspace = useCallback(
-    (workspace: BranchWorkspace) =>
-      useAppStore.getState().setActiveWorktree(workspace.id, workspace.hostId),
-    []
   )
   const hostLabel = environmentName ?? getExecutionHostLabel(hostId)
   // Worktree ids repeat across hosts, so a remote copy is named with its host.
@@ -172,7 +176,7 @@ export function WorkspaceBranchPicker({
       hostLabel={hostLabel}
       workspaceLabel={workspaceLabel}
       workspaces={worktreeMap}
-      onOpenWorkspace={onOpenWorkspace}
+      onOpenWorkspace={openBranchWorkspace}
       onSwitched={onSwitched}
     />
   )

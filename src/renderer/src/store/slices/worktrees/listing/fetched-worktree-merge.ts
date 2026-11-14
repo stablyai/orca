@@ -1,3 +1,4 @@
+import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
@@ -141,18 +142,23 @@ export function mergeFetchedWorktrees(
   get: () => AppState,
   args: FencedWorktreeMergeArgs
 ): WorktreeListingMergeOutcome {
+  let retireNotices: ((after: AppState) => void) | undefined
   if (args.purgeRemovedWorktrees !== false) {
     // Why before the updater: delayed views must commit text the purge may offer back.
     const state = get()
+    const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(
+      state,
+      args.repoId,
+      args.refresh.result,
+      args.hostId
+    )
     flushPurgedWorkspaceEdits(
       state,
-      getRemovedWorktreeIdsAfterAuthoritativeScan(
-        state,
-        args.repoId,
-        args.refresh.result,
-        args.hostId
-      ).map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
+      removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
     )
+    if (removedIds.length > 0) {
+      retireNotices = captureWorkspaceTerminalNoticeRemoval(state, removedIds)
+    }
   }
   // Why a holder: the updater decides the outcome, and a narrowed `let` would hide that assignment.
   const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
@@ -295,6 +301,7 @@ export function mergeFetchedWorktrees(
     }
   })
   if (decision.outcome === 'applied') {
+    retireNotices?.(get())
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)

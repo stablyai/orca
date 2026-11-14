@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 
 const mocks = vi.hoisted(() => ({
   markPinnedClaudePtySpawned: vi.fn()

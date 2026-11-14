@@ -3,7 +3,7 @@ import { resolveClaudeLaunchAccount } from '../claude-accounts/claude-launch-acc
 import type { RuntimeManagedWorktreeCreateArgs } from './workspaces/creation/runtime-managed-worktree-create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { LocalWindowsTerminalRuntimeOptions } from '../../shared/local-windows-terminal-runtime'
-import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import type { ClaudeAccountSelectionTarget } from '../claude-accounts/selection/runtime-selection'
 import { getCodexSelectionTargetForPty } from '../ipc/pty/host-env/codex-home'
 import { newWorktreeLaunchScope } from './terminal/launch/agent-launch-scope-runtime'
 import { resolveLocalProjectRuntimeForRepo } from '../workspaces/execution-host/local-project-runtime-resolution'

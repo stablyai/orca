@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
+import { WorktreeCreate } from '../../../../shared/rpc-contract/workspaces/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from './workspaces/worktree-create-args'
 
 describe('worktree.create startupClaudeAccount', () => {

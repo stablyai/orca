@@ -1,10 +1,10 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   getClaudeSubagentNavigationTitle,
   getClaudeSubagentNavigationDescription
 } from './behavior/claude-subagent-navigation-copy'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import { translateLocalExecutionHostLabel } from '../../sidebar/execution-host-label'
 import { AgentAwakeSetting } from './behavior/AgentAwakeSetting'
 import { AgentCacheTimerSection } from './behavior/AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './runtime/AgentRuntimeSetting'
@@ -19,7 +19,7 @@ import {
   getAgentStatusHooksTitle
 } from './behavior/agent-status-hooks-copy'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { AgentLaunchSettingsSection } from './launch/AgentLaunchSettingsSection'
 import {
   AgentPermissionsSetting,
@@ -69,12 +69,14 @@ export function AgentsPane({
           hostScope={hostScope}
         />
       </SettingsGroup>
-      <SettingsGroup title={getLocalExecutionHostLabel()}>
+      <SettingsGroup title={translateLocalExecutionHostLabel()}>
         <AgentRuntimeSetting
           settings={settings}
           updateSettings={updateSettings}
           refresh={() =>
-            useAppStore.getState().refreshDetectedAgents(undefined, { wakeWslDistro: true })
+            useAppStore
+              .getState()
+              .refreshDetectedAgents(undefined, { wakeWslDistro: true, userInitiated: true })
           }
           wslSupportedPlatform={wslSupportedPlatform}
           wslAvailable={wslAvailable}

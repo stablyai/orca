@@ -153,6 +153,7 @@ export function createTestStore() {
           ]
         ]),
         repos: [],
+        projectGroups: [],
         projectHostSetups: [],
         deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
         updateFolderWorkspace: vi.fn().mockResolvedValue(true),
@@ -162,6 +163,10 @@ export function createTestStore() {
         shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
         deleteManagedBrowserSessionProfile: vi.fn().mockResolvedValue(undefined),
         ptyIdsByTabId: {},
+        terminalLayoutsByTabId: {},
+        lastKnownRelayPtyIdByTabId: {},
+        deferredSshSessionIdsByTabId: {},
+        pendingReconnectPtyIdByTabId: {},
         tabsByWorktree: {},
         tabBarOrderByWorktree: {},
         pendingReconnectTabByWorktree: {},

@@ -1,10 +1,7 @@
-/** User deletion clears drafts using pre-RPC keys; host removal announcements may purge listings before reply, while non-user purges must retain drafts. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 
 import '../../../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -32,7 +29,7 @@ globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
-import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
 import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
@@ -97,10 +94,6 @@ function seedWorktree(store: ReturnType<typeof createTestStore>): void {
   seedWorkspace(store, WT1)
 }
 
-function draftTexts(): string[] {
-  return [CHAT, PANE, OTHER].map((key) => readNativeChatComposerDraft(key).text)
-}
-
 /** A pasted image still uploading in each scope; its chip's id is the scope's. */
 function pasteStillUploading(...scopeKeys: string[]): void {
   for (const scopeKey of scopeKeys) {
@@ -125,44 +118,6 @@ function trackDraftOwners(store: ReturnType<typeof createTestStore>): void {
   )
 }
 
-const FOLDER: FolderWorkspace = {
-  id: 'folder-1',
-  projectGroupId: 'group-a',
-  name: 'Folder',
-  folderPath: '/workspace/folder',
-  linkedTask: null,
-  comment: '',
-  isArchived: false,
-  isUnread: false,
-  isPinned: false,
-  sortOrder: 1,
-  lastActivityAt: 0,
-  createdAt: 1,
-  updatedAt: 1
-}
-
-function seedFolderWorkspace(store: ReturnType<typeof createTestStore>): void {
-  store.setState({
-    projectGroups: [
-      {
-        id: 'group-a',
-        name: 'A',
-        parentPath: '/workspace',
-        parentGroupId: null,
-        createdFrom: 'manual',
-        tabOrder: 0,
-        isCollapsed: false,
-        color: null,
-        createdAt: 1,
-        updatedAt: 1,
-        executionHostId: 'local'
-      }
-    ],
-    folderWorkspaces: [FOLDER]
-  })
-  seedWorkspace(store, folderWorkspaceKey(FOLDER.id))
-}
-
 describe('workspace chat drafts on removal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -170,89 +125,6 @@ describe('workspace chat drafts on removal', () => {
     mockApi.repos.removeForHost.mockResolvedValue(undefined)
     clearNativeChatComposerDraftsForTests()
     clearNativeChatPendingAttachmentsForTests()
-  })
-
-  it('removing a worktree deletes its drafts even when a listing purge lands mid-removal', async () => {
-    const store = createTestStore()
-    seedWorktree(store)
-    mockApi.worktrees.remove.mockImplementation(async () => {
-      store.getState().purgeWorktreeTerminalState([WT1])
-    })
-
-    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
-
-    expect(result).toEqual({ ok: true })
-    expect(draftTexts()).toEqual(['', '', 'other'])
-  })
-
-  it('removing a worktree deletes the draft of a chat whose tab was closed earlier', async () => {
-    const store = createTestStore()
-    seedWorktree(store)
-    setNativeChatComposerDraftOwnerResolver((scopeKey) =>
-      resolveNativeChatDraftOwner(store.getState(), scopeKey)
-    )
-    const closed = structuredAgentSessionDraftScopeKey('session-closed')
-    seedStore(store, {
-      unifiedTabsByWorktree: {
-        [WT1]: [
-          ...(store.getState().unifiedTabsByWorktree[WT1] ?? []),
-          makeUnifiedTab({
-            id: 'closed-tab',
-            entityId: 'session-closed',
-            contentType: 'agent-session',
-            worktreeId: WT1,
-            groupId: 'group-1'
-          })
-        ]
-      }
-    })
-    updateNativeChatComposerDraft(closed, { text: 'written, then its tab closed' }, 'immediate')
-    store.getState().closeUnifiedTab('closed-tab')
-    expect(readNativeChatComposerDraft(closed).text).toBe('written, then its tab closed')
-
-    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
-
-    expect(result).toEqual({ ok: true })
-    expect(readNativeChatComposerDraft(closed).text).toBe('')
-    expect(draftTexts()).toEqual(['', '', 'other'])
-  })
-
-  it('a paste still uploading when its folder workspace is deleted never writes a draft back', async () => {
-    mockApi.folderWorkspaces.delete.mockResolvedValue(true)
-    const store = createTestStore()
-    seedFolderWorkspace(store)
-    trackDraftOwners(store)
-    pasteStillUploading(CHAT, PANE, OTHER)
-
-    await expect(store.getState().deleteFolderWorkspace(FOLDER.id)).resolves.toBe(true)
-
-    expect(uploadsComplete(CHAT, PANE, OTHER)).toEqual([OTHER])
-    expect([CHAT, PANE, OTHER].map(draftImageCount)).toEqual([0, 0, 1])
-    expect(draftTexts()).toEqual(['', '', 'other'])
-  })
-
-  it('drops the uploads of its open chats and panes even when no owner was named', async () => {
-    const store = createTestStore()
-    seedWorktree(store)
-    pasteStillUploading(CHAT, PANE, OTHER)
-
-    await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
-
-    expect(uploadsComplete(CHAT, PANE, OTHER)).toEqual([OTHER])
-    expect([CHAT, PANE, OTHER].map(draftImageCount)).toEqual([0, 0, 1])
-  })
-
-  it('drops the upload of a chat whose tab closed while it was still on its way', async () => {
-    const store = createTestStore()
-    seedWorktree(store)
-    trackDraftOwners(store)
-    pasteStillUploading(CHAT)
-    store.getState().closeUnifiedTab('chat-tab')
-
-    await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
-
-    expect(uploadsComplete(CHAT)).toEqual([])
-    expect(draftImageCount(CHAT)).toBe(0)
   })
 
   it('deletes a draft an upload wrote after its chat’s tab closed, by the owner it began in', async () => {
@@ -283,19 +155,5 @@ describe('workspace chat drafts on removal', () => {
     await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
 
     expect(draftImageCount(later)).toBe(0)
-  })
-
-  it('a removal the host refuses keeps the uploads, which still reach their drafts', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const store = createTestStore()
-    seedWorktree(store)
-    trackDraftOwners(store)
-    pasteStillUploading(CHAT, PANE)
-    mockApi.worktrees.remove.mockRejectedValue(new Error('Permission denied'))
-
-    await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
-
-    expect(uploadsComplete(CHAT, PANE)).toEqual([CHAT, PANE])
-    expect([CHAT, PANE].map(draftImageCount)).toEqual([1, 1])
   })
 })

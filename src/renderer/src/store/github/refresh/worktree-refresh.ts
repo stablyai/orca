@@ -1,7 +1,3 @@
-import type { AppState } from '../../types'
-import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-request-refresh-types'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -10,19 +6,27 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
+
 import { isMacAppDataPath } from '@/app-shell/platform/passive-macos-app-data-access'
-import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
+import {
+  resolveReviewRepository,
+  reviewRepositoryMatchesWorkspace
+} from '@/lib/source-control/review/review-owner'
 import {
   findIndexedReviewRepository,
   hasUniqueIndexedRepositoryHost
 } from '@/lib/workspace/ownership/repository-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import '../cache/cache-identity'
-import { getGitHubRepoCacheKey } from '../../../../../shared/github/github-cache-key'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from '../pull-requests/pr-result-routing'
-import { resolvePRBranchFallback } from '../../../../../shared/github/pr-branch-fallback-rule'
+import { resolvePRBranchFallback } from '../../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
+import type { AppState } from '../../types'
+import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { Repo } from '../../../../../shared/repo-types'
+import type { Worktree } from '../../../../../shared/worktree/types'
 
 export function findWorktreeById(
   state: AppState,

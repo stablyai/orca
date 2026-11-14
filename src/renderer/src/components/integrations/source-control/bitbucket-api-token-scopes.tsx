@@ -9,7 +9,7 @@ export function BitbucketApiTokenScopes(): React.JSX.Element {
       scope: 'read:user:bitbucket',
       purpose: t(
         'auto.components.settings.bitbucket.credentials.dialog.scopeUser',
-        'Verify your account'
+        'Show your account name'
       )
     },
     {

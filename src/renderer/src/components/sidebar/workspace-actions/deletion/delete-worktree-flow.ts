@@ -1,8 +1,8 @@
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
-import { toWorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import { toWorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   showNoDeletableWorkspacesToast,
@@ -11,7 +11,7 @@ import {
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import {
@@ -96,6 +96,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const hasLineageChildren = deleteLineage.descendants.length > 0
   // Skip-confirm preferences never authorize discarding unsaved editor text.
   const skipConfirm =
+    options.forceConfirm !== true &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false) &&
     collectRemovalUnsavedFiles(useAppStore.getState, [target]).length === 0
   if (skipConfirm && !hasLineageChildren) {
@@ -114,7 +115,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
           ])
         }
       : {}),
-    ...(hasLineageChildren ? { allowSkipConfirm: false } : {})
+    ...(hasLineageChildren || options.forceConfirm ? { allowSkipConfirm: false } : {})
   })
 }
 

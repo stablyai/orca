@@ -1,14 +1,14 @@
 import { memo } from 'react'
-import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
-import { triggerMediumImpact } from '../platform/haptics'
+import { triggerMediumImpact } from '../platform/haptics/haptics'
 import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceListItem, Worktree, WorktreeRowView } from '../worktree/workspace-list-types'
-import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
+import type { WorktreeCardDetails } from '../../../src/shared/worktree/row-display/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
@@ -20,6 +20,7 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
+import { PrStateIcon } from './PrStateIcon'
 import { WorktreeUnsavedName } from './WorktreeUnsavedName'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
@@ -76,6 +77,8 @@ function WorktreeListRowComponent({
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
   const hostId = view.hostContextHostId ?? item.hostId
+  const prState = item.linkedPR?.state ?? ''
+  const prColor = prStateColor(prState)
   const hostAccessibilityLabel = [view.hostContextLabel, view.hostContextHealthLabel]
     .filter(Boolean)
     .join(', ')
@@ -153,10 +156,8 @@ function WorktreeListRowComponent({
           </Text>
           {cardDetails.pr && item.linkedPR && (
             <View style={styles.prBadge}>
-              <GitPullRequest size={10} color={prStateColor(item.linkedPR.state)} />
-              <Text style={[styles.prNumber, { color: prStateColor(item.linkedPR.state) }]}>
-                #{item.linkedPR.number}
-              </Text>
+              <PrStateIcon state={prState} size={10} color={prColor} />
+              <Text style={[styles.prNumber, { color: prColor }]}>#{item.linkedPR.number}</Text>
             </View>
           )}
           {isFolderWorkspace && (

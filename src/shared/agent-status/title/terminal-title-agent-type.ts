@@ -1,5 +1,6 @@
 import { collectExplicitAgentTitleEvidence } from './agent-title-evidence'
 import { isQoderTerminalTitle } from './providers/qoder-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
@@ -7,10 +8,11 @@ import {
   titleHasAgentName
 } from './agent-name-token-match'
 import { containsAgentSpinnerGlyph } from './agent-title-glyphs'
-import { isCursorAgentTitle } from './agent-title-core'
+import { isCursorAgentTitle, isGeminiTerminalTitle } from './agent-title-core'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
 import { isDeepSeekBuildTerminalTitle } from './providers/dsb-terminal-title'
 
+export { isGeminiTerminalTitle } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './providers/opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -25,11 +27,6 @@ export const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Cod
 const CLAUDE_MANAGEMENT_TITLE_RE =
   /^\s*(?:"(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?"|'(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?'|(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?)\s+agents\s*$/i
 
-export const GEMINI_WORKING = '\u2726' // ✦
-export const GEMINI_SILENT_WORKING = '\u23F2' // ⏲
-export const GEMINI_IDLE = '\u25C7' // ◇
-export const GEMINI_PERMISSION = '\u270B' // ✋
-
 export function containsBrailleSpinner(title: string): boolean {
   for (const char of title) {
     const codePoint = char.codePointAt(0)
@@ -38,34 +35,6 @@ export function containsBrailleSpinner(title: string): boolean {
     }
   }
   return false
-}
-
-export function isGeminiTerminalTitle(title: string): boolean {
-  // Reject other agents’ identity frames before generic Gemini glyphs; DSH shares ✦ with Gemini.
-  if (isQoderTerminalTitle(title)) {
-    return false
-  }
-  if (isDshTerminalTitle(title) || isDeepSeekBuildTerminalTitle(title)) {
-    return false
-  }
-  // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
-  if (
-    title.includes(GEMINI_PERMISSION) ||
-    title.includes(GEMINI_WORKING) ||
-    title.includes(GEMINI_SILENT_WORKING) ||
-    title.includes(GEMINI_IDLE)
-  ) {
-    return true
-  }
-  // Pi/OMP session paths can mention Gemini without identifying the agent.
-  if (isPiAgentTitle(title)) {
-    return false
-  }
-  // Antigravity model names contain Gemini; defer token matches to agy identity while keeping explicit Gemini glyphs decisive.
-  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
-    return false
-  }
-  return titleHasAgentName(title, 'gemini')
 }
 
 export function isPiAgentTitle(title: string): boolean {
@@ -180,7 +149,7 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'devin')) {
     return 'Devin'
   }
-  if (titleHasAgentName(title, 'jcode')) {
+  if (titleHasAgentName(title, 'jcode') || isJcodeIdentityTerminalTitle(title)) {
     return 'Jcode'
   }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {

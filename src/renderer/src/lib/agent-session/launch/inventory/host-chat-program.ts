@@ -35,7 +35,7 @@ import {
   onRuntimeEnvironmentsRetired
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { getResolvedExecutionHostIdForWorktree } from '../../../resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '../../../workspace/ownership/resolved-worktree-execution-host'
 
 export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'
 type HostFactsStore = Pick<AgentLaunchRouteStore, 'runtimeStatusByEnvironmentId'>

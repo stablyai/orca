@@ -8,6 +8,7 @@ import {
   humanizeTerminalError
 } from './terminal-error-display'
 import { useEffect, useState } from 'react'
+import { AlertTriangle, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { isAgentLaunchOnlyError } from '../launch-outcome/agent-launch-pane-notice-text'
@@ -19,22 +20,21 @@ import {
 import { isWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSignInRequiredTerminalError } from './terminal-ssh-sign-in-error'
 import { StartOnActiveAccountButton } from '../StartOnActiveAccountButton'
+import { describeClaudePinnedLaunchError } from '../claude-pinned-launch-error-copy'
 
 export function TerminalErrorToast({
   error,
-  resourceLimit = false,
   agentId,
   paneOnClient = true,
   onDismiss,
   onRestartDaemon,
   onRetry,
   onStartOnActiveAccount,
+  onRestoreTerminalFocus,
   onOpenNewTerminal,
   onClosePane
 }: {
   error: string
-  /** Classified from separate source events before their display text is joined. */
-  resourceLimit?: boolean
   agentId?: string | null
   /** False for a pane on an SSH or remote host, or one whose host is not yet known. */
   paneOnClient?: boolean
@@ -42,6 +42,7 @@ export function TerminalErrorToast({
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
   onStartOnActiveAccount?: () => void
+  onRestoreTerminalFocus?: () => void
   /** Leaves this pane and its saved session untouched. */
   onOpenNewTerminal?: () => void
   /** Dismissing only hides the toast; the dead pane needs a way out from where the user is looking (#21342). */
@@ -53,6 +54,9 @@ export function TerminalErrorToast({
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
   const showClientEnvironment = paneOnClient && !ssh
   const paneOwnerUnverified = isPaneOwnerRecoveryError(error)
+  const showStartOnActiveAccount = Boolean(
+    onStartOnActiveAccount && describeClaudePinnedLaunchError(error)?.offerActiveAccount
+  )
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
   // Restart cannot recover a session after its owning daemon exits.
   const showIssueLink =
@@ -68,12 +72,6 @@ export function TerminalErrorToast({
   const displayError = showIssueLink
     ? withoutTerminalSpawnIssueRequest(humanizedError)
     : humanizedError
-  const tint =
-    paneOwnerUnverified || resourceLimit
-      ? null
-      : ssh
-        ? 'color-mix(in srgb, var(--color-amber-500) 20%, var(--popover))'
-        : 'color-mix(in srgb, var(--destructive) 20%, var(--popover))'
   const [retrying, setRetrying] = useState(false)
   const [retryFailed, setRetryFailed] = useState(false)
   const [environmentFooter, setEnvironmentFooter] = useState<{
@@ -102,6 +100,7 @@ export function TerminalErrorToast({
     if (!onRetry || retrying) {
       return
     }
+    onRestoreTerminalFocus?.()
     setRetrying(true)
     setRetryFailed(false)
     try {
@@ -118,127 +117,109 @@ export function TerminalErrorToast({
     <div
       data-terminal-error-toast
       data-terminal-error-kind={paneOwnerUnverified ? 'owner-unverified' : ssh ? 'ssh' : 'error'}
-      style={{
-        position: 'absolute',
-        bottom: 12,
-        left: 12,
-        right: 12,
-        zIndex: 50,
-        padding: '10px 14px',
-        borderRadius: 6,
-        background: 'var(--popover)',
-        backgroundImage: tint ? `linear-gradient(${tint}, ${tint})` : undefined,
-        border: paneOwnerUnverified
-          ? '1px solid var(--color-amber-500)'
-          : ssh
-            ? '1px solid rgba(234, 179, 8, 0.35)'
-            : resourceLimit
-              ? '1px solid var(--border)'
-              : '1px solid rgba(220, 38, 38, 0.4)',
-        color: 'var(--popover-foreground)',
-        fontSize: 12,
-        fontFamily: 'monospace',
-        whiteSpace: 'pre-wrap',
-        pointerEvents: 'auto'
-      }}
+      role="alert"
+      className={`scrollbar-sleek pointer-events-auto absolute inset-x-3 bottom-[min(0.75rem,10%)] z-50 flex max-h-[calc(100%-min(1.5rem,20%))] flex-col overflow-y-auto rounded-xl border bg-card text-card-foreground shadow-floating outline-none focus-visible:ring-2 focus-visible:ring-ring ${paneOwnerUnverified || ssh ? 'border-border' : 'border-destructive/50'}`}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-        <span style={{ minWidth: 0 }}>
-          {displayError}
-          {showDaemonRestart ? (
-            <>
-              {'\n'}
-              {t(
-                'auto.components.terminal.pane.TerminalErrorToast.cc6d997c65',
-                'Restart the terminal daemon from here to clear stale daemon state.'
-              )}
-            </>
-          ) : showIssueLink ? (
-            <>
-              {'\n'}
-              {t(
-                'auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6',
-                'If this persists, please'
-              )}{' '}
-              <a
-                href="https://github.com/stablyai/orca/issues"
-                style={{ color: 'inherit', textDecoration: 'underline' }}
-              >
-                {t('auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699', 'file an issue')}
-              </a>
-              .
-            </>
-          ) : null}
-          {showClientEnvironment && footer ? `\n\n${footer}` : null}
-          {paneOwnerUnverified && retryFailed
-            ? `\n${t(
-                'auto.components.terminal.pane.TerminalErrorToast.retryUnavailable',
-                'Retry could not reconnect yet. Try again shortly.'
-              )}`
-            : null}
-        </span>
-        {showDaemonRestart ? (
-          <button
-            onClick={onRestartDaemon}
-            style={{
-              marginLeft: 12,
-              border: '1px solid rgba(252, 165, 165, 0.45)',
-              borderRadius: 6,
-              background: 'rgba(127, 29, 29, 0.35)',
-              color: '#fecaca',
-              cursor: 'pointer',
-              fontSize: 12,
-              padding: '4px 8px',
-              whiteSpace: 'nowrap',
-              flexShrink: 0
-            }}
-          >
-            {t('auto.components.terminal.pane.TerminalErrorToast.e4aa243f8c', 'Restart daemon')}
-          </button>
-        ) : null}
-        {paneOwnerUnverified && onRetry ? (
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => void handleRetry()}
-            disabled={retrying}
-            className="ml-3 border-amber-500/50 bg-popover text-popover-foreground hover:bg-amber-500/20"
-          >
-            {retrying
-              ? t('auto.components.terminal.pane.TerminalErrorToast.retrying', 'Retrying…')
-              : t('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
-          </Button>
-        ) : null}
-        <StartOnActiveAccountButton error={error} onClick={onStartOnActiveAccount} />
-        {/* Why: an owner can stay unverifiable, so Retry alone can loop forever. */}
-        {paneOwnerUnverified && onOpenNewTerminal ? (
-          <Button variant="outline" size="xs" onClick={onOpenNewTerminal} className="ml-2">
-            {t(
-              'auto.components.terminal.pane.TerminalErrorToast.openNewTerminal',
-              'Open new terminal'
-            )}
-          </Button>
-        ) : null}
-        {onClosePane && isRemoteTerminalClosedError(error) ? (
-          <Button variant="outline" size="xs" onClick={onClosePane} className="ml-3">
-            {t('auto.components.terminal.pane.TerminalContextMenu.8c17d6786d', 'Close Pane')}
-          </Button>
-        ) : null}
-        <button
-          onClick={onDismiss}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'inherit',
-            cursor: 'pointer',
-            fontSize: 14,
-            padding: '0 0 0 8px',
-            lineHeight: 1,
-            flexShrink: 0
-          }}
+      <div className="flex shrink-0 items-start gap-3 p-4">
+        <span
+          className={
+            paneOwnerUnverified || ssh
+              ? 'flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground'
+              : 'flex size-8 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive'
+          }
         >
-          ×
-        </button>
+          <AlertTriangle className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1 pt-1">
+          <div className="text-sm font-semibold leading-5">
+            {paneOwnerUnverified || ssh
+              ? t('auto.components.terminal.pane.TerminalErrorToast.title', 'Terminal issue')
+              : t('auto.components.terminal.pane.TerminalErrorToast.errorTitle', 'Terminal error')}
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onDismiss}
+          aria-label={t('terminal.paneTopBanner.dismiss', 'Dismiss')}
+        >
+          <X />
+        </Button>
+      </div>
+      <div className="shrink-0 px-4 pb-4">
+        <div className="whitespace-pre-wrap break-words text-sm leading-5">{displayError}</div>
+        {showDaemonRestart ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {t(
+              'auto.components.terminal.pane.TerminalErrorToast.cc6d997c65',
+              'Restart the terminal daemon from here to clear stale daemon state.'
+            )}
+          </p>
+        ) : showIssueLink ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {t(
+              'auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6',
+              'If this persists, please'
+            )}{' '}
+            <a
+              href="https://github.com/stablyai/orca/issues"
+              className="underline underline-offset-2"
+            >
+              {t('auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699', 'file an issue')}
+            </a>
+            .
+          </p>
+        ) : null}
+        {showClientEnvironment && footer ? (
+          <div className="mt-3 whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
+            {footer}
+          </div>
+        ) : null}
+        {paneOwnerUnverified && retryFailed ? (
+          <p className="mt-3 text-xs text-destructive">
+            {t(
+              'auto.components.terminal.pane.TerminalErrorToast.retryUnavailable',
+              'Retry could not reconnect yet. Try again shortly.'
+            )}
+          </p>
+        ) : null}
+        {showDaemonRestart ||
+        showStartOnActiveAccount ||
+        (paneOwnerUnverified && (onRetry || onOpenNewTerminal)) ||
+        (onClosePane && isRemoteTerminalClosedError(error)) ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {showDaemonRestart ? (
+              <Button size="sm" onClick={onRestartDaemon}>
+                {t('auto.components.terminal.pane.TerminalErrorToast.e4aa243f8c', 'Restart daemon')}
+              </Button>
+            ) : null}
+            {paneOwnerUnverified && onRetry ? (
+              <Button size="sm" onClick={() => void handleRetry()} disabled={retrying}>
+                {retrying
+                  ? t('auto.components.terminal.pane.TerminalErrorToast.retrying', 'Retrying…')
+                  : t('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
+              </Button>
+            ) : null}
+            <StartOnActiveAccountButton error={error} onClick={onStartOnActiveAccount} />
+            {paneOwnerUnverified && onOpenNewTerminal ? (
+              <Button
+                variant={onRetry ? 'secondary' : 'default'}
+                size="sm"
+                onClick={onOpenNewTerminal}
+              >
+                {t(
+                  'auto.components.terminal.pane.TerminalErrorToast.openNewTerminal',
+                  'Open new terminal'
+                )}
+              </Button>
+            ) : null}
+            {onClosePane && isRemoteTerminalClosedError(error) ? (
+              <Button variant="outline" size="sm" onClick={onClosePane}>
+                {t('auto.components.terminal.pane.TerminalContextMenu.8c17d6786d', 'Close Pane')}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   )

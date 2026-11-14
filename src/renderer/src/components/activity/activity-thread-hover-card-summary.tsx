@@ -5,21 +5,18 @@ import { useAppStore } from '@/store/index'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
-import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/row-display/git-identity-display'
 import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import { cn } from '@/lib/class-names'
-import {
-  getExecutionHostLabel,
-  getWorktreeExecutionHostId,
-  parseExecutionHostId
-} from '../../../../shared/execution-host'
+import { getWorktreeExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
+import { getTranslatedExecutionHostLabel } from '../sidebar/execution-host-label'
 import {
   DetailHeader,
   MetadataActionIcon
@@ -30,7 +27,7 @@ import {
 } from '../sidebar/workspace-card/details/WorktreeCardDetailSection'
 import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls'
 import { activityThreadRowCopy, threadAgentStateLabel } from './activity-thread-presentation'
-import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
+import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export function ActivityThreadHoverCardSummary({
@@ -51,7 +48,7 @@ export function ActivityThreadHoverCardSummary({
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined)
   const parsedHost = parseExecutionHostId(executionHostId)
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const hostDisplayLabel = useMemo(() => {
+  const customHostDisplayLabel = useMemo(() => {
     const override = hostLabelOverrides.get(executionHostId)
     if (override) {
       return override
@@ -68,8 +65,10 @@ export function ActivityThreadHoverCardSummary({
         return target
       }
     }
-    return getExecutionHostLabel(executionHostId)
+    return null
   }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
+  const hostDisplayLabel =
+    customHostDisplayLabel ?? getTranslatedExecutionHostLabel(executionHostId)
   const branchIdentityDisplay = useMemo(() => getWorktreeGitIdentityDisplay(worktree), [worktree])
   const { taskTitle, needsAttention } = activityThreadRowCopy(thread, t)
   const workspaceTitle = getActivityThreadWorkspaceTitle(worktree)

@@ -5,8 +5,8 @@ import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
-import { getGitHubPRReviewerRows } from '../../../../src/shared/github/pr-reviewer-display'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
+import { getGitHubPRReviewerRows } from '../../../../src/shared/github/pull-requests/pr-reviewer-display'
 import { useCalmConnectionState } from '../../transport/connection/calm-connection-state'
 import {
   classifyConnection,

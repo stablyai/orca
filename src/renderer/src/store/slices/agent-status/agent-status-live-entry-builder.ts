@@ -195,6 +195,21 @@ export function buildAgentStatusLiveEntry(
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
+  // Only the host names conversations. Its row naming the conversation is authoritative, a missing
+  // stamp included (a settled miss clears a pending null); an ID-less local update keeps the
+  // id only for the very same agent, owner and provider key (locator included).
+  const keepsExistingId =
+    existing?.orcaSessionId !== undefined &&
+    existing.agentType === identity.agentType &&
+    (routing?.connectionId === undefined ||
+      routing.connectionId === (existing.connectionId ?? null)) &&
+    agentProviderSessionsEqual(identity.agentType, existing.providerSession, providerSession)
+  const orcaSessionId =
+    metadata?.providerSession || metadata?.orcaSessionId !== undefined
+      ? metadata.orcaSessionId
+      : keepsExistingId
+        ? existing?.orcaSessionId
+        : undefined
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -241,6 +256,7 @@ export function buildAgentStatusLiveEntry(
     ...liveEntryChildFields(existing, payload),
     ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
+    ...(orcaSessionId !== undefined ? { orcaSessionId } : {}),
     ...(launchAttested !== undefined ? { launchAttested } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }

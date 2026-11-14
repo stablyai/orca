@@ -2,17 +2,47 @@ import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-va
 import { sessionFileExecutionNamespace } from '../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
-import { sessionSortTime } from '../../session-scanner-accumulator'
+import { throwIfAiVaultScanCancelled } from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import { sessionSortTime } from '../../parsing/session-scanner-accumulator'
 
 // Bridging and backfill expose one rollout through multiple roots; list only its canonical alias (#7521).
 
-// Rollout names narrow candidates; inode or parsed session ID must still prove identity.
-const CODEX_ROLLOUT_FILE_NAME_PATTERN = /^rollout-.+\.jsonl$/
+// Legacy names require content proof; canonical names encode immutable rollout identity.
+const CODEX_ROLLOUT_FILE_NAME_PATTERN = /^rollout-.+\.jsonl(?:\.zst)?$/
 
 // Hosts can scan foreign-platform paths, so handle both separators independently of node:path.
 function lastPathSegment(filePath: string): string {
   return filePath.split(/[\\/]/).at(-1) ?? ''
+}
+
+// Codex archives idle rollouts as .jsonl.zst and restores the .jsonl on resume, so both names alias one rollout.
+function codexRolloutAliasName(fileName: string): string {
+  return fileName.endsWith('.zst') ? fileName.slice(0, -'.zst'.length) : fileName
+}
+
+/** Returns null when both or neither alias is archived; otherwise whether `filePath` is the live one. */
+function codexLiveAliasBeats(filePath: string, bestPath: string): boolean | null {
+  const archived = filePath.endsWith('.zst')
+  return archived === bestPath.endsWith('.zst') ? null : !archived
+}
+
+const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+const CANONICAL_ROLLOUT = new RegExp(
+  `^rollout-(\\d{4}-\\d{2}-\\d{2})T(\\d{2})-(\\d{2})-(\\d{2})-${UUID}(?:_${UUID})?\\.jsonl$`
+)
+
+export function canonicalCodexRolloutKey(filePath: string): string | null {
+  const name = codexRolloutAliasName(lastPathSegment(filePath))
+  const match = CANONICAL_ROLLOUT.exec(name)
+  if (!match) {
+    return null
+  }
+  const iso = `${match[1]}T${match[2]}:${match[3]}:${match[4]}.000Z`
+  const time = Date.parse(iso)
+  if (!Number.isFinite(time) || new Date(time).toISOString() !== iso) {
+    return null
+  }
+  return `${sessionFileExecutionNamespace(filePath)}\0${name}`
 }
 
 export function codexRolloutHardlinkIdentity(file: {
@@ -37,7 +67,7 @@ export function codexRolloutHardlinkIdentity(file: {
 }
 
 /** Prefer the real host home, then managed homes, so resume uses the canonical authentication lane. */
-function codexSessionRootRank(codexHome: string | null): number {
+export function codexSessionRootRank(codexHome: string | null): number {
   if (codexHome === null) {
     return 0
   }
@@ -133,7 +163,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
       continue
     }
-    const key = `${sessionFileExecutionNamespace(filePath)}\0${fileName}`
+    const key = `${sessionFileExecutionNamespace(filePath)}\0${codexRolloutAliasName(fileName)}`
     const group = groups.get(key)
     if (group) {
       group.push(candidate)
@@ -173,7 +203,12 @@ export async function dedupeCodexRolloutCopyAliases<T>(
       const filePath = accessors.getFilePath(candidate)
       const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
       const best = bestById.get(id)
-      if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
+      if (
+        !best ||
+        rank < best.rank ||
+        (rank === best.rank &&
+          (codexLiveAliasBeats(filePath, best.filePath) ?? filePath < best.filePath))
+      ) {
         bestById.set(id, { candidate, rank, filePath })
       }
     }
@@ -195,7 +230,7 @@ export function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
     return null
   }
-  return `${session.executionHostId}\0${sessionFileExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
+  return `${session.executionHostId}\0${sessionFileExecutionNamespace(session.filePath)}\0${session.sessionId}\0${codexRolloutAliasName(fileName)}`
 }
 
 export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
@@ -203,6 +238,10 @@ export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultS
   const bestRank = codexSessionRootRank(best.codexHome)
   if (candidateRank !== bestRank) {
     return candidateRank < bestRank
+  }
+  const live = codexLiveAliasBeats(candidate.filePath, best.filePath)
+  if (live !== null) {
+    return live
   }
   const candidateTime = sessionSortTime(candidate)
   const bestTime = sessionSortTime(best)

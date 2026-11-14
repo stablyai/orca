@@ -1,5 +1,5 @@
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { PRState } from '../../../../../../shared/github/pull-request-types'
+import type { PRState } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'

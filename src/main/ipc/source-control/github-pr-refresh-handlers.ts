@@ -4,8 +4,8 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshReason,
-  PRRefreshOutcome
-} from '../../../shared/github/pull-request-refresh-types'
+  PRSnapshotReply
+} from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getPRForBranch } from '../../github/client/lookup/get-pr-for-branch'
@@ -17,9 +17,9 @@ import {
   reportVisiblePRRefreshCandidates,
   addPRRefreshOutcomeObserver,
   setPRRefreshRegistrationCheck
-} from '../../github/pr-refresh-coordinator'
-import { setPRRefreshRendererPort } from '../../github/pr-refresh-renderer-port'
-import { pullRequestChangeObserver } from '../../github/pull-request-changed-events'
+} from '../../github/pull-requests/refresh/pr-refresh-coordinator'
+import { setPRRefreshRendererPort } from '../../github/pull-requests/refresh/pr-refresh-renderer-port'
+import { pullRequestChangeObserver } from '../../github/pull-requests/refresh/pull-request-changed-events'
 import { electronPRRefreshRenderer } from '../../host/electron-pr-refresh-renderer'
 import type { Store } from '../../persistence/loading-store/store'
 import type { StatsCollector } from '../../stats/collector'
@@ -44,8 +44,8 @@ export function registerGitHubPRRefreshHandlers(
 ): void {
   // The windows these handlers serve are the renderers the coordinator reports to.
   setPRRefreshRendererPort(electronPRRefreshRenderer)
-  function recordPRIfNeeded(repo: Repo, outcome: PRRefreshOutcome): void {
-    if (outcome.kind === 'found' && !stats.hasCountedPR(outcome.pr.url)) {
+  function recordPRIfNeeded(repo: Repo, outcome: PRSnapshotReply): void {
+    if ('kind' in outcome && outcome.kind === 'found' && !stats.hasCountedPR(outcome.pr.url)) {
       stats.record({
         type: 'pr_created',
         at: Date.now(),

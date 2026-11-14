@@ -71,12 +71,27 @@ import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender
 
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
+export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
+
+export type MobileSessionTabSubscription = {
+  listener: (
+    snapshot: RuntimeMobileSessionTabsResult,
+    changeSequence: number,
+    delivery?: 'reconciliation'
+  ) => void
+  clientNavigationId?: string
+  clientKind?: 'mobile' | 'runtime'
+  observation?: 'caller'
+  acceptsWorktree?: (worktree: string) => boolean
+}
+
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
   protected getLeafKey(tabId: string, leafId: string): string {
     return `${tabId}::${leafId}`
   }
 
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
+  protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract terminalHandleAccess(): TerminalHandleAccess
   protected readonly runtimeId = randomUUID()
 
@@ -217,11 +232,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     }
   >()
 
-  protected mobileSessionTabListeners = new Set<{
-    listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void
-    clientNavigationId?: string
-    clientKind?: 'mobile' | 'runtime'
-  }>()
+  protected mobileSessionTabListeners = new Set<MobileSessionTabSubscription>()
 
   protected pendingMobileSessionTabsChangeSequenceByWorktree = new Map<string, number>()
 
@@ -329,7 +340,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
-    getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId)
+    getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
+    isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId)
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({

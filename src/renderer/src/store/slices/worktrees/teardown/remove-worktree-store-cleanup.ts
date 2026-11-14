@@ -1,11 +1,13 @@
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
+import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/worktree-card-slot-pane-index'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntries } from '@/lib/workspace/activation/worktree-visit-recency'
-import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
+import { forgetAmbiguousOwnerWarnings } from '@/lib/workspace/ownership/ambiguous-owner-warning'
 import { omitRecordKeys } from './record-key-omission'
+import { removeWorkspaceUnreadState } from '../../workspace-attention/workspace-unread-removal'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import {
@@ -24,6 +26,7 @@ export function applyRemoveWorktreeSuccessState(
   // Clear module caches outside store state; reused IDs must re-arm ambiguity warnings.
   forgetAmbiguousOwnerWarnings([worktreeId])
   forgetCombinedDiffViewsForWorktrees([worktreeId])
+  forgetDisplayedPanesForWorktrees([{ id: worktreeId }])
   set((s) => {
     const worktreeIds = [worktreeId]
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)
@@ -51,6 +54,7 @@ export function applyRemoveWorktreeSuccessState(
     const removedActiveWorktree = s.activeWorktreeId === worktreeId
     return {
       editorBufferKeepRequest,
+      ...removeWorkspaceUnreadState(s, [{ id: worktreeId }]),
       ...removeWorktreeLayout(s, {
         worktreeIds: new Set(worktreeIds),
         tabIds,

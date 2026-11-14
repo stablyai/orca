@@ -1,21 +1,23 @@
-import { useRef, useState } from 'react'
-import { FilePlus, Globe, Smartphone, TerminalSquare, type LucideIcon } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
+import { FilePlus, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
-} from '@/lib/client-creation-action-error'
-import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
-import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+} from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
+import { openNewTerminalTabInWorkspace } from '@/store/terminals/tabs/creation/terminal-active-workspace-creation'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
 import {
   ensureSimulatorTab,
   getSimulatorTabForWorktree
 } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useMeasuredWidth } from '@/components/right-sidebar/right-sidebar-measured-width'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -44,10 +46,21 @@ export function SplitPaneLanding({
 }): React.JSX.Element {
   const t = useTranslate()
   const listRef = useRef<HTMLDivElement>(null)
-  const [selected, setSelected] = useState('')
+  const [selected, setSelected] = useState('default-agent')
+  const selectionDuringGestureRef = useRef(selected)
   const [agentPickerOpen, setAgentPickerOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
+  // Why: a highlight the user moved since the last query is their choice; late results must not take it back.
+  const highlightMovedRef = useRef(false)
+  // Why: the full placeholder clips once a narrow card is focused; a placeholder can't follow a container query, so measure.
+  const [narrowCard, setNarrowCard] = useState(false)
+  const measureCard = useMeasuredWidth(
+    useCallback(
+      (width: number | null) => setNarrowCard(width !== null && width < NARROW_CARD_WIDTH),
+      []
+    )
+  )
   const worktreePath = useFileListWorktree(worktreeId)?.path ?? null
   // Why: paired web clients without host streaming hide these, as the tab bar's + menu does.
   const [browserEnabled, emulatorEnabled] = useAppStore(
@@ -133,84 +146,124 @@ export function SplitPaneLanding({
     (action): action is LandingAction => action !== null && landingQueryMatches(action.label, query)
   )
   const searching = query.trim() !== ''
+  const searchLabel = t(
+    'components.tabGroup.splitPaneLanding.searchAgentsAndFiles',
+    'Search agents and files'
+  )
 
-  // Why: cmdk pulls focus into its input on every selection change, so the list keeps focus
-  // outside the Command root and drives its selection here; / moves into the field.
+  const changeSelected = (next: string): void => {
+    // Why: cmdk falls back to the first row when the highlighted row unmounts; the user's pick is gone, so late rows lead again.
+    if (highlightMovedRef.current && !listHasRow(listRef.current, selected)) {
+      highlightMovedRef.current = false
+    }
+    selectionDuringGestureRef.current = next
+    setSelected(next)
+  }
+
+  const recordHighlightMove = (): void => {
+    if (selectionDuringGestureRef.current !== selected) {
+      highlightMovedRef.current = true
+    }
+  }
+
+  const changeQuery = (next: string): void => {
+    highlightMovedRef.current = false
+    setQuery(next)
+  }
+
+  // Why: cmdk keeps its value when rows mount later, so a fast Enter would open a row the user never saw highlighted.
+  const highlightFirstRow = (): void => {
+    if (highlightMovedRef.current) {
+      return
+    }
+    const first = listRef.current?.querySelector<HTMLElement>(
+      '[cmdk-item]:not([aria-disabled="true"])'
+    )
+    if (first?.dataset.value) {
+      setSelected(first.dataset.value)
+    }
+  }
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    const input = inputRef.current
-    if (event.target === input) {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        if (query !== '') {
-          setQuery('')
-        } else {
-          listRef.current?.focus()
-        }
-      }
-      return
-    }
-    if (event.target !== listRef.current) {
-      return
-    }
-    if (event.key === '/') {
-      event.preventDefault()
-      input?.focus()
-    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault()
-      setSelected(stepLandingSelection(listRef.current, selected, event.key === 'ArrowDown'))
-    } else if (event.key === 'ArrowRight' && selected === 'default-agent') {
+    if (event.key === 'ArrowRight' && query === '' && selected === 'default-agent') {
       event.preventDefault()
       setAgentPickerOpen(true)
-    } else if (event.key === 'Enter') {
+    } else if (event.key === 'Escape' && query !== '') {
       event.preventDefault()
-      listRef.current.querySelector<HTMLElement>('[cmdk-item][data-selected="true"]')?.click()
+      changeQuery('')
+    } else if (movesLandingHighlight(event)) {
+      selectionDuringGestureRef.current = selected
     }
   }
 
   return (
-    <div className="absolute inset-0 overflow-auto scrollbar-sleek bg-background">
-      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-4 py-10">
-        <div
-          ref={listRef}
-          tabIndex={-1}
-          autoFocus={autoFocus}
-          className="outline-none"
-          onKeyDown={onKeyDown}
-        >
+    <div
+      className="absolute inset-0 overflow-auto scrollbar-sleek bg-background"
+      onKeyDown={(event) => {
+        // cmdk changes selection after the Command key handler, before this event bubbles here.
+        if (
+          movesLandingHighlight(event) &&
+          event.target instanceof Element &&
+          event.target.closest('[data-slot="command"]')
+        ) {
+          recordHighlightMove()
+        }
+      }}
+    >
+      <div className="flex min-h-full w-full flex-col items-center justify-center px-4 py-10">
+        <div ref={measureCard} className="split-pane-landing @container w-full max-w-[380px]">
           <Command
-            surface="inline"
+            density="card"
+            label={searchLabel}
             shouldFilter={false}
             loop
             value={selected}
-            onValueChange={setSelected}
-            className="h-auto overflow-visible"
+            onValueChange={changeSelected}
+            onKeyDown={onKeyDown}
+            className="h-auto overflow-hidden"
           >
             <CommandInput
               ref={inputRef}
-              variant="framed"
+              autoFocus={autoFocus}
               value={query}
-              onValueChange={setQuery}
-              placeholder={t(
-                'components.tabGroup.splitPaneLanding.searchPlaceholder',
-                'Open agent, terminal, or file…'
-              )}
+              onValueChange={changeQuery}
+              placeholder={
+                narrowCard
+                  ? t('components.tabGroup.splitPaneLanding.searchShort', 'Search')
+                  : searchLabel
+              }
             />
-            <CommandList className="mt-2 h-72">
+            <CommandList
+              ref={listRef}
+              onPointerMoveCapture={() => {
+                selectionDuringGestureRef.current = selected
+              }}
+              onPointerMove={recordHighlightMove}
+            >
               <CommandEmpty>
                 {t('components.tabGroup.splitPaneLanding.noMatches', 'No matches')}
               </CommandEmpty>
               {searching ? (
-                <LandingAgentResults worktreeId={worktreeId} groupId={groupId} query={query} />
+                <LandingAgentResults
+                  worktreeId={worktreeId}
+                  groupId={groupId}
+                  query={query}
+                  onResultsChange={highlightFirstRow}
+                />
               ) : null}
               {!searching || actions.length > 0 ? (
-                <CommandGroup heading={t('components.tabGroup.splitPaneLanding.new', 'New')}>
+                <CommandGroup
+                  heading={
+                    searching ? t('components.tabGroup.splitPaneLanding.new', 'New') : undefined
+                  }
+                >
                   {searching ? null : (
                     <LandingDefaultAgentItem
                       worktreeId={worktreeId}
                       groupId={groupId}
                       pickerOpen={agentPickerOpen}
                       onPickerOpenChange={setAgentPickerOpen}
-                      onPickerClosed={() => listRef.current?.focus()}
+                      onPickerClosed={() => inputRef.current?.focus()}
                     />
                   )}
                   {actions.map((action) => (
@@ -232,30 +285,28 @@ export function SplitPaneLanding({
                   worktreeId={worktreeId}
                   worktreePath={worktreePath}
                   query={query}
+                  onResultsChange={highlightFirstRow}
                 />
               ) : null}
             </CommandList>
           </Command>
-        </div>
-        <div className="mt-3 flex items-center justify-between px-2 text-xs text-muted-foreground">
-          <span>
-            {t(
-              'components.tabGroup.splitPaneLanding.keyboardHint',
-              '↑↓ Enter to open · → agents · / to search'
-            )}
-          </span>
           {onClosePane ? (
-            <Button type="button" variant="ghost" size="xs" onClick={onClosePane}>
-              <span className="text-muted-foreground">
-                {t('components.tabGroup.splitPaneLanding.closePane', 'Close pane')}
-              </span>
-            </Button>
+            <div className="mt-3 flex justify-center">
+              <Button type="button" variant="ghost" size="xs" onClick={onClosePane}>
+                <span className="text-muted-foreground">
+                  {t('components.tabGroup.splitPaneLanding.closePane', 'Close pane')}
+                </span>
+              </Button>
+            </div>
           ) : null}
         </div>
       </div>
     </div>
   )
 }
+
+/** Focused placeholders do not ellipsize in Chromium. */
+const NARROW_CARD_WIDTH = 300
 
 type LandingAction = {
   id: string
@@ -265,15 +316,16 @@ type LandingAction = {
   onSelect: () => void
 }
 
-function stepLandingSelection(list: HTMLElement, current: string, forward: boolean): string {
-  const values = Array.from(
-    list.querySelectorAll<HTMLElement>('[cmdk-item]:not([data-disabled="true"])'),
-    (item) => item.dataset.value ?? ''
+function listHasRow(list: HTMLElement | null, value: string): boolean {
+  return Array.from(list?.querySelectorAll<HTMLElement>('[cmdk-item]') ?? []).some(
+    (row) => row.dataset.value === value
   )
-  if (values.length === 0) {
-    return current
+}
+
+/** The keys cmdk moves its highlight with (vim bindings included). */
+function movesLandingHighlight(event: React.KeyboardEvent): boolean {
+  if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    return true
   }
-  const index = values.indexOf(current)
-  const next = index === -1 ? 0 : (index + (forward ? 1 : -1) + values.length) % values.length
-  return values[next] ?? current
+  return event.ctrlKey && ['n', 'j', 'p', 'k'].includes(event.key)
 }

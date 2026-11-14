@@ -1,6 +1,6 @@
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
@@ -22,6 +22,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
     access: {
       kind: 'writes',
       caller: 'terminal',
+      callerPane: 'terminalPaneKey',
       targets: { run: 'run', ack: 'message' },
       collection: true
     },

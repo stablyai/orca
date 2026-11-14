@@ -7,11 +7,10 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
-import { NumberField } from '../form-controls/SettingsFormControls'
+import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
-import { BrowserExtensionsExperimentalSetting } from '../browser/extensions/BrowserExtensionsExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../../sidebar/use-wsl-hosts-enabled'
 import {
@@ -50,7 +49,6 @@ export function ExperimentalPane({
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
-  const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
@@ -209,12 +207,12 @@ export function ExperimentalPane({
         {showNewWorktreeCardStyle ? (
           <SearchableSetting
             title={t(
-              'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
-              'New card style'
+              'auto.components.settings.ExperimentalPane.worktreeCardStyle.title',
+              'Card style'
             )}
             description={t(
-              'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.description',
-              'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
+              'auto.components.settings.ExperimentalPane.worktreeCardStyle.copy',
+              'Choose how workspace cards look in the sidebar.'
             )}
             keywords={getExperimentalSearchEntry().newWorktreeCardStyle.keywords}
             className="space-y-3 py-3"
@@ -224,36 +222,51 @@ export function ExperimentalPane({
               <div className="min-w-0 shrink space-y-0.5">
                 <Label>
                   {t(
-                    'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
-                    'New card style'
+                    'auto.components.settings.ExperimentalPane.worktreeCardStyle.title',
+                    'Card style'
                   )}
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   {t(
-                    'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy',
-                    'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
+                    'auto.components.settings.ExperimentalPane.worktreeCardStyle.copy',
+                    'Choose how workspace cards look in the sidebar.'
                   )}
                 </p>
               </div>
-              <Switch
-                checked={newWorktreeCardStyleEnabled}
-                aria-label={t(
-                  'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.toggleLabel',
-                  'Toggle new card style'
-                )}
-                onCheckedChange={() =>
-                  updateSettings({
-                    experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
-                  })
+              <SettingsSegmentedControl<'classic' | 'experimental'>
+                size="sm"
+                value={
+                  settings.experimentalNewWorktreeCardStyle === true ? 'experimental' : 'classic'
                 }
+                onChange={(style) =>
+                  updateSettings({ experimentalNewWorktreeCardStyle: style === 'experimental' })
+                }
+                ariaLabel={t(
+                  'auto.components.settings.ExperimentalPane.worktreeCardStyle.ariaLabel',
+                  'Card style'
+                )}
+                options={[
+                  {
+                    value: 'classic',
+                    label: t(
+                      'auto.components.settings.ExperimentalPane.worktreeCardStyle.classic',
+                      'Classic'
+                    )
+                  },
+                  {
+                    value: 'experimental',
+                    label: t(
+                      'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental',
+                      'Experimental'
+                    )
+                  }
+                ]}
               />
             </div>
           </SearchableSetting>
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
-
-        <BrowserExtensionsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
         {wslHostsAvailable() ? (
           <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />

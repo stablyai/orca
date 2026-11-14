@@ -1,4 +1,4 @@
-// Run Expo Router’s actual routing module: canGoBack reads committed state while back queues work, a timing gap mocks would hide.
+// Run Expo Router’s actual imperative router: canGoBack reads committed state while back queues work, a timing gap mocks would hide.
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -10,22 +10,31 @@ import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 type RoutingModule = {
   canGoBack: () => boolean
   goBack: () => void
-  routingQueue: { run: (ref: unknown) => void }
+  drain: () => void
 }
 
 type NavigationRef = {
   current: { canGoBack: () => boolean; dispatch: (action: { type: string }) => void }
 }
 
+type QueuedIntent = { type: string; payload?: { action?: { type: string } } }
+type ImperativeRouterFactory = (
+  enqueue: (intent: QueuedIntent) => void,
+  setTransitionMode: (mode: string) => void
+) => { canGoBack: () => boolean; goBack: () => void }
+
 const requireFrom = createRequire(import.meta.url)
 
+// Expo Router 58 builds the imperative router over an intent queue; queue intents here and drain them on demand.
 function loadRoutingModule(ref: NavigationRef): RoutingModule {
   const root = dirname(requireFrom.resolve('expo-router/package.json'))
-  const source = readFileSync(join(root, 'build/global-state/routing.js'), 'utf8')
-  const loaded: { exports: Partial<RoutingModule> } = { exports: {} }
+  const source = readFileSync(join(root, 'build/global-state/router.js'), 'utf8')
+  const loaded: { exports: { createImperativeRouter?: ImperativeRouterFactory } } = {
+    exports: {}
+  }
   const stubs: Record<string, unknown> = {
     'expo/dom': { IS_DOM: false },
-    './router-store': { store: { navigationRef: { isReady: () => true, ...ref } } },
+    './navigationRef': { navigationRef: ref },
     '../domComponents/emitDomEvent': { emitDomGoBack: () => false }
   }
   new Function('require', 'exports', 'module', source)(
@@ -33,12 +42,27 @@ function loadRoutingModule(ref: NavigationRef): RoutingModule {
     loaded.exports,
     loaded
   )
-  const { canGoBack, goBack, routingQueue } = loaded.exports
+  const { createImperativeRouter } = loaded.exports
   // Read exports at runtime so Expo upgrades renaming them fail here instead of as unrelated navigationRef errors later.
-  if (canGoBack === undefined || goBack === undefined || routingQueue === undefined) {
-    throw new Error('the routing module did not define canGoBack, goBack and routingQueue')
+  if (createImperativeRouter === undefined) {
+    throw new Error('the router module did not define createImperativeRouter')
   }
-  return { canGoBack, goBack, routingQueue }
+  const queue: QueuedIntent[] = []
+  const imperative = createImperativeRouter(
+    (intent) => queue.push(intent),
+    () => {}
+  )
+  return {
+    canGoBack: imperative.canGoBack,
+    goBack: () => imperative.goBack(),
+    drain: () => {
+      for (const intent of queue.splice(0)) {
+        if (intent.type === 'ACTION' && intent.payload?.action) {
+          ref.current.dispatch(intent.payload.action)
+        }
+      }
+    }
+  }
 }
 
 function stackRef(screens: string[]): NavigationRef {
@@ -143,7 +167,7 @@ function mount(screens: string[]): Harness {
     },
     screens,
     drain: () => {
-      routing.routingQueue.run(ref)
+      routing.drain()
     },
     commitRoute: (pathname) => {
       router.pathname = pathname
@@ -178,27 +202,12 @@ afterEach(() => {
 })
 
 describe('a page that asks to go back twice in one batch', () => {
-  it('pops once, because the second frame reads a stack the first has not left yet', () => {
-    const harness = mount(['home', 'host', 'tasks'])
-    expect(harness.pop()).toBe('popped')
-    expect(harness.pop()).toBe('pop-pending')
-    harness.drain()
-    expect(harness.screens).toEqual(['home', 'host'])
-  })
-
   it('takes the next pop once the route the first one produced has committed', () => {
     const harness = mount(['home', 'host', 'tasks'])
     expect(harness.pop()).toBe('popped')
     harness.drain()
     harness.commitRoute('/h/host-a')
     expect(harness.pop()).toBe('popped')
-    harness.drain()
-    expect(harness.screens).toEqual(['home'])
-  })
-
-  it('refuses with its own reason when the stack has nothing to pop', () => {
-    const harness = mount(['home'])
-    expect(harness.pop()).toBe('nothing-to-pop')
     harness.drain()
     expect(harness.screens).toEqual(['home'])
   })

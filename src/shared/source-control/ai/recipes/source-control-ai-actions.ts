@@ -17,7 +17,9 @@ import {
 // Keep the variable registry separate for max-lines headroom; no re-export so consumer searches stay complete.
 
 export type SourceControlTextActionId = 'commitMessage' | 'pullRequest' | 'branchName'
-export type AiTextActionId = SourceControlTextActionId | 'conversationName'
+/** Text actions outside any repository: they read global settings only, never a repo's overrides. */
+export type GlobalAiTextActionId = 'conversationName' | 'dictationCleanup'
+export type AiTextActionId = SourceControlTextActionId | GlobalAiTextActionId
 
 export type SourceControlLaunchActionId =
   | 'fixCommitFailure'
@@ -94,8 +96,13 @@ export const SOURCE_CONTROL_ACTION_IDS = [
 
 export const AI_TEXT_ACTION_IDS = [
   ...SOURCE_CONTROL_TEXT_ACTION_IDS,
-  'conversationName'
+  'conversationName',
+  'dictationCleanup'
 ] as const satisfies readonly AiTextActionId[]
+
+export function isGlobalAiTextAction(actionId: string): actionId is GlobalAiTextActionId {
+  return actionId === 'conversationName' || actionId === 'dictationCleanup'
+}
 
 export const AI_ACTION_IDS = [
   ...AI_TEXT_ACTION_IDS,
@@ -126,6 +133,7 @@ export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<AiActionId,
   pullRequest: '{basePrompt}',
   branchName: '{basePrompt}',
   conversationName: '{basePrompt}',
+  dictationCleanup: '{basePrompt}',
   fixCommitFailure: '{basePrompt}',
   fixPushFailure: '{basePrompt}',
   fixChecks: '{basePrompt}',

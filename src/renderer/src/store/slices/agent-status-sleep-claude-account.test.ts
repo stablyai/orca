@@ -4,7 +4,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-account-preference'
 import { resolveProjectClaudeAccount } from '../../../../main/claude-accounts/project-claude-account-resolution'
 import { createTestStore } from '../testing/app-store-test-fixture'
-import { makeTab } from '../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../terminals/testing/terminal-tab.test-fixture'
 import {
   recoveryRecordMatches,
   sleepingRecordsEquivalentIgnoringCaptureTime

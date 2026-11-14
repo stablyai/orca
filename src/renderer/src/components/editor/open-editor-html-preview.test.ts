@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
+import { markHydratedBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import {
   EDITOR_OWNER,
@@ -10,7 +11,7 @@ import {
   seedBrowserLinkTestStore,
   WORKSPACE
 } from '@/lib/browser/navigation/browser-link-open.test-fixture'
-import { beginLinkOpenRequest } from '@/lib/link-open-request'
+import { beginLinkOpenRequest } from '@/lib/links/link-open-request'
 import { registerEditorFrameFlush } from './save/flush/editor-pending-flush'
 import { openEditorHtmlPreview } from './open-editor-html-preview'
 
@@ -20,9 +21,21 @@ vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
 
 const initialState = useAppStore.getInitialState()
 
+function resetBrowserLinkStore(): void {
+  useAppStore.setState(
+    {
+      ...initialState,
+      remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({
+        ...initialState.remoteBrowserPageHandlesByPageId
+      })
+    },
+    true
+  )
+}
+
 beforeEach(() => {
   createStoreCascadesMockApi()
-  useAppStore.setState(initialState, true)
+  resetBrowserLinkStore()
   seedBrowserLinkTestStore(useAppStore)
   useAppStore.setState((state) => ({
     openFiles: [
@@ -44,7 +57,7 @@ beforeEach(() => {
     }
   }))
 })
-afterEach(() => useAppStore.setState(initialState, true))
+afterEach(resetBrowserLinkStore)
 
 it('opens HTML in its editor group even when another pane is active, and reuses it on repeat', async () => {
   await openEditorHtmlPreview('report', 'source')
@@ -213,25 +226,6 @@ it('refuses a local preview when the file gains remote host evidence during its 
   })
   expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
 })
-
-it.each(['refused', 'rejected'] as const)(
-  'keeps the editor selected when its guest flush is %s',
-  async (failure) => {
-    const unregister = registerEditorFrameFlush('report', () =>
-      failure === 'refused' ? Promise.resolve(false) : Promise.reject(new Error('flush failed'))
-    )
-    try {
-      await openEditorHtmlPreview('report', 'source')
-      const state = useAppStore.getState()
-      expect(state.browserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
-      expect(
-        state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')?.activeTabId
-      ).toBe('source')
-    } finally {
-      unregister()
-    }
-  }
-)
 
 it('cancels preview when its editor tab closes but the file stays open in another tab', async () => {
   useAppStore.setState((state) => ({

@@ -3,7 +3,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
+import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
@@ -23,7 +23,7 @@ import { assertNestedWorktreeRemovalApproval } from '../../../workspaces/removal
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import { getEffectiveHooks, runHook } from '../../../workspace-hooks/hooks'
-import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
+import type { ArchiveHookOverride } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import {
@@ -179,7 +179,8 @@ export async function executeWorktreeRemoval(
         canonicalWorktreePath,
         repo,
         undefined,
-        localWorktreeGitOptions
+        localWorktreeGitOptions,
+        { identity: { worktreeId: args.worktreeId } }
       )
       archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
         worktreePath: canonicalWorktreePath,

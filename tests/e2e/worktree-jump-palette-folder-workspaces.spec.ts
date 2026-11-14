@@ -39,9 +39,11 @@ for (const theme of ['light', 'dark'] as const) {
         if (!folder) {
           throw new Error('Could not create folder workspace')
         }
-        await store.getState().updateFolderWorkspace(folder.id, { comment: 'Research synthesis' })
+        await store
+          .getState()
+          .updateFolderWorkspace(folder.folderWorkspace.id, { comment: 'Research synthesis' })
         store.setState({ showSleepingWorkspaces: false })
-        return `folder:${folder.id}`
+        return `folder:${folder.folderWorkspace.id}`
       },
       { folderPath, theme }
     )

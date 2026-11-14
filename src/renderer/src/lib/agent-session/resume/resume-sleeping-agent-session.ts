@@ -1,10 +1,8 @@
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import { useAppStore } from '@/store/index'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
-import {
-  agentProviderSessionsEqual,
-  type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
@@ -16,17 +14,15 @@ import {
 } from './sleeping-agent-pane-ownership'
 import { isPaneSpawnDeferred } from '../../../components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import { settleSweptRecord, sweepTreatsAsFinished } from './swept-sleep-record-settlement'
-import {
-  launchSleepingAgentSession,
-  type ResumeSleepingAgentSessionsOptions
-} from './sleeping-agent-session-launch'
+import { launchSleepingAgentSession } from './sleeping-agent-session-launch'
+import type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   findUnhydratedHostMirrorForPane,
-  isHostMirroredSleepingRecord,
-  type UnhydratedHostMirror
+  isHostMirroredSleepingRecord
 } from './host-mirrored-pane-liveness'
-import { parkUntilHostMirrorHandleLands } from '../../host-mirror-handle-gap-wait'
+import type { UnhydratedHostMirror } from './host-mirrored-pane-liveness'
+import { parkUntilHostMirrorHandleLands } from './host-mirror-handle-gap-wait'
 import { getClaimRepresentativeRecords } from './sleeping-record-claim-representative'
 import {
   sleepingRecordHostAllowsSessionClaim,

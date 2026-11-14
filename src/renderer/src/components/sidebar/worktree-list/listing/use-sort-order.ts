@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
+import { persistWorktreeSortOrderByHost } from '@/lib/workspace/persistence/worktree-sort-order-persistence'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
   NO_LIVE_SMART_SORT_SOURCES,
-  rankWorktreesForSort,
-  type SortBy
-} from '../../../../../../shared/sidebar-list/smart-sort'
+  rankWorktreesForSort
+} from '../../../../../../shared/sidebar-list/sorting/smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import {
   ranksFollowPersistedOrder,
   smartSortPhase
-} from '../../../../../../shared/sidebar-list/smart-sort-phase'
+} from '../../../../../../shared/sidebar-list/sorting/smart-sort-phase'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
-import { useSidebarListSession } from '@/lib/sidebar-list-session'
+import { useSidebarListSession } from '@/components/sidebar/sidebar-feed/sidebar-list-session'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import {
   getWorktreeHostIdentity,

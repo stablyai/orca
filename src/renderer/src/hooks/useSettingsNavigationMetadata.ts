@@ -1,7 +1,7 @@
+import { useSupportedGroupHookSettings } from './use-supported-group-hook-settings'
+import type { ProjectGroupSettingsEntry } from './use-supported-group-hook-settings'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
-// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -9,8 +9,7 @@ import {
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal/terminal-search'
 import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   isWindowsTerminalCapabilityHost,
@@ -23,19 +22,24 @@ import {
   useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostQueuesMessages
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
-import type { Repo } from '../../../shared/repo-types'
 import {
   buildCapabilitySettingsSections,
   buildSetupSettingsSections
 } from './settings-navigation-capability-sections'
-import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Translate } from '@/i18n/use-translate'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
+import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
+import type { Repo } from '../../../shared/repo-types'
+import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
+
+// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
+// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 
 export { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
@@ -53,6 +57,7 @@ export function buildSettingsNavigationMetadata(
     isDev = import.meta.env.DEV,
     isLinearConnected = false,
     repos,
+    projectGroups,
     projectGrouping
   }: {
     isMac: boolean
@@ -66,6 +71,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled?: boolean
     isDev?: boolean
     isLinearConnected?: boolean
+    projectGroups?: readonly ProjectGroupSettingsEntry[]
     repos: readonly Repo[]
     projectGrouping?: ProjectGroupingModel
   },
@@ -101,6 +107,7 @@ export function buildSettingsNavigationMetadata(
     isDev,
     isLinearConnected,
     repos,
+    projectGroups,
     projectGrouping
   }
 
@@ -118,6 +125,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
+  const projectGroups = useSupportedGroupHookSettings()
   const repos = useAppStore((state) => state.repos)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
@@ -180,6 +188,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           isDev: import.meta.env.DEV,
           isLinearConnected,
           repos,
+          projectGroups,
           projectGrouping: {
             projects: projectHostSetupProjection.projects,
             projectHostSetups: projectHostSetupProjection.setups
@@ -200,6 +209,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       mobileEmulatorCreationEnabled,
       isLinearConnected,
       repos,
+      projectGroups,
       projectHostSetupProjection,
       languageRevision,
       t

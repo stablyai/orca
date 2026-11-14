@@ -360,8 +360,7 @@
       "pausedState": "En pause",
       "queuedState": "En file d'attente",
       "resume": "Reprendre",
-      "resumeSending": "Reprendre l'envoi des messages en file d'attente",
-      "title": "Messages en file d'attente"
+      "resumeSending": "Reprendre l'envoi des messages en file d'attente"
     },
     "offlineQueue": {
       "failed": "Échec de l'envoi — touchez Envoyer pour réessayer",
@@ -1635,7 +1634,6 @@
       "deleteConfirmMessage": "Supprimer « {{name}} » ({{branch}}) ?",
       "deleteDestroysEnvironment": "Cela détruit aussi l’environnement « {{environment}} » qu’Orca a créé pour lui, avec les modifications non validées et les terminaux en cours qui s’y trouvent.",
       "deleteKeepsEnvironment": "L’environnement « {{environment}} » qu’Orca a créé pour lui continue de tourner : sa recette n’a pas d’étape de destruction.",
-      "deleteWorktree": "Supprimer le worktree",
       "pin": "Épingler",
       "primaryWorktreeDeleteHint": "Worktree principal — impossible à supprimer. Retirez plutôt le projet.",
       "removeHost": "Supprimer l'hôte",
@@ -1808,7 +1806,6 @@
       "daysAgo_one": "il y a {{count}} j",
       "daysAgo_other": "il y a {{count}} j",
       "deleteConfirmMessage": "Cette action supprime définitivement le commentaire sur GitHub.",
-      "deleteConfirmTitle": "Supprimer le commentaire ?",
       "editPlaceholder": "Modifier le commentaire…",
       "hoursAgo_many": "il y a {{count}} h",
       "hoursAgo_one": "il y a {{count}} h",
@@ -2390,13 +2387,10 @@
       "loadFailed": "Impossible de charger la pull request"
     },
     "queuedCardText": {
-      "showLess": "Afficher moins",
       "showLessHint": "Affiche une version abrégée du message",
-      "showMore": "Afficher plus",
       "showMoreHint": "Affiche le message entier"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Supprimer ce message en attente",
       "images_many": "{{count}} images",
       "images_one": "{{count}} image",
       "images_other": "{{count}} images",
@@ -2404,7 +2398,6 @@
       "send": "Envoyer",
       "sendAgainHint": "Renvoyer ce message",
       "sendHint": "Envoyer ce message",
-      "showLessHint": "Affiche une version abrégée du message",
       "steer": "Envoyer maintenant",
       "steerHint": "Envoyer sans interrompre le modèle"
     },
@@ -2461,7 +2454,6 @@
       "addTitle": "Ajouter une commande rapide",
       "chooseAgentTitle": "Choisir un agent",
       "deleteConfirmMessage": "Cette commande rapide sera retirée de votre liste enregistrée.",
-      "deleteConfirmTitle": "Supprimer « {{label}} » ?",
       "editTitle": "Modifier la commande rapide",
       "editorDescription": "Enregistrez des commandes de terminal ou des prompts d'agent pour y accéder rapidement.",
       "title": "Commandes rapides",
@@ -2568,6 +2560,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Échec de l'ajout (reconnexion en cours)"
     },
+    "useCloseActions": {
+      "closeFailed": "Impossible de fermer l’onglet. Réessayez.",
+      "closeFailedDesktopNotReady": "Impossible de fermer l’onglet. Orca est encore en cours de chargement sur votre ordinateur. Réessayez dans un instant."
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "Échec de la commande du navigateur",
       "browserCreateFailed": "Échec de la création du navigateur",
@@ -2638,7 +2634,7 @@
       "insertFailedCopied": "Impossible d'insérer la dictée ; elle a été copiée dans le presse-papiers",
       "inserted": "Dictée insérée",
       "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes.",
-      "stoppedAfterSilenceSeconds": "Arrêté après {{seconds}} secondes de silence"
+      "stoppedAfterSilenceSeconds": "Arrêt après {{seconds}} secondes de silence"
     },
     "useNativeChatStop": {
       "stopNotSent": "Commande d'arrêt non envoyée",
@@ -3452,6 +3448,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "Fusionner la PR nº {{number}} ?",
+      "confirmGitHubSquash": "Compresser les commits et fusionner la PR nº {{number}} ?",
+      "confirmGitHubRebase": "Rebaser et fusionner la PR nº {{number}} ?",
+      "confirmGitLabMerge": "Fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabSquash": "Compresser les commits et fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabRebase": "Rebaser et fusionner la demande de fusion nº {{number}} ?",
       "merged": "Fusionné",
       "closed": "Fermé",
       "conflicts": "Conflits",
@@ -4204,7 +4206,6 @@
       "outcome": "Résultat",
       "allOutcomes": "Tous les résultats",
       "couldNotStart": "Démarrage impossible",
-      "deleteAutomationTitle": "Supprimer l’automatisation ?",
       "deleteRetained": "Supprimer « {{name}} » et ses exécutions conservées ?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Impossible de vérifier le panneau d’origine de l’agent. Reconnectez-vous et réessayez.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Le panneau d’origine de l’agent ne peut plus être ouvert. La sortie enregistrée reste ici.",

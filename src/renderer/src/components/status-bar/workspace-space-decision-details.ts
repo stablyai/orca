@@ -5,7 +5,7 @@ import type { HostedReviewProvider } from '../../../../shared/source-control/hos
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import '../sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '../sidebar/workspace-card/identity/worktree-branch-display'
@@ -33,6 +33,8 @@ export type WorkspaceDecisionDetails = {
   branchStatus: string | null
   reviewLabel: string | null
   issueLabel: string | null
+  /** Cache key of the shown linked issue; changes when the link or its owning host changes. */
+  issueCacheKey: string | null
   linearIssueLabel: string | null
 }
 
@@ -169,20 +171,19 @@ export function getWorkspaceDecisionDetails(
         ? `PR #${linkedPR}`
         : null
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
-  const issue =
+  const issueCacheKey =
     linkedIssue && repo
-      ? inputs.issueCache[
-          getIssueCacheKey(
-            repo.path,
-            repo.id,
-            linkedIssue,
-            inputs.settings,
-            repo.connectionId,
-            ownerExecutionHostId,
-            true
-          )
-        ]?.data
+      ? getIssueCacheKey(
+          repo.path,
+          repo.id,
+          linkedIssue,
+          inputs.settings,
+          repo.connectionId,
+          ownerExecutionHostId,
+          true
+        )
       : null
+  const issue = issueCacheKey ? inputs.issueCache[issueCacheKey]?.data : null
   const issueLabel = linkedIssue
     ? issue
       ? `#${issue.number} ${issue.state}: ${issue.title}`
@@ -228,6 +229,7 @@ export function getWorkspaceDecisionDetails(
     branchStatus: getBranchStatus(inputs.remoteStatusesByWorktree[worktree.worktreeId], t),
     reviewLabel,
     issueLabel,
+    issueCacheKey,
     linearIssueLabel
   }
 }

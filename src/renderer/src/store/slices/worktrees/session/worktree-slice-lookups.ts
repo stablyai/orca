@@ -1,19 +1,20 @@
+import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { getTerminalActivationSpawnSuppression } from '../../../terminals/terminal-activation-spawn-suppression'
+import { getTerminalActivationSpawnSuppression } from '../../../terminals/pty/terminal-activation-spawn-suppression'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
-import { locateTerminalTab } from '../../../terminals/terminal-tab-location'
+import { locateTerminalTab } from '../../../terminals/ownership/terminal-tab-location'
 import {
   admitTerminalRecoveryRemount,
   nextTerminalRecoveryLedger,
   settledTerminalRecoveryLedger
-} from '../../../terminals/terminal-tab-recovery-ledger'
+} from '../../../terminals/pty/terminal-tab-recovery-ledger'
 import type {
   TerminalRecoveryRemountRequest,
   TerminalRecoveryRemountResult
-} from '../../../terminals/terminal-tab-recovery-ledger'
+} from '../../../terminals/pty/terminal-tab-recovery-ledger'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
 import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
@@ -145,6 +146,10 @@ export function createPurgeWorktreeTerminalState(
     if (purgeableWorktreeTargets.length === 0) {
       return
     }
+    const retireNotices = captureWorkspaceTerminalNoticeRemoval(
+      get(),
+      purgeableWorktreeTargets.map((target) => (typeof target === 'string' ? target : target.id))
+    )
     // Why before the purge: delayed views must commit text the purge may offer back.
     flushPurgedWorkspaceEdits(
       get(),
@@ -157,5 +162,6 @@ export function createPurgeWorktreeTerminalState(
         buildWorktreePurgeState(s, purgeableWorktreeTargets, changedPaneKeys)
       )
     )
+    retireNotices(get())
   }
 }

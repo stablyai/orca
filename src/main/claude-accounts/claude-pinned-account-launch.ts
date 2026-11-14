@@ -1,9 +1,9 @@
 import { access } from 'node:fs/promises'
 import { CLAUDE_INJECTED_CONFIG_DIR_ENV } from '../../shared/claude-profile-routing'
-import { isDirectory } from './claude-profile-homes'
-import { claudeProfileSetupFailed } from './claude-profile-launch-errors'
-import { claudeProfileMarkerPath, describeClaudeProfile } from './claude-profile-paths'
-import type { ClaudeProfileRouter } from './claude-profile-router'
+import { isDirectory } from './profiles/claude-profile-homes'
+import { claudeProfileSetupFailed } from './profiles/routing/claude-profile-launch-errors'
+import { claudeProfileMarkerPath, describeClaudeProfile } from './profiles/claude-profile-paths'
+import type { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
 /**

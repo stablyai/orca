@@ -12,7 +12,6 @@ import PinnedTabCloseDialog from './components/terminal-pane/layout/close/Pinned
 import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
 import ClaudeAccountPromptDialog from './components/claude-account-prompt/ClaudeAccountPromptDialog'
-import AgentWorkspaceTrustDecisionDialog from './components/agent-workspace-trust/AgentWorkspaceTrustDecisionDialog'
 import ClaudeAccountSwitchDialog from './components/ClaudeAccountSwitchDialog'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
@@ -130,7 +129,6 @@ function App(): React.JSX.Element {
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />
       <ClaudeAccountPromptDialog />
-      <AgentWorkspaceTrustDecisionDialog />
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />

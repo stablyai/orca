@@ -6,11 +6,10 @@ import { NativeChatResolutionReceipt } from '../../prompts/NativeChatResolutionR
 import { NativeChatWorkingStatus } from '../../conversation/turns/NativeChatWorkingStatus'
 import { NativeChatTurnDiffRollup } from '../../tools/diffs/NativeChatTurnDiffRollup'
 import { NativeChatOpenedPullRequestCard } from '../../tools/pull-requests/NativeChatOpenedPullRequestCard'
-import { NativeChatSubagentSectionHead } from '../../subagents/NativeChatSubagentSectionHead'
-import { NativeChatSubagentEntries } from '../../subagents/NativeChatSubagentRun'
-import type { NativeChatSubagentDisclosure } from '../../subagents/native-chat-subagent-sections'
+import { NativeChatSubagentHead } from '../../subagents/NativeChatSubagentHead'
 import type { NativeChatTaskListPredecessors } from '../../../../../../shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
+import type { NativeChatTimedRow } from '../../conversation/slots/native-chat-timed-rows'
 import type {
   NativeChatDiffReveal,
   NativeChatDiffTarget
@@ -36,10 +35,13 @@ export type NativeChatTranscriptRowContext = {
   latestTurnKey?: string
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  /** Keyed by message id: rows from outside the conversation that came right after that message. */
+  timedRows?: ReadonlyMap<string, readonly NativeChatTimedRow[]>
   structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   onToggleExpandedTurn: (turnKey: string) => void
-  subagentDisclosure: NativeChatSubagentDisclosure
+  /** Opens a subagent's own view; absent where the transcript has none to open. */
+  onOpenSubagent?: (agentId: string) => void
   onScrollMessageToTop: (element: HTMLElement) => void
   onRevealDiff: (target: NativeChatDiffTarget) => void
 }
@@ -61,30 +63,12 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
   const fork = useContext(NativeChatForkContext)
-  const sectionClassName = cn(
-    slot.depth > 0 && 'border-l-2 border-border/60 pl-3',
-    slot.depth > 1 && 'ml-4'
-  )
   if (slot.kind === 'subagent') {
     return (
-      <div className={sectionClassName}>
-        <NativeChatSubagentSectionHead
-          agentId={slot.agentId}
-          entry={slot.entry}
-          expanded={slot.expanded}
-          onSetOpen={context.subagentDisclosure.setSectionOpen}
-        />
-      </div>
-    )
-  }
-  if (slot.kind === 'subagent-entries') {
-    return (
-      <NativeChatSubagentEntries
-        agents={slot.agents}
-        sections={slot.sections}
-        onSetSectionOpen={context.subagentDisclosure.setSectionOpen}
-        // The type its roster row's list inherits, so both halves of the list match.
-        className="text-xs leading-relaxed text-chat-foreground-faint"
+      <NativeChatSubagentHead
+        agentId={slot.agentId}
+        entry={slot.entry}
+        onOpen={context.onOpenSubagent}
       />
     )
   }
@@ -113,8 +97,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     <div
       className={cn(
         'flex flex-col gap-5',
-        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3',
-        sectionClassName
+        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}
@@ -149,13 +132,15 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           actionsHang={slot.actionsHang === true && !newRowsMarkerBelow}
           onScrollMessageToTop={context.onScrollMessageToTop}
           deliveryNotice={deliveryNotice}
-          subagentRoster={slot.subagentRoster}
-          subagentDisclosure={context.subagentDisclosure}
-          inSubagentSection={slot.depth > 0}
+          onOpenSubagent={context.onOpenSubagent}
           runtimeContext={context.runtimeContext}
           structuredAttachments={context.structuredAttachments}
           rewind={
-            nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined) &&
+            nativeChatRowOffersRewind(
+              message,
+              { depth: 0, turnKey },
+              deliveryNotice !== undefined
+            ) &&
             (!rewind?.eligibleItemIds || rewind.eligibleItemIds.has(message.id))
               ? rewind
               : undefined
@@ -175,6 +160,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {openedPullRequests ? (
         <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
       ) : null}
+      {context.timedRows?.get(message.id)?.map(({ key, node }) => (
+        <div key={key}>{node}</div>
+      ))}
     </div>
   )
 })

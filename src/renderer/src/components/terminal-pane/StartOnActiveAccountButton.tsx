@@ -15,7 +15,7 @@ export function StartOnActiveAccountButton({
     return null
   }
   return (
-    <Button variant="outline" size="xs" onClick={onClick} className="ml-3">
+    <Button variant="outline" size="sm" onClick={onClick}>
       {t(
         'auto.components.terminal.pane.TerminalErrorToast.startOnActiveAccount',
         'Start on active account'

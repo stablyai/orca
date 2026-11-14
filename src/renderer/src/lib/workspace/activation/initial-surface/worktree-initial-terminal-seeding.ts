@@ -1,13 +1,11 @@
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../../../../shared/worktree/launch-types'
+} from '../../../../../../shared/worktree/creation/launch-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
-import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../../../shared/worktree-first-surface'
 import { createSequencedSetupAgentCommands } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../../../shared/agent-launch/startup/setup-runner-command'
@@ -72,32 +70,6 @@ export function reseedGatedEmptyWorkspace(
       ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
     }
   )
-}
-
-export function ensureFolderWorkspaceInitialTerminal(
-  folderWorkspace: FolderWorkspace,
-  startup?: WorktreeStartupPayload,
-  providesInitialSurface?: boolean,
-  opts?: Pick<InitialTerminalOptions, 'seedUserDefaultSurface'>
-): string | null {
-  if (providesInitialSurface === true && startup === undefined) {
-    return null
-  }
-  const state = useAppStore.getState()
-  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
-  const primaryTabId = ensureWorktreeHasInitialTerminal(
-    state,
-    workspaceKey,
-    startup,
-    undefined,
-    undefined,
-    undefined,
-    {
-      reseedEmptiedWorkspace: providesInitialSurface !== true,
-      ...opts
-    }
-  )
-  return primaryTabId
 }
 
 export function ensureWorktreeHasInitialTerminal(
@@ -226,21 +198,22 @@ export function ensureWorktreeHasInitialTerminal(
   const shouldCreateNewStartupTerminal =
     opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined
   if (!shouldAutoCreate && !shouldCreateForExplicitWork && !shouldCreateNewStartupTerminal) {
-    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
-    if (existingTerminalTabId && (setup || issueCommand)) {
-      // Main can adopt the startup tab yet fail setup spawn; renderer still runs returned fallback setup.
+    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id ?? null
+    const queuedOnExisting = existingTerminalTabId !== null && Boolean(setup || issueCommand)
+    // Main can adopt the startup tab yet fail setup spawn; renderer still runs returned fallback
+    // setup. Editor- or browser-only workspaces run it in its own tab.
+    if (queuedOnExisting || setup) {
       queueSetupAndIssueCommands(
         store,
         worktreeId,
         existingTerminalTabId,
         setup,
-        issueCommand,
+        existingTerminalTabId ? issueCommand : undefined,
         wrappedSetupCommandStr,
         opts
       )
-      return existingTerminalTabId
     }
-    return null
+    return queuedOnExisting ? existingTerminalTabId : null
   }
 
   const templatedTabId = applyDefaultTerminalTabs(

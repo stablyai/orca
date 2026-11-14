@@ -3,7 +3,7 @@ import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-acc
 import type { ProjectClaudeAccountPreference } from '../../../../shared/claude/project-claude-account-preference'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { translate } from '@/i18n/i18n'
-import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 
 export const DEFAULT_VALUE = '__default__'
 export const ASK_VALUE = '__ask__'

@@ -8,6 +8,7 @@ import { ButtonGroup } from '../../../ui/button-group'
 import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
 import { ClaudeAskPerProjectSetting } from '../../ClaudeAskPerProjectSetting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import {
@@ -46,6 +47,7 @@ export function renderClaudeAccountsSection(
     claudeAccounts,
     claudeAction,
     isRemoteAccountScope,
+    recordFeatureInteraction,
     remoteAccountScopeNotice,
     runClaudeAccountAction,
     setRemoveClaudeTarget,
@@ -384,6 +386,13 @@ export function renderClaudeAccountsSection(
             )}
           </div>
         </SearchableSetting>
+        {isRemoteAccountScope ? null : (
+          <ClaudeOAuthUsageSetting
+            settings={settings}
+            updateSettings={updateSettings}
+            recordFeatureInteraction={recordFeatureInteraction}
+          />
+        )}
         {isRemoteAccountScope ? null : (
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
         )}

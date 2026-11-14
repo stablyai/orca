@@ -1,3 +1,4 @@
+import { captureTerminalPaneNoticeRetirement } from '../../mounting/terminal-pane-notice-retirement'
 import { useTerminalSelectionSearch } from '../../search/use-terminal-selection-search'
 import { useCallback, useEffect, useRef } from 'react'
 import { onActiveTerminalPaneCloseRequest } from './request-active-terminal-pane-close'
@@ -12,7 +13,7 @@ import { clearPaneTerminalError } from '../../errors/terminal-error-accumulation
 import type { TerminalPaneBindingController } from '../ownership/use-terminal-pane-layout-bindings'
 import { retireUnboundIpcTerminalPane } from './retire-unbound-ipc-terminal-pane'
 import { capturePendingTerminalPaneClose } from './terminal-pane-close-admission'
-import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
+import { commitTerminalSurfaceClose } from '@/store/terminals/retirement/terminal-surface-close-intent'
 import { noteAgentLaunchPaneClosedByUser } from '../../../../lib/agent-session/launch/pane/agent-launch-pane-closes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { sendUserPaneCloseToLayoutOwner } from './layout-owner-pane-close-command'
@@ -111,6 +112,19 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         return
       }
       const leafId = manager.getLeafId(paneId)
+      const transport = paneTransportsRef.current.get(paneId)
+      const retireNotice = leafId
+        ? captureTerminalPaneNoticeRetirement({
+            tabId,
+            worktreeId,
+            leafId,
+            transport,
+            ptyId:
+              transport?.getPtyId() ??
+              useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId],
+            getTransports: () => paneTransportsRef.current
+          })
+        : undefined
       // Switch point: main closes the pane first; the window removes it when main's frame does.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
@@ -118,6 +132,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         sendUserPaneCloseToLayoutOwner(
           { worktreeId, tabId, leafId, paneId },
           {
+            onAcceptedClose: retireNotice,
             getManager: () => managerRef.current,
             closeTab: () => onCloseTab(reason),
             closePaneLocally: (id, committedLeafId) => closePaneLocally(id, committedLeafId, reason)
@@ -128,7 +143,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       }
       closePaneLocally(paneId, undefined, reason)
     },
-    [closePaneLocally, onCloseTab, tabId, worktreeId, managerRef]
+    [closePaneLocally, onCloseTab, tabId, worktreeId, managerRef, paneTransportsRef]
   )
   const getCloseDialogCopyKind = useCallback(
     (paneId: number) => resolveLeafCloseCopyKind(tabId, managerRef.current?.getLeafId(paneId)),

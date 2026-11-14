@@ -17,7 +17,7 @@ export function useMobileNativeChatPromptPresentation({
   scopeKey: string | null
   sessionKey: string | null
   observing: boolean
-  respondPermission: (send: string) => Promise<boolean>
+  respondPermission: (send: string, requireStartupDialog?: string) => Promise<boolean>
 }) {
   const card = useMemo(
     () => (permission ? { kind: 'approval' as const, approval: permission } : null),
@@ -40,13 +40,15 @@ export function useMobileNativeChatPromptPresentation({
   })
   const respond = useCallback(
     async (send: string): Promise<boolean> => {
-      const accepted = await respondPermission(send)
-      if (accepted) {
+      const startupDialog = permission?.startupDialog
+      const accepted = await respondPermission(send, startupDialog)
+      // A startup dialog stays up until the host settles it; the card keeps the composer locked meanwhile.
+      if (accepted && !startupDialog) {
         dismissPrompt()
       }
       return accepted
     },
-    [respondPermission, dismissPrompt]
+    [respondPermission, dismissPrompt, permission?.startupDialog]
   )
   return {
     occurrenceKey: promptKey === null ? null : JSON.stringify([scopeKey, sessionKey, promptKey]),

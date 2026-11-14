@@ -1,5 +1,5 @@
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-account-preference'
 import type { PtyPaneStartup } from './pty-connection/startup/pty-pane-startup'
 import {
@@ -21,8 +21,8 @@ export function startPaneOnActiveClaudeAccount(input: {
     restartPane: input.restartPane,
     // Why no tab close: the old tab may hold live split siblings.
     openNewTab: () =>
-      launchAgentInNewTab({
-        requestId: newAgentLaunchRequestId(),
+      launchAgentInNewTabWithOutcome({
+        requestId: createNonSecureContextUuid(),
         agent: 'claude',
         worktreeId: input.worktreeId,
         claudeAccountId: ACTIVE_CLAUDE_ACCOUNT,

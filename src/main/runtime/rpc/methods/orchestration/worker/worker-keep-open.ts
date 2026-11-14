@@ -4,12 +4,12 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { keptOpenStopRefusal } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
-import { callFederatedWorkerShow } from './worker-observation'
+import { callFederatedWorkerShow } from './observation/worker-observation'
 import { resolveStructuredWorkerIdentityForSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
   OrchestrationWorkerKeepOpenParams,
   OrchestrationWorkerSubjectParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-release-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-params'
 
 export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
   defineOrchestrationMethod({

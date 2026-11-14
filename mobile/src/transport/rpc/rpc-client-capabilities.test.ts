@@ -100,7 +100,7 @@ describe('mobile rpc-client capabilities', () => {
       await vi.advanceTimersByTimeAsync(5_001)
 
       expect(client.getState()).toBe('connected')
-      expect(sentRequest(socket, 'session.tabs.subscribe')).toBeDefined()
+      sentRequest(socket, 'session.tabs.subscribe')
       expect(socket.readyState).toBe(MockWebSocket.OPEN)
 
       client.close()

@@ -8,7 +8,7 @@ import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {

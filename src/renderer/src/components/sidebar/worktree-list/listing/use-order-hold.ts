@@ -3,8 +3,8 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-in
 import {
   withHeldProjectRecency,
   type SidebarFeedIndex
-} from '../../../../../../shared/sidebar-list/sidebar-feed-index'
-import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+} from '../../../../../../shared/sidebar-list/feed/sidebar-feed-index'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import { mergeHeldOrder } from './held-order'
 

@@ -48,7 +48,7 @@ import {
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { claudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
+import { claudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
   runtimeHiddenRepos,
@@ -67,10 +67,16 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     () => this._orchestrationDb
   )
 
+  /** The task each pane was dispatched, by pane key, as `worktree.ps` rows title it. */
+  listAgentTasksByPaneKey() {
+    return this.agentOrchestrationProjection.buildByPaneKey() ?? {}
+  }
+
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true,
-    includeAgentWait = false
+    includeAgentWait = false,
+    worktreeId?: string
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
@@ -80,13 +86,12 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       sourceDefaultsSupported
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
-    const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
-      platformByRepoId
+      platformByRepoId,
+      worktreeId
     })
-
     const getSummary = createRuntimeWorktreePsSummaryLookup(
       summaries,
       buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
@@ -116,7 +121,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
         summaries,
-        repoById,
+        repoById: new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo])),
         ptysById: this.ptysById,
         tabs: this.tabs,
         paneOf: (pty) => this.paneOfPty(pty),
@@ -139,10 +144,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       agentList: this.readAgentListPublication()
     })
 
-    const sorted = [...summaries.values()].sort(compareWorktreePs)
     // Apply per-host pagination so hosts sorting last cannot disappear behind a global cap (#18104).
     const page = buildWorktreeListingPage(
-      sorted,
+      [...summaries.values()].sort(compareWorktreePs),
       limit,
       withoutHiddenHosts(this.listKnownExecutionHostIds(), runtimeHiddenHostIds(this.store))
     )
@@ -176,7 +180,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
             ? sourceMatchersByRepoId.get(getRepoHostIdentityForParts(worktree.repoId, owner.hostId))
             : undefined,
           sourceDefaultsSupported,
-          visibilitySettings
+          visibilitySettings,
+          repoOwners
         )
       })
     }
@@ -298,13 +303,16 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
           readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
         isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
         // The same contexts the session's chat row carries.
-        readOrchestration: (paneKey) =>
-          this.agentOrchestrationProjection.buildByPaneKey()?.[paneKey],
+        readOrchestration: (paneKey) => this.agentOrchestrationProjection.getForPaneKey(paneKey),
         dispatch: (event) => this.mobileNotifications.dispatch(event),
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
-      onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
+      createTurnAttention: () =>
+        chatWorkerTurnStopReporter({
+          ...this.workerTurnStopReportDeps,
+          openExistingDb: () => this.getExistingOrchestrationDb()
+        }),
       // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)

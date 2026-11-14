@@ -51,7 +51,12 @@ export function harness(options: {
   )
   const createFolderWorkspace = vi.fn(async (_args: { create: Record<string, unknown> }) => {
     calls.push('createFolderWorkspace')
-    return { worktreeId: 'folder:fw-new', workspacePath: '/repo/task', connectionId: null }
+    return {
+      worktreeId: 'folder:fw-new',
+      workspacePath: '/repo/task',
+      connectionId: null,
+      startupTerminalHandle: undefined
+    }
   })
   const createRecoveryShell = vi.fn(async (_worktreeId: string) => {
     calls.push('createRecoveryShell')

@@ -22,7 +22,7 @@ vi.mock('../wsl/discovery/distro-catalog', () => ({
   getDefaultWslDistro: () => null,
   getWslHome: () => null
 }))
-vi.mock('./claude-profile-router', () => ({
+vi.mock('./profiles/routing/claude-profile-router', () => ({
   ClaudeProfileRouter: function ClaudeProfileRouter() {
     return fakes.host
   }
@@ -30,7 +30,7 @@ vi.mock('./claude-profile-router', () => ({
 vi.mock('./claude-pinned-account-launch', () => ({
   prepareClaudePinnedAccountLaunch: fakes.prepareClaudePinnedAccountLaunch
 }))
-vi.mock('./claude-profile-installed-router', () => ({
+vi.mock('./profiles/routing/claude-profile-installed-router', () => ({
   installClaudeObservedConfigDirs: () => {},
   installClaudeProfileRouter: () => {},
   installClaudeWslProfileRouter: () => {}

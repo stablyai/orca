@@ -1,20 +1,23 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
-import { probeGitAvailability } from '../../git/git-availability'
-import { gitExecFileAsync } from '../../git/runner'
-import { inspectGitRepoForRegistrationAsync } from '../../git/repo'
-import { getClonePathComparisonKey, getSavedProjectPathKeys } from '../../git/repo-clone-path'
-import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { probeGitAvailability } from '../../git/command-runner/host-routing/git-availability'
+import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
+import {
+  getClonePathComparisonKey,
+  getSavedProjectPathKeys
+} from '../../git/repositories/cloning/repo-clone-path'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { repoCreateFailure, type RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
@@ -51,7 +54,11 @@ function getDefaultCreateProjectParent(store: Store): string {
   return join(home, 'orca', 'projects')
 }
 
-export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerRepoCreationHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
+): void {
   ipcMain.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
   ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent(store))
 
@@ -70,6 +77,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
+      enqueueMetadata([result.repo])
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
       return { repo: result.repo }
     }
@@ -222,7 +230,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         repoKind === 'git'
           ? (await inspectGitRepoForRegistrationAsync(targetPath)).rootPath
           : targetPath
-      const detected = await detectRepoIconAndUpstream({
+      const detected = await detectRepoLocalMetadata({
         repoPath,
         kind: repoKind,
         executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -244,6 +252,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       store.addRepo(repo)
+      enqueueMetadata([repo])
       await prepareLocalWorktreeRootForRepo(store, repo)
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)

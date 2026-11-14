@@ -6,7 +6,7 @@ import {
   _internals as pinnedRegistryInternals,
   getPinnedClaudeAccountIdForPty
 } from '../claude-accounts/claude-pinned-pty-registry'
-import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth/runtime-auth-types'
 import type { Store } from '../persistence/loading-store/store'
 import {
   ACTIVE_CLAUDE_ACCOUNT,
@@ -23,7 +23,7 @@ vi.mock('node-pty', () => import('./pty/pty-ipc-mock-registry').then((m) => m.no
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty/pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
-vi.mock('../opencode/hook-service', () =>
+vi.mock('../opencode/status-hooks/hook-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../mimo/hook-service', () =>
@@ -32,7 +32,7 @@ vi.mock('../mimo/hook-service', () =>
 vi.mock('../agent-hooks/server/agent-hook-server', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
-vi.mock('../pi/titlebar-extension-service', () =>
+vi.mock('../pi/managed-extensions/titlebar-extension-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
 vi.mock('../pty/shell-startup/pwsh', () =>
@@ -47,7 +47,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/launchers/linux-terminal-orca-cli-shim', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>

@@ -62,11 +62,10 @@ Tasks cover explicit text targeting with another field logically focused, Unicod
 entry plus submit, select-all replacement plus submit, and color choice plus one
 click. Interference probes remain separate from task latency comparisons.
 
-Explicit-target typing is a native capability probe. Orca's public CLI/RPC currently
-accepts typing at the focused field and does not expose an element target for text.
-Failure of this probe identifies a capability to consider adding; it does not prove
-a violation of the current public typing contract. Click-then-type tasks exercise
-the existing sequence, although this benchmark still bypasses public transports.
+Explicit-target typing is a native capability probe. Orca's public CLI/RPC accepts
+an element target for text (`type-text --element-index`) on providers that report
+`actions.typeTextElement` (macOS, Linux and Windows). Click-then-type tasks send no element with the text, like `type-text`
+without the index, although this benchmark still bypasses public transports.
 
 The Linux Electron job also records restoration stages in `focus-probe/results.json`.
 It records the AT-SPI focus acknowledgment, selected ACTIVE state, manual legacy PID
@@ -81,15 +80,6 @@ AT-SPI ACTIVE is the runtime's focus authority. Global input can still race a la
 focus change, and singleton accessibility/native counts do not establish an atomic
 identity mapping if a window closes or the accessibility tree is stale. The probe
 covers stable fixtures and detected ambiguity, not those concurrent lifecycle races.
-
-## Headless contract checks
-
-```sh
-ORCA_BACKGROUND_LAUNCH=1 python3 -m unittest discover -s config/benchmarks/computer-use -p 'test_*.py'
-```
-
-These checks protect the historical false-success cases and process-tree cleanup.
-They do not import desktop observers or generate native input.
 
 Transports, fixtures and observers were adapted from the historical
 `bench/computer-cua` prototype at `68a68ccf0f16c0a7f952d55adfe21850247b8ee9`.

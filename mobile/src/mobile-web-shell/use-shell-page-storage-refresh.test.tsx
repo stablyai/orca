@@ -11,7 +11,6 @@ import {
   writeMirroredStorage
 } from '../storage/mirrored-storage-keys'
 
-import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
 import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness'
 
 const store = vi.hoisted(() => ({
@@ -53,7 +52,7 @@ beforeEach(() => {
   store.pending.length = 0
 })
 
-it.each(TERMINAL_SHORTCUT_STORAGE_KEYS)(
+it.each(['orca:terminal-accessory-layout'])(
   'publishes the final queued native save for %s, only while focused',
   async (key) => {
     focus.active = false

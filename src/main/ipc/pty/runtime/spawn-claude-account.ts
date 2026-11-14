@@ -1,4 +1,4 @@
-import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
+import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { isClaudeLaunchCommand } from '../host-env/fresh-spawn-routing'
 import {
   isFreshClaudeLaunch,

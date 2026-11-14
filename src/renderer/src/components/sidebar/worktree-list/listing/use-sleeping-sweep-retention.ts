@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
+import { hasActiveWorkspaceActivity } from '@/lib/workspace/activity/worktree-activity-state'
 import { recomputeOn } from '@/lib/recompute-on'
-import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
 import {
   cloneSleepingSweepRetentionState,
   createSleepingSweepRetentionState,
   updateSleepingSweepRetention
-} from '../../../../../../shared/sidebar-list/sleeping-sweep-retention'
+} from '../../../../../../shared/sidebar-list/selection/sleeping-sweep-retention'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
 
 type SweepActivityInputs = Pick<
   VisibleWorktreeOptions,

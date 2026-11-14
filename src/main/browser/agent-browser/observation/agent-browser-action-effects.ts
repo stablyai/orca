@@ -7,6 +7,7 @@ import type { BrowserPageEvent } from '../../guest-lifecycle/page-activity/brows
 import { readRemoteCliAdmittedPage } from '../../routing/input-ownership/remote-cli-page-admission'
 import { readPageChange } from './agent-browser-snapshot-delta'
 import { isLoadingMainFrame } from '../commands/agent-browser-navigation-settle'
+import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
 
 // Settle like ChatGPT's browser: wait for a started navigation, then for a short DOM-quiet window.
 const NAVIGATION_START_GRACE_MS = 50
@@ -170,6 +171,7 @@ async function settle(
     if (loadError && loadError !== start.loadError) {
       effects.loadError = clip(loadError)
     }
+    effects.passkeyRequest = getBrowserPasskeyRequest(current.id)
   }
 
   if (effects.page === undefined) {
@@ -188,6 +190,10 @@ async function settle(
         : []
     )
   )
+  const print = events.find((event) => event.kind === 'print')
+  if (print) {
+    effects.blockedPrint = { origin: clip(print.origin) }
+  }
   effects.consoleErrors = firstItems(watch.consoleErrors.map((error) => clip(error)))
   return effects
 }

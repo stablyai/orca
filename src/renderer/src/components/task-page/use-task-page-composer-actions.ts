@@ -1,9 +1,10 @@
-import type { TaskPageJiraListEffectsModel } from './jira/use-task-page-jira-list-effects'
+import type { TaskPageJiraListEffectsModel } from './jira/listing/use-task-page-jira-list-effects'
 import { useCallback } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
-import { buildLinearIssueLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
+
+import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
 import { useAppStore } from '@/store'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/work-items/linear/linear-issue-workspace-open'
@@ -62,7 +63,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   // Linear string IDs need the provider-generic numeric placeholder 0.
   const openComposerForLinearItem = useCallback(
     (issue: LinearIssue): void => {
-      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue)
+      const linkedWorkItem = buildLinearWorkspaceSource(issue)
       openModal('new-workspace-composer', {
         linkedWorkItem,
         taskSourceContext: linearTaskSourceContext,

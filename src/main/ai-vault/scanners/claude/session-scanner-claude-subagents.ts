@@ -15,19 +15,20 @@ import {
   wslGatedReaddir,
   wslGatedReadFile,
   wslGatedStat
-} from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { recordSessionScanIssue, scanIssueTextFromError } from '../../session-scan-issues'
-import { sessionIdFromFileName, sessionSortTime } from '../../session-scanner-accumulator'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
+import { recordSessionScanIssue, scanIssueTextFromError } from '../../parsing/session-scan-issues'
+import { sessionIdFromFileName, sessionSortTime } from '../../parsing/session-scanner-accumulator'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import {
   isSubagentTranscriptFileName,
   subagentTranscriptsDirFor,
   SUBAGENT_TRANSCRIPT_PREFIX
 } from './session-scanner-subagent-transcripts'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 // Without a terminal report, old transcripts have unknown status rather than remaining running.
 const SUBAGENT_RUNNING_RECENCY_MS = 5 * 60_000

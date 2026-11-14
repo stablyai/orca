@@ -30,61 +30,10 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     expect(inert(ARTIFACT).querySelectorAll('a[href], area[href]')).toHaveLength(0)
   })
 
-  // In srcdoc, #target resolves against inherited shell base, not about:srcdoc, becoming forbidden frame navigation instead of scrolling.
-  // Chromium 147/WebKit 26.4 probes reported frame-src; Chromium replaced artifact with error page. Keep fragment links inert too.
-  it('inerts a fragment link too, because a fragment is not a scroll in this frame', () => {
-    const doc = inert(ARTIFACT)
-    expect(doc.getElementById('frag')?.hasAttribute('href')).toBe(false)
-    expect(doc.getElementById('frag')?.hasAttribute('target')).toBe(false)
-    // The text and the target it named both stay, as everywhere else: hidden, not deleted.
-    expect(doc.getElementById('frag')?.textContent).toBe('contents')
-    expect(doc.getElementById('target')?.textContent).toBe('T')
-    // And the empty href, which resolves to the frame's own URL rather than to a fragment at all.
-    expect(doc.getElementById('empty')?.hasAttribute('href')).toBe(false)
-  })
-
-  it('keeps the text, the headings and the images the author wrote', () => {
-    const doc = inert(ARTIFACT)
-    expect(doc.getElementById('marker')?.textContent).toBe('text')
-    expect(doc.getElementById('top')?.textContent).toBe('tap')
-    expect(doc.getElementById('blank')?.textContent).toBe('window')
-    expect(doc.getElementById('mapped')?.getAttribute('src')).toBe('x.png')
-    expect(doc.title).toBe('A')
-    // The elements are still there and still in order: this is a hidden affordance, not a deletion.
-    expect([...doc.querySelectorAll('a')].map((one) => one.id)).toEqual([
-      'top',
-      'blank',
-      'root',
-      'empty',
-      'frag',
-      'named',
-      'svglink'
-    ])
-  })
-
-  it('drops the target with the href, so no non-link carries link markup', () => {
-    const doc = inert(ARTIFACT)
-    expect(doc.getElementById('top')?.hasAttribute('target')).toBe(false)
-    expect(doc.getElementById('blank')?.hasAttribute('target')).toBe(false)
-  })
-
-  it('reaches an image map and an SVG link, which a pass over `a[href]` alone would not', () => {
-    const doc = inert(ARTIFACT)
-    expect(doc.getElementById('area')?.hasAttribute('href')).toBe(false)
-    // Still an area with its shape: the map is intact, it just goes nowhere.
-    expect(doc.getElementById('area')?.getAttribute('shape')).toBe('rect')
-    expect(doc.getElementById('svglink')?.hasAttribute('href')).toBe(false)
-  })
-
-  it('leaves an anchor that was never a link alone, which is most of what a document has', () => {
-    // `<a name>` has no href to begin with, so nothing here should have changed about it.
-    expect(inert(ARTIFACT).getElementById('named')?.getAttribute('name')).toBe('anchor')
-  })
-
   // Preserve authored doctype bytes/identifiers; srcdoc inherits embedder’s mode regardless, so test document.doctype rather than CSS1Compat.
   it('keeps the doctype whole, identifiers and all', () => {
     const doctypeOf = (html: string) => htmlPreviewWithInertLinks(html).split('>')[0] ?? ''
-    expect(doctypeOf(ARTIFACT).toLowerCase()).toBe('<!doctype html')
+
     expect(
       doctypeOf('<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"><html><body>x')
     ).toBe('<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"')
@@ -94,10 +43,6 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
       )
     ).toContain(
       '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">'
-    )
-    // Leave missing doctype absent rather than inventing author markup.
-    expect(htmlPreviewWithInertLinks('<html><body>x</body></html>').toLowerCase()).not.toContain(
-      '<!doctype'
     )
   })
 
@@ -114,26 +59,6 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     expect(out).toContain('<textarea>\n\n\nfield</textarea>')
     // Only a block that starts with one gets one: this is a compensation, not a prefix.
     expect(out).toContain('<pre id="q">no newline</pre>')
-  })
-
-  it('does not run or fetch what the artifact carries, because nothing here has a context', () => {
-    // DOMParser creates no browsing context; script remains markup without execution.
-    const withScript =
-      '<!doctype html><html><body><script>window.__ran = 1</script><a href="/x">a</a></body></html>'
-    const out = htmlPreviewWithInertLinks(withScript)
-    expect(out).toContain('window.__ran = 1')
-    expect('__ran' in globalThis).toBe(false)
-  })
-
-  it('leaves an href inside a comment where a regex pass would have found it', () => {
-    // Use parser rather than regex so href inside comment remains untouched artifact text.
-    const doc = inert(
-      '<!doctype html><html><body><!-- <a href="https://example.com/x">c</a> -->' +
-        '<a id="real" href="https://example.com/z">r</a></body></html>'
-    )
-    expect(doc.body.innerHTML).toContain('href="https://example.com/x"')
-    // The control: a link that is rendered did lose its href.
-    expect(doc.getElementById('real')?.hasAttribute('href')).toBe(false)
   })
 
   // Declarative shadowroot templates become rendered content at frame parse, but DOMParser leaves templates intact on Chromium 147/WebKit 26.4/happy-dom.

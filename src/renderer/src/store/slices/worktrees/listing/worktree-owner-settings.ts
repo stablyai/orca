@@ -1,5 +1,5 @@
 import { tryRuntimeTargetForWorktreeOwner } from './worktree-owner-target'
-import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
+import { warnAmbiguousOwnerOnce } from '@/lib/workspace/ownership/ambiguous-owner-warning'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '../../../types'
@@ -37,9 +37,10 @@ export function persistPassiveWorktreeMetaForOwner(
   get: WorktreeSliceGet,
   worktreeId: string,
   updates: Partial<WorktreeMeta>,
-  errorLabel: string
+  errorLabel: string,
+  executionHostId?: ExecutionHostId
 ): void {
-  const ownerTarget = tryRuntimeTargetForWorktreeOwner(get(), worktreeId)
+  const ownerTarget = tryRuntimeTargetForWorktreeOwner(get(), worktreeId, executionHostId)
   if (!ownerTarget) {
     warnAmbiguousOwnerOnce(worktreeId, errorLabel)
     return

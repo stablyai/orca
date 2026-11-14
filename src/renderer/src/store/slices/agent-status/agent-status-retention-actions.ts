@@ -3,6 +3,7 @@ import type { RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
+import { retainedAgentExecutionHost } from './retained-agent-execution-host'
 import { capRetainedAgents } from './agent-status-capacity-eviction'
 
 export function createAgentStatusRetentionActions(
@@ -43,8 +44,11 @@ export function createAgentStatusRetentionActions(
             mergedOrchestration !== retained.entry.orchestration
               ? { ...retained.entry, orchestration: mergedOrchestration }
               : retained.entry
+          const executionHostId = retainedAgentExecutionHost(s, retained)
           next[retained.entry.paneKey] =
-            entry === retained.entry ? retained : { ...retained, entry }
+            entry === retained.entry && executionHostId === retained.executionHostId
+              ? retained
+              : { ...retained, entry, executionHostId }
         }
         return { retainedAgentsByPaneKey: capRetainedAgents(next) }
       })

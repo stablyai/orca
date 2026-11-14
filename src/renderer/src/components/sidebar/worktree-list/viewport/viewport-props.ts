@@ -21,7 +21,7 @@ import type {
 } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type {
@@ -77,6 +77,9 @@ export type VirtualizedWorktreeViewportProps = {
   folderWorkspaces: readonly FolderWorkspace[]
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
+  focusedWorktree?: Worktree | null
+  focusedWorkspaceExecutionHostId?: ExecutionHostId | null
+  onKeyboardSelect?: (worktree: Worktree) => void
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onImmediateWorktreeActivate: (worktreeId: string, rowKey: string | undefined) => void
   onContextMenuSelect: (

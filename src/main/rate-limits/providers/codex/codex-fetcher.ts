@@ -27,7 +27,7 @@ import { getMainHttpClient } from '../../../network/http-client'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import {
   fetchCodexRateLimitsViaBackend,
-  supplementCodexSessionWindow
+  supplementCodexUsageWindows
 } from './codex-backend-usage-client'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 import { abortedCodexRateLimitResult } from './codex-rate-limit-fetch-result'
@@ -132,8 +132,8 @@ async function supplementBackendMetadata(
   limits: ProviderRateLimits,
   options?: CodexRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
-  const withSession = await supplementCodexSessionWindow(limits, requestCodexBackend, options)
-  return supplementCodexRateLimitResetCredits(withSession, requestCodexBackend, options)
+  const withWindows = await supplementCodexUsageWindows(limits, requestCodexBackend, options)
+  return supplementCodexRateLimitResetCredits(withWindows, requestCodexBackend, options)
 }
 
 function codexUnavailable(error: string, status: 'error' | 'unavailable'): ProviderRateLimits {

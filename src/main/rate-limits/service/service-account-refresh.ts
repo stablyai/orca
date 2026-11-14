@@ -8,8 +8,9 @@ import {
 import {
   normalizeClaudeAccountSelectionTarget,
   type ClaudeAccountSelectionTarget
-} from '../../claude-accounts/runtime-selection'
+} from '../../claude-accounts/selection/runtime-selection'
 import type {
+  ProviderRateLimits,
   RateLimitRuntimeTarget,
   RateLimitState,
   CodexRateLimitResetResult
@@ -27,6 +28,64 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     const plan = this.getActiveWindowRefreshPlan(Date.now())
     await this.runActiveWindowRefreshPlan(plan)
     return this.getState()
+  }
+
+  /** The home and auth provenance the selected host-runtime reading was taken under. */
+  usageReadingAccount(provider: 'claude' | 'codex'): { home: string; provenance: string } | null {
+    return this.usageReadingAccounts[provider] ?? null
+  }
+
+  /** One provider's applied reading, without the snapshot work `getState` does. */
+  usageReading(provider: 'claude' | 'codex'): ProviderRateLimits | null {
+    return this.state[provider]
+  }
+
+  /** When an automatic read of each provider was last admitted, and which account's reading
+   *  source the service held then; it counts only for that account. */
+  private readonly automaticReadingAt: Partial<
+    Record<
+      'claude' | 'codex',
+      { at: number; source: { home: string; provenance: string } | undefined }
+    >
+  > = {}
+
+  /** An automatic, non-forced read of one provider's selected account. It waits out Retry-After
+   *  and the failure backoff the poller keeps; with `notWithinMs` it also waits while a reading
+   *  or an admitted automatic read of that account is that recent, however many callers ask.
+   *  Returns whether it started a read. */
+  requestUsageReading(
+    provider: 'claude' | 'codex',
+    options: { notWithinMs?: number } = {}
+  ): boolean {
+    if (provider === 'claude' && !this.isClaudeOAuthUsageEnabled()) {
+      return false
+    }
+    const limits = this.state[provider]
+    const now = Date.now()
+    if (this.isFetching || this.isRetryAfterActive(limits)) {
+      return false
+    }
+    if (limits?.status === 'error' && !this.failureRetryDue(provider, now)) {
+      return false
+    }
+    if (options.notWithinMs !== undefined) {
+      const checkedAt = limits?.status === 'ok' ? this.providerCheckedAt(provider, limits) : null
+      const admitted = this.automaticReadingAt[provider]
+      // After a switch, another account's read says nothing about this one.
+      const sameAccount = admitted?.source === this.usageReadingAccounts[provider]
+      const last = Math.max(
+        (sameAccount && admitted?.at) || Number.NEGATIVE_INFINITY,
+        checkedAt ?? Number.NEGATIVE_INFINITY
+      )
+      if (now - last < options.notWithinMs) {
+        return false
+      }
+    }
+    this.automaticReadingAt[provider] = { at: now, source: this.usageReadingAccounts[provider] }
+    // Starts the failure clock as the poller's own retries do.
+    this.lastActiveFailureRetryAtByProvider[provider] = now
+    void (provider === 'claude' ? this.fetchClaudeOnly() : this.fetchCodexOnly()).catch(() => {})
+    return true
   }
 
   async refreshGrok(): Promise<RateLimitState> {
@@ -78,10 +137,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
-    // Weekly-only plans still need outgoing switcher snapshots.
+    // Weekly-only and monthly-only plans still need outgoing switcher snapshots.
     if (
       outgoingAccountId &&
-      (this.state.codex?.session || this.state.codex?.weekly) &&
+      this.state.codex &&
+      hasUsageWindows(this.state.codex) &&
       this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     ) {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)
@@ -174,6 +234,8 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.activeFailureStreakByProvider.claude = 0
     // Outgoing statusline posts must not land on the incoming account during the switch.
     this.lastClaudeAuthSnapshot = null
+    this.liveClaudeUsage = null
+    this.usageReadingAccounts.claude = undefined
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
@@ -193,6 +255,8 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     if (targetChanged) {
       // Outgoing target posts must not land on the incoming target during the switch.
       this.lastClaudeAuthSnapshot = null
+      this.liveClaudeUsage = null
+      this.usageReadingAccounts.claude = undefined
     }
     this.updateState({
       ...this.state,

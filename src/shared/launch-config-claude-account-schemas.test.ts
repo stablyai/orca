@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { parseWorkspaceSession } from './workspace-session/workspace-session-schema'
-import { TerminalCreateParams } from './rpc-contract/terminal-unary-params'
+import { TerminalCreateParams } from './rpc-contract/terminal/terminal-unary-params'
 import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
-} from './rpc-contract/agent-session-params'
+} from './rpc-contract/terminal/agent-session-params'
 import { buildSleepingAgentLaunchConfig } from './agent-session/lifecycle/sleeping-agent-launch-config'
 import { ACTIVE_CLAUDE_ACCOUNT } from './claude/project-claude-account-preference'
 

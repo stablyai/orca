@@ -1,10 +1,11 @@
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import { createLiveAgentWorktreeIdsSelector } from '@/lib/worktree-activity-state'
+import { createLiveAgentWorktreeIdsSelector } from '@/lib/workspace/activity/worktree-activity-state'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -19,7 +20,7 @@ import {
   getVisibleWorktreeTerminalActivityTabs,
   getStructuredChatWorktreeIds
 } from './visible-worktree-activity-inputs'
-import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'
@@ -80,6 +81,7 @@ export function useVisibleSidebarWorktrees(args: {
     workspaceHostScope
   } = filterState
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const repos = useAppStore((s) => s.repos)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   // Opt-out lists must skip the clock so they cannot evict the sample shared by live lists.
   const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
@@ -142,6 +144,7 @@ export function useVisibleSidebarWorktrees(args: {
       pairedDeviceIdsByEnvironment,
       alwaysShowDefaultBranchWorkspace,
       repoMap,
+      hiddenProjects: indexHiddenProjects(repos, defaultHostId),
       workspaceHostScope,
       visibleWorkspaceHostIds,
       defaultHostId,
@@ -172,6 +175,7 @@ export function useVisibleSidebarWorktrees(args: {
     visibleWorkspaceHostIds,
     defaultHostId,
     repoMap,
+    repos,
     tabsByWorktree,
     ptyIdsByTabId,
     browserTabsByWorktree,

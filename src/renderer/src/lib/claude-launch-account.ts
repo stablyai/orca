@@ -1,4 +1,4 @@
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { createNonSecureContextUuid } from '../../../shared/non-secure-context-uuid'
 import type { LaunchAgentInNewTabArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import type { Repo } from '../../../shared/repo-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -88,7 +88,7 @@ export function relaunchWithClaudeAccount(
   return (override) => {
     launch({
       ...args,
-      requestId: newAgentLaunchRequestId(),
+      requestId: createNonSecureContextUuid(),
       agentSessionLaunchPlan: undefined,
       ...(override ? { claudeAccountId: override } : {})
     })

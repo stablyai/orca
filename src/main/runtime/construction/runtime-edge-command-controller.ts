@@ -6,7 +6,7 @@ import { RuntimeEmulatorCommands } from '../emulator/runtime-emulator-commands'
 import { RuntimeBrowserScreencastController } from '../browser/screencast/runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from '../browser/installation/runtime-browser-commands-factory'
 import { RuntimeJiraCommands } from '../integrations/jira/runtime-jira-commands'
-import type { RpcBinarySender } from '../rpc/rpc-binary-sender'
+import type { RpcBinarySender } from '../rpc/transports/rpc-binary-sender'
 
 type PublicMethods<T> = Pick<T, keyof T>
 type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreencast'> & {
@@ -47,6 +47,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserProceedCertificate',
   'browserTabShow',
   'browserTabCurrent',
+  'browserTabAnnotations',
   'browserTabSwitch',
   'browserHover',
   'browserDrag',

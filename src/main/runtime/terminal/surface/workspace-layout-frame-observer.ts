@@ -1,9 +1,9 @@
 // Tests check every records frame against a fresh projection and freeze partition reads; development logs structural frame mismatches, while release builds do neither.
 
 import { logLayoutFrameModelErrors } from './workspace-layout-frame-model-check'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
-import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-published'
-import type { WorkspaceLayoutRecordsFrame } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
+import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
+import type { WorkspaceLayoutRecordsFrame } from '../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
 export type LayoutFrameObservation = {
   frame: WorkspaceLayoutRecordsFrame

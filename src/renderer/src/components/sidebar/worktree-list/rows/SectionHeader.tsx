@@ -10,10 +10,6 @@ import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 
-import {
-  type FolderWorkspacePathStatus,
-  isConfirmedStaleFolderPathStatus
-} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import '@/store/project-groups/project-group-owner-routing'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
@@ -21,9 +17,10 @@ import {
   isSingleHostProjectHeader,
   type GroupHeaderRow
 } from '../../../../../../shared/sidebar-list/row-types'
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
+import { translateWorkspaceStatusHeaderLabel } from '../../workspace-board-status-label'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
@@ -32,7 +29,10 @@ import {
   getProjectGroupHeaderPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT
 } from './indentation'
-import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
+import {
+  FolderPathStatusIndicator,
+  isFolderWorkspaceCreateDisabled
+} from './FolderPathStatusIndicator'
 import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
 import {
   ProjectGroupCreateWorkspaceButton,
@@ -50,14 +50,6 @@ import {
 import { getWorktreeOptionId } from './option-dom'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { Translate } from '@/i18n/use-translate'
-
-// The folder-scan project group whose parent path is gone can't create new workspaces.
-function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
-  return (
-    status?.exists === false &&
-    (isConfirmedStaleFolderPathStatus(status) || status.reason === 'ambiguous-connection')
-  )
-}
 
 export function renderWorktreeSectionHeaderRow(
   args: {
@@ -143,7 +135,10 @@ export function renderWorktreeSectionHeaderRow(
       : null
   const isPinnedHeader = row.key === PINNED_GROUP_KEY
   const headerVisual = getSidebarHeaderVisual(row.icon, ctx.workspaceStatuses, t)
-  const label = row.label ?? headerVisual.label ?? ''
+  const label = translateWorkspaceStatusHeaderLabel(
+    headerWorkspaceStatus,
+    row.label ?? headerVisual.label ?? ''
+  )
   const hostContext =
     ctx.groupBy === 'repo' ? ctx.projectHeaderHostContexts?.get(row.key) : undefined
   const repoHeaderColor = resolveProjectGroupHeaderColor({
@@ -387,6 +382,7 @@ export function renderWorktreeSectionHeaderRow(
             {row.repo && ctx.groupBy === 'repo' ? (
               <RepoHeaderProjectActionsMenu
                 repo={row.repo}
+                hostRepos={row.hostRepos}
                 label={label}
                 projectGroups={ctx.projectGroups}
                 actions={ctx.projectActions}

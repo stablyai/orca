@@ -7,6 +7,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { renderClaudeAccountsSection } from './accounts/claude/accounts-pane-claude-section'
+import { TooltipProvider } from '../ui/tooltip'
 import type { AccountsPaneSectionModel } from './accounts/accounts-pane-types'
 
 function buildModel(updateSettings: AccountsPaneSectionModel['updateSettings']) {
@@ -70,7 +71,9 @@ describe('Claude accounts section ask-per-project setting', () => {
     document.body.appendChild(container)
     const root = createRoot(container)
     await act(async () => {
-      root.render(renderClaudeAccountsSection(buildModel(updateSettings)))
+      root.render(
+        <TooltipProvider>{renderClaudeAccountsSection(buildModel(updateSettings))}</TooltipProvider>
+      )
     })
 
     const switchButton = container.querySelector<HTMLButtonElement>(

@@ -1,14 +1,16 @@
+import { useMemo } from 'react'
 import { ChevronDown, Server } from 'lucide-react'
 import type { NotificationSourceId } from '../../../../../shared/notification-source'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
-import { Separator } from '../../ui/separator'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { useNotificationSourceOptions } from './use-notification-source-options'
 import { pickerExecutionHosts } from '../../../../../shared/execution-host/managed-orcad-execution-host'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
 import { useBoundedHostRows } from '../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../host-picker/HostListOverflowNote'
+import { SETTINGS_GROUP_NESTED_INSET_CLASS } from '../section-layout/SettingsGroup'
 
 type NotificationHostTogglesProps = {
   mutedNotificationSourceIds: readonly NotificationSourceId[]
@@ -23,7 +25,15 @@ export function NotificationHostToggles({
   onChange
 }: NotificationHostTogglesProps): React.JSX.Element | null {
   const t = useTranslate()
-  const hostOptions = pickerExecutionHosts(useNotificationSourceOptions())
+  const sourceOptions = useNotificationSourceOptions()
+  const hostOptions = useMemo(
+    () =>
+      pickerExecutionHosts(sourceOptions).map((host) => ({
+        ...host,
+        searchText: translateHostDisplayLabel(host, t)
+      })),
+    [sourceOptions, t]
+  )
   const mutedSourceIds = new Set(mutedNotificationSourceIds)
   const isMuted = (host: (typeof hostOptions)[number]): boolean =>
     [host.id, ...(host.aliasHostIds ?? [])].some((id) => mutedSourceIds.has(id))
@@ -36,10 +46,11 @@ export function NotificationHostToggles({
     return null
   }
   return (
-    <>
-      <Separator />
+    // One row: the host switches inside it are sub-fields, so they draw no rules of their own.
+    // The trigger is a row too so this wrapper never flips into leaf-row padding when hosts mount.
+    <div data-settings-row="">
       <Collapsible>
-        <CollapsibleTrigger variant="row">
+        <CollapsibleTrigger variant="row" data-settings-row="">
           <span className="min-w-0 space-y-0.5">
             <span className="flex items-center gap-2">
               <Server className="size-4" />
@@ -64,14 +75,14 @@ export function NotificationHostToggles({
           </span>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="ml-4">
+          <div className={SETTINGS_GROUP_NESTED_INSET_CLASS}>
             {rows.searchable ? (
               <HostListSearchField value={rows.query} onChange={rows.setQuery} />
             ) : null}
             {rows.shown.map((host) => (
               <NotificationSettingToggle
                 key={host.id}
-                label={host.label}
+                label={translateHostDisplayLabel(host, t)}
                 description={host.detail}
                 checked={!isMuted(host)}
                 disabled={disabled}
@@ -82,6 +93,6 @@ export function NotificationHostToggles({
           </div>
         </CollapsibleContent>
       </Collapsible>
-    </>
+    </div>
   )
 }

@@ -1,14 +1,15 @@
 import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import { getOptionalStringFlag, getPresentStringFlag } from '../flags'
-import type { RuntimeClient } from '../runtime-client'
+import { getOptionalStringFlag, getPresentStringFlag } from '../arguments/flags'
+import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/types'
-import { assertLocalCwdWorktreeSelector } from '../local-environment-selector'
+import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import {
   getBrowserWorktreeSelector,
   normalizeWorktreeSelectorForCaller,
   resolveCurrentWorktreeSelector
-} from '../selectors'
+} from '../workspace-selection/workspace-selector'
 
 type BrowserCliTarget = {
   worktree?: string
@@ -46,6 +47,31 @@ async function getEnforceableExpectUrl(
   return expectUrl
 }
 
+/** A paired server's fallback is the tab a person is looking at, so a remote command must name its target. */
+export async function getScopedBrowserWorktreeSelector(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<string | undefined> {
+  const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+  if (worktree === undefined && client.isRemote) {
+    const environment = client.environmentSelector
+    const remote = environment
+      ? ` --environment ${quoteCliCommandArgument(environment)}`
+      : ' --pairing-code <the same code>'
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Remote browser commands need --page <browserPageId> or a server-side --worktree <selector> (not `all`); without one they would act on the tab the user is looking at. Nothing was sent.',
+      {
+        nextSteps: [
+          `Find the page with \`orca tab list${remote} --json\` and pass its browserPageId as --page.`
+        ]
+      }
+    )
+  }
+  return worktree
+}
+
 async function getBrowserPageTarget(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -53,7 +79,7 @@ async function getBrowserPageTarget(
 ): Promise<BrowserCliTarget> {
   const page = getOptionalStringFlag(flags, 'page')
   if (!page) {
-    return { worktree: await getBrowserWorktreeSelector(flags, cwd, client) }
+    return { worktree: await getScopedBrowserWorktreeSelector(flags, cwd, client) }
   }
 
   const explicitWorktree = getOptionalStringFlag(flags, 'worktree')

@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto'
 import { resolveHookCommandSourcePolicy } from '../../shared/hook-command-source-policy'
 import { getSetupTrustContent } from '../../shared/orca-hook-setup-config'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
-import type { Repo } from '../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../shared/workspace-hook-owner'
 import type { SetupDecision, SetupTrustMismatch } from '../../shared/worktree/create-types'
-import type { ApprovedSetupHashes } from '../../shared/worktree/approved-setup-hashes'
-import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/launch-types'
+import type { ApprovedSetupHashes } from '../../shared/worktree/creation/approved-setup-hashes'
+import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/creation/launch-types'
 import { shouldRunSetupForCreate } from './effective-hook-config'
 
 /** Same digest as the renderer's hashOrcaHookScript, so host and prompt hashes compare. */
@@ -18,7 +18,7 @@ export function hashOrcaHookTrustContent(content: string): string {
  * Undefined means run as decided: no approval was sent (older client), nothing shared would run, or it matches.
  */
 export function checkCreatedWorktreeSetupTrust(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   createdYamlHooks: OrcaHooks | null,
   decision: SetupDecision | undefined,
   approved: ApprovedSetupHashes
@@ -39,7 +39,29 @@ export function checkCreatedWorktreeSetupTrust(
   return matches ? undefined : { contentHash, scriptContent }
 }
 
-function wouldRunSetup(repo: Repo, decision: SetupDecision | undefined): boolean {
+/**
+ * Older clients send no approval hash. A folder's shared setup never ran before folder setup
+ * existed, so it needs an approval or an explicit run rather than starting unseen.
+ */
+export function folderSharedSetupLacksApproval(
+  repo: WorkspaceHookOwner,
+  createdYamlHooks: OrcaHooks | null,
+  decision: SetupDecision | undefined,
+  approved: ApprovedSetupHashes
+): boolean {
+  if (approved.approvedSetupHash !== undefined || approved.approvedSetupHashes !== undefined) {
+    return false
+  }
+  if (decision === 'run') {
+    return false
+  }
+  const policy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
+    hasLocalScript: Boolean(repo.hookSettings?.scripts.setup?.trim())
+  })
+  return policy !== 'local-only' && Boolean(getSetupTrustContent(createdYamlHooks))
+}
+
+function wouldRunSetup(repo: WorkspaceHookOwner, decision: SetupDecision | undefined): boolean {
   try {
     return shouldRunSetupForCreate(repo, decision)
   } catch {

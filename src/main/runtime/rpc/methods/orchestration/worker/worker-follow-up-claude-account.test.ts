@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { claudePinnedLaunchError } from '../../../../../../shared/claude/claude-pinned-launch-error'
-import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
+import { createOrchestrationWorkerReleaseHarness } from './testing/worker-release.test-support'
 
 const PINNED = { id: 'acct-b', email: 'pinned@example.com', managedAuthRuntime: 'host' }
 

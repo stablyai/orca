@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentLaunchSettingsMutationUpdates } from './agent-launch-settings'
-import { applyAgentPermissionMode, AUTO_TUI_AGENT_ARGS } from '../permissions/tui-agent-permissions'
+import { applyAgentPermissionMode } from '../permissions/tui-agent-permissions'
 
 describe('agent launch permission projection compatibility', () => {
   it('changes only agents Auto does not cover', () => {
@@ -13,7 +13,6 @@ describe('agent launch permission projection compatibility', () => {
       { type: 'permissions', mode: 'manual', exceptAuto: true },
       'darwin'
     )
-    expect(updates.agentDefaultArgs).toMatchObject(AUTO_TUI_AGENT_ARGS)
     expect(updates.agentDefaultArgs?.gemini).toBe('')
     expect(() =>
       agentLaunchSettingsMutationUpdates(

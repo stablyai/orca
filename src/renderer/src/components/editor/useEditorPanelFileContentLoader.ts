@@ -8,7 +8,7 @@ import {
 } from '@/lib/workspace/ownership/connection-context'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope } from '@/runtime/files/runtime-file-routing'
-import { readEditorCsvFileContent } from './csv/csv-file-content'
+import { readEditorCsvFileContent } from './csv/preview/csv-file-content'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import type { RuntimeWorkspaceFileRoute } from '@/lib/files/access/runtime-workspace-file-route'

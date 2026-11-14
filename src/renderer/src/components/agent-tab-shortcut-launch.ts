@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+
+import { createNonSecureContextUuid } from '../../../shared/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { useAppStore } from '../store'
@@ -19,8 +20,8 @@ function launchAgentTab(
   { groupId, focusIntent }: AgentTabLaunchContext
 ): void {
   launchWithClaudeAccountChoice(agent, { worktreeId }, (claudeAccountId) => {
-    launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
+    launchAgentInNewTabWithOutcome({
+      requestId: createNonSecureContextUuid(),
       focusIntent,
       agent,
       worktreeId,

@@ -1,13 +1,19 @@
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccountSummary } from '../../../../../../shared/managed-account-types'
-import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
-import { createWorkerLaunchReceipt, withWorkerLaunchAccount } from './worker-launch-preferences'
-import { assertLocalAccountWorktree, prepareLocalWorkerStart } from './worker-start-validation'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
+import {
+  createWorkerLaunchReceipt,
+  withWorkerLaunchAccount
+} from './start/launch/worker-launch-preferences'
+import {
+  assertLocalWorktree,
+  prepareLocalWorkerStart
+} from './start/launch/worker-start-validation'
 import { decideWorkerStartMode } from '../structured-workers/orchestration-worker-start-mode'
 import { decideAgentLaunchMode } from '../../../../../agent-launch/agent-launch-mode'
-import { parseStartOptions } from './worker-earlier-work'
-import { reopenWorkerTerminal } from './worker-follow-up-placement'
+import { parseStartOptions } from './follow-up/worker-earlier-work'
+import { reopenWorkerTerminal } from './follow-up/worker-follow-up-placement'
 import type { WorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 
 function account(id: string, email: string): ClaudeManagedAccountSummary {
@@ -157,13 +163,13 @@ describe('worker-start --account', () => {
 
   it('refuses an SSH workspace placement', async () => {
     await expect(
-      assertLocalAccountWorktree(
+      assertLocalWorktree(
         { showTerminalWorkspaceLaunchScope: vi.fn(async () => ({ connectionId: 'ssh-1' })) },
         'wt-1'
       )
     ).rejects.toThrow(/SSH workspace/)
     await expect(
-      assertLocalAccountWorktree(
+      assertLocalWorktree(
         { showTerminalWorkspaceLaunchScope: vi.fn(async () => ({ connectionId: null })) },
         'wt-1'
       )

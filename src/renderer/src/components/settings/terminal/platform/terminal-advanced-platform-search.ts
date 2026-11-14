@@ -93,8 +93,11 @@ export const getTerminalMacOptionSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const TERMINAL_MAC_YEN_SETTING_ID = 'terminal-mac-jis-yen-to-backslash'
+
 export const getTerminalMacYenSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: TERMINAL_MAC_YEN_SETTING_ID,
     title: translate(
       'auto.components.settings.terminal.search.694b8764ac',
       'JIS Yen (¥) to Backslash (\\)'

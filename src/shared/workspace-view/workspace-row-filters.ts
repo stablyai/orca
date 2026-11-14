@@ -4,7 +4,7 @@ import {
   isHiddenByKindSwitch,
   type WorkspaceKind,
   type WorkspaceKindSwitches
-} from '../worktree/workspace-kinds'
+} from '../worktree/visibility/workspace-kinds'
 
 /** Persisted Workspace options filters shared across surfaces. */
 export type WorkspaceRowFilters = WorkspaceKindSwitches & {
@@ -51,6 +51,10 @@ export const NO_WORKSPACE_ROW_FILTERS: WorkspaceRowFilters = {
 /** Desktop derives facts from worktrees/tabs; mobile reads host-stamped facts. Missing older-host facts read false to keep rows visible. */
 export type WorkspaceRowFactReader<Row> = {
   isArchived: (row: Row) => boolean
+  /** The row's own host copy of its project is hidden; not a filter, so Clear filters never lifts it. */
+  isInHiddenProject: (row: Row) => boolean
+  /** Every copy of the project is hidden; a filter naming it selects nothing visible, so it is ignored. */
+  isProjectHidden: (repoId: string) => boolean
   /** A folder workspace follows only the host and other-client filters (useSidebarHostVisibleScope). */
   isFolderWorkspace: (row: Row) => boolean
   repoId: (row: Row) => string
@@ -88,10 +92,11 @@ function buildWorkspaceRowPredicate<Row>(
   filters: WorkspaceRowFilters,
   read: WorkspaceRowFactReader<Row>
 ): (row: Row) => boolean {
-  const repoIds = filters.filterRepoIds.length > 0 ? new Set(filters.filterRepoIds) : null
+  const listedFilterIds = filters.filterRepoIds.filter((id) => !read.isProjectHidden(id))
+  const repoIds = listedFilterIds.length > 0 ? new Set(listedFilterIds) : null
   const hostIds = filters.visibleHostIds ? new Set(filters.visibleHostIds) : null
   return (row) => {
-    if (read.isArchived(row)) {
+    if (read.isArchived(row) || read.isInHiddenProject(row)) {
       return false
     }
     if (filters.hideWorkspacesFromOtherDevices && read.isOtherClient(row)) {
