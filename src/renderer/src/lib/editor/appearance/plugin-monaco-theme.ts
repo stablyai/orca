@@ -88,8 +88,8 @@ export function derivePluginMonacoTheme(input: {
   // Why the ring by default: a theme's accent is a faint hover tint, too weak to read as a selection.
   const selection: Rgba = themed ?? [ring[0], ring[1], ring[2], 0.3]
   const faded: Rgba = [selection[0], selection[1], selection[2], selection[3] / 2]
-  // Why: the contrast gate checks a theme's selection at full strength; halved, a dark one can
-  // land on a mid-tone that hides the text, so an unfocused editor keeps the full color then.
+  // Why: the gate checks a theme's selection at full strength; halved, it can blend into a
+  // mid-tone that hides the text, so an unfocused editor then keeps the full color.
   const inactive =
     !themed || contrastRatio(foreground, over(faded, background)) >= MIN_TEXT_CONTRAST
       ? faded
