@@ -182,6 +182,8 @@ type Identity = { userId: string; relayHostId: string }
 // out after landing never leaves the director answering below the edge's epoch. Only directors
 // with the env set read it: unset the env or roll the image back only with no pending row left
 // (SELECT count(*) FROM relay_edge_host_regions WHERE pending_epoch IS NOT NULL).
+// Phones (edgeAssignment) do not finish a pending switch: until the host's next ask does, they are
+// answered the row's epoch and may get WRONG_CELL from an edge already past it, then re-resolve.
 export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: boolean }
 
 // Thrown out of the switch's first transaction (nothing written): the pending switch must be
@@ -473,7 +475,15 @@ export class EdgeAssignments {
       // From then on every ask of this host (any shape) first completes it (frontDoorAttempt), so
       // the director never answers an epoch below one the edge may hold.
       await this.recordPendingSwitch(identity, region, error.epoch, error.cellUrl)
-      return await this.frontDoorAttempt(identity, mapFloor, region, route)
+      try {
+        return await this.frontDoorAttempt(identity, mapFloor, region, route)
+      } catch (retryError) {
+        // Nothing was pending to finish (another director moved the row meanwhile, e.g. while
+        // directors read different edge.json generations) and this ask wants a switch again:
+        // busy, and the host re-asks once the directors agree.
+        if (retryError instanceof FrontDoorSwitchIntent) throw new EdgeMoveBusyError()
+        throw retryError
+      }
     }
   }
 

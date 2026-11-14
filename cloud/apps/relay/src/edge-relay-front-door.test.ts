@@ -337,6 +337,22 @@ describe('EdgeAssignments with front doors', () => {
     expect([edgeState.epoch, await rowEpoch()]).toEqual([2, 2])
   })
 
+  it('a switch that finds nothing pending to finish (another director moved the row) answers busy, not 500', async () => {
+    const { database, edge, pushes } = await withFakeEdge()
+    await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
+    // Another director, on another edge.json generation, bumps the row to 2 between this one's
+    // intent and its pending write: the pending write finds the row at 2 and writes nothing.
+    const real = (edge as unknown as { recordPendingSwitch: (...args: unknown[]) => Promise<void> }).recordPendingSwitch.bind(edge)
+    ;(edge as unknown as { recordPendingSwitch: (...args: unknown[]) => Promise<void> }).recordPendingSwitch = async (...args) => {
+      await database.query(`UPDATE relay_assignments SET assignment_epoch = 2`)
+      await real(...args)
+    }
+    await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
+      EdgeMoveBusyError
+    )
+    expect(pushes).toHaveLength(1)
+  })
+
   it('a first move whose push fails is still deferred as before (the host is not on the edge yet)', async () => {
     const { edge, edgeState } = await withFakeEdge()
     edgeState.down = true
