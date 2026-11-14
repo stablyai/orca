@@ -10,8 +10,13 @@ import { structuredSessionMailReach } from '../../mailbox/routing/structured-ses
 import {
   lineageLiveSession,
   readAgentSessionRecordStore,
+  resolveLineageRunningSession,
   type AgentSessionRecordReader
 } from '../../addressing/session-lineage/structured-session-lineage'
+import {
+  observeStructuredWorker,
+  resolveStructuredWorkerIdentityForSession
+} from '../../terminal-authority/structured-sessions/structured-worker-authority'
 
 /** The chat a Dispatch assignee handle names; null for a terminal or a structured worker. */
 export function chatAssigneeSessionId(
@@ -68,12 +73,16 @@ export function observeChatAssignee(
   }
 }
 
-/** Select unsettled Dispatches only for this hidden session after its exit is proven; other closes may roll back. */
-export function exitedChatDispatchesForSession(
+/** A worker whose chat closed: its mailbox handle and, for a worker Orca started, its pane. */
+export type ClosedChatWorker = { handle: string; paneKey: string | null }
+
+/** Workers whose chat is this hidden session, once its exit is proven: chat assignees with an unsettled
+ *  Dispatch, and the worker Orca started in it. Other closes may roll back; a /clear successor keeps the work. */
+export function closedChatWorkersForSession(
   hiddenSessionId: string,
   db: OrchestrationDb,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
-): (DispatchContextRow & { assignee_handle: string })[] {
+): ClosedChatWorker[] {
   if (!store) {
     return []
   }
@@ -83,15 +92,34 @@ export function exitedChatDispatchesForSession(
         WHERE status IN ('pending', 'dispatched') AND substr(assignee_handle, 1, ?) = ?`
     )
     .all(ORCA_SESSION_ADDRESS_PREFIX.length, ORCA_SESSION_ADDRESS_PREFIX)
+  const closed: ClosedChatWorker[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned complete Dispatch projection returns Dispatch rows; the adapter exposes unknown.
-  return (rows as DispatchContextRow[]).filter(
-    (dispatch): dispatch is DispatchContextRow & { assignee_handle: string } => {
-      const chat = chatAssigneeSessionId(dispatch.assignee_handle)
-      return (
-        chat !== null &&
-        lineageLiveSession(store, chat)?.sessionId === hiddenSessionId &&
-        observeChatAssignee(chat, db, store).status === 'exited'
-      )
+  for (const dispatch of rows as DispatchContextRow[]) {
+    const handle = dispatch.assignee_handle
+    const chat = chatAssigneeSessionId(handle)
+    if (
+      handle &&
+      chat !== null &&
+      lineageLiveSession(store, chat)?.sessionId === hiddenSessionId &&
+      observeChatAssignee(chat, db, store).status === 'exited'
+    ) {
+      closed.push({ handle, paneKey: null })
     }
-  )
+  }
+  const worker = resolveStructuredWorkerIdentityForSession(hiddenSessionId, db)
+  const dispatch = worker && db.getActiveDispatchForTerminal(worker.handle, worker.paneKey)
+  const state = dispatch ? db.getWorkerDispatch(dispatch.id)?.state : undefined
+  if (
+    worker &&
+    // A start still being decided reports its own outcome, and its teardown closes the chat.
+    state !== 'starting' &&
+    state !== 'start_unknown' &&
+    lineageLiveSession(store, worker.sessionId)?.sessionId === hiddenSessionId &&
+    observeStructuredWorker(worker, {
+      resolveSession: (id) => resolveLineageRunningSession(store, id)
+    }).status === 'exited'
+  ) {
+    closed.push({ handle: worker.handle, paneKey: worker.paneKey })
+  }
+  return closed
 }
