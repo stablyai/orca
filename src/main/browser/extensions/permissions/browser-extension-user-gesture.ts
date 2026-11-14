@@ -22,19 +22,21 @@ export function noteBrowserExtensionUserGesture(
   recentGestures.set(signal, Date.now())
 }
 
-export function hasBrowserExtensionUserGesture(caller: BrowserExtensionCaller): boolean {
-  if (caller.userGesture === true) {
-    return true
-  }
+/** When Orca last handed the caller's extension a gesture, if still within the gesture window. */
+export function getBrowserExtensionUserGestureAt(caller: BrowserExtensionCaller): number | null {
   const state = getHostSessionState(caller.session)
   if (!state) {
-    return false
+    return null
   }
   const signal = getBrowserExtensionContextSignal(state, caller.extension.id)
   const at = recentGestures.get(signal)
-  return (
-    at !== undefined &&
+  return at !== undefined &&
     !signal.aborted &&
     Date.now() - at <= BROWSER_EXTENSION_USER_GESTURE_WINDOW_MS
-  )
+    ? at
+    : null
+}
+
+export function hasBrowserExtensionUserGesture(caller: BrowserExtensionCaller): boolean {
+  return caller.userGesture === true || getBrowserExtensionUserGestureAt(caller) !== null
 }
