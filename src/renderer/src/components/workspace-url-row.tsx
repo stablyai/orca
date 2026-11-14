@@ -5,11 +5,11 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
+import { openUrlInWorkspaceBrowser } from '@/lib/workspace-ports/workspace-port-actions'
 import {
   getPortOpenBrowserTooltipLabel,
-  openUrlInWorkspaceBrowser,
   resolvePortOpenInOrcaBrowser
-} from '@/lib/workspace-ports/workspace-port-actions'
+} from '@/lib/workspace-ports/workspace-port-browser-open'
 import { translate } from '@/i18n/i18n'
 
 function displayUrl(url: string): string {
