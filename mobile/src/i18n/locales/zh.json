@@ -191,6 +191,10 @@
       "sendQueueHint": "在当前回合结束后运行",
       "sendSteerHint": "加入智能体当前正在进行的工作"
     },
+    "claudeSessionStatus": {
+      "awaitingNextReply": "下次回复后更新上下文",
+      "compacted": "已压缩 {{times}} 次"
+    },
     "contextUsage": {
       "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
       "title": "上下文",

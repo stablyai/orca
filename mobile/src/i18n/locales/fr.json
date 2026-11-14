@@ -195,6 +195,10 @@
       "sendQueueHint": "S’exécute après le tour en cours",
       "sendSteerHint": "S’ajoute à ce que l’agent fait en ce moment"
     },
+    "claudeSessionStatus": {
+      "awaitingNextReply": "le contexte sera mis à jour après la prochaine réponse",
+      "compacted": "compacté {{times}}×"
+    },
     "contextUsage": {
       "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
       "title": "Contexte",

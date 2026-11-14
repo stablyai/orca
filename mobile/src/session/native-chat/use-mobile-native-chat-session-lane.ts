@@ -4,6 +4,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { StructuredAgentSessionHostSupport } from './agent-session/mobile-structured-agent-session-host-support'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
+import { useMobileClaudeSessionStatus } from './use-mobile-claude-session-status'
 import { useMobileStructuredAgentSession } from './agent-session/use-mobile-structured-agent-session'
 import { useMobileStructuredSessionCommands } from './composer/use-mobile-structured-session-commands'
 import type { MobileNativeChatResolution } from './mobile-native-chat-eligibility'
@@ -45,6 +46,7 @@ export function useMobileNativeChatSessionLane({
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
   sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
+  claudeSessionStatus: ReturnType<typeof useMobileClaudeSessionStatus>
 } {
   const appendComposerText: MobileComposerWriter = Object.assign(
     useCallback((text: string) => appendComposerTextRef.current(text), [appendComposerTextRef]),
@@ -66,6 +68,14 @@ export function useMobileNativeChatSessionLane({
     agent: structured ? null : agent,
     sessionId: structured ? null : sessionId,
     transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)
+  })
+  const claudeSessionStatus = useMobileClaudeSessionStatus({
+    client,
+    agent,
+    sessionId,
+    transcriptPath: resolution?.transcriptPath ?? undefined,
+    refreshKey: `${bridgeSession.messages.length}:${bridgeSession.messages.at(-1)?.id ?? ''}`,
+    enabled: enabled && !structured && agent === 'claude'
   })
   const structuredSession = useMobileStructuredAgentSession({
     client,
@@ -90,6 +100,7 @@ export function useMobileNativeChatSessionLane({
   return {
     structuredSession,
     session: structured ? structuredSession.session : bridgeSession,
-    sessionCommands
+    sessionCommands,
+    claudeSessionStatus
   }
 }

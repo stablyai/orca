@@ -191,6 +191,10 @@
       "sendQueueHint": "현재 턴이 끝난 뒤 실행됩니다",
       "sendSteerHint": "Agent가 지금 하고 있는 작업에 들어갑니다"
     },
+    "claudeSessionStatus": {
+      "awaitingNextReply": "다음 응답 후 컨텍스트가 업데이트됩니다",
+      "compacted": "압축 {{times}}회"
+    },
     "contextUsage": {
       "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
       "title": "컨텍스트",

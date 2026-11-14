@@ -1,3 +1,4 @@
+import type { ClaudeSessionStatus } from '../../../../../src/shared/native-chat/claude-session-status'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { useMobileNativeChatModelDiscovery } from './use-mobile-native-chat-model-discovery'
 import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
@@ -33,6 +34,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   isTabChatView: (tabId: string) => boolean
   isWorking: boolean
   reportedModel: string | null
+  sessionReport?: ClaudeSessionStatus | null
   modelSwitchCommand?: string
   structured: {
     optionSurface?: SessionOptionsSurface
@@ -61,6 +63,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     isTabChatView,
     isWorking,
     reportedModel,
+    sessionReport,
     structured,
     toggleTabChatView,
     worktreeId
@@ -105,6 +108,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
+    sessionReport,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
     writeSettings

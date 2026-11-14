@@ -195,6 +195,10 @@
       "sendQueueHint": "Se ejecuta después del turno actual",
       "sendSteerHint": "Entra en lo que el agente está haciendo ahora"
     },
+    "claudeSessionStatus": {
+      "awaitingNextReply": "el contexto se actualiza tras la próxima respuesta",
+      "compacted": "compactado {{times}}×"
+    },
     "contextUsage": {
       "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
       "title": "Contexto",
