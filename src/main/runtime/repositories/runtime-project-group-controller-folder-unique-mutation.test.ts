@@ -110,8 +110,10 @@ function archiveGroup(root: string, exitCode: number): ProjectGroup {
     createdAt: 1,
     updatedAt: 1,
     hookSettings: {
+      mode: 'override',
       commandSourcePolicy: 'local-only',
       scripts: {
+        setup: '',
         archive: `node -e "require('fs').writeFileSync(process.env.ORCA_ROOT_PATH + '/archive.txt', JSON.stringify({id:process.env.ORCA_WORKSPACE_ID,name:process.env.ORCA_WORKSPACE_NAME,path:process.env.ORCA_WORKTREE_PATH}));process.exit(${exitCode})"`
       }
     }
