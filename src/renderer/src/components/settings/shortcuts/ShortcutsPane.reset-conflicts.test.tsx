@@ -21,7 +21,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('keeps recording when the current default conflicts with an explicit shortcut in a legacy profile', async () => {
+async function recordConflictingChord(): Promise<HTMLElement> {
   vi.stubGlobal('api', { ui: { setShortcutRecorderFocused: vi.fn() } })
   useAppStore.setState({
     keybindings: { 'worktree.palette': ['Mod+J'], 'terminal.clear': ['Mod+K'] },
@@ -48,5 +48,18 @@ it('keeps recording when the current default conflicts with an explicit shortcut
   await act(async () => {
     fireEvent.keyDown(recorder, { key: 'k', code: 'KeyK', metaKey: true })
   })
+  return recorder
+}
+
+it('keeps recording when the current default conflicts with an explicit shortcut in a legacy profile', async () => {
+  const recorder = await recordConflictingChord()
   expect(recorder.getAttribute('aria-pressed')).toBe('true')
+})
+
+it('stops recording and clears the conflict when the recorder loses focus', async () => {
+  const recorder = await recordConflictingChord()
+  expect(screen.queryByText(/conflicts with/)).not.toBeNull()
+  fireEvent.blur(recorder)
+  expect(recorder.getAttribute('aria-pressed')).toBe('false')
+  expect(screen.queryByText(/conflicts with/)).toBeNull()
 })
