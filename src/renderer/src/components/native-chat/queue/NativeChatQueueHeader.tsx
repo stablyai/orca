@@ -95,7 +95,7 @@ export function NativeChatQueueHeader({
           <Button
             ref={foldRef}
             type="button"
-            variant="muted-field-icon"
+            variant="ghost"
             size="icon-xs"
             aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
             aria-expanded={expanded}
