@@ -25,6 +25,7 @@ import {
 } from './pane-launch-agent-candidate'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent-title'
+import { isUnprovenResumeRecord } from '../startup/unproven-resume-record'
 
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   // Share expected-agent derivation between 133;D confirmation and visible resampling so their identity guards cannot drift.
@@ -166,7 +167,9 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       const isHibernationWakeRecord =
         (ptyId && state.suppressedPtyExitIds[ptyId]) ||
         (wake && wake.record === sleepingRecord?.record && (ptyId === null || wake.ptyId === ptyId))
-      if (sleepingRecord && !isHibernationWakeRecord) {
+      // A resumed agent that exits before reporting in (e.g. a startup network failure) leaves its conversation resumable.
+      const isUnprovenResume = isUnprovenResumeRecord(session, state, sleepingRecord, ptyId)
+      if (sleepingRecord && !isHibernationWakeRecord && !isUnprovenResume) {
         session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
       }
       session.clearStaleAgentTabTitleOnConfirmedShell()

@@ -79,6 +79,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     }
 
     session.transportConnectInFlightSince = Date.now()
+    // Unlike the in-flight mark, this outlives the connect: a resume marker dates its proof window from here.
+    session.lastTransportConnectAt = session.transportConnectInFlightSince
     session.pendingSpawnDeferral = null
     const visibleAtSpawn = session.deps.isVisibleRef.current === true
     let ownerRefused = false

@@ -134,6 +134,8 @@ function connectDeferredSessionReattach(
   )
   session.beginReattachLiveDataDeferral(outputCallbacks.generation)
   session.transportConnectInFlightSince = Date.now()
+  // Unlike the in-flight mark, this outlives the connect: a resume marker dates its proof window from here.
+  session.lastTransportConnectAt = session.transportConnectInFlightSince
   const reattachPromise = session.transport.connect({
     url: '',
     cols: session.cols,
