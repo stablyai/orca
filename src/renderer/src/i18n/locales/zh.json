@@ -6921,6 +6921,14 @@
         },
         "workspaceKanbanStatusLane": {
           "newWorkspaceInStatus": "在「{{status}}」中新建工作区"
+        },
+        "AddProjectMenu": {
+          "changeProjectHost": "项目主机：{{host}}",
+          "projectHost": "项目主机",
+          "addRemoteHost": "添加远程主机…",
+          "browseFolder": "浏览文件夹…",
+          "cloneFromUrl": "从 URL 克隆…",
+          "createNewProject": "创建新项目…"
         }
       },
       "shared": {
@@ -20575,6 +20583,15 @@
         "splitChatPane": {
           "title": "在聊天旁打开窗格",
           "action": "拆分窗格"
+        }
+      },
+      "badgeNew": "新功能",
+      "projectsCollapseAll": {
+        "intro": {
+          "title": "一次性折叠所有项目",
+          "body": "按 {sidebar.projects.toggleCollapse}、点击此按钮，或按住 {{modifier}} 点击任意项目标题",
+          "bodyWithoutShortcut": "点击此按钮，或按住 {{modifier}} 点击任意项目标题",
+          "action": "知道了"
         }
       }
     },
