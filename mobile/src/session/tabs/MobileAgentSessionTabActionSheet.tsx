@@ -1,4 +1,6 @@
 import { ActionSheetModal } from '../../components/sheets/ActionSheetModal'
+import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { getMobileNativeChatCliForkActions } from '../native-chat/history/mobile-native-chat-cli-fork'
 import { useMobileAllowAutoCloseActions, workerSubjectOf } from './mobile-worker-auto-close'
@@ -19,6 +21,9 @@ export function MobileAgentSessionTabActionSheet({
     closeWithBulkActions
   } = controller
   const dismiss = () => setAgentSessionActionTarget(null)
+  const title = tab?.title || t('session.sheets.chat', 'Chat')
+  // A fork's sheet names it with its mark, so its actions are not mistaken for the original's.
+  const forked = tab?.forked === true
   const workerActions = useMobileAllowAutoCloseActions(
     controller.client,
     workerSubjectOf(tab ?? undefined)
@@ -26,7 +31,8 @@ export function MobileAgentSessionTabActionSheet({
   return (
     <ActionSheetModal
       visible={tab != null}
-      title={tab?.title || t('session.sheets.chat', 'Chat')}
+      title={forked ? <MobileForkMarkedName name={title} /> : title}
+      titleAccessibilityLabel={forked ? mobileForkAccessibleName(title) : undefined}
       actions={[
         ...getMobileNativeChatCliForkActions({
           controller,
