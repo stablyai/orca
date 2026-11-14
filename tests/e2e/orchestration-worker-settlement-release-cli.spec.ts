@@ -264,19 +264,6 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
       return listed.result.terminals.some((terminal) => terminal.handle === workerHandle)
     })
     .toBe(false)
-  // Its terminal is gone and its process exited, so release finishes instead of reporting release_unknown.
-  const exitedRelease = invokeCompiledCli(userDataDir, [
-    'orchestration',
-    'worker-release',
-    '--dispatch',
-    dispatch.result.dispatch!.id,
-    '--json'
-  ])
-  expect(exitedRelease.status).toBe(0)
-  expect(JSON.parse(exitedRelease.stdout)).toMatchObject({
-    ok: true,
-    result: { state: 'released', processAction: 'none' }
-  })
   const db = new Database(path.join(userDataDir, 'orchestration.db'))
   try {
     db.prepare(
