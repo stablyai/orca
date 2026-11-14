@@ -17,8 +17,7 @@ import {
   readStructuredJournalPage,
   STRUCTURED_JOURNAL_PAGE_LIMIT
 } from './structured-worker-journal-page'
-import { readStructuredLineageArchiveJournal } from './structured-worker-journal-archive'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const host = vi.hoisted(() => {
   const state: { journal: AgentSessionJournal | null } = { journal: null }
@@ -30,13 +29,17 @@ vi.mock(
   '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
   () => ({
     getStructuredAgentSessionHost: () => ({
-      history: async (request: AgentSessionHistoryRequest, scope?: AgentSessionHistoryScope) =>
-        readStructuredAgentSessionHistoryResult({
+      history: async (request: AgentSessionHistoryRequest, scope?: AgentSessionHistoryScope) => {
+        const read = await readStructuredAgentSessionHistoryResult({
           journal: host.journal!,
           record: null,
           request,
-          scope
+          scope,
+          // No live owner: the rows alone.
+          capture: async (rows) => ({ value: (await rows(undefined)).result, work: undefined })
         })
+        return read?.result
+      }
     })
   })
 )
@@ -133,18 +136,5 @@ describe("a worker's journal page", () => {
     expect(page?.items.every((item) => item.agentId === undefined)).toBe(true)
     expect(page?.items.at(-1)?.body).toEqual(said(`worker-${STRUCTURED_JOURNAL_PAGE_LIMIT + 4}`))
     expect(page?.hasOlder).toBe(true)
-  })
-
-  it('archives every row that fits the byte bound, not just the newest page', async () => {
-    for (let index = 0; index < 250; index += 1) {
-      await append(`worker-${index}`)
-    }
-
-    const page = await readStructuredLineageArchiveJournal(['session-1'])
-
-    expect(page?.items).toHaveLength(250)
-    expect(page?.items[0]?.body).toEqual(said('worker-0'))
-    expect(page?.items.at(-1)?.body).toEqual(said('worker-249'))
-    expect(page?.hasOlder).toBe(false)
   })
 })

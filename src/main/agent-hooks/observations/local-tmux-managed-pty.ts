@@ -1,4 +1,4 @@
-import type { PtyProcessInfo } from '../../providers/pty-provider-contract'
+import type { PtyProcessInfo } from '../../providers/pty/process-info'
 import type { TmuxManagedPty } from '../../../shared/tmux-agent-hook-contract'
 import type { HookPaneProcessIo } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 

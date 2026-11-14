@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
 
 afterEach(() => vi.unstubAllGlobals())

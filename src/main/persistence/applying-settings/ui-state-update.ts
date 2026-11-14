@@ -1,11 +1,8 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import {
-  getDefaultUIState,
-  normalizeAgentActivityDisplayMode,
-  normalizeWorktreeCardProperties
-} from '../../../shared/constants'
+import { getDefaultUIState, normalizeAgentActivityDisplayMode } from '../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../shared/worktree/row-display/card-properties'
 import {
   normalizeWorkspaceStatuses,
   clampWorkspaceBoardColumnWidth,

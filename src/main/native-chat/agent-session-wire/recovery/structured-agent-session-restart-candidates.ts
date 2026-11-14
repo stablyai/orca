@@ -2,8 +2,7 @@
 
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import { latestStructuredAgentSessionPrompt } from '../../../../shared/agent-session/requests/structured-agent-session-latest-request'
+import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import { hostCanStartRecord } from '../providers/structured-agent-session-provider-support'
@@ -18,7 +17,7 @@ export type StructuredAgentSessionRestartJournalSource = { journal: AgentSession
 export type StructuredAgentSessionRestartCandidateReader = (
   markers: readonly AgentSessionResumeMarker[],
   leaseState: 'must-be-released' | 'may-be-held'
-) => StructuredAgentSessionResumableSet
+) => Promise<StructuredAgentSessionResumableSet>
 
 export function createStructuredAgentSessionRestartCandidateReader(deps: {
   /** Only explicit actions open marker chats; passive listings use saved previews. */
@@ -26,7 +25,7 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   adapter: StructuredAgentSessionAdapter
   agents: Pick<StructuredAgentRegistry, 'definition'>
-  movedOn: (marker: AgentSessionResumeMarker) => boolean
+  movedOn: (marker: AgentSessionResumeMarker) => Promise<boolean>
   savedByNewerOrca: (sessionId: string) => boolean
 }): StructuredAgentSessionRestartCandidateReader {
   return (markers, leaseState) =>
@@ -39,7 +38,7 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
       latestPrompt: (sessionId) => {
         const session = deps.sessions.get(sessionId)
         return session
-          ? latestStructuredAgentSessionPrompt(session.journal.itemsRead().items)
+          ? session.journal.reads.latestPrompt()
           : (deps.getRecord(sessionId)?.lastTurn?.prompt ?? '')
       },
       leaseState

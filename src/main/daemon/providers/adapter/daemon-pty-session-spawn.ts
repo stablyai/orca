@@ -22,10 +22,11 @@ import { getRecoveredHistorySeedSegments } from '../../history/seed-transfer/ter
 import type { DaemonCreateOrAttachResult as CreateOrAttachResult } from '../../protocol/daemon-create-or-attach-result'
 import { normalizeWslColdRestoreCwd } from '../wsl/wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from '../../pty-subprocess/wsl-session-context'
-import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
+import { resolveSafePtyDefaultCwd } from '../../../providers/working-directory/default-cwd'
 import { probeRecoveredStartupCwdDirectory } from '../../../ipc/pty/host-env/startup-cwd-directory-exists'
 import { resolveUnixShellPath } from '../../../providers/local-pty/local-pty-executable-spawn'
-import type { PtySpawnOptions, PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import {
   injectHistoryEnv,
   injectWslFishHistoryEnv,

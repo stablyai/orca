@@ -40,4 +40,48 @@ test('switching to a floating terminal opens the panel and keeps the main worksp
     }
   }, FLOATING_WORKTREE_ID)
   expect(selection).toEqual({ active: mainWorktreeId, floatingTab: tabId })
+
+  await expect(
+    orcaPage.locator(`${OPEN_PANEL_SELECTOR} [data-floating-workspace-surface-frame]`)
+  ).toBeVisible()
+  const geometry = await orcaPage.evaluate((panelSelector) => {
+    const panel = document.querySelector<HTMLElement>(panelSelector)
+    const surfaceFrame = panel?.querySelector<HTMLElement>(
+      '[data-floating-workspace-surface-frame]'
+    )
+    const handles = Array.from(
+      panel?.querySelectorAll<HTMLElement>('[data-floating-terminal-no-drag]') ?? []
+    )
+    const eastHandle = handles.find((el) => el.classList.contains('cursor-e-resize'))
+    if (!panel || !surfaceFrame || !eastHandle) {
+      return null
+    }
+    const panelRect = panel.getBoundingClientRect()
+    const surfaceRect = surfaceFrame.getBoundingClientRect()
+    const eastRect = eastHandle.getBoundingClientRect()
+    const outsidePanelCount = handles.filter((el) => {
+      const r = el.getBoundingClientRect()
+      return (
+        r.left < panelRect.left - 0.5 ||
+        r.right > panelRect.right + 0.5 ||
+        r.top < panelRect.top - 0.5 ||
+        r.bottom > panelRect.bottom + 0.5
+      )
+    }).length
+    const scrollbarprobeX = surfaceRect.right - 3
+    const scrollbarProbeY = Math.round((surfaceRect.top + surfaceRect.bottom) / 2)
+    const hitAtScrollbarEdge = document.elementFromPoint(scrollbarprobeX, scrollbarProbeY)
+    return {
+      eastWidth: Math.round(eastRect.width),
+      eastStartsAtOrAfterSurfaceRight: eastRect.left >= surfaceRect.right - 0.5,
+      outsidePanelCount,
+      scrollbarEdgeBlockedByResizeHandle: hitAtScrollbarEdge === eastHandle
+    }
+  }, OPEN_PANEL_SELECTOR)
+  expect(geometry).toEqual({
+    eastWidth: 4,
+    eastStartsAtOrAfterSurfaceRight: true,
+    outsidePanelCount: 0,
+    scrollbarEdgeBlockedByResizeHandle: false
+  })
 })

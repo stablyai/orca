@@ -250,6 +250,19 @@ export function tabBucketDraft<T extends TabRow>(previous: KeyedRecord<T[]>): Re
   return createDraft(previous, (next, keys) => linkTabBuckets(previous, next, keys))
 }
 
+/**
+ * For a hot writer that built `next` from `previous` itself: `keys` must name every key it added,
+ * deleted or replaced, and surviving keys must keep their order (a spread plus deletes does).
+ */
+export function linkRecordWrite<R extends KeyedSnapshot>(
+  next: R,
+  previous: KeyedSnapshot,
+  keys: Iterable<string>
+): R {
+  link(next, previous, keys)
+  return next
+}
+
 /** Named cold path: the whole record was rebuilt from a snapshot. */
 export function markFullResync<R extends Keyed>(next: R, reason: FullResyncReason): R {
   links.set(next, { reason })

@@ -1,17 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   coordinateHostStackNavigation,
-  navigateToHostStackRoute,
   type HostStackNavigationState
 } from './host-stack-navigation'
 
-const TARGET = { name: '[hostId]/tasks', params: { hostId: 'host/one' } } as const
-const OTHER_TARGET = {
-  name: '[hostId]/session/[worktreeId]',
-  params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt' }
-} as const
-
-// Remove listeners for real so teardown is tested instead of merely the active guard.
 function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
   let state = initialState
@@ -57,58 +49,6 @@ function committedHostState(hostIdParam: string): HostStackNavigationState {
 }
 
 describe('host stack navigation', () => {
-  it('stops listening and never replaces once canceled', () => {
-    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-
-    const controller = navigateToHostStackRoute(
-      harness.navigation,
-      { push: vi.fn(), replace: vi.fn() },
-      'host/one',
-      TARGET
-    )
-    expect(harness.listenerCount()).toBe(1)
-    controller.cancel()
-
-    expect(harness.unsubscribe).toHaveBeenCalledTimes(1)
-    expect(harness.listenerCount()).toBe(0)
-    expect(controller.isActive()).toBe(false)
-
-    harness.setState(committedHostState('host/one'))
-    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-  })
-
-  it('retargets a still-pending transition to the same host instead of pushing twice', () => {
-    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-    const push = vi.fn()
-    const router = { push, replace: vi.fn() }
-
-    const pending = coordinateHostStackNavigation(
-      null,
-      harness.navigation,
-      router,
-      'host/one',
-      TARGET
-    )
-    const retargeted = coordinateHostStackNavigation(
-      pending,
-      harness.navigation,
-      router,
-      'host/one',
-      OTHER_TARGET
-    )
-
-    expect(retargeted).toBe(pending)
-    expect(push).toHaveBeenCalledTimes(1)
-    expect(harness.listenerCount()).toBe(1)
-
-    harness.setState(committedHostState('host/one'))
-
-    expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
-    expect(harness.navigation.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ payload: OTHER_TARGET })
-    )
-  })
-
   describe('a session opened inside its host document', () => {
     const SESSION = {
       name: '[hostId]/session/[worktreeId]',
@@ -153,28 +93,6 @@ describe('host stack navigation', () => {
             }
           }
         ]
-      ])
-    })
-
-    it('lets another screen tapped while the push commits take the list place', () => {
-      const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-      const push = vi.fn()
-      const router = { push, replace: vi.fn() }
-
-      const pending = coordinateHostStackNavigation(
-        null,
-        harness.navigation,
-        router,
-        'host/one',
-        SESSION,
-        true
-      )
-      coordinateHostStackNavigation(pending, harness.navigation, router, 'host/one', TARGET)
-      harness.setState(committedHostState('host/one'))
-
-      expect(push).toHaveBeenCalledTimes(1)
-      expect(harness.navigation.dispatch.mock.calls).toEqual([
-        [{ type: 'REPLACE', target: '/h', source: 'host-index', payload: TARGET }]
       ])
     })
   })

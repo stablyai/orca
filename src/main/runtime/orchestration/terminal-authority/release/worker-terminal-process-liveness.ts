@@ -1,4 +1,4 @@
-import type { PtyProcessInfo } from '../../../../providers/pty-process-info'
+import type { PtyProcessInfo } from '../../../../providers/pty/process-info'
 
 /** Match the whole ptyId:incarnationId exactly, including embedded colons; absent or whitespace-dirty incarnation cannot attest identity. */
 export function matchesProcessIncarnation(

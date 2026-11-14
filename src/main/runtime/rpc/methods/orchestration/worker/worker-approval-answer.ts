@@ -1,5 +1,5 @@
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
-import { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration-approval-answer-params'
+import { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-approval-answer-params'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { structuredMailboxCustody } from '../../../../orchestration/mailbox/routing/structured-session-mail-target'
 import {
@@ -19,7 +19,7 @@ import {
 } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-report'
 import type { z } from 'zod'
 import type { RpcContext } from '../../../core'
-import { workerApprovalAccess, type WorkerApprovalAccess } from './worker-approval-access'
+import { workerApprovalAccess, type WorkerApprovalAccess } from '../access/worker-approval-access'
 import { formatOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 
 export type WorkerApprovalAnswerReceipt = {
@@ -108,7 +108,7 @@ export async function answerWorkerApproval(
           by: access.answeredBy,
           decision: params.decision,
           reason: access.reason,
-          reasonDelivered: true
+          reasonDelivered: params.decision === 'deny'
         })
       },
       { notify }
@@ -125,7 +125,8 @@ export async function answerWorkerApproval(
     sessionId: custody.sessionId,
     approvalId: params.prompt,
     dispatchId: dispatch.id,
-    decision: params.decision
+    decision: params.decision,
+    byAgent: access.answeredBy === 'coordinator'
   })
   if (!answered.ok) {
     // Answered in the worker's own chat, or gone: say so now, not at the worker's next turn edge.

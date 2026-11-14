@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 // Load session/ledger rows once and persist only changed rows inside the journal transaction.
 // Unreadable records remain present and immutable; every mutation of their ids is refused.
 
@@ -8,11 +8,11 @@ import {
   isPersistedAgentSessionObservationRecord,
   type AgentSessionLease
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import type Database from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import type { AgentSessionStoreState } from './agent-session-store-state'
-import type { AgentSessionStoreRowWrites } from './agent-session-store-draft'
+import type { AgentSessionStoreRowWrites } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   isReadableAgentSessionStoreOperation,
@@ -73,9 +73,48 @@ function unreadableRecordReason(value: unknown): string {
     : 'unsupported_schema'
 }
 
-/** Loaded leases are unreconciled until this host proves ownership; persisted state alone grants no writer.
+export function loadAgentSessionStoreRecordRow(
+  state: AgentSessionStoreState,
+  sessionId: string,
+  json: string | null,
+  unreconciled: boolean
+): void {
+  const parsed = parseJson(json)
+  const value = parsed.ok ? parsed.value : json
+  if (parsed.ok && isReadableAgentSessionStoreRecord(sessionId, value)) {
+    const { record } = decodePersistedAgentSessionRecord(value)
+    state.records.set(sessionId, {
+      ...record,
+      lease: {
+        ...withoutRetiredLeaseLatches(record.lease),
+        ...(unreconciled ? { unreconciled: true } : {})
+      }
+    })
+    return
+  }
+  const decoded =
+    isPersistedAgentSessionObservationRecord(value) && value.sessionId === sessionId
+      ? decodePersistedAgentSessionRecord(structuredClone(value)).record
+      : undefined
+  const conversation = decoded
+    ? agentSessionConversationView({
+        ...decoded,
+        lease: { ...decoded.lease, unreconciled: true }
+      })
+    : undefined
+  state.unreadableRecords.set(sessionId, {
+    reason: unreadableRecordReason(value),
+    raw: value,
+    ...(conversation ? { conversation: Object.freeze(conversation) } : {})
+  })
+}
+
+/** Observers read writer state; read-only or failed installations conservatively invalidate authority.
  * Unreadable operation/key/tab rows are skipped; unreadable records are set aside intact. */
-export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+export function loadAgentSessionStoreRows(
+  db: Database.Database,
+  unreconciled = false
+): AgentSessionStoreState {
   const state: AgentSessionStoreState = {
     records: new Map(),
     operations: new Map(),
@@ -98,31 +137,7 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
     if (sessionId === null) {
       continue
     }
-    const parsed = parseJson(text(row, 'record_json'))
-    const value = parsed.ok ? parsed.value : text(row, 'record_json')
-    if (parsed.ok && isReadableAgentSessionStoreRecord(sessionId, value)) {
-      const { record } = decodePersistedAgentSessionRecord(value)
-      state.records.set(sessionId, {
-        ...record,
-        lease: { ...withoutRetiredLeaseLatches(record.lease), unreconciled: true }
-      })
-    } else {
-      const decoded =
-        isPersistedAgentSessionObservationRecord(value) && value.sessionId === sessionId
-          ? decodePersistedAgentSessionRecord(structuredClone(value)).record
-          : undefined
-      const conversation = decoded
-        ? agentSessionConversationView({
-            ...decoded,
-            lease: { ...decoded.lease, unreconciled: true }
-          })
-        : undefined
-      state.unreadableRecords.set(sessionId, {
-        reason: unreadableRecordReason(value),
-        raw: value,
-        ...(conversation ? { conversation: Object.freeze(conversation) } : {})
-      })
-    }
+    loadAgentSessionStoreRecordRow(state, sessionId, text(row, 'record_json'), unreconciled)
   }
   for (const row of db
     .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
@@ -143,6 +158,32 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
       state.retiredClaimKeys.push(entry)
     }
   }
+  state.sessionTabs = loadAgentSessionStoreTabs(db)
+  return state
+}
+
+/** Installation invalidates prior authority without normalizing untouched saved records. */
+export function installAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+  const mark = db.prepare(`UPDATE agent_session_records
+    SET record_json=json_set(record_json,'$.lease.unreconciled',json('true')) WHERE session_id=?`)
+  for (const row of db.prepare('SELECT session_id,record_json FROM agent_session_records').all()) {
+    const id = text(row, 'session_id')
+    const saved = parseJson(text(row, 'record_json'))
+    if (
+      id !== null &&
+      saved.ok &&
+      isReadableAgentSessionStoreRecord(id, saved.value) &&
+      !saved.value.lease.unreconciled
+    ) {
+      mark.run(id)
+    }
+  }
+  return loadAgentSessionStoreRows(db)
+}
+
+export function loadAgentSessionStoreTabs(
+  db: Database.Database
+): AgentSessionStoreState['sessionTabs'] {
   const recorded = db
     .prepare('SELECT 1 AS present FROM agent_session_store_meta WHERE key = ?')
     .get(SESSION_TABS_RECORDED)
@@ -162,20 +203,50 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
     }
   }
   if (recorded) {
-    state.sessionTabs = table
+    return table
   }
-  return state
+  return null
 }
 
 function writeTabIndex(
   db: Database.Database,
   index: { recorded: boolean; tabs: readonly PersistedAgentSessionTab[] }
 ): void {
-  db.prepare('DELETE FROM agent_session_tabs').run()
-  const insert = db.prepare(
-    'INSERT INTO agent_session_tabs (tab_id, session_id, position) VALUES (?, ?, ?)'
+  const saved = new Map(
+    db
+      .prepare('SELECT tab_id,session_id,position FROM agent_session_tabs')
+      .all()
+      .map(
+        (row) =>
+          [
+            String(row.tab_id),
+            { sessionId: String(row.session_id), position: Number(row.position) }
+          ] as const
+      )
   )
-  index.tabs.forEach(({ tabId, sessionId }, position) => insert.run(tabId, sessionId, position))
+  const nextIds = new Set(index.tabs.map((tab) => tab.tabId))
+  for (const tabId of saved.keys()) {
+    if (!nextIds.has(tabId)) {
+      db.prepare('DELETE FROM agent_session_tabs WHERE tab_id=?').run(tabId)
+    }
+  }
+  let tail = -1
+  for (const row of saved.values()) {
+    tail = Math.max(tail, row.position)
+  }
+  let previous = -1
+  const upsert = db.prepare(`INSERT INTO agent_session_tabs (tab_id,session_id,position)
+    VALUES (?,?,?) ON CONFLICT(tab_id) DO UPDATE
+    SET session_id=excluded.session_id,position=excluded.position`)
+  for (const { tabId, sessionId } of index.tabs) {
+    const row = saved.get(tabId)
+    if (row?.sessionId === sessionId && row.position > previous) {
+      previous = row.position
+    } else {
+      previous = ++tail
+      upsert.run(tabId, sessionId, previous)
+    }
+  }
   if (index.recorded) {
     db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
       SESSION_TABS_RECORDED,

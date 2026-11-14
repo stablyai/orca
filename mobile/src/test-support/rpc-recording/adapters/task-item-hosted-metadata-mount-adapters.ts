@@ -1,5 +1,6 @@
-import type * as WorkspaceAndProjectStateModule from '../../../tasks/use-mobile-tasks-workspace-and-project-state'
-import type * as HostedMetadataModule from '../../../tasks/use-mobile-tasks-hosted-metadata-actions'
+import type * as UseMobileTasksLinearItemActionsModule from '../../../tasks/providers/linear/use-mobile-tasks-linear-item-actions'
+import type * as WorkspaceAndProjectStateModule from '../../../tasks/project-board/use-mobile-tasks-workspace-and-project-state'
+import type * as HostedMetadataModule from '../../../tasks/item-detail/use-mobile-tasks-hosted-metadata-actions'
 import { useLayoutEffect, useRef } from 'react'
 import {
   useCommittedOwnerProjection,
@@ -201,16 +202,17 @@ function mountModelHook<Actions>(
 export function taskItemHostedMetadataMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   function hostedMetadata(item: Record<string, unknown>) {
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(modules, context, {
         useHook: (
           model: Parameters<typeof HostedMetadataModule.useMobileTasksHostedMetadataActions>[0]
         ) =>
-          load<typeof HostedMetadataModule>(
-            'use-mobile-tasks-hosted-metadata-actions.tsx'
-          ).useMobileTasksHostedMetadataActions(model),
+          modules
+            .load<typeof HostedMetadataModule>(
+              'mobile/src/tasks/item-detail/use-mobile-tasks-hosted-metadata-actions.tsx'
+            )
+            .useMobileTasksHostedMetadataActions(model),
         observedFields: [
           'itemAddLabelsDraft',
           'itemRemoveLabelsDraft',
@@ -247,11 +249,11 @@ export function taskItemHostedMetadataMountAdapters(
       })
   }
   const linearItem: MountAdapter = (context) => {
-    const useActions = load<typeof import('../../../tasks/use-mobile-tasks-linear-item-actions')>(
-      'use-mobile-tasks-linear-item-actions.tsx'
+    const useActions = modules.load<typeof UseMobileTasksLinearItemActionsModule>(
+      'mobile/src/tasks/providers/linear/use-mobile-tasks-linear-item-actions.tsx'
     ).useMobileTasksLinearItemActions
-    const useWorkspace = load<typeof WorkspaceAndProjectStateModule>(
-      'use-mobile-tasks-workspace-and-project-state.tsx'
+    const useWorkspace = modules.load<typeof WorkspaceAndProjectStateModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-workspace-and-project-state.tsx'
     ).useMobileTasksWorkspaceAndProjectState
     return mountModelHook(modules, context, {
       useHook: (

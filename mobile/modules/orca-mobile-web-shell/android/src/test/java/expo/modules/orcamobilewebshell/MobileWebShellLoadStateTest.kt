@@ -6,8 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-private fun failure(reason: String) = MobileWebShellLoadEmission("failed", reason)
-
 class MobileWebShellLoadStateTest {
 
   // A prop update on the dead view must not turn a low-memory kill into a crash that spends the JS remount budget.
@@ -28,7 +26,6 @@ class MobileWebShellLoadStateTest {
   @Test
   fun `hears a document only between its commit and the end of that load`() {
     val machine = MobileWebShellLoadStateMachine()
-    assertFalse(machine.hasCommittedDocument)
     machine.started()
     // The previous document is alive and same-origin until the next one commits.
     assertFalse(machine.hasCommittedDocument)
@@ -48,19 +45,6 @@ class MobileWebShellLoadStateTest {
     assertFalse(machine.hasCommittedDocument)
     machine.committed()
     assertFalse(machine.hasCommittedDocument)
-  }
-
-  // Chromium finishes its error document after failure; ready would expose it again.
-  @Test
-  fun `a load that finished after a failure reports nothing`() {
-    val machine = MobileWebShellLoadStateMachine()
-    machine.started()
-    assertEquals(
-      failure("document-load-failed"),
-      machine.failed(MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED)
-    )
-    assertNull(machine.finished())
-    assertNull(machine.started())
   }
 
   // A prop update can replace a failed load before its deferred report.

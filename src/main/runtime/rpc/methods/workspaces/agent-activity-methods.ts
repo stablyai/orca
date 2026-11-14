@@ -2,7 +2,7 @@ import { defineMethod } from '../../core'
 import {
   AgentActivityClearParams,
   AgentActivitySetReadParams
-} from '../../../../../shared/rpc-contract/agent-activity-params'
+} from '../../../../../shared/rpc-contract/agent-activity/agent-activity-params'
 
 // Desktop Agents-list read and clear for paired clients; the next worktree.ps already reflects them.
 export const AGENT_ACTIVITY_METHODS = [

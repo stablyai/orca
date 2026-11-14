@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildFixBrokenChecksPrompt, getCheckDetailsPromptKey } from './pr-checks-fix-prompt'
-import type { PRCheckDetail, PRCheckJob, PRCheckRunDetails } from '../../github/check-types'
+import type { PRCheckDetail, PRCheckJob, PRCheckRunDetails } from '../../github/checks/check-types'
 
 const failingCheck: PRCheckDetail = {
   name: 'unit',

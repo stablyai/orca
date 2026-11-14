@@ -1,5 +1,4 @@
 import { readFileSync, statSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { AgentTokenUsageReporter } from '../reporting/token-usage/agent-token-usage-reporter'
 import { join, parse } from 'node:path'
 import {
@@ -14,6 +13,7 @@ import {
 } from '../worktree-attribution/usage-worktree-refs'
 import { UsageInlineCachePreservation } from '../cache/usage-inline-cache-preservation'
 import { usageSourceCachePath } from '../cache/usage-source-cache-file'
+import { readUsageCacheJson } from '../cache/usage-cache-json'
 import type {
   UsageProviderStoreState,
   UsageProviderStoreLifecycleConfig,
@@ -180,6 +180,7 @@ export abstract class UsageProviderStoreLifecycle<
   private async loadOnWorker(cacheFile: string): Promise<void> {
     try {
       let fallback = false
+      let fallbackState: State | null = null
       const { reportText, migrated, reportIntegrityVerified } = await Promise.resolve()
         .then(() =>
           this.config.splitCacheFile({
@@ -192,22 +193,29 @@ export abstract class UsageProviderStoreLifecycle<
           // Preserve usage history when the worker cannot start.
           console.warn(`${this.config.logTag} Reading the usage cache on the main thread:`, error)
           fallback = true
+          const loaded = this.config.readFallbackCache
+            ? await this.config.readFallbackCache(cacheFile)
+            : { state: await readUsageCacheJson<State>(cacheFile), integrityVerified: false }
+          fallbackState = loaded.state
+          if (!fallbackState) {
+            throw new Error('Saved usage cache is invalid')
+          }
           return {
-            reportText: await readFile(cacheFile, 'utf-8'),
+            reportText: '',
             migrated: false,
-            reportIntegrityVerified: false
+            reportIntegrityVerified: loaded.integrityVerified
           }
         })
       if (reportText === null) {
         return
       }
-      const parsed: State = JSON.parse(reportText)
+      const parsed: State = fallbackState ?? JSON.parse(reportText)
       this.inlineCache.active =
         fallback &&
         !('usageIntegrity' in parsed) &&
         Array.isArray(parsed[this.config.sourceKey]) &&
         parsed[this.config.sourceKey].length > 0
-      await this.applyReport(reportText, parsed, !fallback && reportIntegrityVerified === true)
+      await this.applyReport(reportText, parsed, reportIntegrityVerified === true)
       if (migrated) {
         // Future launches can read the compact report synchronously.
         await this.writeToDisk().catch(() => {})

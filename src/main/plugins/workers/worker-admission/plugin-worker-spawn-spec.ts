@@ -1,5 +1,5 @@
 import type { PluginCapabilityKind } from '../../../../shared/plugins/capabilities/plugin-capabilities'
-import type { ValidDiscoveredPlugin } from '../../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../../discovery/plugin-discovery'
 import type { PluginWorkerSpawnSpec } from '../worker-supervision/plugin-worker-startup'
 import { pluginNeedsResidentWorker } from './plugin-resident-worker'
 
@@ -17,7 +17,7 @@ export function buildPluginWorkerSpawnSpec(
     // Dev roots survive manifest changes; include revision to prevent stale worker reuse.
     manifestRevision: JSON.stringify(plugin.manifest),
     reviewedContentHash: plugin.contentHash ?? plugin.consentContentHash ?? null,
-    ...(plugin.isDev ? { devRevision: plugin.devRevision ?? null } : {}),
+    ...(plugin.isDev ? { devRevision: plugin.devRevision ?? null, allowProposed: true } : {}),
     ...(pluginNeedsResidentWorker(plugin.manifest) ? { keepWarm: true as const } : {}),
     grantedCapabilities
   }

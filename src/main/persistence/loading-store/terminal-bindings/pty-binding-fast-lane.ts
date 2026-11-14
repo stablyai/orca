@@ -1,7 +1,7 @@
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import '../../restoring-sessions/terminal-layout-normalization'
-import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 
 /** not_durable alone means memory matches and only the debounced save remains. */

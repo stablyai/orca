@@ -1,5 +1,5 @@
 /** Before first activation, rule out hand-started orcad/headless owners of the data root. Live, unreadable or unexpected PID records defer to avoid concurrent owners. */
-import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/instance-lock/orcad-instance-lock'
 import { PRIMARY_RUNTIME_METADATA_FILE } from '../../../shared/runtime-bootstrap'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { selectOrcadSlotRuntimeCommand } from '../install/orcad-remote-runtime'

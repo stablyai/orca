@@ -1,50 +1,16 @@
 import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import type { Range, VirtualItem } from '@tanstack/react-virtual'
-import {
-  PINNED_GROUP_KEY,
-  getWorktreeLineageGroupKey
-} from '../../../../../../shared/sidebar-list/group-keys'
-import { getRenderRowKey } from '../listing/render-row'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import type { RenderRow } from '../listing/render-row'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
 // Why: HostSectionHeader wraps its h-8 (32px) card in pt-1 (4px), so the row is 36px.
 export const HOST_HEADER_ROW_HEIGHT = 36
-export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 6
+export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 0
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
 const PENDING_CREATION_ROW_HEIGHT = 56
 const FOLDER_WORKSPACE_ROW_HEIGHT = 64
-
-/** Remap anchors when first/last child changes flip a parent between plain and lineage-group keys without moving it. */
-export function buildLineageRowRekeyMap(rows: readonly RenderRow[]): ReadonlyMap<string, string> {
-  const rekeyed = new Map<string, string>()
-  for (const row of rows) {
-    if (row.type === 'lineage-group') {
-      const groupKey = getRenderRowKey(row)
-      for (const member of row.rows) {
-        rekeyed.set(`wt:${member.rowKey}`, groupKey)
-      }
-      if (row.folder) {
-        rekeyed.set(getRenderRowKey(row.folder), groupKey)
-      }
-      continue
-    }
-    if (row.type === 'folder-workspace') {
-      rekeyed.set(`lineage-group:${row.key}`, getRenderRowKey(row))
-      continue
-    }
-    if (row.type !== 'item') {
-      continue
-    }
-    // Map dissolved groups even with zero children because old anchors still hold their group key.
-    rekeyed.set(
-      `lineage-group:${row.sectionKey}:${getWorktreeLineageGroupKey(row.worktree)}`,
-      getRenderRowKey(row)
-    )
-  }
-  return rekeyed
-}
 
 export function shouldUseHeaderTopSpacing(args: {
   rows: readonly RenderRow[]
@@ -67,6 +33,7 @@ export function estimateRenderRowSize(
   if (row?.type === 'host-header') {
     return (
       HOST_HEADER_ROW_HEIGHT +
+      6 +
       (shouldUseHeaderTopSpacing({
         rows,
         index,
@@ -79,6 +46,7 @@ export function estimateRenderRowSize(
   if (row?.type === 'header') {
     return (
       GROUP_HEADER_ROW_HEIGHT +
+      6 +
       (shouldUseHeaderTopSpacing({
         rows,
         index,
@@ -88,16 +56,11 @@ export function estimateRenderRowSize(
         : 0)
     )
   }
-  if (row?.type === 'lineage-group') {
-    return row.folder
-      ? FOLDER_WORKSPACE_ROW_HEIGHT + row.rows.length * 96
-      : 100 + Math.max(0, row.rows.length - 1) * 96
-  }
   if (row?.type === 'imported-worktrees-card' || row?.type === 'new-external-worktrees-inbox') {
-    return IMPORTED_WORKTREES_LINE_ROW_HEIGHT
+    return IMPORTED_WORKTREES_LINE_ROW_HEIGHT + 6
   }
   if (row?.type === 'pending-creation') {
-    return PENDING_CREATION_ROW_HEIGHT
+    return PENDING_CREATION_ROW_HEIGHT + 6
   }
   if (row?.type === 'folder-workspace') {
     return FOLDER_WORKSPACE_ROW_HEIGHT

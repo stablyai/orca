@@ -6,7 +6,7 @@ import {
   isAgentSessionHostStatusPresentation,
   type AgentSessionHostStatusPresentation
 } from '../agent-session/view/agent-session-host-status-rows'
-import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../agent-session/lifecycle/agent-session-orca-stop'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from './native-chat-stopped-before-start'
 import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../agent-session/agent-session-fork'
 import type { NativeChatBlock, NativeChatTextBlock } from './native-chat-types'

@@ -1,6 +1,6 @@
 import { BranchSwitchLandedWithWarningError } from '../../../../../git/worktrees/checkout/branch-switch'
-import { mapDispatcherError } from '../../../dispatcher-error-response'
-import '../../../unused-default-rpc-methods.test-fixture'
+import { mapDispatcherError } from '../../../responses/dispatcher-error-response'
+import '../../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { describe, expect, it } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { RpcDispatcher } from '../../../dispatcher'

@@ -1,11 +1,10 @@
 // Resolve compatible published row IDs back to model tabs/panes without changing older client keys/selections (wire rule 3).
 
 import type { LayoutTab, WorkspaceLayout } from '../workspace-layout-model'
-import { layoutContainsLeafId } from '../terminal-pane-tree'
+import { layoutContainsLeafId } from '../terminal-topology/terminal-pane-tree'
 import { AGENT_SESSION_ROW_PREFIX, TERMINAL_ROW_SEPARATOR } from './old-client-session-row-ids'
 
-export { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
-export { projectSessionTabs } from './old-client-session-tabs-projection'
+import './old-client-session-tabs-projection'
 
 export type SessionTabRowTarget = { tab: LayoutTab; leafId?: string }
 

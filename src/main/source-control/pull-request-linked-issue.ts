@@ -3,7 +3,7 @@ import type { PullRequestLinkedIssue } from '../../shared/source-control/ai/gene
 import { isLinkedIssueNumber } from '../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import type { WorkspaceLinkedItem } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from '../git/command-runner/git-runtime-options'
-import { getIssue as getGitHubIssue } from '../github/issues'
+import { getIssue as getGitHubIssue } from '../github/issues/issues'
 import { getIssue as getGitLabIssue } from '../gitlab/issues/gitlab-issue-queries'
 
 export type PullRequestLinkedIssueMeta = {

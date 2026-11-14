@@ -13,9 +13,9 @@ import type {
 import {
   clientPageCreationTimeout,
   waitForClientPageCreationResult,
-  closeUncommittedClientPage,
   type BrowserClientPageExecutionHostGrant
 } from '../client-pages/browser-host-client-page-creation'
+import { closeUncommittedClientPage } from '../client-pages/browser-host-uncommitted-client-page'
 
 const pendingByPlacements = new WeakMap<
   BrowserHostPagePlacementRegistry,

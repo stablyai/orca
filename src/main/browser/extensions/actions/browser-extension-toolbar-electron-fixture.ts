@@ -2,7 +2,7 @@ import { app, BaseWindow, BrowserWindow, protocol, ipcMain, session } from 'elec
 import { renameSync, writeFileSync } from 'node:fs'
 import '../../../../shared/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
-import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'

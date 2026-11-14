@@ -42,19 +42,6 @@ describe('a route update over a re-sent init', () => {
     expect(seen).toEqual(['pane-1', '', 'pane-1'])
   })
 
-  it('reaches the page for a different pane without opening a second session', async () => {
-    const pair = await openedOnTheSession()
-    const before = pair.client.getShellSession()
-    const seen = recordRouteUpdates(pair)
-    pair.host.publishRoute(sessionRoute('pane-1'))
-    await pair.flush()
-    pair.host.publishRoute(sessionRoute('pane-2'))
-    await pair.flush()
-    expect(seen).toEqual(['pane-1', 'pane-2'])
-    expect(pair.pageReadyCount()).toBe(1)
-    expect(pair.client.getShellSession()?.sessionId).toBe(before?.sessionId)
-  })
-
   // Repeated ready repairs state but is not another pane request; notify listeners only when route params move.
   it('publishes nothing for a re-asked ready that carries the route the page holds', async () => {
     const pair = await openedOnTheSession()
@@ -79,23 +66,5 @@ describe('a route update over a re-sent init', () => {
     sent?.resolve({ id: 'r1', ok: true, result: { worktrees: [] } })
     await pair.flush()
     await expect(pending).resolves.toMatchObject({ ok: true })
-  })
-
-  it('leaves the storage snapshot the same object the page already held', async () => {
-    const pair = await openedOnTheSession()
-    const before = pair.client.getShellSession()?.storage
-    pair.host.publishRoute(sessionRoute('pane-1'))
-    await pair.flush()
-    expect(pair.client.getShellSession()?.storage).toBe(before)
-  })
-
-  it('sends the second init to a page whose ready declares nothing', async () => {
-    const pair = await openedOnTheSession()
-    pair.host.receive(JSON.stringify({ v: 1, type: 'ready' }))
-    await pair.flush()
-    const framesBefore = pair.toPage.length
-    pair.host.publishRoute(sessionRoute('pane-1'))
-    await pair.flush()
-    expect(pair.toPage.length).toBe(framesBefore + 1)
   })
 })

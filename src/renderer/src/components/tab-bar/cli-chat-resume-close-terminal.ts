@@ -8,7 +8,7 @@ import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/termin
 import {
   captureTerminalSurfaceIdentity,
   isRetainedTerminalSurfaceIdentity
-} from '../../../../shared/workspace-layout/terminal-tab-close'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-close'
 import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalWait

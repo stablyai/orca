@@ -1,4 +1,5 @@
-import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
+import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -13,12 +14,12 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-reveal-identity'
-import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-pane-reveal'
+import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
+import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import type {
   TerminalLeafMoveResult,
   TerminalPaneMoveToNewTabRequest
-} from '../../../../shared/workspace-layout/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -26,9 +27,9 @@ import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hos
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
-} from '../../../../shared/worktree/base-ref-drift-types'
+} from '../../../../shared/worktree/base-refs/base-ref-drift-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState
@@ -55,6 +56,7 @@ export type RuntimeNotifier = {
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
   browserProfilesChanged?(): void
+  workspaceCleanupRunFinished?(run: WorkspaceCleanupRunFinishedEvent['run']): void
   activateWorktree(
     repoId: string,
     worktreeId: string,
@@ -129,6 +131,8 @@ export type RuntimeNotifier = {
       sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
       newLeafId?: string
+      /** An agent's split: the new pane leaves the user's active pane and keyboard focus alone. */
+      activate?: false
     }
   ): void
   /** `recordInteraction: false` marks a title the host applied, not one the user typed. */

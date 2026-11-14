@@ -4,7 +4,7 @@ vi.mock('electron', () => ({ app: { getPath: () => '/tmp/userData' } }))
 
 import { runVendorHook } from './testing/vendor-hook-delivery.test-fixture'
 
-import { getManagedScript as getClaudeManagedScript } from '../../../claude/hook-service'
+import { getManagedScript as getClaudeManagedScript } from '../../../claude/hooks/hook-script'
 import { getManagedScript as getCursorManagedScript } from '../../../cursor/hook-script'
 
 const CLAUDE_SCRIPT_OPTIONS = {

@@ -5,7 +5,7 @@ import { applyDividerStyles, disposeDivider } from './pane-divider'
 import { findPaneChildren } from './pane-tree-equalization'
 import { refitPanesUnder } from './pane-tree-ops'
 import { readSplitRatio } from './pane-split-ratio'
-import { SPLIT_RATIO_TOLERANCE } from '../../../../../shared/workspace-layout/terminal-pane-tree'
+import { SPLIT_RATIO_TOLERANCE } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 type GeometryWrite = {
   split: HTMLElement

@@ -12,7 +12,7 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project-types
 import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getProjectGroupHeaderKey } from '../../../../shared/sidebar-list/group-keys'
+import { getProjectGroupHeaderKey } from '../../../../shared/sidebar-list/sections/group-keys'
 import { getDistinctProjectGroups } from '../../../../shared/project-groups'
 import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
 import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'

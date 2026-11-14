@@ -1,6 +1,6 @@
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceSet } from './tabs-slice-contract'
-import { updateSplitRatio } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { updateSplitRatio } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { replaceRecordEntries } from '../../keyed-record-transitions'
 
 export function createTabsSplitRatioActions(

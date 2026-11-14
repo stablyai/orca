@@ -21,11 +21,11 @@ import type {
   PluginInstallSource,
   PluginLockEntry
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
-import { validatePluginInstallTree } from '../plugin-artifact-validation'
+import { validatePluginInstallTree } from '../artifacts/plugin-artifact-validation'
 import { renamePluginFileWithWindowsRetry } from './plugin-atomic-file-write'
-import { hashPluginTree } from '../plugin-content-hash'
+import { hashPluginTree } from '../artifacts/plugin-content-hash'
 import { publishPluginInstall } from './plugin-install-publication'
-import { readPluginManifestText } from '../plugin-manifest-file'
+import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
 import { pluginInstallTrustError } from './plugin-install-trust'
 import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
 import { readPluginLockfile } from './plugin-install-lockfile-store'

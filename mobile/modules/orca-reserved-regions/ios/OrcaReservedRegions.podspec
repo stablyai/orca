@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description = s.summary
   s.license = { :type => 'MIT' }
   s.author = 'Orca'
-  s.homepage = 'https://onorca.dev'
+  s.homepage = 'https://orca.dev'
   s.source = { :git => 'https://github.com/stablyai/orca.git' }
   s.platforms = { :ios => '16.4' }
   s.swift_version = '5.9'

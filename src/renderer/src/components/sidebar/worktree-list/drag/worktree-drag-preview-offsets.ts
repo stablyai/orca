@@ -5,6 +5,7 @@ export type WorktreeDragPreviewRect = {
   groupIndex: number
   top: number
   bottom: number
+  layoutBottom?: number
 }
 
 function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
@@ -82,6 +83,7 @@ export function buildWorktreeDragPreviewOffsets(args: {
   dropIndex: number
   rects: readonly WorktreeDragPreviewRect[]
 }): WorktreeDragPreviewLayout {
+  const rects = args.rects.map((rect) => ({ ...rect, bottom: rect.layoutBottom ?? rect.bottom }))
   const committedNextIds = moveWorktreeIdsWithinGroup(
     args.groupIds,
     args.draggedIds,
@@ -108,7 +110,7 @@ export function buildWorktreeDragPreviewOffsets(args: {
 
   const groupIdSet = new Set(args.groupIds)
   const rectById = new Map<string, WorktreeDragPreviewRect>()
-  for (const rect of args.rects) {
+  for (const rect of rects) {
     if (groupIdSet.has(rect.worktreeId)) {
       rectById.set(rect.worktreeId, rect)
     }
@@ -120,8 +122,8 @@ export function buildWorktreeDragPreviewOffsets(args: {
     args.fallbackGap >= 0
       ? args.fallbackGap
       : 0
-  const fallbackStride = getFallbackStride(args.rects, defaultGap)
-  const fallbackGap = getFallbackGap(args.rects, defaultGap)
+  const fallbackStride = getFallbackStride(rects, defaultGap)
+  const fallbackGap = getFallbackGap(rects, defaultGap)
   const groupRects = args.groupIds.flatMap((id) => {
     const rect = rectById.get(id)
     return rect ? [rect] : []
@@ -179,7 +181,7 @@ export function buildWorktreeDragPreviewOffsets(args: {
   }
 
   const offsets = new Map<string, number>()
-  for (const rect of args.rects) {
+  for (const rect of rects) {
     if (draggedSet.has(rect.worktreeId)) {
       continue
     }

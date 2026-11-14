@@ -1,6 +1,11 @@
+import {
+  requireBrowserHostCommandResultLedger,
+  type BrowserHostCommandResultIdentity,
+  type BrowserHostLeaseState
+} from '../leases/browser-host-lease-records'
+import type { BrowserHostCommandResultParams } from './browser-host-command-state'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
-import type { BrowserHostLeaseState } from '../leases/browser-host-lease-records'
 import { assertBrowserHostPageCommandAdmission } from './browser-host-page-command-admission'
 import type { BrowserClientPageAuthority } from '../reconciliation/browser-host-page-placement'
 
@@ -26,4 +31,28 @@ export function issueBrowserHostClientPageCommand(
     pageHostGeneration: authority.pageHostGeneration,
     command
   })
+}
+
+export function attachBrowserHostClientCommandDelivery(
+  state: BrowserHostLeaseState,
+  delivery: (event: BrowserClientHostCommandEvent) => void
+): () => void {
+  const ledger = state.commandLedger
+  if (!ledger) {
+    throw new Error('browser_host_command_protocol_required')
+  }
+  return ledger.attach(delivery)
+}
+
+export function settleBrowserHostClientPageCommand(
+  state: BrowserHostLeaseState,
+  identity: BrowserHostCommandResultIdentity,
+  params: BrowserHostCommandResultParams,
+  requirePage: (authority: BrowserClientPageAuthority) => unknown
+): boolean {
+  const ledger = requireBrowserHostCommandResultLedger(state, identity)
+  if (!ledger.isUnplacedPageResult(params)) {
+    requirePage(params)
+  }
+  return ledger.settle(params)
 }

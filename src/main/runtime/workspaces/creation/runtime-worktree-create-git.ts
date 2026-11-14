@@ -2,7 +2,7 @@ import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host
 import type { BranchPrefixStrategy } from '../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getPRForBranch } from '../../../github/client/lookup/get-pr-for-branch'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { foldGitRefNameCase } from '../../../git/refs/resolution/repo-branch-conflict'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
@@ -96,12 +96,15 @@ export async function canCheckoutExistingLocalBranch(
   }
   const worktrees = await listWorktrees(repoPath, gitOptions)
   let busy = worktrees.find((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
-  if (explicitReuse && !busy) {
+  if (!busy) {
+    // Why: macOS Git resolves case and NFC/NFD aliases to one stored ref; Linux keeps them distinct.
+    // Explicit reuse already verified that the requested spelling is stored exactly.
     for (const worktree of worktrees) {
       const checkedOutBranch = normalizeLocalBranchName(worktree.branch)
       if (
         foldGitRefNameCase(checkedOutBranch) === foldGitRefNameCase(branchName) &&
-        !(await hasExactBranchRef(checkedOutBranch))
+        ((!explicitReuse && !(await hasExactBranchRef(branchName))) ||
+          !(await hasExactBranchRef(checkedOutBranch)))
       ) {
         busy = worktree
         break

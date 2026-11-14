@@ -17,7 +17,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session/workspace-session-tab-activity'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
-import { normalizePairedServerRow } from '../../../shared/sidebar-list/paired-server-rows'
+import { normalizePairedServerRow } from '../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
 import {

@@ -3,7 +3,7 @@ import { dialog, type BrowserWindow, type MessageBoxOptions } from 'electron'
 import type { RuntimeRpcStartErrorClass } from '../../../../shared/telemetry-daemon-event-schemas'
 import { translateMain } from '../../../i18n/main-i18n'
 import { track } from '../../../telemetry/client'
-import { waitForWindowToShow } from '../../../window/wait-for-window-to-show'
+import { waitForWindowToShow } from '../../../window/visibility/wait-for-window-to-show'
 
 const MAX_VISIBLE_CAUSE_LENGTH = 500
 

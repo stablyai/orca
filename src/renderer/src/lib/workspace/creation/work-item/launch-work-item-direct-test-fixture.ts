@@ -230,6 +230,7 @@ beforeEach(() => {
   )
   mocks.pasteDraftWhenAgentReady.mockResolvedValue(true)
   mocks.store = {
+    projectGroups: [],
     repos: [
       {
         id: 'repo-1',

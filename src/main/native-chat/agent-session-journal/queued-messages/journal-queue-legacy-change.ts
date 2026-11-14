@@ -77,7 +77,7 @@ function handOffInDoubt(submission: AgentJournalSubmission): boolean {
 
 export function unanswered(
   card: QueuedMessageRow,
-  submissions: ReadonlyMap<string, AgentJournalSubmission>
+  submissions: Pick<ReadonlyMap<string, AgentJournalSubmission>, 'get'>
 ): boolean {
   if (card.state !== 'dispatched') {
     return card.state !== 'withdrawn'

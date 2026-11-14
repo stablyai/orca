@@ -5,7 +5,7 @@ import {
 } from '../../../../../../../shared/agent-session/agent-session-availability'
 import type { AgentSessionModelCatalogResult } from '../../../../../../../shared/agent-session/agent-session-wire'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import type { AgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import {
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
@@ -17,12 +17,12 @@ import {
   structuredAgentSessionHostKey,
   useStructuredAgentSessionHostCapabilityState
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import type { StructuredAgentSessionOptionRecord } from '../../../../../../../shared/agent-session/options/structured-agent-session-option-state'
+import type { StructuredAgentSessionOptionRecord } from '../../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-option-state'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
 } from '../../../../../../../shared/host-model-listing-waits'
-import { usesModelSpecificAcpEfforts } from '../../../../../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { usesModelSpecificAcpEfforts } from '../../../../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import { AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY } from '../../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 /** Warm visible chats from the host catalog and share one listing wait per chat. Recheck held unavailability on agent changes, focus and turn edges. */

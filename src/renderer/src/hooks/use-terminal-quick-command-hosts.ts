@@ -15,7 +15,7 @@ import { useAppStore } from '@/store'
 import type {
   RuntimeTerminalQuickCommands,
   TerminalQuickCommandHostsSlice
-} from '@/store/terminals/terminal-quick-command-hosts'
+} from '@/store/terminals/quick-commands/terminal-quick-command-hosts'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   getTranslatedExecutionHostLabel,

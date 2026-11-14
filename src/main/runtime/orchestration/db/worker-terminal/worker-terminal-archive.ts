@@ -28,7 +28,7 @@ export function storeWorkerTerminalArchive(
     .run(params.dispatchId, params.resourceId, params.kind, params.content)
 }
 
-/** Stop closes the terminal; keep its output so a later release has an archive to settle with. */
+/** Stop closes the terminal; record where its output lives so a later release has a reference to settle with. */
 export function storeWorkerTerminalArchiveBeforeStop(
   this: OrchestrationDb,
   params: {
@@ -37,7 +37,7 @@ export function storeWorkerTerminalArchiveBeforeStop(
     kind: WorkerTerminalArchiveKind
     content: string
     archiveSource: 'transcript' | 'terminal'
-    archiveStatus: Extract<WorkerTerminalArchiveStatus, 'captured' | 'empty'>
+    archiveStatus: WorkerTerminalArchiveStatus
   }
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
@@ -68,7 +68,7 @@ export function commitWorkerTerminalArchiveForRelease(
     kind?: WorkerTerminalArchiveKind
     content?: string
     archiveSource: 'transcript' | 'terminal'
-    archiveStatus: Extract<WorkerTerminalArchiveStatus, 'captured' | 'empty'>
+    archiveStatus: WorkerTerminalArchiveStatus
   }
 ): WorkerTerminalResourceRow {
   this.db.exec('BEGIN IMMEDIATE')
@@ -128,7 +128,7 @@ export function getWorkerTerminalArchive(
     .get(dispatchId) as WorkerTerminalArchiveRow | undefined
 }
 
-/** Existence only; archive rows hold up to 256 KB of output. */
+/** Existence only; rows written before references can still hold a saved copy until it is removed. */
 export function hasWorkerTerminalArchive(this: OrchestrationDb, dispatchId: string): boolean {
   return Boolean(
     this.db.prepare('SELECT 1 FROM worker_terminal_archives WHERE dispatch_id = ?').get(dispatchId)
@@ -181,7 +181,7 @@ export function revertWorkerTerminalReleaseToRetained(
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
-/** Caller owns the transaction; retain must preserve committed release state and its output archive. */
+/** Caller owns the transaction; retain must preserve committed release state and its output reference. */
 export function retainTerminalResourceInTransaction(
   database: OrchestrationDb,
   resourceId: string,
@@ -198,7 +198,7 @@ export function retainTerminalResourceInTransaction(
     )
     .run(reason, resourceId)
   if (changes > 0) {
-    // A stopped worker's terminal is closed; the archive taken before stop is its only output.
+    // A stopped worker's terminal is closed; the reference taken before stop is its only pointer to output.
     const dropped = database.db
       .prepare(
         `DELETE FROM worker_terminal_archives WHERE dispatch_id = ? AND NOT EXISTS (
