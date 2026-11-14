@@ -13,6 +13,7 @@ const execve = Object.getOwnPropertyDescriptor(process, 'execve')
 beforeEach(() => {
   Object.defineProperty(process, 'execve', {
     configurable: true,
+    writable: true,
     value: vi.fn(() => {
       throw new Error('Unexpected native replacement')
     })
