@@ -31,16 +31,22 @@ export const readChatWorkerPrompt: ChatWorkerPromptReader = async (sessionId, it
   return item?.body.kind === 'approval' ? { revision: item.revision, body: item.body } : null
 }
 
+/** Settled by Orca's own answer, for a coordinator or a person. */
+export function answeredByOrca(prompt: ChatWorkerPrompt): boolean {
+  const { resolution } = prompt.body
+  return (
+    resolution.state !== 'pending' &&
+    resolution.resolvedBy?.startsWith(ORCHESTRATION_APPROVAL_CALLER_PREFIX) === true
+  )
+}
+
 /** How a reported chat approval closed, from its journal item; null while it is still open, or when
  *  Orca answered it, since that answer writes its own closing line with the reason. */
 export function chatApprovalCloseOutcome(
   prompt: ChatWorkerPrompt | null
 ): WorkerApprovalOutcome | null {
   const resolution = prompt?.body.resolution
-  if (
-    resolution?.state === 'pending' ||
-    resolution?.resolvedBy?.startsWith(ORCHESTRATION_APPROVAL_CALLER_PREFIX)
-  ) {
+  if (resolution?.state === 'pending' || (prompt && answeredByOrca(prompt))) {
     return null
   }
   return {
