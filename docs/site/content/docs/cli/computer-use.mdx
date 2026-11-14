@@ -116,7 +116,7 @@ On Linux and Windows, action payloads also pass briefly through a local operatio
 
 ## Screenshots
 
-`get-app-state` returns an accessibility tree and, by default, a screenshot. With `--json`, the image bytes are written to disk and the path is returned in `screenshot.path` rather than embedded in the response. Pass `--no-screenshot` when pixels aren't needed (faster, smaller payload). On macOS, a window that is minimized, hidden or on another Space can't be read; bring it on screen, or pass `--restore-window` to have Orca bring it forward.
+`get-app-state` returns an accessibility tree and, by default, a screenshot. With `--json`, the image bytes are written to disk and the path is returned in `screenshot.path` rather than embedded in the response. Pass `--no-screenshot` when pixels aren't needed (faster, smaller payload). On macOS, a window that is minimized or hidden has no pixels, so the screenshot fails while the accessibility tree still comes back; a window on another Space is captured.
 
 On Wayland, screenshots work on KDE Plasma, Hyprland and Sway. On Hyprland and Sway they need `grim`, GdkPixbuf, and `hyprctl` or `swaymsg`; Orca finds the target window by process ID and title and captures its region, so overlapping windows can show in the image.
 
