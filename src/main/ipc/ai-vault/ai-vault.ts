@@ -1,8 +1,7 @@
+import { scanLocalAiVaultSessionsAsIssue } from './ai-vault-local-list'
 import { scanRemoteLeg } from './ai-vault-remote-scan-observation'
-import {
-  forwardRowInterest,
-  rowsAreObserved
-} from '../../ai-vault/scan-lifecycle/ai-vault-row-interest'
+import { scanRecoveryInterest } from '../../ai-vault/scan-lifecycle/ai-vault-scan-recovery'
+import { rowsAreObserved } from '../../ai-vault/scan-lifecycle/ai-vault-row-interest'
 import type { AiVaultRowDelta, AiVaultScanRows } from '../../../shared/ai-vault-scan-rows'
 import { registerAiVaultListHandler } from './ai-vault-list-handler'
 import {
@@ -11,11 +10,7 @@ import {
 } from './ai-vault-projection-dependency'
 import { app, ipcMain } from 'electron'
 import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
-import {
-  listAiVaultSessions as listCachedLocalAiVaultSessions,
-  AiVaultLocalScanError,
-  resetAiVaultSessionListCacheForTests
-} from '../../ai-vault/listing/cached-session-list'
+import { resetAiVaultSessionListCacheForTests } from '../../ai-vault/listing/cached-session-list'
 import type { AiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
 import { deleteAiVaultSession, registerAiVaultDeleteHandler } from './ai-vault-delete'
 import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
@@ -24,10 +19,8 @@ import {
   mergeAiVaultListResults
 } from '../../ai-vault/listing/session-list-results'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
-import { classifyAiVaultScanError } from '../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
-  isAiVaultScanCancelledError,
   type AiVaultFirstUserPromptArgs,
   type AiVaultListArgs,
   type AiVaultListResult,
@@ -136,8 +129,17 @@ async function listAiVaultSessions(
       observeRows: options.observeRows,
       signal: options.signal,
       start: (scanSignal, _scanId, publish) => {
+        const force = (scanRecoveryInterest(scanSignal)?.required ?? 0) > 0
+        const effectiveArgs = force ? { ...args, force: true } : args
         const scan = () =>
-          scanAiVaultSessionsByHostScope(args, hostScope, scanSignal, key, dependency, publish)
+          scanAiVaultSessionsByHostScope(
+            effectiveArgs,
+            hostScope,
+            scanSignal,
+            key,
+            dependency,
+            publish
+          )
         if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
           return scan()
         }
@@ -146,7 +148,7 @@ async function listAiVaultSessions(
           dependency,
           depth,
           scopePaths,
-          force: args?.force === true,
+          force,
           afterFingerprint,
           scan
         })
@@ -236,37 +238,6 @@ export function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryRe
     path: 'runtime environments',
     fallbackMessage: 'Runtime hosts are unavailable.'
   })
-}
-
-// Like remote failures, local scanner/cache/WSL failures must degrade to issues without discarding healthy hosts.
-async function scanLocalAiVaultSessionsAsIssue(
-  args: AiVaultListArgs | undefined,
-  signal: AbortSignal | undefined,
-  publish?: (delta: AiVaultRowDelta) => void
-): Promise<AiVaultListResult> {
-  try {
-    const observe = publish
-      ? (rows: AiVaultScanRows) =>
-          publish(rows.kind === 'delta' ? rows.delta : { upserts: [...rows.sessions], removed: [] })
-      : undefined
-    if (observe && publish) {
-      forwardRowInterest(observe, publish)
-    }
-    return await listCachedLocalAiVaultSessions(args, { signal, observeRows: observe })
-  } catch (error) {
-    if (isAiVaultScanCancelledError(error)) {
-      throw error
-    }
-    // Keep raw supervision details in logs; show an actionable host issue.
-    const raw = error instanceof Error ? error.message : 'Local session scan failed.'
-    console.error('[ai-vault] local session scan failed:', raw)
-    const result = aiVaultScanIssueResult({
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      path: 'this computer',
-      ...classifyAiVaultScanError(raw)
-    })
-    return error instanceof AiVaultLocalScanError ? { ...result, scanId: error.scanId } : result
-  }
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {

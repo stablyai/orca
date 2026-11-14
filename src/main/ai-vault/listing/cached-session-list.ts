@@ -115,6 +115,7 @@ export async function listAiVaultSessions(
     onReject: (error, scanId) =>
       isAiVaultScanCancelledError(error) ? error : new AiVaultLocalScanError(scanId, error),
     start: async (scanSignal, scanId, publish) => {
+      const force = (scanRecoveryInterest(scanSignal)?.required ?? 0) > 0
       const scanProgress = progress
       if (!scanProgress) {
         throw new Error('Local scan progress was not created.')
@@ -157,14 +158,14 @@ export async function listAiVaultSessions(
       ) {
         const current = cachedLists.get(key)
         if (
-          args?.force === true ||
+          force ||
           !current ||
           current.expiresAt <= Date.now() ||
           !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
           // A forced refresh supersedes every list: an older one for another scope (the
           // scope-only view a full list also serves) must not be served after it.
-          if (args?.force === true) {
+          if (force) {
             cachedLists.clear()
             forcedRefreshEpoch++
           }

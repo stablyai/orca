@@ -140,3 +140,28 @@ it('runs a fresh pass for a force that arrives after a recovered successor began
   ])
   expect(start).toHaveBeenCalledOnce()
 })
+
+it('drops a detached newest requirement so a recovered observation can serve surviving forces', async () => {
+  const coordinator = new AiVaultScanCoordinator()
+  const pending = Promise.withResolvers<typeof EMPTY>()
+  let signal!: AbortSignal
+  const first = coordinator.run({
+    key: 'scope',
+    start: (s) => {
+      signal = s
+      return pending.promise
+    }
+  })
+  await Promise.resolve()
+  const start = vi.fn(async () => EMPTY)
+  const force = coordinator.run({ key: 'scope', force: true, start })
+  const interest = scanRecoveryInterest(signal)!
+  interest.observation = nextScanObservationOrder()
+  const controller = new AbortController()
+  const late = coordinator.run({ key: 'scope', force: true, signal: controller.signal, start })
+  controller.abort()
+  await expect(late).rejects.toMatchObject({ name: 'AbortError' })
+  pending.resolve(EMPTY)
+  await Promise.all([first, force])
+  expect(start).not.toHaveBeenCalled()
+})

@@ -167,10 +167,10 @@ export class AiVaultScanCoordinator {
   private attach(args: Run, entry: Entry): Promise<AiVaultListResult> {
     entry.waiters++
     const interest = scanRecoveryInterest(entry.controller.signal)
-    const forced = !!args.requiredOrder
+    const forced = args.force === true && scanRecoveryInterest(args.signal) === undefined
     const releaseParent = inheritScanRecoveryInterest(args.signal, entry.controller.signal)
     const obligation = Symbol()
-    if (forced) {
+    if (args.requiredOrder) {
       entry.requirements.set(obligation, args.requiredOrder ?? 0)
     }
     if (forced && interest) {

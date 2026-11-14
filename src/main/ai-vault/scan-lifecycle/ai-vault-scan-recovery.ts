@@ -18,7 +18,7 @@ let order = 0
 export const nextScanObservationOrder = (): number => ++order
 
 export function scanForceOrder(force: boolean | undefined, parent?: AbortSignal): number {
-  return force ? scanRecoveryInterest(parent)?.required || nextScanObservationOrder() : 0
+  return scanRecoveryInterest(parent)?.required || (force ? nextScanObservationOrder() : 0)
 }
 
 export function createScanRecoveryInterest(signal: AbortSignal): Interest {
