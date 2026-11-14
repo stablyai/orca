@@ -53,7 +53,8 @@ export async function activateBackendRuntime(
   const { ServeReadinessPublisher } = await import('../server/serve-readiness')
   const { servePublishMode } = await import('../server/serve-pairing-readiness')
   const { buildOrcadServeReadiness } = await import('../orcad/serve-startup/orcad-serve-readiness')
-  const { openBackendCoreProfile } = await import('./core-profile-startup')
+  const { createOrcadProfileStateStartup } =
+    await import('../orcad/profile-state/orcad-profile-state-startup')
   const { daemonOwnsFreshPersistentPtys } =
     await import('../daemon/providers/lifecycle/daemon-provider-state')
   const { resolveDaemonSessionScrollbackRows } =
@@ -97,7 +98,7 @@ export async function activateBackendRuntime(
   // Initialize sealing before Store load unseals protected settings.
   await timed('secret-store', () => host.prepareSecrets(runtimeUserDataPath))
   const { store: profileStore, authority: profileStateAuthority } = await timed('profile', () =>
-    openBackendCoreProfile(runtimeUserDataPath)
+    createOrcadProfileStateStartup(runtimeUserDataPath)
   )
   profileShutdown.store = profileStore
   registerCleanup(() => worktreeRemovalLifetime.close())
