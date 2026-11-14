@@ -94,25 +94,34 @@ function PickerTrigger(props: {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <PopoverTrigger asChild disabled={props.disabled}>
-          <Button
-            ref={props.triggerRef}
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-label={props.accessibleName}
-            disabled={props.disabled}
-            className="max-w-64"
-            onKeyDown={props.onKeyDown}
-          >
-            <span data-composer-label className="flex min-w-0 items-center gap-1">
-              <span className="truncate text-chat-foreground">{props.modelLabel}</span>
-              {props.optionsLabel ? <span className="shrink-0">{props.optionsLabel}</span> : null}
-              <ChevronDown className="size-3" />
-            </span>
-            <SlidersHorizontal data-composer-compact-icon className="hidden size-3.5" />
-          </Button>
-        </PopoverTrigger>
+        <span
+          role={props.disabled ? 'button' : undefined}
+          tabIndex={props.disabled ? 0 : undefined}
+          aria-disabled={props.disabled || undefined}
+          aria-label={props.disabled ? props.accessibleName : undefined}
+          className="inline-flex min-w-0 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+        >
+          <PopoverTrigger asChild disabled={props.disabled}>
+            <Button
+              ref={props.triggerRef}
+              type="button"
+              variant="ghost"
+              size="xs"
+              aria-label={props.accessibleName}
+              aria-hidden={props.disabled || undefined}
+              disabled={props.disabled}
+              className="max-w-64"
+              onKeyDown={props.onKeyDown}
+            >
+              <span data-composer-label className="flex min-w-0 items-center gap-1">
+                <span className="truncate text-chat-foreground">{props.modelLabel}</span>
+                {props.optionsLabel ? <span className="shrink-0">{props.optionsLabel}</span> : null}
+                <ChevronDown className="size-3" />
+              </span>
+              <SlidersHorizontal data-composer-compact-icon className="hidden size-3.5" />
+            </Button>
+          </PopoverTrigger>
+        </span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         <div className="space-y-0.5">
