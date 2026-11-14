@@ -106,6 +106,19 @@ export async function readGitReviewBranchSources(
     expandedUrls.set(remote, result)
     return result
   }
+  const booleanValues = new Map<string, boolean>()
+  const gitBoolean = async (key: string): Promise<boolean> => {
+    const cached = booleanValues.get(key)
+    if (cached !== undefined) {
+      return cached
+    }
+    if (!config.has(key)) {
+      return false
+    }
+    const value = (await runGit(['config', '--bool', '--get', key])).stdout.trim() === 'true'
+    booleanValues.set(key, value)
+    return value
+  }
   const sources = new Map<string, GitReviewBranchSource | Error>()
   for (const branch of branchNames) {
     try {
@@ -120,6 +133,7 @@ export async function readGitReviewBranchSources(
       if (remote === '.') {
         throw new Error('Review publish remote is local')
       }
+      const mirror = await gitBoolean(`remote.${remote}.mirror`)
       const specs = config.get(`remote.${remote}.push`) ?? []
       let trackedBranchName: string | undefined
       const destinations = new Set(
@@ -129,9 +143,10 @@ export async function readGitReviewBranchSources(
         throw new Error('Review push destination is ambiguous')
       }
       const branchName = destinations.values().next().value ?? branch
+      const pushMode = get('push.default') ?? 'simple'
       let pushBranchName: string | null =
         localTracking ||
-        (destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing'))
+        (destinations.size === 0 && (specs.length > 0 || (pushMode === 'nothing' && !mirror)))
           ? null
           : branchName
       const fetchRemote =
@@ -141,18 +156,21 @@ export async function readGitReviewBranchSources(
           : remotes.size === 1
             ? remotes.keys().next().value
             : undefined)
+      const mergeValues = config.get(`branch.${branch}.merge`) ?? []
+      // An upstream remote with several branch.<name>.merge values has no single branch Git will push.
+      const ambiguousMerge = Boolean(trackedRemote) && mergeValues.length > 1
+      const merge = ambiguousMerge ? undefined : mergeValues.at(-1)?.trim() || undefined
       if (
+        !mirror &&
         specs.length === 0 &&
-        (!trackedRemote || !get(`branch.${branch}.merge`)) &&
-        (((get('push.default') ?? 'simple') === 'simple' && remote === fetchRemote) ||
-          get('push.default') === 'upstream') &&
+        (!trackedRemote || !merge) &&
+        ((pushMode === 'simple' && remote === fetchRemote) || pushMode === 'upstream') &&
         !/^(true|yes|on|1)$/i.test(get('push.autosetupremote') ?? '')
       ) {
         pushBranchName = null
       }
       if (destinations.size === 0) {
         if (!localTracking && remote === trackedRemote) {
-          const merge = get(`branch.${branch}.merge`)
           const tracked = merge?.startsWith('refs/heads/')
             ? merge.slice('refs/heads/'.length)
             : undefined
@@ -163,23 +181,36 @@ export async function readGitReviewBranchSources(
           ) {
             trackedBranchName = tracked
           }
-          if ((get('push.default') ?? 'simple') === 'simple' && tracked && tracked !== branch) {
+          if (!mirror && pushMode === 'simple' && tracked && tracked !== branch) {
             pushBranchName = null
           }
-          if (specs.length === 0 && get('push.default') === 'upstream') {
+          if (!mirror && specs.length === 0 && pushMode === 'upstream' && !ambiguousMerge) {
             if (!merge) {
               throw new Error('Review upstream is unavailable')
             }
             pushBranchName = tracked ?? null
           }
         } else if (
+          !mirror &&
           specs.length === 0 &&
-          get('push.default') === 'upstream' &&
+          pushMode === 'upstream' &&
           explicitRemote &&
-          remote !== trackedRemote
+          remote !== trackedRemote &&
+          !ambiguousMerge
         ) {
           throw new Error('Review upstream belongs to another remote')
         }
+      }
+      if (
+        !mirror &&
+        ambiguousMerge &&
+        destinations.size === 0 &&
+        specs.length === 0 &&
+        ((pushMode === 'simple' && remote === trackedRemote) ||
+          pushMode === 'upstream' ||
+          pushMode === 'tracking')
+      ) {
+        pushBranchName = null
       }
       sources.set(branch, {
         remoteName: remote,

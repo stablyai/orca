@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { devNull, tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, it } from 'vitest'
 import { readGitReviewBranchSources } from './git-review-branch-source'
@@ -93,6 +93,75 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
     expect((await snapshot()).get('feature')).toBeInstanceOf(Error)
     await git(['config', '--replace-all', 'remote.origin.push', 'refs/heads/feature:refs/tags/v1'])
     expect((await snapshot()).get('feature')).toBeInstanceOf(Error)
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+  }
+})
+
+it('treats multiple branch merge values as an unknown upstream while keeping explicit push controls', async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), 'review-multi-merge-'))
+  const git = (args: string[]) =>
+    exec('git', args, {
+      cwd: repo,
+      env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1' }
+    })
+  try {
+    await git(['init', '--quiet'])
+    await git(['config', 'remote.origin.url', 'https://gitlab.com/team/repo.git'])
+    await git(['config', 'remote.fork.url', 'https://gitlab.com/me/repo.git'])
+    await git(['config', 'branch.feature.remote', 'origin'])
+    await git(['config', 'branch.feature.merge', 'refs/heads/main'])
+    await git(['config', '--add', 'branch.feature.merge', 'refs/heads/other'])
+    await git(['config', 'push.default', 'upstream'])
+    const source = () => readGitReviewBranchSources(git, ['feature'])
+    expect((await source()).get('feature')).toEqual({
+      remoteName: 'origin',
+      branchName: 'feature',
+      pushBranchName: null,
+      urls: ['https://gitlab.com/team/repo.git']
+    })
+    await git(['config', 'push.default', 'current'])
+    expect((await source()).get('feature')).toEqual({
+      remoteName: 'origin',
+      branchName: 'feature',
+      urls: ['https://gitlab.com/team/repo.git']
+    })
+    await git(['config', 'push.default', 'matching'])
+    expect((await source()).get('feature')).toEqual({
+      remoteName: 'origin',
+      branchName: 'feature',
+      urls: ['https://gitlab.com/team/repo.git']
+    })
+    await git(['config', 'push.default', 'simple'])
+    await git(['config', 'branch.feature.pushRemote', 'fork'])
+    expect((await source()).get('feature')).toEqual({
+      remoteName: 'fork',
+      branchName: 'feature',
+      urls: ['https://gitlab.com/me/repo.git']
+    })
+    await git(['config', '--unset', 'branch.feature.pushRemote'])
+    await git(['config', 'remote.pushDefault', 'fork'])
+    expect((await source()).get('feature')).toEqual({
+      remoteName: 'fork',
+      branchName: 'feature',
+      urls: ['https://gitlab.com/me/repo.git']
+    })
+    await git(['config', '--unset', 'remote.pushDefault'])
+    await git(['config', 'remote.origin.push', 'refs/heads/feature:refs/heads/published'])
+    await git(['config', 'push.default', 'upstream'])
+    expect((await source()).get('feature')).toEqual({
+      remoteName: 'origin',
+      branchName: 'published',
+      urls: ['https://gitlab.com/team/repo.git']
+    })
+    await git(['config', '--unset', 'remote.origin.push'])
+    await git(['config', '--unset', 'branch.feature.remote'])
+    await git(['config', 'push.autoSetupRemote', 'true'])
+    expect((await source()).get('feature')).toEqual({
+      remoteName: 'origin',
+      branchName: 'feature',
+      urls: ['https://gitlab.com/team/repo.git']
+    })
   } finally {
     await rm(repo, { recursive: true, force: true })
   }

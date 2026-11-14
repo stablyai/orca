@@ -210,6 +210,130 @@ const cases: PushCase[] = [
     destination: null,
     pushSucceeds: true,
     noUpstream: true
+  },
+  {
+    name: 'simple refuses duplicate upstream merges',
+    config: [
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/feature'],
+      ['--add', 'branch.feature.merge', 'refs/heads/feature']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'automatic setup still refuses multiple upstream merges',
+    config: [
+      ['push.default', 'simple'],
+      ['push.autoSetupRemote', 'true'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/other'],
+      ['--add', 'branch.feature.merge', 'refs/heads/feature']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'upstream mode refuses multiple merges',
+    config: [
+      ['push.default', 'upstream'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/published']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'tracking refuses multiple upstream merges',
+    config: [
+      ['push.default', 'tracking'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'tracking with split pushRemote refuses multiple upstream merges',
+    config: [
+      ['push.default', 'tracking'],
+      ['push.autoSetupRemote', 'true'],
+      ['branch.feature.remote', 'origin'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other'],
+      ['branch.feature.pushRemote', 'fork']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'tracking with local upstream and pushRemote refuses multiple merges',
+    config: [
+      ['push.default', 'tracking'],
+      ['branch.feature.remote', '.'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other'],
+      ['branch.feature.pushRemote', 'fork']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'blank extra merge still counts as multiple',
+    config: [
+      ['push.autoSetupRemote', 'true'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/feature'],
+      ['--add', 'branch.feature.merge', '']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'shorthand multiple merges are still unknown',
+    config: [
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'feature'],
+      ['--add', 'branch.feature.merge', 'other']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'same-remote pushRemote does not escape multiple merges',
+    config: [
+      ['push.default', 'simple'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/other'],
+      ['--add', 'branch.feature.merge', 'refs/heads/feature'],
+      ['branch.feature.pushRemote', 'fork']
+    ],
+    destination: null,
+    pushSucceeds: false,
+    noUpstream: true
+  },
+  {
+    name: 'mirror remote still publishes when merges are multiple',
+    config: [
+      ['push.default', 'simple'],
+      ['remote.fork.mirror', 'true'],
+      ['branch.feature.remote', 'fork'],
+      ['branch.feature.merge', 'refs/heads/main'],
+      ['--add', 'branch.feature.merge', 'refs/heads/other']
+    ],
+    destination: 'feature',
+    pushSucceeds: true,
+    noUpstream: true
   }
 ]
 it.for(cases)(
@@ -267,8 +391,8 @@ it.for(cases)(
         await git(['config', 'branch.feature.remote', 'fork'])
         await git(['config', 'branch.feature.merge', 'refs/heads/other'])
       }
-      for (const [key, value] of config) {
-        await git(['config', key, value])
+      for (const entry of config) {
+        await git(['config', ...entry])
       }
       const configuredHead = await getConfiguredPushHead(repo, 'feature', null, {})
       const source = (await readGitReviewBranchSources(git, ['feature'])).get('feature')
