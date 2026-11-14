@@ -24,7 +24,7 @@ export function runEnvironmentStoreBatch(
         } catch (cause) {
           invalidateEnvironmentStoreObservation()
           const error = cause instanceof Error ? cause : new Error(String(cause))
-          const fields = error as Error & Partial<EnvironmentStoreError>
+          const fields: Partial<EnvironmentStoreError> = error
           return {
             ok: false as const,
             error: {

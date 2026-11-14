@@ -28,7 +28,9 @@ export async function readAgentSenderPrincipals(
     environmentRow,
     db.db.prepare('SELECT DISTINCT environment_id AS environmentId FROM federated_dispatches').all()
   )
-  const peers = await Promise.all(environments.map(({ environmentId }) => principal(environmentId)))
+  const peers = await Promise.all(
+    environments.map(({ environmentId }) => Promise.resolve(principal(environmentId)))
+  )
   return peers.filter((peer): peer is AgentSenderPrincipal => peer !== undefined)
 }
 

@@ -149,7 +149,7 @@ export class WslHostService {
     }
     // Block reconnect from visible work, liveness and calls before stopping; a failed removal
     // must leave the host usable and allow another attempt.
-    await this.removing.add(environmentId)
+    this.removing.add(environmentId)
     const removal = await removeWslHostServer(
       this.deps.userDataPath(),
       this.connector,

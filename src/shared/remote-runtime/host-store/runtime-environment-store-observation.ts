@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import {
   readNodeFileSyncWithinLimit,
   type BoundedNodeFileRead
@@ -43,9 +42,13 @@ export function readEnvironmentRegistryFile(
     return observation.get(path) ?? null
   }
   let read: BoundedNodeFileRead | null = null
-  if (existsSync(path)) {
+  try {
     hardenExistingSecureFile(path)
     read = readNodeFileSyncWithinLimit(path, maxBytes)
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+      throw error
+    }
   }
   observation?.set(path, read)
   return read

@@ -45,7 +45,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
 
   // Apply thinning facts in stream order; gaps require snapshot restore and change transient-scan authority.
   setLocalBackgroundStreamUnsub(
-    localProvider.onBackgroundStreamEvent?.(async (payload) => {
+    localProvider.onBackgroundStreamEvent?.((payload) => {
       if (payload.kind === 'backgroundMarker') {
         session.runtime?.setPtyTransientFactDelegation(
           payload.id,
@@ -68,7 +68,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
         )
         return
       }
-      await session.runtime?.emitDaemonPtyTransientFact(payload.id, payload.fact)
+      session.runtime?.emitDaemonPtyTransientFact(payload.id, payload.fact)
     }) ?? null
   )
 

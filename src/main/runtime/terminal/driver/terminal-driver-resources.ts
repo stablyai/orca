@@ -78,7 +78,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
-  ): void
+  ): Promise<void>
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
   protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
   protected abstract setWorkspaceSessionForWorktree(

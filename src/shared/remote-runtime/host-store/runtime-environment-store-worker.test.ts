@@ -1,11 +1,13 @@
 import './environment-store-worker.test-support'
-import { closeEnvironmentStore } from './runtime-environment-store-worker-client'
+import {
+  closeEnvironmentStore,
+  environmentStoreWriteCount
+} from './runtime-environment-store-worker-client'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { environmentStoreWriteCount } from './runtime-environment-store-worker-client'
 import { observeEnvironmentStoreReads } from './runtime-environment-store-read-observation'
 import { encodePairingOffer } from '../pairing/pairing'
 import {

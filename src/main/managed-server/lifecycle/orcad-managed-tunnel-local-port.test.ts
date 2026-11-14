@@ -22,7 +22,7 @@ function listen(port = 0): Promise<Server> {
   return new Promise((resolve, reject) => {
     const server = createServer()
     server.once('error', reject)
-    server.listen(port, '127.0.0.1', async () => await resolve(server))
+    server.listen(port, '127.0.0.1', () => resolve(server))
   })
 }
 

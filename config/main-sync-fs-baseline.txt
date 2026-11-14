@@ -600,10 +600,7 @@
 2 src/shared/real-path-sync.ts
 1 src/shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch.ts
 1 src/shared/remote-runtime/host-store/runtime-e2ee-keypair-file.ts
-1 src/shared/remote-runtime/host-store/runtime-environment-sidecar.ts
-2 src/shared/remote-runtime/host-store/runtime-environment-store-read-cache.ts
-2 src/shared/remote-runtime/host-store/runtime-environment-store-records.ts
-1 src/shared/remote-runtime/host-store/wsl-host-deployment-store.ts
+1 src/shared/remote-runtime/host-store/runtime-environment-store-records.ts
 13 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-path-metadata-snapshot.ts
 1 src/shared/secure-storage/secure-path-windows-acl.ts

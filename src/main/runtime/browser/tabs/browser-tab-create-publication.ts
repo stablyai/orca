@@ -26,7 +26,7 @@ export type BrowserTabCreatePublicationHost = {
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
-  ): void
+  ): Promise<void>
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
 }
 
