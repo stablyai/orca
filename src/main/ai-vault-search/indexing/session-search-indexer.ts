@@ -270,7 +270,7 @@ export class SessionSearchIndexer {
         roots: this.roots,
         full,
         primaryWake,
-        onDiscoveryBegin: () => {
+        onDiscovered: () => {
           discoveryAccepted = true
         },
         purge: maintenance,

@@ -1,3 +1,7 @@
+import {
+  SessionSearchWorkerClient,
+  SessionSearchOperationError
+} from '../worker/session-search-worker-client'
 import { writeFile } from 'node:fs/promises'
 import '../worker/session-search-worker.test-fixture'
 import { join } from 'node:path'
@@ -91,39 +95,65 @@ it('retries discovery after failure without silently sweeping stale roots', asyn
   ).toEqual({ n: 2 })
 })
 
-it('keeps an explicit full refresh after root lookup fails on settled history', async () => {
-  vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(false)
-  let unavailable = false
-  await writeClaudeTranscript(
-    join(harness.claudeProjectDir, 'seed.jsonl'),
-    ['seed conversation'],
-    'seed'
-  )
-  indexer = new SessionSearchIndexer({
-    discoveryPolicy: 'event-led',
-    databasePath: harness.databasePath,
-    roots: harness.roots,
-    resolveRoots: async () => {
-      if (unavailable) {
-        throw new Error('unavailable')
+it.each(['root lookup', 'retirement wake'])(
+  'keeps an explicit full refresh after %s fails on settled history',
+  async (failure) => {
+    vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(false)
+    let unavailable = false
+    const errors: unknown[] = []
+    const unavailableError =
+      failure === 'retirement wake'
+        ? new SessionSearchOperationError('unavailable')
+        : new Error('unavailable')
+    const request = SessionSearchWorkerClient.prototype.request
+    vi.spyOn(SessionSearchWorkerClient.prototype, 'request').mockImplementation(async function (
+      this: SessionSearchWorkerClient,
+      command
+    ) {
+      if (
+        unavailable &&
+        failure === 'retirement wake' &&
+        command.op === 'catalog' &&
+        command.command.kind === 'frontier-wake' &&
+        command.command.scope === 'parked-retirement'
+      ) {
+        unavailable = false
+        throw unavailableError
       }
-      return harness.roots
-    },
-    historyDays: null,
-    clock: new FakeSessionSearchClock(),
-    onError: () => undefined
-  })
-  await indexer.start()
-  expect(indexer.status().phase).toBe('current')
-  await writeFile(
-    join(harness.claudeProjectDir, 'missed.jsonl'),
-    `${claudeLines(['unnoticed conversation'], 'missed', 0).join('\n')}\n`
-  )
-  unavailable = true
-  await indexer.reconcile({ full: true })
-  unavailable = false
-  await indexer.reconcile()
-  expect(
-    harness.read((db) => new SessionSearchEngine(db).search({ query: 'unnoticed' }).hits)
-  ).toHaveLength(1)
-})
+      return request.call(this, command)
+    })
+    await writeClaudeTranscript(
+      join(harness.claudeProjectDir, 'seed.jsonl'),
+      ['seed conversation'],
+      'seed'
+    )
+    indexer = new SessionSearchIndexer({
+      discoveryPolicy: 'event-led',
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      resolveRoots: async () => {
+        if (unavailable && failure === 'root lookup') {
+          throw unavailableError
+        }
+        return harness.roots
+      },
+      historyDays: null,
+      clock: new FakeSessionSearchClock(),
+      onError: (error) => errors.push(error)
+    })
+    await indexer.start()
+    expect(indexer.status().phase).toBe('current')
+    await writeFile(
+      join(harness.claudeProjectDir, 'missed.jsonl'),
+      `${claudeLines(['unnoticed conversation'], 'missed', 0).join('\n')}\n`
+    )
+    unavailable = true
+    await indexer.reconcile({ full: true })
+    expect(errors).toContain(unavailableError)
+    unavailable = false
+    await indexer.reconcile()
+    expect(
+      harness.read((db) => new SessionSearchEngine(db).search({ query: 'unnoticed' }).hits)
+    ).toHaveLength(1)
+  }
+)

@@ -37,7 +37,7 @@ export type SessionSearchPassArgs = {
   previousRootsWithFiles?: ReadonlySet<string>
   purge?: boolean
   onPurged?: () => void
-  onDiscoveryBegin?: () => void
+  onDiscovered?: () => void
   startReadDeadline?: () => () => boolean
   discoveryOverdue?: () => boolean
   listings: SessionSearchDirectoryReader
@@ -74,7 +74,6 @@ export async function runSessionSearchPass(
   if (args.full) {
     state.needsRetirement = true
   }
-  args.onDiscoveryBegin?.()
   await wakeSessionSearchPassRetirements(args)
   return withCursorChatMetaScan(async () => {
     const accept = async (
@@ -187,6 +186,7 @@ export async function runSessionSearchPass(
     const swept = await withSessionDiscovery(state.discovery, () =>
       discoverSessionSearchCandidates(args.roots, { limitPerAgent: Infinity, signal, raw: true })
     ).finally(() => state.discovery.settled())
+    args.onDiscovered?.()
     await state.discovery.end()
     const issues: AiVaultScanIssue[] = [...swept.issues]
     const update = await state.candidates.update(
