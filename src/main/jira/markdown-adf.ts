@@ -207,13 +207,11 @@ function blockNode(node: MdNode, context: ConversionContext): AdfNode[] {
       ]
     case 'thematicBreak':
       return [{ type: 'rule' }]
-    case 'blockquote':
-      return [
-        {
-          type: 'blockquote',
-          content: fitBlocks(blockNodes(node.children, context), BLOCKQUOTE_BLOCKS)
-        }
-      ]
+    case 'blockquote': {
+      const content = fitBlocks(blockNodes(node.children, context), BLOCKQUOTE_BLOCKS)
+      // ADF requires a block in every quote; `>` alone or a quoted rule leaves none.
+      return [{ type: 'blockquote', content: content.length > 0 ? content : [paragraph([])] }]
+    }
     case 'list':
       return [listNode(node, context)]
     case 'code':

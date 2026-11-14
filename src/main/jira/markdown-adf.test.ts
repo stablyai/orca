@@ -96,6 +96,12 @@ describe('markdownToAdf', () => {
     ])
   })
 
+  it('gives an empty or rule-only quote an empty paragraph', async () => {
+    const emptyQuote = [{ type: 'blockquote', content: [{ type: 'paragraph', content: [] }] }]
+    expect((await markdownToAdf('>')).content).toEqual(emptyQuote)
+    expect((await markdownToAdf('> ---')).content).toEqual(emptyQuote)
+  })
+
   it('builds header rows for GFM tables', async () => {
     const doc = await markdownToAdf('| a | b |\n| - | - |\n| 1 | 2 |')
     expect(doc.content).toEqual([
