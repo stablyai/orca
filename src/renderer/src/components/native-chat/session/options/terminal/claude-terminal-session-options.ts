@@ -121,18 +121,24 @@ function parseClaudeModelName(cell: string): string | null {
   return name || null
 }
 
+// Keep a dotted version whole: `Opus 5` must not claim a banner reading `Opus 5.5`.
 function modelNameTokens(value: string): string[] {
-  return value.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
+  return value.toLowerCase().match(/[a-z]+|\d+(?:\.\d+)*[a-z]*/g) ?? []
+}
+
+// Listed labels may carry the vendor (`Claude Opus 5.5`) that the banner omits (`Opus 5.5`).
+function withoutClaudeVendor(value: string): string {
+  return value.replace(/^\s*claude\s+(?=\S)/i, '')
 }
 
 /** Match a whole leading family and ordered variant tokens, allowing inserted versions without claiming vendor slugs or other context sizes. */
 function labelNamesReportedModel(reportedModel: string, label: string): boolean {
-  const labelTokens = modelNameTokens(label)
+  const labelTokens = modelNameTokens(withoutClaudeVendor(label))
   const family = labelTokens[0]
   if (!family) {
     return false
   }
-  const name = reportedModel.toLowerCase()
+  const name = withoutClaudeVendor(reportedModel).toLowerCase()
   if (name !== family && !name.startsWith(`${family} `)) {
     return false
   }
@@ -157,7 +163,9 @@ function findClaudeCatalogModel(
   for (const candidates of [models ?? [], seeded]) {
     const matches = candidates.filter(({ label }) => labelNamesReportedModel(reportedModel, label))
     const best = matches.sort(
-      (left, right) => modelNameTokens(right.label).length - modelNameTokens(left.label).length
+      (left, right) =>
+        modelNameTokens(withoutClaudeVendor(right.label)).length -
+        modelNameTokens(withoutClaudeVendor(left.label)).length
     )[0]
     if (best) {
       return best
