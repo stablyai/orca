@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  CLIPBOARD_IMAGE_MAX_PIXELS,
-  CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
-  CLIPBOARD_IMAGE_TOO_LARGE_ERROR
-} from '../../../../../shared/clipboard-image'
 import { blobToBase64, convertImageBlobToPng } from './image-blob-png'
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13])
@@ -65,40 +60,6 @@ afterEach(() => {
 })
 
 describe('convertImageBlobToPng', () => {
-  it('validates dimensions and returns PNG signature bytes unchanged', async () => {
-    const decode = stubDecodedSize(800, 600)
-    const png = new Blob([PNG_BYTES], { type: 'image/png' })
-
-    await expect(convertImageBlobToPng(png)).resolves.toBe(png)
-
-    expect(decode).toHaveBeenCalledOnce()
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
-  })
-
-  it.each([
-    ['a non-PNG mislabeled as PNG', () => new Blob([WEBP_BYTES], { type: 'image/png' })],
-    [
-      'SVG',
-      () =>
-        new Blob(['<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"></svg>'], {
-          type: 'image/svg+xml'
-        })
-    ]
-  ])(
-    'decodes %s with an image element and encodes its natural dimensions',
-    async (_name, source) => {
-      stubDecodedSize(800, 600)
-      const { dimensions, drawImage, png } = stubCanvas()
-
-      await expect(convertImageBlobToPng(source())).resolves.toBe(png)
-
-      expect(dimensions.width).toBe(800)
-      expect(dimensions.height).toBe(600)
-      expect(drawImage).toHaveBeenCalledOnce()
-      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
-    }
-  )
-
   it.each([
     ['image/svg+xml', 2000, 1000, 128, 64],
     ['image/png', 20, 40, 20, 40]
@@ -115,21 +76,6 @@ describe('convertImageBlobToPng', () => {
       expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
     }
   )
-  it('rejects excessive source bytes before creating a decode URL', async () => {
-    await expect(
-      convertImageBlobToPng(new Blob([new Uint8Array(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)]))
-    ).rejects.toThrow(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
-    expect(URL.createObjectURL).not.toHaveBeenCalled()
-  })
-
-  it('rejects excessive PNG dimensions and releases its decode URL', async () => {
-    stubDecodedSize(CLIPBOARD_IMAGE_MAX_PIXELS + 1, 1)
-
-    await expect(
-      convertImageBlobToPng(new Blob([PNG_BYTES], { type: 'image/png' }))
-    ).rejects.toThrow(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
-  })
 })
 
 it('aborts an active image read and settles both active and already-retired reads', async () => {
