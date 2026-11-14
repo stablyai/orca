@@ -517,6 +517,8 @@ it.each(['a routine report', 'another HEAD'] as const)(
 
 it('an action that waited for quota keeps its turn when another worktree of its PR is reported meanwhile', async () => {
   const { coordinator } = await load()
+  const [firstWindow] = coordinatorMocks.getAllWebContentsMock()
+  coordinatorMocks.getAllWebContentsMock.mockReturnValue([firstWindow, { ...firstWindow, id: 2 }])
   const row = (branch: string) =>
     makeCandidate({
       branch,
