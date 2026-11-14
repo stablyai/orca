@@ -151,6 +151,21 @@ it("keeps a WSL host's projects across a restart, with only the row fields", () 
   })
 })
 
+it('does not restore a removed WSL project from the offline catalog after a restart', () => {
+  const { open } = profile()
+  const store = open()
+  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld, django]))
+  recordHostRepoCatalogAnswer(store, otherWslHost, 'repo.list', repoListAnswer([django]))
+  store.removeProjectForHost({ id: 'django', executionHostId: 'runtime:env-wsl' })
+  store.flushOrThrow()
+
+  const restarted = open()
+  expect(listHostRepoCatalogSnapshots(restarted, [wslHost, otherWslHost])).toEqual({
+    'env-wsl': { repos: [expect.objectContaining({ id: 'hello' })] },
+    'env-wsl-2': { repos: [expect.objectContaining({ id: 'django' })] }
+  })
+})
+
 it('keeps each distro separately and ignores failures, other methods and paired servers', () => {
   const { open } = profile()
   const store = open()
