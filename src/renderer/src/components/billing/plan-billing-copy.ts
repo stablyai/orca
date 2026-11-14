@@ -2,10 +2,9 @@
 import type { Translate } from '@/i18n/use-translate'
 import type {
   OrcaBillingDenyReason,
-  OrcaBillingOpenResult,
   OrcaBillingOverageResult
 } from '../../../../shared/orca-billing'
-import { formatCents } from './plans/plans-pricing'
+import { formatCents } from '../../../../shared/orca-billing-usage-alerts'
 
 export function denyReasonCopy(
   reason: OrcaBillingDenyReason,
@@ -104,49 +103,7 @@ export function statusLabel(status: string, t: Translate): string {
   }
 }
 
-export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): string | null {
-  switch (result.status) {
-    case 'opened':
-      return null
-    case 'forbidden':
-      return t(
-        'auto.components.billing.openForbidden2',
-        'Only an owner or admin can manage billing.'
-      )
-    case 'already-subscribed':
-      return t(
-        'auto.components.billing.openAlreadySubscribed',
-        'This account already has a plan. Use Manage billing to change it.'
-      )
-    case 'team-required':
-      return t(
-        'auto.components.billing.openTeamRequired',
-        'Plans belong to a team. Create a team, then choose a plan.'
-      )
-    case 'no-billing-account':
-      return t(
-        'auto.components.billing.openNoAccount',
-        'There is no billing account yet. Choose a plan first.'
-      )
-    case 'signed-out':
-      return t(
-        'auto.components.billing.openSignedOut2',
-        'Sign in to Orca again to manage your team.'
-      )
-    case 'plan-unavailable':
-      return t(
-        'auto.components.billing.openPlanUnavailable',
-        'Checkout for this plan isn’t working right now. Try again in a few minutes, or contact us and we’ll set you up.'
-      )
-    case 'unconfigured':
-      return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
-    case 'failed':
-      return t('auto.components.billing.openFailed', 'Couldn’t reach billing. Try again.')
-  }
-}
-
-/** "The spend cap can be at most $5,000." */
-export function capTooHighCopy(maxCents: number, locale: string, t: Translate): string {
+function capTooHighCopy(maxCents: number, locale: string, t: Translate): string {
   return t('auto.components.billing.capAtMost', 'The spend cap can be at most {{max}}.', {
     max: formatCents(maxCents, locale)
   })

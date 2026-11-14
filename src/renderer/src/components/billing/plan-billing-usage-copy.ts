@@ -11,9 +11,9 @@ import {
   includedUsagePercent,
   sandboxHoursAmount,
   sandboxHoursLeft,
-  sandboxHoursUsed
+  sandboxHoursUsed,
+  isActivePlan
 } from './plan-billing-format'
-import { isActivePlan } from './team/team-seat-math'
 
 /** The bar's warning tone without billing's alert levels (an older service). */
 const DEFAULT_WARNING_TONE_PERCENT = 90

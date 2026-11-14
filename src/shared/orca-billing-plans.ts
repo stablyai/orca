@@ -4,7 +4,7 @@
 import type { OrcaBillingInterval } from './orca-billing'
 
 export type OrcaPlanFeature = {
-  /** Stable id the desktop localizes (plan-feature-copy.ts); `text` is the English fallback. */
+  /** Stable feature id; `text` is the English copy. */
   id: string
   params: Record<string, string | number>
   text: string

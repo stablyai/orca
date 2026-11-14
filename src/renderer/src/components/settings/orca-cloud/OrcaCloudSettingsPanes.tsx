@@ -3,17 +3,16 @@ import { CircleUserRound } from 'lucide-react'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
+import { activeTeamRole } from '@/lib/orca-cloud/active-team-role'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { TeamPageBody } from '../../billing/team/TeamDialogHost'
 import {
   CloudEnvironmentSection,
   useOrcaCloudEnvironmentsAvailability
 } from '../../cloud-environment/CloudEnvironmentSection'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
-import { EnterpriseSettingsPane } from '../enterprise/EnterpriseSettingsPane'
 import { CloudSecretsSection } from '../cloud-secrets/CloudSecretsSection'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { CloudPredictiveWakeSetting } from './CloudPredictiveWakeSetting'
@@ -21,6 +20,8 @@ import { OrcaCloudMcpServersPane } from './OrcaCloudMcpServersPane'
 import { OrcaCloudLocalCommandsPane } from './OrcaCloudLocalCommandsPane'
 import { OrcaCloudSkillsPane } from './cloud-skills/OrcaCloudSkillsPane'
 import { TeamWorkspacesSettings } from '../cloud-workspaces/TeamWorkspacesSettings'
+import { canManageMembers } from '../../billing/team/team-roles'
+import { EnterpriseConsoleLink, TeamConsoleLink } from './OrcaCloudConsoleLinks'
 
 type OrcaCloudAccount = {
   orgId: string | null
@@ -115,42 +116,22 @@ export function OrcaCloudWorkspacesPane(): React.JSX.Element {
   )
 }
 
-/** Settings › Enterprise: single sign-on, sign-in policies and the team audit log. */
+/**
+ * Settings › Enterprise (owners and admins; the nav hides it otherwise): single sign-on, domains,
+ * directory sync, the MFA policy and the audit log are managed in the web console.
+ */
 export function OrcaCloudEnterprisePane(): React.JSX.Element {
-  return <OrcaCloudAccountGate>{() => <EnterpriseSettingsPane />}</OrcaCloudAccountGate>
+  return <OrcaCloudAccountGate>{() => <EnterpriseConsoleLinkForAdmins />}</OrcaCloudAccountGate>
 }
 
+function EnterpriseConsoleLinkForAdmins(): React.JSX.Element | null {
+  const role = activeTeamRole(useAppStore((s) => s.orcaProfileAuthStatus))
+  return role !== null && canManageMembers(role) ? <EnterpriseConsoleLink /> : null
+}
+
+/** Settings › Team: members, invites and roles are managed in the web console. */
 export function OrcaCloudTeamPane(): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <OrcaCloudAccountGate>
-      {(account) =>
-        account.billing ? (
-          // JA-17: members inline (invite field, then the table); seats and invoices stay on
-          // Plan & billing, linked. Remount per team so row state never carries over.
-          <TeamPageBody
-            key={account.orgId ?? 'none'}
-            arrival={null}
-            inline={{
-              onOpenPlanBilling: () => {
-                const store = useAppStore.getState()
-                store.openSettingsTarget({ pane: 'cloud-billing', repoId: null })
-                store.openSettingsPage()
-              }
-            }}
-          />
-        ) : (
-          <InlineError
-            tone="neutral"
-            title={t(
-              'settings.orcaCloud.team.unavailable',
-              'Teams aren’t available for this account yet.'
-            )}
-          />
-        )
-      }
-    </OrcaCloudAccountGate>
-  )
+  return <OrcaCloudAccountGate>{() => <TeamConsoleLink />}</OrcaCloudAccountGate>
 }
 
 export function OrcaCloudSecretsPane(): React.JSX.Element {

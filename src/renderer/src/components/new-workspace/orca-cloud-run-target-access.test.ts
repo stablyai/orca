@@ -6,13 +6,9 @@ import {
   orcaCloudCanStart
 } from './orca-cloud-run-target-access'
 
-const openPlansPage = vi.fn()
-vi.mock('@/components/billing/plans/plans-page-store', () => ({
-  openPlansPage: (source: string) => openPlansPage(source)
-}))
-const requestOrcaCloudAfterCheckout = vi.fn()
-vi.mock('@/lib/orca-cloud-after-checkout', () => ({
-  requestOrcaCloudAfterCheckout: (intent: unknown) => requestOrcaCloudAfterCheckout(intent)
+const openCloudConsole = vi.fn()
+vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({
+  openCloudConsole: (section: string) => openCloudConsole(section)
 }))
 
 function denied(
@@ -33,8 +29,7 @@ function denied(
 
 describe('Orca Cloud run-target access by role', () => {
   beforeEach(() => {
-    openPlansPage.mockReset()
-    requestOrcaCloudAfterCheckout.mockReset()
+    openCloudConsole.mockReset()
   })
 
   it('carries the role on no plan, so members are not sent to plans they cannot buy', () => {
@@ -43,17 +38,16 @@ describe('Orca Cloud run-target access by role', () => {
     expect(owner).toEqual({ state: 'no-plan', lapsed: false, canManageBilling: true })
     expect(member).toEqual({ state: 'no-plan', lapsed: true, canManageBilling: false })
     expect(getOrcaCloudPick(member)).toEqual({ kind: 'blocked' })
-    expect(openPlansPage).not.toHaveBeenCalled()
+    expect(openCloudConsole).not.toHaveBeenCalled()
   })
 
-  it('sends an owner or admin to plans and leaves a return-to-composer intent', () => {
+  it('sends an owner or admin to billing in the browser', () => {
     const pick = getOrcaCloudPick(toOrcaCloudRunTargetAccess(denied('no_subscription', true)))
     expect(pick.kind).toBe('act')
     if (pick.kind === 'act') {
       pick.run()
     }
-    expect(requestOrcaCloudAfterCheckout).toHaveBeenCalledWith({ kind: 'composer' })
-    expect(openPlansPage).toHaveBeenCalledWith('sandbox')
+    expect(openCloudConsole).toHaveBeenCalledWith('billing')
   })
 
   it('blocks members at the spend cap and lets owners act', () => {

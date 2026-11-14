@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import {
-  BillingServiceError,
   assertStripeHostedUrl,
   claimTrial,
-  createCheckoutUrl,
   createPortalUrl,
   BillingOrgMismatchError,
   fetchEntitlement,
@@ -64,10 +62,13 @@ describe('billing client', () => {
   describe('EP-9: the token is for the team this device shows', () => {
     beforeEach(() => resetBillingExplicitOrgForTests())
 
-    it('asks auth for this device\'s team explicitly and accepts a token for it', async () => {
+    it("asks auth for this device's team explicitly and accepts a token for it", async () => {
       const seen: Seen[] = []
       const bt = jwt({ sub: 'u1', org: 'org_paid' })
-      const fetchImpl = fakeFetch({ [endpoints.billingTokenEndpoint]: Response.json({ billingToken: bt, expiresAt: 1 }) }, seen)
+      const fetchImpl = fakeFetch(
+        { [endpoints.billingTokenEndpoint]: Response.json({ billingToken: bt, expiresAt: 1 }) },
+        seen
+      )
       expect(await mintBillingToken(endpoints, 'a', 'org_paid', fetchImpl)).toBe(bt)
       expect(seen[0]?.init?.body).toBe(JSON.stringify({ orgId: 'org_paid' }))
     })
@@ -75,15 +76,21 @@ describe('billing client', () => {
     it('refuses a token auth minted for another team (another device switched the shared active team)', async () => {
       const fetchImpl: typeof fetch = async () =>
         Response.json({ billingToken: jwt({ sub: 'u1', org: 'org_eval' }), expiresAt: 1 })
-      await expect(mintBillingToken(endpoints, 'a', 'org_paid', fetchImpl)).rejects.toBeInstanceOf(BillingOrgMismatchError)
+      await expect(mintBillingToken(endpoints, 'a', 'org_paid', fetchImpl)).rejects.toBeInstanceOf(
+        BillingOrgMismatchError
+      )
       // A personal account never accepts a team token either.
-      await expect(mintBillingToken(endpoints, 'a', null, fetchImpl)).rejects.toBeInstanceOf(BillingOrgMismatchError)
+      await expect(mintBillingToken(endpoints, 'a', null, fetchImpl)).rejects.toBeInstanceOf(
+        BillingOrgMismatchError
+      )
     })
 
     it('treats 403 not_a_member as a team-switch error, not a session failure', async () => {
       const fetchImpl: typeof fetch = async () =>
         new Response(JSON.stringify({ error: 'not_a_member' }), { status: 403 })
-      await expect(mintBillingToken(endpoints, 'a', 'org_gone', fetchImpl)).rejects.toBeInstanceOf(BillingOrgMismatchError)
+      await expect(mintBillingToken(endpoints, 'a', 'org_gone', fetchImpl)).rejects.toBeInstanceOf(
+        BillingOrgMismatchError
+      )
     })
 
     it('falls back to the empty body on an older auth (400), still checking the claim', async () => {
@@ -112,48 +119,6 @@ describe('billing client', () => {
       })
     )
     await expect(call).rejects.toBeInstanceOf(OrcaCloudRequestError)
-  })
-
-  it('reports billing refusals as BillingServiceError, never as a session failure', async () => {
-    const call = createCheckoutUrl(
-      endpoints,
-      'bt',
-      { plan: 'team', interval: 'month', seats: 1 },
-      fakeFetch({
-        'https://billing.example.test/v1/billing/checkout': Response.json(
-          { error: 'already_subscribed' },
-          { status: 409 }
-        )
-      })
-    )
-    await expect(call).rejects.toMatchObject({
-      statusCode: 409,
-      errorCode: 'already_subscribed'
-    })
-    await expect(call).rejects.toBeInstanceOf(BillingServiceError)
-  })
-
-  it('sends plan, interval and seats and returns the hosted Checkout URL', async () => {
-    const seen: Seen[] = []
-    const url = await createCheckoutUrl(
-      endpoints,
-      'bt',
-      { plan: 'team', interval: 'year', seats: 3 },
-      fakeFetch(
-        {
-          'https://billing.example.test/v1/billing/checkout': Response.json({
-            url: 'https://checkout.stripe.com/c/pay/cs_test_1'
-          })
-        },
-        seen
-      )
-    )
-    expect(url).toBe('https://checkout.stripe.com/c/pay/cs_test_1')
-    expect(JSON.parse(String(seen[0]?.init?.body))).toEqual({
-      plan: 'team',
-      interval: 'year',
-      seats: 3
-    })
   })
 
   it('only opens Stripe-hosted pages', async () => {
@@ -255,8 +220,13 @@ describe('billing client', () => {
     expect(unsafe.offers).toBeNull()
     // A portal cancel's end date (cancel_at) comes through; older services omit it.
     expect(
-      (await fetchEntitlement(endpoints, 'bt', response({ cancelAtPeriodEnd: true, cancelAt: 1797167516000 })))
-        .cancelAt
+      (
+        await fetchEntitlement(
+          endpoints,
+          'bt',
+          response({ cancelAtPeriodEnd: true, cancelAt: 1797167516000 })
+        )
+      ).cancelAt
     ).toBe(1797167516000)
     expect((await fetchEntitlement(endpoints, 'bt', response({}))).cancelAt).toBeNull()
     // A plan this desktop doesn't know (a newer service) is still a plan, never "no plan".

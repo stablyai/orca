@@ -1,8 +1,6 @@
 import type { McpSyncStatus } from '../../../../../shared/agent-mcp-sync/mcp-sync-contract'
 import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { PlanBillingView } from '../../billing/PlanBillingSection'
-import { sampleTeam } from '../../billing/plan-billing-fixtures'
 import { AgentApiKeysCloudDescription } from '../agent-api-keys/AgentApiKeysCloudDescription'
 import { CloudSecretsPane } from '../cloud-secrets/CloudSecretsPane'
 import { FIXTURE_NAMES, fixtureCloudSecretsApi } from '../cloud-secrets/cloud-secrets-fixture-data'
@@ -10,6 +8,7 @@ import { CloudMcpSyncPanel } from '../runtime-environments/cloud-mcp/CloudMcpSyn
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { OrcaCloudMcpServersView, type OrcaCloudMcpWorkspace } from './OrcaCloudMcpServersPane'
 import { OrcaCloudSignedOutNotice } from './OrcaCloudSettingsPanes'
+import { CloudConsoleLinkRowView } from './CloudConsoleLinkRow'
 
 const noop = (): void => {}
 const BARE_BODY = 'rounded-none border-0 bg-transparent p-0 shadow-none'
@@ -143,6 +142,7 @@ export const secretsPage = defineFixture({
   )
 })
 
+/** Billing is managed in the web console: the page keeps the plan's name and one link. */
 export const billingPage = defineFixture({
   width: 784,
   render: () => (
@@ -151,15 +151,11 @@ export const billingPage = defineFixture({
       title="Plan & billing"
       description="Your Orca Cloud plan, sandbox hours and payment."
     >
-      <PlanBillingView
-        result={{ status: 'ok', entitlement: sampleTeam }}
-        loading={false}
+      <CloudConsoleLinkRowView
+        label="Team"
+        description="Change your plan, see sandbox hours and invoices, and update payment."
         busy={false}
-        notice={null}
-        onRefresh={noop}
-        onPortal={noop}
-        onSetOverage={noop}
-        onSeePlans={noop}
+        onOpen={noop}
       />
     </Page>
   )

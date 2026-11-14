@@ -19,9 +19,9 @@ vi.mock('@/components/ui/popover', () => ({
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
 }))
 
-const openPlansPage = vi.fn()
-vi.mock('@/components/billing/plans/plans-page-store', () => ({
-  openPlansPage: (source: string) => openPlansPage(source)
+const openCloudConsole = vi.fn()
+vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({
+  openCloudConsole: (source: string) => openCloudConsole(source)
 }))
 
 const hosts: ProjectHostSetupOption[] = [
@@ -101,7 +101,7 @@ function render(
 }
 
 beforeEach(() => {
-  openPlansPage.mockClear()
+  openCloudConsole.mockClear()
   resetOrcaCloudBillingCache()
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -133,7 +133,7 @@ describe('RunTargetCombobox', () => {
     expect(activeText()).toContain('Orca Cloud')
     press('Enter')
     expect(onRecipeChange).toHaveBeenCalledWith('cloud')
-    expect(openPlansPage).not.toHaveBeenCalled()
+    expect(openCloudConsole).not.toHaveBeenCalled()
   })
 
   it('opens the plans page instead of building when there is no plan', () => {
@@ -141,7 +141,7 @@ describe('RunTargetCombobox', () => {
     render({ state: 'no-plan', lapsed: false, canManageBilling: true }, onRecipeChange)
     press('ArrowDown')
     press('Enter')
-    expect(openPlansPage).toHaveBeenCalledWith('sandbox')
+    expect(openCloudConsole).toHaveBeenCalledWith('billing')
     expect(onRecipeChange).not.toHaveBeenCalled()
   })
 
@@ -152,7 +152,7 @@ describe('RunTargetCombobox', () => {
     expect(container.textContent).not.toContain('Upgrade')
     press('ArrowDown')
     press('Enter')
-    expect(openPlansPage).not.toHaveBeenCalled()
+    expect(openCloudConsole).not.toHaveBeenCalled()
     expect(onRecipeChange).not.toHaveBeenCalled()
   })
 
@@ -230,11 +230,11 @@ describe('RunTargetCombobox', () => {
     press('ArrowDown')
     press('Enter')
     expect(onRecipeChange).not.toHaveBeenCalled()
-    expect(openPlansPage).not.toHaveBeenCalled()
+    expect(openCloudConsole).not.toHaveBeenCalled()
 
     await act(async () => answer(NO_PLAN))
 
-    expect(openPlansPage).toHaveBeenCalledWith('sandbox')
+    expect(openCloudConsole).toHaveBeenCalledWith('billing')
     expect(onRecipeChange).not.toHaveBeenCalled()
   })
 
@@ -247,7 +247,7 @@ describe('RunTargetCombobox', () => {
 
     await act(async () => answer(NO_PLAN))
 
-    expect(openPlansPage).not.toHaveBeenCalled()
+    expect(openCloudConsole).not.toHaveBeenCalled()
   })
 
   it('does nothing when a member who cannot fix the block picks Orca Cloud', () => {
@@ -261,7 +261,7 @@ describe('RunTargetCombobox', () => {
     ).toBe('true')
     press('Enter')
     expect(onRecipeChange).not.toHaveBeenCalled()
-    expect(openPlansPage).not.toHaveBeenCalled()
+    expect(openCloudConsole).not.toHaveBeenCalled()
   })
 
   it('jumps to the ends of the list with Home and End', () => {

@@ -1,7 +1,7 @@
-// Copy and small rules shared by the MFA banner, the blocked screen and the Enterprise row. Pure,
+// Copy and small rules shared by the MFA banner and the blocked screen. Pure,
 // so the views and their tests agree on every boundary.
 import type { Translate } from '@/i18n/use-translate'
-import type { OrcaTeamMfaGrace, OrcaTeamMfaPolicy } from '../../../../shared/orca-team-mfa-policy'
+import type { OrcaTeamMfaPolicy } from '../../../../shared/orca-team-mfa-policy'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -97,33 +97,8 @@ export function claimMfaToast(
   return true
 }
 
-/** "6 days left", "1 day left", "Due now". i18next plurals, never ternaries on the count. */
-export function mfaCountdownLabel(enforceAt: number, now: number, t: Translate): string {
-  const days = mfaDaysLeft(enforceAt, now)
-  if (days <= 0) {
-    return t('auto.components.teamMfa.dueNow', 'Due now')
-  }
-  return t('auto.components.teamMfa.daysLeft', '{{count}} days left', {
-    count: days,
-    defaultValue_one: '{{count}} day left'
-  })
-}
-
 export function mfaDeadlineDate(enforceAt: number, locale: string): string {
   return new Intl.DateTimeFormat(locale, { month: 'long', day: 'numeric', year: 'numeric' }).format(
     enforceAt
   )
-}
-
-export function mfaGraceLabel(grace: OrcaTeamMfaGrace, t: Translate): string {
-  switch (grace) {
-    case 'now':
-      return t('auto.components.teamMfa.graceNow', 'Immediately')
-    case 7:
-      return t('auto.components.teamMfa.grace7', 'In 7 days')
-    case 14:
-      return t('auto.components.teamMfa.grace14', 'In 14 days')
-    case 30:
-      return t('auto.components.teamMfa.grace30', 'In 30 days')
-  }
 }

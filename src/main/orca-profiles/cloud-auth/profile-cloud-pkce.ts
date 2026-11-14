@@ -7,7 +7,7 @@ import {
   ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS,
   ORCA_CLOUD_CALLBACK_SUCCESS_PAGE
 } from './profile-cloud-callback-page'
-import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../shared/orca-org-enterprise'
+import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../shared/orca-profile-reconnect-reason'
 
 export type OrcaCloudAuthorizationCode = {
   code: string

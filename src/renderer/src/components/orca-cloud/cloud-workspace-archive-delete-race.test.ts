@@ -18,7 +18,7 @@ vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () =
 vi.mock('@/lib/workspace/activation/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: vi.fn()
 }))
-vi.mock('@/components/billing/plans/plans-page-store', () => ({ openPlansPage: vi.fn() }))
+vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({ openCloudConsole: vi.fn() }))
 
 import { runArchiveCloudWorkspace } from './cloud-workspace-actions'
 import {

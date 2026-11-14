@@ -1,10 +1,6 @@
 // A team's "require MFA" policy (Enterprise). The auth service owns it; the desktop reads the
-// deadline and the person's own state for the banner and the blocked screen, and owners and
-// admins set it from Settings, Enterprise.
-
-/** Enforce now, or after a grace period in days. Mirrors the server's fixed choices. */
-export const ORCA_TEAM_MFA_GRACE_CHOICES = ['now', 7, 14, 30] as const
-export type OrcaTeamMfaGrace = (typeof ORCA_TEAM_MFA_GRACE_CHOICES)[number]
+// deadline and the person's own state for the banner and the blocked screen. Owners and admins
+// set it in the web console.
 
 /**
  * The person's own state in this team:
@@ -22,23 +18,6 @@ export type OrcaTeamMfaPolicy = {
   self: OrcaTeamMfaSelfState
   /** The account's security page, on Orca Cloud's own origin (checked in main). */
   setupUrl: string
-  /** Owners and admins only. */
-  manage?: {
-    /** The team's plan includes MFA enforcement. */
-    available: boolean
-    pendingMembers: number
-    /** A stored policy the plan no longer covers: it enforces nothing. */
-    inactiveEnforceAt?: number
-    /** The team's single sign-on is live: members who use it are handled by their provider. */
-    ssoHandled: boolean
-  }
-}
-
-export type OrcaTeamMfaPendingMember = {
-  userId: string | null
-  email: string
-  displayName?: string
-  mfa: 'pending' | 'blocked' | 'off'
 }
 
 type Unavailable =
@@ -47,26 +26,4 @@ type Unavailable =
 
 export type OrcaTeamMfaPolicyResult = ({ status: 'ok' } & OrcaTeamMfaPolicy) | Unavailable
 
-export type OrcaTeamMfaPolicySetResult =
-  | { status: 'ok'; policy: { enforceAt: number; setAt: number } | null; pendingMembers: number }
-  /** The person changing the policy has no MFA themselves; the policy read has the setup link. */
-  | { status: 'actor-needs-mfa' }
-  /** The team's plan does not include MFA enforcement. */
-  | { status: 'not-entitled' }
-  /** The team uses single sign-on, so "now" is refused: members need time to sign in again. */
-  | { status: 'sso-needs-notice' }
-  | Unavailable
-
-export type OrcaTeamMfaPendingResult =
-  | { status: 'ok'; members: OrcaTeamMfaPendingMember[] }
-  | Unavailable
-
-export type OrcaTeamMfaRemindResult =
-  /** `delivery: 'log'` means the server recorded the reminder but sent no email. */
-  | { status: 'ok'; recipients: number; delivery: 'log' | 'test-inbox' | 'unknown' }
-  | { status: 'no-policy' | 'not-found' }
-  | Unavailable
-
 export type OrcaTeamMfaPolicyArgs = { orgId: string }
-export type OrcaTeamMfaPolicySetArgs = { orgId: string; enforce: OrcaTeamMfaGrace | 'off' }
-export type OrcaTeamMfaRemindArgs = { orgId: string; userId?: string }

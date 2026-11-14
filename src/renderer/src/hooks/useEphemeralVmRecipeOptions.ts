@@ -11,7 +11,6 @@ import type { EphemeralVmFailure } from '../../../shared/ephemeral-vm-failure-co
 import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { takeOrcaCloudSelectionAfterSignIn } from '@/lib/orca-cloud-select-after-sign-in'
-import { onOrcaCloudCheckoutReturn } from '@/lib/orca-cloud-after-checkout'
 
 type EphemeralVmRecipeOptionsArgs = {
   /** Defaults on: Orca Cloud is gated by the account's sandbox capability in main. */
@@ -205,9 +204,6 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
     lastAuthKey.current = authKey
     load(false)
   }, [authKey, load])
-
-  // A paid Checkout from the Run-on row: reload so the left selection intent picks Orca Cloud.
-  useEffect(() => onOrcaCloudCheckoutReturn(() => load(false)), [load])
 
   useEffect(() => {
     if (!window.api.plugins?.onChanged) {

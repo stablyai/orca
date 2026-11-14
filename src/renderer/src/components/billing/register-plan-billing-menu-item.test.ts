@@ -4,6 +4,8 @@ const auth = vi.hoisted(() => {
   const state: { status: unknown } = { status: null }
   return state
 })
+const openCloudConsole = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({ openCloudConsole }))
 vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => ({ orcaProfileAuthStatus: auth.status }),
@@ -18,8 +20,6 @@ import {
 import { getBillingReadInFlight, recordBillingStatus } from './billing-summary-store'
 import { sampleTeam } from './plan-billing-fixtures'
 import { BILLING_CAPABILITY, registerPlanBillingMenuItem } from './register-plan-billing-menu-item'
-import { getPlansPageState } from './plans/plans-page-store'
-import { closeTeamPage, getTeamPageState } from './team/team-page-store'
 
 const visible = (): string[] =>
   selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), {
@@ -34,7 +34,7 @@ afterEach(() => {
   auth.status = null
   vi.unstubAllGlobals()
   recordBillingStatus({ status: 'signed-out' })
-  closeTeamPage()
+  openCloudConsole.mockReset()
 })
 
 describe('account menu billing items', () => {
@@ -52,7 +52,7 @@ describe('account menu billing items', () => {
     expect(visible()).toEqual(['orca.team', 'orca.plan-billing'])
     const plans = getRegisteredAccountMenuItems().find((item) => item.id === 'orca.plan-billing')
     plans?.onSelect()
-    expect(getPlansPageState()).toEqual({ open: true, source: 'account-menu' })
+    expect(openCloudConsole).toHaveBeenCalledWith('billing')
     dispose()
     expect(getRegisteredAccountMenuItems()).toHaveLength(0)
   })
@@ -73,12 +73,12 @@ describe('account menu billing items', () => {
     dispose()
   })
 
-  it('opens the Team page from the Team item', () => {
+  it('opens the team console page from the Team item', () => {
     const dispose = registerPlanBillingMenuItem()
     getRegisteredAccountMenuItems()
       .find((item) => item.id === 'orca.team')
       ?.onSelect()
-    expect(getTeamPageState()).toEqual({ open: true, arrival: null })
+    expect(openCloudConsole).toHaveBeenCalledWith('team')
     dispose()
   })
 

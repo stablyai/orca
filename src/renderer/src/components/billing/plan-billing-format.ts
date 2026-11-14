@@ -66,3 +66,14 @@ export function formatDollars(cents: number): string {
   const dollars = Math.max(0, cents) / 100
   return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`
 }
+
+/** A plan that is in force now (not canceled, never started, or lapsed before it began). */
+export function isActivePlan(entitlement: OrcaBillingEntitlement | null): boolean {
+  return Boolean(
+    entitlement &&
+    entitlement.plan !== null &&
+    entitlement.status !== 'canceled' &&
+    entitlement.status !== 'none' &&
+    entitlement.status !== 'incomplete_expired'
+  )
+}

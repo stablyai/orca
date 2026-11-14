@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { classifyVmBuildFailure, type VmBuildFailure } from './vm-build-failure'
 import { getLastBillingStatus } from '@/components/billing/billing-summary-store'
@@ -63,7 +63,7 @@ export function showVmBuildFailureToast(
       ? {
           action: {
             label: translate('auto.components.billing.comparePlans', 'Compare plans'),
-            onClick: () => openPlansPage('sandbox')
+            onClick: () => void openCloudConsole('billing')
           }
         }
       : {})

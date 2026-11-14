@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { isSignInNoticeVisible } from '@/lib/orca-cloud/sign-in-notice-visibility'
-import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../../../shared/orca-org-enterprise'
+import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../../../shared/orca-profile-reconnect-reason'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileResult,

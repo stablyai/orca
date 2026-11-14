@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  normalizePendingMembers,
-  normalizeTeamMfaPolicy,
-  sameOriginUrl
-} from './profile-cloud-team-mfa-service'
+import { normalizeTeamMfaPolicy, sameOriginUrl } from './profile-cloud-team-mfa-service'
 
 const API = 'https://cloud.orca.dev'
 const setupUrl = `${API}/v1/account/security`
@@ -18,25 +14,13 @@ describe('normalizeTeamMfaPolicy', () => {
     ).toEqual({ policy: { enforceAt: 200, setAt: 100 }, self: 'pending', setupUrl })
   })
 
-  it('reads a manager answer, including a policy the plan no longer covers', () => {
+  it('ignores the manager fields (the policy is managed in the web console)', () => {
     expect(
       normalizeTeamMfaPolicy(
-        {
-          policy: null,
-          self: { mfa: 'on' },
-          setupUrl,
-          available: false,
-          pendingMembers: 3,
-          inactivePolicy: { enforceAt: 500 }
-        },
+        { policy: null, self: { mfa: 'on' }, setupUrl, available: false, pendingMembers: 3 },
         API
       )
-    ).toEqual({
-      policy: null,
-      self: 'on',
-      setupUrl,
-      manage: { available: false, pendingMembers: 3, inactiveEnforceAt: 500, ssoHandled: false }
-    })
+    ).toEqual({ policy: null, self: 'on', setupUrl })
   })
 
   it('never turns a malformed state into blocked', () => {
@@ -64,50 +48,11 @@ describe('normalizeTeamMfaPolicy', () => {
 })
 
 describe('single sign-on', () => {
-  it('reads the delegated state and the team-level flag', () => {
+  it('reads the delegated state', () => {
     const read = normalizeTeamMfaPolicy(
-      {
-        policy: { enforceAt: 200, setAt: 100 },
-        self: { mfa: 'delegated' },
-        setupUrl,
-        available: true,
-        pendingMembers: 0,
-        ssoHandled: true
-      },
+      { policy: { enforceAt: 200, setAt: 100 }, self: { mfa: 'delegated' }, setupUrl },
       API
     )
     expect(read.self).toBe('delegated')
-    expect(read.manage?.ssoHandled).toBe(true)
-  })
-
-  it('treats anything but true as not handled', () => {
-    for (const ssoHandled of [undefined, 'true', 1, null]) {
-      const read = normalizeTeamMfaPolicy(
-        { policy: null, self: { mfa: 'on' }, setupUrl, available: true, ssoHandled },
-        API
-      )
-      expect(read.manage?.ssoHandled).toBe(false)
-    }
-  })
-})
-
-describe('normalizePendingMembers', () => {
-  it('keeps members with an email and maps unknown states to off', () => {
-    expect(
-      normalizePendingMembers({
-        members: [
-          { userId: 'u1', email: 'a@x.dev', displayName: 'Ada', mfa: 'pending' },
-          { userId: null, email: 'b@x.dev', mfa: 'blocked' },
-          { userId: 'u3', email: 'c@x.dev', mfa: 'whatever' },
-          { userId: 'u4' },
-          'nope'
-        ]
-      })
-    ).toEqual([
-      { userId: 'u1', email: 'a@x.dev', displayName: 'Ada', mfa: 'pending' },
-      { userId: null, email: 'b@x.dev', mfa: 'blocked' },
-      { userId: 'u3', email: 'c@x.dev', mfa: 'off' }
-    ])
-    expect(normalizePendingMembers(null)).toEqual([])
   })
 })

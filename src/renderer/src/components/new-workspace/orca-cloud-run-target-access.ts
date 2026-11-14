@@ -1,12 +1,11 @@
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
-import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import { useAppStore } from '@/store/index'
 import { sandboxHoursLeft } from '@/components/billing/plan-billing-format'
 import {
   cancelOrcaCloudSelectionAfterSignIn,
   requestOrcaCloudSelectionAfterSignIn
 } from '@/lib/orca-cloud-select-after-sign-in'
-import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
 import { classifyEntitlementDenial, isOrcaCloudTrial } from '../../../../shared/orca-billing'
 
 /** Signing in from the row selects Orca Cloud once main offers it (the recipe list reloads). */
@@ -23,10 +22,9 @@ function signInThenSelectOrcaCloud(): void {
     .catch(() => cancelOrcaCloudSelectionAfterSignIn(token))
 }
 
-/** Paying from the row returns to this composer with Orca Cloud picked (see PlansDialogHost). */
-function choosePlanThenSelectOrcaCloud(): void {
-  requestOrcaCloudAfterCheckout({ kind: 'composer' })
-  openPlansPage('sandbox')
+/** Plans are chosen in the web console; the row re-reads billing when the composer reopens. */
+function choosePlanInBrowser(): void {
+  void openCloudConsole('billing')
 }
 
 /**
@@ -124,7 +122,7 @@ export function getOrcaCloudPick(access: OrcaCloudRunTargetAccess): OrcaCloudPic
       return { kind: 'act', run: signInThenSelectOrcaCloud }
     case 'no-plan':
       return access.canManageBilling
-        ? { kind: 'act', run: choosePlanThenSelectOrcaCloud }
+        ? { kind: 'act', run: choosePlanInBrowser }
         : { kind: 'blocked' }
     case 'out-of-hours':
       return access.canManageBilling
