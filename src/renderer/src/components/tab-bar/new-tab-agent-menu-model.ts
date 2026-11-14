@@ -8,6 +8,8 @@ import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AgentPickerDefaultSettings } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
+import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
 
 export type NewTabAgentMenuModel =
   | { state: 'loading'; placeholderCount: number }
@@ -22,6 +24,8 @@ export type NewTabAgentMenuModel =
         launchCwd?: string | null
         workspace: ProspectiveWorkspace
         executionHostId: string
+        /** The target host's published capabilities; `null` while unknown. */
+        hostCapabilities?: readonly string[] | null
         pairingRevision?: number
         runtimeId?: string | null
         settings: AgentPickerDefaultSettings | null
@@ -34,6 +38,30 @@ export type AgentMenuRowsTarget = {
   workspace: ProspectiveWorkspace
   /** Only a terminal can start here, so chat rows say so instead of dropping the directory. */
   launchCwd?: string | null
+}
+
+type SettledPickerContext = Extract<NewTabAgentMenuModel, { state: 'settled' }>['pickerContext']
+
+/**
+ * Create worktree offers per-launch setup where the host can apply the picks: this computer, or a
+ * paired host that advertises the create-options capability. Older paired hosts keep the plain rows.
+ */
+export function pickerContextOffersAgentSetup(context: SettledPickerContext | undefined): boolean {
+  if (!context) {
+    return false
+  }
+  if (context.executionHostId === LOCAL_EXECUTION_HOST_ID) {
+    return true
+  }
+  return (
+    parseExecutionHostId(context.executionHostId)?.kind === 'runtime' &&
+    context.hostCapabilities?.includes(WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY) === true
+  )
+}
+
+/** A menu still loading cannot offer setup; a settled one follows its picker context. */
+export function modelOffersAgentSetup(model: NewTabAgentMenuModel): boolean {
+  return model.state === 'settled' && pickerContextOffersAgentSetup(model.pickerContext)
 }
 
 /** Compare selected launch references before deriving source, profile or catalog views. */
