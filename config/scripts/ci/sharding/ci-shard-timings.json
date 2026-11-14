@@ -4105,7 +4105,6 @@
       "src/renderer/src/components/activity/activity-portal-readiness-decay.react185.test.tsx": 228,
       "src/renderer/src/components/activity/activity-portal-readiness-loop.react185.test.tsx": 377,
       "src/renderer/src/components/activity/activity-portal-readiness-subscription-churn.react185.test.tsx": 315,
-      "src/renderer/src/components/activity/activity-scope-filter.test.ts": 734,
       "src/renderer/src/components/activity/activity-search-query.test.tsx": 2286,
       "src/renderer/src/components/activity/activity-thread-list-pane.multi-select.test.tsx": 4699,
       "src/renderer/src/components/activity/activity-thread-list-pane.virtualization.test.tsx": 4863,
