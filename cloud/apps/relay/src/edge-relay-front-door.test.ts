@@ -2,8 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 import type { EdgeAdmin, EdgeAssignBody } from './edge-admin-client.js'
 import { edgeLocationHint } from './edge-admin-client.js'
-import { edgeFrontDoorFor, parseEdgeControl, type EdgeControlFlags } from './edge-relay-control.js'
-import { EDGE_CELL_ID, EdgeAssignments, EdgeMoveDeferredError, type EdgeRelayConfig } from './edge-relay.js'
+import { edgeFrontDoorFor, parseEdgeControl, parseEdgeControlOver, type EdgeControlFlags } from './edge-relay-control.js'
+import {
+  EDGE_CELL_ID,
+  EDGE_LOCKED_CALLS_MAX,
+  EdgeAssignments,
+  EdgeMoveBusyError,
+  EdgeMoveDeferredError,
+  type EdgeRelayConfig
+} from './edge-relay.js'
 import { edgeRoute } from './edge-relay-route.js'
 import { EdgeAdminUnavailableError } from './edge-admin-client.js'
 
@@ -45,6 +52,21 @@ describe('director/edge.json frontDoor', () => {
     }
     // Any other bad value still voids the whole object.
     expect(parse({ mode: 'sideways', frontDoor: { url: DOOR } })).toBeNull()
+  })
+
+  it('a bad frontDoor over a good one keeps the good one (reported), like a bad file keeps the last flags', () => {
+    const previous: EdgeControlFlags = { mode: 'on', frontDoor: { url: DOOR, countries: ['CN'] } }
+    expect(parseEdgeControlOver({ v: 1, flags: { mode: 'off', frontDoor: { url: 'http://typo' } } }, previous)).toEqual({
+      flags: { mode: 'off', frontDoor: { url: DOOR, countries: ['CN'] } },
+      ignoredKeys: ['frontDoor']
+    })
+    // Removing the key is not a bad value: the mapping goes.
+    expect(parseEdgeControlOver({ v: 1, flags: { mode: 'on' } }, previous)).toEqual({ flags: { mode: 'on' }, ignoredKeys: [] })
+    // A good value replaces it.
+    expect(parseEdgeControlOver({ v: 1, flags: { frontDoor: { url: DOOR, hosts: [HOST] } } }, previous)?.flags.frontDoor).toEqual({
+      url: DOOR,
+      hosts: [HOST]
+    })
   })
 
   it('a trailing slash on the URL is the same origin', () => {
@@ -226,29 +248,75 @@ describe('EdgeAssignments with front doors', () => {
     expect(pushes[0]!.locationHint).toBe('enam')
   })
 
-  it('a switch whose push fails keeps the host on the edge, unswitched, and never falls through', async () => {
-    const fail = { next: false }
-    const { database, edge, pushes, recordedUrl } = await setup(new Set([DOOR]), fail)
+  it('a switch push that times out after landing answers busy, and the retry commits the landed epoch', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const database = await openInMemoryRelayDatabase()
+    databases.push(database)
+    // A fake edge object: epochs only move forward; `landThenFail` applies the push, then the
+    // director sees a timeout.
+    const edgeState = { epoch: 0, landThenFail: false, down: false }
+    const pushes: EdgeAssignBody[] = []
+    const admin = {
+      assign: async (body: EdgeAssignBody) => {
+        pushes.push(body)
+        if (edgeState.down) throw new EdgeAdminUnavailableError('timeout')
+        if (body.assignmentEpoch < edgeState.epoch) return { outcome: 'stale' as const, assignmentEpoch: edgeState.epoch }
+        const outcome = body.assignmentEpoch === edgeState.epoch ? ('unchanged' as const) : ('applied' as const)
+        edgeState.epoch = body.assignmentEpoch
+        if (edgeState.landThenFail) throw new EdgeAdminUnavailableError('timeout')
+        return { outcome, assignmentEpoch: body.assignmentEpoch }
+      }
+    } as unknown as EdgeAdmin
+    const edge = new EdgeAssignments(
+      database,
+      { cellUrl: EDGE_URL, frontDoorUrls: new Set([DOOR]), rolloutPercent: 0, allowHosts: new Set(), denyHosts: new Set(), regions: new Set(['us-central1']) },
+      () => 1_000,
+      admin
+    )
+    await edge.ensureEdgeCell()
     await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
-    fail.next = true
-    const kept = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })
-    expect(kept).toMatchObject({ cellId: EDGE_CELL_ID, cellUrl: EDGE_URL, assignmentEpoch: 1 })
-    expect(pushes).toHaveLength(2)
+    expect(edgeState.epoch).toBe(1)
+    edgeState.landThenFail = true
+    await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
+      EdgeMoveBusyError
+    )
+    // The edge holds 2; the director row is still 1 and never answered 1 after the push was sent.
+    expect(edgeState.epoch).toBe(2)
     const row = (await database.query(`SELECT cell_id, assignment_epoch FROM relay_assignments`))[0]!
     expect([row.cell_id, Number(row.assignment_epoch)]).toEqual([EDGE_CELL_ID, 1])
-    expect(await recordedUrl()).toBeNull()
-    // A first move whose push fails is still deferred as before (the host is not on the edge yet).
-    await database.query(`DELETE FROM relay_assignments`)
+    // Still unreachable: still busy, never an answer at an epoch the edge may be past.
+    edgeState.down = true
     await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
-      EdgeMoveDeferredError
+      EdgeMoveBusyError
     )
-    // The edge is back: the next real reconnect switches.
-    fail.next = false
-    await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
+    // Back: the retry pushes the same epoch, the edge answers unchanged, and 2 commits.
+    edgeState.down = false
+    edgeState.landThenFail = false
     expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).toMatchObject({
       cellUrl: DOOR,
       assignmentEpoch: 2
     })
+    expect(edgeState.epoch).toBe(2)
+    // A first move whose push fails is still deferred as before (the host is not on the edge yet).
+    await database.query(`DELETE FROM relay_assignments`)
+    edgeState.down = true
+    await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
+      EdgeMoveDeferredError
+    )
+  })
+
+  it('a switch this director could not even send (push cap) keeps the host unswitched at its epoch', async () => {
+    const { database, edge, pushes } = await setup(new Set([DOOR]))
+    await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
+    ;(edge as unknown as { lockedCalls: number }).lockedCalls = EDGE_LOCKED_CALLS_MAX
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).toMatchObject({
+      cellId: EDGE_CELL_ID,
+      cellUrl: EDGE_URL,
+      assignmentEpoch: 1
+    })
+    expect(pushes).toHaveLength(1)
+    const row = (await database.query(`SELECT assignment_epoch FROM relay_assignments`))[0]!
+    expect(Number(row.assignment_epoch)).toBe(1)
   })
 
   it('a recorded front door dropped from the boot list causes no epoch bump, and the record is cleared', async () => {

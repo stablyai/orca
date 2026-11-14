@@ -100,7 +100,14 @@ const EdgeControlObjectSchema = z.object({
 
 // Unknown keys (a newer writer's, or a typo) are dropped and reported; a known key with a bad value
 // voids the whole object, so the last applied flags stay.
-export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => {
+export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => parseEdgeControlOver(body, undefined)
+
+// As parseEdgeControl, with the flags applied now: a bad frontDoor keeps the last good one (as a bad
+// file keeps the last applied flags), reported in ignoredKeys; the rest of the object applies.
+export function parseEdgeControlOver(
+  body: unknown,
+  previous: EdgeControlFlags | undefined
+): ReturnType<ControlFlagParse<EdgeControlFlags>> {
   const parsed = EdgeControlObjectSchema.safeParse(body)
   if (!parsed.success) {
     return null
@@ -121,6 +128,7 @@ export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => {
   } = parsed.data.flags
   const frontDoor = rawFrontDoor === undefined ? undefined : parseFrontDoor(rawFrontDoor)
   if (frontDoor === null) ignoredKeys.push('frontDoor')
+  const keptFrontDoor = frontDoor === null ? previous?.frontDoor : frontDoor
   ignoredKeys.sort()
   return {
     flags: {
@@ -130,7 +138,7 @@ export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => {
       ...(regionRolloutPermille === undefined ? {} : { regionRolloutPermille }),
       ...(regionExcludeCountries === undefined ? {} : { regionExcludeCountries }),
       ...(regionExcludeUnknownCountry === undefined ? {} : { regionExcludeUnknownCountry }),
-      ...(frontDoor === undefined || frontDoor === null ? {} : { frontDoor })
+      ...(keptFrontDoor === undefined ? {} : { frontDoor: keptFrontDoor })
     },
     ignoredKeys
   }
@@ -148,10 +156,12 @@ export function startEdgeControl(
   input: { fetch?: typeof fetch; random?: () => number; pollMs?: number; autoStart?: boolean } = {}
 ): EdgeControl & { poll: () => Promise<void> } {
   const listeners: (() => void)[] = []
+  // parse reads the applied flags lazily (the channel exists by the time it polls).
+  const applied: { flags: () => EdgeControlFlags | undefined } = { flags: () => undefined }
   const channel = startControlFlagChannel({
     objectName: EDGE_CONTROL_OBJECT_NAME,
     defaults: EDGE_CONTROL_DEFAULTS,
-    parse: parseEdgeControl,
+    parse: (body) => parseEdgeControlOver(body, applied.flags()),
     appliedEvent: EDGE_CONTROL_APPLIED_EVENT,
     onApplied: () => {
       for (const listener of listeners) {
@@ -160,6 +170,7 @@ export function startEdgeControl(
     },
     ...input
   })
+  applied.flags = () => channel.applied().flags
   return {
     flags: () => channel.applied().flags,
     onChange: (listener) => {

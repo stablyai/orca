@@ -150,7 +150,7 @@ export const EDGE_LOCKED_CALLS_MAX = 8
 // this director already has EDGE_LOCKED_CALLS_MAX pushes in flight) and nothing changed: the host
 // stays where it is and moves on a later ask.
 export class EdgeMoveDeferredError extends Error {
-  constructor(reason: 'units_held' | 'push_failed' | 'edge_busy') {
+  constructor(readonly reason: 'units_held' | 'push_failed' | 'edge_busy') {
     super(`relay_edge_move_deferred:${reason}`)
   }
 }
@@ -173,7 +173,9 @@ type Identity = { userId: string; relayHostId: string }
 // same object, but phones keep the first. So: deploy the image everywhere with
 // ORCA_RELAY_EDGE_FRONT_DOOR_URLS unset; set the env, then the flag, only once every serving
 // revision is new; to roll back, remove frontDoor and wait for mapped hosts to move back (their
-// next drain) before rolling back the env or the image.
+// next drain) before rolling back the env or the image. Env skew matters as much: a director
+// whose ORCA_RELAY_EDGE_FRONT_DOOR_URLS lacks a recorded URL answers the edge URL and clears the
+// record, so every serving revision must carry the same list.
 export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: boolean }
 
 class FrontDoorSwitchDeferredError extends Error {}
@@ -452,8 +454,8 @@ export class EdgeAssignments {
       return await this.frontDoorAttempt(identity, mapFloor, region, route)
     } catch (error) {
       if (!(error instanceof FrontDoorSwitchDeferredError)) throw error
-      // The edge did not take the switch's epoch: nothing committed. The host is on the edge and
-      // must stay there (falling through to the cell lanes would place it without an export or a
+      // The edge definitely did not take the switch's epoch: nothing committed. The host is on the
+      // edge and must stay there (falling through to the cell lanes would place it without an export or a
       // fence), so it is kept on its current origin and epoch, and switches on a later reconnect.
       console.warn(JSON.stringify({ event: 'orca_relay_edge_front_door_switch_deferred', reason: error.message }))
       return await this.frontDoorAttempt(identity, mapFloor, region, { ...route, switchable: false })
@@ -563,9 +565,18 @@ export class EdgeAssignments {
         try {
           pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor: placeApac, devices: false })
         } catch (error) {
-          // Rolls this transaction back; moveToEdgeWithFrontDoor keeps the host unswitched.
-          if (error instanceof EdgeMoveDeferredError) throw new FrontDoorSwitchDeferredError(error.message)
-          throw error
+          if (!(error instanceof EdgeMoveDeferredError)) throw error
+          // Never sent (this director's push cap): the edge's epoch is unchanged, keep the host
+          // unswitched on its current epoch.
+          if (error.reason === 'edge_busy') throw new FrontDoorSwitchDeferredError(error.message)
+          // Sent, outcome unknown or refused (timeout, 5xx, an edge ahead of this row): the edge may
+          // hold an epoch above the one this rollback keeps, and a desktop's hello at that one would
+          // get WRONG_CELL. Busy (503 + Retry-After) instead: the host re-asks, and the retried push
+          // of the same epoch is answered `unchanged` or `applied`. Keep frontDoor in place until
+          // that retry lands: removing it makes the next ask sticky, which would answer the old epoch
+          // to an edge that may hold the new one. For an edge that cannot answer, mode down is the
+          // lever (hosts leave the edge without export, as for any edge host).
+          throw new EdgeMoveBusyError()
         }
         await record(transaction, chosen)
         console.warn(
