@@ -293,6 +293,42 @@ describe('committed agent status changes', () => {
 
     stopBroken()
   })
+  it('finishes an accepted transaction when an ordinary store observer throws', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(BASE_TIME)
+    const store = seedBatchStore()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    let reachedThrowingObserver = false
+    const stopBroken = store.subscribe(() => {
+      reachedThrowingObserver = true
+      throw new Error('ordinary observer')
+    })
+    let observedPrompt: string | undefined
+    const stopLater = store.subscribe((state) => {
+      observedPrompt = state.agentStatusByPaneKey.get(FIRST_PANE)?.prompt
+    })
+    let committedPrompt: string | undefined
+    try {
+      expect(() =>
+        store.getState().transactAgentStatuses((transaction) => {
+          transaction.apply({
+            paneKey: FIRST_PANE,
+            payload: { state: 'working', agentType: 'claude', prompt: 'Accepted task' },
+            timing: { updatedAt: BASE_TIME, stateStartedAt: BASE_TIME }
+          })
+          transaction.afterCommit(() => {
+            committedPrompt = store.getState().agentStatusByPaneKey.get(FIRST_PANE)?.prompt
+          })
+        })
+      ).not.toThrow()
+      expect(reachedThrowingObserver).toBe(true)
+      expect(observedPrompt).toBe('Accepted task')
+      expect(committedPrompt).toBe('Accepted task')
+    } finally {
+      stopBroken()
+      stopLater()
+    }
+  })
   it('announces every eviction when later folds share the private batch draft', () => {
     vi.useFakeTimers()
     vi.setSystemTime(BASE_TIME)
