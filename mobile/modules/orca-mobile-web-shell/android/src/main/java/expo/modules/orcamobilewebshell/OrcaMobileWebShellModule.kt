@@ -44,6 +44,8 @@ class OrcaMobileWebShellModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("OrcaMobileWebShell")
 
+    Function("supportsVisualDocuments") { true }
+
     OnCreate {
       callbacksContext = appContext.reactContext?.applicationContext?.also {
         it.registerComponentCallbacks(memoryCallbacks)
@@ -136,6 +138,14 @@ class OrcaMobileWebShellModule : Module() {
 
       AsyncFunction("postBridgeMessage") { view: OrcaMobileWebShellView, json: String ->
         view.postBridgeMessage(json)
+      }
+
+      AsyncFunction("createVisualDocument") { view: OrcaMobileWebShellView, html: String ->
+        view.createVisualDocument(html)
+      }
+
+      AsyncFunction("releaseVisualDocument") { view: OrcaMobileWebShellView, url: String ->
+        view.releaseVisualDocument(url)
       }
 
       OnViewDidUpdateProps { view: OrcaMobileWebShellView ->

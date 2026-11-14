@@ -52,6 +52,13 @@ internal class OrcaMobileWebShellView(
     current.postBridgeMessage(json)
   }
 
+  fun createVisualDocument(html: String): String =
+    (document ?: throw MobileWebShellBridgeUnavailableException()).createVisualDocument(html)
+
+  fun releaseVisualDocument(url: String) {
+    document?.releaseVisualDocument(url)
+  }
+
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
     document?.resume()

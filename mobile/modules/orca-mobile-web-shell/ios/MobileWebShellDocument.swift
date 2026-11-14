@@ -82,6 +82,7 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
 
   var sessionId: String?
   var generation: MobileWebShellGeneration?
+  let visualDocuments = MobileWebShellVisualDocuments()
 
   func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
     let key = ObjectIdentifier(urlSchemeTask)
@@ -91,9 +92,26 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
       let generation,
       let url = urlSchemeTask.request.url,
       let parts = MobileWebShellRequestParts(request: urlSchemeTask.request),
-      let path = MobileWebShellOrigin.resolveRequestPath(parts, sessionId: sessionId),
-      let asset = generation.entries[path]
+      let path = MobileWebShellOrigin.resolveRequestPath(parts, sessionId: sessionId)
     else {
+      fail(urlSchemeTask, key)
+      return
+    }
+    if path.hasPrefix(MobileWebShellVisualPolicy.prefix) {
+      guard let data = visualDocuments.read(path),
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+          headerFields: MobileWebShellResponseHeaders.forPath(path,
+            contentType: "text/html; charset=utf-8", byteCount: data.count)) else {
+        fail(urlSchemeTask, key)
+        return
+      }
+      liveTasks.remove(key)
+      urlSchemeTask.didReceive(response)
+      urlSchemeTask.didReceive(data)
+      urlSchemeTask.didFinish()
+      return
+    }
+    guard let asset = generation.entries[path] else {
       fail(urlSchemeTask, key)
       return
     }
@@ -263,6 +281,7 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
     destroyed = true
     sink = nil
     clearBridgeTarget()
+    schemeHandler.visualDocuments.clear()
     pendingDocumentUrl = nil
     webView.stopLoading()
     webView.removeFromSuperview()
@@ -278,6 +297,7 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
     )
     guard applied?.matches(next) != true else { return }
     applied = next
+    schemeHandler.visualDocuments.clear()
     clearBridgeTarget()
     loadState.reset()
     pendingDocumentUrl = nil
@@ -414,6 +434,29 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
     webView.callAsyncJavaScript(bridgeDeliver, arguments: ["m": json], in: frame, in: .page) { _ in }
   }
 
+  func createVisualDocument(_ html: String) throws -> String {
+    guard isUsable, loadState.hasCommittedDocument, let sessionId = appliedSessionId,
+      let origin = MobileWebShellOrigin.documentUrl(sessionId: sessionId) else {
+      throw MobileWebShellBridgeUnavailableException()
+    }
+    let path = try schemeHandler.visualDocuments.create(html)
+    return origin.absoluteString.dropLast() + path
+  }
+
+  func releaseVisualDocument(_ url: String) {
+    guard let parsed = URL(string: url), let path = visualDocumentPath(parsed) else { return }
+    schemeHandler.visualDocuments.remove(path)
+  }
+
+  private func visualDocumentPath(_ url: URL?) -> String? {
+    guard let url, let sessionId = appliedSessionId,
+      var parts = MobileWebShellRequestParts(url: url) else { return nil }
+    parts.fragment = nil
+    guard let path = MobileWebShellOrigin.resolveRequestPath(parts, sessionId: sessionId),
+      schemeHandler.visualDocuments.read(path) != nil else { return nil }
+    return path
+  }
+
   private func installNetworkBlock(into controller: WKUserContentController) {
     NetworkBlockRuleList.load { [weak self] ruleList in
       guard let self else { return }
@@ -512,6 +555,10 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
       isDownload = navigationAction.shouldPerformDownload
     }
     let isMainFrame = navigationAction.targetFrame?.isMainFrame == true
+    if !isMainFrame && !isDownload && visualDocumentPath(navigationAction.request.url) != nil {
+      decisionHandler(.allow)
+      return
+    }
     // linkActivated gates only opener offers; gesture-free subframe top navigation must never authorize a load.
     let verdict = MobileWebShellNavigationPolicy.verdict(
       url: navigationAction.request.url?.absoluteString,
@@ -536,10 +583,11 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
     decidePolicyFor navigationResponse: WKNavigationResponse,
     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
   ) {
-    // Only srcdoc subframes pass the action policy; refusing one must not fail the shell document.
+    // Refusing a subframe must not fail the shell document.
     guard navigationResponse.isForMainFrame else {
       let url = navigationResponse.response.url?.absoluteString
-      decisionHandler(url == MobileWebShellNavigationPolicy.inlineDocumentUrl ? .allow : .cancel)
+      decisionHandler(url == MobileWebShellNavigationPolicy.inlineDocumentUrl ||
+        visualDocumentPath(navigationResponse.response.url) != nil ? .allow : .cancel)
       return
     }
     let allowed = navigationResponse.canShowMIMEType &&

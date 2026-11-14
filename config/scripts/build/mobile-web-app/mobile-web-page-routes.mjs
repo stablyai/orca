@@ -109,6 +109,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.pdf.view',
       'native.image.act',
       'native.speech.act',
+      'native.visual.document',
       'native.a11y.announce',
       'terminalKeyRail',
       DEVICE_STORE_GRANT

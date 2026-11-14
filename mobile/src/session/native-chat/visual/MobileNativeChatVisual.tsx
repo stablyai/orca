@@ -79,6 +79,8 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
     <View style={styles.frame}>
       <MobileNativeChatVisualFrame
         html={state.html}
+        source={source}
+        file={directive.file}
         title={title}
         mode="inline"
         onFailed={onFrameFailed}
@@ -101,6 +103,8 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
       {fullscreen ? (
         <MobileNativeChatVisualFullscreen
           html={state.html}
+          source={source}
+          file={directive.file}
           title={title}
           onClose={closeFullscreen}
           onFailed={onFrameFailed}
@@ -112,11 +116,15 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
 
 function MobileNativeChatVisualFullscreen({
   html,
+  source,
+  file,
   title,
   onClose,
   onFailed
 }: {
   html: string
+  source: MobileNativeChatVisualSource
+  file: string
   title: string
   onClose: () => void
   onFailed: () => void
@@ -153,6 +161,8 @@ function MobileNativeChatVisualFullscreen({
         </View>
         <MobileNativeChatVisualFrame
           html={html}
+          source={source}
+          file={file}
           title={title}
           mode="fullscreen"
           onFailed={onFailed}

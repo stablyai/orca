@@ -6,6 +6,7 @@ import type {
 } from './bridge/bridge-terminal-key'
 import type { BridgePageGeometry } from './bridge/bridge-page-geometry'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useNativeVisualDocuments } from '../platform/use-native-visual-documents'
 import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
@@ -139,6 +140,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   const clientIdRef = useRef(clientId)
   const clientRef = useRef(client)
   const [framesWithoutHost] = useState(createPageFramesWithoutHost)
+  const serveNativeVerb = useNativeVisualDocuments(sessionId, clientRef, viewRef, argsRef)
   // Update refs on every commit before host construction; native frames may arrive before passive effects.
   useLayoutEffect(() => {
     argsRef.current = args
@@ -193,7 +195,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onNavigateBack: () => argsRef.current.onNavigateBack(),
       onExternalLink: (url) => argsRef.current.onExternalLink(url),
       onHaptic: (kind) => argsRef.current.onHaptic(kind),
-      serveNativeVerb: (verb, params) => argsRef.current.serveNativeVerb(verb, params),
+      serveNativeVerb,
       readStorage: () => argsRef.current.readStorage(),
       onStorageWrite: (key, value) => argsRef.current.onStorageWrite(key, value),
       onPageFault: (error) => argsRef.current.onPageFault(error),
@@ -217,11 +219,11 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       hostRef.current = null
       host.dispose()
     }
-  }, [buildId, client, framesWithoutHost, sessionId, snapshot])
+  }, [buildId, client, framesWithoutHost, sessionId, snapshot, serveNativeVerb])
 
   useEffect(() => {
     const mounted = hostRef.current
-    if (mounted !== null && mounted.sessionId === sessionId && args.pageGeometry !== undefined) {
+    if (mounted?.sessionId === sessionId && args.pageGeometry !== undefined) {
       mounted.host.publishPageGeometry(args.pageGeometry)
     }
   }, [buildId, client, sessionId, snapshot, args.pageGeometry])
@@ -231,7 +233,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   const verdictOpen = args.hostStatus != null
   useEffect(() => {
     const mounted = hostRef.current
-    if (mounted !== null && mounted.sessionId === sessionId) {
+    if (mounted?.sessionId === sessionId) {
       mounted.host.publishColorScheme(colorScheme)
       mounted.host.publishUiLocale(uiLocale)
       mounted.host.publishHostStatus()
@@ -278,14 +280,14 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     // behind it exists.
     publishStorage: useCallback(() => {
       const mounted = hostRef.current
-      if (mounted !== null && mounted.sessionId === sessionId) {
+      if (mounted?.sessionId === sessionId) {
         mounted.host.publishStorage()
       }
     }, [buildId, client, sessionId, snapshot]),
     publishRoute: useCallback(
       (route: BridgeInitRoute) => {
         const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
+        if (mounted?.sessionId === sessionId) {
           mounted.host.publishRoute(route)
         }
       },
@@ -294,7 +296,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     publishSafeAreaInsets: useCallback(
       (insets: BridgeSafeAreaInsets) => {
         const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
+        if (mounted?.sessionId === sessionId) {
           mounted.host.publishSafeAreaInsets(insets)
         }
       },
@@ -303,7 +305,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     publishKeyboardInset: useCallback(
       (height: number) => {
         const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
+        if (mounted?.sessionId === sessionId) {
           mounted.host.publishKeyboardInset(height)
         }
       },
@@ -312,7 +314,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     publishFoldDivision: useCallback(
       (division: BridgeFoldDivision | null) => {
         const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
+        if (mounted?.sessionId === sessionId) {
           mounted.host.publishFoldDivision(division)
         }
       },
@@ -321,7 +323,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     publishTerminalKeyRail: useCallback(
       (keys: BridgeTerminalKeyRail) => {
         const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
+        if (mounted?.sessionId === sessionId) {
           mounted.host.publishTerminalKeyRail(keys)
         }
       },
@@ -330,11 +332,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     sendTerminalKey: useCallback(
       (key: BridgeTerminalKeyId, inputOwner?: string) => {
         const mounted = hostRef.current
-        return (
-          mounted !== null &&
-          mounted.sessionId === sessionId &&
-          mounted.host.sendTerminalKey(key, inputOwner)
-        )
+        return mounted?.sessionId === sessionId && mounted.host.sendTerminalKey(key, inputOwner)
       },
       [buildId, client, sessionId, snapshot]
     ),
@@ -343,7 +341,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     // is one the navigator has to be left to answer.
     sendBack: useCallback(() => {
       const mounted = hostRef.current
-      return mounted !== null && mounted.sessionId === sessionId && mounted.host.sendBack()
+      return mounted?.sessionId === sessionId && mounted.host.sendBack()
     }, [sessionId]),
     sendAppInactive: useCallback(() => {
       const mounted = hostRef.current

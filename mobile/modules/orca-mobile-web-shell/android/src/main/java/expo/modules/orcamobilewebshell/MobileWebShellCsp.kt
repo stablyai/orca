@@ -20,8 +20,8 @@ internal val MOBILE_WEB_SHELL_CSP = listOf(
   // Media previews play bytes downloaded through authenticated RPC, never a network URL.
   "media-src blob:",
   "object-src 'none'",
-  "frame-src 'none'",
-  "child-src 'none'",
+  "frame-src 'self'",
+  "child-src 'self'",
   "worker-src 'none'",
   // Preserve srcdoc’s about: base/in-page links without admitting network bases.
   "base-uri about:",

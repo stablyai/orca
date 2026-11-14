@@ -17,6 +17,10 @@ enum MobileWebShellResponseHeaders {
       // WebKit srcdoc images leaked the embedder origin despite iframe referrerPolicy; set the document header.
       headers["Referrer-Policy"] = "no-referrer"
     }
+    if path.hasPrefix(MobileWebShellVisualPolicy.prefix) {
+      headers["Content-Security-Policy"] = MobileWebShellVisualPolicy.csp
+      headers["Referrer-Policy"] = "no-referrer"
+    }
     return headers
   }
 }
