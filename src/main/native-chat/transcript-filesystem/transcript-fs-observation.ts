@@ -71,25 +71,40 @@ export function observeTranscriptStat(path: string, read: () => Promise<Stats>):
   if (existing) {
     return existing
   }
-  const pending = read()
-    .then(
-      (stats) => {
-        if (!scope.closed) {
-          scope.facts.set(
-            key,
-            Float64Array.from(STAT_FIELDS, (field) => stats[field])
+  const pending = read().then(
+    (stats) => {
+      scope.pending.delete(key)
+      if (!scope.closed) {
+        scope.facts.set(
+          key,
+          Float64Array.of(
+            stats.dev,
+            stats.mode,
+            stats.nlink,
+            stats.uid,
+            stats.gid,
+            stats.rdev,
+            stats.blksize,
+            stats.ino,
+            stats.size,
+            stats.blocks,
+            stats.atimeMs,
+            stats.mtimeMs,
+            stats.ctimeMs,
+            stats.birthtimeMs
           )
-        }
-        return stats
-      },
-      (error: unknown) => {
-        if (!scope.closed) {
-          scope.facts.set(key, { error })
-        }
-        throw error
+        )
       }
-    )
-    .finally(() => scope.pending.delete(key))
+      return stats
+    },
+    (error: unknown) => {
+      scope.pending.delete(key)
+      if (!scope.closed) {
+        scope.facts.set(key, { error })
+      }
+      throw error
+    }
+  )
   scope.pending.set(key, pending)
   return pending
 }
