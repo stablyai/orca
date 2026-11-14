@@ -92,7 +92,10 @@ export function NativeChatQuestionAnswerField({
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              onEnter()
+              // A held Enter would answer each following no-option step in turn.
+              if (!e.repeat) {
+                onEnter()
+              }
             }
           }}
           placeholder={placeholder}

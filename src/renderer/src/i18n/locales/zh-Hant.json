@@ -19539,7 +19539,8 @@
         "previous": "上一個問題",
         "nextQuestion": "下一個問題",
         "back": "返回",
-        "skipAndSubmit": "略過並提交"
+        "skipAndSubmit": "略過並提交",
+        "stepLabel": "{{value0}}，第 {{value1}} 個，共 {{value2}} 個：{{value3}}"
       },
       "ask": {
         "awaiting": "等待使用者輸入：",

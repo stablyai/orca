@@ -372,7 +372,7 @@ export function NativeChatQueuedMessageCard({
           </span>
           {/* The menu portals, so the list's scroll box never clips it. */}
           <DropdownMenu>
-            <span className="inline-flex opacity-50 transition-opacity focus-within:opacity-100 hover:opacity-100 has-[[data-state=open]]:opacity-100">
+            <span className="inline-flex opacity-70 transition-opacity focus-within:opacity-100 hover:opacity-100 has-[[data-state=open]]:opacity-100">
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"

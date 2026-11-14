@@ -21042,7 +21042,8 @@
         "previous": "Pergunta anterior",
         "nextQuestion": "Próxima pergunta",
         "back": "Voltar",
-        "skipAndSubmit": "Pular e enviar"
+        "skipAndSubmit": "Pular e enviar",
+        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Aguardando entrada do usuário:",

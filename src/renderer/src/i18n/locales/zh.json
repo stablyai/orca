@@ -19271,7 +19271,8 @@
         "previous": "上一个问题",
         "nextQuestion": "下一个问题",
         "back": "返回",
-        "skipAndSubmit": "跳过并提交"
+        "skipAndSubmit": "跳过并提交",
+        "stepLabel": "{{value0}}，第 {{value1}} 个，共 {{value2}} 个：{{value3}}"
       },
       "approval": {
         "needsNewerOrca": "此请求需要更新版本的 Orca",

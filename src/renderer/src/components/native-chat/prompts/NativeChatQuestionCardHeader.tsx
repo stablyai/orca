@@ -2,8 +2,33 @@ import { Check, ChevronLeft, ChevronRight, MessageCircleQuestionMark, X } from '
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
+
+/** The card's accessible name: on a multi-step card, which step it is before the question. */
+export function nativeChatQuestionCardLabel(
+  t: Translate,
+  question: AskPrompt['questions'][number],
+  index: number,
+  total: number
+): string {
+  if (total <= 1) {
+    return question.question
+  }
+  return t(
+    'components.native-chat.question.stepLabel',
+    '{{value0}}, {{value1}} of {{value2}}: {{value3}}',
+    {
+      value0:
+        question.header ||
+        t('components.native-chat.question.step', 'Step {{value0}}', { value0: index + 1 }),
+      value1: index + 1,
+      value2: total,
+      value3: question.question
+    }
+  )
+}
 
 export type NativeChatQuestionStep = { id: string; header: string; answered: boolean }
 

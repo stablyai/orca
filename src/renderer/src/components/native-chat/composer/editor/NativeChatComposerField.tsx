@@ -267,7 +267,6 @@ export function NativeChatComposerField({
   return (
     <div
       data-composer-field={launch ? undefined : ''}
-      data-native-chat-queue-dock={launch ? undefined : ''}
       className={launch ? undefined : '@container/composer-field shrink-0 bg-chat-pane'}
     >
       <div className={launch ? undefined : 'native-chat-composer-gutter pt-2 pb-4'}>
@@ -314,7 +313,8 @@ export function NativeChatComposerField({
               !launch && 'native-chat-composer-card',
               launch
                 ? 'border-foreground/10 bg-background dark:bg-foreground/[0.04]'
-                : 'border-chat-composer-border bg-chat-composer-surface',
+                : // An opaque canvas under the translucent surface: the queue tab tucks behind this box.
+                  'border-chat-composer-border bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))]',
               // Contain caret-blink repaint to the composer; keep 4px slack around overhanging attachment buttons, while menus use portals.
               '[contain:paint]'
             )}

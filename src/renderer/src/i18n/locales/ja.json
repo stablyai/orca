@@ -19009,7 +19009,8 @@
         "previous": "前の質問",
         "nextQuestion": "次の質問",
         "back": "戻る",
-        "skipAndSubmit": "スキップして送信"
+        "skipAndSubmit": "スキップして送信",
+        "stepLabel": "{{value0}}、{{value1}} / {{value2}}：{{value3}}"
       },
       "approval": {
         "needsNewerOrca": "このリクエストには新しいバージョンの Orca が必要です。",

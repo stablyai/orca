@@ -127,3 +127,29 @@
     --composer-gutter: calc(var(--spacing) * 4);
   }
 }
+
+/* A question card body that scrolls in a short pane fades at the bottom while more lies below. */
+@property --native-chat-scroll-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes native-chat-scroll-fade {
+  from {
+    --native-chat-scroll-fade: calc(var(--spacing) * 10);
+  }
+  to {
+    --native-chat-scroll-fade: 0px;
+  }
+}
+
+[data-native-chat-dock-fit~='card'] .native-chat-question-card-body {
+  mask-image: linear-gradient(
+    to bottom,
+    black calc(100% - var(--native-chat-scroll-fade)),
+    transparent
+  );
+  animation: native-chat-scroll-fade linear both;
+  animation-timeline: scroll(self);
+}

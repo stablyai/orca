@@ -4,6 +4,7 @@ import { nativeChatAppearanceStyle } from '../appearance/native-chat-appearance-
 import { NativeChatDock } from '../pane/dock/NativeChatDock'
 import { NativeChatQuestionCard } from '../prompts/NativeChatQuestionCard'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
+import { NativeChatComposer } from '../composer/NativeChatComposer'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
@@ -219,7 +220,7 @@ export const shortPane = defineFixture({
 export const tinyPane = defineFixture({
   width: 560,
   render: () => (
-    <Pane queue={controller(cards(6))} question={{ questions: QUESTIONS }} height={230} />
+    <Pane queue={controller(cards(6))} question={{ questions: QUESTIONS }} height={312} />
   )
 })
 
@@ -268,3 +269,44 @@ function FitLab() {
 }
 
 export const fitLab = defineFixture({ width: 560, render: () => <FitLab /> })
+
+// The app's own composer under the queue (and an async question), as a structured chat shows them.
+function RealComposerPane({ question }: { question: boolean }) {
+  return (
+    <div
+      data-native-chat-root="true"
+      className="native-chat-appearance flex flex-col bg-chat-pane"
+      style={{ ...nativeChatAppearanceStyle({}), height: question ? 900 : 520 }}
+    >
+      <div className="flex min-h-[calc(var(--spacing)*20)] flex-1 flex-col justify-end overflow-hidden p-4 text-sm text-muted-foreground [[data-native-chat-dock-fit~=transcript]_&]:min-h-0">
+        Here is the draft for the Slack card.
+      </div>
+      <NativeChatDock>
+        <NativeChatQueuedMessageList controller={controller(cards(3))} chatWorktreeId={null} />
+        {question ? (
+          <NativeChatQuestionCard
+            prompt={{ questions: QUESTIONS.slice(0, 2) }}
+            onAnswer={() => {}}
+            onCancel={() => {}}
+          />
+        ) : null}
+        <NativeChatComposer
+          terminalTabId="queue-fixture-tab"
+          paneKey="queue-fixture-pane"
+          targetPtyId={null}
+          agent="claude"
+        />
+      </NativeChatDock>
+    </div>
+  )
+}
+
+export const withRealComposer = defineFixture({
+  width: 560,
+  render: () => <RealComposerPane question />
+})
+
+export const onRealComposer = defineFixture({
+  width: 560,
+  render: () => <RealComposerPane question={false} />
+})

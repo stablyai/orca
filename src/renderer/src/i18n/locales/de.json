@@ -19836,7 +19836,8 @@
         "previous": "Vorherige Frage",
         "nextQuestion": "Nächste Frage",
         "back": "Zurück",
-        "skipAndSubmit": "Überspringen und senden"
+        "skipAndSubmit": "Überspringen und senden",
+        "stepLabel": "{{value0}}, {{value1}} von {{value2}}: {{value3}}"
       },
       "ask": {
         "awaiting": "Warten auf Benutzereingabe:",

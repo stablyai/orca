@@ -64,9 +64,10 @@ export function NativeChatQueueHeader({
       {pause ? (
         <>
           {/* Each greys during the other: a Resume would send the cards a Clear is deleting. */}
+          {/* Neutral beside Resume; it reads as destructive only on hover. */}
           <Button
             type="button"
-            variant="ghost"
+            variant="muted-destructive"
             size="xs"
             disabled={!clearCapable || queuePending !== null}
             onClick={onClearAll}

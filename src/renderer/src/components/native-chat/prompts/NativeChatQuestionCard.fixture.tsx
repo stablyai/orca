@@ -383,3 +383,25 @@ export const skippedLastStep = defineFixture({
     await new Promise(requestAnimationFrame)
   }
 })
+
+// A single-select pick before its auto-advance: the tile fills, rings and its number turns into a check.
+export const pickedSingle = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion />,
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]?.click()
+    await new Promise(requestAnimationFrame)
+  }
+})
+
+// Keyboard focus on an option: an outline outside the tile, never the picked look.
+export const optionFocus = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion />,
+  interact: async (frame) => {
+    frame
+      .querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]
+      ?.focus({ focusVisible: true })
+    await new Promise(requestAnimationFrame)
+  }
+})

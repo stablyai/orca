@@ -207,6 +207,7 @@ describe('NativeChatQuestionCard', () => {
     const onAnswer = vi.fn()
     renderCard({ prompt: { questions: [question('One'), question('Two')] }, onAnswer })
     expect(document.activeElement).toBe(card())
+    expect(card().getAttribute('aria-label')).toBe('One, 1 of 2: One?')
     expect(optionRows().map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
     // Enter on the card with nothing answered neither picks option 1 nor moves on.
     pressKey({ key: 'Enter' }, card())
@@ -293,6 +294,38 @@ describe('NativeChatQuestionCard', () => {
     act(() => card().focus())
     pressKey({ key: 'Enter' }, card())
     expect(onAnswer).toHaveBeenCalledTimes(2)
+  })
+
+  it('answers one typed step per Enter press, never with a held key', () => {
+    const onAnswer = vi.fn()
+    const typed = (header: string): AskPrompt['questions'][number] => ({
+      question: `${header}?`,
+      header,
+      multiSelect: false,
+      options: []
+    })
+    renderCard({ prompt: { questions: [typed('One'), typed('Two'), typed('Three')] }, onAnswer })
+    const field = (): HTMLTextAreaElement => container.querySelector('textarea')!
+    const type = (value: string): void =>
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+        setter.call(field(), value)
+        field().dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    type('first')
+    pressKey({ key: 'Enter' }, field())
+    expect(container.textContent).toContain('2 of 3')
+    // The key is still down: auto-repeat must not answer step 2 for the person.
+    pressKey({ key: 'Enter', repeat: true }, field())
+    pressKey({ key: 'Enter', repeat: true }, field())
+    expect(container.textContent).toContain('2 of 3')
+    type('second')
+    pressKey({ key: 'Enter' }, field())
+    type('third')
+    pressKey({ key: 'Enter', repeat: true }, field())
+    expect(onAnswer).not.toHaveBeenCalled()
+    pressKey({ key: 'Enter' }, field())
+    expect(onAnswer).toHaveBeenCalledTimes(1)
   })
 })
 

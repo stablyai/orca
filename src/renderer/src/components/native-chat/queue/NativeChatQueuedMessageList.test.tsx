@@ -138,3 +138,32 @@ it('shows one row in a short pane and no +N more when the question is gone and r
   renderQueue(controller([1, 2, 3, 4, 5, 6].map((i) => card(i))))
   expect(screen.queryByRole('button', { name: /more$/ })).toBeNull()
 })
+
+it('expands a short pane’s list without a question open', () => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    () => new DOMRect(0, 0, 0, 4)
+  )
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(500)
+  renderQueue(controller([1, 2, 3, 4, 5, 6].map((i) => card(i))))
+  fireEvent.click(screen.getByRole('button', { name: '+5 more' }))
+  expect(screen.getByRole('button', { name: 'Show less' }).getAttribute('aria-expanded')).toBe(
+    'true'
+  )
+})
+
+it('keeps a list folded for room folded while only its header has focus, and says so', async () => {
+  renderQueue(controller([card(1), card(2)]))
+  const root = document.querySelector('[data-native-chat-root]')!
+  // The fit pass sets this attribute in the app; the toggle mirrors it through a mutation observer.
+  await act(async () => root.setAttribute('data-native-chat-dock-fit', 'queue'))
+  const fold = screen.getByRole('button', { name: 'Queued messages' })
+  expect(fold.getAttribute('aria-expanded')).toBe('false')
+  act(() => fold.focus())
+  expect(fold.getAttribute('aria-expanded')).toBe('false')
+  expect(root.querySelector('[data-list-focus]')).toBeNull()
+  // A row that holds focus keeps the list open, and the toggle reports it.
+  act(() => screen.getByRole('button', { name: 'Queued message 1' }).focus())
+  expect(fold.getAttribute('aria-expanded')).toBe('true')
+  act(() => fold.focus())
+  expect(fold.getAttribute('aria-expanded')).toBe('false')
+})

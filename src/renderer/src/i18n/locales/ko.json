@@ -19006,7 +19006,8 @@
         "previous": "이전 질문",
         "nextQuestion": "다음 질문",
         "back": "뒤로",
-        "skipAndSubmit": "건너뛰고 제출"
+        "skipAndSubmit": "건너뛰고 제출",
+        "stepLabel": "{{value0}}, {{value1}}/{{value2}}: {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "이 요청에는 최신 버전의 Orca가 필요합니다.",

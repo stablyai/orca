@@ -55,6 +55,8 @@ export function NativeChatQueuedMessageList({
   const [showAll, setShowAll] = useState(false)
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set())
   const [dragging, setDragging] = useState(false)
+  // A row holding focus keeps the list from folding for room; the header's own controls do not.
+  const [listFocused, setListFocused] = useState(false)
   // Collapsing is local to this queue's run: once it empties, the next card shows open.
   if (cards.length === 0 && (!expanded || userOpen || showAll)) {
     setExpanded(true)
@@ -62,12 +64,14 @@ export function NativeChatQueuedMessageList({
     setShowAll(false)
   }
   const room = useNativeChatQueueRoom(regionRef, unitRef)
-  if (!room.questionOpen && showAll) {
+  // Expansion lasts while the list is capped below full (a question or a short pane), not past it.
+  if (room.rowCap >= NATIVE_CHAT_QUEUE_FULL_ROWS && showAll) {
     setShowAll(false)
   }
   const editing = controller.editor !== undefined
   const shownOpenIds = cards.filter((card) => openIds.has(card.messageId))
-  const fitFolded = useNativeChatDockFitToken(regionRef, 'queue') && !userOpen && !editing
+  const fitFolded =
+    useNativeChatDockFitToken(regionRef, 'queue') && !userOpen && !editing && !listFocused
   const listShown = expanded && !fitFolded
   // Rows are whole: the list's cap is a row count in the chat's own spacing, never a pixel total.
   const rowCap =
@@ -141,10 +145,11 @@ export function NativeChatQueuedMessageList({
       data-native-chat-queue=""
       data-user-open={userOpen || undefined}
       data-editing={editing || undefined}
+      data-list-focus={listFocused || undefined}
       className={cn(
         cards.length > 0 &&
-          // A tab tucked 12px behind the next input surface (that surface's 8px top padding plus 12px).
-          'relative z-0 flex min-h-0 shrink-0 flex-col px-3 sm:px-4 [[data-native-chat-composer-tab-strip]+&]:pt-2 [&:has(+[data-native-chat-queue-dock])]:-mb-5 [[data-native-chat-dock-fit~=queue]_&[data-user-open]]:shrink'
+          // A tab tucked 12px behind the next input surface or message box (its 8px top padding plus 12px).
+          'relative z-0 flex min-h-0 shrink-0 flex-col px-3 sm:px-4 [[data-native-chat-composer-tab-strip]+&]:pt-2 [&:has(+:is([data-native-chat-queue-dock],[data-native-chat-composer-scope]))]:-mb-5 [[data-native-chat-dock-fit~=queue]_&[data-user-open]]:shrink'
       )}
     >
       {/* One chat-spacing unit, measured so row caps and the short-pane test scale with the chat's text size. */}
@@ -153,7 +158,7 @@ export function NativeChatQueuedMessageList({
         <div className="@container mx-auto flex min-h-0 w-full max-w-(--chat-content-max-width) flex-col">
           <div
             ref={queueRef}
-            className="mx-3 flex min-h-0 flex-col rounded-t-xl border border-b-0 border-border bg-chat-composer-surface pt-0.5 pb-3.5 [--queued-row:calc(var(--spacing)*8)] [[data-native-chat-queue]:not(:has(+[data-native-chat-queue-dock]))_&]:mb-2 [[data-native-chat-queue]:not(:has(+[data-native-chat-queue-dock]))_&]:rounded-b-xl [[data-native-chat-queue]:not(:has(+[data-native-chat-queue-dock]))_&]:border-b [[data-native-chat-queue]:not(:has(+[data-native-chat-queue-dock]))_&]:pb-1"
+            className="mx-3 flex min-h-0 flex-col rounded-t-xl border border-b-0 border-border bg-chat-composer-surface pt-0.5 pb-3.5 [--queued-row:calc(var(--spacing)*8)] [[data-native-chat-queue]:not(:has(+:is([data-native-chat-queue-dock],[data-native-chat-composer-scope])))_&]:mb-2 [[data-native-chat-queue]:not(:has(+:is([data-native-chat-queue-dock],[data-native-chat-composer-scope])))_&]:rounded-b-xl [[data-native-chat-queue]:not(:has(+:is([data-native-chat-queue-dock],[data-native-chat-composer-scope])))_&]:border-b [[data-native-chat-queue]:not(:has(+:is([data-native-chat-queue-dock],[data-native-chat-composer-scope])))_&]:pb-1"
           >
             <NativeChatQueueHeader
               foldRef={foldRef}
@@ -172,6 +177,12 @@ export function NativeChatQueuedMessageList({
             <ul
               ref={listRef}
               id={listId}
+              onFocus={() => setListFocused(true)}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  setListFocused(false)
+                }
+              }}
               // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
               hidden={!expanded}
               aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
@@ -184,7 +195,7 @@ export function NativeChatQueuedMessageList({
                 'scrollbar-sleek min-h-(--queued-row) shrink overflow-y-auto px-1 py-px',
                 rowCap === null && 'max-h-72',
                 // Folded for room unless the person opened it, is editing, or has focus in it.
-                '[[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],:focus-within)_&]:hidden'
+                '[[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],[data-list-focus])_&]:hidden'
               )}
             >
               <NativeChatQueuedMessageRows
@@ -237,7 +248,7 @@ export function NativeChatQueuedMessageList({
                 aria-controls={listId}
                 aria-expanded={showAll}
                 onClick={() => setShowAll(!showAll)}
-                className="mx-1 shrink-0 rounded-md px-1.5 py-1 text-left text-xs font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground focus-visible:outline-[1.5px] focus-visible:outline-foreground/45 [[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],:focus-within)_&]:hidden"
+                className="mx-1 shrink-0 rounded-md px-1.5 py-1 text-left text-xs font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground focus-visible:outline-[1.5px] focus-visible:outline-foreground/45 [[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],[data-list-focus])_&]:hidden"
               >
                 {showAll
                   ? t('components.native-chat.queuedMessages.showLessRows', 'Show less')

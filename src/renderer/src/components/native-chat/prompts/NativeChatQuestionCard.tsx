@@ -5,7 +5,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
-import { NativeChatQuestionCardHeader } from './NativeChatQuestionCardHeader'
+import {
+  NativeChatQuestionCardHeader,
+  nativeChatQuestionCardLabel
+} from './NativeChatQuestionCardHeader'
 import { NativeChatQuestionAnswerField } from './NativeChatQuestionAnswerField'
 import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
@@ -269,7 +272,7 @@ export function NativeChatQuestionCard({
       data-native-chat-queue-dock
       data-native-chat-question-card
       role="group"
-      aria-label={q.question}
+      aria-label={nativeChatQuestionCardLabel(t, q, index, total)}
       tabIndex={-1}
       // The card opens focused but must not look picked or ringed; options draw their own focus.
       className="flex min-h-0 shrink flex-col bg-chat-pane outline-none"
@@ -306,11 +309,12 @@ export function NativeChatQuestionCard({
       }}
     >
       <div className="mx-auto flex min-h-0 w-full max-w-(--chat-content-max-width) flex-col px-3 pt-2 pb-4 sm:px-4">
-        {/* One 14px gutter (px-3.5) for the question, option tiles and footer, so their edges line up. */}
+        {/* One 14px gutter (px-3.5) for the question, option tiles and footer, so their edges line up.
+            An opaque canvas under the translucent surface keeps the tucked queue tab from showing through. */}
         <div
           ref={surfaceRef}
           data-native-chat-dock-clip
-          className="relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-[14px] border border-primary/28 bg-chat-composer-surface shadow-sm"
+          className="relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-[14px] border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm"
         >
           <NativeChatQuestionCardHeader
             steps={prompt.questions.map((question, i) => ({
@@ -330,8 +334,9 @@ export function NativeChatQuestionCard({
           />
           <div
             data-native-chat-dock-unsqueezed
-            // Short of room (fit level card), the question, options and typed answer scroll as one body.
-            className="scrollbar-sleek flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto"
+            // Short of room (fit level card), the question, options and typed answer scroll as one body,
+            // still tall enough for the question's first line and option 1, and faded while more lies below.
+            className="native-chat-question-card-body scrollbar-sleek flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:min-h-[calc(var(--spacing)*26)] [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto"
           >
             <div
               className={cn(

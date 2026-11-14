@@ -19467,7 +19467,8 @@
         "previous": "Pregunta anterior",
         "nextQuestion": "Siguiente pregunta",
         "back": "Atrás",
-        "skipAndSubmit": "Omitir y enviar"
+        "skipAndSubmit": "Omitir y enviar",
+        "stepLabel": "{{value0}}, {{value1}} de {{value2}}: {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "Esta solicitud necesita una versión más reciente de Orca.",

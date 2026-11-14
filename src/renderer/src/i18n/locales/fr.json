@@ -19740,7 +19740,8 @@
         "previous": "Question précédente",
         "nextQuestion": "Question suivante",
         "back": "Retour",
-        "skipAndSubmit": "Passer et envoyer"
+        "skipAndSubmit": "Passer et envoyer",
+        "stepLabel": "{{value0}}, {{value1}} sur {{value2}} : {{value3}}"
       },
       "approval": {
         "needsNewerOrca": "Cette demande nécessite une version plus récente d'Orca.",

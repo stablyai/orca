@@ -22,6 +22,9 @@ const buttonVariants = cva(
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
           'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
+        // A secondary destructive action beside a primary one: muted until hovered.
+        'muted-destructive':
+          'text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:text-destructive',
         // A queued row's Send/Steer: unfilled bold text that fills on hover.
         'queued-row-action': 'font-semibold text-foreground hover:bg-foreground/9',
         // The head queued card's Steer: the row action, filled as the primary while the composer previews Steer queued.
