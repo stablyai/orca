@@ -147,7 +147,7 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/NewWorkspaceSetupScriptField.tsx",
+    "filePath": "mobile/src/new-workspace/creation/forms/NewWorkspaceSetupScriptField.tsx",
     "kind": "jsx-expression",
     "text": "ORCA.YAML",
     "dynamic": false,

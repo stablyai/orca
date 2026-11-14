@@ -11,7 +11,7 @@ import {
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { prStateColor } from '../../components/WorktreeMetaGlyphs'
+import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
 import { PrStateIcon } from '../../source-control/review/status/PrStateIcon'
 import {
   LIST_LEADING_INSET,

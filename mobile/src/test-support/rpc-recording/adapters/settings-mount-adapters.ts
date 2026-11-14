@@ -1,5 +1,5 @@
 import type * as UsePrBotAuthorOverridesModule from '../../../source-control/review/pull-request/comments/use-pr-bot-author-overrides'
-import type * as UseNewWorkspaceRuntimeContextModule from '../../../components/use-new-workspace-runtime-context'
+import type * as UseNewWorkspaceRuntimeContextModule from '../../../new-workspace/creation/runtime/use-new-workspace-runtime-context'
 import type * as UseHostRepoMetadataModule from '../../../host-screen/catalog/use-host-repo-metadata'
 import type * as UseMobileTasksRuntimeHydrationModule from '../../../tasks/screen-state/use-mobile-tasks-runtime-hydration'
 import { notifyManager, useQueryClient, type QueryClient } from '@tanstack/react-query'
@@ -53,7 +53,7 @@ export function settingsMountAdapters(
     },
     'settings.workspace-context': ({ client }) => {
       const useContext = modules.load<typeof UseNewWorkspaceRuntimeContextModule>(
-        'mobile/src/components/use-new-workspace-runtime-context.ts'
+        'mobile/src/new-workspace/creation/runtime/use-new-workspace-runtime-context.ts'
       ).useNewWorkspaceRuntimeContext
       let state: ReturnType<typeof useContext>
       let visible = true

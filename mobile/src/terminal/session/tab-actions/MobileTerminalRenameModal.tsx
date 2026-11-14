@@ -1,6 +1,6 @@
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { TextInputSheetContent } from '../../../components/TextInputModal'
-import { useDraftRenameSheet } from '../../../components/use-draft-rename-sheet'
+import { useDraftRenameSheet } from '../../../components/rename/use-draft-rename-sheet'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useHostDisplay } from '../../../host-descriptors/use-host-display'
 import { useHostProfile } from '../../../host-catalog/use-host-profile'
