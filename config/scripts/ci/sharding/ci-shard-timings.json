@@ -4097,8 +4097,6 @@
       "src/renderer/src/components/NewWorkspaceComposerCard.set-location.test.tsx": 1301,
       "src/renderer/src/components/SelectedTextCopyMenu.test.tsx": 329,
       "src/renderer/src/components/UpdateCard.error-card.test.tsx": 2851,
-      "src/renderer/src/components/UpdateCard.test.ts": 694,
-      "src/renderer/src/components/WorktreeBaseFallbackDialog.test.tsx": 2104,
       "src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx": 5607,
       "src/renderer/src/components/activity/activity-clear-completed-hmr.test.ts": 814,
       "src/renderer/src/components/activity/activity-clear-completed-state-lifetime.test.ts": 4609,
