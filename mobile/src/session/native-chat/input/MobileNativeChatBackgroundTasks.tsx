@@ -31,6 +31,7 @@ import {
   backgroundTaskRowStopId,
   backgroundTasksStripTicks,
   buildBackgroundTaskGroups,
+  buildBackgroundTaskGroupsFromRows,
   buildBackgroundTaskGroupsFromViews
 } from '../../../../../src/shared/background-task-roster'
 import { AGENT_WORKING_COLOR, AgentStateDot } from '../../../components/AgentStateDot'
@@ -39,6 +40,7 @@ import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
+import type { MobileTerminalChatSubagents } from './use-mobile-terminal-chat-subagents'
 import {
   useMobileBackgroundTaskStops,
   type MobileBackgroundTaskStopping as Stopping
@@ -50,6 +52,10 @@ import {
 import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
+
+export type MobileNativeChatBackgroundTasksSource =
+  | MobileStructuredBackgroundTasks
+  | MobileTerminalChatSubagents
 
 export function BackgroundTaskKindIcon({
   kind,
@@ -88,6 +94,7 @@ function TaskRow({
   row,
   now,
   hostNow,
+  agentIcon,
   supportsTaskStop,
   stopping,
   onStop
@@ -96,6 +103,8 @@ function TaskRow({
   now: number
   /** `now` on the host's clock, which stamps every elapsed anchor. */
   hostNow: number
+  /** False where every listed row is an agent, as in a terminal chat's strip. */
+  agentIcon: boolean
   supportsTaskStop: boolean
   stopping: Stopping
   onStop: (taskId: string) => void
@@ -108,7 +117,9 @@ function TaskRow({
   return (
     <>
       <View testID="background-task-row" style={styles.row}>
-        <BackgroundTaskKindIcon kind={row.kind} size={14} />
+        {agentIcon || row.kind !== 'agent' ? (
+          <BackgroundTaskKindIcon kind={row.kind} size={14} />
+        ) : null}
         <AgentStateDot state={row.displayState} />
         <Text style={styles.rowText} numberOfLines={1} ellipsizeMode="tail">
           <Text style={styles.lead}>{lead}</Text>
@@ -147,6 +158,7 @@ function TaskRow({
               row={owned}
               now={now}
               hostNow={hostNow}
+              agentIcon={agentIcon}
               supportsTaskStop={supportsTaskStop}
               stopping={stopping}
               onStop={onStop}
@@ -162,11 +174,12 @@ function TaskRow({
 function MobileNativeChatBackgroundTasksImpl({
   tasks
 }: {
-  tasks: MobileStructuredBackgroundTasks
+  tasks: MobileNativeChatBackgroundTasksSource
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { view, rowContext } = tasks
+  const rows = 'rows' in tasks ? tasks.rows : undefined
   const [expanded, setExpanded] = useState(false)
   // Seed from usable window width to avoid changing form after first layout.
   const [narrow, setNarrow] = useState(
@@ -175,10 +188,12 @@ function MobileNativeChatBackgroundTasksImpl({
   const { stopping, onStop } = useMobileBackgroundTaskStops(tasks)
   const groups = useMemo(
     () =>
-      view.children !== undefined
-        ? buildBackgroundTaskGroupsFromViews(view.children, rowContext)
-        : buildBackgroundTaskGroups(view.tasks, view.settledTasks, say),
-    [view.children, view.tasks, view.settledTasks, rowContext, t]
+      rows !== undefined
+        ? buildBackgroundTaskGroupsFromRows(rows)
+        : view.children !== undefined
+          ? buildBackgroundTaskGroupsFromViews(view.children, rowContext)
+          : buildBackgroundTaskGroups(view.tasks, view.settledTasks, say),
+    [rows, view.children, view.tasks, view.settledTasks, rowContext, t]
   )
   const now = useNow(1_000, view.show && backgroundTasksStripTicks(groups, expanded))
   if (!view.show) {
@@ -241,6 +256,7 @@ function MobileNativeChatBackgroundTasksImpl({
                       row={entry.row}
                       now={now}
                       hostNow={hostNow}
+                      agentIcon={rows === undefined}
                       supportsTaskStop={view.supportsStop}
                       stopping={stopping}
                       onStop={onStop}

@@ -21,6 +21,12 @@ import { deriveNativeChatStreamingText } from '../../../../../src/shared/native-
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatSession } from '../use-mobile-native-chat-session'
 import type { MobileNativeChatResolution } from '../mobile-native-chat-eligibility'
+import { mobileNativeChatScopeKey } from '../mobile-native-chat-scope-key'
+import type { ConnectionState } from '../../../transport/connection/connection-state'
+import {
+  useMobileTerminalChatSubagents,
+  type MobileTerminalChatSubagents
+} from '../input/use-mobile-terminal-chat-subagents'
 
 import {
   pendingSendsAsMessages,
@@ -34,12 +40,18 @@ export type MobileNativeChatTerminalTurn = NativeChatTerminalTurn & {
   workingStartedAt: number | null
   workingEpoch: number | null | undefined
   settledTurns: NativeChatSettledTurns
+  /** The subagents the hook row lists as running; null when no tab is active. */
+  backgroundTasks: MobileTerminalChatSubagents | null
   /** Stop hides working until the turn ends or a newer working epoch starts. */
   stop: () => void
 }
 
 // Desktop's terminal-chat turn rules (NativeChatResolvedView) over the phone's hook row and transcript feed.
 export function useMobileNativeChatTerminalTurn(args: {
+  hostId: string
+  worktreeId: string
+  activeSessionTabId: string | null
+  connState: ConnectionState
   /** The terminal chat's hook row; null for structured chats or when no chat shows. */
   status: AgentStatusEntry | null | undefined
   resolution: Pick<MobileNativeChatResolution, 'agent' | 'sessionId'> | null
@@ -144,12 +156,19 @@ export function useMobileNativeChatTerminalTurn(args: {
       }),
     [latestTurnId, latestWorkedSeconds, transcriptSettled, turn.turnActive, turnStartedAt]
   )
+  const backgroundTasks = useMobileTerminalChatSubagents({
+    sessionKey: mobileNativeChatScopeKey(args.hostId, args.worktreeId, args.activeSessionTabId),
+    status,
+    connected: args.connState === 'connected',
+    turnActive: turn.turnActive
+  })
   return {
     ...turn,
     streamingText,
     workingStartedAt: turn.turnActive ? turnStartedAt : null,
     workingEpoch,
     settledTurns,
+    backgroundTasks,
     stop: stopTurn
   }
 }
