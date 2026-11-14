@@ -10,6 +10,7 @@ import {
 import { getUserKeybindingsPath } from './keybinding-file'
 import { KeybindingService } from './keybinding-service'
 import { toSearchShortcutPluginOwners } from '../../shared/keybindings/search-shortcut-plugin-owners'
+import { planSearchShortcutOptInForSnapshot } from '../../shared/keybindings/search-shortcut-opt-in'
 
 describe('KeybindingService profile defaults', () => {
   let home: string
@@ -461,6 +462,56 @@ describe('KeybindingService Search shortcut opt-in', () => {
       expect(result.snapshot.overrides['terminal.clear']).toEqual(['Mod+K'])
       expect(result.snapshot.overrides['worktree.palette']).toEqual(['Mod+J'])
     }
+  })
+
+  it('claims nothing after an indeterminate save that an edit overtook, and plans from live bindings', async () => {
+    let release: () => void = () => undefined
+    const service = openLegacy({
+      persist: (choice) =>
+        new Promise<void>((_resolve, reject) => {
+          release = () => {
+            stored = choice
+            reject(new Error('writer exited before acknowledging'))
+          }
+        })
+    })
+    const pending = service.setSearchShortcutChoice('accepted')
+    await Promise.resolve()
+    await Promise.resolve()
+    service.setActionBindings('terminal.clear', ['Mod+K'])
+    release()
+    const result = await pending
+    expect(result.outcome).toBe('unconfirmed')
+    expect(planSearchShortcutOptInForSnapshot(result.snapshot)).toEqual({
+      kind: 'accepted',
+      searchOnModK: false,
+      owners: [{ actionId: 'terminal.clear' }]
+    })
+  })
+
+  it('judges an accepted choice from live bindings while the file is unreadable', async () => {
+    stored = 'accepted'
+    write('{ not json')
+    const service = openLegacy({ legacyOverrides: { 'worktree.palette': ['Mod+P'] } })
+    const snapshot = service.reload()
+    expect(snapshot.overrides['worktree.palette']).toEqual(['Mod+P'])
+    expect(planSearchShortcutOptInForSnapshot(snapshot)).toEqual({
+      kind: 'accepted',
+      searchOnModK: false,
+      owners: []
+    })
+
+    write('{ not json')
+    const clean = openLegacy()
+    expect(
+      planSearchShortcutOptInForSnapshot(clean.reload(), [
+        { actionId: 'plugin:acme.tools/open', title: 'Open tools', defaultBindings: ['Mod+K'] }
+      ])
+    ).toEqual({
+      kind: 'accepted',
+      searchOnModK: true,
+      owners: [{ actionId: 'plugin:acme.tools/open', title: 'Open tools' }]
+    })
   })
 
   it('keeps legacy shortcuts when the save is rejected before commit', async () => {

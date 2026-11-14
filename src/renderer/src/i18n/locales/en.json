@@ -25777,6 +25777,11 @@
     "acceptedTaken": "{{key}} is also assigned to {{actions}}. Change that shortcut to use {{key}} for Search, or undo.",
     "acceptedCustom": "Search uses a custom shortcut, and {{key}} no longer clears terminals. Undo restores {{legacyKey}} and {{key}} clear.",
     "supersededToast": "{{key}} was just assigned to another shortcut",
-    "supersededDetail": "Your later change was kept. See Settings › Shortcuts."
+    "supersededDetail": "Your later change was kept. See Settings › Shortcuts.",
+    "unconfirmedInSettings": "Couldn't confirm the change was saved. This row shows what's active now.",
+    "unconfirmedToast": "Couldn't confirm the change",
+    "unconfirmedDetail": "Settings › Shortcuts shows which Search shortcut is active.",
+    "undoneToast": "{{legacyKey}} opens Search again",
+    "undoFailed": "Couldn't undo. Try again in Settings › Shortcuts."
   }
 }

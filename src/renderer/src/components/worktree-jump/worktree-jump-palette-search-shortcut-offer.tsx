@@ -11,7 +11,8 @@ import {
 } from '@/lib/keyboard/search-shortcut-offer'
 import type {
   KeybindingFileSnapshot,
-  SearchShortcutChoice
+  SearchShortcutChoice,
+  SearchShortcutChoiceResult
 } from '../../../../shared/keybindings/types'
 
 /** macOS only: Ctrl+K on Windows/Linux also takes the shell's kill-line, so it is offered in Settings alone. */
@@ -51,41 +52,44 @@ function SearchShortcutOfferPrompt({
     setFailed(false)
     try {
       const outcome = await setSearchShortcutChoice(choice)
-      if (
-        choice === 'accepted' &&
-        (outcome === 'applied' || outcome === 'unconfirmed' || outcome === 'superseded')
-      ) {
+      if (choice === 'dismissed') {
+        if (outcome !== 'applied' && mountedRef.current) {
+          setFailed(true)
+        }
+      } else if (outcome === 'applied' || outcome === 'superseded') {
         // The footer unmounts with the new snapshot, so confirmation and Undo move to a toast.
-        const title =
-          outcome === 'superseded'
-            ? t(
+        toast.success(
+          outcome === 'applied'
+            ? t('searchShortcutOptIn.acceptedToast', '{{key}} now opens Search', keys)
+            : t(
                 'searchShortcutOptIn.supersededToast',
                 '{{key}} was just assigned to another shortcut',
                 keys
-              )
-            : t('searchShortcutOptIn.acceptedToast', '{{key}} now opens Search', keys)
-        toast.success(title, {
-          description:
-            outcome === 'unconfirmed'
-              ? t(
-                  'searchShortcutOptIn.unconfirmed',
-                  "The save wasn't confirmed. Check Settings › Shortcuts after restarting Orca."
-                )
-              : outcome === 'superseded'
+              ),
+          {
+            description:
+              outcome === 'superseded'
                 ? t(
                     'searchShortcutOptIn.supersededDetail',
                     'Your later change was kept. See Settings › Shortcuts.'
                   )
                 : undefined,
-          action: {
-            label: t('searchShortcutOptIn.undo', 'Undo'),
-            onClick: () => void setSearchShortcutChoice('dismissed').catch(() => undefined)
+            action: {
+              label: t('searchShortcutOptIn.undo', 'Undo'),
+              onClick: () => void undoSearchShortcut(setSearchShortcutChoice, t, keys)
+            }
           }
+        )
+      } else if (outcome === 'unconfirmed') {
+        // Possibly saved: claim nothing about which key works, only where to look.
+        toast(t('searchShortcutOptIn.unconfirmedToast', "Couldn't confirm the change"), {
+          description: t(
+            'searchShortcutOptIn.unconfirmedDetail',
+            'Settings › Shortcuts shows which Search shortcut is active.'
+          )
         })
-      } else if (outcome === 'unchanged' || outcome === 'refused') {
-        if (mountedRef.current) {
-          setFailed(true)
-        }
+      } else if (mountedRef.current) {
+        setFailed(true)
       }
     } catch (error) {
       console.error('Failed to save Search shortcut choice:', error)
@@ -143,4 +147,34 @@ function SearchShortcutOfferPrompt({
       </Button>
     </div>
   )
+}
+
+async function undoSearchShortcut(
+  setSearchShortcutChoice: (
+    choice: SearchShortcutChoice
+  ) => Promise<SearchShortcutChoiceResult['outcome']>,
+  t: ReturnType<typeof useTranslate>,
+  keys: { key: string; legacyKey: string }
+): Promise<void> {
+  let outcome: SearchShortcutChoiceResult['outcome'] | 'error'
+  try {
+    outcome = await setSearchShortcutChoice('dismissed')
+  } catch (error) {
+    console.error('Failed to undo Search shortcut choice:', error)
+    outcome = 'error'
+  }
+  if (outcome === 'applied') {
+    toast(t('searchShortcutOptIn.undoneToast', '{{legacyKey}} opens Search again', keys))
+  } else if (outcome === 'unconfirmed') {
+    toast(t('searchShortcutOptIn.unconfirmedToast', "Couldn't confirm the change"), {
+      description: t(
+        'searchShortcutOptIn.unconfirmedDetail',
+        'Settings › Shortcuts shows which Search shortcut is active.'
+      )
+    })
+  } else {
+    toast.error(
+      t('searchShortcutOptIn.undoFailed', "Couldn't undo. Try again in Settings › Shortcuts.")
+    )
+  }
 }

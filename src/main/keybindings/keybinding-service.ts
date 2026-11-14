@@ -158,13 +158,14 @@ export class KeybindingService {
     this.searchShortcutChoice = this.readSearchShortcutChoice()
     this.defaultOverrides = this.buildDefaultOverrides()
     const snapshot = this.reload()
-    if (failed) {
-      return {
-        snapshot,
-        outcome: this.searchShortcutChoice === choice ? 'unconfirmed' : 'unchanged'
-      }
+    if (this.searchShortcutChoice !== choice) {
+      return { snapshot, outcome: 'unchanged' }
     }
-    // Action and plugin edits aren't serialized behind the save, so judge the result, not the preflight.
+    if (failed) {
+      // Possibly committed; the UI must not claim the shortcut works, only point to Settings.
+      return { snapshot, outcome: 'unconfirmed' }
+    }
+    // Action and plugin edits aren't serialized behind the save, so judge the live result, not the preflight.
     const superseded =
       choice === 'accepted' &&
       !searchShortcutOptInIsEffective(

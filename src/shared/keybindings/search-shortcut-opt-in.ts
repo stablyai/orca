@@ -64,7 +64,7 @@ export function getExplicitKeybindingOverrides(
   }
 }
 
-/** Snapshot-level preflight; refuses when the shared file is unreadable. */
+/** Snapshot-level plan. An accepted choice is judged by the live effective bindings, which main routing uses too. */
 export function planSearchShortcutOptInForSnapshot(
   snapshot: KeybindingFileSnapshot,
   pluginOwners: readonly SearchShortcutPluginOwner[] = []
@@ -72,19 +72,24 @@ export function planSearchShortcutOptInForSnapshot(
   if (!snapshot.searchShortcut) {
     return { kind: 'none' }
   }
+  if (snapshot.searchShortcut.choice === 'accepted') {
+    // Effective overrides already carry explicit, fallback and inherited bindings, readable file or not.
+    const searchOnModK = searchHasModK(snapshot.platform, snapshot.overrides)
+    return {
+      kind: 'accepted',
+      searchOnModK,
+      owners: findModKOwners(snapshot.platform, snapshot.overrides, searchOnModK, pluginOwners)
+    }
+  }
   if (
     snapshot.searchShortcut.fileError ||
     snapshot.diagnostics.some((diagnostic) => diagnostic.code === 'readFailed')
   ) {
-    // Explicit state is unknown; an accepted choice is still live and undoable.
-    return snapshot.searchShortcut.choice === 'accepted'
-      ? { kind: 'accepted', searchOnModK: true, owners: [] }
-      : { kind: 'file-error' }
+    return { kind: 'file-error' }
   }
   return planSearchShortcutOptIn(
     snapshot.platform,
     getExplicitKeybindingOverrides(snapshot),
-    snapshot.searchShortcut.choice,
     pluginOwners
   )
 }
@@ -133,26 +138,12 @@ function findModKOwners(
   return owners
 }
 
-/** Preflight for a legacy-cohort profile; only an `eligible` result may be persisted. */
-export function planSearchShortcutOptIn(
+/** Preflight for an undecided or dismissed legacy-cohort profile; only `eligible` may be persisted. */
+function planSearchShortcutOptIn(
   platform: NodeJS.Platform,
   explicitOverrides: KeybindingOverrides,
-  choice: SearchShortcutChoice | null,
-  pluginOwners: readonly SearchShortcutPluginOwner[] = []
+  pluginOwners: readonly SearchShortcutPluginOwner[]
 ): SearchShortcutOffer {
-  const optedIn = (): boolean =>
-    searchHasModK(
-      platform,
-      resolveKeybindingOverrides(platform, explicitOverrides, getSearchOptInBindings(platform))
-    )
-  if (choice === 'accepted') {
-    const searchOnModK = optedIn()
-    return {
-      kind: 'accepted',
-      searchOnModK,
-      owners: findModKOwners(platform, explicitOverrides, searchOnModK, pluginOwners)
-    }
-  }
   const legacy = resolveKeybindingOverrides(
     platform,
     explicitOverrides,
@@ -164,7 +155,10 @@ export function planSearchShortcutOptIn(
   if (Object.hasOwn(explicitOverrides, SEARCH_ACTION)) {
     return { kind: 'custom-search' }
   }
-  const searchOnModK = optedIn()
+  const searchOnModK = searchHasModK(
+    platform,
+    resolveKeybindingOverrides(platform, explicitOverrides, getSearchOptInBindings(platform))
+  )
   const owners = findModKOwners(platform, explicitOverrides, searchOnModK, pluginOwners)
   return owners.length > 0 || !searchOnModK ? { kind: 'conflict', owners } : { kind: 'eligible' }
 }

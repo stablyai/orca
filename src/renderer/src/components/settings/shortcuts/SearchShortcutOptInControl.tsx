@@ -74,8 +74,8 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
           {notice === 'unconfirmed' ? (
             <span className="block text-muted-foreground" role="status">
               {t(
-                'searchShortcutOptIn.unconfirmed',
-                "The save wasn't confirmed. Check Settings › Shortcuts after restarting Orca."
+                'searchShortcutOptIn.unconfirmedInSettings',
+                "Couldn't confirm the change was saved. This row shows what's active now."
               )}
             </span>
           ) : notice === 'unchanged' || notice === 'error' ? (
