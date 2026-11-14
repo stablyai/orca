@@ -32,10 +32,16 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function CopyButton({
   text,
-  title: titleOverride
+  title: titleOverride,
+  ariaLabel,
+  copiedLabel,
+  disabled = false
 }: {
   text: string
   title?: string
+  ariaLabel?: string
+  copiedLabel?: string
+  disabled?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const title =
@@ -81,15 +87,48 @@ export function CopyButton({
     [clearCopiedResetTimer, text]
   )
 
+  const idleLabel = ariaLabel ?? title
+  const announcedLabel = copied && copiedLabel ? copiedLabel : idleLabel
+
   return (
     <button
+      type="button"
       ref={setCopyButtonRef}
-      className="p-1 rounded hover:bg-accent text-muted-foreground/40 hover:text-foreground transition-colors shrink-0"
+      className="p-1 rounded hover:bg-accent text-muted-foreground/40 hover:text-foreground transition-colors shrink-0 disabled:cursor-not-allowed disabled:opacity-40"
+      aria-label={announcedLabel}
       title={title}
+      disabled={disabled}
       onClick={handleCopy}
     >
       {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
     </button>
+  )
+}
+
+export function CopyAllButton({
+  text,
+  disabled
+}: {
+  text: string
+  disabled: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  const copyAllLabel = t(
+    'auto.components.right.sidebar.checks.panel.content.097012c048',
+    'Copy all'
+  )
+  const copiedLabel = t(
+    'auto.components.right.sidebar.checks.panel.content.1e53e45072',
+    'Copied'
+  )
+  return (
+    <CopyButton
+      text={text}
+      title={copyAllLabel}
+      ariaLabel={copyAllLabel}
+      copiedLabel={copiedLabel}
+      disabled={disabled}
+    />
   )
 }
 
@@ -307,6 +346,24 @@ export function buildCopyText(comment: PRComment): string {
   const lineRange = formatLineRange(comment)
   const location = lineRange ? `${comment.path}:${lineRange}` : comment.path
   return `File: ${location}\n\n${comment.body}`
+}
+
+/** Build paste-ready context while preserving the current comment filter. */
+export function buildCopyAllCommentsText(comments: PRComment[]): string {
+  return comments
+    .map((comment) => {
+      const lineRange = formatLineRange(comment)
+      const location = comment.path
+        ? lineRange
+          ? `${comment.path}:${lineRange}`
+          : comment.path
+        : 'PR conversation'
+      const source = comment.url ? `Source: ${comment.url}` : null
+      return [`Author: ${comment.author}`, `Context: ${location}`, source, '', comment.body]
+        .filter((line): line is string => line !== null)
+        .join('\n')
+    })
+    .join('\n\n---\n\n')
 }
 
 export function QueueForAgentButton({
