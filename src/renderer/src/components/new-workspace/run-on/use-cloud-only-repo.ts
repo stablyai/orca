@@ -45,7 +45,7 @@ export type CloudOnlyRepo = {
   githubHandoff: GitHubAccessHandoffPhase
   /** After the wait ran out with nothing new: read once more and wait again. */
   checkGitHubAgain: () => void
-  start: (request: { prompt: string; agent: string | null }) => Promise<boolean>
+  start: (request: { name: string; agent: string | null }) => Promise<boolean>
 }
 
 export function useCloudOnlyRepo({
@@ -122,7 +122,7 @@ export function useCloudOnlyRepo({
     void window.api.orcaCloudWorkspace.connectGitHub()
   }, [beginHandoff])
   const start = useCallback(
-    (request: { prompt: string; agent: string | null }) =>
+    (request: { name: string; agent: string | null }) =>
       picked
         ? startCloudWorkspaceFromGitHub({
             repoUrl: picked.url,
@@ -175,14 +175,15 @@ function remoteServerStep(): CloudSetupStep {
 export function useCloudOnlyCreate({
   cloudOnly,
   createWorkspace,
-  prompt,
+  name,
   agent,
   profileId,
   onClose
 }: {
   cloudOnly: CloudOnlyRepo
   createWorkspace: () => void
-  prompt: string
+  /** The composer's name field: the workspace's name, never the agent's prompt. */
+  name: string
   agent: string | null
   profileId: string | null
   onClose?: () => void
@@ -194,9 +195,9 @@ export function useCloudOnlyCreate({
       return
     }
     clearCloudStartDraft(profileId)
-    void start({ prompt, agent })
+    void start({ name, agent })
     onClose?.()
-  }, [agent, createWorkspace, onClose, picked, profileId, prompt, start])
+  }, [agent, createWorkspace, name, onClose, picked, profileId, start])
 }
 
 /**

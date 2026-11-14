@@ -25,7 +25,7 @@ function creation(
     request: githubCreateRequest({
       repoUrl: 'https://github.com/nwparker/orca-sandbox-push-test',
       fullName: 'nwparker/orca-sandbox-push-test',
-      prompt: 'Add a push test',
+      name: 'Add a push test',
       agent: 'claude',
       composerRepoId: 'repo'
     }),

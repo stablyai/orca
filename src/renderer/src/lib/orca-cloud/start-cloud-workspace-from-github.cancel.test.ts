@@ -71,7 +71,7 @@ afterEach(() => {
 const REQUEST = {
   repoUrl: 'https://github.com/acme/web',
   fullName: 'acme/web',
-  prompt: '',
+  name: '',
   agent: null,
   composerRepoId: 'repo-1'
 }

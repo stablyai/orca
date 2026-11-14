@@ -34,7 +34,7 @@ function failed(
     request: githubCreateRequest({
       repoUrl: 'https://github.com/acme/web',
       fullName: 'acme/web',
-      prompt: 'Fix login',
+      name: 'Fix login',
       agent: null
     })
   }

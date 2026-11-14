@@ -8,7 +8,6 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { firstWorktreeOnHost } from '@/components/cloud-workspaces/open-cloud-workspace'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
 import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -25,8 +24,10 @@ import {
 
 export type FirstCloudAgentRequest = {
   fullName: string
-  prompt: string
-  /** The composer's pick; null uses the workspace's default agent (only with a prompt). */
+  /**
+   * The composer's pick; null is Blank terminal and starts nothing. It starts with no prompt: the
+   * composer's name field only names the workspace (CLOUD-ONLY-NAME-AS-PROMPT).
+   */
   agent: string | null
   worktreeId: string | null
   hostId?: string
@@ -38,8 +39,8 @@ const FIRST_WORKTREE_WAIT_MS = 90_000
 const NOTICE_DISMISS_WAIT_MS = 10 * 60_000
 
 export async function launchFirstCloudAgent(request: FirstCloudAgentRequest): Promise<void> {
-  const prompt = request.prompt.trim()
-  if (!prompt && !isTuiAgent(request.agent)) {
+  const agent = request.agent
+  if (!isTuiAgent(agent)) {
     return
   }
   const deadline = Date.now() + FIRST_WORKTREE_WAIT_MS
@@ -63,21 +64,14 @@ export async function launchFirstCloudAgent(request: FirstCloudAgentRequest): Pr
     agentNotStartedNotice(request.agent, request.fullName, request.hostId)
     return
   }
-  const agent = isTuiAgent(request.agent)
-    ? request.agent
-    : await resolveDefaultAgentForWorktree(useAppStore.getState, worktreeId).catch(() => null)
   if (environmentId) {
-    void settleFirstTerminal({ environmentId, worktreeId, claimed, launched: Boolean(agent) })
-  }
-  if (!agent) {
-    return
+    void settleFirstTerminal({ environmentId, worktreeId, claimed, launched: true })
   }
   launchAgentInNewTabWithOutcome({
     requestId: createNonSecureContextUuid(),
     ...captureAgentTabLaunchContext(worktreeId),
     agent,
     worktreeId,
-    ...(prompt ? { prompt: request.prompt, promptDelivery: 'submit-after-ready' as const } : {}),
     launchSource: 'unknown'
   })
 }
