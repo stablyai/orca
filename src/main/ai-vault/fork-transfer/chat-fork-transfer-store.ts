@@ -192,6 +192,8 @@ export class ChatForkTransferStore {
       throw new ChatForkTransferError('chat_fork_transfer_too_large')
     }
     entry.busy = true
+    // The idle deadline is paused while a chunk writes, so it can't drop the import mid-append.
+    clearChatForkIdleTimer(entry)
     try {
       await writeChatForkChunk(entry.handle, bytes, offset)
     } catch (error) {
@@ -199,6 +201,9 @@ export class ChatForkTransferStore {
       throw error
     } finally {
       entry.busy = false
+    }
+    if (this.imports.get(importId) !== entry) {
+      throw new ChatForkTransferError('chat_fork_transfer_not_found')
     }
     entry.hash.update(bytes)
     entry.written += bytes.length
