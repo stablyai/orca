@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   runProcess: vi.fn(),
   resetTcc: vi.fn(),
   peek: vi.fn(),
-  readBundleId: vi.fn()
+  readBundleId: vi.fn(),
+  sessionLocked: vi.fn()
 }))
 
 vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
@@ -19,6 +20,7 @@ vi.mock('../macos-native/macos-native-provider-paths', () => ({
 }))
 vi.mock('./macos-computer-use-permission-status', () => ({
   getComputerUsePermissionStatus: vi.fn(),
+  readMacOSSessionLocked: mocks.sessionLocked,
   resolveComputerUseHelperUnavailableReason: () => null
 }))
 vi.mock('./macos-computer-use-permission-status-gate', () => ({
@@ -86,6 +88,7 @@ describe('computer-use setup cancellation', () => {
     mocks.resetTcc.mockReset().mockResolvedValue({ ok: true })
     mocks.peek.mockReset().mockResolvedValue(denied)
     mocks.readBundleId.mockReset().mockResolvedValue(null)
+    mocks.sessionLocked.mockReset().mockResolvedValue(false)
     Object.defineProperty(process, 'platform', { value: 'darwin' })
   })
 
@@ -279,6 +282,23 @@ describe('computer-use setup cancellation', () => {
       code: 'screen_locked'
     })
     await vi.advanceTimersByTimeAsync(5_000)
+    expect(setupLaunches()).toEqual([])
+  })
+
+  it('refuses setup when the screen locked after the status was read', async () => {
+    mocks.peek.mockResolvedValue({
+      ...denied,
+      permissions: [
+        { id: 'accessibility', status: 'granted' },
+        { id: 'screenshots', status: 'granted' }
+      ],
+      sessionLocked: false
+    })
+    mocks.sessionLocked.mockResolvedValue(true)
+    const { permissions } = await loadModules()
+    await expect(
+      permissions.openComputerUsePermissions('accessibility', { skipGranted: true })
+    ).rejects.toMatchObject({ code: 'screen_locked' })
     expect(setupLaunches()).toEqual([])
   })
 })

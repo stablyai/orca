@@ -4123,6 +4123,10 @@ private enum PermissionKind: CaseIterable {
     }
 
     func requestAndOpenSettings() {
+        // Why: the screen can lock after the setup helper started.
+        guard !SessionLockProbe.isLocked() else {
+            return
+        }
         switch self {
         case .accessibility:
             openAccessibilitySettings()
@@ -5155,11 +5159,13 @@ private func runPermissionCheck(
 }
 
 private func permissionStatusJSON() -> String {
+    // Why: behind the lock screen macOS reports Accessibility as untrusted even when it is granted, so a lock at
+    // either end of the probes marks the whole answer as read while locked.
+    let lockedBefore = SessionLockProbe.isLocked()
     let snapshot = permissionStatusSnapshotSettled()
     let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
     let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
-    // Why: behind the lock screen macOS reports Accessibility as untrusted even when it is granted.
-    let sessionLocked = SessionLockProbe.isLocked()
+    let sessionLocked = lockedBefore || SessionLockProbe.isLocked()
     return #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)","sessionLocked":\#(sessionLocked)}"#
 }
 
@@ -5308,6 +5314,8 @@ if arguments.first == "--agent" {
         initialPermission: PermissionKind.parse(arguments.dropFirst().first),
         copy: permissionCopy
     )
+} else if arguments.first == "--session-locked" {
+    print(SessionLockProbe.isLocked())
 } else if arguments.first == "--permission-status" {
     printPermissionStatus()
 } else if arguments.first == "--permission-status-file" {

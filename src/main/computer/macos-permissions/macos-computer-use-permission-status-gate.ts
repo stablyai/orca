@@ -146,6 +146,10 @@ export function createPermissionStatusGate(
 
 // A missing helper answers without launching anything, so it is as safe to reuse as a grant.
 function isCacheable(result: StatusResult): boolean {
+  // A result read while locked must not decide setup after the lock ends.
+  if (result.sessionLocked) {
+    return false
+  }
   return (
     result.helperUnavailableReason !== null ||
     result.permissions.every((permission) => permission.status !== 'not-granted')

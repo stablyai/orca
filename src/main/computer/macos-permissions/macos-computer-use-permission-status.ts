@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { runProcess } from '@orca/process-host'
 import type {
   ComputerUsePermissionId,
   ComputerUsePermissionStatus,
@@ -16,6 +17,7 @@ import { RuntimeClientError } from '../runtime-client-error'
 import { stopMacOSPermissionStatusHelper } from './macos-computer-use-permission-status-cleanup'
 
 const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
+const SESSION_LOCK_READ_TIMEOUT_MS = 3_000
 
 type HelperPermissionStatus = Partial<
   Record<ComputerUsePermissionId, ComputerUsePermissionStatus> & { sessionLocked: boolean }
@@ -64,6 +66,20 @@ async function getComputerUsePermissionStatusAsync(
     ],
     sessionLocked: raw.sessionLocked === true
   }
+}
+
+// A fresh read of the current lock state; cached permission results can predate a lock or an unlock.
+export async function readMacOSSessionLocked(): Promise<boolean> {
+  const executablePath = resolveMacOSComputerUseExecutablePath()
+  if (!executablePath) {
+    return false
+  }
+  const result = await runProcess({
+    program: executablePath,
+    args: ['--session-locked'],
+    timeoutMs: SESSION_LOCK_READ_TIMEOUT_MS
+  }).catch(() => null)
+  return result?.code === 0 && result.stdout.trim() === 'true'
 }
 
 // Answers from the bundle layout alone, without launching the helper.

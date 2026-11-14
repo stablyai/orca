@@ -8,7 +8,10 @@ import {
 import { isHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 import { readMacosBundleId, resetMacosTccPermission } from '../../macos-permissions/macos-tcc-reset'
 import { resolveMacOSComputerUseAppPath } from '../macos-native/macos-native-provider-paths'
-import { resolveComputerUseHelperUnavailableReason } from './macos-computer-use-permission-status'
+import {
+  readMacOSSessionLocked,
+  resolveComputerUseHelperUnavailableReason
+} from './macos-computer-use-permission-status'
 import { computerUsePermissionStatusGate } from './macos-computer-use-permission-status-gate'
 import type {
   ComputerUsePermissionId,
@@ -187,7 +190,8 @@ async function openComputerUsePermissionsAsync(
     throw new RuntimeClientError('accessibility_error', status.helperUnavailableReason)
   }
   // Why: behind the lock screen macOS reports Accessibility as untrusted, so setup would open Settings for nothing.
-  if (status.sessionLocked) {
+  // The status may be cached from before a lock, so the lock is read fresh too.
+  if (status.sessionLocked || (await readMacOSSessionLocked())) {
     throw new RuntimeClientError(COMPUTER_ERROR_CODES.screen_locked, COMPUTER_SCREEN_LOCKED_MESSAGE)
   }
   const nextStep = nextPermissionStep(status.permissions)
