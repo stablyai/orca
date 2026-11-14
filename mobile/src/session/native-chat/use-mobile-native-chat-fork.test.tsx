@@ -163,8 +163,7 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
       },
       agentWorking: false,
       sessionForkSupport: 'supported',
-      createFork,
-      createWorktreeFork: vi.fn(async () => {})
+      createFork
     })
     return null
   }

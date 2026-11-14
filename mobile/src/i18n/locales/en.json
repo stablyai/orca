@@ -3431,11 +3431,37 @@
         "menu": "Fork as Background Subagent",
         "menuHint": "A copy of this chat works on a task and reports back"
       },
-      "choose": {
-        "title": "Fork from this response",
-        "inChat": "In a new chat",
-        "worktree": "Into a new worktree",
-        "subagent": "As a background subagent"
+      "sheet": {
+        "hostOffline": "Not connected",
+        "hostChecking": "Checking…",
+        "hostNeedsUpdate": "Update Orca on this host to fork chats onto it",
+        "thisHost": "This chat’s host",
+        "chooseWorkspace": "Choose a workspace",
+        "thisWorktree": "This worktree, in a new tab",
+        "newWorktree": "A new worktree",
+        "runSubagent": "Background subagent with a task",
+        "runOpen": "Open it",
+        "agentUnavailable": "This chat can’t be forked into this agent on this host",
+        "runSubagentHint": "Works in its own worktree and reports back to this chat",
+        "host": "Host",
+        "workspace": "Workspace",
+        "agent": "Agent",
+        "runAs": "Run as",
+        "usageLimited": "{{agent}} is at its usage limit, so the fork starts with {{other}}, which gets a recap of this chat.",
+        "recapNote": "{{agent}} starts with a recap of this chat up to here.",
+        "title": "Fork chat",
+        "noAgent": "No agent on this host can take this fork",
+        "fork": "Fork",
+        "copying": "Copying the chat to {{host}}… {{percent}}%",
+        "opening": "Opening the fork on {{host}}…",
+        "offline": "{{host}} isn’t connected. Connect to it, then fork again.",
+        "notNow": "This response can’t be forked right now. Wait for the chat to finish, then try again.",
+        "noRecap": "There’s nothing in this chat yet to hand to another agent.",
+        "tooLarge": "This chat is too large to copy to another host. Fork it with another agent instead.",
+        "busy": "{{host}} is copying other chats. Wait a moment, then fork again.",
+        "targetUnsupported": "That workspace can’t take a copied chat. Pick a local workspace on that host.",
+        "sourceUnavailable": "This chat’s saved history wasn’t found on this host, so it can’t be copied.",
+        "relayFailed": "Couldn’t copy the chat to {{host}}. {{detail}}"
       }
     },
     "hostOutage": {

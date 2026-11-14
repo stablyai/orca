@@ -21,6 +21,7 @@ import {
   useMobileNativeChatFork
 } from './native-chat/use-mobile-native-chat-fork'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
+import { useMobileChatForkSheet } from './chat-fork/use-mobile-chat-fork-sheet'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 /** The chat's "Fork from this response" and the chat a "Forked from" divider opens. */
@@ -40,10 +41,10 @@ export function MobileNativeChatForkProvider({
   })
   const terminal = controller.activeSessionTab?.type === 'terminal'
   const createFork = useCallback(
-    async (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => {
+    async (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource, recap?: string) => {
       const current = latestController.current
       // A terminal chat forks into a new terminal resuming a cut copy of its transcript.
-      if (current.activeSessionTab?.type === 'terminal') {
+      if (current.activeSessionTab?.type === 'terminal' && !recap) {
         await current.handleCreateTerminal(undefined, {
           sourceChatFork: {
             sessionId: forkFrom.sessionId,
@@ -53,17 +54,23 @@ export function MobileNativeChatForkProvider({
         })
         return
       }
-      return forkMobileStructuredChat(current, agent, forkFrom)
+      return forkMobileStructuredChat(current, agent, forkFrom, recap)
     },
     []
   )
   const executionHost = useWorkspaceExecutionHost()
   const { getWorktreeCreateCutoverSupport } = useNewWorktreeRuntimeCapabilities(client, true)
   const createWorktreeFork = useCallback(
-    (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource, mode: MobileWorktreeForkMode) => {
+    (
+      agent: TuiAgent,
+      forkFrom: StructuredAgentSessionForkSource,
+      mode: MobileWorktreeForkMode,
+      recap?: string
+    ) => {
       const current = latestController.current
       return forkMobileStructuredChatIntoWorktree({
         mode,
+        recap,
         terminal: current.activeSessionTab?.type === 'terminal',
         sourceLabel: current.activeSessionTab?.title || undefined,
         client: current.client,
@@ -94,9 +101,29 @@ export function MobileNativeChatForkProvider({
     agentWorking: chat.nativeChatTurnActive,
     sessionForkSupport: chat.nativeChatForkSupport,
     createFork,
-    createWorktreeFork,
     terminal
   })
+  const forkSheet = useMobileChatForkSheet({
+    fork,
+    controller,
+    latestController,
+    createFork,
+    createWorktreeFork,
+    executionHost
+  })
+  const { open: openForkSheet } = forkSheet
+  const forkContext = useMemo(() => ({ ...fork, openSheet: openForkSheet }), [fork, openForkSheet])
+  // The header's and tab sheet's fork items open the sheet at their own preset.
+  const openLatestForkSheet = useCallback(
+    (mode: MobileWorktreeForkMode): boolean => {
+      const message = fork.latestForkable()
+      if (message) {
+        openForkSheet(message, mode)
+      }
+      return !!message
+    },
+    [fork, openForkSheet]
+  )
   const showNothingToFork = useCallback(
     () =>
       latestController.current.showToast(
@@ -105,7 +132,7 @@ export function MobileNativeChatForkProvider({
       ),
     []
   )
-  useMobileWorktreeForkRequest(fork.forkLatestToWorktree, showNothingToFork)
+  useMobileWorktreeForkRequest(openLatestForkSheet, showNothingToFork)
   // A fork and its source share a workspace and host.
   const openSource = useMemo(
     () =>
@@ -119,10 +146,11 @@ export function MobileNativeChatForkProvider({
     [client, openNativeSession, worktreeId]
   )
   return (
-    <MobileNativeChatForkContext.Provider value={fork}>
+    <MobileNativeChatForkContext.Provider value={forkContext}>
       <MobileNativeChatForkedFromContext.Provider value={openSource}>
         {children}
       </MobileNativeChatForkedFromContext.Provider>
+      {forkSheet.sheet}
     </MobileNativeChatForkContext.Provider>
   )
 }
