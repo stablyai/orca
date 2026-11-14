@@ -5,10 +5,10 @@ import type { StructuredAgentSessionHostCapabilityState } from '../agent-session
 import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionMessages } from '../agent-session/view/structured-agent-session-message-projection'
-import type { NativeChatTurnJournal } from './transcript/native-chat-turn-membership'
-import type { AgentSessionOptionsResult } from '../agent-session/options/agent-session-options-result'
+import type { NativeChatTurnJournal } from './transcript/turns/native-chat-turn-membership'
+import type { AgentSessionOptionsResult } from '../agent-session/options/protocol/agent-session-options-result'
 import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../agent-session/agent-session-fork'
-import { nativeChatTurnMembership } from './transcript/native-chat-turn-membership'
+import { nativeChatTurnMembership } from './transcript/turns/native-chat-turn-membership'
 import type { NativeChatMessage } from './native-chat-types'
 
 /** What a chat can fork: nothing, not yet known (drawn disabled), or through which turns. */

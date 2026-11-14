@@ -190,7 +190,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
         })
         if (result.auth.state !== 'connected') {
           toast.success(
-            translate('auto.store.slices.orca.profiles.a37b5e6d37', 'Signed out of profile')
+            translate('auto.store.slices.orca.profiles.a37b5e6d37', 'Signed out of Orca')
           )
         }
         return result

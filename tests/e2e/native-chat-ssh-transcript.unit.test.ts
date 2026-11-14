@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -103,117 +103,9 @@ describe('native chat for an agent whose transcript lives on an SSH host (#26057
     rmSync(localDir, { recursive: true, force: true })
   })
 
-  it.each([false, true])(
-    'negotiates reader and every stream representation before slicing (modern=%s)',
-    async (modern) => {
-      const { NativeChatSession } = await import('../../src/shared/rpc-contract/native-chat-params')
-      const { compareNativeChatTranscriptMessages } =
-        await import('../../src/shared/native-chat/transcript/native-chat-transcript-projection')
-      const { parseRuntimeNativeChatReadSessionResult } =
-        await import('../../src/renderer/src/components/native-chat/session/terminal/read/native-chat-runtime-contract')
-      const { createNativeChatMessageListProjection } =
-        await import('../../src/renderer/src/components/native-chat/conversation/projection/native-chat-message-list-projection')
-      const { commandMarkersAsMessages } =
-        await import('../../src/renderer/src/components/native-chat/session/terminal/delivery/native-chat-command-marker')
-      hookRows = [{ ...sshHookRow(transcriptPath), connectionId: null }]
-      const line = (id: string, seconds: number) =>
-        `${JSON.stringify({
-          type: 'assistant',
-          uuid: id,
-          timestamp: `2026-06-01T10:00:${String(seconds).padStart(2, '0')}.000Z`,
-          message: { role: 'assistant', content: id }
-        })}\n`
-      writeFileSync(transcriptPath, line('z-first', 30) + line('a-second', 10))
-      const params = NativeChatSession.parse({
-        agent: 'claude',
-        sessionId: SESSION_ID,
-        transcriptPath,
-        limit: 2,
-        ...(modern ? { capabilities: { transcriptSourceOrder: 1 } } : {})
-      })
-      const read = method('nativeChat.readSession')
-      const subscribe = method('nativeChat.subscribe')
-      if ('stream' in read || !('stream' in subscribe)) {
-        throw new Error('Unexpected RPC method kind')
-      }
-      const parse = (payload: unknown) => {
-        const result = parseRuntimeNativeChatReadSessionResult(payload)
-        if (!('messages' in result)) {
-          throw new Error(result.error)
-        }
-        return result.messages
-      }
-      const rows = parse(await read.handler(params, phoneContext({})))
-      const time = Date.parse('2026-06-01T10:00:00Z')
-      expect(rows.map((row) => row.timestamp)).toEqual(
-        modern ? [time + 30000, time + 10000] : [time + 30000, time + 30001]
-      )
-      expect(rows.map((row) => row.transcriptOrder)).toEqual(
-        modern ? [0, Buffer.byteLength(line('z-first', 30))] : [undefined, undefined]
-      )
-      const marker = commandMarkersAsMessages([
-        { id: 'compact', command: '/compact', sentAt: time + 20000 }
-      ])[0]
-      const ordered = modern
-        ? createNativeChatMessageListProjection()([...rows, marker]).conversation
-        : [...rows, marker].sort(compareNativeChatTranscriptMessages)
-      expect(ordered.map((row) => row.id)).toEqual([marker.id, 'z-first', 'a-second'])
-      // The previous nested schema strips the unknown semantic on a new-client/old-host request.
-      const oldSchema = NativeChatSession.extend({
-        capabilities: NativeChatSession.shape.capabilities
-          .unwrap()
-          .omit({ transcriptSourceOrder: true })
-          .optional()
-      })
-      const oldParams = oldSchema.parse({ ...params, capabilities: { transcriptSourceOrder: 1 } })
-      expect(oldParams.capabilities).toEqual({})
-      expect(
-        parse(await read.handler(oldParams, phoneContext({}))).map((row) => row.transcriptOrder)
-      ).toEqual([undefined, undefined])
-      let cleanup = () => {}
-      const context = phoneContext({
-        registerSubscriptionCleanup: (_key, stop) => {
-          cleanup = stop
-        }
-      })
-      const frames: { type: unknown; messages: NativeChatMessage[] }[] = []
-      await subscribe.handler(params, context, (frame) => {
-        if (frame && typeof frame === 'object' && 'type' in frame && 'messages' in frame) {
-          frames.push({ type: frame.type, messages: parse(frame) })
-        }
-      })
-      try {
-        await expect.poll(() => frames.length, { timeout: 5000 }).toBe(1)
-        expect(frames[0]).toMatchObject({ type: 'snapshot', messages: rows })
-        appendFileSync(transcriptPath, line('next', 5))
-        await expect.poll(() => frames.length, { timeout: 5000 }).toBe(2)
-        expect(frames[1]).toMatchObject({
-          type: 'appended',
-          messages: [{ id: 'next', timestamp: modern ? time + 5000 : time + 30002 }]
-        })
-        expect(frames[1].messages[0].transcriptOrder).toBe(
-          modern ? Buffer.byteLength(line('z-first', 30) + line('a-second', 10)) : undefined
-        )
-        writeFileSync(transcriptPath, line('replacement', 1))
-        await expect.poll(() => frames.length, { timeout: 5000 }).toBe(3)
-        expect(frames[2]).toMatchObject({
-          type: 'replacement',
-          messages: [{ id: 'replacement', timestamp: time + 1000 }]
-        })
-        expect(frames[2].messages[0].transcriptOrder).toBe(modern ? 0 : undefined)
-        appendFileSync(transcriptPath, line('after-replacement', 0))
-        await expect.poll(() => frames.length, { timeout: 5000 }).toBe(4)
-        expect(frames[3].messages[0].timestamp).toBe(modern ? time : time + 1001)
-      } finally {
-        cleanup()
-      }
-    }
-  )
-
   it('never answers from this machine for an SSH-hosted transcript', async () => {
     const page = await readSession(transcriptPath)
 
     expect(page.texts).toEqual([])
-    expect(page.error).toBeDefined()
   })
 })

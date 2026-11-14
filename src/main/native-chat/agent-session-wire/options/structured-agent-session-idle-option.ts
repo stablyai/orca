@@ -5,17 +5,21 @@ import { contextStructuredAgentSessionCurrentWork } from '../observations/struct
 import { structuredAgentSessionSendBlock } from '../operations/structured-agent-session-send-preparation'
 
 /** Reserve under admission; provider work and its readback never hold that lane. */
-export function confirmIdleStructuredAgentSessionOption(
+export async function confirmIdleStructuredAgentSessionOption(
   context: StructuredAgentSessionMutationContext,
   ctx: AgentSessionTurnContext,
   input: { key: string; value: string }
-): void {
+): Promise<void> {
   const { sessionId, fence } = ctx
   const { adapter, store } = context.deps
   const child = context.sessions.get(sessionId)?.child
-  const eligible = (value: string): boolean => {
+  const eligible = async (value: string): Promise<boolean> => {
     const record = store.getRecord(sessionId)
-    const work = contextStructuredAgentSessionCurrentWork(ctx)
+    const work = await contextStructuredAgentSessionCurrentWork(ctx)
+    const reopen = await ctx.journal.reads.queue({
+      kind: 'reopen-mark',
+      facts: ctx.journal.queuedMessages.facts()
+    })
     return !!(
       child &&
       context.sessions.get(sessionId)?.child === child &&
@@ -30,10 +34,15 @@ export function confirmIdleStructuredAgentSessionOption(
       !work.working() &&
       !work.hasActionablePrompt() &&
       !context.childWorkOpen(sessionId) &&
-      !ctx.journal.queuedMessages.awaitReopenMark()
+      reopen.kind === 'reopen-mark' &&
+      !reopen.awaits
     )
   }
-  if (!eligible(input.value) || !child || context.deliveryOrder.joinOptions(sessionId, child)) {
+  if (
+    !(await eligible(input.value)) ||
+    !child ||
+    context.deliveryOrder.joinOptions(sessionId, child)
+  ) {
     return
   }
   const operation = context.acquireAborts.begin(
@@ -61,7 +70,7 @@ export function confirmIdleStructuredAgentSessionOption(
           if (
             !operation.signal.aborted &&
             confirmed !== undefined &&
-            eligible(confirmed) &&
+            (await eligible(confirmed)) &&
             cycle.demand !== 'refresh'
           ) {
             ctx.publish()
@@ -71,7 +80,7 @@ export function confirmIdleStructuredAgentSessionOption(
             operation.signal.aborted ||
             cycle.demand !== 'refresh' ||
             value === undefined ||
-            !eligible(value)
+            !(await eligible(value))
           ) {
             // Completion and the last claim are atomic with subsequent picks.
             finish()

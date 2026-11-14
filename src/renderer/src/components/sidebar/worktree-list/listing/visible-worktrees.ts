@@ -10,7 +10,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   buildWorktreeComparator,
   sortWorktreesSmart
-} from '../../../../../../shared/sidebar-list/smart-sort'
+} from '../../../../../../shared/sidebar-list/sorting/smart-sort'
 import './visible-worktree-activity-inputs'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'

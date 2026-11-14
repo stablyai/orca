@@ -1,6 +1,6 @@
 import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
-import { savedRewindKeys } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { savedRewindKeys } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
@@ -12,9 +12,9 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import { turnMembership } from '../rewind/structured-rewind-cut'
-import { namedSubagents } from '../../../../shared/native-chat/transcript/native-chat-subagent-items'
-import { isTerminalSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
-import { isSettledBackgroundTaskState } from '../../../../shared/native-chat/input/native-chat-background-task-row'
+import { namedSubagents } from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
+import { isTerminalSubagentState } from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
+import { isSettledBackgroundTaskState } from '../../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import {
   providerTimelineKeyPart,
   providerTimelineTurnKeyPart
@@ -86,60 +86,8 @@ export function prepareForkSnapshot(input: {
           }
         : identity
     mapped.set(item.itemId, agentJournalItemKey(target))
-    const references: string[] = []
-    mapBodyLinks(item.body, (id) => {
-      references.push(id)
-      return id
-    })
-    if (item.turnScope?.kind === 'turn') {
-      references.push(item.turnScope.turnItemId)
-    }
-    for (const ref of references) {
-      depend(ref, item.itemId)
-    }
-    if (item.agentId !== undefined) {
-      depend(`agent:${item.agentId}`, item.itemId)
-      if (item.parentAgentId !== undefined) {
-        depend(`agent:${item.parentAgentId}`, `agent:${item.agentId}`)
-      }
-    }
-    if (item.providerParentRef !== undefined) {
-      depend(`tool:${item.providerParentRef}`, item.itemId)
-      if (item.agentId !== undefined) {
-        depend(`tool:${item.providerParentRef}`, `agent:${item.agentId}`)
-      }
-    }
-    const body = item.body
-    const calls =
-      body.kind === 'tool-call'
-        ? [body]
-        : body.kind === 'message'
-          ? body.blocks.filter((block) => block.type === 'tool-call')
-          : []
-    for (const call of calls) {
-      if (call.callId !== undefined) {
-        depend(item.itemId, `tool:${call.callId}`)
-      }
-    }
-    const helpers = body.kind === 'message' ? body.blocks.flatMap(namedSubagents) : []
-    for (const helper of helpers) {
-      depend(item.itemId, `agent:${helper.id}`)
-    }
-    if (
-      helpers.some((helper) => !isTerminalSubagentState(helper.state)) ||
-      readAgentJournalTurn(body)?.state === 'running' ||
-      (body.kind === 'tool-call' && body.state === 'running') ||
-      (body.kind === 'message' &&
-        (body.state === 'running' ||
-          body.blocks.some(
-            (block) =>
-              (block.type === 'background-task' && !isSettledBackgroundTaskState(block.state)) ||
-              (block.type === 'tool-call' && block.state === 'running')
-          ))) ||
-      ((body.kind === 'approval' || body.kind === 'question') &&
-        body.resolution.state === 'pending') ||
-      (body.kind === 'status' && (body.threadGoal !== undefined || body.forkedFrom !== undefined))
-    ) {
+    visitForkDependencies(item, depend)
+    if (omitForkPresentation(item.body)) {
       omitted.add(item.itemId)
     }
   }
@@ -223,7 +171,7 @@ export function prepareForkSnapshot(input: {
 }
 
 /** Visit only journal links; provider tool arguments and payloads are ordinary frozen content. */
-function mapBodyLinks(
+export function mapBodyLinks(
   body: AgentJournalItemBody,
   link: (id: string) => string
 ): AgentJournalItemBody {
@@ -259,4 +207,88 @@ function mapBodyLinks(
       }
     })
   }
+}
+
+export function visitForkDependencies(
+  item: AgentJournalSnapshot['items'][number],
+  depend: (parent: string, child: string) => void
+): void {
+  for (const [parent, child] of forkDependencies(item)) {
+    depend(parent, child)
+  }
+}
+
+/** One edge at a time lets private preparation yield even when one body names many dependents. */
+export function* forkDependencies(
+  item: AgentJournalSnapshot['items'][number]
+): Generator<readonly [string, string]> {
+  const body = item.body
+  if (body.kind === 'turn' && body.userItemId !== undefined) {
+    yield [body.userItemId, item.itemId]
+  }
+  if (body.kind === 'status' && body.turnLifecycle?.userItemId !== undefined) {
+    yield [body.turnLifecycle.userItemId, item.itemId]
+  }
+  if (item.turnScope?.kind === 'turn') {
+    yield [item.turnScope.turnItemId, item.itemId]
+  }
+  if (item.agentId !== undefined) {
+    yield [`agent:${item.agentId}`, item.itemId]
+    if (item.parentAgentId !== undefined) {
+      yield [`agent:${item.parentAgentId}`, `agent:${item.agentId}`]
+    }
+  }
+  if (item.providerParentRef !== undefined) {
+    yield [`tool:${item.providerParentRef}`, item.itemId]
+    if (item.agentId !== undefined) {
+      yield [`tool:${item.providerParentRef}`, `agent:${item.agentId}`]
+    }
+  }
+  if (body.kind === 'tool-call' && body.callId !== undefined) {
+    yield [item.itemId, `tool:${body.callId}`]
+  }
+  if (body.kind === 'message') {
+    for (const block of body.blocks) {
+      if (block.type === 'tool-result' && block.fullOutputItemId !== undefined) {
+        yield [block.fullOutputItemId, item.itemId]
+      }
+      if (block.type === 'text') {
+        if (block.usageLimitTurnItemId !== undefined) {
+          yield [block.usageLimitTurnItemId, item.itemId]
+        }
+        if (block.orcaStop?.turnItemId !== undefined) {
+          yield [block.orcaStop.turnItemId, item.itemId]
+        }
+      }
+      if (block.type === 'tool-call' && block.callId !== undefined) {
+        yield [item.itemId, `tool:${block.callId}`]
+      }
+      for (const helper of namedSubagents(block)) {
+        yield [item.itemId, `agent:${helper.id}`]
+      }
+    }
+  }
+}
+
+export function omitForkPresentation(body: AgentJournalItemBody): boolean {
+  const hasUnsettledHelper =
+    body.kind === 'message' &&
+    body.blocks.some((block) =>
+      namedSubagents(block).some((helper) => !isTerminalSubagentState(helper.state))
+    )
+  return (
+    hasUnsettledHelper ||
+    readAgentJournalTurn(body)?.state === 'running' ||
+    (body.kind === 'tool-call' && body.state === 'running') ||
+    (body.kind === 'message' &&
+      (body.state === 'running' ||
+        body.blocks.some(
+          (block) =>
+            (block.type === 'background-task' && !isSettledBackgroundTaskState(block.state)) ||
+            (block.type === 'tool-call' && block.state === 'running')
+        ))) ||
+    ((body.kind === 'approval' || body.kind === 'question') &&
+      body.resolution.state === 'pending') ||
+    (body.kind === 'status' && (body.threadGoal !== undefined || body.forkedFrom !== undefined))
+  )
 }

@@ -5,8 +5,8 @@ import {
   getWorkspaceSpaceWindow,
   isWorkspaceSpaceWindowRenderer
 } from '../../window/workspace-space-window'
-import { safelyRevealWindow } from '../../window/focus-existing-window'
-import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
+import { safelyRevealWindow } from '../../window/activation/focus-existing-window'
+import { isBackgroundLaunch } from '../../window/activation/foreground-activation-policy'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import { isWorkspaceSpaceChange } from '../../../shared/workspace-disk-space/workspace-space-change'
 import type { Store } from '../../persistence/loading-store/store'

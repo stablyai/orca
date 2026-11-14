@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
@@ -9,13 +10,17 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   parseGitHubIssueOrPRLink,
   type GitHubIssueOrPRLink
-} from '../../../../../../shared/github/links'
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+} from '../../../../../../shared/github/repositories/links'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../../shared/repo-types'
+import type { HostAuthorityKey } from '../../../../../../shared/host-authority'
 import {
   githubLinkPreviewKey,
   loadGitHubLinkPreview,
-  readCachedGitHubLinkPreview
+  loadRoutedGitHubLinkPreview,
+  readCachedGitHubLinkPreview,
+  readCachedRoutedGitHubLinkPreview,
+  routedGitHubLinkPreviewKey
 } from './native-chat-github-link-preview'
 import {
   githubLinkBelongsToRepo,
@@ -23,6 +28,13 @@ import {
   type NativeChatGitHubRepo
 } from './native-chat-github-repo'
 import { useNativeChatHoverPreview } from './use-native-chat-hover-preview'
+import {
+  createGitHubPreviewRouteStore,
+  type GitHubPreviewRouteStore
+} from './native-chat-github-route-store'
+
+const subscribeNothing = (): (() => void) => () => {}
+const readNoRepo = (): null => null
 
 function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
   const t = useTranslate()
@@ -69,24 +81,84 @@ function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
   )
 }
 
+/** Which lookup answers a card: the chat repo's, or one routed through another repo on the chat's host. */
+export type GitHubPeekSource =
+  | { kind: 'repo'; repo: Repo }
+  | { kind: 'routed'; authorityKey: HostAuthorityKey }
+
+function peekLookup(
+  source: GitHubPeekSource,
+  link: GitHubIssueOrPRLink,
+  key: string,
+  route: GitHubPreviewRouteStore | null
+) {
+  return source.kind === 'repo'
+    ? {
+        key,
+        read: () => readCachedGitHubLinkPreview(source.repo, link),
+        load: () => loadGitHubLinkPreview(source.repo, link)
+      }
+    : {
+        key,
+        read: () =>
+          readCachedRoutedGitHubLinkPreview(source.authorityKey, link, route ?? undefined),
+        load: () => loadRoutedGitHubLinkPreview(source.authorityKey, link, route ?? undefined)
+      }
+}
+
 export function NativeChatGitHubPeekBody({
-  repo,
+  source,
   link,
   otherRepoFallback
 }: {
-  repo: Repo
+  source: GitHubPeekSource
   link: GitHubIssueOrPRLink
   /** For a link to another repo, which an older host or a repo the sign-in can't read leaves
    *  unanswered: what such a link showed before, kept until its details arrive, and never a failure.
    *  Null shows just the name until then. Undefined for the chat repo's own links. */
   otherRepoFallback?: ReactNode
 }): ReactNode {
-  const t = useTranslate()
-  const { state, retry } = useNativeChatHoverPreview(
-    githubLinkPreviewKey(repo, link),
-    () => readCachedGitHubLinkPreview(repo, link),
-    () => loadGitHubLinkPreview(repo, link)
+  // Select the catalog itself so unrelated store updates don't rescan it for a route.
+  const routeRepos = useAppStore((state) => (source.kind === 'routed' ? state.repos : null))
+  const route = useMemo(
+    () =>
+      source.kind === 'routed'
+        ? createGitHubPreviewRouteStore(routeRepos ?? [], source.authorityKey, link)
+        : null,
+    [source, link, routeRepos]
   )
+  const routedRepo = useSyncExternalStore(
+    route?.subscribe ?? subscribeNothing,
+    route?.read ?? readNoRepo
+  )
+  const key = useMemo(
+    () =>
+      source.kind === 'repo'
+        ? githubLinkPreviewKey(source.repo, link)
+        : routedGitHubLinkPreviewKey(source.authorityKey, link, routedRepo),
+    [source, link, routedRepo]
+  )
+  return (
+    <GitHubPeekContent
+      key={key}
+      lookup={peekLookup(source, link, key, route)}
+      link={link}
+      otherRepoFallback={otherRepoFallback}
+    />
+  )
+}
+
+function GitHubPeekContent({
+  lookup,
+  link,
+  otherRepoFallback
+}: {
+  lookup: ReturnType<typeof peekLookup>
+  link: GitHubIssueOrPRLink
+  otherRepoFallback?: ReactNode
+}): ReactNode {
+  const t = useTranslate()
+  const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
   if (otherRepoFallback && state.status !== 'ready') {
     return otherRepoFallback
   }

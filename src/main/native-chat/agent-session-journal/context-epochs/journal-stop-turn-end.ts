@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../journal-memory-collections'
 import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 // All turn-end writers apply this rule on the journal lane. Session-ending Stop bindings are memory-only
 // and disappear on relaunch; provider verdicts and ends observed before Stop retain their meaning.
@@ -6,7 +7,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
 import type {
@@ -35,9 +36,13 @@ type TurnEndState = Pick<
 
 /** Accepted openers may precede their turn row; steers/folds into running turns open none. */
 export function latestAcceptedSendUnopened(state: JournalReducerState): boolean {
+  return state.queries.latestAcceptedUnopened(state)
+}
+
+export function memoryLatestAcceptedSendUnopened(state: JournalReducerState): boolean {
   let latest: { submission: AgentJournalSubmission; sequence: number } | undefined
   const owner = getJournalInputOrder(state)!
-  for (const item of state.items.values()) {
+  for (const item of memoryJournalMap(state.items).values()) {
     const submission = owner.inputForItem(item.itemId)
     if (
       submission?.dispatchState === 'accepted' &&
@@ -54,7 +59,7 @@ export function latestAcceptedSendUnopened(state: JournalReducerState): boolean 
   if (!latest) {
     return false
   }
-  for (const item of state.items.values()) {
+  for (const item of memoryJournalMap(state.items).values()) {
     const opener = readAgentJournalTurn(item.body)?.userItemId
     if (opener && owner.inputForItem(state.aliases.get(opener) ?? opener) === latest.submission) {
       return false

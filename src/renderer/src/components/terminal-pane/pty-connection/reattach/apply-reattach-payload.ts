@@ -116,7 +116,11 @@ export function createReattachPayloadHandlers(
       )
       session.recordRendererOrderedSeq({ seq: ctx.connectResult.snapshotSeq })
       if (typeof ctx.connectResult.snapshotSeq === 'number') {
-        session.streamPosition.anchor(ctx.ptyId, ctx.connectResult.snapshotSeq)
+        session.streamPosition.anchor(
+          ctx.ptyId,
+          ctx.connectResult.snapshotSeq,
+          ctx.connectResult.pendingEscapeTailAnsi ?? ''
+        )
       }
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
@@ -186,7 +190,11 @@ export function createReattachPayloadHandlers(
         )
         session.recordRendererOrderedSeq(modelSnapshot)
         if (typeof modelSnapshot.seq === 'number') {
-          session.streamPosition.anchor(ctx.ptyId, modelSnapshot.seq)
+          session.streamPosition.anchor(
+            ctx.ptyId,
+            modelSnapshot.seq,
+            modelSnapshot.pendingEscapeTailAnsi ?? ''
+          )
         }
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
         if (ctx.connectResult?.coldRestore) {

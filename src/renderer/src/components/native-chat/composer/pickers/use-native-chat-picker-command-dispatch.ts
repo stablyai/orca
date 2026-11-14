@@ -13,9 +13,9 @@ import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from '../submit/native-chat-composer-target'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatSendLifecycle } from '../../session/terminal/send/use-native-chat-send-lifecycle'
-import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer

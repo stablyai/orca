@@ -30,7 +30,8 @@ type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 const COMPOSER_PROMPT_PREFIX = /^\s*[\u276F\u203A\u00BB]\s?/
 const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
 const COMPOSER_TOP_FRAME_PREFIX = /^[\u2500\u2501-]{8,}/
-const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[\u00B7\u2022]\s+\S.*$/i
+// Codex can follow the model with reasoning effort and service tier (`gpt-5.4 high Fast`).
+const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)(?:\s+[\w-]+){0,2}\s+[\u00B7\u2022]\s+\S.*$/i
 
 function composerContinuationRows(
   context: TerminalCursorContext,

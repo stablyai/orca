@@ -7,7 +7,7 @@ import {
   agentSessionPromptQuestions,
   legacyAgentSessionQuestionAnswers
 } from '../agent-session/agent-session-question-answer'
-import type { NativeChatAskRowSubject } from './input/native-chat-ask-row'
+import type { NativeChatAskRowSubject } from './input/questions/native-chat-ask-row'
 
 /** Desktop's fallbacks for its translations; the phone's words. */
 export const NATIVE_CHAT_RECEIPT_COPY = {

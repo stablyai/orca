@@ -25,7 +25,7 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import { RuntimeClientError } from '../../src/cli/runtime/types'
+import { RuntimeClientError } from '../../src/cli/runtime/connection/types'
 import type {
   RuntimeStatus,
   RuntimeTerminalCreate,

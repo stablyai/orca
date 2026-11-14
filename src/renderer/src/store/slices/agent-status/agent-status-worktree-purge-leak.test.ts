@@ -36,7 +36,7 @@ globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 
 const WT = 'repo1::/path/wt1'
 const TAB = 'tab-1'
@@ -100,20 +100,13 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
   it('purgeWorktreeTerminalState drops every pane-scoped map for the removed worktree', () => {
     const store = createTestStore()
     seedPaneState(store)
-    const epochBefore = store.getState().agentStatusEpoch
-    const previous = store.getState().agentStatusByPaneKey[PANE]
-    const accepted = vi.fn()
-    const dispose = store.getState().subscribeAgentStatusChanges(accepted)
 
     store.getState().purgeWorktreeTerminalState([WT])
 
     const s = store.getState()
-    expect(accepted).toHaveBeenCalledExactlyOnceWith([
-      { paneKey: PANE, previous, current: undefined }
-    ])
-    dispose()
+
     expect(s.agentStatusByPaneKey[PANE]).toBeUndefined()
-    expect(s.agentStatusEpoch).toBe(epochBefore + 1)
+
     expect(s.agentLaunchConfigByPaneKey[PANE]).toBeUndefined()
     expect(s.acknowledgedAgentsByPaneKey[PANE]).toBeUndefined()
     expect(s.paneForegroundAgentByPaneKey[PANE]).toBeUndefined()

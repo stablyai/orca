@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { linkSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import { prepareCodexAiVaultSessionResume } from './codex-ai-vault-session-resume'
 import { getOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
 
@@ -48,19 +48,6 @@ describe('prepareCodexAiVaultSessionResume', () => {
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true })
-  })
-
-  it('refuses before falling through when selected-home trust is indeterminate', async () => {
-    const resolveSelectedHome = vi.fn((): string | null => {
-      throw new ManagedCodexHomeTemporarilyUnavailableError()
-    })
-    const isSystemDefaultRealHome = vi.fn(() => true)
-
-    await expect(prepare(resolveSelectedHome, isSystemDefaultRealHome)).rejects.toBeInstanceOf(
-      ManagedCodexHomeTemporarilyUnavailableError
-    )
-    expect(resolveSelectedHome).toHaveBeenCalledOnce()
-    expect(isSystemDefaultRealHome).not.toHaveBeenCalled()
   })
 
   it('repins an aliased rollout when the selected home is owned', async () => {

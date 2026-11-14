@@ -3,15 +3,15 @@
 
 import type { AgentSessionAnyRefusalDetails } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger,
   AgentSessionResumeWork
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import type { AgentSessionRestartActivity } from '../../../../shared/agent-session/lifecycle/agent-session-restart-activity'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
+import type { AgentSessionRestartActivity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import { isResumableStructuredAgentSessionRecord } from './structured-agent-session-resume-eligibility'
 import {
   normalizeOptionalField,
@@ -64,16 +64,16 @@ export type StructuredAgentSessionResumeSetInput = {
   markers: readonly AgentSessionResumeMarker[]
   getRecord: (sessionId: string) => AgentSessionRecord | null
   supportsRecord: (record: AgentSessionRecord) => boolean
-  latestPrompt: (sessionId: string) => string
-  movedOn: (marker: AgentSessionResumeMarker) => boolean
+  latestPrompt: (sessionId: string) => string | Promise<string>
+  movedOn: (marker: AgentSessionResumeMarker) => boolean | Promise<boolean>
   savedByNewerOrca: (sessionId: string) => boolean
   /** may-be-held relaxes ownership only, preserving all other eligibility checks. */
   leaseState?: 'must-be-released' | 'may-be-held'
 }
 
-export function structuredAgentSessionResumableSet(
+export async function structuredAgentSessionResumableSet(
   input: StructuredAgentSessionResumeSetInput
-): StructuredAgentSessionResumableSet {
+): Promise<StructuredAgentSessionResumableSet> {
   const candidates: StructuredAgentSessionResumeCandidate[] = []
   const superseded: AgentSessionResumeMarker[] = []
   for (const marker of input.markers) {
@@ -98,7 +98,7 @@ export function structuredAgentSessionResumableSet(
       superseded.push(marker)
       continue
     }
-    if (input.movedOn(marker)) {
+    if (await input.movedOn(marker)) {
       superseded.push(marker)
       continue
     }
@@ -114,7 +114,7 @@ export function structuredAgentSessionResumableSet(
       work: marker.work,
       trigger: marker.trigger,
       recordedAt: marker.recordedAt,
-      latestPrompt: input.latestPrompt(marker.sessionId),
+      latestPrompt: await input.latestPrompt(marker.sessionId),
       executionHostId: record.location.executionHostId,
       workspaceKind: record.location.workspaceKind,
       ...(model === undefined ? {} : { model }),

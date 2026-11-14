@@ -36,7 +36,7 @@ vi.mock('./linux-package/linux-update-package-type', () => ({
   isExternallyManagedLinuxInstall: isExternallyManagedLinuxInstallMock
 }))
 
-vi.mock('../cli/appimage-copy-pre-extraction', () => ({
+vi.mock('../cli/appimage/appimage-copy-pre-extraction', () => ({
   preExtractDownloadedAppImageUpdate: preExtractUpdateMock
 }))
 vi.mock('./releases/updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))

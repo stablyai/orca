@@ -26,8 +26,7 @@ describe('orchestration CLI/runtime boundary', () => {
   afterEach(() => {
     h.cleanup()
     restoreTerminalHandle()
-    vi.doUnmock('../../../../../cli/format')
-    vi.doUnmock('../../../../../cli/runtime-client')
+    vi.doUnmock('../../../../../cli/output/command-result-output')
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
     vi.resetModules()
@@ -104,8 +103,8 @@ describe('orchestration CLI/runtime boundary', () => {
 
 /** Imports orchestration handlers after mocking output so the test observes state, not stdout. */
 async function loadOrchestrationHandlers(): Promise<Record<string, CliHandler>> {
-  vi.doMock('../../../../../cli/format', () => ({ printResult: vi.fn() }))
-  const cliModulePath = '../../../../../cli/handlers/orchestration'
+  vi.doMock('../../../../../cli/output/command-result-output', () => ({ printResult: vi.fn() }))
+  const cliModulePath = '../../../../../cli/orchestration/orchestration-handlers'
   const module = (await import(cliModulePath)) as {
     ORCHESTRATION_HANDLERS: Record<string, CliHandler>
   }

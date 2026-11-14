@@ -3,8 +3,8 @@ import type {
   RemoteLayoutSnapshotWorkspace
 } from '../../shared/remote-layout-snapshot'
 import type { StoreRuntimeState } from '../persistence/loading-store/store-runtime-state'
-import type { WriteSchedulingOperations } from '../persistence/loading-store/write-scheduling'
-import { scheduleSave } from '../persistence/loading-store/write-scheduling'
+import type { WriteSchedulingOperations } from '../persistence/loading-store/profile-writing/write-scheduling'
+import { scheduleSave } from '../persistence/loading-store/profile-writing/write-scheduling'
 
 type RemoteLayoutSnapshotRuntime = Pick<StoreRuntimeState, 'state' | 'dirtyProfileStateDomains'>
 

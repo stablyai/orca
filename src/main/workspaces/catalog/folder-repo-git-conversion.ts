@@ -12,7 +12,10 @@ import {
 import type { Store } from '../../persistence/loading-store/store'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { getGitRepoRootAsync, isGitRepoAsync } from '../../git/repo-detection'
+import {
+  getGitRepoRootAsync,
+  isGitRepoAsync
+} from '../../git/repositories/discovery/repo-detection'
 import { findExtraFolderWorkspaceIds } from './folder-workspace-meta-presence'
 import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
 

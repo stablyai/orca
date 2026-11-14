@@ -7,7 +7,7 @@ import { useHostWorktreeRows } from './use-host-worktree-rows'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { firstParam } from '../navigation/route-param-reader'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
-import { openExternalLink } from '../platform/external-link'
+import { openExternalLink } from '../platform/external-links/external-link'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 

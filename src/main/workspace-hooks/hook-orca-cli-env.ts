@@ -1,7 +1,7 @@
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { toLinuxPath } from '../../shared/wsl-paths'
-import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
-import { getManagedWslCliDir, getWslCliCommandName } from '../cli/wsl-managed-cli'
+import { prependOrcaCliDirToChildPath } from '../cli/launchers/orca-cli-child-path'
+import { getManagedWslCliDir, getWslCliCommandName } from '../cli/wsl/wsl-managed-cli'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from '../wsl/execution/wsl-managed-cli-path-restore'
 
 // A hook isn't a pane: an Orca started from an Orca terminal must not lend that pane's identity.

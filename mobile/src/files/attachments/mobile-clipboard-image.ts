@@ -1,10 +1,6 @@
 import { isWindowsAbsolutePathLike } from '../../../../src/shared/cross-platform-path'
 import { formatImageDropPasteText } from '../../../../src/shared/image-path-paste'
 import { formatAgentImagePath } from '../../../../src/shared/agent-image-paste'
-import {
-  computeMobileClipboardImageDownscale,
-  type MobileClipboardImageResizer
-} from './mobile-clipboard-image-downscale'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from './mobile-clipboard-image-upload-chunk'
 import '../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
@@ -21,7 +17,6 @@ export const MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024
 
 export const MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CUTOVER_MAX_RETRIES = 1
-const MOBILE_CLIPBOARD_IMAGE_MAX_DOWNSCALE_ATTEMPTS = 3
 
 const DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
@@ -35,39 +30,6 @@ export function normalizeMobileClipboardImageBase64(data: string): string {
     throw new Error('Clipboard image content must be base64')
   }
   return contentBase64
-}
-
-export type MobileClipboardImage = {
-  data: string
-  size: { width: number; height: number }
-}
-
-// Retry bounded downscales; any remaining overflow reaches the existing too-large check.
-export async function prepareMobileClipboardImageBase64(
-  image: MobileClipboardImage,
-  resize: MobileClipboardImageResizer,
-  maxBase64Length: number = MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS
-): Promise<string> {
-  let data = image.data
-  let width = image.size.width
-  let height = image.size.height
-  for (let attempt = 0; attempt < MOBILE_CLIPBOARD_IMAGE_MAX_DOWNSCALE_ATTEMPTS; attempt += 1) {
-    const contentLength = data.replace(DATA_URL_PREFIX_RE, '').length
-    const target = computeMobileClipboardImageDownscale(
-      contentLength,
-      width,
-      height,
-      maxBase64Length
-    )
-    if (!target) {
-      return data
-    }
-    const resized = await resize(data, target)
-    data = resized.data
-    width = resized.width
-    height = resized.height
-  }
-  return data
 }
 
 export async function saveMobileClipboardImageAsTempFile(

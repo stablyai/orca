@@ -2,6 +2,11 @@ import { constants, type Stats } from 'node:fs'
 import { open, type FileHandle } from 'node:fs/promises'
 import { isENOENT } from './access/filesystem-path-containment'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
+import {
+  IMAGE_SIGNATURE_BYTES,
+  detectImageFileSignature,
+  type ImageFileSignature
+} from '../../../shared/image-file-signature'
 
 export const NOT_A_REGULAR_FILE_MESSAGE = 'Not a regular file'
 
@@ -64,6 +69,12 @@ export async function readLocalFilePrefix(handle: FileHandle, bytes: number): Pr
   const probe = Buffer.alloc(bytes)
   const { bytesRead } = await handle.read(probe, 0, probe.length, 0)
   return probe.subarray(0, bytesRead)
+}
+
+export async function readImageFileSignature(
+  handle: FileHandle
+): Promise<ImageFileSignature | null> {
+  return detectImageFileSignature(await readLocalFilePrefix(handle, IMAGE_SIGNATURE_BYTES))
 }
 
 export async function assertLocalWriteTargetIsRegularFile(filePath: string): Promise<void> {

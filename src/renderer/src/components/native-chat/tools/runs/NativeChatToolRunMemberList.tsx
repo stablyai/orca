@@ -1,17 +1,15 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock
 } from '../../../../../../shared/native-chat/native-chat-types'
-import { pairNativeChatToolResults } from '../../../../../../shared/native-chat/tools/native-chat-tool-pairing'
-import { nativeChatToolLineIdentity } from '../../../../../../shared/native-chat/tools/native-chat-tool-line-identity'
 import { NativeChatDiffCard } from '../diffs/NativeChatDiffCard'
 import { NativeChatTaskList } from '../tasks/NativeChatTaskList'
 import { NativeChatToolLine } from '../lines/NativeChatToolLine'
-import { buildEditCards } from '../../../../../../shared/native-chat/tools/native-chat-edit-cards'
-import { buildNativeChatTaskListRows } from '../../../../../../shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
+import { buildNativeChatToolRunRows, type NativeChatToolRunRow } from './native-chat-tool-run-rows'
+import { NativeChatToolRunMembers } from './NativeChatToolRunMembers'
 
 /** Mount only while expanded so collapsed runs avoid member pairing and diff work. */
 export function NativeChatToolRunMemberList({
@@ -22,7 +20,10 @@ export function NativeChatToolRunMemberList({
   revealedDiff,
   onRevealDiff,
   disclosureId,
-  asides
+  asides,
+  followKey,
+  startsAtEnd,
+  memoryKey
 }: {
   /** Every tool block of the run; `headerBlocks` is those minus its asks. */
   blocks: NativeChatBlock[]
@@ -34,40 +35,44 @@ export function NativeChatToolRunMemberList({
   revealedDiff?: NativeChatDiffReveal
   onRevealDiff?: (element: HTMLElement) => void
   disclosureId?: string
+  followKey: number
+  startsAtEnd: boolean
+  memoryKey?: string
 }): React.JSX.Element {
-  const taskLists = useMemo(
+  // One flat keyed row list with or without asides, so a row gaining its first never remounts a line.
+  const rows = useMemo(
     () =>
-      buildNativeChatTaskListRows(blocks, {
-        todowrite: previousTodoWrite,
-        update_plan: previousUpdatePlan
+      buildNativeChatToolRunRows({
+        blocks,
+        headerBlocks,
+        asides,
+        previousTodoWrite,
+        previousUpdatePlan
       }),
-    [blocks, previousTodoWrite, previousUpdatePlan]
-  )
-  const { editCards, consumedResults } = useMemo(() => buildEditCards(blocks), [blocks])
-  const { resultByCall, pairedResults } = useMemo(
-    () => pairNativeChatToolResults(headerBlocks),
-    [headerBlocks]
+    [asides, blocks, headerBlocks, previousTodoWrite, previousUpdatePlan]
   )
 
-  const seen = new Map<string, number>()
-  const member = (block: NativeChatBlock, blockIndex: number): React.ReactNode => {
-    const taskList = taskLists.rows.get(block)
-    if (taskList) {
-      return <NativeChatTaskList key={`tasks:${blockIndex}`} {...taskList} />
-    }
-    if (taskLists.consumedResults.has(block)) {
-      return null
-    }
-    const edit = editCards.get(block)
-    if (edit) {
-      return (
-        <div key={`edit:${edit.key}`}>
-          {edit.files.map((file, fileIndex) => (
+  const renderRow = useCallback(
+    (row: NativeChatToolRunRow): React.ReactNode => {
+      switch (row.kind) {
+        case 'aside':
+          return row.element
+        case 'tasks':
+          return (
+            <NativeChatTaskList
+              {...row.taskList}
+              disclosureKey={
+                disclosureId === undefined ? undefined : `tasks:${disclosureId}:${row.key}`
+              }
+            />
+          )
+        case 'edit':
+          return row.files.map((file, fileIndex) => (
             <NativeChatDiffCard
-              key={`${edit.key}:${fileIndex}`}
+              key={`${row.editKey}:${fileIndex}`}
               file={file}
               revealSignal={
-                revealedDiff?.editKey === edit.key && revealedDiff.fileIndex === fileIndex
+                revealedDiff?.editKey === row.editKey && revealedDiff.fileIndex === fileIndex
                   ? revealedDiff.requestId
                   : undefined
               }
@@ -75,38 +80,33 @@ export function NativeChatToolRunMemberList({
               disclosureKey={
                 disclosureId === undefined
                   ? undefined
-                  : `diff:${disclosureId}:${edit.key}:${fileIndex}`
+                  : `diff:${disclosureId}:${row.editKey}:${fileIndex}`
               }
             />
-          ))}
-        </div>
-      )
-    }
-    // A result its call now owns is drawn by that call's line, not as a row of its own.
-    if (consumedResults.has(block) || pairedResults.has(block)) {
-      return null
-    }
-    const lineIdentity = nativeChatToolLineIdentity(block, seen)
-    return (
-      <NativeChatToolLine
-        key={lineIdentity}
-        block={block}
-        result={block.type === 'tool-call' ? resultByCall.get(block) : undefined}
-        disclosureKey={
-          disclosureId === undefined ? undefined : `line:${disclosureId}:${lineIdentity}`
-        }
-      />
-    )
-  }
+          ))
+        case 'line':
+          return (
+            <NativeChatToolLine
+              block={row.block}
+              result={row.result}
+              disclosureKey={
+                disclosureId === undefined ? undefined : `line:${disclosureId}:${row.lineIdentity}`
+              }
+            />
+          )
+      }
+    },
+    [disclosureId, onRevealDiff, revealedDiff]
+  )
 
-  // One flat keyed list with or without asides, so a row gaining its first never remounts a line.
   return (
-    <>
-      {headerBlocks.flatMap((block, blockIndex) => [
-        ...(asides?.before.get(block) ?? []),
-        member(block, blockIndex)
-      ])}
-      {asides?.after}
-    </>
+    <NativeChatToolRunMembers
+      rows={rows}
+      renderRow={renderRow}
+      followKey={followKey}
+      startsAtEnd={startsAtEnd}
+      memoryKey={memoryKey}
+      revealRowKey={revealedDiff ? `edit:${revealedDiff.editKey}` : undefined}
+    />
   )
 }

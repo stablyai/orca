@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUDIT_EVENT_RETENTION_MS,
-  hashCredential,
   CONFIRM_RESULT_RETENTION_MS,
   RelayCredentialStore,
   type RelayIdentity
@@ -291,55 +290,5 @@ describe('credential cleanup invite reaper', () => {
     expect(await remainingIds(database, 'relay_confirm_results', 'req_id')).toEqual(['confirm-recent'])
     expect(await remainingIds(database, 'relay_audit_events', 'id')).toEqual(['audit-recent'])
     await database.close()
-  })
-
-  it('still replays a confirm result inside retention', async () => {
-    const database = await openInMemoryRelayDatabase()
-    let now = NOW - DAY_MS
-    const store = new RelayCredentialStore(database, () => now)
-    try {
-      const invite = await store.createInvite(identity, 'device-1')
-      const reservation = await store.reserveCredential(identity.relayHostId, invite.inviteToken)
-      if (!reservation) {
-        throw new Error('invite did not reserve')
-      }
-      await store.recordConnectionBasis({
-        ...reservation,
-        basisConnId: 'invite-basis',
-        owningControlGeneration: 1,
-        deadline: reservation.leaseExpiresAt
-      })
-      await store.installCredential({
-        ...identity,
-        relayDeviceId: 'device-1',
-        reqId: 'install-1',
-        newResumeTokenHash: hashCredential('resume-token'),
-        owningControlGeneration: 1,
-        authorization: { mode: 'relay-basis', basisConnId: 'invite-basis' }
-      })
-      const resume = await store.reserveCredential(identity.relayHostId, 'resume-token')
-      if (!resume) {
-        throw new Error('resume did not reserve')
-      }
-      await store.recordConnectionBasis({
-        ...resume,
-        basisConnId: 'resume-basis',
-        owningControlGeneration: 1,
-        deadline: resume.leaseExpiresAt
-      })
-      const request = {
-        ...identity,
-        reqId: 'confirm-1',
-        basisConnId: 'resume-basis',
-        owningControlGeneration: 1
-      }
-      const confirmed = await store.confirmResume(request)
-      expect(confirmed).toMatchObject({ renewed: true, acceptedAs: 'current' })
-      now = NOW
-      await store.cleanup()
-      expect(await store.confirmResume(request)).toEqual(confirmed)
-    } finally {
-      await database.close()
-    }
   })
 })

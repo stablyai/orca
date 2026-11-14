@@ -3,9 +3,9 @@ import type {
   HostedReviewInfo,
   HostedReviewForBranchArgs
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { singlePaneLayoutSnapshot } from '../../../terminals/terminal-single-pane-layout'
+import { singlePaneLayoutSnapshot } from '../../../terminals/layout/terminal-single-pane-layout'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeTerminalTab } from '../../../terminals/terminal-row.test-fixture'
+import { makeTerminalTab } from '../../../terminals/testing/terminal-row.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import {
   createTestStore,

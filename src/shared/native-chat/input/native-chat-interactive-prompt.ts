@@ -2,14 +2,12 @@ import {
   parseNativeChatApprovalEnvelope,
   parseNativeChatFolderTrustEnvelope,
   parseNativeChatStartupMenuEnvelope
-} from './native-chat-approval-envelope'
+} from './approvals/native-chat-approval-envelope'
 import { formatAgentTypeLabel } from '../../agent-status/presentation/agent-type-label'
-import type {
-  AgentJournalApprovalItem,
-  AgentJournalApprovalSubject
-} from '../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalApprovalItem } from '../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalApprovalSubject } from '../../agent-session/journal/agent-session-journal-approval-subject'
 import { parseAskFromStatus, resolveNativeChatAsk } from './native-chat-ask'
-import type { AskPrompt } from './native-chat-ask-types'
+import type { AskPrompt } from './questions/native-chat-ask-types'
 import type { NativeChatMessage } from '../native-chat-types'
 import { parseOmpPlanReviewPrompt } from '../../omp-plan-review-prompt'
 
@@ -22,8 +20,11 @@ export type ChatApproval = {
   subject?: AgentJournalApprovalSubject
   detail?: string
   options: { label: string; send: string }[]
-  /** Can't collapse: a freed composer's Return would answer the agent's startup dialog. */
-  holdsComposer?: true
+  /**
+   * The screen-read startup dialog envelope this card answers. It can't collapse (a freed composer's
+   * Return would answer the dialog), and the host writes a choice only while its screen still reads as it.
+   */
+  startupDialog?: string
   /** No option is styled as the default: the agent's own consent choices are shown as equals. */
   neutralOptions?: true
 }
@@ -89,7 +90,7 @@ export function parseApprovalFromStatus(
   const folderTrust = parseNativeChatFolderTrustEnvelope(interactivePrompt)
   if (folderTrust) {
     return {
-      holdsComposer: true,
+      startupDialog: interactivePrompt!,
       title: say('folderTrustTitle'),
       description: say('folderTrustHint'),
       options: [
@@ -104,7 +105,7 @@ export function parseApprovalFromStatus(
   if (startupMenu) {
     // Labels are the menu's own rows; with none the card only locks Send and opens the terminal.
     return {
-      holdsComposer: true,
+      startupDialog: interactivePrompt!,
       neutralOptions: true,
       title: say('startupMenuTitle', { value0: formatAgentTypeLabel(agent) }),
       ...(startupMenu.description ? { description: startupMenu.description } : {}),
@@ -137,6 +138,20 @@ export function parseInteractivePrompt(
   }
   const approval = parseApprovalFromStatus(interactivePrompt, agent, say)
   return approval ? { kind: 'approval', approval } : null
+}
+
+/** One line naming what the agent waits on (a status pill's text), never the raw envelope JSON. */
+export function interactivePromptLabel(
+  interactivePrompt: string | undefined | null,
+  toolName?: string,
+  agent?: string,
+  say?: NativeChatApprovalSay
+): string | undefined {
+  const card = parseInteractivePrompt(interactivePrompt, toolName, agent, say)
+  if (card?.kind === 'approval') {
+    return card.approval.title
+  }
+  return card?.prompt.questions[0]?.question || undefined
 }
 
 /** A live approval wins, then the live or unresolved transcript ask, so a parked selector cannot consume the next message as its answer. */

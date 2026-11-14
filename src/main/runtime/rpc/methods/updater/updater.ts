@@ -5,7 +5,7 @@ import {
   getRemoteServerUpdaterSnapshot,
   installRemoteServerUpdater
 } from '../../../hosts/management/remote-server-updater'
-import { UpdaterCheckParams } from '../../../../../shared/rpc-contract/updater-params'
+import { UpdaterCheckParams } from '../../../../../shared/rpc-contract/updater/updater-params'
 
 export const UPDATER_METHODS = [
   defineMethod({

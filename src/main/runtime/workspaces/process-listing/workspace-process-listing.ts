@@ -33,6 +33,7 @@ import {
   neverThrowingStructuredAgentSessionLogger
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from '../../agent-session/records/agent-session-record-store-slot'
+import { localAgentSessionRecordStoreLocation } from '../../agent-session/records/local-agent-session-record-store-startup-open'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../../agent-hooks/first-work/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-rename-runtime'
@@ -48,7 +49,7 @@ import {
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { claudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
+import { claudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
   runtimeHiddenRepos,
@@ -67,10 +68,16 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     () => this._orchestrationDb
   )
 
+  /** The task each pane was dispatched, by pane key, as `worktree.ps` rows title it. */
+  listAgentTasksByPaneKey() {
+    return this.agentOrchestrationProjection.buildByPaneKey() ?? {}
+  }
+
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true,
-    includeAgentWait = false
+    includeAgentWait = false,
+    worktreeId?: string
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
@@ -80,13 +87,12 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       sourceDefaultsSupported
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
-    const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
-      platformByRepoId
+      platformByRepoId,
+      worktreeId
     })
-
     const getSummary = createRuntimeWorktreePsSummaryLookup(
       summaries,
       buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
@@ -116,7 +122,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
         summaries,
-        repoById,
+        repoById: new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo])),
         ptysById: this.ptysById,
         tabs: this.tabs,
         paneOf: (pty) => this.paneOfPty(pty),
@@ -139,10 +145,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       agentList: this.readAgentListPublication()
     })
 
-    const sorted = [...summaries.values()].sort(compareWorktreePs)
     // Apply per-host pagination so hosts sorting last cannot disappear behind a global cap (#18104).
     const page = buildWorktreeListingPage(
-      sorted,
+      [...summaries.values()].sort(compareWorktreePs),
       limit,
       withoutHiddenHosts(this.listKnownExecutionHostIds(), runtimeHiddenHostIds(this.store))
     )
@@ -176,7 +181,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
             ? sourceMatchersByRepoId.get(getRepoHostIdentityForParts(worktree.repoId, owner.hostId))
             : undefined,
           sourceDefaultsSupported,
-          visibilitySettings
+          visibilitySettings,
+          repoOwners
         )
       })
     }
@@ -207,27 +213,27 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
 
   /** Admission needs only the ledger; a later chat host must reuse this store. */
   async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
-    const { store } = await openAgentSessionRecordStoreOnce({
-      stateDirectory: getProfileUserDataPath(),
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
-    })
+    const { store } = await openAgentSessionRecordStoreOnce(
+      localAgentSessionRecordStoreLocation(this.legacyStructuredSessionTabIds)
+    )
     return store
   }
 
-  /** CI-line watches run on every host from startup, whether or not a chat was ever opened. */
-  startPullRequestWatches(): void {
-    void startPRWatchRuntime({
-      stateDirectory: getProfileUserDataPath(),
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
-      ...prWatchWorkspaceSources({
-        resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
-        store: () => this.requireStore()
-      })
-    })
+  /** CI-line watches run on every host once it serves (`admit`), whether or not a chat was ever opened. */
+  startPullRequestWatches(options: { admit?: boolean } = {}): void {
+    void startPRWatchRuntime(
+      {
+        stateDirectory: getProfileUserDataPath(),
+        legacySessionTabIds: this.legacyStructuredSessionTabIds,
+        hostId: LOCAL_EXECUTION_HOST_ID,
+        logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
+        ...prWatchWorkspaceSources({
+          resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+          store: () => this.requireStore()
+        })
+      },
+      options
+    )
   }
 
   /** Defer host creation until profile paths are final and chat is used; reuse an admission-opened record store. */
@@ -289,8 +295,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
       conversationNaming: nameChat,
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
-      queuedAgentMessageOwed: (sessionId, from, peek) =>
-        this.structuredChatMailOwed(sessionId, from, peek),
+      queuedAgentMessageOwed: (sessionId, from) => this.structuredChatMailOwed(sessionId, from),
       assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
       attentionDelivery: createStructuredAttentionMobileDelivery({
         readNotificationSettings: () => this.requireStore().getSettings().notifications,
@@ -303,12 +308,16 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
-      onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
+      createTurnAttention: () =>
+        chatWorkerTurnStopReporter({
+          ...this.workerTurnStopReportDeps,
+          openExistingDb: () => this.getExistingOrchestrationDb()
+        }),
       // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })
-    // Re-arms watches a chat-runtime teardown stopped; a no-op while they run.
+    // Starts watches not yet running once the host has served: a failed first start or a teardown retries here.
     this.startPullRequestWatches()
   }
 }

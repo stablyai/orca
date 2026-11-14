@@ -9,8 +9,11 @@ import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
   type KeyboardLayoutChangeEvent
 } from '../../shared/keyboard-layout-events'
-import { prepareAndInvokeAppRestart } from '../renderer-restart-wiring'
-import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../preload-runtime-support'
+import { prepareAndInvokeAppRestart } from '../renderer/restart/renderer-restart-wiring'
+import {
+  awaitBeforeUnloadCheckpoint,
+  startupDiagnosticsEnabled
+} from '../renderer/renderer-runtime'
 import type { PreloadApi } from '../api-types'
 
 export const appApi = {

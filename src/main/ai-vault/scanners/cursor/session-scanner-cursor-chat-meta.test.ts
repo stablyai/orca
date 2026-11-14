@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 
 let failNextChatsReaddir = false
 let failNextChatsRootReaddir = false
@@ -10,53 +10,56 @@ let failMetaJsonReads = false
 let failMetaJsonStats: false | true | 'eacces' = false
 let cancelMetaJsonReads: AbortController | null = null
 let chatsRootReads = 0
-vi.mock('../../../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
-  const actual = await importOriginal<typeof WslTranscriptFsAccess>()
-  return {
-    ...actual,
-    wslGatedReaddir: (
-      ...args: Parameters<typeof actual.wslGatedReaddir>
-    ): ReturnType<typeof actual.wslGatedReaddir> => {
-      if (args[0].endsWith('chats')) {
-        chatsRootReads += 1
-        if (failNextChatsRootReaddir) {
-          failNextChatsRootReaddir = false
+vi.mock(
+  '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof WslTranscriptFsAccess>()
+    return {
+      ...actual,
+      wslGatedReaddir: (
+        ...args: Parameters<typeof actual.wslGatedReaddir>
+      ): ReturnType<typeof actual.wslGatedReaddir> => {
+        if (args[0].endsWith('chats')) {
+          chatsRootReads += 1
+          if (failNextChatsRootReaddir) {
+            failNextChatsRootReaddir = false
+            return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
+          }
+        }
+        if (failNextChatsReaddir && args[0].includes('workspace-hash')) {
+          failNextChatsReaddir = false
           return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
         }
+        return actual.wslGatedReaddir(...args)
+      },
+      wslGatedReadFile: (
+        ...args: Parameters<typeof actual.wslGatedReadFile>
+      ): ReturnType<typeof actual.wslGatedReadFile> => {
+        if (failMetaJsonReads && String(args[0]).endsWith('meta.json')) {
+          return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
+        }
+        if (cancelMetaJsonReads && String(args[0]).endsWith('meta.json')) {
+          cancelMetaJsonReads.abort()
+          return Promise.reject(new DOMException('This operation was aborted', 'AbortError'))
+        }
+        return actual.wslGatedReadFile(...args)
+      },
+      wslGatedStat: (
+        ...args: Parameters<typeof actual.wslGatedStat>
+      ): ReturnType<typeof actual.wslGatedStat> => {
+        if (failMetaJsonStats && String(args[0]).endsWith('meta.json')) {
+          return Promise.reject(
+            failMetaJsonStats === 'eacces'
+              ? Object.assign(new Error('permission denied'), { code: 'EACCES' })
+              : new WslTranscriptFsError('timeout', 'wsl fs timed out')
+          )
+        }
+        return actual.wslGatedStat(...args)
       }
-      if (failNextChatsReaddir && args[0].includes('workspace-hash')) {
-        failNextChatsReaddir = false
-        return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
-      }
-      return actual.wslGatedReaddir(...args)
-    },
-    wslGatedReadFile: (
-      ...args: Parameters<typeof actual.wslGatedReadFile>
-    ): ReturnType<typeof actual.wslGatedReadFile> => {
-      if (failMetaJsonReads && String(args[0]).endsWith('meta.json')) {
-        return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
-      }
-      if (cancelMetaJsonReads && String(args[0]).endsWith('meta.json')) {
-        cancelMetaJsonReads.abort()
-        return Promise.reject(new DOMException('This operation was aborted', 'AbortError'))
-      }
-      return actual.wslGatedReadFile(...args)
-    },
-    wslGatedStat: (
-      ...args: Parameters<typeof actual.wslGatedStat>
-    ): ReturnType<typeof actual.wslGatedStat> => {
-      if (failMetaJsonStats && String(args[0]).endsWith('meta.json')) {
-        return Promise.reject(
-          failMetaJsonStats === 'eacces'
-            ? Object.assign(new Error('permission denied'), { code: 'EACCES' })
-            : new WslTranscriptFsError('timeout', 'wsl fs timed out')
-        )
-      }
-      return actual.wslGatedStat(...args)
     }
   }
-})
-import type * as WslTranscriptFsAccess from '../../../native-chat/wsl-transcript-fs-access'
+)
+import type * as WslTranscriptFsAccess from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import {
   cursorChatMetaPath,
   resetCursorChatMetaIndexCacheForTests,
@@ -67,8 +70,8 @@ import {
   type AiVaultScanIssue,
   type AiVaultSession
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { AI_VAULT_AGENT_SOURCES } from '../../session-scanner-agent-sources'
-import { discoverFiles } from '../../session-scanner-discovery'
+import { AI_VAULT_AGENT_SOURCES } from '../../discovery/session-scanner-agent-sources'
+import { discoverFiles } from '../../discovery/session-scanner-discovery'
 import { scanAiVaultSessions } from '../../session-scanner'
 import {
   createSessionParseStats,
@@ -82,7 +85,7 @@ import {
   resolveSessionScopeCwd
 } from '../../parse-cache/session-parse-cache-store'
 
-import { isolatedScanRoots } from '../../session-scanner-test-fixtures'
+import { isolatedScanRoots } from '../../scanner-fixtures/session-scanner-test-fixtures'
 import type { FileWithMtime } from '../../session-scanner-types'
 
 // Mirror Cursor meta.json keys (2026-09).

@@ -3,11 +3,11 @@ import {
   type ManagedOrcadAutoUpdateSkip
 } from './orcad-managed-update-decision'
 import { OrcadCrashLoopError } from './orcad-managed-crash-loop'
-import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
+import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import {
   OrcadArtifactsUnavailableError,
   OrcadHostUnsupportedError
-} from '../../orcad/orcad-host-unavailable'
+} from '../../orcad/diagnostics/orcad-host-unavailable'
 import { findIncompleteManagedOrcadMigration } from './orcad-managed-migration-status'
 import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../activation/orcad-activation-fence-hold'
 import { resolveLinkedOrcadContext } from './orcad-managed-runtime-context'

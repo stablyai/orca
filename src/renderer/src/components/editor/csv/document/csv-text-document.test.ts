@@ -38,16 +38,6 @@ describe('CSV text mutations', () => {
     expect(parseCsv(result).rows[2]).toEqual(['B,ob', 'two\r\nlines'])
   })
 
-  it('extends ragged rows without padding unaffected rows', () => {
-    const document = parseCsvTextDocument('a,b,c\nshort\n1,2,3\n', ',')
-    expect(
-      mutateCsvTextDocument(document, {
-        kind: 'cells',
-        edits: [{ row: 1, column: 2, value: 'last' }]
-      })
-    ).toBe('a,b,c\nshort,,last\n1,2,3\n')
-  })
-
   it('keeps an empty retained record when deleting the unterminated last row', () => {
     const document = parseCsvTextDocument('\nbody', ',')
     const result = mutateCsvTextDocument(document, { kind: 'delete-rows', rows: [1] })

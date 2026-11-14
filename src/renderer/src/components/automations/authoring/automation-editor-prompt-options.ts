@@ -1,5 +1,5 @@
 import type { editor } from 'monaco-editor'
-import { monacoFindOptions } from '@/components/editor/monaco-find-options'
+import { monacoFindOptions } from '@/components/editor/monaco/monaco-find-options'
 import type { MonacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 
 export function buildAutomationPromptEditorOptions(args: {

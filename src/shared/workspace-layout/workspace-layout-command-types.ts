@@ -1,7 +1,7 @@
 // Pure commands change layout only; runtime owns catalog/path/host-support/liveness refusals requiring external facts.
 
-import type { LayoutClientVisibility } from './workspace-layout-client-visibility'
-import type { LiveTerminalAdoption } from './workspace-layout-terminal-adoption'
+import type { LayoutClientVisibility } from './client-views/workspace-layout-client-visibility'
+import type { LiveTerminalAdoption } from './commands/workspace-layout-terminal-adoption'
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
@@ -11,10 +11,10 @@ import type {
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
 } from './terminal-tab-types'
-import type { PaneSide } from './terminal-pane-tree'
-import type { SplitRatioIntent } from './split-ratio-intents'
-import type { PaneOutcomeChanges } from './workspace-layout-pane-outcomes'
-import type { LayoutEditorView } from './layout-editor-view'
+import type { PaneSide } from './terminal-topology/terminal-pane-tree'
+import type { SplitRatioIntent } from './tab-groups/split-ratio-intents'
+import type { PaneOutcomeChanges } from './commands/workspace-layout-pane-outcomes'
+import type { LayoutEditorView } from './editor-tabs/layout-editor-view'
 import type { LayoutEditorFile, LayoutTerminalCreation } from './workspace-layout-model'
 
 type On = { workspace: string }

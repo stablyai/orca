@@ -39,7 +39,7 @@ import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch
 import { resolveAgentLaunchRuntime } from '../launch/agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/opencode-model-startup-plan'
+import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
@@ -171,6 +171,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         const resolved = await this.resolveWorkspaceSelector(`id:${worktreeId}`, scope)
         return {
           worktreeId: resolved.id,
+          ...(resolved.identity ? { identityKey: resolved.identity.key } : {}),
           path: resolved.git.path,
           branch: resolved.git.branch,
           displayName: resolved.displayName

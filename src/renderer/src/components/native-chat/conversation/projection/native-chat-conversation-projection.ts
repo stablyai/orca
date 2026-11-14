@@ -1,6 +1,6 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { projectNativeChatTaskListFrame } from '../../../../../../shared/native-chat/input/native-chat-task-list-frames'
-import { isNativeChatThreadGoalRow } from '../../../../../../shared/native-chat/transcript/native-chat-thread-goal-rows'
+import { projectNativeChatTaskListFrame } from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list-frames'
+import { isNativeChatThreadGoalRow } from '../../../../../../shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 
 /** These independent transforms consume folded rows; unchanged rows need no block inspection. */
 export function createNativeChatConversationProjection() {

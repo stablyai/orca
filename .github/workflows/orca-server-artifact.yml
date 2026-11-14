@@ -9,7 +9,7 @@ on:
       # The launcher relies on how the CLI picks and starts its serve runtime.
       - 'src/cli/runtime/launch.ts'
       - 'src/cli/runtime/orca-app-executable.ts'
-      - 'src/cli/runtime/serve-orcad-launch.ts'
+      - 'src/cli/runtime/serve/startup/serve-orcad-launch.ts'
       - 'src/shared/orcad-local-serve-selection.ts'
       - 'src/shared/orcad-artifacts.ts'
   # Catch serve regressions on main between releases.
