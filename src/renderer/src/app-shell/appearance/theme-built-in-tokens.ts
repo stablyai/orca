@@ -60,6 +60,10 @@ export function themeBuiltInTokens(mode: 'light' | 'dark'): Record<string, strin
   }
   const probe = document.createElement('div')
   probe.style.display = 'none'
+  // Why reset first: a token no rule declares would otherwise inherit the theme painted on <html>.
+  for (const token of [...PLUGIN_APP_THEME_TOKENS, '--callout-note']) {
+    probe.style.setProperty(token, 'initial')
+  }
   for (const [name, value] of declarationsFor(mode)) {
     probe.style.setProperty(name, value)
   }

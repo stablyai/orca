@@ -1,4 +1,5 @@
 import { resolveTerminalPaneAppearance } from '../appearance/resolve-terminal-pane-appearance'
+import { useThemeStudioTerminalPreview } from '@/store/appearance/theme-studio-preview-store'
 import { useSshReconnectErrorOwnership } from '../errors/use-ssh-reconnect-error-ownership'
 import { useTerminalPaneChatProjection } from '../chat/use-terminal-pane-chat-projection'
 
@@ -41,6 +42,8 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     worktreeId
   } = controller
 
+  // Subscribes so the pane title follows an `orca theme` draft's terminal background.
+  useThemeStudioTerminalPreview()
   const {
     effectiveAppearance,
     terminalBackground,

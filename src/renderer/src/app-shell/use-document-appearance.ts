@@ -117,7 +117,8 @@ export function useDocumentAppearance(): void {
   }, [surfaceOpacity])
   // Why re-parse: the theme list keeps the registration as received, and a newer host may send
   // a background this build cannot paint; it must drop to no image, never reach CSS.
-  const registeredBackground = pluginTheme?.background
+  // Why none under a draft: a kept draft has no image, so the preview must not show one.
+  const registeredBackground = draftTheme ? undefined : pluginTheme?.background
   const themeBackground = useMemo(
     () => tolerantPluginThemeBackgroundRegistration.parse(registeredBackground),
     [registeredBackground]
@@ -140,7 +141,7 @@ export function useDocumentAppearance(): void {
     // Why wait for the list: until it loads, the startup cache is still the right paint.
     // Why theme too: contrast is checked against the built-ins of the current mode.
     if (ready && theme) {
-      // Why no cache for a draft: the next launch must start in the user's own theme.
+      // Why no cache for a draft: a launch paints the user's own theme until main re-sends it.
       appPainted.current = applyPluginAppTheme(appTheme, draftTheme ? { storage: null } : {})
     }
   }, [appTheme, draftTheme, ready, theme, dark])

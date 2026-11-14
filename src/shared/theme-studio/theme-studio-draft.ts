@@ -8,6 +8,7 @@ import {
 } from '../plugins/artifacts/plugin-theme-artifact'
 import {
   normalizeTerminalColorOverrides,
+  normalizeTerminalHexColor,
   TERMINAL_COLOR_KEYS
 } from '../terminal-themes/terminal-custom-themes'
 import type { TerminalColorOverrides } from '../terminal-themes/terminal-color-overrides'
@@ -23,6 +24,7 @@ export const THEME_STUDIO_TERMINAL_PREFIX = 'terminal.'
 const APP_TOKENS: ReadonlySet<string> = new Set(PLUGIN_APP_THEME_TOKENS)
 const TERMINAL_KEYS: ReadonlySet<string> = new Set(TERMINAL_COLOR_KEYS)
 const MAX_NAME_LENGTH = 64
+const REQUIRED_TOKENS: ReadonlySet<string> = new Set(PLUGIN_APP_THEME_REQUIRED_TOKENS)
 
 const tokenRecordSchema = z.record(
   z.string().refine((token) => APP_TOKENS.has(token), 'is not a public theme token'),
@@ -32,7 +34,12 @@ const tokenRecordSchema = z.record(
 export const themeStudioVariantSchema = z.object({
   tokens: tokenRecordSchema,
   tokenColors: tokenColorsSchema.optional(),
-  terminal: z.partialRecord(z.enum(TERMINAL_COLOR_KEYS), z.string()).optional()
+  terminal: z
+    .partialRecord(
+      z.enum(TERMINAL_COLOR_KEYS),
+      z.string().refine((value) => normalizeTerminalHexColor(value) !== null, 'must be a hex color')
+    )
+    .optional()
 })
 
 export type ThemeStudioVariant = {
@@ -164,7 +171,7 @@ function setVariantValue(variant: ThemeStudioVariant, rawKey: string, value: str
 function unsetVariantValue(variant: ThemeStudioVariant, rawKey: string): string {
   const key = parseThemeStudioKey(rawKey)
   if (key.kind === 'token') {
-    if ((PLUGIN_APP_THEME_REQUIRED_TOKENS as readonly string[]).includes(key.token)) {
+    if (REQUIRED_TOKENS.has(key.token)) {
       throw new ThemeStudioError(THEME_STUDIO_ERROR_CODES.invalid, `${key.token} is required`, {
         key: key.token,
         nextSteps: ['Set it to another color instead of removing it.']

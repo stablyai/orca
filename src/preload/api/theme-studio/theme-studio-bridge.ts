@@ -6,7 +6,6 @@ import {
   THEME_STUDIO_REPORT_CHANNEL,
   THEME_STUDIO_REQUEST_CHANNEL,
   THEME_STUDIO_USER_ACTION_CHANNEL,
-  type ThemeStudioPreview,
   type ThemeStudioReply,
   type ThemeStudioReport,
   type ThemeStudioRequest,
@@ -15,8 +14,9 @@ import {
 
 /** `orca theme` drafts: main paints them here, and this window reports and answers back. */
 export type ThemeStudioApi = {
-  current: () => Promise<ThemeStudioPreview>
-  onPreview: (callback: (preview: ThemeStudioPreview) => void) => () => void
+  /** Untrusted until the renderer parses it. */
+  current: () => Promise<unknown>
+  onPreview: (callback: (preview: unknown) => void) => () => void
   report: (report: ThemeStudioReport) => void
   onRequest: (callback: (request: ThemeStudioRequest) => void) => () => void
   reply: (reply: ThemeStudioReply) => void

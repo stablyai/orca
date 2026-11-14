@@ -84,7 +84,8 @@ function issueFor(
               : undefined
       return {
         problem: 'contrast',
-        tokens: [...drop.dropped],
+        // Why only the draft's own: a derived token is fixed by changing the one it comes from.
+        tokens: drop.dropped.filter((token) => owned[token] !== undefined),
         text: drop.text,
         surface: drop.surface,
         ratio: drop.ratio === null ? null : round(drop.ratio),

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -59,8 +59,8 @@ export async function exportDraft(ctx: HandlerContext): Promise<void> {
     throw new RuntimeClientError('invalid_argument', 'Missing <dir>.')
   }
   const folder = localPath(ctx, target, 'export')
-  if (existsSync(folder) && readdirSync(folder).length > 0) {
-    throw new RuntimeClientError('invalid_argument', `${folder} is not empty.`, {
+  if (existsSync(folder) && (!statSync(folder).isDirectory() || readdirSync(folder).length > 0)) {
+    throw new RuntimeClientError('invalid_argument', `${folder} is not an empty folder.`, {
       nextSteps: ['Pass a new or empty folder.']
     })
   }

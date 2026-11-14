@@ -55,13 +55,17 @@ function installThemeStudioBridge(): void {
     return
   }
   bridgeInstalled = true
+  let pushed = false
   const accept = (raw: unknown): void => {
     const parsed = themeStudioPreviewSchema.safeParse(raw)
     if (parsed.success) {
       useThemeStudioPreviewStore.setState({ preview: parsed.data })
     }
   }
-  api.onPreview(accept)
+  api.onPreview((preview) => {
+    pushed = true
+    accept(preview)
+  })
   api.onRequest((request) => {
     void answer(request)
       .catch((error: unknown): ThemeStudioReply => ({
@@ -71,7 +75,15 @@ function installThemeStudioBridge(): void {
       }))
       .then((reply) => api.reply(reply))
   })
-  void api.current().then(accept, () => undefined)
+  // Why only before a push: a push that lands first is newer than this answer.
+  void api.current().then(
+    (preview) => {
+      if (!pushed) {
+        accept(preview)
+      }
+    },
+    () => undefined
+  )
 }
 
 function showPreviewToast(preview: NonNullable<ThemeStudioPreview>): void {

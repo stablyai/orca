@@ -37,6 +37,7 @@ import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/termin
 import { windowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { contrastRatio, hexToRgb, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
 import { getTerminalFontSizeOverride } from './terminal-font-size-overrides'
+import { withThemeStudioTerminalPreview } from '@/store/appearance/theme-studio-preview-store'
 
 export function hexToRgba(hex: string, alpha: number): string {
   const [r, g, b] = hexToRgb(hex)
@@ -161,14 +162,15 @@ export function applyTerminalAppearance(
 ): void {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
-  const theme = composeActiveTerminalTheme(appearance.theme, settings)
+  const palette = withThemeStudioTerminalPreview(appearance.theme, appearance.mode)
+  const theme = composeActiveTerminalTheme(palette, settings)
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
   // Why: over a window backdrop the split root is the one translucent paint; xterm's viewport,
   // scrollable element and canvas each repainting it compounded 0.82 to ~0.99 (#36196).
   const backdropActive = windowBackdropActive()
   const xtermTheme = backdropActive
-    ? composeActiveTerminalTheme(appearance.theme, { ...settings, terminalBackgroundOpacity: 0 })
+    ? composeActiveTerminalTheme(palette, { ...settings, terminalBackgroundOpacity: 0 })
     : theme
 
   const terminalFontWeights = resolveTerminalFontWeights(

@@ -8,6 +8,7 @@ import {
   resolveOpaqueTerminalBackground
 } from '../../../../../shared/terminal-themes/terminal-title-contrast'
 import type { CSSProperties } from 'react'
+import { withThemeStudioTerminalPreview } from '@/store/appearance/theme-studio-preview-store'
 import type { TerminalPaneMobileController } from '../controller/use-terminal-pane-mobile-actions'
 
 export function resolveTerminalPaneAppearance({
@@ -22,7 +23,10 @@ export function resolveTerminalPaneAppearance({
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
-  const terminalBackground = effectiveAppearance?.theme?.background
+  const terminalBackground = effectiveAppearance
+    ? withThemeStudioTerminalPreview(effectiveAppearance.theme, effectiveAppearance.mode)
+        ?.background
+    : undefined
   const titleUsesLightSurface = isTerminalBackgroundLight(terminalBackground, {
     appSurface: effectiveAppearance?.mode,
     backgroundOpacity: settings?.terminalBackgroundOpacity

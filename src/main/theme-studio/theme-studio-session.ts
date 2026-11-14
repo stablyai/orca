@@ -62,10 +62,16 @@ export class ThemeStudioSession {
   private latestReport: ThemeStudioReport | null = null
   private waiters: { revision: number; resolve: (report: ThemeStudioReport | null) => void }[] = []
 
-  constructor(private readonly deps: ThemeStudioSessionDeps) {}
+  private persisting: Promise<void> = Promise.resolve()
+  /** Settles once a session a restart interrupted is restored; edits wait for it. */
+  readonly ready: Promise<void>
+
+  constructor(private readonly deps: ThemeStudioSessionDeps) {
+    this.ready = this.restore()
+  }
 
   /** Restores a session a restart interrupted; a damaged file is dropped. */
-  async load(): Promise<void> {
+  private async restore(): Promise<void> {
     let raw: string
     try {
       raw = await readFile(this.deps.sessionFile, 'utf8')
@@ -248,7 +254,13 @@ export class ThemeStudioSession {
     }, PERSIST_DEBOUNCE_MS)
   }
 
-  private async persist(): Promise<void> {
+  private persist(): Promise<void> {
+    // Why chained: a slow disk must not let two writes share the temporary file.
+    this.persisting = this.persisting.then(() => this.writeSession())
+    return this.persisting
+  }
+
+  private async writeSession(): Promise<void> {
     if (!this.draft) {
       return
     }

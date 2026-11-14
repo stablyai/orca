@@ -43,7 +43,11 @@ export const THEME_STUDIO_METHODS = [
     name: 'themeStudio.status',
     permission: 'host-admin',
     params: ThemeStudioStatusParams,
-    handler: async (params) => requireThemeStudio().status(params.resolved === true)
+    handler: async (params) =>
+      requireThemeStudio().status({
+        resolved: params.resolved === true,
+        report: params.report !== false
+      })
   }),
   defineMethod({
     name: 'themeStudio.edit',

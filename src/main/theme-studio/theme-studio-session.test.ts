@@ -62,7 +62,7 @@ describe('ThemeStudioSession', () => {
     vi.useRealTimers()
     await vi.waitFor(() => readFile(sessionFile, 'utf8'))
     const restored = new ThemeStudioSession({ sessionFile, push: () => undefined })
-    await restored.load()
+    await restored.ready
     expect(restored.draft).toEqual(draftWith('#111111'))
     expect(restored.status().undo).toBe(1)
     restored.end()

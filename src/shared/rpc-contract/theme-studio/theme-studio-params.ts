@@ -10,7 +10,11 @@ const nameSchema = z.string().trim().min(1).max(64)
 // Why a bound: a whole-theme transform past +-100% only clips colors to black, white or grey.
 const percentSchema = z.number().min(-100).max(100)
 
-export const ThemeStudioStatusParams = z.object({ resolved: z.boolean().optional() })
+export const ThemeStudioStatusParams = z.object({
+  resolved: z.boolean().optional(),
+  /** False skips waiting for the open draft's contrast report. */
+  report: z.boolean().optional()
+})
 
 export const ThemeStudioEditParams = z.object({
   from: z.discriminatedUnion('kind', [

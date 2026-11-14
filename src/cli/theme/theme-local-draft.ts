@@ -22,7 +22,7 @@ function plainTokens(tokens: Record<string, string>): Record<string, string> {
 async function variantFromFile(
   file: string
 ): Promise<{ mode: ThemeStudioMode; variant: ThemeStudioVariant }> {
-  const theme = parsePluginAppThemeArtifact(await readFile(file, 'utf8'), 'strict')
+  const theme = parsePluginAppThemeArtifact(await readFile(file, 'utf8'), 'tolerant')
   return {
     mode: theme.base,
     variant: {
@@ -75,7 +75,7 @@ export async function draftFromLocal(path: string): Promise<ThemeStudioDraft> {
   for (const terminalPath of contributionPaths(manifest, 'terminalThemes')) {
     const { mode, terminal } = parsePluginTerminalThemeArtifact(
       await readFile(insideFolder(path, terminalPath), 'utf8'),
-      'strict'
+      'tolerant'
     )
     const target = mode === 'unknown' ? null : draft[mode]
     if (target && !target.terminal) {

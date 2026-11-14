@@ -33,7 +33,12 @@ import { exportDraft, shot } from './theme-file-commands'
 async function edit(ctx: HandlerContext): Promise<void> {
   const from = stringFlag(ctx, 'from') ?? 'current'
   const name = stringFlag(ctx, 'name')
-  const local = from === 'current' ? null : localPath(ctx, from, 'edit')
+  // Why the shape check: in a forwarding shell only a path needs local files; a theme id does not.
+  const pathLike = /[\\/]/.test(from) || from.startsWith('.') || /\.json$/i.test(from)
+  const local =
+    from === 'current' || (process.env.ORCA_CLI_CWD && !pathLike)
+      ? null
+      : localPath(ctx, from, 'edit')
   const source =
     from === 'current'
       ? { kind: 'current' }
@@ -44,7 +49,8 @@ async function edit(ctx: HandlerContext): Promise<void> {
 }
 
 async function set(ctx: HandlerContext): Promise<void> {
-  const modes = modesFlag(ctx) ?? [await shownMode(ctx)]
+  const assigns = listFlag(ctx, 'assignment').length > 0 || listFlag(ctx, 'unset').length > 0
+  const modes = modesFlag(ctx) ?? (assigns ? [await shownMode(ctx)] : [])
   const patch = mergePatches(await patchFlag(ctx), assignmentsPatch(ctx, modes))
   if (!isRecord(patch) || Object.keys(patch).length === 0) {
     throw new RuntimeClientError('invalid_argument', 'Nothing to set.', {
@@ -61,9 +67,7 @@ async function shownMode(ctx: HandlerContext): Promise<ThemeStudioMode> {
   const status = await call<{ resolved?: { shownMode: ThemeStudioMode } }>(
     ctx,
     'themeStudio.status',
-    {
-      resolved: true
-    }
+    { resolved: true, report: false }
   )
   return status.resolved?.shownMode ?? 'dark'
 }

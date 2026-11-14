@@ -19,6 +19,8 @@ import { requestFromRenderer } from '../ipc/renderer-request-relay'
 import { captureOrcaChrome } from '../plugins/view/plugin-view-chrome-shot'
 import { isPluginShotWindowShown } from '../plugins/view/plugin-shot-policy'
 import type { PluginService } from '../plugins/plugin-service'
+import { getUserPluginsDir } from '../plugins/plugin-discovery'
+import { readPluginLockfile } from '../plugins/installation/plugin-install-lockfile-store'
 import { ThemeStudioSession } from './theme-studio-session'
 import { createThemeStudioService, type ThemeStudioWindow } from './theme-studio-service'
 
@@ -98,6 +100,12 @@ export function bindThemeStudio(options: {
         terminalThemes: contentPacks.terminalThemes.list()
       }
     },
+    installedFrom: async (pluginKey) => {
+      const source = (await readPluginLockfile(getUserPluginsDir(options.userDataPath))).plugins[
+        pluginKey
+      ]?.source
+      return source ? (source.kind === 'local-path' ? source.path : pluginKey) : null
+    },
     installFolder: installHostWrittenPluginFolder,
     pluginsRoot: join(root, 'plugins')
   })
@@ -118,13 +126,7 @@ export function bindThemeStudio(options: {
     ) {
       return
     }
-    if (parsed.data.action === 'discard') {
-      session.end()
-      return
-    }
-    void service.apply(undefined).catch((error) => {
-      console.warn('[theme-studio] could not keep the draft:', error)
-    })
+    void (parsed.data.action === 'discard' ? service.discardFromWindow() : service.keepFromWindow())
   })
   ipcMain.handle(THEME_STUDIO_CURRENT_CHANNEL, (event) => {
     const draft = session.draft
@@ -133,5 +135,4 @@ export function bindThemeStudio(options: {
       : null
   })
   setThemeStudioForRpc(service)
-  void session.load()
 }
