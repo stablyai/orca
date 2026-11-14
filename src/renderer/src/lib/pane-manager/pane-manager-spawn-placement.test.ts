@@ -52,10 +52,14 @@ describe('PaneManager spawn placement hints', () => {
       placement: 'before'
     })
 
-    expect(onPaneCreated).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ leafId: LEAF_C }),
-      { placement: { kind: 'split', parentLeafId: LEAF_A, direction: 'horizontal' } }
-    )
+    expect(onPaneCreated).toHaveBeenCalledWith(expect.objectContaining({ leafId: LEAF_C }), {
+      placement: {
+        kind: 'split',
+        parentLeafId: LEAF_A,
+        direction: 'horizontal',
+        insertBefore: true
+      }
+    })
     // The pane-created handler serializes proposedRoot from the DOM, so the order must be final then.
     expect(treesAtCreation).toEqual([
       {
