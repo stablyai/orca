@@ -6,7 +6,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-start'],
     summary: 'Start one supervised worker on the Run home or a connected Orca server',
     usage:
-      'orca orchestration worker-start (--task <task_id> | --spec <text> | --spec-file <path|->) [--keep-open] [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration worker-start (--task <task_id> | --spec <text> | --spec-file <path|->) [--keep-open] [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--advisory-policy-file <path> | --execution-policy-file <path>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--request-id <uuid> | --retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
@@ -27,15 +27,21 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'agent',
       'model',
       'effort',
+      'advisory-policy-file',
+      'execution-policy-file',
       'terminal',
       'retry-of',
       'timeout-ms',
       'run',
       'from',
-      'retry-request'
+      'retry-request',
+      'request-id'
     ],
     identityFlagRoles: { from: 'caller', terminal: 'target' },
     notes: [
+      '--execution-policy-file admits one fresh local folder Codex actor for an undispatched task, or a new child spec, with explicit model/effort, included-account fingerprint, named access and a finite deadline. It forbids reuse, retry, remote routing, setup and terminal fallback. Capability support alone does not qualify a route.',
+      '--advisory-policy-file reads a private bounded snapshot policy from a local JSON file. It requires a fresh child --spec, --parent, exact existing local folder workspace, and explicit Claude model/effort. Unsupported native routes refuse before effects; the parser capability is not qualification. Reuse, remote routing, setup and worktree creation are refused.',
+      'Advisory policy schema 2 additionally binds the observed included Claude account, model and effort before input. Detailed worker-show can retain its owned advisory-receipt after release, without artifacts or spawn tokens. SDK query-pipeline usage excludes auxiliary helpers; its main-response counter and loop ceiling do not qualify a provider request limit. Missing native qualification remains unavailable.',
       'With --spec and no bound Run, a coordinator gets a new Run bound to it, named after the Task title; the receipt names the Run it created or joined.',
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
       'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',
@@ -47,12 +53,13 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'New worktrees use agent-first creation; without --setup, setup runs unless the project turns it off. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
       'New worktrees without --name get the name Orca gives an unnamed workspace; the receipt names it. Servers older than this change still require --name.',
       'Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.',
-      "How the worker runs follows the user's own setting for new agent tabs; there is no flag for it and no caller needs to ask. A dispatch the setting cannot apply to still starts, so the placement, agent, and launch options passed here are always the ones honoured.",
+      "Ordinary workers follow the user's setting for new agent tabs, with the start receipt explaining any fallback. A bounded advisory policy requires a constrained structured worker and refuses terminal fallback.",
       'Drive every worker the same way whichever way it was started: the same orchestration verbs, the same handle. Mail, dispatch, worker-show, worker-read and the whole lifecycle behave identically. The start receipt records which one ran, for operators and telemetry.',
       'Not every worker has a terminal. Read output with worker-read --source auto or --source transcript, which always work; --source terminal is refused when there is none, and orca terminal verbs do not accept every worker handle. Nothing above needs you to know which kind you have — the orchestration verbs cover all of them.',
       '--on selects only the worker server; the Run and this command remain on the current Orca server.',
       'With --on, use an exact remote selector, new-child or new-top-level (new-child and new-top-level need a remote --repo); new-child nests the server worktree under your workspace, or starts it top-level with a warning when that server is too old to nest across machines. Remote current is invalid.',
       '--retry-of needs --task naming the failed Task (--spec creates a new one) and does not inherit placement; repeat the intended --on/worktree and --agent/terminal choices.',
+      '--request-id supplies a caller-generated UUID persisted before the first send, so request-show can inspect a lost response. Use --retry-request for recovery; the flags cannot be combined. An absent lookup does not prove no effect.',
       '--spec-file reads the spec from a file (relative to the current directory) or stdin (-) on this machine, so quotes and backticks need no shell escaping.',
       '--keep-open keeps the worker open after it finishes, as worker-keep-open does right after start.',
       'The call exits 0 for ready, and in the concise view for a start whose turn was not yet observed (--full exits 1 for anything but ready). Failed or outcome_unknown exits 1 and JSON includes stage/failedStage, setup, effects, residualResources, and recovery commands when needed.'

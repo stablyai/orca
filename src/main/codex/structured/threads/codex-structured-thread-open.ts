@@ -13,11 +13,21 @@ import type { CodexAppServerConnection } from '../../app-server/codex-app-server
 import type { CodexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
 import { readCodexThreadId } from '../../app-server/codex-structured-thread-facts'
 import {
+  codexExecutionThreadConfig,
+  assertCodexExecutionToolsDisabled
+} from '../launch/codex-execution-thread-controls'
+import {
   readCodexSandboxPolicy,
   type CodexSandboxPolicy
 } from '../launch/codex-structured-sandbox-policy'
 
 export type CodexOpenedThread = {
+  activePermissionProfile?: { id: string }
+  modelProvider?: string
+  cwd?: string
+  runtimeWorkspaceRoots?: string[]
+  approvalPolicy?: string
+  approvalsReviewer?: string
   threadId: string
   reportedPermissionMode?: string | null
   supersededThreadId?: string
@@ -67,20 +77,56 @@ export async function openCodexThread(
     model?: string
     threadConfig?: Record<string, unknown>
     commandEnv?: Record<string, string>
+    execution?: { profileId: string }
   },
   /** null: no deadline; the start that opens the thread bounds it (`signal`). */
   timeoutMs: number | null | undefined,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onStartingFreshThread?: () => void
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
-  const config = { ...launch.threadConfig, ...shellEnvironmentSetConfig(launch.commandEnv) }
+  if (launch.execution && resumeThreadId) {
+    throw new Error('A bounded Codex thread cannot resume.')
+  }
+  const config = {
+    ...launch.threadConfig,
+    ...shellEnvironmentSetConfig(launch.execution ? undefined : launch.commandEnv),
+    ...(launch.execution ? await codexExecutionThreadConfig(connection, launch.cwd) : {})
+  }
   const threadSettings = {
     cwd: launch.cwd,
-    ...launch.permissionPolicy,
+    ...(launch.execution
+      ? {
+          dynamicTools: [
+            {
+              type: 'function',
+              name: 'orca_worker_report',
+              description:
+                'Report the result of the one admitted task to its Orca owner. Call once after verification.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', enum: ['succeeded', 'failed', 'needs_context'] },
+                  summary: { type: 'string', minLength: 1, maxLength: 8192 }
+                },
+                required: ['status', 'summary'],
+                additionalProperties: false
+              }
+            }
+          ],
+          permissions: launch.execution.profileId,
+          runtimeWorkspaceRoots: [launch.cwd],
+          approvalPolicy: 'never',
+          approvalsReviewer: 'user',
+          allowProviderModelFallback: false,
+          modelProvider: 'openai'
+        }
+      : launch.permissionPolicy),
     ...(Object.keys(config).length > 0 ? { config } : {})
   }
   const startThread = (): Promise<unknown> => {
     throwIfSignalAborted(signal)
+    onStartingFreshThread?.()
     return connection.request(
       'thread/start',
       { ...threadSettings, ...(launch.model ? { model: launch.model } : {}) },
@@ -141,10 +187,14 @@ export async function openCodexThread(
   if (!threadId) {
     throw new Error('codex app-server did not name the thread it opened')
   }
+  if (launch.execution) {
+    await assertCodexExecutionToolsDisabled(connection, threadId)
+  }
   if (supersededThreadId === undefined && resumeThreadId && threadId !== resumeThreadId) {
     throw new Error(`codex app-server resumed ${threadId} instead of ${resumeThreadId}`)
   }
   const result = opened as Record<string, unknown>
+  const profile = result.activePermissionProfile
   const thread =
     typeof result.thread === 'object' && result.thread !== null
       ? (result.thread as Record<string, unknown>)
@@ -154,7 +204,22 @@ export async function openCodexThread(
   const serviceTierKnown = Object.hasOwn(result, 'serviceTier')
   const serviceTier = nonEmptyString(result.serviceTier)
   const sandbox = readCodexSandboxPolicy(result.sandbox)
+  const cwd = nonEmptyString(result.cwd)
+  const approvalPolicy = nonEmptyString(result.approvalPolicy ?? result.approval_policy)
+  const approvalsReviewer = nonEmptyString(result.approvalsReviewer ?? result.approvals_reviewer)
   return {
+    ...(Array.isArray(result.runtimeWorkspaceRoots) &&
+    result.runtimeWorkspaceRoots.length <= 64 &&
+    result.runtimeWorkspaceRoots.every((value) => typeof value === 'string')
+      ? { runtimeWorkspaceRoots: [...result.runtimeWorkspaceRoots] }
+      : {}),
+    ...(profile && typeof profile === 'object' && 'id' in profile && typeof profile.id === 'string'
+      ? { activePermissionProfile: { id: profile.id } }
+      : {}),
+    ...(typeof result.modelProvider === 'string' ? { modelProvider: result.modelProvider } : {}),
+    ...(cwd ? { cwd } : {}),
+    ...(approvalPolicy ? { approvalPolicy } : {}),
+    ...(approvalsReviewer ? { approvalsReviewer } : {}),
     threadId,
     reportedPermissionMode: reportedCodexPermissionMode(result),
     ...(supersededThreadId === undefined ? {} : { supersededThreadId }),

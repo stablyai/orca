@@ -61,7 +61,8 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
         await closing
       }
     },
-    profileShutdown.checkpoint
+    profileShutdown.checkpoint,
+    options.noAgentHookSync
   )
   const version = getAppEnvironment().getVersion()
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
@@ -76,14 +77,12 @@ async function activateOrcadRuntime(
   // Overlap login-shell probing with imports and store startup.
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
   const { startOrcadDaemon, stopOrcadDaemon } = await import('../daemon/orcad-daemon-supervision')
-  // The daemon and its PTYs inherit the adopted login env and nothing later startup writes, so it
-  // spawns as soon as that lands, alongside imports, stores and hooks. Rejects only when supervised.
+  // PTYs must inherit the adopted login environment before later startup writes.
   const daemonStartup = loginEnvironment.then(() => timed('daemon', () => startOrcadDaemon()))
   // Observed now: an early abort may never reach the await below.
   void daemonStartup.catch(() => {})
   // Registered first, so it runs last (cleanups run in reverse) and covers an import that throws
-  // mid-spawn. It disconnects without killing daemon PTYs that must survive restart, after an
-  // in-flight spawn settles; a failed one leaves only the disconnect to do.
+  // mid-spawn. Disconnect only after it settles, retaining PTYs that must survive restart.
   registerCleanup(() => daemonStartup.catch(() => {}).then(() => stopOrcadDaemon()))
   const { OrcaRuntimeService } = await import('../../runtime/orca-runtime')
   const { createOrcadRuntimeRpcServer } = await import('./orcad-runtime-rpc')
@@ -106,13 +105,11 @@ async function activateOrcadRuntime(
   const { agentHookRuntimeDeps } = await import('../../agent-hooks/runtime/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
     await import('../../agent-hooks/runtime/hook-status-session-tabs-republish')
-  const { startOrcadAgentHookServer, startOrcadManagedAgentHooks } =
-    await import('./orcad-managed-agent-hooks')
+  const agentHooks = await import('./orcad-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../../runtime/terminal/identity/agent-status-observed-pane-identity')
 
-  const { disposeWatcherProcessAndWait } =
-    await import('../../ipc/filesystem/watcher-process/parcel-watcher-process')
+  const watcherProcess = await import('../../ipc/filesystem/watcher-process/parcel-watcher-process')
 
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
@@ -123,7 +120,7 @@ async function activateOrcadRuntime(
   registerCleanup(() => uninstallObservedStatusIdentity())
   registerCleanup(profileShutdown.finalize)
   registerCleanup(stopOrcadStructuredAgentSessions)
-  registerCleanup(() => disposeWatcherProcessAndWait())
+  registerCleanup(() => watcherProcess.disposeWatcherProcessAndWait())
   const { DesktopPushService } = await import('../../runtime/push/desktop-push-service')
   const { resolvePushGatewayOrigin } = await import('../../runtime/push/push-gateway-origin')
 
@@ -152,7 +149,7 @@ async function activateOrcadRuntime(
   // Subscribe before hooks start so early turns are counted.
   const { startOrcadStats } = await import('./orcad-stats')
   const stats = startOrcadStats(runtimeUserDataPath, agentHookServer, registerCleanup)
-  await startOrcadAgentHookServer(agentHookServer, {
+  await agentHooks.startOrcadAgentHookServer(agentHookServer, {
     env: 'production',
     userDataPath: runtimeUserDataPath,
     statusHooksEnabled: isAgentStatusHooksEnabled(profileStore.getSettings())
@@ -160,10 +157,11 @@ async function activateOrcadRuntime(
 
   // Reconcile, daemon and runtime all consume this environment.
   await timed('login-env-wait', () => loginEnvironment)
-  const managedAgentHooks = startOrcadManagedAgentHooks(
+  const managedAgentHooks = agentHooks.startOrcadManagedAgentHooks(
     profileStore,
     (enabled) => agentHookServer.setStatusHooksEnabled(enabled),
-    registerCleanup
+    registerCleanup,
+    !options.noAgentHookSync
   )
 
   // Install the daemon provider before PTY handlers can route their first call.
@@ -183,6 +181,7 @@ async function activateOrcadRuntime(
   const { createOrcadAccountServices } = await import('../account-launch/orcad-account-services')
   const accountLaunch = createOrcadAccountServices({
     store: profileStore,
+    noAgentHookSync: options.noAgentHookSync,
     setClaudeStatusLineListener: (listener) =>
       agentHookServer.setClaudeStatusLineListener(listener),
     registerCleanup,
@@ -297,9 +296,8 @@ async function activateOrcadRuntime(
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
   agentHookServer.setClaudePermissionHolds(runtime.terminalWorkerApprovals)
   // First RPC clients must see a fully published graph.
-  const { publishHeadlessRuntimeGraph } =
-    await import('../../runtime/session-graph/headless-runtime-graph')
-  publishHeadlessRuntimeGraph(runtime)
+  const runtimeGraph = await import('../../runtime/session-graph/headless-runtime-graph')
+  runtimeGraph.publishHeadlessRuntimeGraph(runtime)
   // Only the runtime can identify running shells and install deferred migrated history.
   void runtime.installPendingOrcadMigrationShellHistory().catch((error: unknown) => {
     console.error('[orcad-migration] installing pending shell history failed:', error)
@@ -340,7 +338,7 @@ async function activateOrcadRuntime(
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
   reportStartupTiming()
-  managedAgentHooks.readinessPublished()
+  managedAgentHooks?.readinessPublished()
 
   await idleExitStartup.start({
     rpc,

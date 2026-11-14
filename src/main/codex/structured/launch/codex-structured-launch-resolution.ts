@@ -1,3 +1,4 @@
+import { readCodexExecutionExecutable } from './codex-execution-executable'
 import { pathEnvRelativeTo } from '../../../../shared/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import {
@@ -31,6 +32,8 @@ import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permis
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import { codexOrcaHooksOffArgs } from './codex-structured-orca-hooks-off'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
+import { codexExecutionLaunch } from './codex-execution-controls'
+import { codexProjectConfigIsolationArgs } from '../catalog/codex-project-config-isolation'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
@@ -128,6 +131,7 @@ export function codexStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<CodexStructuredLaunch> {
   return async (basis) => {
     const { record } = basis
+    const execution = codexExecutionLaunch(record)
     const recordHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const { command, prefixArgs } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
@@ -136,14 +140,21 @@ export function codexStructuredLaunchPart(
       resolveEnvironment: basis.environment
     })
     const environment = await basis.environment()
-    const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.nativeId ?? null
     // Match the first turn's model to avoid duplicate prompt injection on a model switch.
     const model = record.options?.model
-    const visuals = await basis.visuals()
+    const visuals = execution ? null : await basis.visuals()
     const launchDirectory = await basis.launchDirectory()
-    const selectedHome = await deps.prepareLaunchAccountHome?.(record, launchDirectory)
+    const args = execution
+      ? [...execution.args, ...(await codexProjectConfigIsolationArgs(launchDirectory))]
+      : codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
+    const executable = execution
+      ? await readCodexExecutionExecutable(command, prefixArgs, launchDirectory, environment)
+      : undefined
+    const selectedHome = execution
+      ? undefined
+      : await deps.prepareLaunchAccountHome?.(record, launchDirectory)
     const accountHome = selectedHome
       ? requireLegacyAgentSessionAccountHome(selectedHome)
       : recordHome
@@ -165,18 +176,29 @@ export function codexStructuredLaunchPart(
         // Before the user's args: a later -c table replaces this one, so their hooks.state wins.
         args: [
           ...prefixArgs,
-          ...codexOrcaHooksOffArgs(
-            accountHome.path || environment?.CODEX_HOME || getSystemCodexHomePath()
-          ),
+          ...(execution
+            ? []
+            : codexOrcaHooksOffArgs(
+                accountHome.path || environment?.CODEX_HOME || getSystemCodexHomePath()
+              )),
           ...args,
           'app-server'
         ],
         codexHome: accountHome.path,
         resumeThreadId,
+        ...(execution
+          ? {
+              execution: {
+                policy: execution.policy,
+                profileId: execution.profileId,
+                ...(executable ? { executable } : {})
+              }
+            }
+          : {}),
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
         ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
         // Own settings leaves a new thread to config and a resumed thread to its saved policy.
-        ...(basis.permissionMode === 'own'
+        ...(execution || basis.permissionMode === 'own'
           ? {}
           : { permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask') }),
         ...(model ? { model } : {}),
@@ -188,6 +210,9 @@ export function codexStructuredLaunchPart(
       ),
       // Clear inherited scratch paths that may belong to another chat.
       inheritedEnvToDelete: [
+        ...(execution
+          ? ['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'CHATGPT_BASE_URL']
+          : []),
         ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ],

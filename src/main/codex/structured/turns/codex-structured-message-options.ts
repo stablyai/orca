@@ -1,4 +1,5 @@
 import { pickedSkillsInText } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { prepareCodexExecutionInput } from './codex-execution-input'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import type { CodexTurnHost } from './codex-structured-turn-start'
@@ -7,6 +8,7 @@ import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/age
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { StructuredAgentSessionAdmitFreshInput } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { codexSessionCapabilities } from '../catalog/codex-structured-catalog-entry'
@@ -15,6 +17,18 @@ import {
   codexEffectiveModel,
   codexTurnRequestOptions
 } from '../catalog/codex-structured-service-tier'
+
+export type CodexTurnInput = {
+  clientMessageId: string
+  body: AgentJournalMessageItem
+  requestedAt?: number
+  turnOptions?: Readonly<Record<string, string>>
+  executionOptions?: AgentSessionExecutionOptions
+  signal?: AbortSignal
+  isCurrent?: () => boolean
+  admitFreshInput?: StructuredAgentSessionAdmitFreshInput
+  beforeWrite?: () => void
+}
 
 export function resolvedCodexGoalSettings(
   _session: CodexSession,
@@ -104,7 +118,8 @@ export function readCodexAppliedInputOptions(
 export async function prepareCodexMessageDispatch(
   session: CodexSession,
   input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0],
-  registered: () => boolean
+  registered: () => boolean,
+  readExecution: NonNullable<StructuredAgentSessionAdapter['readExecutionEvidence']>
 ) {
   const checkAbort = () => {
     if (input.signal?.aborted) {
@@ -127,9 +142,17 @@ export async function prepareCodexMessageDispatch(
     throw error
   })
   checkAbort()
+  const beforeWrite = await prepareCodexExecutionInput(
+    session,
+    input,
+    turnOptions,
+    registered,
+    readExecution
+  )
   return {
     ...input,
     turnOptions,
+    ...(beforeWrite ? { beforeWrite } : {}),
     isCurrent: () =>
       registered() &&
       !session.ended &&

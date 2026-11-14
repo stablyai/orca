@@ -46,6 +46,7 @@ import {
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import { admitCommandReceiptMutation } from './structured-agent-session-command-admission'
+import { advisoryOperationRefusal } from './structured-agent-session-advisory-operation'
 
 import {
   AGENT_SESSION_NOT_ATTACHED,
@@ -102,6 +103,13 @@ async function admitAndRunAgentSessionMutationUnchecked<TValue>(
   const conflict = agentSessionFingerprintConflict(envelope, hostFingerprint)
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
+  }
+  const advisoryRefusal = advisoryOperationRefusal(
+    request.store.getRecord(envelope.sessionId),
+    plan.method
+  )
+  if (advisoryRefusal) {
+    return refuseAgentSessionMutation(advisoryRefusal)
   }
   if (plan.commandReceipt) {
     return admitCommandReceiptMutation(request, hostFingerprint, plan.commandReceipt)

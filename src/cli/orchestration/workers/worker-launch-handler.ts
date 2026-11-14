@@ -21,11 +21,13 @@ import { explainOlderRuntimeRunRequired } from '../recovery/older-runtime-run-bi
 import { withResolvedNextCommands } from '../recovery/orchestration-mutation-recovery'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { refuseAgentServerRoute } from '../identity/agent-server-route'
+import { readWorkerBoundedPolicies } from './worker-bounded-policy'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async (ctx) => {
     const { flags, client, cwd, json } = ctx
     await refuseAgentServerRoute('worker-start', ctx)
+    const policies = await readWorkerBoundedPolicies(flags, cwd, client)
     const terminal = getPresentStringFlag(flags, 'terminal')
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
@@ -77,6 +79,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       agent: getOptionalStringFlag(flags, 'agent'),
       model,
       effort,
+      ...policies,
       terminal,
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),

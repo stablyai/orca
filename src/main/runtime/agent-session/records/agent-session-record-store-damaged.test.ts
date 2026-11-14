@@ -149,4 +149,188 @@ describe('damaged saved conversation observations', () => {
     })
     expect(store.getConversation('session-beta')).toBeNull()
   })
+
+  it('persists a bounded advisory policy without exposing its artifact text in conversation metadata', async () => {
+    const store = await open()
+    const request = {
+      ...reserveRequest(),
+      advisoryPolicy: {
+        schema: 1 as const,
+        dataScope: 'published' as const,
+        sourcePin: 'a'.repeat(40),
+        deadlineAt: NOW + 300_000,
+        maxModelCalls: 4,
+        artifacts: [
+          {
+            path: 'note.txt',
+            text: 'hello',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+          }
+        ]
+      }
+    }
+    await store.founding.commit(request)
+    request.advisoryPolicy.artifacts[0]!.text = 'changed input'
+    expect(store.getRecord('session-alpha')?.advisoryPolicy?.artifacts[0]?.text).toBe('hello')
+    const reopened = await open()
+    expect(reopened.getRecord('session-alpha')?.schemaVersion).toBe(3)
+    expect(reopened.getRecord('session-alpha')?.advisoryPolicy?.artifacts).toEqual([
+      {
+        path: 'note.txt',
+        text: 'hello',
+        sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+      }
+    ])
+    expect(JSON.stringify(reopened.listConversations())).not.toContain('hello')
+    expect(reopened.getConversation('session-alpha')).not.toHaveProperty('advisoryPolicy')
+  })
+
+  it('retains an unreadable constrained record if its version is downgraded', async () => {
+    const store = await open()
+    await store.founding.commit(reserveRequest())
+    await editPersistedTestAgentSessionStore(directory, (persisted) => {
+      Object.assign(persisted.records['session-alpha'], {
+        advisoryPolicy: {
+          schema: 1,
+          dataScope: 'published',
+          sourcePin: 'a'.repeat(40),
+          deadlineAt: NOW + 300_000,
+          maxModelCalls: 4,
+          artifacts: [
+            {
+              path: 'note.txt',
+              text: 'hello',
+              sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+            }
+          ]
+        }
+      })
+    })
+    const reopened = await open()
+    expect(reopened.getRecord('session-alpha')).toBeNull()
+    expect(reopened.selectWritableRecord('session-alpha').kind).toBe('unreadable')
+    await expect(reopened.reserveOwner(reserveRequest({ expectedFence: 1 }))).rejects.toMatchObject(
+      { refusal: { code: 'execution_owner_reconciling', details: { reason: 'recordUnreadable' } } }
+    )
+  })
+
+  it('does not grant a bounded advisor another owner after a proven exit and restart', async () => {
+    const store = await open()
+    await store.founding.commit({
+      ...reserveRequest(),
+      advisoryPolicy: {
+        schema: 1,
+        dataScope: 'published',
+        sourcePin: 'a'.repeat(40),
+        deadlineAt: NOW + 300_000,
+        maxModelCalls: 4,
+        artifacts: [
+          {
+            path: 'note.txt',
+            text: 'hello',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+          }
+        ]
+      }
+    })
+    const owner = await establishOwner(store, { expectedFence: 1 })
+    const released = await store.evictProvenDeadOwner({
+      sessionId: 'session-alpha',
+      expectedFence: owner.lease.runtimeFence,
+      probe: { outcome: 'pid-absent' },
+      now: NOW + 100
+    })
+    const reopened = await open()
+    await reopened.reconcileOnRestart({
+      probe: async () => ({ outcome: 'pid-absent' }),
+      now: NOW + 150
+    })
+    await expect(
+      reopened.reserveOwner(
+        reserveRequest({
+          expectedFence: released.lease.runtimeFence,
+          probe: { outcome: 'pid-absent' },
+          now: NOW + 200
+        })
+      )
+    ).rejects.toMatchObject({
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'advisoryAlreadyStarted' }
+      }
+    })
+  })
+
+  it('refuses first acquisition when an unstarted advisor deadline has passed', async () => {
+    const store = await open()
+    await store.founding.commit({
+      ...reserveRequest(),
+      advisoryPolicy: {
+        schema: 1,
+        dataScope: 'published',
+        sourcePin: 'a'.repeat(40),
+        deadlineAt: NOW + 100,
+        maxModelCalls: 4,
+        artifacts: [
+          {
+            path: 'note.txt',
+            text: 'hello',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+          }
+        ]
+      }
+    })
+    await expect(
+      store.reserveOwner(reserveRequest({ expectedFence: 1, now: NOW + 200 }))
+    ).rejects.toMatchObject({
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'advisoryDeadlinePassed' }
+      }
+    })
+  })
+
+  it.each([false, true])(
+    'refuses adding or replacing an advisory policy on an existing record (%s)',
+    async (bounded) => {
+      const store = await open()
+      const original = {
+        schema: 1 as const,
+        dataScope: 'published' as const,
+        sourcePin: 'a'.repeat(40),
+        deadlineAt: NOW + 300_000,
+        maxModelCalls: 4,
+        artifacts: [
+          {
+            path: 'note.txt',
+            text: 'hello',
+            sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+          }
+        ]
+      }
+      await store.founding.commit({
+        ...reserveRequest(),
+        ...(bounded ? { advisoryPolicy: original } : {})
+      })
+      const replacement = {
+        ...original,
+        sourcePin: 'b'.repeat(40),
+        artifacts: [
+          {
+            path: 'note.txt',
+            text: 'world',
+            sha256: '486ea46224d1bb4fb680f34f7c9ad96a8f24ec88be73ea8e5a6c65260e9cb8a7'
+          }
+        ]
+      }
+      await expect(
+        store.reserveOwner({ ...reserveRequest({ expectedFence: 1 }), advisoryPolicy: replacement })
+      ).rejects.toMatchObject({
+        refusal: {
+          code: 'agent_session_operation_invalid',
+          details: { reason: 'advisoryPolicyMismatch' }
+        }
+      })
+    }
+  )
 })

@@ -31,8 +31,12 @@ export function startOrcadAgentHookServer(
 export function startOrcadManagedAgentHooks(
   store: Pick<ProfilePreferences, 'getSettings' | 'onSettingsChanged'>,
   setStatusHooksEnabled: (enabled: boolean) => void,
-  registerCleanup: (cleanup: BackendServiceCleanup) => void
-): { readinessPublished: () => void } {
+  registerCleanup: (cleanup: BackendServiceCleanup) => void,
+  sync = true
+): { readinessPublished: () => void } | null {
+  if (!sync) {
+    return null
+  }
   const published = Promise.withResolvers<void>()
   let stopping = false
   const agentView = getClaudeAgentViewService()

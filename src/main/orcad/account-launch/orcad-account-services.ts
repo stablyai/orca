@@ -47,6 +47,7 @@ type OrcadAccountServices = {
 /** WSL accounts remain desktop-owned, including pushed CODEX_HOME and structured launch selection. */
 export function createOrcadAccountServices(args: {
   store: Store
+  noAgentHookSync?: boolean
   setClaudeStatusLineListener: (
     listener: ((event: ClaudeStatusLineRateLimits) => void) | null
   ) => void
@@ -63,6 +64,7 @@ export function createOrcadAccountServices(args: {
   }
   const { store, clientCodexHomes } = args
   const services = createProviderAccountServices(store, {
+    noAgentHookSync: args.noAgentHookSync,
     setClaudeStatusLineListener: args.setClaudeStatusLineListener
   })
   args.registerCleanup(() => {

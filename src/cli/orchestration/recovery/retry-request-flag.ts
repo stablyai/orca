@@ -17,3 +17,25 @@ export function readRetryRequestFlag(flags: Map<string, string | boolean>): stri
   }
   return value
 }
+
+/** A caller-supplied key can outlive the CLI process; it does not prove a first effect. */
+export function readRequestIdFlag(flags: Map<string, string | boolean>): string | undefined {
+  const value = flags.get('request-id')
+  rejectValuelessFlag(value, 'request-id')
+  if (value === undefined) {
+    return undefined
+  }
+  if (!isOrchestrationRetryRequestId(value)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--request-id must be a caller-generated UUID persisted before sending.'
+    )
+  }
+  if (flags.has('retry-request')) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--request-id and --retry-request cannot be combined.'
+    )
+  }
+  return value
+}

@@ -15,6 +15,7 @@ import {
   codexChildWorkSink
 } from '../background-work/codex-background-task-tracker'
 import type { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
+import { bindCodexExecutionCheckpoint } from './codex-execution-receipt'
 import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-identity'
@@ -57,7 +58,7 @@ type CodexOpenContext = {
   translator: CodexJournalTranslator | null
   dispatchEchoes: CodexDispatchEchoes
   subagentExecutions: CodexSubagentExecutions
-  setPrimaryThreadId: (threadId: string) => void
+  setPrimaryThreadId: (threadId: string | null) => void
   forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
   unbindReadingControl?: () => void
 }
@@ -79,6 +80,7 @@ export async function openCodexStructuredSession(
     throw new Error('codex open does not match the spawned child')
   }
   const current = (): void => {
+    attempt.window.execution?.controls.assertOpen()
     throwIfSignalAborted(openInput.signal)
     if (attempt.exitError) {
       throw attempt.exitError
@@ -92,6 +94,14 @@ export async function openCodexStructuredSession(
     openInput.signal
   )
   current()
+  if (launch.execution) {
+    // Initial account loading can notify during the first read; settle it before admission evidence.
+    await waitForPromiseWithSignal(
+      connection.request('account/read', { refreshToken: false }, { timeoutMs: 2_000 }),
+      openInput.signal
+    )
+    current()
+  }
   const threadLaunch = await waitForPromiseWithSignal(
     withCodexVisualsThreadConfig(connection, launch, {
       sessionId,
@@ -110,7 +120,8 @@ export async function openCodexStructuredSession(
       { ...threadLaunch, commandEnv },
       // Long rollout/MCP setup relies on the host ceiling and cancellation unless a timeout is supplied.
       deps.requestTimeoutMs ?? null,
-      openInput.signal
+      openInput.signal,
+      () => start.setPrimaryThreadId(null)
     ),
     openInput.signal
   )
@@ -118,6 +129,12 @@ export async function openCodexStructuredSession(
   start.setPrimaryThreadId(opened.threadId)
   attempt.window.appliedSettings.observe(opened)
   const returnedTurns = Array.isArray(opened.thread?.turns) ? opened.thread.turns : []
+  attempt.window.usageMeter.open(
+    opened.threadId,
+    (launch.resumeThreadId === null || !!opened.supersededThreadId) && returnedTurns.length === 0,
+    { ...opened, modelProvider: opened.modelProvider ?? opened.thread?.modelProvider },
+    deps.now?.() ?? Date.now()
+  )
   if (
     translator &&
     input.events &&
@@ -158,7 +175,27 @@ export async function openCodexStructuredSession(
         : undefined
       : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
+  if (attempt.window.execution) {
+    attempt.window.execution.toolsIsolated = true
+    attempt.window.execution.openedWorkspaceRoots = opened.runtimeWorkspaceRoots
+  }
+  attempt.window.nativeExecutionSettings = {
+    ...opened,
+    modelProvider: opened.modelProvider ?? opened.thread?.modelProvider,
+    sandboxPolicy: opened.sandbox
+  }
   const session: CodexSession = {
+    usageMeter: attempt.window.usageMeter,
+    ...(attempt.window.execution ? { execution: attempt.window.execution } : {}),
+    get nativeExecutionSettings() {
+      return attempt.window.nativeExecutionSettings
+    },
+    ...(typeof opened.thread?.modelProvider === 'string'
+      ? { modelProvider: opened.thread.modelProvider }
+      : {}),
+    get authRevision() {
+      return attempt.window.authRevision
+    },
     events: input.events,
     account: start.account,
     codexHome: launch.codexHome,
@@ -167,6 +204,9 @@ export async function openCodexStructuredSession(
     threadId: opened.threadId,
     historyMode: opened.historyMode,
     permissions: {
+      ...(opened.cwd ? { reportedCwd: opened.cwd } : {}),
+      ...(opened.approvalPolicy ? { approvalPolicy: opened.approvalPolicy } : {}),
+      ...(opened.approvalsReviewer ? { approvalsReviewer: opened.approvalsReviewer } : {}),
       acquiredMode: input.permissionMode ?? 'ask',
       ...(opened.sandbox ? { acquiredSandbox: opened.sandbox } : {}),
       launchSandboxIntact: true,
@@ -202,6 +242,7 @@ export async function openCodexStructuredSession(
     ...(start.unbindReadingControl ? { unbindReadingControl: start.unbindReadingControl } : {})
   }
   current()
+  bindCodexExecutionCheckpoint(session)
   sessions.set(sessionId, session)
   for (const event of attempt.window.drain()) {
     event()

@@ -1,0 +1,263 @@
+import { expect, it } from 'vitest'
+import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
+import {
+  acquireReadyCodexForTest,
+  adapterFor,
+  fakeCodex,
+  identityFor,
+  THREAD_ID
+} from './codex-structured-session-adapter-fixture'
+
+async function fixture(
+  options: { resumed?: boolean; rerouteBeforeOpen?: boolean; replaceUnsaved?: boolean } = {}
+) {
+  const settings = { model: 'gpt-live', effort: 'low', modelProvider: 'openai' }
+  const openedThreadId = options.replaceUnsaved ? 'thread-replacement' : THREAD_ID
+  const codex = fakeCodex({
+    'account/read': () => ({
+      account: { type: 'chatgpt', id: 'account-1', email: 'private@invalid.test', planType: 'pro' }
+    }),
+    'thread/start': () => {
+      if (options.rerouteBeforeOpen) {
+        codex.connections[0]!.handlers.onNotification?.('model/rerouted', {
+          threadId: openedThreadId,
+          turnId: 'opening-turn',
+          fromModel: 'gpt-live',
+          toModel: 'gpt-other',
+          reason: 'capacity'
+        })
+      }
+      return {
+        thread: { id: openedThreadId, modelProvider: 'openai', status: { type: 'idle' } },
+        model: 'gpt-live',
+        reasoningEffort: 'low',
+        modelProvider: 'openai'
+      }
+    },
+    'thread/resume': () => {
+      if (options.replaceUnsaved) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          `no rollout found for thread id ${THREAD_ID}`
+        )
+      }
+      return {
+        thread: { id: THREAD_ID, modelProvider: 'openai', status: { type: 'idle' } },
+        model: 'gpt-live',
+        reasoningEffort: 'low',
+        modelProvider: 'openai'
+      }
+    }
+  })
+  const adapter = adapterFor(codex, {
+    resumeThreadId: options.resumed ? THREAD_ID : null,
+    ...(options.replaceUnsaved ? { supersedeIfUnsaved: true } : {})
+  })
+  await acquireReadyCodexForTest(adapter, {
+    identity:
+      options.rerouteBeforeOpen && !options.replaceUnsaved
+        ? { ...identityFor('session-1'), providerHandle: null }
+        : identityFor('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9'
+  })
+  const read = () => adapter.readUsageMeter({ sessionId: 'session-1', fence: 7 })
+  const notify = (method: string, params: unknown) =>
+    codex.connections[0]!.handlers.onNotification?.(method, params)
+  const usage = (total = 99, threadId = THREAD_ID) =>
+    notify('thread/tokenUsage/updated', {
+      threadId,
+      tokenUsage: {
+        total: {
+          totalTokens: total,
+          inputTokens: total - 19,
+          cachedInputTokens: 32,
+          outputTokens: 19,
+          reasoningOutputTokens: 12
+        }
+      }
+    })
+  return { adapter, codex, read, notify, usage, settings }
+}
+
+it('reads an actual held account and cumulative tokens without requiring worker execution permissions', async () => {
+  const f = await fixture()
+  try {
+    const before = await f.read()
+    expect(before?.meter).toMatchObject({
+      version: 1,
+      agent: 'codex',
+      sessionId: 'session-1',
+      runtimeFence: 7,
+      acquisitionGeneration: 'generation-1',
+      model: 'gpt-live',
+      effort: 'low',
+      scope: 'primary-thread',
+      quiescent: true,
+      origin: 'fresh-thread',
+      account: {
+        fingerprint: 'codex:07e998012c1137decdf3efbbb1c3ee6d79b015638cbc197bdbcce1875de4faad',
+        plan: 'pro'
+      },
+      usage: { threadId: THREAD_ID, totalTokens: 0, inputTokens: 0, outputTokens: 0 }
+    })
+    f.usage(900, 'foreign-thread')
+    f.usage()
+    const after = await f.read()
+    expect(after?.meter).toMatchObject({
+      origin: 'provider-counter',
+      usage: {
+        totalTokens: 99,
+        inputTokens: 80,
+        cachedInputTokens: 32,
+        outputTokens: 19,
+        reasoningOutputTokens: 12
+      }
+    })
+    expect(after?.meter.meterId).toBe(before?.meter.meterId)
+    expect(before?.isCurrent()).toBe(false)
+    expect(JSON.stringify(after?.meter)).not.toMatch(/private@|account-1/)
+    expect(await f.adapter.readUsageMeter({ sessionId: 'session-1', fence: 8 })).toBeNull()
+  } finally {
+    await f.adapter.closeAll()
+  }
+})
+
+it('never assumes a zero baseline for a resumed thread and keeps counter corruption unknown', async () => {
+  const f = await fixture({ resumed: true })
+  try {
+    expect(await f.read()).toBeNull()
+    f.usage()
+    expect((await f.read())?.meter.usage.totalTokens).toBe(99)
+    f.usage(98)
+    expect(await f.read()).toBeNull()
+    f.usage(120)
+    expect(await f.read()).toBeNull()
+  } finally {
+    await f.adapter.closeAll()
+  }
+})
+
+it.each([
+  { hasCounter: false, threadId: THREAD_ID },
+  { hasCounter: true, threadId: THREAD_ID },
+  { hasCounter: false, threadId: undefined },
+  { hasCounter: true, threadId: undefined }
+])(
+  'keeps primary or unscopable reroute usage unverifiable: %j',
+  async ({ hasCounter, threadId }) => {
+    const f = await fixture()
+    try {
+      if (hasCounter) {
+        f.usage()
+      }
+      const before = await f.read()
+      const reroute = {
+        threadId: 'foreign-thread',
+        turnId: 'turn-1',
+        fromModel: 'gpt-live',
+        toModel: 'gpt-other',
+        reason: 'capacity'
+      }
+      f.notify('model/rerouted', reroute)
+      expect(before?.isCurrent()).toBe(true)
+      f.notify('model/rerouted', { ...reroute, threadId })
+      expect(before?.isCurrent()).toBe(false)
+      expect(await f.read()).toBeNull()
+      f.usage(120)
+      expect(await f.read()).toBeNull()
+    } finally {
+      await f.adapter.closeAll()
+    }
+  }
+)
+
+it('keeps usage unknown when a reroute arrives before the primary opening reply', async () => {
+  const f = await fixture({ rerouteBeforeOpen: true })
+  try {
+    expect(await f.read()).toBeNull()
+    f.usage()
+    expect(await f.read()).toBeNull()
+  } finally {
+    await f.adapter.closeAll()
+  }
+})
+
+it('keeps a replacement thread reroute unknown after its unsaved predecessor cannot resume', async () => {
+  const f = await fixture({ resumed: true, rerouteBeforeOpen: true, replaceUnsaved: true })
+  try {
+    expect(await f.read()).toBeNull()
+    f.usage(99, 'thread-replacement')
+    expect(await f.read()).toBeNull()
+  } finally {
+    await f.adapter.closeAll()
+  }
+})
+
+it('requires a new provider counter after every turn before measuring another interval', async () => {
+  const f = await fixture()
+  try {
+    f.usage()
+    expect((await f.read())?.meter.usage.totalTokens).toBe(99)
+    f.notify('turn/started', { threadId: THREAD_ID, turn: { id: 'missing-counter' } })
+    f.notify('turn/completed', {
+      threadId: THREAD_ID,
+      turn: { id: 'missing-counter', status: 'completed' }
+    })
+    expect(await f.read()).toBeNull()
+    f.usage(120)
+    expect((await f.read())?.meter.usage.totalTokens).toBe(120)
+    f.notify('thread/status/changed', { threadId: THREAD_ID, status: { type: 'active' } })
+    f.notify('thread/status/changed', { threadId: THREAD_ID, status: { type: 'idle' } })
+    expect(await f.read()).toBeNull()
+  } finally {
+    await f.adapter.closeAll()
+  }
+})
+
+it('changes the meter identity after model or account changes even when the original values return', async () => {
+  const f = await fixture()
+  try {
+    f.usage()
+    const before = await f.read()
+    f.notify('thread/settings/updated', {
+      threadId: THREAD_ID,
+      threadSettings: { ...f.settings, model: 'other' }
+    })
+    f.notify('thread/settings/updated', { threadId: THREAD_ID, threadSettings: f.settings })
+    expect(await f.read()).toBeNull()
+    f.usage(120)
+    const changed = await f.read()
+    expect(changed?.meter.meterId).not.toBe(before?.meter.meterId)
+    f.notify('account/updated', {})
+    f.usage(140)
+    expect((await f.read())?.meter.meterId).not.toBe(changed?.meter.meterId)
+  } finally {
+    await f.adapter.closeAll()
+  }
+})
+
+it('discards an account-read race and never treats an active turn as a zero-cost interval', async () => {
+  const f = await fixture()
+  const account = Promise.withResolvers<unknown>()
+  try {
+    f.codex.routes['account/read'] = () => account.promise
+    const reading = f.read()
+    f.notify('account/updated', {})
+    account.resolve({ account: { type: 'chatgpt', id: 'account-1', planType: 'pro' } })
+    expect(await reading).toBeNull()
+    expect((await f.read())?.meter.usage.totalTokens).toBe(0)
+    f.notify('turn/started', { threadId: THREAD_ID, turn: { id: 'turn-1' } })
+    expect(await f.read()).toBeNull()
+    f.usage()
+    expect(await f.read()).toBeNull()
+    f.notify('turn/completed', { threadId: THREAD_ID, turn: { id: 'turn-1', status: 'completed' } })
+    expect((await f.read())?.meter.usage.totalTokens).toBe(99)
+    f.codex.routes['account/read'] = () => ({ account: { type: 'apiKey' } })
+    expect(await f.read()).toBeNull()
+  } finally {
+    account.resolve({})
+    await f.adapter.closeAll()
+  }
+})

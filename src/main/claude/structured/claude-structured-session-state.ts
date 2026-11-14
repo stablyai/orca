@@ -29,6 +29,8 @@ import type { AgentSessionProviderHandleLink } from '../../../shared/agent-sessi
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-invocation'
 import type { ClaudeInitializeFacts } from './claude-structured-session-startup'
+import type { AgentSessionAdvisoryReporterFactory } from '../../../shared/agent-session/agent-session-advisory-report'
+import type { AgentSessionAdvisoryReceiptWrite } from '../../../shared/agent-session/agent-session-advisory-receipt'
 
 export type {
   ClaudeAuthDiagnostic,
@@ -49,6 +51,8 @@ export type ClaudeLateDispatchOutcome =
   | { clientMessageId: string; state: 'unknown'; reason: string }
 
 export type ClaudeStructuredSessionAdapterDeps = {
+  prepareAdvisoryReporter?: AgentSessionAdvisoryReporterFactory
+  onAdvisoryReceipt?: (input: AgentSessionAdvisoryReceiptWrite) => Promise<void>
   namingInputs?: (record: AgentSessionRecord) => Promise<ClaudeNamingInputs>
   namingRecord?: (sessionId: string) => AgentSessionRecord | null | undefined
   atRestCommands?: ClaudeAtRestCommandCatalog

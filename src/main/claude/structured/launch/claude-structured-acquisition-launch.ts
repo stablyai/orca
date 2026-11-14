@@ -127,3 +127,8 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     }
   })
 }
+
+export type ClaudeSessionAcquisitionInput = Omit<
+  Parameters<typeof resolveClaudeAcquisitionLaunch>[0],
+  'previous' | 'attempt'
+>

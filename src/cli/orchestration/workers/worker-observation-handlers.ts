@@ -8,6 +8,7 @@ import {
   getRequiredStringFlag
 } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/types'
+import { escapeTerminalControlCharacters } from '../../../shared/terminal/output/terminal-control-character-escape'
 import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
@@ -17,7 +18,8 @@ import { formatWorkerRead, type LegacyWorkerReadResult } from './worker-output'
 export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-show': async ({ flags, client, json }) => {
     const result = await client.call<WorkerShowResult>('orchestration.workerShow', {
-      dispatch: getRequiredStringFlag(flags, 'dispatch')
+      dispatch: getRequiredStringFlag(flags, 'dispatch'),
+      ...(flags.has('full') ? { includeSettings: true } : {})
     })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, WORKER_SHOW_VIEW)
@@ -62,6 +64,20 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       }
       if (value.autoReleaseAt) {
         lines.push(`Auto-release: ${value.autoReleaseAt}`)
+      }
+      if (value.settings) {
+        lines.push(
+          escapeTerminalControlCharacters(
+            value.settings.kind === 'unknown'
+              ? `Settings: unknown (${value.settings.reason})`
+              : value.settings.kind === 'execution-receipt'
+                ? `Execution receipt (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.qualification.receipt)}`
+                : value.settings.kind === 'advisory-receipt'
+                  ? `Advisory receipt (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.qualification.receipt)}`
+                  : `Settings (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.current)}`,
+            true
+          )
+        )
       }
       return lines.join('\n')
     })

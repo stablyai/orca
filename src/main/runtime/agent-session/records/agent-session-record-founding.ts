@@ -5,8 +5,12 @@ import {
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
+  AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION,
+  AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionAdvisoryPolicySchema } from '../../../../shared/agent-session/agent-session-advisory-policy'
+import { agentSessionExecutionPolicySchema } from '../../../../shared/agent-session/agent-session-execution-policy'
 import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/agent-session-conversation-name'
 
 export type AgentSessionRecordIdentity = Pick<
@@ -16,6 +20,8 @@ export type AgentSessionRecordIdentity = Pick<
   | 'provider'
   | 'accountHome'
   | 'options'
+  | 'advisoryPolicy'
+  | 'executionPolicy'
   | 'launchArgs'
   | 'launchDirectory'
   | 'forkedFrom'
@@ -30,15 +36,34 @@ export function agentSessionRecordIdentityFields(
   const { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode, ...options } =
     identity.options ?? {}
   const conversationName = normalizeAgentSessionConversationName(identity.conversationName)
+  const advisory =
+    identity.advisoryPolicy === undefined
+      ? null
+      : agentSessionAdvisoryPolicySchema.safeParse(identity.advisoryPolicy)
+  if (advisory && !advisory.success) {
+    throw new Error('agent_session_advisory_policy_invalid')
+  }
+  const execution =
+    identity.executionPolicy === undefined
+      ? null
+      : agentSessionExecutionPolicySchema.parse(identity.executionPolicy)
+  const schemaVersion: AgentSessionRecord['schemaVersion'] = execution
+    ? AGENT_SESSION_EXECUTION_RECORD_SCHEMA_VERSION
+    : advisory
+      ? AGENT_SESSION_ADVISORY_RECORD_SCHEMA_VERSION
+      : AGENT_SESSION_RECORD_SCHEMA_VERSION
+  const savedOptions = execution ? { model: execution.model, effort: execution.effort } : options
   return {
-    schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
+    schemaVersion,
     sessionId: identity.sessionId,
     location: identity.location,
     provider: identity.provider,
     accountHome: identity.accountHome,
     ...(identity.forkedFrom ? { forkedFrom: identity.forkedFrom } : {}),
-    ...(Object.keys(options).length > 0 ? { options } : {}),
-    ...(permissionMode ? { permissionMode } : {}),
+    ...(Object.keys(savedOptions).length > 0 ? { options: savedOptions } : {}),
+    ...(advisory?.success ? { advisoryPolicy: advisory.data } : {}),
+    ...(execution ? { executionPolicy: execution } : {}),
+    ...(execution ? { permissionMode: 'own' } : permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     // /clear retains its tab and launch directory.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),

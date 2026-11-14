@@ -1,0 +1,113 @@
+import { executionBuildHash as buildHash } from '../../../../agent-session/records/agent-session-execution-runtime'
+import { agentSessionExecutionReceiptSchema } from '../../../../../../shared/agent-session/agent-session-execution-receipt'
+import { agentSessionExecutionPolicyFingerprint } from '../../../../../../shared/agent-session/agent-session-execution-policy'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { OrchestrationWorkerSettings } from '../../../../../../shared/orchestration/workers/orchestration-worker-settings'
+import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { workerStartOptionsExecutionPolicyFingerprint } from '../../../../orchestration/workers/launch/worker-launch-observation'
+import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
+
+function receiptCustody(record: AgentSessionRecord): string {
+  const lease = record.lease
+  return JSON.stringify([
+    record.sessionId,
+    record.schemaVersion,
+    record.provider,
+    record.location,
+    record.accountHome,
+    record.providerHandleChain,
+    record.executionPolicy,
+    [
+      lease.runtimeKind,
+      lease.runtimeFence,
+      lease.claimStatus,
+      lease.ownerProcess,
+      lease.reservedSpawnToken,
+      lease.provenHandleLinkId,
+      lease.claimKeyId,
+      lease.handoffStage,
+      lease.handoffOperationId,
+      lease.unreconciled
+    ]
+  ])
+}
+
+export async function readWorkerExecutionReceipt(
+  host: StructuredAgentSessionHost,
+  db: OrchestrationDb,
+  dispatchId: string,
+  runtimeId: string | undefined
+): Promise<OrchestrationWorkerSettings | null> {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  const sessionId = dispatch?.assignee_orca_session_id
+  const record = sessionId && host.deps.store.getRecord(sessionId)
+  if (!sessionId || !record?.executionPolicy) {
+    return null
+  }
+  const parsed = agentSessionExecutionReceiptSchema.safeParse(record.executionReceipt)
+  if (!parsed.success || !parsed.data.closure) {
+    return null
+  }
+  const unknown = { kind: 'unknown' as const, reason: 'identity_changed' as const }
+  const receipt = parsed.data
+  const fingerprint = agentSessionExecutionPolicyFingerprint(record.executionPolicy)
+  const task = dispatch && db.getTask(dispatch.task_id)
+  const released =
+    record.lease.claimStatus === 'released' &&
+    !record.lease.ownerProcess &&
+    !record.lease.reservedSpawnToken &&
+    record.lease.runtimeFence === receipt.execution.runtimeFence + 1
+  if (
+    !runtimeId ||
+    !receipt.runtime ||
+    buildHash === 'unknown' ||
+    !dispatch ||
+    !task ||
+    task.run_id !== dispatch.run_id ||
+    record.provider !== 'codex' ||
+    record.schemaVersion !== 4 ||
+    record.location.executionHostId !== 'local' ||
+    record.location.wslDistro !== null ||
+    record.location.workspaceKind !== 'folder' ||
+    receipt.execution.sessionId !== sessionId ||
+    (receipt.execution.runtimeFence !== record.lease.runtimeFence && !released) ||
+    receipt.execution.bounded?.policyFingerprint !== fingerprint ||
+    workerStartOptionsExecutionPolicyFingerprint(
+      db.getWorkerDispatch(dispatchId)?.start_options ?? ''
+    ) !== fingerprint
+  ) {
+    return unknown
+  }
+  const custody = receiptCustody(record)
+  const metadata = await host.deps.adapter?.readExecutionQualification?.(record).catch(() => null)
+  const after = host.deps.store.getRecord(sessionId)
+  const afterDispatch = db.getDispatchContextById(dispatchId)
+  if (
+    !after ||
+    !afterDispatch ||
+    receiptCustody(after) !== custody ||
+    after.executionReceipt !== record.executionReceipt ||
+    afterDispatch.assignee_orca_session_id !== sessionId ||
+    afterDispatch.task_id !== dispatch.task_id ||
+    afterDispatch.run_id !== dispatch.run_id ||
+    db.getTask(dispatch.task_id)?.run_id !== dispatch.run_id ||
+    workerStartOptionsExecutionPolicyFingerprint(
+      db.getWorkerDispatch(dispatchId)?.start_options ?? ''
+    ) !== fingerprint
+  ) {
+    return unknown
+  }
+  const { spawnTokenHash: _private, ...publicReceipt } = receipt
+  return {
+    kind: 'execution-receipt',
+    sessionId: record.sessionId,
+    runtimeFence: receipt.execution.runtimeFence,
+    agent: 'codex',
+    qualification: {
+      runtime: structuredClone(receipt.runtime),
+      policy: structuredClone(record.executionPolicy),
+      receipt: structuredClone(publicReceipt),
+      metadata: metadata ?? null
+    }
+  }
+}

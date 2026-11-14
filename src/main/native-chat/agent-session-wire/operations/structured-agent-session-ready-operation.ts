@@ -27,6 +27,7 @@ import type { StructuredAgentSessionStartClaim } from '../startup/structured-age
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
 
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { advisoryOperationRefusal } from './structured-agent-session-advisory-operation'
 
 import {
   operationDidNotRun,
@@ -83,10 +84,14 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
   const preparedOperation = context.serialize<QueuedReadyOperation<T>>(
     envelope.sessionId,
     async () => {
+      const record = context.deps.store.getRecord(envelope.sessionId)
+      const advisoryRefusal = advisoryOperationRefusal(record, plan.method)
+      if (advisoryRefusal) {
+        return { result: { ok: false, refusal: advisoryRefusal } }
+      }
       authority = options.goal
         ? context.acquireAborts.begin(envelope.sessionId, false, true)
         : undefined
-      const record = context.deps.store.getRecord(envelope.sessionId)
       if (options.needsAgent && !options.needsAgent(record)) {
         return { result: await run({ ok: true, child: null }) }
       }

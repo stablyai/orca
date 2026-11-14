@@ -15,6 +15,7 @@ import {
 } from '../../agent-session-journal/writing/command-receipt-schema'
 import type { ExistingCommandReceipt } from '../../agent-session-journal/writing/command-receipt-table'
 import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
+import { advisorySendRefusal } from './structured-agent-session-advisory-operation'
 import {
   AGENT_SESSION_NOT_ATTACHED,
   refuseAgentSessionMutation
@@ -81,6 +82,13 @@ export async function admitCommandReceiptMutation<TValue>(
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
   const current = store.requireWritableRecord(envelope.sessionId)
+  const advisoryRefusal =
+    plan.method === 'agentSession.send'
+      ? advisorySendRefusal(current, journal, envelope.clientOperationId)
+      : null
+  if (advisoryRefusal) {
+    return refuseAgentSessionMutation(advisoryRefusal)
+  }
   // Journal fences protect conversation writes; provider effects also require the lease.
   const leaseRefusal = plan.conversationWrite ? null : refuseUnlessWriterAdmitted(current.lease)
   if (leaseRefusal) {

@@ -1,3 +1,5 @@
+import { readWorkerExecutionReceipt } from '../worker-execution-receipt'
+import { readWorkerAdvisoryReceipt } from '../worker-advisory-receipt'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { isStructuredWorkerHandle } from '../../../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
@@ -10,6 +12,14 @@ import {
   observeStructuredSession
 } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
+import { getStructuredAgentSessionHost } from '../../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { OrchestrationWorkerSettings } from '../../../../../../../shared/orchestration/workers/orchestration-worker-settings'
+import { agentSessionAdvisoryPolicyFingerprint } from '../../../../../../../shared/agent-session/agent-session-advisory-policy'
+import {
+  workerStartOptionsAdvisoryPolicyFingerprint,
+  workerStartOptionsExecutionPolicyFingerprint
+} from '../../../../../orchestration/workers/launch/worker-launch-observation'
+import { agentSessionExecutionPolicyFingerprint } from '../../../../../../../shared/agent-session/agent-session-execution-policy'
 
 export type SessionWorkerObservation = {
   terminal: null
@@ -82,5 +92,159 @@ export async function ensureSessionWorkerRecords(
     )
   ) {
     await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  }
+}
+
+/** Detailed inspection reads options without starting a child; a replaced owner invalidates the answer. */
+export async function readStructuredWorkerSettings(
+  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'> &
+    Partial<Pick<OrcaRuntimeService, 'getRuntimeId'>>,
+  db: OrchestrationDb,
+  dispatchId: string
+): Promise<OrchestrationWorkerSettings> {
+  const identity = resolveStructuredWorkerForDispatch(db, dispatchId)
+  if (!identity) {
+    return { kind: 'unknown', reason: 'terminal_worker' }
+  }
+  const ownsDispatch = () =>
+    db.findActiveDispatchForAssignee(identity.handle, identity.paneKey)?.id === dispatchId
+  try {
+    await runtime.ensureStructuredAgentSessionHost()
+    const host = getStructuredAgentSessionHost()
+    if (!host) {
+      return { kind: 'unknown', reason: 'host_unavailable' }
+    }
+    const historical = await readWorkerExecutionReceipt(
+      host,
+      db,
+      dispatchId,
+      runtime.getRuntimeId?.()
+    )
+    if (getStructuredAgentSessionHost() !== host) {
+      return { kind: 'unknown', reason: 'identity_changed' }
+    }
+    if (historical) {
+      return historical
+    }
+    const advisoryReceipt = readWorkerAdvisoryReceipt(
+      host,
+      db,
+      dispatchId,
+      runtime.getRuntimeId?.()
+    )
+    if (advisoryReceipt) {
+      if (getStructuredAgentSessionHost() !== host) {
+        return { kind: 'unknown', reason: 'identity_changed' }
+      }
+      return advisoryReceipt
+    }
+    const held = holdStructuredWorker(identity, db)
+    if (held.kind !== 'held') {
+      return { kind: 'unknown', reason: 'not_held' }
+    }
+    const sessionId = held.running.sessionId
+    const before = host.deps.store.getConversation(sessionId)
+    if (!before || observeStructuredSession(sessionId).status !== 'live') {
+      return { kind: 'unknown', reason: 'not_live' }
+    }
+    if (!ownsDispatch()) {
+      return { kind: 'unknown', reason: 'identity_changed' }
+    }
+    const policy = host.deps.store.getRecord(sessionId)?.advisoryPolicy
+    const executionPolicy = host.deps.store.getRecord(sessionId)?.executionPolicy
+    const executionFingerprint =
+      executionPolicy && agentSessionExecutionPolicyFingerprint(executionPolicy)
+    const policyFingerprint = policy && agentSessionAdvisoryPolicyFingerprint(policy)
+    const options = await host.readOptions(sessionId, { readsWithoutModel: true })
+    const execution = await host.deps.adapter?.readExecutionEvidence?.({
+      sessionId,
+      fence: before.currentFence
+    })
+    if (getStructuredAgentSessionHost() !== host) {
+      return { kind: 'unknown', reason: 'identity_changed' }
+    }
+    const after = host.deps.store.getConversation(sessionId)
+    const currentPolicy = host.deps.store.getRecord(sessionId)?.advisoryPolicy
+    const currentExecutionPolicy = host.deps.store.getRecord(sessionId)?.executionPolicy
+    const currentHold = holdStructuredWorker(identity, db)
+    if (
+      currentHold.kind !== 'held' ||
+      (execution && !execution.isCurrent()) ||
+      !ownsDispatch() ||
+      currentHold.running.sessionId !== sessionId ||
+      after?.currentFence !== before.currentFence ||
+      (currentExecutionPolicy && agentSessionExecutionPolicyFingerprint(currentExecutionPolicy)) !==
+        executionFingerprint ||
+      (executionFingerprint &&
+        (workerStartOptionsExecutionPolicyFingerprint(
+          db.getWorkerDispatch(dispatchId)?.start_options ?? ''
+        ) !== executionFingerprint ||
+          execution?.evidence.bounded?.policyFingerprint !== executionFingerprint)) ||
+      (currentPolicy && agentSessionAdvisoryPolicyFingerprint(currentPolicy)) !==
+        policyFingerprint ||
+      (policyFingerprint &&
+        workerStartOptionsAdvisoryPolicyFingerprint(
+          db.getWorkerDispatch(dispatchId)?.start_options ?? ''
+        ) !== policyFingerprint) ||
+      observeStructuredSession(sessionId).status !== 'live' ||
+      !db.isDispatchProcessCurrent({
+        dispatchId,
+        paneKey: identity.paneKey,
+        processIncarnation: identity.processIncarnation
+      })
+    ) {
+      return { kind: 'unknown', reason: 'identity_changed' }
+    }
+    const {
+      model,
+      reportedModel,
+      effort,
+      reportedEffort,
+      fastMode,
+      serviceTier,
+      interactionMode,
+      permissionMode,
+      reportedPermissionMode,
+      fastModeState,
+      acceptedInputSources,
+      confirmed,
+      defaulted
+    } = options.current
+    return {
+      kind: 'options',
+      sessionId,
+      runtimeFence: before.currentFence,
+      agent: before.provider,
+      ...(execution ? { execution: execution.evidence } : {}),
+      ...(policy && policyFingerprint
+        ? {
+            advisory: {
+              sourcePin: policy.sourcePin,
+              dataScope: policy.dataScope,
+              deadlineAt: policy.deadlineAt,
+              maxModelCalls: policy.maxModelCalls,
+              policyFingerprint,
+              qualification: 'unqualified' as const
+            }
+          }
+        : {}),
+      current: {
+        model,
+        reportedModel,
+        effort,
+        reportedEffort,
+        fastMode,
+        serviceTier,
+        interactionMode,
+        permissionMode,
+        reportedPermissionMode,
+        fastModeState,
+        acceptedInputSources,
+        confirmed,
+        defaulted
+      }
+    }
+  } catch {
+    return { kind: 'unknown', reason: 'read_failed' }
   }
 }

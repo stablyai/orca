@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionExecutionReader as ExecutionReader } from './structured-agent-session-execution-reader'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
@@ -33,7 +34,7 @@ import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-sess
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
-  StructuredAgentSessionAdapterStop
+  StructuredAgentSessionAdapterStop as AdapterStop
 } from './structured-agent-session-adapter-stop'
 /** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
 export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
@@ -173,10 +174,15 @@ export type StructuredAgentSessionSetOptionInput = {
   signal?: AbortSignal
 }
 
-export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
+type AdapterBase = AdapterStop & ExecutionReader
+
+export type StructuredAgentSessionAdapter = AdapterBase & {
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
+  /** Absent means the adapter cannot enforce a bounded advisory launch. */
+  supportsAdvisoryPolicy?(location: AgentSessionExecutionLocation, agent: string): boolean
+  supportsExecutionPolicy?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */
   supportsLocation?(location: AgentSessionExecutionLocation): boolean
   /** Spawn once per reservation; use its token/fence because the store rejects mismatched handles. */

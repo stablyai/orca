@@ -3,10 +3,30 @@ import { getPresentStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
+import type { AgentSessionUsageSnapshot } from '../../shared/agent-session/agent-session-usage-meter'
 
 type ChatRenameResult = { name: string | null; applied: boolean }
 
 export const CHAT_HANDLERS: Record<string, CommandHandler> = {
+  'chat usage': async ({ flags, client, json }) => {
+    const sessionId =
+      getPresentStringFlag(flags, 'session') ??
+      (client.isRemote ? undefined : readInjectedAgentSessionId())
+    if (!sessionId) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Missing required --session: name the chat on the target host.'
+      )
+    }
+    const result = await client.call<AgentSessionUsageSnapshot>('agentSession.usageSnapshot', {
+      sessionId
+    })
+    printResult(result, json, (value) =>
+      value.status === 'ok'
+        ? `${value.meter.usage.totalTokens} primary-thread tokens (${value.meter.model}, ${value.meter.effort}).`
+        : `Usage unknown: ${value.reason}.`
+    )
+  },
   'chat rename': async ({ flags, client, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
     // An empty --session must not fall back to this chat; the injected id is local-only.

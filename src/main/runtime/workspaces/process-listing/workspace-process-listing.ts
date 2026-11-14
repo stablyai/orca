@@ -33,7 +33,6 @@ import {
   neverThrowingStructuredAgentSessionLogger
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from '../../agent-session/records/agent-session-record-store-slot'
-import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../../agent-hooks/first-work/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-rename-runtime'
 import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
@@ -58,6 +57,7 @@ import {
 import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
+import { createWorkerReportBindings } from '../../orchestration/workers/reports/agent-session-execution-report'
 import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
 import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
 const DEFAULT_WORKTREE_PS_LIMIT = 200
@@ -96,7 +96,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       summaries,
       buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
     )
-    const session = this.store?.getWorkspaceSession?.()
     const countedPtyIds = new Set<string>()
     const terminalTitleEvidenceByRow = applyRuntimeWorktreePsTerminalActivity({
       freshPtyLiveness,
@@ -104,7 +103,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       leaves: this.leaves.values(),
       ptysById: this.ptysById,
       tabs: this.tabs,
-      session,
+      session: this.store?.getWorkspaceSession?.(),
       getPaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
       paneOf: (pty) => this.paneOfPty(pty),
       getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
@@ -211,7 +210,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   }
 
   /** Admission needs only the ledger; a later chat host must reuse this store. */
-  async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
+  async openAgentSessionRecordStore() {
     const { store } = await openAgentSessionRecordStoreOnce({
       stateDirectory: getProfileUserDataPath(),
       legacySessionTabIds: this.legacyStructuredSessionTabIds,
@@ -308,6 +307,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
+      ...createWorkerReportBindings(this),
       createTurnAttention: () =>
         chatWorkerTurnStopReporter({
           ...this.workerTurnStopReportDeps,

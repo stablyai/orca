@@ -48,4 +48,17 @@ describe('chat rename CLI', () => {
     await expect(rename(client, '')).rejects.toThrow('Missing value for --session')
     expect(call).not.toHaveBeenCalled()
   })
+
+  it('requires an explicit target session for remote usage reads', async () => {
+    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'local-chat')
+    const { client } = chatClient(true)
+    await expect(
+      CHAT_HANDLERS['chat usage']({
+        flags: new Map(),
+        client,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toThrow('Missing required --session')
+  })
 })

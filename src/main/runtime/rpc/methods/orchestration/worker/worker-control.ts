@@ -21,17 +21,15 @@ import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/termi
 import { failedWorkerStartHasOutput } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
 import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
-import {
-  WorkerDispatchParams,
-  WorkerReadParams
-} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-control-params'
+import * as WorkerControlParams from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-control-params'
+import { readStructuredWorkerSettings } from './observation/session-worker-observation'
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.workerShow',
     access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
-    params: WorkerDispatchParams,
+    params: WorkerControlParams.WorkerShowParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const dispatch = db.getDispatchContextById(params.dispatch)
@@ -44,16 +42,27 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       }
       const federated = db.getFederatedDispatch(params.dispatch)
       if (federated) {
-        return showFederatedWorker({
+        const result = await showFederatedWorker({
           runtime,
           db,
           dispatchId: params.dispatch,
           dispatch,
           federated
         })
+        return {
+          ...result,
+          ...(params.includeSettings
+            ? { settings: { kind: 'unknown' as const, reason: 'remote_worker' as const } }
+            : {})
+        }
       }
       if (!worker) {
-        return showContextOnlyWorker(runtime, db, dispatch)
+        return {
+          ...(await showContextOnlyWorker(runtime, db, dispatch)),
+          ...(params.includeSettings
+            ? { settings: await readStructuredWorkerSettings(runtime, db, params.dispatch) }
+            : {})
+        }
       }
       if (worker.runtime_epoch && worker.runtime_epoch !== runtime.getRuntimeId()) {
         if (worker.state === 'starting') {
@@ -80,6 +89,9 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         observation: exposeObservation(observation),
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null,
         autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource),
+        ...(params.includeSettings
+          ? { settings: await readStructuredWorkerSettings(runtime, db, params.dispatch) }
+          : {}),
         coordinatedFrom: db.getPeerRun(dispatch.run_id)?.home_label ?? null
       }
     }
@@ -88,7 +100,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     name: 'orchestration.workerRead',
     access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
-    params: WorkerReadParams,
+    params: WorkerControlParams.WorkerReadParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const dispatch = db.getDispatchContextById(params.dispatch)
@@ -219,7 +231,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     name: 'orchestration.workerAbandon',
     access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
-    params: WorkerDispatchParams,
+    params: WorkerControlParams.WorkerDispatchParams,
     handler: (params, { runtime, orchestrationCaller, orchestrationCompatibilityEvidence }) => {
       const db = runtime.getOrchestrationDb()
       // Session identity wins; a terminal-only caller is identified by its launch evidence and pane.

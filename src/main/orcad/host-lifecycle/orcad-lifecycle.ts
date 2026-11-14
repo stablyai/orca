@@ -167,7 +167,8 @@ export async function startOrcadWithHost<T extends object>(
   userDataPath: string,
   start: (registerCleanup: (cleanup: BackendServiceCleanup) => void) => Promise<T>,
   runQuitHandlers: () => void | Promise<void>,
-  checkpoint: () => Promise<void> = async () => {}
+  checkpoint: () => Promise<void> = async () => {},
+  noAgentHookSync = false
 ): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
   const instanceLock = acquireOrcadInstanceLock(userDataPath, {
     // Yield the data root to the process that took its lock; supervisors stand by on this code.
@@ -195,7 +196,7 @@ export async function startOrcadWithHost<T extends object>(
     async (registerCleanup) => {
       admission = acquireProfileStateRuntimeAdmission(userDataPath)
       // Browser authorization UI must not block RPC readiness.
-      browserProvider = startOrcadBrowserProvider({ userDataPath })
+      browserProvider = startOrcadBrowserProvider({ userDataPath, noAgentHookSync })
       // Only managed hosts have opted-in desktop bridges; user-started hosts route to paired page hosts.
       setDesktopBrowserBridgeHostEnabled(Boolean(process.env[ORCAD_MANAGED_ACTIVATION_ROOT_ENV]))
       return { ...(await start(registerCleanup)), instance }

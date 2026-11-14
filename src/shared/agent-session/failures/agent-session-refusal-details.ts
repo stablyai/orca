@@ -31,6 +31,10 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
   agent_session_operation_invalid: [
     // The request
     'requestMalformed',
+    'advisoryAlreadyStarted',
+    'advisoryDeadlinePassed',
+    'advisoryPolicyMismatch',
+    'advisoryOperationUnsupported',
     'operationIdInvalid',
     'messageIdReused',
     'operationRefusedEarlier',

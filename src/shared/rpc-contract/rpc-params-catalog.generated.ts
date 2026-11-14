@@ -478,7 +478,8 @@ import {
 } from './orchestration/orchestration-runs-params'
 import {
   WorkerDispatchParams,
-  WorkerReadParams
+  WorkerReadParams,
+  WorkerShowParams
 } from './orchestration/orchestration-worker-control-params'
 import {
   OrchestrationWorkerKeepOpenParams,
@@ -910,6 +911,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.subscribeTurnCompletions': SubscribeTurnCompletionsParams,
   'agentSession.threadGoal': ThreadGoalParams,
   'agentSession.unsubscribe': UnsubscribeParams,
+  'agentSession.usageSnapshot': OptionsParams,
   'agentSessionAttachment.read': AttachmentReadParams,
   'agentSessionAttachment.readTextChunk': AttachmentTextReadParams,
   'agentSessionAttachment.uploadAbort': AttachmentUploadIdParams,
@@ -1440,7 +1442,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerRead': WorkerReadParams,
   'orchestration.workerRelease': WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
   'orchestration.workerRetain': WorkerRetainParams,
-  'orchestration.workerShow': WorkerDispatchParams,
+  'orchestration.workerShow': WorkerShowParams,
   'orchestration.workerStart': WorkerStartParams,
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerTerminalUserInput': OrchestrationWorkerSubjectParams,

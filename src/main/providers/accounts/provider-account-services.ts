@@ -36,12 +36,15 @@ export type ProviderAccountServices = {
 export function createProviderAccountServices(
   store: Store,
   options: {
+    noAgentHookSync?: boolean
     codexAccountLifecycle?: ConstructorParameters<typeof CodexAccountService>[3]
     setClaudeStatusLineListener: (listener: (event: ClaudeStatusLineRateLimits) => void) => void
   }
 ): ProviderAccountServices {
   const agentView = getClaudeAgentViewService()
-  void agentView.reconcile(store.getSettings())
+  if (!options.noAgentHookSync) {
+    void agentView.reconcile(store.getSettings())
+  }
   const rateLimits = new RateLimitService()
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
   const codexAccounts = new CodexAccountService(
@@ -68,7 +71,9 @@ export function createProviderAccountServices(
     store.getSettings()
   )
   store.onSettingsChanged((updates, settings) => {
-    void agentView.reconcile(settings)
+    if (!options.noAgentHookSync) {
+      void agentView.reconcile(settings)
+    }
     if (updates.claudeOAuthUsageEnabled === false) {
       rateLimits.discardClaudeOAuthUsage()
     } else if (updates.claudeOAuthUsageEnabled === true) {

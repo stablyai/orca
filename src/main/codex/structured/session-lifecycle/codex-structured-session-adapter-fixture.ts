@@ -127,6 +127,9 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       closeCount: 0,
       pid: 4321,
       closed: false,
+      get closeResult() {
+        return connection.closed ? { root: 'exited' as const, tree: 'exited' as const } : null
+      },
       request: async (method, params) => {
         connection.calls.push({ method, params })
         const route = routes[method]

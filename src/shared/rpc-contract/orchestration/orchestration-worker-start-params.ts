@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
+import { agentSessionAdvisoryPolicySchema } from '../../agent-session/agent-session-advisory-policy'
+import { agentSessionExecutionPolicySchema } from '../../agent-session/agent-session-execution-policy'
 
 export const OptionalWorkerLaunchPreference = z
   .string()
@@ -29,6 +31,8 @@ export const WorkerStartParams = z
     agent: OptionalString,
     model: OptionalWorkerLaunchPreference,
     effort: OptionalWorkerLaunchPreference,
+    executionPolicy: agentSessionExecutionPolicySchema.optional(),
+    advisoryPolicy: agentSessionAdvisoryPolicySchema.optional(),
     retryOf: OptionalString,
     timeoutMs: OptionalFiniteNumber,
     devMode: z.boolean().optional(),
@@ -36,6 +40,65 @@ export const WorkerStartParams = z
     adoptTaskId: OptionalString
   })
   .superRefine((params, ctx) => {
+    if (
+      params.executionPolicy &&
+      (params.advisoryPolicy ||
+        (!params.task && (!params.spec || !params.parent)) ||
+        !params.worktree?.startsWith('id:') ||
+        params.agent !== 'codex' ||
+        params.model !== params.executionPolicy.model ||
+        params.effort !== params.executionPolicy.effort ||
+        [
+          params.on,
+          params.terminal,
+          params.retryOf,
+          params.adoptTaskId,
+          params.setup,
+          params.name,
+          params.repo,
+          params.baseBranch,
+          params.displayName,
+          params.comment,
+          params.deps
+        ].some((value) => value !== undefined))
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['executionPolicy'],
+        message:
+          'Bounded execution requires a fresh local Codex child, exact folder and policy selection, without reuse or setup.'
+      })
+    }
+    if (
+      params.advisoryPolicy &&
+      (!params.spec ||
+        !params.parent ||
+        !params.worktree?.startsWith('id:') ||
+        params.agent !== 'claude' ||
+        !params.model ||
+        !params.effort ||
+        [
+          params.task,
+          params.on,
+          params.terminal,
+          params.retryOf,
+          params.adoptTaskId,
+          params.setup,
+          params.name,
+          params.repo,
+          params.baseBranch,
+          params.displayName,
+          params.comment,
+          params.deps
+        ].some((value) => value !== undefined))
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['advisoryPolicy'],
+        message:
+          'Advisors require a new child consultation, exact existing local folder, explicit Claude model and effort, and no reuse or setup.'
+      })
+    }
     if (!params.task && !params.spec) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

@@ -9,6 +9,8 @@ import type { WorkerStartInput } from './worker-start-input'
 import type { RunRow } from '../../../../../orchestration/db/orchestration-records'
 import type { startLocalWorker } from './local-worker-start'
 import { resolveDispatchCreator } from '../../runs/dispatch-creator'
+import { agentSessionAdvisoryPolicyFingerprint } from '../../../../../../../shared/agent-session/agent-session-advisory-policy'
+import { agentSessionExecutionPolicyFingerprint } from '../../../../../../../shared/agent-session/agent-session-execution-policy'
 
 export function createLocalWorkerStartDispatch(
   {
@@ -45,6 +47,14 @@ export function createLocalWorkerStartDispatch(
   }
 ) {
   const startOptions = {
+    ...(params.executionPolicy
+      ? {
+          executionPolicyFingerprint: agentSessionExecutionPolicyFingerprint(params.executionPolicy)
+        }
+      : {}),
+    ...(params.advisoryPolicy
+      ? { advisoryPolicyFingerprint: agentSessionAdvisoryPolicyFingerprint(params.advisoryPolicy) }
+      : {}),
     worktree: requestedWorktree,
     mode,
     resolvedWorktreeId: resolvedWorktreeId ?? null,

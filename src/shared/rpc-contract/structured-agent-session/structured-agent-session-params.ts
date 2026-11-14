@@ -21,6 +21,8 @@ import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_L
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../../agent-session/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
 import { SOURCE_FIELDS, ResumeWriterAdmission } from './structured-agent-session-resume-params'
+import { agentSessionAdvisoryPolicySchema } from '../../agent-session/agent-session-advisory-policy'
+import { agentSessionExecutionPolicySchema } from '../../agent-session/agent-session-execution-policy'
 
 /** Matches the journal's bounds on one grouped prompt. */
 
@@ -123,7 +125,9 @@ export const CreateIntentParams = z
       .strict()
       .optional(),
     options: AgentSessionOptions.optional(),
-    optionsMode: z.literal('replace-model-selection').optional()
+    optionsMode: z.literal('replace-model-selection').optional(),
+    executionPolicy: agentSessionExecutionPolicySchema.optional(),
+    advisoryPolicy: agentSessionAdvisoryPolicySchema.optional()
   })
   .strict()
 

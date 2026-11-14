@@ -25,6 +25,7 @@ Options:
                            would accept them.
   --json                   Print the one-line server readiness JSON to stdout.
   --no-pairing             Do not create a client pairing offer at startup.
+  --no-agent-hook-sync     Skip automatic agent-hook and navigation configuration sync.
   --mobile-pairing         Create a mobile-scoped pairing offer with a QR code.
   --grant-desktop-control  Allow desktop control in the default runtime offer;
                            cannot combine with --no-pairing or --mobile-pairing.
@@ -64,6 +65,8 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
       options.allowPublic = true
     } else if (arg === '--refuse-public') {
       options.refusePublic = true
+    } else if (arg === '--no-agent-hook-sync') {
+      options.noAgentHookSync = true
     } else if (arg === '--no-pairing') {
       options.noPairing = true
     } else if (arg === '--mobile-pairing') {

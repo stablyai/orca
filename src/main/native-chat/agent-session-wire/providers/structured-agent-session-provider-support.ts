@@ -1,3 +1,5 @@
+import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionAttachParams } from '../acquisition/structured-agent-session-attach'
 import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
@@ -55,6 +57,11 @@ export function hostCanStartRecord(
   record: AgentSessionRecord
 ): boolean {
   return (
+    (!record.executionPolicy ||
+      deps.adapter.supportsExecutionPolicy?.(record.location, record.provider) === true) &&
+    (!record.advisoryPolicy ||
+      (record.location.workspaceKind === 'folder' &&
+        deps.adapter.supportsAdvisoryPolicy?.(record.location, record.provider) === true)) &&
     adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider) &&
     agentDrivesSession(deps.agents, record)
   )
@@ -71,4 +78,48 @@ export function knownAgentIds(deps: {
       ...deps.store.listConversations().map(({ provider }) => provider)
     ])
   ]
+}
+
+function structuredAgentSessionCreateMalformed(params: AgentSessionAttachParams): boolean {
+  return (
+    params.envelope.expectedRuntimeFence !== null ||
+    params.agent !== params.provider ||
+    Boolean(
+      (params.advisoryPolicy || params.executionPolicy) &&
+      (params.adopt ||
+        params.fork ||
+        params.providerHandle ||
+        params.location.workspaceKind !== 'folder')
+    )
+  )
+}
+
+export function structuredAgentSessionCreateRefusal(
+  deps: Parameters<typeof hostCanStartRecord>[0],
+  params: AgentSessionAttachParams,
+  prior: AgentSessionRecord | null
+) {
+  if (structuredAgentSessionCreateMalformed(params)) {
+    return refuse(
+      'agent_session_operation_invalid',
+      { reason: 'requestMalformed' },
+      'The create request is malformed.'
+    )
+  }
+  const unsupported =
+    (params.executionPolicy &&
+      deps.adapter.supportsExecutionPolicy?.(params.location, params.agent) !== true) ||
+    (params.advisoryPolicy &&
+      deps.adapter.supportsAdvisoryPolicy?.(params.location, params.agent) !== true) ||
+    (prior
+      ? !hostCanStartRecord(deps, prior)
+      : !deps.agents.definition(params.agent) ||
+        !adapterSupportsCreateIfDeclared(deps.adapter, params.location, params.agent))
+  return unsupported
+    ? refuse(
+        'structured_agent_session_unsupported',
+        { reason: 'hostUnsupported' },
+        'This execution host cannot create the requested chat.'
+      )
+    : null
 }

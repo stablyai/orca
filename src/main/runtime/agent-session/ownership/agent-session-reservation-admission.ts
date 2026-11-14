@@ -1,3 +1,6 @@
+import { validateAgentSessionReservationInput } from './agent-session-reservation-input'
+export { validateAgentSessionReservationInput } from './agent-session-reservation-input'
+import { admitExecutionOwnerReservation } from './agent-session-execution-reservation'
 /** Evaluate reservation identity/replay/CAS without I/O; commit applies the winning record and operation row in one store transaction. */
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -19,14 +22,11 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import {
   agentSessionExecutionLocationsEqual,
-  isAgentSessionLaunchEnv,
-  isAgentSessionOptions,
   type AgentSessionExecutionLocation,
   type AgentSessionLaunchArgs,
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/agent-session-launch-args'
 import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type {
   StructuredAgentId,
@@ -48,6 +48,7 @@ import {
   type AgentSessionAccountHome
 } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { assertReservedTabUnheld } from '../agent-session-tab-table'
+import { admitAdvisoryOwnerReservation } from './agent-session-advisory-reservation'
 
 export type AgentSessionReserveRequest = {
   forkedFrom?: AgentSessionRecord['forkedFrom']
@@ -63,6 +64,8 @@ export type AgentSessionReserveRequest = {
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
+  advisoryPolicy?: AgentSessionRecord['advisoryPolicy']
+  executionPolicy?: AgentSessionRecord['executionPolicy']
   /** Saved catalog rows those options are admitted against; transient, never written. */
   models?: AgentSessionAdmissionModels
   /** Reserved tab ids are checked before spawn and claimed only when the tab publishes. */
@@ -144,18 +147,6 @@ export function admitPendingAgentSessionReservationReplay(
   return record
 }
 
-export function validateAgentSessionReservationInput(request: AgentSessionReserveRequest): void {
-  if (request.launchEnv && !isAgentSessionLaunchEnv(request.launchEnv)) {
-    throw new Error('agent_session_launch_env_invalid')
-  }
-  if (request.launchArgs && !isAgentSessionLaunchArgs(request.launchArgs)) {
-    throw new Error('agent_session_launch_args_invalid')
-  }
-  if (request.options && !isAgentSessionOptions(request.options)) {
-    throw new Error('agent_session_options_invalid')
-  }
-}
-
 export function applyAgentSessionReservation(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest,
@@ -188,6 +179,8 @@ export function applyAgentSessionReservation(
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
   }
   const existing = selected.record
+  admitAdvisoryOwnerReservation(existing, request)
+  admitExecutionOwnerReservation(existing, request)
   if (
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||

@@ -1,3 +1,5 @@
+import type { CodexExecutionAdapterDeps } from './codex-execution-receipt'
+import type { AgentSessionExecutionExecutable } from '../../../../shared/agent-session/agent-session-execution-evidence'
 import type { CodexProviderInvocationDeps } from './codex-provider-session-rename'
 import type { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
@@ -29,8 +31,8 @@ import type { AgentModelCatalogStore } from '../../../native-chat/agent-model-ca
 import type { AgentModelCatalogSessionAccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-lister'
 import type { StructuredAgentSessionProviderOpen } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
-import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { CodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
+import type { CodexSessionPermissions } from '../turns/codex-structured-turn-permission'
+import type { codexExecutionLaunch } from '../launch/codex-execution-controls'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
@@ -39,6 +41,9 @@ export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
 }
 
 export type CodexStructuredLaunch = {
+  execution?: Pick<NonNullable<ReturnType<typeof codexExecutionLaunch>>, 'policy' | 'profileId'> & {
+    executable?: AgentSessionExecutionExecutable
+  }
   prefixArgs?: readonly string[]
   command: string
   args: string[]
@@ -58,14 +63,6 @@ export type CodexStructuredLaunch = {
   visuals?: NativeChatVisualsLaunch
 }
 
-/** Boundaries retain host receipt time through buffering and retries. */
-export const CODEX_RECEIPT_TIMED_METHODS: ReadonlySet<string> = new Set([
-  'turn/started',
-  'turn/completed',
-  'item/started',
-  'item/completed'
-])
-
 export type CodexStructuredSessionEvent =
   | {
       type: 'notification'
@@ -73,7 +70,7 @@ export type CodexStructuredSessionEvent =
       threadId: string
       method: string
       params: unknown
-      /** Original host receipt time for CODEX_RECEIPT_TIMED_METHODS boundaries. */
+      /** Original host receipt time for turn and item boundaries. */
       observedAt?: number
       /** Highest dispatch sequence armed when this turn-start was first received. */
       dispatchSequenceAtReceipt?: number
@@ -93,7 +90,7 @@ export type CodexStructuredSessionEvent =
   /** Translator-only compatibility for callers that do not participate in host recovery. */
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
-export type CodexStructuredSessionAdapterDeps = {
+export type CodexStructuredSessionAdapterDeps = CodexExecutionAdapterDeps & {
   providerInvocation?: CodexProviderInvocationDeps
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands
@@ -134,6 +131,11 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  usageMeter?: CodexAcquisitionWindow['usageMeter']
+  execution?: CodexAcquisitionWindow['execution']
+  readonly nativeExecutionSettings?: Record<string, unknown>
+  modelProvider?: string
+  readonly authRevision?: number
   events?: StructuredAgentSessionEventSink
   account?: AgentSessionAccountKind
   /** CODEX_HOME this app-server launched under. */
@@ -149,16 +151,7 @@ export type CodexSession = {
   threadId: string
   historyMode?: 'legacy' | 'paginated'
   /** Provider facts from this acquisition, not another copy of the chat's selected mode. */
-  permissions?: {
-    acquiredMode: AgentChatPermissionChoice
-    appliedMode?: AgentChatPermissionChoice
-    acquiredSandbox?: CodexSandboxPolicy
-    launchSandboxIntact: boolean
-    cwd: string
-    visualsFolder?: string
-    preparedMode?: AgentChatPermissionChoice
-    preparedAuto?: CodexSandboxPolicy
-  }
+  permissions?: CodexSessionPermissions
   /** Wire-observed open primary turns; rewind and untargeted Stop use these before journal admission. */
   activeTurnIds?: Set<string>
   /** Interrupt-acknowledged turns cannot accept steers while awaiting turn/completed. */

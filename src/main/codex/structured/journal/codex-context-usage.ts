@@ -6,12 +6,61 @@ import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
+import type { AgentSessionExecutionUsage } from '../../../../shared/agent-session/agent-session-execution-evidence'
+
+export function readCodexCumulativeUsage(
+  params: unknown,
+  threadId: string,
+  observedAt: number,
+  previous?: AgentSessionExecutionUsage
+): AgentSessionExecutionUsage | undefined {
+  const total = readRecord(readRecord(readRecord(params).tokenUsage).total)
+  const fields = [
+    'totalTokens',
+    'inputTokens',
+    'cachedInputTokens',
+    'outputTokens',
+    'reasoningOutputTokens'
+  ] as const
+  if (
+    fields.some(
+      (key) =>
+        !Number.isSafeInteger(total[key]) ||
+        Number(total[key]) < 0 ||
+        (previous !== undefined && Number(total[key]) < previous[key])
+    )
+  ) {
+    return undefined
+  }
+  const [totalTokens, inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens] =
+    fields.map((key) => Number(total[key]))
+  if (
+    totalTokens! !== inputTokens! + outputTokens! ||
+    cachedInputTokens! > inputTokens! ||
+    reasoningOutputTokens! > outputTokens! ||
+    cachedInputTokens! - (previous?.cachedInputTokens ?? 0) >
+      inputTokens! - (previous?.inputTokens ?? 0) ||
+    reasoningOutputTokens! - (previous?.reasoningOutputTokens ?? 0) >
+      outputTokens! - (previous?.outputTokens ?? 0)
+  ) {
+    return undefined
+  }
+  return {
+    threadId,
+    observedAt,
+    totalTokens: totalTokens!,
+    inputTokens: inputTokens!,
+    cachedInputTokens: cachedInputTokens!,
+    outputTokens: outputTokens!,
+    reasoningOutputTokens: reasoningOutputTokens!
+  }
+}
 
 function positiveCount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
-// last.totalTokens measures context, including after compaction; total is cumulative thread spend.
+// last.totalTokens measures context; cumulative totals are provider counters, not billing proof.
 export function readCodexContextUsage(
   params: unknown,
   capturedAt: number

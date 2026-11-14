@@ -26,7 +26,7 @@ type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipi
 
 export function sendPointToPointMessage(args: {
   params: SendParamsInput
-  runtime: OrcaRuntimeService
+  runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb' | 'notifyMessageArrived'>
   db: OrchestrationDb
   from: string
   to: string

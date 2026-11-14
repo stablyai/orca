@@ -34,6 +34,11 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
     this.adapters().some((adapter) => adapter.supportsLocation?.(location) ?? false)
 
+  supportsAdvisoryPolicy = (location: AgentSessionExecutionLocation, agent: string): boolean =>
+    this.agents.registration(agent)?.adapter.supportsAdvisoryPolicy?.(location, agent) ?? false
+  supportsExecutionPolicy = (location: AgentSessionExecutionLocation, agent: string): boolean =>
+    this.agents.registration(agent)?.adapter.supportsExecutionPolicy?.(location, agent) ?? false
+
   /** Closure is permanent; late acquisition must never reopen routing to closed adapters. */
   async acquire(input: Parameters<Adapter['acquire']>[0]) {
     if (this.allAdaptersClosed) {
@@ -217,6 +222,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     }
     return reader(input)
   }
+
+  readExecutionQualification: NonNullable<Adapter['readExecutionQualification']> = (record) =>
+    this.agents.registration(record.provider)?.adapter.readExecutionQualification?.(record) ??
+    Promise.resolve(null)
+
+  readExecutionEvidence: NonNullable<Adapter['readExecutionEvidence']> = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.readExecutionEvidence?.(input) ?? Promise.resolve(null)
 
   generateText: NonNullable<Adapter['generateText']> = (input) => {
     const { adapter } = this.requireAgent(input)

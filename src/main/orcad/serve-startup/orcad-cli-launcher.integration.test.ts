@@ -1,3 +1,4 @@
+// @orca-isolated-worker: Child sealing must not inherit another suite's partial session-host registry.
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'

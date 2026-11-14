@@ -18,6 +18,20 @@ type PermissionHost = {
   permissions?: CodexSession['permissions']
 }
 
+export type CodexSessionPermissions = {
+  reportedCwd?: string
+  approvalPolicy?: string
+  approvalsReviewer?: string
+  acquiredMode: AgentChatPermissionChoice
+  appliedMode?: AgentChatPermissionChoice
+  acquiredSandbox?: CodexSandboxPolicy
+  launchSandboxIntact: boolean
+  cwd: string
+  visualsFolder?: string
+  preparedMode?: AgentChatPermissionChoice
+  preparedAuto?: CodexSandboxPolicy
+}
+
 /** Prepared outside the host serialize so a configuration request never holds up accepting sends. */
 export async function prepareCodexTurnPermission(
   session: PermissionHost,

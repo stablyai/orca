@@ -1,13 +1,71 @@
+import type {
+  AgentSessionExecutionExecutable,
+  AgentSessionExecutionUsage,
+  AgentSessionExecutionEvidence
+} from '../../../../shared/agent-session/agent-session-execution-evidence'
 import { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
+import { CodexCumulativeUsageMeter } from '../journal/codex-cumulative-usage-meter'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import '../prompts/codex-structured-prompt-replies'
 import { CodexPromptRegistry } from '../prompts/codex-prompt-registry'
+import { createCodexExecutionControls } from '../launch/codex-execution-controls'
+import type { AgentSessionExecutionPolicy } from '../../../../shared/agent-session/agent-session-execution-policy'
+import type { AgentSessionExecutionReceiptWrite } from '../../../../shared/agent-session/agent-session-execution-receipt'
+import type {
+  AgentSessionExecutionReport,
+  AgentSessionExecutionReporter
+} from '../../../../shared/agent-session/agent-session-execution-report'
 
 // Bound events retained before a session can route them.
 export const MAX_CODEX_ACQUISITION_BUFFER_OPERATIONS = 1024
 export const MAX_CODEX_ACQUISITION_BUFFER_BYTES = 4 * 1024 * 1024
 
 export class CodexAcquisitionWindow {
+  execution?: {
+    policy: AgentSessionExecutionPolicy
+    profileId: string
+    executable?: AgentSessionExecutionExecutable
+    controls: ReturnType<typeof createCodexExecutionControls>
+    inputAdmitted: boolean
+    toolsIsolated: boolean
+    openedWorkspaceRoots?: string[]
+    usage?: AgentSessionExecutionUsage
+    usageUnverifiable?: boolean
+    lastEvidence?: AgentSessionExecutionEvidence
+    invalidated: boolean
+    turnCompleted: boolean
+    report?: AgentSessionExecutionReport
+    reporter?: AgentSessionExecutionReporter
+    record?: (write: AgentSessionExecutionReceiptWrite) => Promise<void>
+    binding?: Omit<AgentSessionExecutionReceiptWrite, 'receipt'>
+    checkpoint?: () => void
+  }
+
+  startExecution(
+    input:
+      | {
+          policy: AgentSessionExecutionPolicy
+          profileId: string
+          executable?: AgentSessionExecutionExecutable
+        }
+      | undefined,
+    close: () => Promise<boolean>,
+    onFault: (reason: Error) => void
+  ): void {
+    if (input) {
+      this.execution = {
+        ...input,
+        controls: createCodexExecutionControls(input.policy, close, onFault),
+        inputAdmitted: false,
+        toolsIsolated: false,
+        invalidated: false,
+        turnCompleted: false
+      }
+    }
+  }
+  nativeExecutionSettings?: Record<string, unknown>
+  authRevision = 0
+  readonly usageMeter = new CodexCumulativeUsageMeter()
   readonly appliedSettings = new CodexAppliedSettings()
   readonly prompts = new CodexPromptRegistry()
   /** Null until the spawn resolves; the handshake can already emit events. */

@@ -41,7 +41,7 @@ import type {
 } from './structured-agent-runtime-registration-types'
 
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
-  const { deps, followUps, host } = context
+  const { deps, followUps, host, store } = context
   const providerInvocation = {
     resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
     resolveWorkspacePath: deps.resolveWorkspacePath,
@@ -50,6 +50,16 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
     ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
   }
   return new CodexStructuredSessionAdapter({
+    onExecutionReceipt: async (input) => {
+      const runtime = deps.executionRuntimeIdentity?.()
+      await store.recordExecutionReceipt({
+        ...input,
+        receipt: { ...input.receipt, ...(runtime ? { runtime } : {}) }
+      })
+    },
+    ...(deps.prepareExecutionReporter
+      ? { prepareExecutionReporter: deps.prepareExecutionReporter }
+      : {}),
     providerInvocation,
     resolveAccountKind: deps.resolveCodexAccountKind,
     atRestCommands: createCodexAtRestSkillCatalog({
@@ -136,6 +146,16 @@ function createClaudeAdapter(
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onDispatchSettledLate: followUps.onDispatchSettledLate,
     ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
+    ...(deps.prepareAdvisoryReporter
+      ? { prepareAdvisoryReporter: deps.prepareAdvisoryReporter }
+      : {}),
+    onAdvisoryReceipt: async (input) => {
+      const runtime = deps.executionRuntimeIdentity?.()
+      await store.recordAdvisoryReceipt({
+        ...input,
+        receipt: { ...input.receipt, ...(runtime ? { runtime } : {}) }
+      })
+    },
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })
 }

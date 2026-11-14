@@ -114,6 +114,8 @@ async function resolveAndCommitStructuredAgentSessionCreate(
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.optionsMode ? { optionsMode: params.optionsMode } : {}),
         ...(params.options ? { options: params.options } : {}),
+        ...(params.advisoryPolicy ? { advisoryPolicy: params.advisoryPolicy } : {}),
+        ...(params.executionPolicy ? { executionPolicy: params.executionPolicy } : {}),
         ...(params.firstMessage ? { firstMessage: params.firstMessage } : {}),
         atRest: Boolean(
           params.forkFrom ||
