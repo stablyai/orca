@@ -94,7 +94,7 @@ export function getManagedScript(
         ]
       : []),
     ...buildPosixClaudeBackgroundJobGuardLines(),
-    ...(source === 'claude' ? buildHookProcessCapture() : []),
+    ...(source === 'claude' ? buildHookProcessCapture({ reuseForClaudeToolEvents: true }) : []),
     // Surviving PTYs need fresh endpoint coordinates; suppress errors and survive outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  unset ORCA_AGENT_HOOK_TRANSPORT',
