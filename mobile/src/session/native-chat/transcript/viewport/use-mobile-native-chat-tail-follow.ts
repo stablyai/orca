@@ -40,7 +40,11 @@ export type MobileNativeChatListHandle = {
 }
 
 export type MobileNativeChatTailFollow = {
-  listProps: { ref: (list: MobileNativeChatListHandle | null) => void }
+  listProps: {
+    ref: (list: MobileNativeChatListHandle | null) => void
+    /** The row a pending restore waits on was drawn. */
+    onDrawn: () => void
+  }
   pageListProps: {
     ref: (list: MobileNativeChatListHandle | null) => void
     isFollowing: () => boolean
@@ -150,9 +154,13 @@ export function useMobileNativeChatTailFollow(args: {
     (event: NativeScrollEvent) => {
       if (listReportsGestures()) {
         setAtTail(isAtTail(event))
+        // Also mid-fling: the view can be left before the gesture ends.
+        if (userScrollActiveRef.current) {
+          rememberPlace()
+        }
       }
     },
-    [setAtTail]
+    [rememberPlace, setAtTail]
   )
 
   // Detach even on one-point reader moves; programmatic corrections must not alter intent.
@@ -283,7 +291,7 @@ export function useMobileNativeChatTailFollow(args: {
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
   return {
-    listProps: { ref: attachList },
+    listProps: { ref: attachList, onDrawn: tryRestore },
     pageListProps: { ref: attachList, isFollowing, onEndDistance, onDrawn: tryRestore },
     showJumpToTail: !following && !atTail,
     pinToTail,
