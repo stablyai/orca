@@ -34,6 +34,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent'],
     notes: [
       "Lists the accounts on this machine with the ids `orca account select` and `orca account rm` accept. `system` is the provider's own sign-in outside Orca.",
+      '`dynamic: true` means new Claude or Codex launches pick an account each time (`--account dynamic`).',
       '`--environment` / `--pairing-code` are rejected rather than ignored; run it on the host whose accounts you want to see.'
     ],
     examples: ['orca account list', 'orca account list --agent claude']
@@ -42,15 +43,18 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     path: ['account', 'select'],
     summary: 'Select the account new agent launches use on this Orca host',
     usage:
-      'orca account select --agent claude|codex|opencode|devin|antigravity --account <id|email|label|system> [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent', 'account'],
+      'orca account select --agent claude|codex|opencode|devin|antigravity --account <id|email|label|system|dynamic> [--off] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent', 'account', 'off'],
     notes: [
       "--account takes an id, email or label from `orca account list`, or `system` for the provider's own sign-in. An email shared by several accounts is refused; pass the id.",
-      'The selection applies to agents launched on this host after it, like the status-bar account switcher. Antigravity has no `system` default.'
+      'The selection applies to agents launched on this host after it, like the status-bar account switcher. Antigravity has no `system` default.',
+      'Claude and Codex only: `dynamic` makes each new host launch use the account whose weekly limit resets soonest, keeping a margin free on every account; `--account dynamic --off` turns it off. The selected account stays the fallback when no account qualifies, and selecting one leaves `dynamic` as it is.'
     ],
     examples: [
       'orca account select --agent claude --account me@work.example',
       'orca account select --agent codex --account system',
+      'orca account select --agent claude --account dynamic',
+      'orca account select --agent claude --account dynamic --off',
       'orca account select --agent antigravity --account me@gmail.example'
     ]
   },

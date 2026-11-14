@@ -17,6 +17,7 @@ import { createCodexSessionResumeLaunchPreparation } from '../../codex/history/r
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
+import type { StructuredCodexLaunchHomeInput } from '../../runtime/agent-session/environment/structured-agent-account-home'
 import { isWslHostOrcadProcess } from '../../ipc/wsl-guest-windows-drive-path'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 
@@ -28,7 +29,7 @@ type OrcadAccountServices = {
   /** Pin auto-resume to the account home that recorded the session. */
   prepareCodexSessionResume: PrepareCodexSessionResume
   runtimeDeps: {
-    prepareCodexStructuredLaunch: (input: StructuredLaunchInput) => Promise<string | null>
+    prepareCodexStructuredLaunch: (input: StructuredCodexLaunchHomeInput) => Promise<string | null>
     resolveCodexStructuredLaunchHome: (input: StructuredLaunchInput) => string | null
     prepareCodexCatalogProbeHome: (homePath: string) => void
     prepareAiVaultSessionResume: (
@@ -74,8 +75,8 @@ export function createOrcadAccountServices(args: {
     getRuntimeHome: () => codexRuntimeHome,
     getSettings: () => store.getSettings()
   })
-  const prepareClaudeAuth: PrepareClaudeAuth = (target) =>
-    services.claudeRuntimeAuth.prepareForClaudeLaunch(target)
+  const prepareClaudeAuth: PrepareClaudeAuth = (target, dynamicAccountLaunch) =>
+    services.claudeRuntimeAuth.prepareForClaudeLaunch(target, dynamicAccountLaunch)
   const resumeLaunch = createCodexSessionResumeLaunchPreparation({
     getRuntimeHome: () => codexRuntimeHome,
     getSettings: () => store.getSettings()
@@ -89,9 +90,9 @@ export function createOrcadAccountServices(args: {
         ? null
         : resumeLaunch.prepareCodexSessionResumeForLaunch(resumeArgs),
     runtimeDeps: {
-      prepareCodexStructuredLaunch: async ({ launchEnv }) =>
+      prepareCodexStructuredLaunch: async ({ launchEnv, dynamicAccountLaunch }) =>
         (await clientCodexHomes.selectLaunchHome(undefined, launchEnv)) ??
-        prepareCodexHome(undefined, launchEnv),
+        prepareCodexHome(undefined, launchEnv, { dynamicAccountLaunch }),
       resolveCodexStructuredLaunchHome: ({ launchEnv }) =>
         clientCodexHomes.readLaunchHome(launchEnv) ??
         codexRuntimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv),

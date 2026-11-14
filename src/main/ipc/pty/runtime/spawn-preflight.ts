@@ -103,7 +103,10 @@ export async function prepareRuntimePtySpawn(
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+      ? await ctx.deps.prepareClaudeAuth(
+          ctx.codexSelectionTarget,
+          args.launchAgent === 'claude' && !args.resumeProviderSession
+        )
       : null
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true

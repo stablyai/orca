@@ -20,6 +20,7 @@ import {
   trackAccountAddition
 } from '../sign-in/account-add-cancel-target'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { DynamicAccountLaunchSetting } from '../dynamic-account-launch-setting'
 
 export function renderCodexAccountsSection(
   model: AccountsPaneSectionModel,
@@ -310,6 +311,7 @@ export function renderCodexAccountsSection(
             )}
           </div>
         </SearchableSetting>
+        <DynamicAccountLaunchSetting provider="codex" model={model} />
       </SettingsGroup>
     </div>
   )

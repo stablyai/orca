@@ -27,7 +27,9 @@ export function listStaleCodexPanes(args: {
       args.settings,
       parseSelectionLaneKey(record.selectionKey)
     )
-    if (record.accountId !== activeAccountId) {
+    const launchSelectionId =
+      record.selectionAccountId === undefined ? record.accountId : record.selectionAccountId
+    if (launchSelectionId !== activeAccountId) {
       stalePanes.push({ ptyId, launchAccountId: record.accountId, activeAccountId })
     }
   }

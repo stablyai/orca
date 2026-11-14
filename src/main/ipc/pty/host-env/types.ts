@@ -6,6 +6,7 @@ import type { ClaudeAccountSelectionTarget } from '../../../claude-accounts/sele
 import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
 import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
 import type { CodexSessionResumePreparation } from '../../../codex/history/resume/codex-session-resume-home'
+import type { CodexHomeLaunchOptions } from '../../../codex-accounts/runtime-home/runtime-home-service-types'
 
 export type BuildPtyHostEnvOptions = {
   isPackaged: boolean
@@ -36,8 +37,10 @@ export type BuildPtyHostEnvOptions = {
   deferGitConfigGuardToDaemon?: boolean
 }
 
-export type CodexHomeLaunchContext = {
-  unavailableManagedHomePath?: string
+export type CodexHomeLaunchContext = Pick<
+  CodexHomeLaunchOptions,
+  'unavailableManagedHomePath' | 'dynamicAccountLaunch'
+> & {
   launchesCodex?: boolean
 }
 
@@ -72,5 +75,6 @@ export function allocatePtyLifecycleSequence(): number {
 }
 
 export type PrepareClaudeAuth = (
-  target?: ClaudeAccountSelectionTarget
+  target?: ClaudeAccountSelectionTarget,
+  dynamicAccountLaunch?: boolean
 ) => Promise<ClaudeRuntimeAuthPreparation>

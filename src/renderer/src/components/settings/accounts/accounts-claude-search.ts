@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
+import { getDynamicAccountLaunchSearchEntry } from './dynamic-account-launch-search'
 
 export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
   {
@@ -37,5 +38,6 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.restart', 'restart'),
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.running', 'running')
     ]
-  }
+  },
+  getDynamicAccountLaunchSearchEntry('claude')
 ])

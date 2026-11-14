@@ -23817,7 +23817,17 @@
         "failed": "Sign-in failed. Try again."
       }
     },
-    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser."
+    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "dynamicLaunch": {
+      "title": "Pick an account for each new session",
+      "description": "Uses the account whose weekly limit resets soonest, keeping a margin free on every account.",
+      "keyword": {
+        "dynamic": "dynamic"
+      },
+      "needsUsagePolling": "Turn on Claude usage polling below to use this.",
+      "margin": "Margin to keep on each account (%)",
+      "marginScope": "Applies to Claude and Codex."
+    }
   },
   "fileSearch": {
     "failed": "Search failed. Try again.",

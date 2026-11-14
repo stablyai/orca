@@ -21,6 +21,7 @@ import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-s
 import type { OrchestrationEnvironmentTransport } from '../orchestration/federation/environment-transport'
 import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
 import type { SessionSearchSettingsApply } from '../integrations/ai-vault/runtime-session-search-settings'
+import type { StructuredCodexLaunchHomeInput } from '../agent-session/environment/structured-agent-account-home'
 
 export type RuntimeConstructionDependencies = {
   /** A host that opened the saved-chat store before construction passes the ids it used. */
@@ -68,9 +69,9 @@ export type RuntimeConstructionDependencies = {
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
   ) => Promise<AiVaultPrepareSessionResumeResult>
-  prepareCodexStructuredLaunch?: (input: {
-    launchEnv: NodeJS.ProcessEnv
-  }) => string | null | Promise<string | null>
+  prepareCodexStructuredLaunch?: (
+    input: StructuredCodexLaunchHomeInput
+  ) => string | null | Promise<string | null>
   resolveCodexStructuredLaunchHome?: (input: {
     launchEnv: NodeJS.ProcessEnv
   }) => string | null | Promise<string | null>

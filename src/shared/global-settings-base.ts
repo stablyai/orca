@@ -6,6 +6,7 @@ import type { WorktreeCardDisplaySettings } from './worktree/card-display-settin
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
+import type { DynamicAccountLaunchSettings } from './dynamic-account-launch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
 import type { NativeChatIdleStopSettings } from './native-chat/native-chat-idle-stop'
@@ -36,6 +37,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   WorktreeDeletionPreferences &
   WorktreeCardDisplaySettings &
   ClaudeAccountSwitchSettings &
+  DynamicAccountLaunchSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings &

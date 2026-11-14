@@ -105,10 +105,14 @@ function parseRegistry(parsed: unknown): CodexPaneAccountRegistryFile {
   for (const [ptyId, record] of Object.entries(panes)) {
     if (isPaneAccountRecord(record)) {
       const homeRoute = readPaneHomeRoute(record.homeRoute)
+      const { selectionAccountId } = record
       empty.panes[ptyId] = {
         selectionKey: record.selectionKey,
         accountId: record.accountId,
-        ...(homeRoute ? { homeRoute } : {})
+        ...(homeRoute ? { homeRoute } : {}),
+        ...(selectionAccountId === null || typeof selectionAccountId === 'string'
+          ? { selectionAccountId }
+          : {})
       }
     }
   }

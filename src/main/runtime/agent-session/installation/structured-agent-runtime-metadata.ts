@@ -1,4 +1,7 @@
-import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import {
+  agentSessionAccountHome,
+  agentSessionAccountHomePath
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
@@ -16,6 +19,12 @@ import { supportsClaudeStructuredLocation } from '../../../claude/structured/lau
 import { supportsAcpStructuredLocation } from '../../../acp/session/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../../../pi/rpc-runtime-metadata'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
+import {
+  getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath
+} from '../../../codex/configuration/homes/codex-home-paths'
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath
@@ -119,9 +128,10 @@ async function resolveCodexAccountHomePath(
   request: StructuredAgentAccountHomeRequest,
   services: StructuredAgentAccountHomeServices
 ): Promise<string> {
-  const { launchEnv, purpose, workspacePath, location } = request
+  const { launchEnv, purpose, workspacePath, location, dynamicAccountLaunch } = request
   const codexHome = await resolveStructuredCodexAccountHomePath({
     launchEnv,
+    dynamicAccountLaunch,
     resolveLaunchHome:
       purpose === 'launch' ? services.prepareCodexLaunchHome : services.readCodexLaunchHome
   })
@@ -137,6 +147,18 @@ async function resolveCodexAccountHomePath(
   return codexHome
 }
 
+function isCurrentCodexAccountHome(
+  home: string | null,
+  accounts: readonly CodexManagedAccount[]
+): boolean {
+  const pinned = home === null ? null : normalizeRuntimePathForComparison(home)
+  return [
+    getSystemCodexHomePath(),
+    resolveOrcaManagedCodexHomePath(),
+    ...accounts.map((account) => account.managedHomePath)
+  ].some((path) => normalizeRuntimePathForComparison(path) === pinned)
+}
+
 // One roster supplies both metadata readers and the host's synchronous adapter factories.
 export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCatalogEntry[] = [
   { kind: 'pi', metadata: PI_RPC_RUNTIME_METADATA },
@@ -148,7 +170,13 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       modelCatalog: codexModelCatalogDiscovery,
       ...CODEX_CLI_CONVERSATIONS,
       supportsLocation: (location) => supportsCodexStructuredLocation(location),
-      launchFollowsSelection: () => true,
+      // With dynamic launch on, a chat keeps its account while that account still exists.
+      launchFollowsSelection: (accountHome, settings) =>
+        !settings.codexDynamicAccountLaunch ||
+        !isCurrentCodexAccountHome(
+          agentSessionAccountHomePath(accountHome),
+          settings.codexManagedAccounts ?? []
+        ),
       resolveAccountHome: async (request, services) =>
         agentSessionAccountHome(
           CODEX_STRUCTURED_AGENT,
@@ -165,16 +193,26 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       ...CLAUDE_CLI_CONVERSATIONS,
       supportsLocation: supportsClaudeStructuredLocation,
       // Without a router a launch keeps the record's home (resolveClaudeStructuredLaunchHome).
-      launchFollowsSelection: () => getClaudeProfileRouter() !== undefined,
-      resolveAccountHome: async ({ launchEnv, location, purpose }, services) =>
+      launchFollowsSelection: (accountHome) => {
+        const router = getClaudeProfileRouter()
+        const home = agentSessionAccountHomePath(accountHome)
+        return router !== undefined && router.dynamicLaunch?.pinnedAccount(home) === undefined
+      },
+      resolveAccountHome: async (
+        { launchEnv, location, purpose, dynamicAccountLaunch },
+        services
+      ) =>
         agentSessionAccountHome(
           CLAUDE_STRUCTURED_AGENT,
-          await resolveStructuredClaudeAccountHomePath({
-            launchEnv,
-            wslDistro: location?.wslDistro ?? null,
-            ...(purpose !== 'read' ? { purpose: 'identity' } : {}),
-            getClaudeConfigDirectory: services.getClaudeConfigDirectory
-          })
+          (purpose === 'launch' && dynamicAccountLaunch && !location?.wslDistro
+            ? await getClaudeProfileRouter()?.dynamicLaunch?.newChatHome()
+            : null) ??
+            (await resolveStructuredClaudeAccountHomePath({
+              launchEnv,
+              wslDistro: location?.wslDistro ?? null,
+              ...(purpose !== 'read' ? { purpose: 'identity' } : {}),
+              getClaudeConfigDirectory: services.getClaudeConfigDirectory
+            }))
         )
     }
   },

@@ -107,6 +107,11 @@ function readOwnershipMarker(file: string): string | null {
   return comparableOwnershipRecord(version, accountId, runtime, distro)
 }
 
+// Outside the account folder, so removing the account can repoint panes launched on it.
+export function claudeProfileLaunchPointerPath(dataRoot: string, accountId: string): string {
+  return join(dataRoot, 'claude-profiles', `launch-${accountId}`)
+}
+
 // Setup writes this marker only after completing successfully.
 export function claudeProfileMarkerPath(profile: ClaudeProfileDescriptor): string {
   const path = profile.target.runtime === 'wsl' ? hostPath.posix : hostPath

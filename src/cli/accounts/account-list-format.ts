@@ -8,6 +8,7 @@ type AccountsBlock = {
     host: string | null
     wsl: Record<string, string | null>
   }
+  dynamic?: boolean
 }
 
 export function formatDataAccounts(label: string, state: ManagedDataAccountsState): string {
@@ -25,7 +26,8 @@ export function formatDataAccounts(label: string, state: ManagedDataAccountsStat
 
 export function formatAccountsBlock(label: string, block: AccountsBlock): string {
   const hostAccountId = block.activeAccountIdsByRuntime?.host ?? block.activeAccountId
-  const system = `  system  System default${hostAccountId === null ? ' (active)' : ''}`
+  const dynamic = block.dynamic ? '  dynamic: true\n' : ''
+  const system = `${dynamic}  system  System default${hostAccountId === null ? ' (active)' : ''}`
   if (block.accounts.length === 0) {
     return `No managed ${label} accounts.\n${system}`
   }

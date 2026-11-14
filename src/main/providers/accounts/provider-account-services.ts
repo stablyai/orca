@@ -50,13 +50,14 @@ export function createProviderAccountServices(
     codexRuntimeHome,
     options.codexAccountLifecycle
   )
-  const claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
+  const claudeRuntimeAuth = new ClaudeRuntimeAuthService(store, rateLimits)
   const claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   // Background quota polls must not boot stopped distros; user-driven resets may prepare them.
   rateLimits.setCodexHomePathResolver((target) =>
     resolveCodexRateLimitHomeUnlessStopped(codexRuntimeHome, target)
   )
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
+  codexRuntimeHome.setDynamicAccountReadings(rateLimits)
   // Read credentials where Kimi’s CLI refreshes its token, including WSL (#12370).
   rateLimits.setKimiHomeResolver(() =>
     resolveKimiHome(resolveLocalAccountUsageTarget(store.getSettings()))

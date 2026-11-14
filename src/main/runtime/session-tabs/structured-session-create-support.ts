@@ -119,11 +119,13 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       })
       return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
     }
+    // Adopting a CLI conversation keeps the selection; only a new chat may be routed.
     const resolveAccountHome = this.structuredAgentAccountHomeResolver(
       input.agent,
       input.worktree,
       'launch',
-      hostLaunchDirectory
+      hostLaunchDirectory,
+      !input.resumeFrom
     )
     if (!resolveAccountHome) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {

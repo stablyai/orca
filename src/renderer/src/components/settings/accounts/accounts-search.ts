@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
+import { getDynamicAccountLaunchSearchEntry } from './dynamic-account-launch-search'
 
 export const ACCOUNTS_SECTION_IDS = {
   codex: 'accounts-codex',
@@ -81,7 +82,8 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.35b461d817', 'sign in')
     ]
-  }
+  },
+  getDynamicAccountLaunchSearchEntry('codex', ACCOUNTS_SECTION_IDS.codex)
 ])
 
 export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [

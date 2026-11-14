@@ -53,7 +53,8 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
         unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
         deferConfigSync: (prepare) => {
           syncConfig = prepare
-        }
+        },
+        dynamicAccountLaunch: launchContext?.dynamicAccountLaunch
       })
       const launchesCodex = launchContext?.launchesCodex === true
       if (runtimeHomePath === null && target?.runtime !== 'wsl') {

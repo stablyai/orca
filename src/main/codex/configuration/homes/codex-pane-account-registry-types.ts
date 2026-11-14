@@ -7,6 +7,8 @@ export type CodexPaneAccountRecord = {
   accountId: string | null
   /** Older records lack route provenance. */
   homeRoute?: CodexPaneHomeRoute
+  /** The selection when a dynamic launch ran on another account; staleness compares this. */
+  selectionAccountId?: string | null
 }
 
 export type CodexPaneAccountRegistryFile = {

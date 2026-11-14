@@ -21,8 +21,22 @@ import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
 import { blockedWslDistroForExec } from '../../../wsl/discovery/wsl-background-exec-gate'
 import { getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
 import type { CodexHomeLaunchOptions } from '../runtime-home-service-types'
+import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
+import { DynamicAccountLaunchPick } from '../../../providers/accounts/dynamic-account-launch-pick'
+
+type CodexDynamicAccountReadings = Pick<
+  RateLimitService,
+  'getState' | 'fetchInactiveCodexAccountsOnOpen' | 'requestUsageReading'
+>
 
 export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
+  private dynamicAccountReadings: CodexDynamicAccountReadings | null = null
+  private readonly dynamicLaunch = new DynamicAccountLaunchPick()
+
+  setDynamicAccountReadings(readings: CodexDynamicAccountReadings): void {
+    this.dynamicAccountReadings = readings
+  }
+
   protected initializeLastSyncedState(): void {
     const settings = this.store.getSettings()
     const activeAccount = this.getActiveAccount(
@@ -47,6 +61,19 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       this.startLegacyWslAuthDrain(wslTarget)
       this.finishWslLaunchPreparation(wslTarget, homePath)
       return homePath
+    }
+    const dynamicHome = this.resolveDynamicAccountHome(options)
+    if (
+      dynamicHome &&
+      !(
+        options?.unavailableManagedHomePath &&
+        normalizeRuntimePathForComparison(options.unavailableManagedHomePath) ===
+          normalizeRuntimePathForComparison(dynamicHome)
+      )
+    ) {
+      // The pick is not the selection, so selection bookkeeping stays untouched.
+      this.materializeSelfContainedHomeForLaunch(dynamicHome, options?.deferConfigSync)
+      return dynamicHome
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
@@ -137,6 +164,12 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     options?: CodexHomeLaunchOptions
   ): Promise<string | null> {
     if (target?.runtime !== 'wsl') {
+      const readings = this.dynamicLaunchReadings(options)
+      if (readings) {
+        await this.dynamicLaunch.refresh(readings, 'codex', () =>
+          readings.fetchInactiveCodexAccountsOnOpen()
+        )
+      }
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }
     const wslTarget = this.resolveWslDefaultTarget(target)
@@ -155,6 +188,47 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
     this.finishWslLaunchPreparation(wslTarget, homePath)
     return homePath
+  }
+
+  private dynamicLaunchReadings(
+    options?: CodexHomeLaunchOptions
+  ): CodexDynamicAccountReadings | null {
+    return options?.dynamicAccountLaunch && this.store.getSettings().codexDynamicAccountLaunch
+      ? this.dynamicAccountReadings
+      : null
+  }
+
+  private resolveDynamicAccountHome(options?: CodexHomeLaunchOptions): string | null {
+    const readings = this.dynamicLaunchReadings(options)
+    if (!readings) {
+      return null
+    }
+    const settings = this.store.getSettings()
+    const selectedAccountId = normalizeCodexRuntimeSelection(settings).host
+    const hostAccounts = settings.codexManagedAccounts.filter(
+      (account) => !this.getWslManagedHomePath(account)
+    )
+    const accountId = this.dynamicLaunch.pick(settings, () => {
+      const state = readings.getState()
+      const inactive = new Map(
+        state.inactiveCodexAccounts.map((usage) => [usage.accountId, usage.rateLimits])
+      )
+      return [
+        // The meter reads the selected account only while it watches the host lane.
+        {
+          accountId: selectedAccountId,
+          rateLimits: state.codexTarget.runtime === 'host' ? state.codex : null
+        },
+        ...hostAccounts
+          .filter((account) => account.id !== selectedAccountId)
+          .map((account) => ({
+            accountId: account.id,
+            rateLimits: inactive.get(account.id) ?? null
+          }))
+      ]
+    })
+    const account = hostAccounts.find((candidate) => candidate.id === accountId)
+    return account ? this.getTrustedSelfContainedManagedHomePath(account) : null
   }
 
   beginHostSystemDefaultSessionMigrationLaunch(

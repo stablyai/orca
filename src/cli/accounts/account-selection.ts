@@ -20,6 +20,7 @@ import {
   formatDataAccounts
 } from './account-list-format'
 import { assertDataAccountsSupported, listDataAccounts } from './data-account-commands'
+import { selectDynamicLaunch, type ClaudeCodexSnapshot } from './dynamic-account-launch'
 
 const ACCOUNT_AGENTS = ['claude', 'codex', 'opencode', 'devin', 'antigravity'] as const
 type AccountAgent = (typeof ACCOUNT_AGENTS)[number]
@@ -43,11 +44,6 @@ type ProviderAccounts = {
   list: () => Promise<void>
   select: (accountId: string | null) => Promise<void>
   remove: (accountId: string) => Promise<void>
-}
-
-type ClaudeCodexSnapshot = {
-  claude: ClaudeRateLimitAccountsState
-  codex: CodexRateLimitAccountsState
 }
 
 function emailChoices(state: { accounts: readonly { id: string; email: string }[] }) {
@@ -290,6 +286,9 @@ function resolveSavedAccountId(
 export async function selectAgentAccount(ctx: HandlerContext): Promise<void> {
   const agent = readAgentFlag(ctx)
   const query = readAccountFlag(ctx)
+  if (await selectDynamicLaunch(ctx, agent, query)) {
+    return
+  }
   // Why: accounts.selectClaude carries no target, so `system` from the WSL bridge
   // would reset the Windows host's selection instead of the distro's.
   if (agent === 'claude' && query === 'system' && getWslAccountTarget(ctx.cwd)) {

@@ -1,5 +1,6 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import type { StructuredAgentCliConversations } from '../../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import type {
@@ -52,6 +53,8 @@ export type StructuredAgentAccountHomeRequest = {
   workspacePath: (() => Promise<string>) | null
   /** The permission mode a new chat starts in, when it names one. */
   permissionMode?: string
+  /** A new chat, not an adoption, which dynamic account launch may route to another account. */
+  dynamicAccountLaunch?: boolean
 }
 
 /** What resolving an account may ask of the runtime around it. */
@@ -137,7 +140,10 @@ export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {
   ) => Promise<AgentSessionAccountHome>
   /** Whether a start of an existing chat launches under the account `resolveAccountHome` picks now
    *  rather than the one its record pins; absent keeps the record's. */
-  launchFollowsSelection?: () => boolean
+  launchFollowsSelection?: (
+    accountHome: AgentSessionAccountHome,
+    settings: Partial<Pick<GlobalSettings, 'codexDynamicAccountLaunch' | 'codexManagedAccounts'>>
+  ) => boolean
 }
 
 export type StructuredAgentRuntimeRegistration = StructuredAgentRuntimeMetadata & {

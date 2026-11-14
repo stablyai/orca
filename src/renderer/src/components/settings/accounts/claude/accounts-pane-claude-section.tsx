@@ -32,6 +32,7 @@ import {
   trackAccountAddition
 } from '../sign-in/account-add-cancel-target'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { DynamicAccountLaunchSetting } from '../dynamic-account-launch-setting'
 
 export function renderClaudeAccountsSection(
   model: AccountsPaneSectionModel,
@@ -385,6 +386,7 @@ export function renderClaudeAccountsSection(
             )}
           </div>
         </SearchableSetting>
+        <DynamicAccountLaunchSetting provider="claude" model={model} />
         {isRemoteAccountScope ? null : (
           <ClaudeOAuthUsageSetting
             settings={settings}
