@@ -217,8 +217,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:addFromPairingCode'
     )
     await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const mainFrame = { detached: false }
     const sender = {
       id: 1,
+      mainFrame,
       isDestroyed: () => false,
       send: vi.fn(),
       on: vi.fn(),
@@ -235,7 +237,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     >('runtimeEnvironments:subscribe')
     const start = (subscriptionId: string, reason: string, method = 'github.prForBranch') =>
       subscribe(
-        { sender },
+        { sender, senderFrame: mainFrame },
         { selector: 'desk', subscriptionId, method, params: { reason, selected: true } }
       )
     await start('timer-1', 'swr')
