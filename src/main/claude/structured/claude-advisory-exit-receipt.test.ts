@@ -21,12 +21,13 @@ it('retains final advisory cleanup after unexpected exit without retaining repor
   const cwd = await mkdtemp(join(tmpdir(), 'orca-advisory-exit-'))
   const claude = fakeClaude()
   const writes: AgentSessionAdvisoryReceiptWrite[] = []
+  const observedAt = 1800000000000
   let reportGeneration: (() => string | null) | undefined
   const policy = {
     schema: 2 as const,
     dataScope: 'published' as const,
     sourcePin: 'a'.repeat(40),
-    deadlineAt: Date.now() + 120000,
+    deadlineAt: observedAt + 120000,
     maxModelCalls: 4,
     binding: {
       accountFingerprint: `claude:${'b'.repeat(64)}`,
@@ -81,7 +82,7 @@ it('retains final advisory cleanup after unexpected exit without retaining repor
       turnCompleted: false,
       execution: {
         agent: 'claude',
-        observedAt: Date.now(),
+        observedAt,
         binding: null,
         bounded: {
           policyFingerprint: agentSessionAdvisoryPolicyFingerprint(policy),
@@ -93,14 +94,14 @@ it('retains final advisory cleanup after unexpected exit without retaining repor
           callCounter: 'main-assistant-message-ids'
         }
       },
-      closure: { root: 'exited', tree: 'unverifiable', observedAt: Date.now() }
+      closure: { root: 'exited', tree: 'unverifiable', observedAt }
     }
     connection.handlers.onAdvisoryObservation?.(observation)
     const close = connection.close
     connection.close = async () => {
       connection.handlers.onAdvisoryObservation?.({
         ...observation,
-        closure: { root: 'exited', tree: 'exited', observedAt: Date.now() }
+        closure: { root: 'exited', tree: 'exited', observedAt: observedAt + 1 }
       })
       return close()
     }
