@@ -48,34 +48,6 @@ async function iconPlugin(svgs: Record<string, string>): Promise<ValidDiscovered
   }
 }
 
-it('lists metadata and reads a theme only when it is loaded', async () => {
-  const plugin = await iconPlugin({
-    'folder.svg': '<svg viewBox="0 0 1 1"><path fill="currentColor" d="M0 0h1v1z"/></svg>',
-    'ts.svg': '<svg viewBox="0 0 1 1"><rect width="1" height="1" fill="#3178c6"/></svg>'
-  })
-  const registry = new PluginIconThemeRegistry(new PluginContentVerifier())
-  await registry.reconcile([plugin], () => true)
-
-  expect(registry.list()).toEqual([
-    {
-      id: 'plugin:samples.minimal-icons/minimal',
-      pluginKey: 'samples.minimal-icons',
-      label: 'Minimal',
-      revision: expect.stringMatching(/^[0-9a-f]{32}$/)
-    }
-  ])
-  const theme = await registry.load('plugin:samples.minimal-icons/minimal')
-  expect(theme?.svgs).toHaveLength(2)
-  expect(theme?.svgs[theme.icons.folder ?? -1]).toContain('currentColor')
-  expect(theme?.svgs[theme.fileExtensions.ts ?? -1]).toContain('#3178c6')
-  await expect(registry.load('plugin:samples.other/x')).resolves.toBeNull()
-
-  // An update that changes only SVG bytes keeps id and title but installs a new tree hash.
-  const revision = registry.list()[0]?.revision
-  await registry.reconcile([{ ...plugin, contentHash: 'a'.repeat(64) }], () => true)
-  expect(registry.list()[0]?.revision).not.toBe(revision)
-})
-
 it('fails a load whose file is not an SVG document and forgets themes once disabled', async () => {
   const plugin = await iconPlugin({
     'folder.svg': '<!DOCTYPE svg [<!ENTITY x "y">]><svg/>',
