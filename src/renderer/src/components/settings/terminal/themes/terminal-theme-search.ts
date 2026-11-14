@@ -2,6 +2,9 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+// Light-mode rows render only after switching Theme mode to Light, so their results land on that switch.
+export const TERMINAL_THEME_MODE_SETTING_ID = 'terminal-theme-mode'
+
 export const getTerminalDarkThemeSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.ee9665265e', 'Dark theme'),
@@ -56,6 +59,7 @@ export const getTerminalThemeTargetSearchEntries = createLocalizedCatalog(() => 
 
 export const getTerminalLightThemeSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: TERMINAL_THEME_MODE_SETTING_ID,
     title: translate(
       'auto.components.settings.terminal.search.match_dark_mode_title',
       'Match dark mode'
@@ -101,6 +105,7 @@ export const getTerminalLightThemeSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: TERMINAL_THEME_MODE_SETTING_ID,
     title: translate('auto.components.settings.terminal.search.18a9f63aff', 'Light divider color'),
     description: translate(
       'auto.components.settings.terminal.search.77d9f9cd55',

@@ -1,7 +1,7 @@
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
-import { createClaudeChildTreeReaper } from '../../claude/claude-agent-sdk-exit-proof'
+import { createClaudeChildTreeReaper } from '../../claude/child-process/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
 import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'

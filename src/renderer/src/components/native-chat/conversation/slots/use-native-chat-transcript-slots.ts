@@ -1,4 +1,9 @@
-import { useMemo } from 'react'
+import { NativeChatVisualOwnerContext } from '../../media/visuals/native-chat-visual-owner'
+import {
+  nativeChatMarkdownImageSources,
+  nativeChatVisualMarkdownImageSources
+} from '../../markdown/native-chat-markdown-image-sources'
+import { useContext, useMemo } from 'react'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
@@ -15,7 +20,7 @@ import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-in
 export function useNativeChatTranscriptSlots({
   line,
   ...input
-}: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId' | 'tailRowBelow'> & {
+}: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId'> & {
   line: {
     /** The row drawn under the transcript, if any. */
     tailRow: 'awaiting-input' | 'activity' | null
@@ -28,6 +33,10 @@ export function useNativeChatTranscriptSlots({
   forkPoint: NativeChatSideChatForkPoint | null
   liveLine: NativeChatLiveLine | null
 } {
+  const visualOwner = useContext(NativeChatVisualOwnerContext)
+  const imageSources = visualOwner
+    ? nativeChatVisualMarkdownImageSources
+    : nativeChatMarkdownImageSources
   const {
     messages,
     unresolvedRowIds,
@@ -41,8 +50,7 @@ export function useNativeChatTranscriptSlots({
     expandedTurnKeys,
     isWorking,
     lifecycleWorking,
-    subagentSections,
-    subagentChoices,
+    subagentHeads,
     forkOffer
   } = input
   const { tailRow, thinking, stopping = false, activityText } = line
@@ -77,11 +85,10 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
-  // A boolean, so the line's changing words never rebuild the slots.
-  const tailRowBelow = liveLine !== null || tailRow === 'awaiting-input'
   const { slots, forkPoint } = useMemo(
     () =>
       buildNativeChatTranscript({
+        imageSources,
         messages,
         unresolvedRowIds,
         typography,
@@ -94,14 +101,13 @@ export function useNativeChatTranscriptSlots({
         expandedTurnKeys,
         isWorking,
         lifecycleWorking,
-        subagentSections,
-        subagentChoices,
+        subagentHeads,
         liveReasoningId,
-        tailRowBelow,
         forkOffer
       }),
     [
       expandedTurnKeys,
+      imageSources,
       forkOffer,
       isWorking,
       lifecycleWorking,
@@ -110,9 +116,7 @@ export function useNativeChatTranscriptSlots({
       messages,
       openedPullRequests,
       receipts,
-      subagentChoices,
-      subagentSections,
-      tailRowBelow,
+      subagentHeads,
       turnDiffs,
       turnKeys,
       turnStatuses,

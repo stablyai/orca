@@ -182,6 +182,21 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].ptyId).toBeNull()
   })
 
+  it('labels a waiting agent with its question, not the prompt envelope JSON', () => {
+    const interactivePrompt = JSON.stringify({
+      questions: [{ question: 'Which database?', options: [{ label: 'Postgres' }] }]
+    })
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ state: 'waiting', toolName: 'AskUserQuestion', interactivePrompt })
+        }
+      }),
+      NOW
+    )
+    expect(snapshot.cards[0].askSummary).toBe('Which database?')
+  })
+
   it('skips card-only context for count snapshots', () => {
     mapMetadataCalls.hostKind.mockClear()
     mapMetadataCalls.parentPaneKey.mockClear()

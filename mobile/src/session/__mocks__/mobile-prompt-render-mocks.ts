@@ -67,7 +67,9 @@ vi.mock('../native-chat/transcript/MobileNativeChatRowOverlaysHost', () => ({
 vi.mock('../native-chat/visual/MobileNativeChatVisual', () => ({
   useMobileNativeChatVisualRenderer: () => null
 }))
-vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
+vi.mock('../../platform/accessibility/use-reduced-motion', () => ({
+  useReducedMotionEnabled: () => null
+}))
 vi.mock('../native-chat/transcript/MobileNativeChatLiveLine', () => ({
   MobileNativeChatLiveLine: 'LiveStatus'
 }))

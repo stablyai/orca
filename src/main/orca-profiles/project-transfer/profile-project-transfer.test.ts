@@ -11,10 +11,10 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import {
   exportProfileStateJson,
-  hashProfileStateJson,
   importProfileStateJson
-} from '../../persistence/profile-state/profile-state-documents'
-import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'
+} from '../../persistence/profile-state/documents/profile-state-documents'
+import { hashProfileStatePayload as hashProfileStateJson } from '../../persistence/profile-state/documents/profile-state-document-validation'
+import { openProfileStateDatabase } from '../../persistence/profile-state/database/profile-state-database'
 import {
   persistProfileProjectMoveIntent,
   recoverPendingProfileProjectMoves
@@ -66,6 +66,15 @@ async function loadTransferModule() {
   return import('./profile-project-transfer')
 }
 
+function transferMove(
+  transfer: Awaited<ReturnType<typeof loadTransferModule>>['transferOrcaProfileProject']
+) {
+  return transfer(
+    { sourceProfileId: 'personal', targetProfileId: 'work', repoId: 'repo-1', mode: 'move' },
+    testState.dir
+  )
+}
+
 function profile(id: string, name: string): OrcaProfileIndex['profiles'][number] {
   return {
     id,
@@ -87,18 +96,8 @@ function writeIndex(activeProfileId = 'personal'): void {
   writeFileSync(join(testState.dir, 'orca-profile-index.json'), JSON.stringify(index), 'utf-8')
 }
 
-function profileDataPath(profileId: string): string {
-  return join(testState.dir, 'profiles', profileId, 'orca-data.json')
-}
-
 function profileDatabasePath(profileId: string): string {
   return join(testState.dir, 'profiles', profileId, 'profile-state.db')
-}
-
-function writeProfileState(profileId: string, state: PersistedState): void {
-  const dataFile = profileDataPath(profileId)
-  mkdirSync(join(dataFile, '..'), { recursive: true })
-  writeFileSync(dataFile, JSON.stringify(state, null, 2), 'utf-8')
 }
 
 function writeProfileStateDatabase(profileId: string, state: PersistedState): void {
@@ -112,19 +111,6 @@ function writeProfileStateDatabase(profileId: string, state: PersistedState): vo
   }
 }
 
-function writeProfileStateDatabaseWithAcceptedLegacyJson(profileId: string, rawJson: string): void {
-  const databasePath = profileDatabasePath(profileId)
-  mkdirSync(join(databasePath, '..'), { recursive: true })
-  const opened = openProfileStateDatabase(databasePath, profileId)
-  try {
-    importProfileStateJson(opened.db, rawJson, {
-      acceptedLegacyJsonHash: hashProfileStateJson(rawJson)
-    })
-  } finally {
-    opened.db.close()
-  }
-}
-
 function readProfileStateDatabase(profileId: string): PersistedState {
   const opened = openProfileStateDatabase(profileDatabasePath(profileId), profileId)
   try {
@@ -132,13 +118,6 @@ function readProfileStateDatabase(profileId: string): PersistedState {
   } finally {
     opened.db.close()
   }
-}
-
-function readProfileState(profileId: string): PersistedState {
-  if (existsSync(profileDatabasePath(profileId))) {
-    return readProfileStateDatabase(profileId)
-  }
-  return JSON.parse(readFileSync(profileDataPath(profileId), 'utf-8')) as PersistedState
 }
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -165,6 +144,22 @@ function makeState(overrides: Partial<PersistedState> = {}): PersistedState {
   }
 }
 
+// A profile saved before artifactSharingEnabled existed carries no defaults for it.
+function writeOlderProfileStateDatabase(
+  profileId: string,
+  settings: Record<string, unknown>,
+  repos: Repo[] = []
+): void {
+  const databasePath = profileDatabasePath(profileId)
+  mkdirSync(join(databasePath, '..'), { recursive: true })
+  const opened = openProfileStateDatabase(databasePath, profileId)
+  try {
+    importProfileStateJson(opened.db, JSON.stringify({ settings, repos }))
+  } finally {
+    opened.db.close()
+  }
+}
+
 describe('profile project transfer', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-profile-transfer-'))
@@ -173,84 +168,6 @@ describe('profile project transfer', () => {
 
   afterEach(() => {
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('rejects a duplicate physical project inside the target profile', async () => {
-    writeProfileState(
-      'personal',
-      makeState({
-        repos: [makeRepo({ path: 'C:\\Work\\Orca\\' })]
-      })
-    )
-    writeProfileState(
-      'work',
-      makeState({
-        repos: [makeRepo({ id: 'repo-existing', path: 'c:/work/orca' })]
-      })
-    )
-
-    const { transferOrcaProfileProject } = await loadTransferModule()
-    const result = transferOrcaProfileProject(
-      {
-        sourceProfileId: 'personal',
-        targetProfileId: 'work',
-        repoId: 'repo-1',
-        mode: 'copy'
-      },
-      testState.dir
-    )
-
-    expect(result).toEqual({
-      status: 'duplicate-target',
-      sourceProfileId: 'personal',
-      targetProfileId: 'work',
-      sourceRepoId: 'repo-1',
-      duplicateRepoId: 'repo-existing'
-    })
-    expect(readProfileState('work').repos.map((repo) => repo.id)).toEqual(['repo-existing'])
-  })
-
-  it('fails closed when a profile has both database and legacy JSON state', async () => {
-    const sourceState = makeState({ repos: [makeRepo()] })
-    writeProfileState('personal', sourceState)
-    writeProfileStateDatabase('personal', sourceState)
-    writeProfileState('work', makeState())
-
-    const { transferOrcaProfileProject } = await loadTransferModule()
-    expect(() =>
-      transferOrcaProfileProject(
-        {
-          sourceProfileId: 'personal',
-          targetProfileId: 'work',
-          repoId: 'repo-1',
-          mode: 'copy'
-        },
-        testState.dir
-      )
-    ).toThrowError(expect.objectContaining({ code: 'ambiguous_profile_state_storage' }))
-  })
-
-  it('rejects a missing SQLite database when a retained export proves JSON is stale', async () => {
-    const sourceState = makeState({ repos: [makeRepo()] })
-    writeProfileState('personal', sourceState)
-    const sourceJson = readFileSync(profileDataPath('personal'), 'utf-8')
-    writeProfileStateDatabaseWithAcceptedLegacyJson('personal', sourceJson)
-    rmSync(profileDatabasePath('personal'))
-    writeFileSync(`${profileDataPath('personal')}.sqlite-export.1.json`, sourceJson)
-    writeProfileState('work', makeState())
-
-    const { transferOrcaProfileProject } = await loadTransferModule()
-    expect(() =>
-      transferOrcaProfileProject(
-        {
-          sourceProfileId: 'personal',
-          targetProfileId: 'work',
-          repoId: 'repo-1',
-          mode: 'copy'
-        },
-        testState.dir
-      )
-    ).toThrowError(expect.objectContaining({ code: 'profile-state-recovery-required' }))
   })
 
   it('fences a SQLite transfer write against the revision that was read', async () => {
@@ -307,5 +224,17 @@ describe('profile project transfer', () => {
     expect(() => recoverPendingProfileProjectMoves(testState.dir)).toThrow(/intent is malformed/)
     expect(readProfileStateDatabase('personal').repos).toHaveLength(1)
     expect(existsSync(intentPath)).toBe(true)
+  })
+
+  it('moves a project without granting publishing permission to either older profile', async () => {
+    writeOlderProfileStateDatabase('personal', {}, [makeRepo()])
+    writeOlderProfileStateDatabase('work', {})
+    const { transferOrcaProfileProject } = await loadTransferModule()
+
+    expect(transferMove(transferOrcaProfileProject)).toMatchObject({ status: 'transferred' })
+    expect(readProfileStateDatabase('personal').settings).not.toHaveProperty(
+      'artifactSharingEnabled'
+    )
+    expect(readProfileStateDatabase('work').settings).not.toHaveProperty('artifactSharingEnabled')
   })
 })

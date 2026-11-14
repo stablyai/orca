@@ -13,6 +13,7 @@ import {
   runAgentShortcutsScenario,
   type AfterAgentInput
 } from './helpers/browser-agent-focus-scenarios'
+import { startWindowsForegroundHolder } from './helpers/windows-foreground-holder'
 
 function hasXdotool(): boolean {
   try {
@@ -25,14 +26,17 @@ function hasXdotool(): boolean {
 
 function realKeystrokeReachesTerminal(
   orcaPage: Page,
-  electronApp: ElectronApplication
+  electronApp: ElectronApplication,
+  pressRealKey: (key: string) => Promise<void>
 ): AfterAgentInput {
   return async (pageId) => {
-    expect(
-      await electronApp.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow() !== null)
-    ).toBe(true)
+    await expect
+      .poll(() =>
+        electronApp.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow() !== null)
+      )
+      .toBe(true)
     const pageKeysBefore = await evalInPage(orcaPage, pageId, 'JSON.stringify(window.__keys)')
-    execFileSync('xdotool', ['key', 'y'])
+    await pressRealKey('y')
     await expect.poll(async () => (await readHost(orcaPage)).log.includes('key:y')).toBe(true)
     expect(await evalInPage(orcaPage, pageId, 'JSON.stringify(window.__keys)')).toBe(pageKeysBefore)
     expect((await readHost(orcaPage)).terminalFocused).toBe(true)
@@ -55,6 +59,55 @@ for (const [name, run] of scenarios) {
     expect(hasXdotool(), 'install xdotool on the Xvfb lane').toBe(true)
     test.setTimeout(120_000)
     await orcaPage.bringToFront()
-    await run(orcaPage, realKeystrokeReachesTerminal(orcaPage, electronApp))
+    await run(
+      orcaPage,
+      realKeystrokeReachesTerminal(orcaPage, electronApp, async (key) => {
+        execFileSync('xdotool', ['key', key])
+      })
+    )
   })
 }
+
+test.describe('on the Windows desktop', () => {
+  // Why: the holder takes the real foreground and the test presses real keys, so never on a desktop.
+  test.skip(
+    process.platform !== 'win32' ||
+      process.env.GITHUB_ACTIONS !== 'true' ||
+      process.env.RUNNER_ENVIRONMENT !== 'github-hosted',
+    'real foreground and keystrokes need the hosted Windows CI desktop'
+  )
+
+  for (const [name, run] of scenarios) {
+    test(`${name} leave Orca behind the user’s app on Windows @headful`, async ({
+      orcaPage,
+      electronApp
+    }) => {
+      const ownedWindow = await electronApp.browserWindow(orcaPage)
+      const windowId = await ownedWindow.evaluate((window) => window.id)
+      await ownedWindow.dispose()
+      const holder = await startWindowsForegroundHolder()
+      try {
+        // Why: background launch keeps Orca hidden, and a hidden window cannot be activated at all.
+        await electronApp.evaluate(({ BrowserWindow }, id) => {
+          BrowserWindow.fromId(id)?.showInactive()
+        }, windowId)
+        await holder.take()
+        await run(orcaPage, async (pageId) => {
+          // Why: a guest press that activates Orca's window pulls it over the app the user is in.
+          expect(await holder.foreground()).toMatchObject({ holder: true })
+          // The same check must see Orca once it really is activated, or the one above proves nothing.
+          const orcaPid = await electronApp.evaluate(({ BrowserWindow }, id) => {
+            BrowserWindow.fromId(id)?.focus()
+            return process.pid
+          }, windowId)
+          await expect
+            .poll(() => holder.foreground())
+            .toMatchObject({ holder: false, pid: orcaPid })
+          await realKeystrokeReachesTerminal(orcaPage, electronApp, holder.press)(pageId)
+        })
+      } finally {
+        await holder.close()
+      }
+    })
+  }
+})

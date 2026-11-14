@@ -5,26 +5,28 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
+/** A collapsed prompt's one line, above the queue; nothing while no prompt is collapsed. */
 export function MobileNativeChatPromptStrip({
-  title,
-  onExpand
+  prompt
 }: {
-  title: string
-  onExpand: () => void
-}): React.JSX.Element {
+  prompt?: { title: string; expand: () => void } | null
+}): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  if (!prompt) {
+    return null
+  }
   return (
     <View testID="native-chat-prompt-strip" style={styles.strip}>
       <Text style={styles.title} numberOfLines={1}>
-        {title}
+        {prompt.title}
       </Text>
       <Pressable
         accessibilityLabel={t('chat.promptStrip.expand', 'Expand')}
         accessibilityState={{ expanded: false }}
         hitSlop={8}
         style={({ pressed }) => [styles.action, pressed && pressedStyle]}
-        onPress={onExpand}
+        onPress={prompt.expand}
       >
         <ChevronUp size={16} color={colors.textMuted} />
       </Pressable>

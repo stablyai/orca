@@ -1,6 +1,6 @@
 // After each window frame flush, compare store slices with the full save/Loader build using identical cache/view/facts, like main’s model check.
 
-import { stableJson } from '../../../../../shared/workspace-layout/workspace-layout-load-report'
+import { stableJson } from '../../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import { isTabPaneTreeHeld } from '../intents/layout-owner-pane-tree-holds'
 import {
   observeLayoutFrameApply,

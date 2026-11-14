@@ -55,10 +55,7 @@ import { openWithReadyStructuredAgentSessionChild } from './structured-agent-ses
 
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import '../options/structured-agent-session-options-read'
-import {
-  noteStructuredAgentSessionOptionPick,
-  recordStructuredAgentSessionOptionIntent
-} from '../options/structured-agent-session-option-intent'
+import { recordStructuredAgentSessionOptionIntent } from '../options/structured-agent-session-option-intent'
 import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
 
 export function sendStructuredAgentSessionTurn(
@@ -268,7 +265,6 @@ export async function setStructuredAgentSessionOption(
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
         if (picked.ok) {
-          noteStructuredAgentSessionOptionPick(context, ctx, params, !noChoice)
           confirmIdleStructuredAgentSessionOption(context, ctx, params)
         }
         return picked

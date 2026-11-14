@@ -1,7 +1,7 @@
 import { MobileNativeChatComposerMenuReservation } from './MobileNativeChatComposerAllocation'
 import type { RefObject } from 'react'
 import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
 import { FileText, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
@@ -17,7 +17,7 @@ export function MobileNativeChatComposerSuggestions({
   anchorRef,
   ...props
 }: {
-  anchorRef: RefObject<View | null>
+  anchorRef: RefObject<HostInstance | null>
   rows: readonly ComposerMenuRow[]
   onPick: (row: ComposerMenuRow) => void
   nestedScrollEnabled?: boolean

@@ -66,6 +66,7 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { FILE_LOAD_RETRY_DELAYS_MS } from './useEditorPanelFileLoadRetry'
 
 let latestFileContents: Record<string, FileContent> = {}
+let latestReload: ReturnType<typeof useEditorPanelContentState>['reloadContent'] = () => {}
 
 const EMPTY_EDITOR_VIEW_MODE = {}
 const HOST_READ_LATENCY_MS = 1
@@ -80,6 +81,7 @@ function Probe({ activeFile, openFiles }: { activeFile: OpenFile; openFiles: Ope
     editorViewMode: EMPTY_EDITOR_VIEW_MODE
   })
   latestFileContents = state.fileContents
+  latestReload = state.reloadContent
   return null
 }
 
@@ -188,5 +190,54 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     // Terminal: no more reads, still no eviction.
     await advanceTimers(60_000)
     expect(closeFile).not.toHaveBeenCalled()
+  })
+
+  it('skips a reload after Start when the file already loaded, and reloads one still failed', async () => {
+    const activeFile = { ...makeDirtyMirroredFile(), isDirty: false }
+    const openFiles = [activeFile]
+    const store = createTestStore()
+    store.setState({
+      openFiles,
+      worktreesByRepo: {
+        project: [
+          makeWorktree({
+            id: activeFile.worktreeId,
+            repoId: 'project',
+            path: '/home/user/project',
+            hostId: 'runtime:env-1'
+          })
+        ]
+      },
+      setLastKnownDiskSignature: vi.fn()
+    })
+    mocks.getState.mockImplementation(store.getState)
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: '# notes', isBinary: false })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<Probe activeFile={activeFile} openFiles={openFiles} />)
+    })
+    await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(latestFileContents[activeFile.id]?.content).toBe('# notes')
+    const readsAfterLoad = mocks.readRuntimeFileContent.mock.calls.length
+
+    await act(async () => latestReload(activeFile, { onlyIfFailed: true }))
+    await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(readsAfterLoad)
+    expect(latestFileContents[activeFile.id]?.content).toBe('# notes')
+
+    // A non-retryable failure keeps the editor's own retry out of the count.
+    mocks.readRuntimeFileContent.mockRejectedValueOnce(new Error('ENOENT: no such file'))
+    await act(async () => latestReload(activeFile))
+    await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(latestFileContents[activeFile.id]?.loadError).toContain('ENOENT')
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(readsAfterLoad + 1)
+
+    await act(async () => latestReload(activeFile, { onlyIfFailed: true }))
+    await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(readsAfterLoad + 2)
+    expect(latestFileContents[activeFile.id]?.content).toBe('# notes')
   })
 })

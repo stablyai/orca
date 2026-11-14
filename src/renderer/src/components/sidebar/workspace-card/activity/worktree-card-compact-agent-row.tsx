@@ -159,13 +159,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
   const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
-  const { leadingText, trailingText } = getCompactAgentLineOrder(
-    agent,
-    dotState,
-    primary,
-    secondary,
-    t
-  )
+  const { leadingText, trailingText } = getCompactAgentLineOrder(agent, primary, secondary, t)
   const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
@@ -240,6 +234,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             title={sendTargetDisabledReason ? null : undefined}
             tooltipSide="right"
             progress={presentation.progress}
+            unread={isUnvisited}
           />
           {!hideIcon && (
             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>

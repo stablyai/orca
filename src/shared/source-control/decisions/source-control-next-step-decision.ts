@@ -1,10 +1,10 @@
 import type { GitConflictOperation } from '../../git/status/git-status-types'
-import type { PRInfo } from '../../github/pull-request-types'
+import type { PRInfo } from '../../github/pull-requests/pull-request-types'
 import {
   resolveGitHubPRMergeState,
   type GitHubPRMergeStateKind
-} from '../../github/pull-request-merge-state'
-import { resolveGitHubPRStackMergeDecision } from '../../github/pull-request-stack-merge'
+} from '../../github/pull-requests/merge/pull-request-merge-state'
+import { resolveGitHubPRStackMergeDecision } from '../../github/pull-requests/merge/pull-request-stack-merge'
 import type { SourceControlCommitAreaPrimaryActionDecision } from './source-control-primary-action-decision-types'
 
 // What the branch's hosted review creation offers once nothing local is left to do.

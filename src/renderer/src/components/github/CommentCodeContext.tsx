@@ -16,12 +16,12 @@ import {
 import { getPrCommentCodeContext } from '@/components/github/pr-comment-code-context'
 import { getPRFileContentsRenderLimit } from '@/components/github/pr-file-diff-mapping'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import type { PRComment } from '../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../shared/github/comments/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type {
-  GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents
-} from '../../../../shared/github/pull-request-types'
+} from '../../../../shared/github/pull-requests/pull-request-types'
 
 const MonacoCodeExcerpt = lazy(() => import('@/components/editor/MonacoCodeExcerpt'))
 

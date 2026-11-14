@@ -6,7 +6,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class BoundedGunzipTest {
-  // Shared with the Swift checks and the JS tests, which pin fflate's answer to the same inputs.
   private val vectors = JSONArray(File("../tests/gunzip-vectors.json").readText())
 
   @Test

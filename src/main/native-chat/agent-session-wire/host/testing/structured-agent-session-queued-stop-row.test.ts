@@ -135,10 +135,11 @@ describe("Stop's event", () => {
   it('a stopped unconfirmed hand-off stays ordinary while Resume drains waiting cards', async () => {
     const working = await rig.workingSend()
     await openRigTurnFor(rig, working)
+    await rig.settleAccepted(working, 'stopped')
     const steered = await queuedDraft('sent now into the turn')
     const opening = await queuedDraft('opens its own turn')
     const last = await queuedDraft('waiting behind them')
-    await rig.sendNow(steered)
+    expect(await rig.sendNow(steered)).toMatchObject({ ok: true })
     await eventually(async () => expect((await rig.handoff(steered))?.handedOverAt).toBeDefined())
     const steer = await rig.handoffId(steered)
     // Codex ends the stopped turn without taking the steer: the agent may have it, nothing proves
@@ -153,7 +154,6 @@ describe("Stop's event", () => {
       },
       via: 'steer'
     })
-    await rig.settleAccepted(working, 'stopped')
     await openRigTurnFor(rig, working, 'interrupted')
     await expectHeld('stopped', opening, last)
     expect(await rig.drafts()).toEqual([

@@ -243,9 +243,16 @@ export function BrowserExtensionsMenuSub({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   return (
-    <DropdownMenuSub>
+    <DropdownMenuSub
+      onOpenChange={(open) => {
+        if (open) {
+          void recordFeatureInteraction('browser-extensions')
+        }
+      }}
+    >
       <DropdownMenuSubTrigger>
         <Puzzle className="mr-2 size-3.5" />
         {t('browser.extensions.menu', 'Extensions')}

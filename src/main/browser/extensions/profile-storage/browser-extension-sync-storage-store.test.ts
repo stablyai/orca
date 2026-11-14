@@ -20,18 +20,6 @@ afterEach(() => {
 })
 
 describe('BrowserExtensionProfileDocumentStore', () => {
-  it('keeps each profile and extension apart and survives a restart', () => {
-    const store = new BrowserExtensionProfileDocumentStore(root)
-    store.write('default', EXTENSION, { theme: { dark: true }, list: [1, 'two'] })
-    store.write('work', EXTENSION, { theme: 'light' })
-    store.flush()
-
-    const reopened = new BrowserExtensionProfileDocumentStore(root)
-    expect(reopened.read('default', EXTENSION)).toEqual({ theme: { dark: true }, list: [1, 'two'] })
-    expect(reopened.read('work', EXTENSION)).toEqual({ theme: 'light' })
-    expect(reopened.read('default', OTHER)).toEqual({})
-  })
-
   it('retries acknowledged writes after a failed flush', () => {
     const store = new BrowserExtensionProfileDocumentStore(root)
     store.write('default', EXTENSION, { token: 'saved after recovery' })

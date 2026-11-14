@@ -38,23 +38,29 @@ const {
   getEnterpriseGitHubRepoSlugMock: vi.fn()
 }))
 
-vi.mock('../github/client', () => ({
-  createGitHubPullRequest: createGitHubPullRequestMock,
-  getRepoSlug: getRepoSlugMock,
+vi.mock('../github/client/create/create-github-pull-request', () => ({
+  createGitHubPullRequest: createGitHubPullRequestMock
+}))
+
+vi.mock('../github/client/fetch/repo-slug-upstream', () => ({
+  getRepoSlug: getRepoSlugMock
+}))
+
+vi.mock('../github/client/lookup/get-pr-for-branch', () => ({
   getPRForBranch: vi.fn()
 }))
 
-vi.mock('../github/github-enterprise-repository', () => ({
+vi.mock('../github/repositories/github-enterprise-repository', () => ({
   getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
 
-vi.mock('../gitlab/client', () => ({
+vi.mock('../gitlab/merge-requests/merge-request-lookup', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: vi.fn(),
   getMergeRequest: vi.fn()
 }))
 
-vi.mock('../gitlab/merge-request-creation', () => ({
+vi.mock('../gitlab/merge-requests/merge-request-creation', () => ({
   createGitLabMergeRequest: createGitLabMergeRequestMock
 }))
 
@@ -86,22 +92,35 @@ vi.mock('../gitea/pull-request-creation', () => ({
   isGiteaReviewCreationAuthenticated: isGiteaReviewCreationAuthenticatedMock
 }))
 
-vi.mock('../github/gh-utils', () => ({
+vi.mock('../github/execution/github-operation-slots', () => ({
   acquire: vi.fn(),
-  release: vi.fn(),
-  ghExecFileAsync: ghExecFileAsyncMock,
+  release: vi.fn()
+}))
+
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', () => ({
+  ghExecFileAsync: ghExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../gitlab/gl-utils', () => ({
+vi.mock('../gitlab/requests/glab-request-admission', () => ({
   acquire: vi.fn(),
-  release: vi.fn(),
-  glabExecFileAsync: glabExecFileAsyncMock,
+  release: vi.fn()
+}))
+
+vi.mock('../git/command-runner/hosted-cli/glab-exec-file', () => ({
+  glabExecFileAsync: glabExecFileAsyncMock
+}))
+
+vi.mock('../gitlab/projects/gitlab-project-ref-resolution', () => ({
   glabRepoExecOptions: (repoPath: string, connectionId?: string | null) =>
     connectionId ? {} : { cwd: repoPath }
 }))
 
-vi.mock('../git/source-control/upstream', () => ({
+vi.mock('../git/source-control/upstream/upstream', () => ({
   getUpstreamStatus: getUpstreamStatusMock
 }))
 
@@ -111,7 +130,7 @@ vi.mock('./hosted-review', () => ({
 
 import { createHostedReview } from './hosted-review-creation'
 
-import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
+import { _resetOriginGitHubApiRepositoryCache } from '../github/repositories/github-api-repository-remote-probe'
 
 // Isolate module-level repository identities between tests.
 beforeEach(() => {

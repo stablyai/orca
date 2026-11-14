@@ -1,9 +1,10 @@
-import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
+import { AgentConversationCopyError } from '../native-chat/conversation-adoption/agent-conversation-copy-error'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { asRecord, parseJsonObject } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { parseJsonObject } from '../ai-vault/parsing/session-json-object'
 import { createLegacyIdentityTracker } from '../native-chat/agent-session-journal/history-import/journal-legacy-identity'
-import { readCodexLocalHistory } from '../native-chat/codex-local-history'
-import { decodeCodexTranscriptLine } from '../native-chat/transcript-line-decoders-codex'
+import { readCodexLocalHistory } from '../native-chat/transcript-history/codex/codex-local-history'
+import { decodeCodexTranscriptLine } from '../native-chat/transcript-decoding/transcript-line-decoders-codex'
 
 type Root = { id?: string; terminal: boolean; prompt: boolean }
 

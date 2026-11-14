@@ -10,7 +10,7 @@ import {
 import { STATUS_LABELS } from '../../../src/shared/git/status/git-status-labels'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileDiffReviewQueueItem } from '../source-control/review/mobile-diff-review-queue'
-import { statusColor } from '../source-control/mobile-git-status'
+import { statusColor } from '../source-control/changes/mobile-git-status'
 import { colors, pressedStyle, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

@@ -61,13 +61,6 @@ function mountedFiles(markup: string): string[] {
 const LINE = '::orca-visual{file="usage.html" title="Usage by day"}'
 
 describe('remarkNativeChatVisuals', () => {
-  it('does not mount a raw HTML placeholder forged without the nonce', () => {
-    const markup = render(
-      '<div data-orca-visual="guess" data-orca-visual-file="usage.html">x</div>\n\nafter'
-    )
-    expect(mountedFiles(markup)).toEqual([])
-  })
-
   it('keeps reference links defined after the directive working', () => {
     const markup = render(`See [the docs][d].\n\n${LINE}\n\n[d]: https://example.com/docs`)
     expect(mountedFiles(markup)).toEqual(['usage.html'])

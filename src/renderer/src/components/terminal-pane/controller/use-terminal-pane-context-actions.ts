@@ -1,11 +1,11 @@
 import { usePaneTitleRenameActions } from '../titles/use-pane-title-rename-actions'
 import { useCallback, useEffect } from 'react'
 import { useTerminalPaneContextMenu } from '../context-menu/use-terminal-pane-context-menu'
-import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 import { useVisibleTerminalQuickCommandHosts } from '@/hooks/use-visible-terminal-quick-command-hosts'
 
-export function useTerminalPaneContextActions(controller: TerminalPaneCloseController) {
+export function useTerminalPaneContextActions(controller: TerminalPaneMountedController) {
   const {
     cancelPendingRenameFrames,
     clearPaneScrollback,
@@ -128,5 +128,5 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
   }
 }
 
-export type TerminalPaneContextController = TerminalPaneCloseController &
+export type TerminalPaneContextController = TerminalPaneMountedController &
   ReturnType<typeof useTerminalPaneContextActions>

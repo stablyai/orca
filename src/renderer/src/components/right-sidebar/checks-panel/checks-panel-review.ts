@@ -1,7 +1,7 @@
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { hostedReviewInfoFromGitHubPRInfo as gitHubPRToChecksPanelReview } from '../../../../../shared/source-control/hosted-review/hosted-review-github'
-import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../shared/worktree/hosted-review/github-pr-suppression'
 
 export type ChecksPanelReview = HostedReviewInfo
 

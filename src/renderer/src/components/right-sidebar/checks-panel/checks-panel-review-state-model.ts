@@ -2,7 +2,7 @@ import type { HostedReviewCreationBlockedReason } from '../../../../../shared/so
 import type {
   GitHubPRRefreshSkippedReason,
   PRRefreshErrorType
-} from '../../../../../shared/github/pull-request-refresh-types'
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { ChecksPanelReviewLookup } from './checks-panel-review-lookup-authority'
 
 /** Refresh failures may preserve a confirmed composer but must never open a new one. */

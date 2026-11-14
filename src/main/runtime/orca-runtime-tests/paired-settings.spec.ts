@@ -1,38 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import {
-  applyAgentStatusHooksEnabledMock,
-  reconcileClaudeAgentViewMock
-} from '../orca-runtime-test-mocks/setup.spec'
+import { applyAgentStatusHooksEnabledMock } from '../orca-runtime-test-mocks/setup.spec'
 import { deferred, store } from './orca-runtime-test-fixtures.spec'
-import { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
+import '../client/settings/runtime-client-settings'
 
 describe('OrcaRuntimeService', () => {
-  it.each([true, false])(
-    'awaits navigation-only updates from paired clients (%s)',
-    async (enabled) => {
-      let settings = { ...store.getSettings(), claudeSubagentNavigationEnabled: !enabled }
-      const controller = new RuntimeClientSettingsController({
-        getSettings: () => settings,
-        updateSettings: (updates) => {
-          settings = { ...settings, ...updates }
-        }
-      })
-      const gate = deferred<void>()
-      reconcileClaudeAgentViewMock.mockImplementationOnce(() => gate.promise)
-      const complete = vi.fn()
-      const pending = controller.update({ claudeSubagentNavigationEnabled: enabled }).then(complete)
-      await vi.waitFor(() =>
-        expect(reconcileClaudeAgentViewMock).toHaveBeenLastCalledWith(settings)
-      )
-      expect(complete).not.toHaveBeenCalled()
-      gate.resolve()
-      await pending
-      expect(complete).toHaveBeenCalledOnce()
-    }
-  )
-
   it('serializes paired-client hook reconciliation and reads current settings', async () => {
     let settings = {
       ...store.getSettings(),

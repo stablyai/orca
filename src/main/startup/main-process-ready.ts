@@ -1,12 +1,14 @@
-import { initializeMainProcessI18nAndMenu } from './main-process-i18n-menu'
+import { beginProfileShutdownCheckpoint } from '../persistence/profile-shutdown-checkpoint'
+import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
+import { initializeMainProcessI18nAndMenu } from './main-window/main-process-i18n-menu'
 import { mainProcessState as state } from './main-process-state'
 import { initializeReadyFoundation } from './main-process-ready-foundation'
 import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
-import { releaseDesktopActivationAfter } from './serve-desktop-activation'
+import { releaseDesktopActivationAfter } from './serve-launch/serve-desktop-activation'
 import {
   initializeMainProcessRuntimeLaunch,
   type MainProcessRuntimeLaunchOptions
-} from './main-process-runtime-launch'
+} from './runtime-startup/main-process-runtime-launch'
 
 export async function initializeMainProcessReady(
   launchOptions: MainProcessRuntimeLaunchOptions
@@ -39,9 +41,33 @@ export async function initializeMainProcessReady(
     // Startup now exits after failure; reopening would use a closing profile writer.
     state.desktopActivationGate = null
     try {
-      await state.store?.freezeWritesAsync()
-      state.profileStateAdmission?.release()
-      state.profileStateAdmission = undefined
+      state.profileShutdownCheckpoint ??= beginProfileShutdownCheckpoint(
+        state.store,
+        state.runtime?.flushPaneGrids()
+      )
+      const removalStopping = worktreeRemovalLifetime.close().then(
+        () => true,
+        (closeError) => {
+          console.error(
+            '[worktrees] Failed to stop workspace deletion after startup failure:',
+            closeError
+          )
+          return false
+        }
+      )
+      const [removalStopped] = await Promise.all([
+        removalStopping,
+        state.profileShutdownCheckpoint.catch(() => {})
+      ])
+      try {
+        await state.store?.flushFinalOrThrowAsync()
+      } finally {
+        await state.store?.freezeWritesAsync()
+      }
+      if (removalStopped) {
+        state.profileStateAdmission?.release()
+        state.profileStateAdmission = undefined
+      }
     } catch (closeError) {
       console.error(
         '[persistence] Failed to close profile persistence after startup failure:',

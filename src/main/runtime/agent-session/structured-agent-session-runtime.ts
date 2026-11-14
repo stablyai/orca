@@ -20,7 +20,7 @@ import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
 } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { migrateLegacyNativeChatVisualsFolders } from '../../native-chat/native-chat-scratch-folder-migration'
+import { migrateLegacyNativeChatVisualsFolders } from '../../native-chat/conversation-files/native-chat-scratch-folder-migration'
 
 import type { StructuredAgentSessionRuntimeDeps } from './installation/structured-agent-session-runtime-contract'
 

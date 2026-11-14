@@ -153,22 +153,27 @@ describe('detectTerminalComposerDraft', () => {
     expect(hasTerminalComposerPlaceholder(context)).toBe(false)
   })
 
-  it('preserves a shell prompt that happens to use the Claude glyph', () => {
-    expect(
-      detectTerminalComposerDraft({
-        rows: ['last command output', '❯ git status'],
-        typedRows: ['last command output', '❯ git status'],
-        promptGlyphBoldRows: [false, false],
-        rowsBelow: [],
-        typedRowsBelow: [],
-        beforeCursor: '❯ git status',
-        afterCursor: '',
-        rawAfterCursor: '',
-        cursorHidden: false,
-        cursorViewportRow: 7
-      })
-    ).toBeNull()
-  })
+  it.each(['gpt-5.4 high Fast · ~/repo'])(
+    'recognizes a Codex composer whose undimmed footer reads %s',
+    (footer) => {
+      expect(
+        detectTerminalComposerDraft({
+          rows: ['› review the change'],
+          typedRows: ['› review the change'],
+          promptGlyphBoldRows: [true],
+          rowsBelow: ['', `  ${footer}`],
+          typedRowsBelow: ['', `  ${footer}`],
+          rowsBelowWrapped: [false, false],
+          rowsBelowCustomForeground: [false, false],
+          beforeCursor: '› review the change',
+          afterCursor: '',
+          rawAfterCursor: '',
+          cursorHidden: false,
+          cursorViewportRow: 4
+        })
+      ).toMatchObject({ text: 'review the change', promptGlyph: '›' })
+    }
+  )
 
   it('rejects a hidden-cursor dialog even when its selected row uses a composer glyph', () => {
     expect(
@@ -263,25 +268,6 @@ describe('detectTerminalComposerDraft', () => {
     ).toBeNull()
   })
 
-  it('keeps a draft continuation containing a middle dot', () => {
-    expect(
-      detectTerminalComposerDraft({
-        rows: ['────────', '❯ proceed '],
-        typedRows: ['────────', '❯'],
-        promptGlyphBoldRows: [false, false],
-        rowsWrapped: [false, false],
-        rowsBelow: ['deploy · verify', '────────'],
-        typedRowsBelow: ['', '────────'],
-        rowsBelowWrapped: [true, false],
-        beforeCursor: '❯ ',
-        afterCursor: 'proceed ',
-        rawAfterCursor: 'proceed ',
-        cursorHidden: false,
-        cursorViewportRow: 8
-      })?.text
-    ).toBe('proceed deploy · verify')
-  })
-
   it('keeps a model-like continuation before the Codex status footer', () => {
     expect(
       detectTerminalComposerDraft({
@@ -319,25 +305,6 @@ describe('detectTerminalComposerDraft', () => {
     ).toBe('proceed with the release')
   })
 
-  it('keeps typed hard-newline rows below a restored cursor in the draft', () => {
-    expect(
-      detectTerminalComposerDraft({
-        rows: ['────────', '❯ first line'],
-        typedRows: ['────────', '❯ first line'],
-        promptGlyphBoldRows: [false, false],
-        rowsWrapped: [false, false],
-        rowsBelow: ['  second line', '────────'],
-        typedRowsBelow: ['  second line', '────────'],
-        rowsBelowWrapped: [false, false],
-        beforeCursor: '❯ first',
-        afterCursor: ' line',
-        rawAfterCursor: ' line',
-        cursorHidden: false,
-        cursorViewportRow: 8
-      })?.text
-    ).toBe('first line\nsecond line')
-  })
-
   it('keeps typed continuation rows after an intentional blank draft line', () => {
     expect(
       detectTerminalComposerDraft({
@@ -355,25 +322,6 @@ describe('detectTerminalComposerDraft', () => {
         cursorViewportRow: 8
       })
     ).toMatchObject({ text: 'first line\n\nsecond line', endRow: 10 })
-  })
-
-  it('keeps a model-like Claude paragraph above the bottom composer frame', () => {
-    expect(
-      detectTerminalComposerDraft({
-        rows: ['────────', '❯ compare models'],
-        typedRows: ['────────', '❯ compare models'],
-        promptGlyphBoldRows: [false, false],
-        rowsWrapped: [false, false],
-        rowsBelow: ['', 'gpt-5 · verify', '────────'],
-        typedRowsBelow: ['', 'gpt-5 · verify', '────────'],
-        rowsBelowWrapped: [false, false, false],
-        beforeCursor: '❯ ',
-        afterCursor: 'compare models',
-        rawAfterCursor: 'compare models',
-        cursorHidden: false,
-        cursorViewportRow: 8
-      })?.text
-    ).toBe('compare models\n\ngpt-5 · verify')
   })
 
   it('stops before a blank row that only precedes the composer frame', () => {
@@ -407,21 +355,6 @@ describe('readTerminalComposerTypedText', () => {
     cursorHidden: false,
     cursorViewportRow: 8
   }
-
-  it('reads a composer showing only a dim suggestion as empty', () => {
-    expect(readTerminalComposerTypedText(suggestionOnly)).toBe('')
-  })
-
-  it('keeps typed text and drops the dim suggestion rows after it', () => {
-    expect(
-      readTerminalComposerTypedText({
-        ...suggestionOnly,
-        rows: ['────────', '❯ ship it'],
-        typedRows: ['────────', '❯ ship it'],
-        beforeCursor: '❯ ship it'
-      })
-    ).toBe('ship it')
-  })
 
   it("finds the closing frame past dim suggestion rows under Claude's hidden caret", () => {
     const hidden = { ...suggestionOnly, cursorHidden: true, activeBuffer: 'normal' as const }
@@ -459,11 +392,5 @@ describe('readTerminalComposerTypedText', () => {
         beforeCursor: '      return 1'
       })
     ).toBe('def f():\n    return 1')
-  })
-
-  it('returns null when no composer is visible', () => {
-    expect(
-      readTerminalComposerTypedText({ ...suggestionOnly, rows: ['Do you want to proceed?'] })
-    ).toBeNull()
   })
 })

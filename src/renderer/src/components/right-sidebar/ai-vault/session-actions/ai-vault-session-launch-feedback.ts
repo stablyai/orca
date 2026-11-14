@@ -19,6 +19,15 @@ export function notifyAiVaultSessionQueued(agent: AiVaultAgent): void {
   )
 }
 
+export function notifyAiVaultSessionNoContinuationContext(): void {
+  toast.error(
+    translate(
+      'components.agentSessionContinuation.noContext',
+      'No session context is available to continue in a new session.'
+    )
+  )
+}
+
 export function notifyAiVaultSessionPreparationFailure(
   error: unknown,
   agent: AiVaultAgent,

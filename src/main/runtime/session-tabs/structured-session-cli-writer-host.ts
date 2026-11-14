@@ -8,8 +8,8 @@ import { assertCliConversationWritersExited } from '../agent-session/lifecycle/s
 import type { EnrichedAgentHookEventPayload } from '../../agent-hooks/server/server-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../shared/structured-agent-cli-conversation-adoption'
-import { recordConversationKey } from '../../native-chat/structured-conversation-key'
-import type { StructuredAgentCliSourceRoute } from '../../native-chat/structured-agent-cli-source'
+import { recordConversationKey } from '../../native-chat/conversation-adoption/structured-conversation-key'
+import type { StructuredAgentCliSourceRoute } from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/process-listing/workspace-process-listing'
 
 export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends OrcaRuntimeWithGetWorktreePs {

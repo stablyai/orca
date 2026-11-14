@@ -14,7 +14,7 @@ import { askOptionPreview } from '../../../../shared/native-chat/input/native-ch
 import { boundJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies'
-import type { ClaudePendingPrompt } from '../../claude-prompt-registry'
+import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
 
 const APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
   { id: 'allow', label: 'Allow', intent: 'allow_once' },
@@ -58,6 +58,7 @@ export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApp
     ...(prompt.blockedPath ? { blockedPath: prompt.blockedPath } : {}),
     ...(prompt.matchedAskRule ? { matchedAskRule: prompt.matchedAskRule } : {}),
     ...(prompt.subject ? { subject: prompt.subject } : {}),
+    ...(prompt.personOnly ? { personOnly: true } : {}),
     detail: detail || null,
     options: (planSubject ? PLAN_APPROVAL_OPTIONS : APPROVAL_OPTIONS).map((option) => ({
       ...option

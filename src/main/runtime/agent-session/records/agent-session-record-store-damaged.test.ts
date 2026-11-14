@@ -1,5 +1,5 @@
 import { listStructuredProviderSessionOwnership } from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
-import { findConflictingStructuredAdoption } from '../../../native-chat/structured-agent-session-history-adoption'
+import { findConflictingStructuredAdoption } from '../../../native-chat/conversation-adoption/structured-agent-session-history-adoption'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

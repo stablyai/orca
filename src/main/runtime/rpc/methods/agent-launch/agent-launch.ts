@@ -2,7 +2,7 @@
  * Keep worktree.create's PTY/handle contract for older clients.
  * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
 
-import { agentLaunchFeatureRequirement } from '../../agent-launch-feature-requirement'
+import { agentLaunchFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { AgentLaunchTabClosedError } from '../../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../../shared/agent-launch/contracts/agent-launch-operation'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
@@ -32,7 +32,7 @@ import {
   AgentLaunch,
   AgentLaunchReplay,
   type AgentLaunchParams
-} from '../../../../../shared/rpc-contract/agent-launch-params'
+} from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {

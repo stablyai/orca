@@ -22,7 +22,7 @@ import {
 import { Store } from '../../../persistence/loading-store/store'
 import type { OrcadMigrationDestinationCatalog } from '../cutover/orcad-migration-cutover-coordinator'
 import { storeBackedOrcadMigrationDestination } from '../cutover/testing/orcad-migration-destination-fake'
-import { removeOrcadMigrationJournalsForDestination } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { removeOrcadMigrationJournalsForDestination } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 
 import { SshConnectionStore } from '../../../ssh/targets/ssh-connection-store'
 

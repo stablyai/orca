@@ -1,6 +1,7 @@
 import { Markdown } from '@tiptap/markdown'
 import { registerRichMarkdownBlockSource } from '../document/rich-markdown-block-source'
 import { preserveLiteralMarkdownSource } from '../document/rich-markdown-literal-serialization'
+import { preserveLiteralProseEntities } from './rich-markdown-prose-entities'
 import type { RichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 
 export const RichMarkdownExtension = Markdown.extend({
@@ -24,6 +25,7 @@ export function createRichMarkdownExtension(
   return RichMarkdownExtension.configure().extend({
     onBeforeCreate(event) {
       this.parent?.(event)
+      preserveLiteralProseEntities(this.editor)
       preserveLiteralMarkdownSource(this.editor, codec, htmlSuperscriptLinks)
       registerRichMarkdownBlockSource(this.editor, codec, htmlSuperscriptLinks)
     }

@@ -1,68 +1,36 @@
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { claudeToolClose, readClaudeToolResult } from './claude-tool-result-close'
+import path from 'node:path'
+import { afterEach, expect, it } from 'vitest'
+import { claudeTookHookAnswer, readClaudeToolRecord } from './claude-tool-result-close'
 
-const dirs: string[] = []
-afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })))
-
-function transcript(...entries: unknown[]): string {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-claude-transcript-'))
-  dirs.push(dir)
-  const path = join(dir, 'session.jsonl')
-  writeFileSync(path, `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`)
-  return path
-}
-
-const result = (id: string, content: unknown, isError?: boolean) => ({
-  type: 'user',
-  message: {
-    role: 'user',
-    content: [{ type: 'tool_result', tool_use_id: id, content, is_error: isError }]
+let dir: string | null = null
+afterEach(async () => {
+  if (dir) {
+    await rm(dir, { recursive: true, force: true })
   }
+  dir = null
 })
 
-describe("Claude's tool_result for one tool call", () => {
-  it('reads only that call, in either content shape', async () => {
-    const path = transcript(
-      result('toolu_old', 'use a script file', true),
-      { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_new' }] } },
-      result('toolu_new', [{ type: 'text', text: '59' }])
-    )
-    expect(await readClaudeToolResult(path, 'toolu_new')).toEqual({ isError: false, text: '59' })
-    expect(await readClaudeToolResult(path, 'toolu_none')).toBeNull()
-    expect(await readClaudeToolResult(join(path, 'missing'), 'toolu_new')).toBeNull()
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'never opens a path that is not a regular file',
-    async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'orca-claude-transcript-'))
-      dirs.push(dir)
-      const fifo = join(dir, 'fifo')
-      execFileSync('mkfifo', [fifo])
-      expect(await readClaudeToolResult(fifo, 'toolu_new')).toBeNull()
-    }
+it("takes an allowed call whose command then failed as Orca's allow, from Claude's own transcript", async () => {
+  dir = await mkdtemp(path.join(tmpdir(), 'claude-tool-record-'))
+  const transcript = path.join(dir, 'session.jsonl')
+  // The lines Claude 2.1.322 wrote for the owner's live case (2026-11-11), trimmed to what is read.
+  await writeFile(
+    transcript,
+    [
+      '{"type":"attachment","attachment":{"type":"hook_permission_decision","decision":"allow","toolUseID":"toolu_live","hookEvent":"PermissionRequest"}}',
+      '{"type":"attachment","attachment":{"type":"hook_success","hookEvent":"PostToolUseFailure","toolUseID":"toolu_live"}}',
+      '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_live","is_error":true,"content":"Exit code 1\\n(eval):14: parse error near `\\\\n\'"}]}}'
+    ].join('\n')
   )
 
-  it('credits Orca only with its own deny text, and names a No and the 2:00 block', () => {
-    const deny = { isError: true, text: 'use a script file' }
-    expect(claudeToolClose(deny, 'use a script file')).toBe('hook-denied')
-    expect(claudeToolClose(deny, null)).toBe('other')
-    expect(
-      claudeToolClose(
-        { isError: true, text: "The user doesn't want to proceed with this tool use. Rejected." },
-        'use a script file'
-      )
-    ).toBe('user-denied')
-    expect(
-      claudeToolClose(
-        { isError: true, text: 'Permission was denied by a built-in Claude Code safety check.' },
-        null
-      )
-    ).toBe('auto-denied')
-    expect(claudeToolClose({ isError: false, text: '59' }, 'use a script file')).toBe('ran')
+  const record = await readClaudeToolRecord(transcript, 'toolu_live')
+  expect(record).toEqual({
+    hookDecision: 'allow',
+    result: { isError: true, text: "Exit code 1\n(eval):14: parse error near `\\n'" }
   })
+  expect(claudeTookHookAnswer(record!, 'allow', 'use a script file')).toBe(true)
+  expect(claudeTookHookAnswer(record!, 'deny', 'use a script file')).toBe(false)
+  expect(await readClaudeToolRecord(transcript, 'toolu_other')).toBeNull()
 })

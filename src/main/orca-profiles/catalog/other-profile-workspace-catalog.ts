@@ -7,8 +7,8 @@ import {
   getOrcaProfileIndexPath
 } from '../profile-storage-paths'
 import { readProfileIndex } from '../profile-index-store'
-import { readProfileStateDomains } from '../../persistence/profile-state/profile-state-domain-reader'
-import { assertNoRetainedProfileStateExports } from '../../persistence/profile-state/profile-state-recovery-required'
+import { readProfileStateDomains } from '../../persistence/profile-state/documents/profile-state-domain-reader'
+import { assertNoRetainedProfileStateExports } from '../../persistence/profile-state/recovery/profile-state-recovery-required'
 
 /** Histories lack profile segments, so include inactive profiles before GC.
  * Read persisted IDs without Store migrations; unreadable profiles must prevent pruning. */

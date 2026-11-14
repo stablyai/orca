@@ -1,6 +1,6 @@
 import { setBoundedScopeCacheEntry } from '../../../../../src/shared/native-chat/native-chat-scope-cache'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatResumePoint } from '../../../../../src/shared/rpc-contract/native-chat-params'
+import type { NativeChatResumePoint } from '../../../../../src/shared/rpc-contract/native-chat/native-chat-params'
 import { peekStoredChatTranscript } from './mobile-native-chat-transcript-store'
 
 const MAX_CACHED_TRANSCRIPTS = 8

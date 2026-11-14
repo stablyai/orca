@@ -32,6 +32,7 @@ export function createPaneManagerOptionsTestContext(
         current: new Map<number, PanePtyBinding>(binding ? [[1, binding]] : [])
       },
       dispatchNotification: vi.fn(),
+      consumeTabIssueCommandSplit: vi.fn(),
       setTabPaneExpanded: vi.fn(),
       setTabCanExpandPane: vi.fn(),
       setExpandedPane: vi.fn(),

@@ -1,5 +1,5 @@
 import { ClaudeHookService } from '../claude/hook-service'
-import { OPENCLAUDE_HOOK_SETTINGS } from '../claude/hook-settings'
+import { OPENCLAUDE_HOOK_SETTINGS } from '../claude/hooks/hook-settings'
 
 export const openClaudeHookService = new ClaudeHookService({
   agent: 'openclaude',

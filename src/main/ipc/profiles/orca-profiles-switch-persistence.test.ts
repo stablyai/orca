@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from '../../persistence/loading-store/profile-state-maintenance-fixture'
+} from '../../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
 import { registerOrcaProfileHandlers } from './orca-profiles'
 
 const { handlers, quit, select } = vi.hoisted(() => ({

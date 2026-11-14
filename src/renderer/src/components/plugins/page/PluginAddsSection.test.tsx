@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { useAppStore } from '@/store'
 import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-language-packs'
 import { usePluginSyntaxStore } from '@/store/plugins/syntax/plugin-syntax-packs'

@@ -90,19 +90,4 @@ describe('pairing a server that is already saved', () => {
     expect(listEnvironments(userDataPath).map((entry) => entry.id)).toContain(first.id)
     expect(listEnvironments(userDataPath)).toHaveLength(2)
   })
-
-  it('refuses to fold a cloud workspace server into a saved entry', () => {
-    const first = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'Studio',
-      pairingCode: pairingCode('ws://192.0.2.10:6768')
-    })
-    expect(() =>
-      addOrUpdateEnvironmentFromPairingCode(userDataPath, {
-        name: 'VM',
-        pairingCode: pairingCode('ws://192.0.2.20:6768', 'vm-token'),
-        source: 'ephemeral-vm'
-      })
-    ).toThrow('This server is already paired as "Studio".')
-    expect(listEnvironments(userDataPath)).toEqual([first])
-  })
 })

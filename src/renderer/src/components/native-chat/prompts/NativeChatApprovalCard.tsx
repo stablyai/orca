@@ -1,6 +1,6 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useRef, useState } from 'react'
-import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
+import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/agent-session-approval-detail-preview'
 import { cn } from '@/lib/class-names'
@@ -26,6 +26,8 @@ export type NativeChatApprovalCardProps = {
   onCollapse?: () => void
   /** A choice is being delivered: the options wait for its answer. */
   isSubmitting?: boolean
+  /** The option being sent, while `isSubmitting`: its button shows that it is working. */
+  submittingOption?: string
   shouldFocus?: boolean
   /** Shown when the card has no options: only the terminal can answer it. */
   onOpenTerminal?: () => void
@@ -33,8 +35,8 @@ export type NativeChatApprovalCardProps = {
   worker?: { name: string; onOpen: () => void }
   /** Live time left before the agent decides on its own, shown only when its screen shows it. */
   countdown?: string
-  /** `transcript`: a row in the message list, not the composer slot (no slot height, no focus). */
-  placement?: 'composer' | 'transcript'
+  /** `stacked`: one of several cards above the composer, not the chat's own slot (no slot height, no focus). */
+  placement?: 'composer' | 'stacked'
 }
 
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
@@ -44,6 +46,7 @@ export function NativeChatApprovalCard({
   onCancel,
   onCollapse,
   isSubmitting = false,
+  submittingOption,
   shouldFocus = false,
   onOpenTerminal,
   worker,
@@ -56,7 +59,7 @@ export function NativeChatApprovalCard({
   const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(approval.subject)
-  const inTranscript = placement === 'transcript'
+  const stacked = placement === 'stacked'
   const hasContext = Boolean(
     countdown ||
     approval.description ||
@@ -65,18 +68,16 @@ export function NativeChatApprovalCard({
     approval.subject ||
     approval.detail
   )
-  useNativeChatPromptCardFocus(cardRef, shouldFocus && !inTranscript)
+  useNativeChatPromptCardFocus(cardRef, shouldFocus && !stacked)
   const escape = onCancel ?? (isSubmitting ? undefined : onCollapse)
 
   return (
     <SecuritySurface>
-      <div
-        className={inTranscript ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}
-      >
+      <div className={stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}>
         <div
           className={cn(
             'mx-auto flex w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4',
-            !inTranscript && 'h-full min-h-0 max-h-full'
+            !stacked && 'h-full min-h-0 max-h-full'
           )}
         >
           <div
@@ -211,7 +212,14 @@ export function NativeChatApprovalCard({
                       : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
                   )}
                 >
-                  {opt.label}
+                  {isSubmitting && opt.send === submittingOption ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                      {opt.label}
+                    </span>
+                  ) : (
+                    opt.label
+                  )}
                 </button>
               ))}
               {approval.options.length === 0 && onOpenTerminal ? (

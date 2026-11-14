@@ -1,10 +1,11 @@
-import { hashProfileStateJson } from '../../persistence/profile-state/profile-state-documents'
+import '../../persistence/profile-state/documents/profile-state-documents'
 import {
+  hashProfileStatePayload as hashProfileStateJson,
   isRecord,
   type ProfileStateParsedDocument
-} from '../../persistence/profile-state/profile-state-document-validation'
-import { prepareProfileStateDomainMutation } from '../../persistence/profile-state/profile-state-domain-write-validation'
-import type { ProfileStateDomainMutation } from '../../persistence/profile-state/profile-state-domain-writes'
+} from '../../persistence/profile-state/documents/profile-state-document-validation'
+import { prepareProfileStateDomainMutation } from '../../persistence/profile-state/documents/profile-state-domain-write-validation'
+import type { ProfileStateDomainMutation } from '../../persistence/profile-state/documents/profile-state-domain-writes'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 
 export type ProfileProjectDomainDigest = { domain: string; hash: string }

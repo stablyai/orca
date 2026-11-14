@@ -1,14 +1,15 @@
 import { useMemo } from 'react'
+import type { MobileAnimatedInterpolation } from '../platform/animated-handles'
 import {
   classifyConnection,
   isConnectionOutage,
   verdictDisplayLabel
 } from '../transport/connection/connection-health'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useInitialSessionTerminalAutoCreate } from '../terminal/session/use-initial-session-terminal-autocreate'
+import { useInitialSessionTerminalAutoCreate } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from '../transport/connection/mobile-session-connection-copy'
 import type { MobileSessionBulkCloseModel } from './tabs/use-mobile-session-bulk-close'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 
@@ -76,11 +77,8 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     presentedConnState === 'connected'
       ? showLoadingState && visibleTabs.length === 0
         ? t('session.presentation.loadingTabs', 'Loading tabs')
-        : visibleTabs.length === 1
-          ? t('session.presentation.oneTab', '1 tab')
-          : t('session.presentation.tabCount', '{{tabCount}} tabs', {
-              tabCount: visibleTabs.length
-            })
+        : // The tab count lives in the tab bar, so the header names the branch instead.
+          (scope.worktreeBranch ?? MOBILE_SESSION_STATUS_LABELS.connected)
       : showConnectionRetry
         ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
             status: verdictDisplayLabel(connectionVerdict)
@@ -97,7 +95,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     !scope.activeBrowserTab
   const dockBottomInset = dockShown && (sideRail || padAvailable) ? 0 : insets.bottom
   const reducedMotion = useReducedMotionEnabled()
-  const toastRise = useMemo(
+  const toastRise = useMemo<MobileAnimatedInterpolation | 0>(
     () =>
       reducedMotion === false
         ? toastOpacityRef.current.interpolate({

@@ -21,7 +21,7 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
-import { idOf, isRecord, resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf, isRecord, resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
@@ -84,7 +84,7 @@ export async function call(
 }
 
 export async function openChat(sessionId: string): Promise<FakeConnection> {
-  const attached = await host.attach({ callerKey: 'test-surface' }, attachParams(sessionId))
+  const attached = await host.attach({ callerKey: 'test-surface' }, attachParams(sessionId, root))
   expect(attached, JSON.stringify(attached)).toMatchObject({ ok: true })
   await host.setSessionTabVisibility(sessionId, true)
   threadBySession.set(sessionId, codex.connections.at(-1)!.threadId!)

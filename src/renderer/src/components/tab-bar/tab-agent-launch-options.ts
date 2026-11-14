@@ -38,7 +38,12 @@ function compactAgentAlias(value: string): string {
   return normalizeAgentAlias(value).replace(/[\s_-]+/g, '')
 }
 
-function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string; cmd: string } | null {
+function getCatalogEntry(agent: TuiAgent): {
+  id: TuiAgent
+  label: string
+  cmd: string
+  searchAliases?: readonly string[]
+} | null {
   return getAgentCatalog().find((entry) => entry.id === agent) ?? null
 }
 
@@ -66,6 +71,10 @@ export function buildTabAgentLaunchOptions(
     if (entry?.cmd) {
       aliases.add(normalizeAgentAlias(entry.cmd))
       aliases.add(compactAgentAlias(entry.cmd))
+    }
+    for (const searchAlias of entry?.searchAliases ?? []) {
+      aliases.add(normalizeAgentAlias(searchAlias))
+      aliases.add(compactAgentAlias(searchAlias))
     }
     const commandOverride = commandOverrides[agent]?.trim()
     if (commandOverride) {

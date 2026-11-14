@@ -38,7 +38,7 @@ import {
   setOrcaCloudSignInLink,
   startOrcaCloudSignInProgress
 } from './profile-cloud-sign-in-progress'
-import { clearRelayRegionPreferenceCache } from '../../runtime/mobile-cloud-relay/relay-region-preference'
+import { clearRelayRegionPreferenceCache } from '../../runtime/mobile-cloud-relay/region-selection/relay-region-preference'
 
 import './profile-cloud-capability-refresh'
 

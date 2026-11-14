@@ -130,8 +130,12 @@ export abstract class AgentHookServerState {
   protected endpointFileWritten = false
   protected state: HookListenerState = createHookListenerState({
     nextListingOrder: this.nextStatusListingOrder,
-    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey)
+    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey),
+    ...this.legacyRowHooks
   })
+  protected get legacyRowHooks(): Parameters<typeof createHookListenerState>[0] {
+    return {}
+  }
   protected onTransportInterference: ((report: HookTransportInterferenceReport) => void) | null =
     null
   protected transportInterference = createHookTransportInterferenceTracker(
@@ -310,10 +314,6 @@ export abstract class AgentHookServerState {
     launchTokenHashOverride?: string
   ): AgentHookAuthorityEvidence | null
   protected abstract scheduleStatusPersist(turnBoundary?: boolean): void
-  protected abstract scheduleTurnStatusPersist(
-    previous: EnrichedAgentHookEventPayload | undefined,
-    next: EnrichedAgentHookEventPayload
-  ): void
   protected abstract runStatusPersist(): boolean
   protected abstract getStatusStore(): LastStatusStore | null
 

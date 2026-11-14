@@ -22,7 +22,7 @@ import {
 import '../../../../orchestration/workers/launch/worker-dispatch-preamble'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import './orchestration-structured-worker-lifecycle'
-import '../worker/worker-observation'
+import '../worker/observation/worker-observation'
 
 const WORKTREE = 'repo::wt'
 const STRUCTURED_HANDLE = 'structworker_worker'
@@ -39,7 +39,7 @@ vi.mock(
   })
 )
 
-vi.mock('../worker/worker-topology', async (importOriginal) => ({
+vi.mock('../worker/start/placement/worker-placement-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createStructuredWorkerSessionForWorktree: async (args: { effects: unknown[] }) => {
     args.effects.push({ kind: 'terminal', role: 'agent', action: 'created' })

@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { projectRelationsTableFixture } from '../../../../shared/github/project-relations.test-fixture'
+import { projectRelationsTableFixture } from '../../../../shared/github/projects/project-relations.test-fixture'
 import ProjectViewList from './ProjectViewList'
 
 const table = projectRelationsTableFixture()

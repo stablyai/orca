@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { usePublishedMachineName } from '@/components/machine-identity/use-published-machine-name'
-import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   createNativeChatComposerWorkspaceSelector,
@@ -93,7 +93,7 @@ export function NativeChatComposerWorkspace({
             type="button"
             variant="ghost"
             size="xs"
-            className="h-5.5 min-w-0 flex-1 justify-start"
+            className="h-5.5 min-w-0 max-w-full shrink justify-start"
             aria-label={t(
               'components.native-chat.composerWorkspace.copyIdentity',
               'Copy {{value0}}',
@@ -156,7 +156,9 @@ export function NativeChatComposerWorkspace({
             >
               <Folder className="size-3" aria-hidden />
               <span className={FOOTER_TEXT}>{checkout}</span>
-              <span className="shrink-0 font-normal text-2xs text-chat-foreground-faint [text-box:trim-both_cap_alphabetic]">
+              <span
+                className={`${FOOTER_TEXT} max-w-[max(0px,calc(100%_-_var(--spacing)*5))] shrink-0 font-normal text-chat-foreground-faint`}
+              >
                 · {kindLabel}
               </span>
             </Button>
@@ -166,26 +168,30 @@ export function NativeChatComposerWorkspace({
           </TooltipContent>
         </Tooltip>
       )}
-      {identity?.kind === 'branch' &&
-      rowWorktreeId &&
-      repoId &&
-      hostId &&
-      path &&
-      // Direct SSH ids aren't served by the git switch route; those keep click-to-copy.
-      parseExecutionHostId(hostId)?.kind !== 'ssh' ? (
-        <NativeChatComposerBranchPicker
-          worktreeId={rowWorktreeId}
-          worktreePath={path}
-          hostId={hostId}
-          repoId={repoId}
-          branch={identity.branchName}
-          turnActive={isWorking}
-          textClassName={FOOTER_TEXT}
-          onCopyBranch={() => void copyValue(identity.branchName)}
-          fallback={copyIdentityButton}
-        />
-      ) : (
-        copyIdentityButton
+      {identity && (
+        <div className="flex min-w-[min(100%,calc(var(--spacing)*18))] flex-1 items-center">
+          {identity.kind === 'branch' &&
+          rowWorktreeId &&
+          repoId &&
+          hostId &&
+          path &&
+          // Direct SSH ids aren't served by the git switch route; those keep click-to-copy.
+          parseExecutionHostId(hostId)?.kind !== 'ssh' ? (
+            <NativeChatComposerBranchPicker
+              worktreeId={rowWorktreeId}
+              worktreePath={path}
+              hostId={hostId}
+              repoId={repoId}
+              branch={identity.branchName}
+              turnActive={isWorking}
+              textClassName={FOOTER_TEXT}
+              onCopyBranch={() => void copyValue(identity.branchName)}
+              fallback={copyIdentityButton}
+            />
+          ) : (
+            copyIdentityButton
+          )}
+        </div>
       )}
     </div>
   )

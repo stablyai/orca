@@ -173,7 +173,7 @@ export const pendingAnswer = defineFixture({
     option.click()
     await new Promise(requestAnimationFrame)
     ;[...frame.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent === 'Submit')
+      .find((button) => button.textContent?.startsWith('Submit'))
       ?.click()
     await new Promise(requestAnimationFrame)
   }
@@ -271,4 +271,62 @@ export const previews = defineFixture({
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
     await new Promise(requestAnimationFrame)
   }
+})
+
+const dispatchOptions = [
+  {
+    label: 'Yes, investigate and report',
+    description: "I'll find the config and summarize it."
+  },
+  {
+    label: 'No, I know what it is',
+    description: "You're already aware of it; I'll leave it alone."
+  },
+  {
+    label: 'Ask me later',
+    description: 'Keep the dispatches running for now.'
+  }
+]
+
+function FocusedQuestion({ steps = 1 }: { steps?: number }) {
+  return (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-4"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: Array.from({ length: steps }, (_, i) => ({
+            question:
+              i === 0
+                ? 'I found active dispatches from an automation I do not recognize. Should I look into it?'
+                : 'Where should the report go?',
+            header: i === 0 ? 'Investigate' : 'Report',
+            multiSelect: false,
+            options: dispatchOptions
+          }))
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+        onCollapse={() => {}}
+        shouldFocus
+      />
+    </div>
+  )
+}
+
+// Keyboard focus lands on option 1 as the card opens; it must not look picked.
+export const keyboardFocus = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion />
+})
+
+export const multiStep = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={2} />
+})
+
+export const narrow = defineFixture({
+  width: 400,
+  render: () => <FocusedQuestion />
 })

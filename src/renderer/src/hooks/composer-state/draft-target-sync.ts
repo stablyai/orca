@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { ComposerModel } from './composer-model'
+import { pickerRepos } from '../../../../shared/hidden-projects'
 
 export type DraftTargetSyncInput = Pick<
   ComposerModel,
@@ -130,8 +131,10 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     if (isProjectGroupTarget || pendingInitialWorkspaceTarget) {
       return
     }
-    if (!repoId && eligibleRepos[0]?.id) {
-      setRepoId(eligibleRepos[0].id)
+    // The default is the first listed project; a hidden one stays reachable only when named.
+    const firstListed = pickerRepos(eligibleRepos)[0]
+    if (!repoId && firstListed?.id) {
+      setRepoId(firstListed.id)
     }
   }, [eligibleRepos, isProjectGroupTarget, pendingInitialWorkspaceTarget, repoId, setRepoId])
 

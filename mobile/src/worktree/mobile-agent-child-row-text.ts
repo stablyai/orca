@@ -60,5 +60,5 @@ export function mobileAgentChildRowText(
       : row.detail?.kind === 'role' && (!row.detail.agentType || row.detail.agentType === 'unknown')
         ? translate('session.agentChildRow.agent', 'Agent')
         : agentChildRowDetailText(row, now, mobileAgentChildRowCopy())
-  return agentChildRowLeadTrail(row, mobileAgentChildRowName(row), detail)
+  return agentChildRowLeadTrail(mobileAgentChildRowName(row), detail)
 }

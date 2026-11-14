@@ -1,6 +1,9 @@
 import { useContext, type ReactNode } from 'react'
 import { View } from 'react-native'
-import { MobileNativeChatComposerPresenceContext } from '../mobile-native-chat-lower-region-context'
+import {
+  MobileNativeChatComposerPresenceContext,
+  MobileNativeChatQueueAbovePromptContext
+} from '../mobile-native-chat-lower-region-context'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 
 export function MobileNativeChatQueueFrame({
@@ -13,14 +16,16 @@ export function MobileNativeChatQueueFrame({
   children: ReactNode
 }) {
   const composerPresent = useContext(MobileNativeChatComposerPresenceContext)
-  const untucked = editing || !composerPresent
+  // Native keeps the composer mounted (hidden) under a prompt, so presence alone cannot untuck it.
+  const abovePrompt = useContext(MobileNativeChatQueueAbovePromptContext)
+  const untucked = editing || !composerPresent || abovePrompt
   return (
     <View
       testID={box ? 'queued-box' : undefined}
       style={
         box
-          ? [styles.box, untucked && styles.inlineBox]
-          : [styles.list, untucked && styles.inlineList]
+          ? [styles.box, untucked && styles.inlineBox, abovePrompt && styles.closedBox]
+          : [styles.list, untucked && styles.inlineList, abovePrompt && styles.closedList]
       }
     >
       {children}

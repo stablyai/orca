@@ -21,7 +21,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import {
   keysMayMatch,
   terminalConversationKey
-} from '../../../native-chat/structured-conversation-key'
+} from '../../../native-chat/conversation-adoption/structured-conversation-key'
 
 export type ResumeSpawnArgs = {
   connectionId?: string | null

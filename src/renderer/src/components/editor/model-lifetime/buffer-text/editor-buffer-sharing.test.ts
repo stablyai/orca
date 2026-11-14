@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-// Use real record middleware and save queues for cross-workspace restored drafts, phone writes, rich text and autosave pauses.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
@@ -84,7 +83,7 @@ function openShared(disk: string) {
 }
 
 describe('two workspaces on one record', () => {
-  it("a save writes another view's pending rich text; typing during the save stays dirty (scenario 5)", async () => {
+  it('a save flushes pending rich text from another view of its record', async () => {
     const disk = stubGuardedDisk({ [GUARDED_PATH]: BASE })
     const { store, a, b } = openShared(BASE)
     store.getState().setEditorDraft(a.id, 'source')

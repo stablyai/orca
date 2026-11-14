@@ -1,6 +1,6 @@
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import type { PtyProcessInspectionOptions } from '../../../providers/pty-process-inspection'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInspectionOptions } from '../../../providers/pty/process-inspection'
 
 /** Foreground reads go to the exact owner and never borrow the current daemon's default route. */
 export class DaemonPtyTargetInspection {

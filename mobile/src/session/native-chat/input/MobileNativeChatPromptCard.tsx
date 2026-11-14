@@ -10,7 +10,7 @@ import {
   type LayoutChangeEvent
 } from 'react-native'
 import { SHEET_CURVE, SHEET_HEIGHT_DURATION_MS } from '../../../components/sheet-motion-values'
-import { useReducedMotionEnabled } from '../../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
 import { colors, pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -26,7 +26,6 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
-import { MobileNativeChatPromptStrip } from './MobileNativeChatPromptStrip'
 import {
   useMobileNativeChatLowerGeometry,
   useMobileNativeChatLowerRegion
@@ -147,24 +146,16 @@ export function MobileNativeChatPromptCard({
       />
     ) : null
   const arrival = usePromptCardArrival(card !== null)
-  // Hide without remounting so a collapsed prompt keeps partial selections.
+  // Hide without remounting so a collapsed prompt keeps partial selections; the view draws its strip.
   return (
-    <>
-      <PromptCardSlot
-        collapsed={Boolean(collapsedPrompt)}
-        answering={answering}
-        arriving={arrival.arriving}
-        onLayout={arrival.onLayout}
-      >
-        <Animated.View style={[styles.arrivalLayer, arrival.style]}>{card}</Animated.View>
-      </PromptCardSlot>
-      {collapsedPrompt ? (
-        <MobileNativeChatPromptStrip
-          title={collapsedPrompt.title}
-          onExpand={collapsedPrompt.expand}
-        />
-      ) : null}
-    </>
+    <PromptCardSlot
+      collapsed={Boolean(collapsedPrompt)}
+      answering={answering}
+      arriving={arrival.arriving}
+      onLayout={arrival.onLayout}
+    >
+      <Animated.View style={[styles.arrivalLayer, arrival.style]}>{card}</Animated.View>
+    </PromptCardSlot>
   )
 }
 

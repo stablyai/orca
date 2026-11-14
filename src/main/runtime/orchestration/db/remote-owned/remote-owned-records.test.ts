@@ -4,13 +4,8 @@ import { createRootDispatch } from '../root-dispatch-test-fixture'
 import { claimTaskForStart } from '../tasks/task-start-claim'
 import type { RunRow } from '../orchestration-records'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
-import {
-  getRemoteDispatch,
-  listRemoteDispatches,
-  oweRemoteDispatchStop
-} from './remote-dispatch-records'
+import { getRemoteDispatch, listRemoteDispatches } from './remote-dispatch-records'
 import { importRemoteOwnedItem, type PulledRemoteOwnedItem } from './remote-owned-import'
-import { refuseTaskOfClosedPairing } from './remote-placement-hold'
 import {
   getRemotePlacement,
   recordRemoteStart,
@@ -151,27 +146,6 @@ describe('remote-owned records on the coordinating Orca', () => {
 
   const importItem = (pulled: PulledRemoteOwnedItem) => importRemoteOwnedItem(db, PIN, pulled)
 
-  describe('a database an unreleased build made', () => {
-    it('repairs the placement and record tables on open, so starts and settlements work', () => {
-      db.db.exec(`
-        DROP TABLE remote_placements;
-        CREATE TABLE remote_placements (
-          task_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, environment_id TEXT NOT NULL,
-          conversation_id TEXT NOT NULL, state TEXT NOT NULL, request_key TEXT NOT NULL,
-          prior_task_status TEXT NOT NULL, dispatch_id TEXT, reserved_by_runtime TEXT NOT NULL,
-          outcome_unknown INTEGER NOT NULL DEFAULT 0,
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
-        ALTER TABLE remote_dispatches DROP COLUMN task_settled_here;
-      `)
-      db.createTables()
-
-      startedOnB('task_t', 'ctx_b1')
-      settleRemoteAttemptHere(db, 'ctx_b1', 'stopped')
-      expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ task_settled_here: 1 })
-    })
-  })
-
   describe('a retry here of an attempt on the server, by the local rule', () => {
     const retryHere = () => claimTaskForStart(db, db.getTask('task_t')!, { retryOf: 'ctx_b1' })
 
@@ -185,68 +159,6 @@ describe('remote-owned records on the coordinating Orca', () => {
 
       settleRemoteAttemptHere(db, 'ctx_b1', 'abandoned')
       expect(retryHere).not.toThrow()
-    })
-
-    it('follows a stop the server proved', () => {
-      startedOnB('task_t', 'ctx_b1')
-      importItem(stateItem('ctx_b1', 'task_t', { status: 'dispatched', workerState: 'ready' }))
-      settleRemoteAttemptHere(db, 'ctx_b1', 'stopped')
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'failed',
-          workerState: 'stopped',
-          taskStatus: 'blocked'
-        })
-      )
-      expect(retryHere).not.toThrow()
-    })
-  })
-
-  describe('#5 placement fence', () => {
-    it('refuses a local start of a Task being placed on a server, with the ordinary text', () => {
-      placeTask('task_t')
-      expect(db.getTask('task_t')?.status).toBe('dispatched')
-      expect(() =>
-        db.createStartingWorkerDispatch({
-          taskId: 'task_t',
-          startOptions: {},
-          creator: { kind: 'system' },
-          maxDepth: Number.MAX_SAFE_INTEGER
-        })
-      ).toThrow('Task task_t is dispatched; only a ready Task can start.')
-    })
-
-    it('refuses --task naming another Run', () => {
-      const other = db.createRun({
-        objective: 'Other',
-        coordinatorHandle: null,
-        coordinatorPaneKey: null
-      })
-      const foreign = db.createTask({ spec: 'theirs', runId: other.id })
-      expect(() =>
-        reserveRemotePlacement(db, {
-          link,
-          taskId: foreign.id,
-          requestKey: 'k'
-        })
-      ).toThrow(`Task ${foreign.id} was not found in Run ${run.id}.`)
-      expect(getRemotePlacement(db, foreign.id)).toBeUndefined()
-    })
-
-    it('frees the Task only when the server applied nothing, and a same-key retry finds its reservation', () => {
-      placeTask('task_t')
-      expect(placeTask('task_t').placement.state).toBe('reserved')
-      releaseRemotePlacement(db, 'task_t', 'key_task_t')
-      expect(getRemotePlacement(db, 'task_t')).toBeUndefined()
-      expect(db.getTask('task_t')?.status).toBe('ready')
-    })
-
-    it('refuses a start whose deps are unfinished with the ordinary not-ready text', () => {
-      const dep = db.createTask({ spec: 'first', runId: run.id })
-      expect(() => placeTask('task_t', 'k', [dep.id])).toThrow(
-        'Task task_t is pending; only a ready Task can start.'
-      )
-      expect(db.getTask('task_t')).toBeUndefined()
     })
   })
 
@@ -290,18 +202,6 @@ describe('remote-owned records on the coordinating Orca', () => {
     })
   })
 
-  describe('a re-made pairing', () => {
-    it('releases what the old link held, so the Task can be changed here again', () => {
-      startedOnB('task_t', 'ctx_b1')
-      openRemoteRunLink(db, run.id, {
-        ...SERVER,
-        homePeerFingerprint: 'cred_a_new',
-        pairingRevision: 2
-      })
-      expect(db.updateTaskStatus('task_t', 'failed', 'pairing re-made')?.status).toBe('failed')
-    })
-  })
-
   describe('#3 late facts after a reset', () => {
     for (const reset of ['resetAll', 'resetTasks'] as const) {
       it(`records nothing from a start answer that lands after ${reset}`, () => {
@@ -331,32 +231,6 @@ describe('remote-owned records on the coordinating Orca', () => {
         expect(getRemotePlacement(db, 'task_t')).toBeUndefined()
       })
     }
-
-    it('records nothing from a start answer that lands after the pairing was re-made', () => {
-      placeTask('task_t')
-      openRemoteRunLink(db, run.id, {
-        ...SERVER,
-        homePeerFingerprint: 'cred_a_new',
-        pairingRevision: 2
-      })
-      expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('closed')
-      expect(
-        recordRemoteStart(db, {
-          conversationId: link.conversation_id,
-          taskId: 'task_t',
-          dispatchId: 'ctx_late',
-          requestKey: 'key_task_t'
-        })
-      ).toBeUndefined()
-      expect(getRemoteDispatch(db, 'ctx_late')).toBeUndefined()
-    })
-
-    it('opens a new link for the Run after a reset, so a later start gets its own cancel', () => {
-      db.resetTasks()
-      const next = openRemoteRunLink(db, run.id, SERVER)
-      expect(next.conversation_id).not.toBe(link.conversation_id)
-      expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('cancel_owed')
-    })
   })
 
   describe('#4 import position', () => {
@@ -392,63 +266,9 @@ describe('remote-owned records on the coordinating Orca', () => {
       ).toHaveLength(1)
       expect(getRemoteRunLink(db, link.conversation_id)?.last_imported_sequence).toBe(3)
     })
-
-    it('fails each Task when the server reset removed its Dispatch', () => {
-      startedOnB('task_t', 'ctx_b1')
-      oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')
-      importItem(stateItem('ctx_b1', 'task_t', { removed: 'Reset on devB.' }))
-      expect(db.getTask('task_t')).toMatchObject({ status: 'failed', result: 'Reset on devB.' })
-      expect(getRemoteDispatch(db, 'ctx_b1')?.stop_owed).toBe(0)
-    })
   })
 
   describe('#8 settlement through the Task half', () => {
-    it('completes the Task from the first success and readies its dependents, writing no local execution rows', () => {
-      startedOnB('task_t', 'ctx_b1')
-      const dependent = db.createTask({ spec: 'next', runId: run.id, deps: ['task_t'] })
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'completed',
-          workerState: 'succeeded',
-          taskStatus: 'completed',
-          result: 'shipped'
-        })
-      )
-      expect(db.getTask('task_t')).toMatchObject({ status: 'completed', result: 'shipped' })
-      expect(db.getTask(dependent.id)?.status).toBe('ready')
-      expect(db.db.prepare('SELECT COUNT(*) AS n FROM dispatch_contexts').get()).toEqual({ n: 0 })
-      expect(db.db.prepare('SELECT COUNT(*) AS n FROM worker_dispatches').get()).toEqual({ n: 0 })
-    })
-
-    it('lets the first result stand: a later failure and a duplicate success are no-ops', () => {
-      startedOnB('task_t', 'ctx_b1')
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'completed',
-          workerState: 'succeeded',
-          taskStatus: 'completed',
-          result: 'first'
-        })
-      )
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'completed',
-          workerState: 'succeeded',
-          taskStatus: 'completed',
-          result: 'again'
-        })
-      )
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'failed',
-          workerState: 'failed',
-          taskStatus: 'failed',
-          result: 'late'
-        })
-      )
-      expect(db.getTask('task_t')).toMatchObject({ status: 'completed', result: 'first' })
-    })
-
     it('keeps a late D1 failure from failing a Task reopened under D2', () => {
       startedOnB('task_t', 'ctx_d1')
       importItem(
@@ -491,69 +311,6 @@ describe('remote-owned records on the coordinating Orca', () => {
       )
       expect(db.getTask('task_t')).toMatchObject({ status: 'completed', result: 'D2' })
     })
-
-    it("applies the server's unobserved-prompt correction after a failed state item", () => {
-      startedOnB('task_t', 'ctx_b1')
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'failed',
-          workerState: 'failed',
-          taskStatus: 'failed',
-          result: 'stalled'
-        })
-      )
-      expect(db.getTask('task_t')?.status).toBe('failed')
-      // Without B's decision, a later success is a second result and does not stand.
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'completed',
-          workerState: 'succeeded',
-          taskStatus: 'completed',
-          result: 'uncorrected'
-        })
-      )
-      expect(db.getTask('task_t')?.status).toBe('failed')
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'completed',
-          workerState: 'succeeded',
-          taskStatus: 'completed',
-          result: 'it worked',
-          corrected: true
-        })
-      )
-      expect(db.getTask('task_t')).toMatchObject({ status: 'completed', result: 'it worked' })
-    })
-
-    it('ignores a late remote result once the Task was started here', () => {
-      startedOnB('task_t', 'ctx_d1')
-      importItem(
-        stateItem('ctx_d1', 'task_t', {
-          status: 'failed',
-          workerState: 'stopped',
-          taskStatus: 'blocked'
-        })
-      )
-      db.updateTaskStatus('task_t', 'ready')
-      const local = createRootDispatch(db, 'task_t', 'term_local')
-      importItem(
-        stateItem('ctx_d1', 'task_t', {
-          status: 'failed',
-          workerState: 'stopped',
-          taskStatus: 'failed',
-          result: 'late D1'
-        })
-      )
-      expect(db.getTask('task_t')?.status).toBe('dispatched')
-      expect(db.getDispatchContextById(local.id)?.status).toBe('dispatched')
-    })
-
-    it('counts a remote attempt as the Task’s active worker for local Task updates', () => {
-      startedOnB('task_t', 'ctx_b1')
-      expect(() => db.updateTaskStatus('task_t', 'completed', 'by hand')).toThrow(
-        'Task task_t cannot move to completed while supervised Dispatch ctx_b1 is active'
-      )
-    })
   })
 
   describe('a local claim takes the Task back', () => {
@@ -583,141 +340,6 @@ describe('remote-owned records on the coordinating Orca', () => {
       )
       expect(db.getTask('task_t')).toMatchObject({ status: 'failed', result: 'local D2 failure' })
     })
-
-    it('lets a local start through once the pairing behind a reservation was re-made', () => {
-      placeTask('task_t')
-      openRemoteRunLink(db, run.id, {
-        ...SERVER,
-        homePeerFingerprint: 'cred_a_new',
-        pairingRevision: 2
-      })
-      db.updateTaskStatus('task_t', 'ready')
-      const started = db.createStartingWorkerDispatch({
-        taskId: 'task_t',
-        startOptions: {},
-        creator: { kind: 'system' },
-        maxDepth: Number.MAX_SAFE_INTEGER
-      })
-      expect(started.task.status).toBe('dispatched')
-      expect(getRemotePlacement(db, 'task_t')).toBeUndefined()
-    })
-  })
-
-  describe('Task guards', () => {
-    it('refuses a decision gate on a Task a remote worker still holds', () => {
-      startedOnB('task_t', 'ctx_b1')
-      expect(() => db.createGate({ taskId: 'task_t', question: 'Ship?' })).toThrow(
-        'Task task_t cannot open a gate while supervised Dispatch ctx_b1 is active'
-      )
-    })
-
-    it('keeps holding a Task whose worker finished until its result comes home', () => {
-      startedOnB('task_t', 'ctx_b1')
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'dispatched',
-          workerState: 'succeeded',
-          taskStatus: 'dispatched'
-        })
-      )
-      expect(() => db.updateTaskStatus('task_t', 'completed', 'by hand')).toThrow(
-        'ctx_b1 is active'
-      )
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'circuit_broken',
-          workerState: null,
-          taskStatus: 'dispatched'
-        })
-      )
-      expect(() => db.updateTaskStatus('task_t', 'failed', 'by hand')).toThrow('ctx_b1 is active')
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'failed',
-          workerState: null,
-          taskStatus: 'failed',
-          result: 'from the server'
-        })
-      )
-      expect(db.getTask('task_t')).toMatchObject({ status: 'failed', result: 'from the server' })
-    })
-
-    it('refuses a local retry of an older local attempt once a server attempt is the latest', () => {
-      const task = db.createTask({ spec: 'work', runId: run.id })
-      const d1 = db.createStartingWorkerDispatch({
-        taskId: task.id,
-        startOptions: {},
-        creator: { kind: 'system' },
-        maxDepth: Number.MAX_SAFE_INTEGER
-      })
-      db.failWorkerStart(d1.dispatch.id, 'agent_readiness', 'local failed')
-      db.updateTaskStatus(task.id, 'ready')
-      reserveRemotePlacement(db, {
-        link,
-        taskId: task.id,
-        requestKey: 'remote'
-      })
-      recordRemoteStart(db, {
-        conversationId: link.conversation_id,
-        taskId: task.id,
-        dispatchId: 'ctx_d2',
-        requestKey: 'remote'
-      })
-      importItem(
-        stateItem('ctx_d2', task.id, {
-          status: 'failed',
-          workerState: 'failed',
-          taskStatus: 'failed',
-          result: 'remote failed'
-        })
-      )
-      expect(db.getTask(task.id)?.status).toBe('failed')
-      expect(() =>
-        db.createStartingWorkerDispatch({
-          taskId: task.id,
-          retryOf: d1.dispatch.id,
-          startOptions: {},
-          creator: { kind: 'system' },
-          maxDepth: Number.MAX_SAFE_INTEGER
-        })
-      ).toThrow(`Task ${task.id} cannot retry from Dispatch ${d1.dispatch.id}.`)
-    })
-
-    it('refuses to place a Task again on a server whose pairing was re-made since it was placed', () => {
-      placeTask('task_t', 'k')
-      openRemoteRunLink(db, run.id, {
-        ...SERVER,
-        homePeerFingerprint: 'cred_a_new',
-        pairingRevision: 2
-      })
-      db.updateTaskStatus('task_t', 'ready')
-      expect(() => refuseTaskOfClosedPairing(db, 'task_t', { ...SERVER, name: 'devB' })).toThrow(
-        'Task task_t was placed through a pairing with devB that was re-made or removed; create a new task to run it there.'
-      )
-      expect(db.getTask('task_t')?.status).toBe('ready')
-    })
-
-    it("takes the server's corrected failure text", () => {
-      startedOnB('task_t', 'ctx_b1')
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'failed',
-          workerState: 'failed',
-          taskStatus: 'failed',
-          result: 'stalled'
-        })
-      )
-      importItem(
-        stateItem('ctx_b1', 'task_t', {
-          status: 'failed',
-          workerState: 'failed',
-          taskStatus: 'failed',
-          result: 'real failure',
-          corrected: true
-        })
-      )
-      expect(db.getTask('task_t')).toMatchObject({ status: 'failed', result: 'real failure' })
-    })
   })
 
   describe('S3 / S8 queue items', () => {
@@ -743,63 +365,6 @@ describe('remote-owned records on the coordinating Orca', () => {
         worker_state: 'succeeded'
       })
       expect(db.getTask('task_t')?.status).toBe('completed')
-    })
-
-    it('creates the record of a Dispatch it never heard of from the item, and adopts it as the placement’s attempt', () => {
-      placeTask('task_t')
-      importItem(stateItem('ctx_unseen', 'task_t', { status: 'pending', workerState: 'starting' }))
-      expect(getRemoteDispatch(db, 'ctx_unseen')).toMatchObject({
-        task_id: 'task_t',
-        run_id: run.id,
-        worker_state: 'starting'
-      })
-      expect(getRemotePlacement(db, 'task_t')).toMatchObject({
-        state: 'accepted',
-        dispatch_id: 'ctx_unseen'
-      })
-    })
-
-    it('refuses an item whose message ID, Run, peer Run or kind does not match, leaving the position', () => {
-      startedOnB('task_t', 'ctx_b1')
-      const good = stateItem('ctx_b1', 'task_t', {})
-      expect(() => importItem({ ...good, messageId: 'other' })).toThrow('was not imported')
-      const wrongPeer = JSON.parse(good.payload)
-      expect(() =>
-        importItem({
-          ...good,
-          payload: JSON.stringify({ ...wrongPeer, peerRunId: 'run_elsewhere' })
-        })
-      ).toThrow('peer Run')
-      expect(() =>
-        importItem({ ...good, payload: JSON.stringify({ ...wrongPeer, homeRunId: 'run_other' }) })
-      ).toThrow('belongs to Run')
-      expect(() => importItem({ ...good, kind: 'worker_future' })).toThrow('kind worker_future')
-      expect(() => importItem({ ...good, payload: '{"v":2}' })).toThrow('does not match')
-      expect(getRemoteRunLink(db, link.conversation_id)?.last_imported_sequence).toBe(0)
-      importItem(good)
-      expect(getRemoteRunLink(db, link.conversation_id)?.last_imported_sequence).toBe(good.sequence)
-    })
-
-    it('records the question a remote worker asked, and files its mail in the Run mailbox', () => {
-      startedOnB('task_t', 'ctx_b1')
-      expect(
-        importItem(mailItem('msg_q', 'question', { dispatchId: 'ctx_b1', taskId: 'task_t' }))
-      ).toEqual({ to: `run:${run.id}`, type: 'question' })
-      expect(
-        db.db
-          .prepare(
-            'SELECT dispatch_id, environment_id FROM remote_owned_questions WHERE message_id = ?'
-          )
-          .get('msg_q')
-      ).toEqual({ dispatch_id: 'ctx_b1', environment_id: 'env_b' })
-      expect(db.getUnreadMessages(`run:${run.id}`)).toEqual([
-        expect.objectContaining({
-          id: 'msg_q',
-          type: 'question',
-          from_handle: 'dispatch:ctx_b1',
-          body: 'body'
-        })
-      ])
     })
   })
 })

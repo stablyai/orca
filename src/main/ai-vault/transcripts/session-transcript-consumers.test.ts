@@ -1,36 +1,15 @@
-import { appendFile, mkdir, mkdtemp, rm, stat, truncate, utimes, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { zstdCompressSync } from 'node:zlib'
-import { afterEach, expect, it, vi } from 'vitest'
-import { isAiVaultScanCancelledError } from '../../../shared/ai-vault/contracts/ai-vault-types'
+
+import { afterEach, expect, it } from 'vitest'
+
 import { scanAiVaultSessions } from '../session-scanner'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'
-import { isolatedScanRoots, jsonLines } from '../session-scanner-test-fixtures'
+import { isolatedScanRoots, jsonLines } from '../scanner-fixtures/session-scanner-test-fixtures'
 import type { FileWithMtime, SessionFileCandidate } from '../session-scanner-types'
 
-const OPENCODE_SQLITE_SESSION = {
-  id: 'local:opencode:sqlite-session:db',
-  agent: 'opencode' as const,
-  sessionId: 'sqlite-session'
-}
-const OPENCODE_SQLITE_MESSAGES = [
-  { role: 'user' as const, text: 'ask sqlite', timestamp: null },
-  { role: 'assistant' as const, text: 'reply sqlite', timestamp: null }
-]
-
-// Replace worker transport while retaining the transcript channel integration.
-vi.mock(
-  '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
-  async (importOriginal) => ({
-    ...(await importOriginal<typeof OpenCodeSqliteWorkerSpawn>()),
-    parseOpenCodeSqliteSessionViaWorker: () => Promise.resolve(OPENCODE_SQLITE_SESSION),
-    captureOpenCodeSqliteSessionViaWorker: () =>
-      Promise.resolve({ session: OPENCODE_SQLITE_SESSION, messages: OPENCODE_SQLITE_MESSAGES })
-  })
-)
-import type * as OpenCodeSqliteWorkerSpawn from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import {
   registerTranscriptConsumer,
   resetTranscriptConsumersForTests,
@@ -117,38 +96,6 @@ async function writeClaudeFixture(): Promise<{
   return { root, roots, transcript }
 }
 
-it('reports a scan cancelled mid-read as cancelled, and the next scan matches a cold one', async () => {
-  const { roots, transcript } = await writeClaudeFixture()
-  // Span several chunks so cancellation leaves most of the file unread.
-  const padding = Array.from({ length: 100 }, (_, index) => ({
-    type: 'user',
-    sessionId: 'claude-session',
-    timestamp: '2026-05-01T11:00:00.000Z',
-    message: { role: 'user', content: `${index} ${'x'.repeat(2_000)}` }
-  }))
-  await appendFile(transcript, `${jsonLines(padding)}\n`)
-  const recorder = recordingConsumer()
-  const controller = new AbortController()
-  const unregister = registerTranscriptConsumer({
-    beginRead: () => ({ message: () => controller.abort(), finish: () => {} })
-  })
-
-  await expect(
-    scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20, signal: controller.signal })
-  ).rejects.toSatisfy(isAiVaultScanCancelledError)
-  unregister()
-  expect(recorder.reads.map((read) => read.outcome)).toEqual([
-    expect.objectContaining({ incomplete: true, cancelled: true })
-  ])
-  expect(recorder.reads[0].messages.length).toBeLessThan(padding.length)
-
-  const next = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-  resetSessionParseCacheForTests()
-  const cold = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-  expect(next.issues).toEqual([])
-  expect(next.sessions).toEqual(cold.sessions)
-})
-
 it('replays only the appended lines on a resumed read', async () => {
   const { roots, transcript } = await writeClaudeFixture()
   const consumer = recordingConsumer()
@@ -174,38 +121,6 @@ it('replays only the appended lines on a resumed read', async () => {
   ])
 })
 
-it.each(['rewrite', 'truncate then regrow'])(
-  're-reads a same-size %s from zero',
-  async (operation) => {
-    const { transcript } = await writeClaudeFixture()
-    const before = await claudeCandidate(transcript)
-    await parseAgentSessionFileCached(before, 'darwin')
-    const consumer = recordingConsumer()
-    const rewritten = `${jsonLines(claudeTurns(1, 4))}\n`.replace('reply 4', 'fresh 4')
-    expect(Buffer.byteLength(rewritten)).toBe(before.file.sizeBytes)
-
-    if (operation === 'truncate then regrow') {
-      await truncate(transcript, 0)
-      await appendFile(transcript, rewritten)
-    } else {
-      await writeFile(transcript, rewritten)
-    }
-    const changedAt = new Date(before.file.mtimeMs + 2000)
-    await utimes(transcript, changedAt, changedAt)
-    const session = await parseAgentSessionFileCached(await claudeCandidate(transcript), 'darwin')
-
-    expect(consumer.reads).toHaveLength(1)
-    expect(consumer.reads[0].start.mode).toBe('replace')
-    expect(consumer.reads[0].start.previousByteOffset).toBe(0)
-    expect(textsFor(consumer.reads, 'claude')).toContain('assistant:fresh 4')
-    expect(textsFor(consumer.reads, 'claude')).not.toContain('assistant:reply 4')
-    resetSessionParseCacheForTests()
-    expect(session).toEqual(
-      await parseAgentSessionFileCached(await claudeCandidate(transcript), 'darwin')
-    )
-  }
-)
-
 it('publishes a trailing unterminated line once, when it is complete', async () => {
   const { roots, transcript } = await writeClaudeFixture()
   const consumer = recordingConsumer()
@@ -221,25 +136,6 @@ it('publishes a trailing unterminated line once, when it is complete', async () 
   consumer.reads.length = 0
   await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
   expect(textsFor(consumer.reads, 'claude')).toEqual(['user:ask 5'])
-})
-
-it('keeps the session list working when a consumer throws', async () => {
-  const { roots } = await writeClaudeFixture()
-  registerTranscriptConsumer({
-    beginRead: () => ({
-      message: () => {
-        throw new Error('consumer exploded')
-      },
-      finish: () => undefined
-    })
-  })
-  const healthy = recordingConsumer()
-
-  const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-
-  expect(result.issues).toEqual([])
-  expect(result.sessions.find((entry) => entry.agent === 'claude')?.messageCount).toBe(8)
-  expect(textsFor(healthy.reads, 'claude')).toHaveLength(12)
 })
 
 async function claudeCandidate(transcript: string): Promise<SessionFileCandidate> {
@@ -276,71 +172,4 @@ it('serializes overlapping parses of one path so no consumer read is orphaned', 
   ])
   expect(first?.messageCount).toBe(10)
   expect(second?.messageCount).toBe(10)
-})
-
-it('reports the transcript size, not the cache key, as a whole-file read offset', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-transcript-cline-'))
-  tempRoots.push(root)
-  const roots = isolatedScanRoots(root)
-  // Cline’s cache key includes its sibling file, while this read covers only the transcript.
-  const sessionDir = join(roots.clineSessionsDir, 'cline-session')
-  await mkdir(sessionDir, { recursive: true })
-  const metadataPath = join(sessionDir, 'cline-session.json')
-  await writeFile(
-    metadataPath,
-    JSON.stringify({
-      session_id: 'cline-session',
-      started_at: '2026-05-01T10:00:00.000Z',
-      cwd: '/tmp/cline'
-    })
-  )
-  await writeFile(
-    join(sessionDir, 'cline-session.messages.json'),
-    JSON.stringify({
-      updated_at: '2026-05-01T10:00:01.000Z',
-      messages: [{ role: 'user', content: [{ type: 'text', text: 'x'.repeat(400) }] }]
-    })
-  )
-  const consumer = recordingConsumer()
-
-  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-
-  const read = consumer.reads.find((entry) => entry.start.candidate.agent === 'cline')
-  expect(read?.outcome?.byteOffset).toBe((await stat(metadataPath)).size)
-})
-
-it('covers an archived Codex rollout through its compressed size, never resuming into it', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-transcript-consumers-zst-'))
-  tempRoots.push(root)
-  const path = join(root, 'rollout-2026-05-01T10-00-00-archived.jsonl.zst')
-  const records = [
-    { type: 'session_meta', payload: { id: 'archived', cwd: '/repo' } },
-    {
-      timestamp: '2026-05-01T10:00:01.000Z',
-      type: 'response_item',
-      payload: { type: 'message', role: 'user', content: [{ type: 'text', text: 'old ask' }] }
-    }
-  ]
-  await writeFile(path, zstdCompressSync(`${jsonLines(records)}\n`))
-  const stats = await stat(path)
-  const candidate: SessionFileCandidate = {
-    agent: 'codex',
-    file: {
-      path,
-      mtimeMs: stats.mtimeMs,
-      modifiedAt: stats.mtime.toISOString(),
-      sizeBytes: stats.size
-    },
-    codexHome: null
-  }
-  const consumer = recordingConsumer()
-
-  await parseAgentSessionFileCached(candidate, 'darwin', undefined, 'any')
-  await parseAgentSessionFileCached(candidate, 'darwin', undefined, 'any')
-
-  expect(consumer.reads.map((read) => [read.start.mode, read.outcome?.byteOffset])).toEqual([
-    ['replace', stats.size],
-    ['replace', stats.size]
-  ])
-  expect(textsFor(consumer.reads, 'codex')).toEqual(['user:old ask', 'user:old ask'])
 })

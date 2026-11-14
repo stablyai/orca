@@ -4,7 +4,7 @@ import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import {
   collectLayoutLeafIdsInOrder,
   resolveRootlessTerminalLayoutLeafId
-} from '../../../../shared/workspace-layout/terminal-pane-tree'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import { useAppStore } from '../../store/index'

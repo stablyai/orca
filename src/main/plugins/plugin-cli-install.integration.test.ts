@@ -292,7 +292,7 @@ describe('orca plugin install and update over Git', () => {
     const catalog = join(root, 'catalog')
     const moved = join(root, 'moved-locale')
     await mkdir(catalog, { recursive: true })
-    await git(catalog, ['init', '--quiet'])
+    await git(catalog, ['init', '--quiet', '--initial-branch=master'])
     const listCatalog = (url: string, tag: string) =>
       commitTag(
         catalog,
