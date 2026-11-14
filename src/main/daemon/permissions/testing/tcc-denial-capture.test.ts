@@ -89,6 +89,21 @@ describe('tcc denial capture', () => {
       skipped: [mocks.logVerdict, mocks.signatures, mocks.fullDiskAccess]
     },
     {
+      // The access reader is lazily imported, so it starts after an await of its own.
+      stage: 'log reader, before the lazily imported access reader',
+      probe: mocks.logVerdict,
+      result: {
+        logAccess: 'ok',
+        tccdAsked: 'no',
+        authValue: 'none',
+        authReason: 'none',
+        service: 'none',
+        requirementFailure: 'no',
+        kernelDeny: 'no'
+      },
+      skipped: [mocks.fullDiskAccess]
+    },
+    {
       stage: 'log, signature and access probes',
       probe: mocks.signatures,
       result: { live: 'pass', diskCopy: 'pass' },

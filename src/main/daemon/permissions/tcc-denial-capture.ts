@@ -12,6 +12,7 @@ import {
   type HelperOrigin
 } from '../../../shared/daemon-tcc-denial-capture'
 import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/local-build-compatibility-contract'
+import type { DeveloperPermissionStatus } from '../../../shared/developer-permissions-types'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { msSinceWakeSignal } from '../../power/wake-signal-clock'
 import { isTelemetryEnabled, track } from '../../telemetry/client'
@@ -150,17 +151,23 @@ export function releaseTccDenialCapture(start: TccDenialCaptureStart): void {
 }
 
 async function readFullDiskAccess(): Promise<FullDiskAccessValue> {
+  let status: DeveloperPermissionStatus
   try {
     // Lazy: the status reader reaches the provider modules that import this capture.
     const { getTerminalHostsFullDiskAccessStatus } =
       await import('./daemon-full-disk-access-status')
-    const status = await getTerminalHostsFullDiskAccessStatus()
-    return status === 'granted' || status === 'denied' || status === 'unsupported'
-      ? status
-      : 'unknown'
-  } catch {
+    // The import is an await: consent may have gone, and the reader probes the host and disk.
+    requireTelemetryConsent()
+    status = await getTerminalHostsFullDiskAccessStatus()
+  } catch (error) {
+    if (error instanceof TelemetryOptedOutError) {
+      throw error
+    }
     return 'unknown'
   }
+  return status === 'granted' || status === 'denied' || status === 'unsupported'
+    ? status
+    : 'unknown'
 }
 
 function helperOriginOf(identity: DaemonEndpointIdentity): HelperOrigin {
