@@ -1,5 +1,5 @@
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
-import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/transcript/native-chat-prose'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-prose'
 import { buildNativeChatTranscriptSlots } from '../../conversation/slots/native-chat-transcript-slots'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'

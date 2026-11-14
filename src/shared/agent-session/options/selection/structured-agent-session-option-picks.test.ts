@@ -4,7 +4,7 @@ import {
   applyNativeChatSessionOptionPicks,
   resolveStructuredLaunchSeedOptions,
   updateNativeChatSessionOptionDefaults
-} from '../../../native-chat/input/native-chat-session-option-defaults'
+} from '../../../native-chat/input/session-options/native-chat-session-option-defaults'
 import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue

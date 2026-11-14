@@ -32,7 +32,7 @@ import { isRootAgentJournalItem } from '../../../../src/shared/agent-session/jou
 import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal
-} from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+} from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 
 /** The fork a response offers: none, an empty held slot, drawn disabled, or pressable. */

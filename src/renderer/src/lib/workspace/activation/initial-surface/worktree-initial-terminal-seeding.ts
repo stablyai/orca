@@ -13,7 +13,7 @@ import { agentKindToTuiAgent } from '../../../../../../shared/agent-kind'
 import { useAppStore } from '@/store/index'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/workspace/creation/setup/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace/ownership/workspace-terminal-host-authority'
-import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-cache'
+import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore

@@ -29,7 +29,7 @@ import {
   type NativeChatVisualOwner
 } from '../../media/visuals/native-chat-visual-owner'
 import { useNativeChatTranscriptSlots } from '../../conversation/slots/use-native-chat-transcript-slots'
-import { nativeChatGeneratedImageAnswers } from '../../../../../../shared/native-chat/transcript/native-chat-generated-image-answers'
+import { nativeChatGeneratedImageAnswers } from '../../../../../../shared/native-chat/transcript/images/native-chat-generated-image-answers'
 import { projectStructuredAgentStartItem } from '../../../../../../shared/structured-agent-start-projection'
 import { projectStructuredQuestionMessages } from '../../../../../../shared/structured-agent-question-projection'
 import { desktopStructuredTranscript } from '../../conversation/projection/structured-agent-session-message-projection'
@@ -37,7 +37,7 @@ import { desktopStructuredTranscript } from '../../conversation/projection/struc
 import { projectStructuredItemToNativeChat } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isAdmissibleAgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { agentMessageHeading } from '../../../../../../shared/agent-session/agent-message-presentation'
-import { nativeChatTurnFoldRow } from '../../../../../../shared/native-chat/transcript/native-chat-turn-fold'
+import { nativeChatTurnFoldRow } from '../../../../../../shared/native-chat/transcript/folding/native-chat-turn-fold'
 import { isNoiseMessage } from '../../../../../../shared/native-chat/native-chat-noise'
 import { nativeChatRowSpeaksOrActs } from '../../../../../../shared/native-chat/native-chat-trailing-run'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'

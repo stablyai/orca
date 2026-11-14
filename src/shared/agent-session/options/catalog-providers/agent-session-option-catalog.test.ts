@@ -4,7 +4,7 @@ import '../launch/agent-session-option-launch'
 import {
   resolveNativeChatSessionOptionDefaults,
   updateNativeChatSessionOptionDefaults
-} from '../../../native-chat/input/native-chat-session-option-defaults'
+} from '../../../native-chat/input/session-options/native-chat-session-option-defaults'
 
 describe('agent session option catalog', () => {
   it('parses Claude list_models discovery into catalog models with options', () => {

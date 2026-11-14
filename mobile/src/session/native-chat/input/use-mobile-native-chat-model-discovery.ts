@@ -5,7 +5,7 @@ import type { CatalogModel } from '../../../../../src/shared/agent-session/optio
 import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels
-} from '../../../../../src/shared/native-chat/input/native-chat-discovered-catalog-models'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-discovered-catalog-models'
 import { defineRpcOperation, runRpcOperation } from '../../../transport/rpc/rpc-operation'
 
 const discoveredModel = z.object({

@@ -19,7 +19,7 @@ import {
 } from './mobile-native-chat-in-flight-sends'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import { structuredSessionOperationId } from '../agent-session/structured-session-operation-id'
-import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
+import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
 import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './use-mobile-native-chat-unconfirmed-sends'
 
 export function useMobileStructuredNativeChatSendBridge(args: {

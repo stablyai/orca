@@ -1,7 +1,7 @@
 import { useContext, useMemo } from 'react'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
-import { nativeChatGeneratedImageAnswers } from '../../../../../src/shared/native-chat/transcript/native-chat-generated-image-answers'
+import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import { nativeChatGeneratedImageAnswers } from '../../../../../src/shared/native-chat/transcript/images/native-chat-generated-image-answers'
 import { MobileNativeChatVisualContext } from '../visual/mobile-native-chat-visual-context'
 import {
   mobileNativeChatMarkdownImageSources,

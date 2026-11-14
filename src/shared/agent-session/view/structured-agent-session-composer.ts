@@ -8,7 +8,7 @@ import type {
 import {
   sessionSlashCommandSuggestions,
   type SlashCommandSuggestion
-} from '../../native-chat/input/native-chat-slash-commands'
+} from '../../native-chat/input/commands/native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
 import type { AgentSessionThreadGoalChange } from '../agent-session-thread-goal-wire'
 import type { AgentSessionSlashCommand } from '../agent-session-wire'

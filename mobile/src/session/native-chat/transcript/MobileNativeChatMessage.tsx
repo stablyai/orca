@@ -9,15 +9,15 @@ import * as Chat from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
-} from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
-import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
+} from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
+import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
   MobileNativeChatGroupedThought,
   MobileNativeChatReasoningRow
 } from './MobileNativeChatReasoningRow'
 import { mobileNativeChatRowId } from './mobile-native-chat-reading-place'
 import { nativeChatWorkRunEntries } from '../../../../../src/shared/native-chat/native-chat-work-run'
-import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
+import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
 import { MobileNativeChatPullRequestEventLine } from './MobileNativeChatPullRequestEventLine'
@@ -31,13 +31,13 @@ import { MobileNativeChatResolutionReceipt } from './MobileNativeChatResolutionR
 import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
+} from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-row'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundTaskRun'
-import { withoutBackgroundTaskRows } from '../../../../../src/shared/native-chat/input/native-chat-background-task-row'
+import { withoutBackgroundTaskRows } from '../../../../../src/shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { ToolRun } from './MobileNativeChatToolRun'
-import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
 import { MobileNativeChatVisualContext } from '../visual/mobile-native-chat-visual-context'

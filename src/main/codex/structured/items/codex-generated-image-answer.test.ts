@@ -4,7 +4,7 @@ import { codexNonMessageIdentity } from './codex-thread-item-identity'
 import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { nativeChatGeneratedImageAnswers } from '../../../../shared/native-chat/transcript/native-chat-generated-image-answers'
+import { nativeChatGeneratedImageAnswers } from '../../../../shared/native-chat/transcript/images/native-chat-generated-image-answers'
 
 it.each(['complete', 'sparse'])(
   'enriches %s authoritative saved generation once and preserves the result through replay',

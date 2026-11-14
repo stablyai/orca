@@ -6,7 +6,7 @@ import type { SessionOptionDescriptor } from '../../../../../src/shared/native-c
 import {
   nativeChatModelPillLabel,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { translate } from '../../../i18n/mobile-i18n'
 import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'

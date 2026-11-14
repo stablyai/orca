@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/agent-session-wire'
-import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
+import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-activity'
 import { latestStructuredAgentSessionAssistantMessage } from '../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionThinking,

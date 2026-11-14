@@ -6,7 +6,7 @@ import { cleanup } from '@testing-library/react'
 
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatBackgroundTaskBlock } from '../../../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 
 afterEach(cleanup)
 

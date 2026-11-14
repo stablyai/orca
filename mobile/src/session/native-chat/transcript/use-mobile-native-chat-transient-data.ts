@@ -4,7 +4,7 @@ import {
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { orderNativeChatDisplayMessages } from '../../../../../src/shared/native-chat/transcript/native-chat-message-order'
+import { orderNativeChatDisplayMessages } from '../../../../../src/shared/native-chat/transcript/messages/native-chat-message-order'
 
 type Input = Parameters<typeof buildMobileNativeChatTransientData>[0]
 type Preview = { urls: readonly string[]; row: NativeChatMessage }

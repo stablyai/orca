@@ -5,7 +5,7 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { nativeChatRowRendersContent } from '../../../shared/native-chat/transcript/native-chat-row-content'
+import { nativeChatRowRendersContent } from '../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import {

@@ -9,7 +9,7 @@ import {
   type AgentLaunchSettingsSource
 } from './agent-launch-settings'
 import { migrateAgentPermissionChoice } from '../permissions/tui-agent-permission-lift'
-import '../../native-chat/input/native-chat-session-option-defaults'
+import '../../native-chat/input/session-options/native-chat-session-option-defaults'
 
 const baseline: AgentLaunchSettingsSource = {
   agentPermissionDefault: 'ask',

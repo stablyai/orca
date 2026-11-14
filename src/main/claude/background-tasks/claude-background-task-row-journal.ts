@@ -1,6 +1,6 @@
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { backgroundTaskJournalBody as claudeBackgroundTaskBody } from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { backgroundTaskJournalBody as claudeBackgroundTaskBody } from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { isBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 import type {
   StructuredAgentSessionEventSink,

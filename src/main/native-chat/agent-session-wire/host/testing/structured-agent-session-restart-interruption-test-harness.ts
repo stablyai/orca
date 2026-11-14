@@ -4,7 +4,7 @@ import {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import '../../providers/structured-agent-session-adapter'
 import { AgentSessionAcquisitionRootExitObservedError } from '../../acquisition/structured-agent-session-acquisition-errors'
-import { withNativeChatCutTurnNotices } from '../../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../../../shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

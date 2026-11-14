@@ -4,7 +4,7 @@ import type {
   NativeChatMessage,
   NativeChatSubagentEntry
 } from '../../../../../shared/native-chat/native-chat-types'
-import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import type { NativeChatSubagentHandoff } from './native-chat-subagent-handoff'
 import type { NativeChatSubagentHistory } from './native-chat-subagent-history'
 
