@@ -5314,8 +5314,6 @@ if arguments.first == "--agent" {
         initialPermission: PermissionKind.parse(arguments.dropFirst().first),
         copy: permissionCopy
     )
-} else if arguments.first == "--session-locked" {
-    print(SessionLockProbe.isLocked())
 } else if arguments.first == "--permission-status" {
     printPermissionStatus()
 } else if arguments.first == "--permission-status-file" {
