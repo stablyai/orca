@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { listenForHibernatedAgentWake } from '@/components/terminal-pane/mounting/hibernated-agent-wake-listener'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import {
   setTabShownOutsidePane,
   takeSleepingAgentWakeRequest
