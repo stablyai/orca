@@ -70,9 +70,17 @@ export function useMobileNativeChatComposerMenu(input: {
         agent ?? 'codex',
         reported,
         input.goalMode?.hostSetsGoals === true,
-        input.interactionModeSupported === true
+        input.interactionModeSupported === true,
+        structuredCatalog ? structuredCatalog.conversationCommands : [],
+        structuredCatalog?.cleanBackgroundTerminals
       ),
-    [agent, reported, input.goalMode?.hostSetsGoals, input.interactionModeSupported]
+    [
+      agent,
+      reported,
+      input.goalMode?.hostSetsGoals,
+      input.interactionModeSupported,
+      structuredCatalog
+    ]
   )
   const commandAvailable = useMemo(
     () => (input.editing ? (name: string) => acceptsText(`/${name}`) : undefined),

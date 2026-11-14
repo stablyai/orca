@@ -13,6 +13,7 @@ import {
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../../agent-session/agent-session-wire'
 import * as z from 'zod'
+import { AgentSessionReviewTargetSchema } from '../../agent-session/agent-session-review-target'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../../execution-host'
@@ -134,7 +135,7 @@ export const CancelParams = z
     envelope: MutationEnvelope,
     // Absent: stop whatever the conversation has in flight. Present: only if that turn is current.
     turnId: Identifier('Invalid turn id').optional(),
-    scope: z.literal('background-tasks').optional(),
+    scope: z.enum(['background-tasks', 'background-terminals']).optional(),
     taskId: Identifier('Invalid task id').optional(),
     prompt: z
       .object({
@@ -149,11 +150,11 @@ export const CancelParams = z
     if (value.taskId !== undefined && value.scope !== 'background-tasks') {
       ctx.addIssue({ code: 'custom', message: 'A task id requires background-task scope' })
     }
-    if (value.prompt !== undefined && value.scope === 'background-tasks') {
+    if (value.prompt !== undefined && value.scope !== undefined) {
       ctx.addIssue({ code: 'custom', message: 'A prompt cannot use background-task scope' })
     }
     // A card with no running turn names only itself; the host routes it.
-    if (value.turnId === undefined && value.scope !== undefined) {
+    if (value.turnId === undefined && value.scope === 'background-tasks') {
       ctx.addIssue({ code: 'custom', message: 'A background-task cancel names its turn' })
     }
   })
@@ -256,7 +257,8 @@ export const ModelCatalogParams = z.strictObject({
 export const ConversationCommandParams = z
   .object({
     envelope: MutationEnvelope,
-    command: z.enum(['clear', 'compact']),
+    command: z.enum(['clear', 'compact', 'review']),
+    review: AgentSessionReviewTargetSchema.optional(),
     /** Only where the session's options report compactInstructions: older strict hosts refuse it. */
     instructions: CompactInstructions.optional(),
     /** Queue active /compact only with agent-session.queued-commands.v1; older strict hosts refuse it.
@@ -264,9 +266,22 @@ export const ConversationCommandParams = z
     delivery: z.literal('queue-if-active').optional()
   })
   .strict()
-  .refine((params) => params.instructions === undefined || params.command === 'compact', {
-    message: 'Only /compact takes instructions'
-  })
+  .refine(
+    (params) =>
+      params.instructions === undefined ||
+      params.command === 'compact' ||
+      params.command === 'review',
+    {
+      message: 'Only /compact and /review take instructions'
+    }
+  )
+  .refine(
+    (params) =>
+      params.command === 'review'
+        ? Boolean(params.review && (params.review.type !== 'custom' || params.instructions?.trim()))
+        : params.review === undefined,
+    { message: 'A review requires a target and custom instructions' }
+  )
 
 export const ThreadGoalParams = z
   .object({

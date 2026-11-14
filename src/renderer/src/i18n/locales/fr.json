@@ -19335,7 +19335,9 @@
         "runCommandWhenDone": "Lancez /{{command}} quand il aura terminé.",
         "commandAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /{{command}}.",
         "modelUnavailableUpdate": "{{agent}} n’a pas pu utiliser {{detail}}. Mettez {{agent}} à jour vers {{minimumVersion}} ou une version ultérieure pour le conserver après un redémarrage, ou choisissez un autre modèle et renvoyez.",
-        "modelNotSelected": "Aucun modèle n’est sélectionné pour {{agent}}. Vérifiez votre sélection de modèle et votre connexion à {{agent}}, puis renvoyez."
+        "modelNotSelected": "Aucun modèle n’est sélectionné pour {{agent}}. Vérifiez votre sélection de modèle et votre connexion à {{agent}}, puis renvoyez.",
+        "reviewFailed": "Codex n’a pas pu effectuer la revue. Réessayez /review.",
+        "reviewSettingsUnsupported": "Mettez Codex à jour pour utiliser un autre modèle pour la revue, ou revenez à {{detail}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "L'historique de ce chat n'a pas pu être chargé.",
@@ -22026,7 +22028,8 @@
   "common": {
     "retry": "Réessayer",
     "cancel": "Annuler",
-    "delete": "Supprimer"
+    "delete": "Supprimer",
+    "back": "Retour"
   },
   "fileExplorer": {
     "root": {
@@ -23281,6 +23284,17 @@
   "nativeChat": {
     "math": {
       "scrollDisplayEquation": "Faire défiler l'équation affichée"
+    },
+    "review": {
+      "baseBranch": "Comparer à une branche de base",
+      "uncommittedChanges": "Examiner les modifications non commitées",
+      "commit": "Examiner un commit",
+      "custom": "Instructions de revue personnalisées",
+      "loadFailed": "Codex n’a pas pu charger les cibles de revue. Réessayez /review.",
+      "instructions": "Saisir les instructions de revue",
+      "searchBranches": "Rechercher des branches…",
+      "searchCommits": "Rechercher des commits…",
+      "title": "Examiner les modifications"
     }
   },
   "runtime": {

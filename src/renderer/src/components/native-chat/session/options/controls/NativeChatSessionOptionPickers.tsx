@@ -1,3 +1,4 @@
+import { ReviewPicker } from './NativeChatReviewPicker'
 import { memo, useEffect, useRef, useState } from 'react'
 import { ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,7 @@ import {
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import type { NativeChatOptionPickerRequest } from './native-chat-option-picker-request'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
+import type { NativeChatReviewMenu } from '../../../../../../../shared/native-chat/input/native-chat-review-menu'
 import { NativeChatModelCombobox } from './NativeChatModelCombobox'
 import { useNativeChatPickerFocusReturn } from '../../../composer/focus/native-chat-picker-focus-return'
 import { NativeChatSessionOptionRows } from './NativeChatSessionOptionRows'
@@ -153,6 +155,7 @@ function SessionOptionPopover(props: {
   )
   // Why here: this unmounts with the pill, so a picker that went away comes back closed.
   const [open, setOpen] = useState(false)
+  const [review, setReview] = useState<NativeChatReviewMenu | null>(null)
   const [seenRequest, setSeenRequest] = useState<NativeChatOptionPickerRequest | null>(null)
   // The option a slash command asked for, focused in place of the search by that opening only.
   const [requestedOptionId, setRequestedOptionId] = useState<string | null>(null)
@@ -160,6 +163,7 @@ function SessionOptionPopover(props: {
     setSeenRequest(props.request)
     if (props.request && canOpen) {
       setOpen(true)
+      setReview(props.request.review ?? null)
       setRequestedOptionId(props.request.id === model.id ? null : props.request.id)
     }
   }
@@ -213,7 +217,15 @@ function SessionOptionPopover(props: {
   }
 
   return (
-    <Popover open={open} onOpenChange={(next) => setOpen(next && canOpen)}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next && canOpen)
+        if (!next) {
+          setReview(null)
+        }
+      }}
+    >
       <PickerTrigger
         modelLabel={modelLabel}
         optionsLabel={optionsLabel}
@@ -232,11 +244,18 @@ function SessionOptionPopover(props: {
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' && canOpen) {
             event.preventDefault()
+            setReview(null)
             setOpen(true)
           }
         }}
       />
       <PopoverContent
+        onEscapeKeyDown={(event) => {
+          if (review && review.getSnapshot().page !== 'review') {
+            event.preventDefault()
+            review.back()
+          }
+        }}
         // Why end: the pill's label changes under an open picker; only its right edge stays put.
         align="end"
         side="top"
@@ -264,6 +283,7 @@ function SessionOptionPopover(props: {
         // Escape from a portaled child (the speed list) closes only that child.
         onKeyDown={(event) => {
           if (
+            !review &&
             event.key === 'Escape' &&
             !(event.target instanceof HTMLInputElement) &&
             event.target instanceof Node &&
@@ -273,7 +293,16 @@ function SessionOptionPopover(props: {
           }
         }}
       >
-        {model.kind.type === 'select' && !model.action ? (
+        {review ? (
+          <ReviewPicker
+            menu={review}
+            onClose={() => {
+              setOpen(false)
+              setReview(null)
+              focusReturn.notePick()
+            }}
+          />
+        ) : model.kind.type === 'select' && !model.action ? (
           <NativeChatModelCombobox
             choices={model.kind.choices}
             currentValue={model.kind.currentValue}
@@ -302,13 +331,15 @@ function SessionOptionPopover(props: {
             </Button>
           </NativeChatSessionOptionWriteGroup>
         )}
-        <NativeChatSessionOptionRows
-          options={options}
-          shownReason={model.settable ? null : modelReason}
-          pendingIds={pendingIds}
-          onSet={set}
-          onAction={act}
-        />
+        {!review && (
+          <NativeChatSessionOptionRows
+            options={options}
+            shownReason={model.settable ? null : modelReason}
+            pendingIds={pendingIds}
+            onSet={set}
+            onAction={act}
+          />
+        )}
       </PopoverContent>
     </Popover>
   )

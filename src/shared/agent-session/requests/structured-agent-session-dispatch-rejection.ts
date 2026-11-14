@@ -96,6 +96,8 @@ const KIND_CATEGORY = {
   emptyMessage: 'content',
   commandUnavailable: 'content',
   commandRefused: 'content',
+  reviewFailed: 'content',
+  reviewSettingsUnsupported: 'content',
   queueFull: 'transport',
   writeFailed: 'transport',
   hostFault: 'transport'
@@ -139,6 +141,8 @@ const KIND_VERDICT = {
   emptyMessage: 'failure',
   commandUnavailable: 'failure',
   commandRefused: 'failure',
+  reviewFailed: 'failure',
+  reviewSettingsUnsupported: 'failure',
   queueFull: 'failure',
   writeFailed: 'failure',
   hostFault: 'failure',

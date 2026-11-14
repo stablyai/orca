@@ -3,6 +3,7 @@ import { useMobileNativeChatModelDiscovery } from './use-mobile-native-chat-mode
 import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
 import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+import type { NativeChatReviewMenu } from '../../../../../src/shared/native-chat/input/native-chat-review-menu'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import { useCallback, useMemo } from 'react'
 import type {
@@ -37,8 +38,9 @@ export function useMobileNativeChatSessionOptionController(args: {
   structured: {
     optionSurface?: SessionOptionsSurface
     conversationCommands?: readonly AgentSessionConversationCommand[]
+    cleanBackgroundTerminals?: boolean
     compactInstructions?: boolean
-    optionPickerRequest?: { id: string; sequence: number } | null
+    optionPickerRequest?: { id: string; sequence: number; review?: NativeChatReviewMenu } | null
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
     appliesOnAttach?: boolean
@@ -119,6 +121,7 @@ export function useMobileNativeChatSessionOptionController(args: {
             optionSurface: structured.optionSurface,
             conversationCommands: structured.conversationCommands,
             compactInstructions: structured.compactInstructions,
+            cleanBackgroundTerminals: structured.cleanBackgroundTerminals,
             pendingId: structuredPendingId,
             appliesOnAttach: structured.appliesOnAttach,
             heldPick: structured.heldPick,
@@ -136,6 +139,7 @@ export function useMobileNativeChatSessionOptionController(args: {
       structured.appliesOnAttach,
       structured.heldPick,
       structured.compactInstructions,
+      structured.cleanBackgroundTerminals,
       structured.conversationCommands,
       structured.optionPickerRequest,
       structured.optionSurface

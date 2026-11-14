@@ -25,12 +25,40 @@ export async function runTargetedCancel(
   params: StructuredAgentSessionBackgroundStopInput & {
     clientOperationId: string
     turnId?: string
-    scope?: 'background-tasks'
+    scope?: 'background-tasks' | 'background-terminals'
     prompt?: { itemId: string; expectedRevision: number }
   }
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
   const named = params.turnId !== undefined ? { turnId: params.turnId } : {}
   const { clientOperationId, prompt } = params
+  if (params.scope === 'background-terminals') {
+    const accepted = await acceptStopTarget(ctx)
+    if (!accepted.ok) {
+      return accepted
+    }
+    try {
+      if (!ctx.adapter.cleanBackgroundTerminals) {
+        throw new Error('Background-terminal cleanup is unavailable.')
+      }
+      await ctx.adapter.cleanBackgroundTerminals({ sessionId: ctx.sessionId, fence: ctx.fence })
+      return { ok: true, value: { cancelled: true } }
+    } catch (error) {
+      await writeStructuredAgentSessionStopNote(
+        ctx,
+        clientOperationId,
+        {
+          kind: 'status',
+          tone: 'error',
+          text:
+            error instanceof Error
+              ? error.message
+              : "Codex couldn't stop its background terminals. Try /stop again."
+        },
+        AGENT_JOURNAL_THREAD_SCOPE
+      )
+      return { ok: true, value: { cancelled: false } }
+    }
+  }
   if (params.scope) {
     const children = params.childWork?.()
     const targets = agentChildWorkStopTargets(children, params.taskId)

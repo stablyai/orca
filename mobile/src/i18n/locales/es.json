@@ -2272,7 +2272,9 @@
       "waitForBackgroundTasks": "Espere a que terminen las tareas en segundo plano.",
       "waitForStart": "Espere a que el agente termine de iniciarse.",
       "writeFailed": "Orca no pudo entregar este mensaje al agente, así que no se envió.",
-      "pluginInputRequired": "{{agent}} se detuvo porque el complemento «{{plugin}}» espera una entrada en un panel de terminal. Desactiva el complemento para las sesiones de chat o ejecuta la tarea en un terminal de {{agent}}."
+      "pluginInputRequired": "{{agent}} se detuvo porque el complemento «{{plugin}}» espera una entrada en un panel de terminal. Desactiva el complemento para las sesiones de chat o ejecuta la tarea en un terminal de {{agent}}.",
+      "reviewFailed": "Codex no pudo realizar la revisión. Vuelve a intentar /review.",
+      "reviewSettingsUnsupported": "Actualiza Codex para revisar con otro modelo o vuelve a {{detail}}."
     },
     "fileReader": {
       "copyReviewNotes": "Copiar notas de revisión",
@@ -4329,6 +4331,22 @@
           }
         }
       }
+    }
+  },
+  "nativeChat": {
+    "review": {
+      "baseBranch": "Revisar contra una rama base",
+      "uncommittedChanges": "Revisar cambios sin confirmar",
+      "commit": "Revisar un commit",
+      "custom": "Instrucciones de revisión personalizadas",
+      "loadFailed": "Codex no pudo cargar los objetivos de revisión. Vuelve a intentar /review.",
+      "instructions": "Introduce las instrucciones de revisión",
+      "searchBranches": "Buscar ramas…",
+      "searchCommits": "Buscar commits…",
+      "title": "Revisar cambios",
+      "back": "Volver a los objetivos de revisión",
+      "run": "Ejecutar",
+      "done": "Listo"
     }
   }
 }

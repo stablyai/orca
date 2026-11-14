@@ -46,6 +46,8 @@ const declaring = (definition: typeof CLAUDE_STRUCTURED_AGENT) => ({
     capabilities: {
       ...definition.capabilities,
       compact: false,
+      review: false,
+      cleanBackgroundTerminals: false,
       threadGoal: false,
       rewind: false,
       fork: undefined

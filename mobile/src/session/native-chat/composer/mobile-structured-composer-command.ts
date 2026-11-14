@@ -56,7 +56,9 @@ export async function dispatchMobileStructuredCommand(input: {
       input.text,
       input.controller.changeThreadGoal !== undefined,
       input.controller.agent,
-      input.controller.snapshot
+      input.controller.snapshot,
+      input.controller.conversationCommands,
+      input.controller.cleanBackgroundTerminals
     )
   ) {
     return input.pending.current ? 'rejected' : null
@@ -73,7 +75,30 @@ export async function dispatchMobileStructuredCommand(input: {
   let unknown = false
   const outcome = await dispatchStructuredAgentSessionComposerCommand(input.text, {
     ...input.controller,
-    runConversationCommand: async (command, instructions) => {
+    cleanBackgroundTerminalsCommand: async () => {
+      const result = await requestStructuredAgentSessionMutation<{ cancelled: boolean }>({
+        client: input.client,
+        sessionId: input.sessionId,
+        expectedRuntimeFence: input.fence,
+        method: 'agentSession.cancel',
+        fingerprintMethod: 'agentSession.cancel',
+        fields: { scope: 'background-terminals' },
+        timeoutMs: input.timeoutMs
+      })
+      if (result.status === 'unknown') {
+        unknown = true
+        input.onError(
+          translate(
+            'session.structuredComposerCommand.operationUnconfirmed',
+            'Conversation operation was not confirmed.'
+          )
+        )
+      } else if (result.status !== 'accepted') {
+        input.onError(result.message)
+      }
+      return result.status === 'accepted' && result.value.cancelled
+    },
+    runConversationCommand: async (command, instructions, _onSent, review) => {
       const held = (hold: Parameters<typeof heldConversationCommandParts>[1]) =>
         mobileAgentSessionWriteNoticeText(heldConversationCommandParts(command, hold))
       // A command on its way is the agent's work in flight.
@@ -114,6 +139,7 @@ export async function dispatchMobileStructuredCommand(input: {
             fingerprintMethod: 'agentSession.conversationCommand',
             fields: agentSessionConversationCommandFields(command, {
               instructions,
+              review,
               delivery: waitsInLine ? 'queue-if-active' : undefined
             }),
             timeoutMs: Math.max(input.timeoutMs, 195_000)

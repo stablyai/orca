@@ -62,6 +62,9 @@ export function heldConversationCommandParts(
   command: AgentSessionConversationCommand,
   hold: Exclude<StructuredConversationCommandHold, 'ahead'>
 ): AgentSessionWriteNoticeSentence[] {
+  if (command === 'review') {
+    return ['pendingWork']
+  }
   const clear = command === 'clear'
   switch (hold) {
     case 'prompt':

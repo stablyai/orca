@@ -169,6 +169,9 @@ export const AGENT_SESSION_FAILURE_COPY = {
   agentStillWorking: AGENT_STILL_WORKING,
   runCommandWhenDone: "Run /{{command}} when it's done.",
   commandAfterAnswer: "Answer the agent's question or approval, then run /{{command}}.",
+  reviewSettingsUnsupported:
+    'Update Codex to review with a different model, or switch back to {{detail}}.',
+  reviewFailed: "Codex couldn't run the review. Try /review again.",
   compactionFailed: 'Compaction failed.',
   compactionFailedQuoted: 'Compaction failed: {{detail}}.',
   compactionUnconfirmed: 'Compaction completion is unconfirmed.',

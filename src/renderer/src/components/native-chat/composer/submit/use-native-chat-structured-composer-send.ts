@@ -92,7 +92,9 @@ export function useNativeChatStructuredComposerSend({
           text,
           structuredTransport.threadGoal !== undefined,
           agent,
-          structuredTransport.optionSnapshot
+          structuredTransport.optionSnapshot,
+          structuredTransport.conversationCommands,
+          structuredTransport.cleanBackgroundTerminals
         )
       // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (

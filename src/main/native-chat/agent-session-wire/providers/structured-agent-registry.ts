@@ -19,6 +19,8 @@ function requiredAdapterMethods(
   return [
     ...(capabilities.fork ? (['copyConversation'] as const) : []),
     ...(capabilities.compact ? (['compact'] as const) : []),
+    ...(capabilities.review ? (['review'] as const) : []),
+    ...(capabilities.cleanBackgroundTerminals ? (['cleanBackgroundTerminals'] as const) : []),
     ...(capabilities.threadGoal ? (['changeThreadGoal'] as const) : []),
     ...(capabilities.rewind && !adapter.forkForRewind ? (['rewind', 'recoverRewind'] as const) : [])
   ]

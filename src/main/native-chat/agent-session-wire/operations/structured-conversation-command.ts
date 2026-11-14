@@ -1,3 +1,4 @@
+import type { AgentSessionReviewTarget } from '../../../../shared/agent-session/agent-session-review-target'
 import { neverThrowingStructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type {
   AgentSessionConversationCommand,
@@ -40,6 +41,7 @@ export function conversationCommandFailure(
 export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
   command: AgentSessionConversationCommand
+  review?: AgentSessionReviewTarget
   /** /compact only: free text that steers the summary. */
   instructions?: string
   /** Only /compact queues: the drain delivers provider messages; /clear needs host-side execution. */

@@ -5,26 +5,31 @@ import type { MobileNativeChatFileAttachments } from './use-mobile-native-chat-f
 import type { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
 import type { MobileStructuredThreadGoal } from '../input/use-mobile-structured-thread-goal'
 
-const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
-
 export function useMobileNativeChatStructuredComposer(args: {
   structured: boolean
   sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
   /** The host keeps files a phone uploads; an older one refuses the upload. */
   acceptsFiles: boolean
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined
+  cleanBackgroundTerminals?: boolean
   compactInstructions?: boolean | undefined
   files: MobileNativeChatFileAttachments
   threadGoal: MobileStructuredThreadGoal | null
 }): MobileNativeChatStructuredComposer | null {
   const { structured, acceptsFiles, compactInstructions, files, threadGoal } = args
-  const conversationCommands = args.conversationCommands ?? NO_COMMANDS
+  const conversationCommands = args.conversationCommands
+  const cleanBackgroundTerminals = args.cleanBackgroundTerminals
   const { commands, refresh, setMenuOpen } = args.sessionCommands
   const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
   // Memoize commands separately so attachment changes cannot rebuild the menu catalog.
   const catalog = useMemo(
-    () => ({ reported: commands, conversationCommands, compactInstructions }),
-    [commands, compactInstructions, conversationCommands]
+    () => ({
+      reported: commands,
+      conversationCommands,
+      compactInstructions,
+      cleanBackgroundTerminals
+    }),
+    [commands, compactInstructions, conversationCommands, cleanBackgroundTerminals]
   )
   return useMemo(
     () =>

@@ -151,7 +151,7 @@ export function cancelStructuredAgentSessionTurn(
   params: {
     envelope: AgentSessionMutationEnvelope
     turnId?: string
-    scope?: 'background-tasks'
+    scope?: 'background-tasks' | 'background-terminals'
     taskId?: string
     prompt?: { itemId: string; expectedRevision: number }
   }

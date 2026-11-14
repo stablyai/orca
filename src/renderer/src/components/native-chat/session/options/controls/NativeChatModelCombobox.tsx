@@ -1,3 +1,4 @@
+import { NativeChatReviewChoices } from './NativeChatReviewChoices'
 import { useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import {
@@ -19,6 +20,7 @@ import { AgentPickerLegacyModelsToggle } from '../../../../agent/AgentPickerLega
 import { useLegacyModelsExpanded } from '../../../../agent/use-legacy-models-expanded'
 
 type NativeChatModelComboboxProps = {
+  review?: { label: string; onSubmit?: (instructions: string) => void }
   choices: readonly SessionOptionSelectChoice[]
   currentValue: string | undefined
   /** Choices stay listed and searchable, but cannot be picked. */
@@ -37,7 +39,7 @@ function modelChoiceFilter(value: string, search: string, keywords?: string[]): 
   return terms.every((term) => haystack.includes(term)) ? 1 : 0
 }
 
-export function NativeChatModelCombobox({
+function ModelChoices({
   choices,
   currentValue,
   readOnly,
@@ -132,5 +134,19 @@ export function NativeChatModelCombobox({
         </NativeChatSessionOptionWriteGroup>
       </CommandList>
     </Command>
+  )
+}
+
+export function NativeChatModelCombobox(props: NativeChatModelComboboxProps): React.JSX.Element {
+  return props.review ? (
+    <NativeChatReviewChoices
+      choices={props.choices}
+      label={props.review.label}
+      busy={props.busy}
+      onSelect={props.onSelect}
+      onSubmit={props.review.onSubmit}
+    />
+  ) : (
+    <ModelChoices {...props} />
   )
 }

@@ -1,3 +1,4 @@
+import type { AgentSessionReviewTarget } from '../../../../shared/agent-session/agent-session-review-target'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
@@ -71,6 +72,8 @@ export type AgentSessionAcquisition = {
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
 export type StructuredAgentSessionCommandRun = {
   clientMessageId: string
+  name?: 'compact' | 'review'
+  review?: AgentSessionReviewTarget
   turnId: string
   identity: AgentJournalItemIdentity
   resultIdentity: AgentJournalItemIdentity
@@ -242,11 +245,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     { ok: true; fork: AgentSessionRewindFork } | { ok: false; reason: AgentSessionRewindReason }
   >
   /** Return provider compaction admission; translator ends the command turn unless child-exit recovery does first. */
-  compact?(input: {
-    sessionId: string
-    fence: number
-    command: StructuredAgentSessionCommandRun
-  }): Promise<AgentSessionCommandAdmission>
+  review?: StructuredAgentSessionNativeCommand
+  cleanBackgroundTerminals?(input: { sessionId: string; fence: number }): Promise<void>
+  compact?: StructuredAgentSessionNativeCommand
   /** Rejection proves refusal; thrown changes have unknown effects. */
   changeThreadGoal?(input: {
     sessionId: string
@@ -368,3 +369,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** Acknowledge only after dead-child, lease and journal ownership release. */
   acknowledgeSessionRelease?(sessionId: string, acquisition?: AcquisitionReceipt): void
 }
+
+type StructuredAgentSessionNativeCommand = (input: {
+  sessionId: string
+  fence: number
+  command: StructuredAgentSessionCommandRun
+  executionOptions?: AgentSessionExecutionOptions
+}) => Promise<AgentSessionCommandAdmission>

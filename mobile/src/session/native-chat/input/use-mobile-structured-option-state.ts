@@ -135,6 +135,7 @@ export function useMobileStructuredOptionState(args: {
               sessionId: support.sessionId,
               commands: support.result.conversationCommands ?? [],
               compactInstructions: support.result.compactInstructions === true,
+              cleanBackgroundTerminals: support.result.cleanBackgroundTerminals === true,
               forkSupport: support.result.forkSupport,
               contextUsage: support.result.contextUsage
             },

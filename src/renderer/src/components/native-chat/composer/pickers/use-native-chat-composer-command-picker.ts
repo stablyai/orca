@@ -37,12 +37,29 @@ export function useNativeChatComposerCommandPicker(
   const { agent, terminalTabId } = pickerArgs
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
   const reported = structuredTransport?.sessionCommands
+  const conversationCommands = structuredTransport?.conversationCommands
+  const cleanBackgroundTerminals = structuredTransport?.cleanBackgroundTerminals
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
   const hostSetsInteractionMode =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent, reported, hostSetsGoals, hostSetsInteractionMode),
-    [agent, reported, hostSetsGoals, hostSetsInteractionMode]
+    () =>
+      prepareQueuedMessageEditText(
+        agent,
+        reported,
+        hostSetsGoals,
+        hostSetsInteractionMode,
+        conversationCommands,
+        cleanBackgroundTerminals
+      ),
+    [
+      agent,
+      reported,
+      hostSetsGoals,
+      hostSetsInteractionMode,
+      conversationCommands,
+      cleanBackgroundTerminals
+    ]
   )
   const commandAvailable = useCallback(
     (name: string) => mode === undefined || acceptsText(`/${name}`),
@@ -53,6 +70,8 @@ export function useNativeChatComposerCommandPicker(
     ...(mode === 'launch' ? { launchWorktreeId: structuredTransport?.worktreeId } : {}),
     ...editor,
     agentCommands,
+    conversationCommands,
+    cleanBackgroundTerminals,
     commandAvailable,
     sessionSkills,
     onPickerDemand: structuredTransport?.setCommandsMenuOpen,

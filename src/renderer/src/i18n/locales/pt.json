@@ -17,7 +17,8 @@
   "common": {
     "retry": "Tentar novamente",
     "cancel": "Cancelar",
-    "delete": "Excluir"
+    "delete": "Excluir",
+    "back": "Voltar"
   },
   "quickOpen": {
     "moreMatchesAvailable": "Mais resultados podem estar disponíveis. Refine sua busca para reduzir os resultados.",
@@ -21221,7 +21222,9 @@
         "modelNotSelected": "{{agent}} não tem nenhum modelo selecionado. Verifique a seleção de modelo e o login do {{agent}} e envie novamente.",
         "pluginInputRequired": "{{agent}} parou porque o plugin \"{{plugin}}\" está aguardando uma entrada em um painel de terminal. Desative o plugin para sessões de chat ou execute a tarefa em um terminal {{agent}}.",
         "claudeEffortInvalid": "O nível de esforço do Claude é inválido; selecione low, medium, high, xhigh ou max e envie novamente.",
-        "unconfirmed": "Não foi possível confirmar se esta mensagem foi enviada. Ela não foi reenviada."
+        "unconfirmed": "Não foi possível confirmar se esta mensagem foi enviada. Ela não foi reenviada.",
+        "reviewFailed": "O Codex não conseguiu realizar a revisão. Tente /review novamente.",
+        "reviewSettingsUnsupported": "Atualize o Codex para revisar com outro modelo ou volte para {{detail}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "Não foi possível carregar o histórico deste chat.",
@@ -23826,6 +23829,17 @@
   "nativeChat": {
     "math": {
       "scrollDisplayEquation": "Rolar equação em bloco"
+    },
+    "review": {
+      "baseBranch": "Comparar com uma branch base",
+      "uncommittedChanges": "Revisar alterações sem commit",
+      "commit": "Revisar um commit",
+      "custom": "Instruções de revisão personalizadas",
+      "loadFailed": "O Codex não conseguiu carregar os alvos da revisão. Tente /review novamente.",
+      "instructions": "Digite as instruções de revisão",
+      "searchBranches": "Buscar branches…",
+      "searchCommits": "Buscar commits…",
+      "title": "Revisar alterações"
     }
   },
   "runtime": {

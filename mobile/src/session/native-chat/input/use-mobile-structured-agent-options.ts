@@ -1,4 +1,3 @@
-import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { isAgentSessionHandleProvider } from '../../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -27,10 +26,9 @@ import {
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
 import { lockedStructuredAgentSessionOptionSnapshot } from '../../../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 
-const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
-
 export function useMobileStructuredAgentOptions(args: {
   agent: string | null
+  worktreeId?: string
   /** This world's last host lists for the chat's agent; absent, the picker waits for the host. */
   modelCatalogCache?: HostModelCatalogCache | null
   client: RpcClient | null
@@ -256,6 +254,9 @@ export function useMobileStructuredAgentOptions(args: {
 
   const { optionPickerRequest, invokeStructuredOption, optionSurface } =
     useMobileStructuredOptionSurface({
+      client,
+      worktreeId: args.worktreeId,
+      onError: args.onOptionError,
       optionSnapshot,
       admits: writer.admits,
       demandModelCatalog,
@@ -266,7 +267,9 @@ export function useMobileStructuredAgentOptions(args: {
   return {
     optionPickerRequest,
     conversationCommands:
-      conversationSupport?.sessionId === sessionId ? conversationSupport.commands : NO_COMMANDS,
+      conversationSupport?.sessionId === sessionId ? conversationSupport.commands : undefined,
+    cleanBackgroundTerminals:
+      conversationSupport?.sessionId === sessionId && conversationSupport.cleanBackgroundTerminals,
     compactInstructions:
       conversationSupport?.sessionId === sessionId && conversationSupport.compactInstructions,
     /** The options read's word on whether the installed agent forks; absent until it answers. */

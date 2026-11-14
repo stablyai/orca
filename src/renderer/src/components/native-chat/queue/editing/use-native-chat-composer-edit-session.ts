@@ -57,13 +57,29 @@ export function useNativeChatComposerEditSession({
   completeItem: (item: NativeChatPickerItem) => void
 }) {
   const sessionCommands = structuredTransport?.sessionCommands
+  const conversationCommands = structuredTransport?.conversationCommands
+  const cleanBackgroundTerminals = structuredTransport?.cleanBackgroundTerminals
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
   const hostSetsInteractionMode =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
   const acceptsText = useMemo(
     () =>
-      prepareQueuedMessageEditText(agent, sessionCommands, hostSetsGoals, hostSetsInteractionMode),
-    [agent, sessionCommands, hostSetsGoals, hostSetsInteractionMode]
+      prepareQueuedMessageEditText(
+        agent,
+        sessionCommands,
+        hostSetsGoals,
+        hostSetsInteractionMode,
+        conversationCommands,
+        cleanBackgroundTerminals
+      ),
+    [
+      agent,
+      sessionCommands,
+      hostSetsGoals,
+      hostSetsInteractionMode,
+      conversationCommands,
+      cleanBackgroundTerminals
+    ]
   )
   const isEditing = editSession !== undefined
   useLayoutEffect(() => {

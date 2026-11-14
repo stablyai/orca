@@ -6,6 +6,8 @@ export type AgentSessionCapabilities = {
   fork?: 'checkpoint' | 'tip'
   /** Compact the conversation's context on request: offers the `/compact` command. */
   compact: boolean
+  review?: boolean
+  cleanBackgroundTerminals?: boolean
   /** `/compact` takes free text that steers the summary; absent where the agent would drop it. */
   compactInstructions?: boolean
   /** `/compact` runs while background tasks keep running; absent, it waits for them to end. */

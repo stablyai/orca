@@ -78,7 +78,11 @@ export type AgentJournalMessageItem = {
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
    *  user typed; this names the command and its instructions so no reader parses it. Open like
    *  `sentAs`. */
-  command?: { name: string; instructions?: string }
+  command?: {
+    name: string
+    instructions?: string
+    review?: { type: string; branch?: string; sha?: string; title?: string }
+  }
   /** The skills the user picked from the menu for this message, by the file the agent selects
    *  each by. The text still carries each `$name`; agents that select by name ignore this. */
   skills?: AgentJournalSkillRef[]

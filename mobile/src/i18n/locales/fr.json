@@ -2272,7 +2272,9 @@
       "usageLimitWindowWeeklyModel": "hebdomadaire du modèle",
       "waitForBackgroundTasks": "Attendez la fin des tâches en arrière-plan.",
       "waitForStart": "Attendez que l'agent ait fini de démarrer.",
-      "writeFailed": "Orca n'a pas pu transmettre ce message à l'agent, il n'a donc pas été envoyé."
+      "writeFailed": "Orca n'a pas pu transmettre ce message à l'agent, il n'a donc pas été envoyé.",
+      "reviewFailed": "Codex n’a pas pu effectuer la revue. Réessayez /review.",
+      "reviewSettingsUnsupported": "Mettez Codex à jour pour utiliser un autre modèle pour la revue, ou revenez à {{detail}}."
     },
     "fileReader": {
       "copyReviewNotes": "Copier les notes de revue",
@@ -4329,6 +4331,22 @@
           }
         }
       }
+    }
+  },
+  "nativeChat": {
+    "review": {
+      "baseBranch": "Comparer à une branche de base",
+      "uncommittedChanges": "Examiner les modifications non commitées",
+      "commit": "Examiner un commit",
+      "custom": "Instructions de revue personnalisées",
+      "loadFailed": "Codex n’a pas pu charger les cibles de revue. Réessayez /review.",
+      "instructions": "Saisir les instructions de revue",
+      "searchBranches": "Rechercher des branches…",
+      "searchCommits": "Rechercher des commits…",
+      "title": "Examiner les modifications",
+      "back": "Revenir aux cibles de revue",
+      "run": "Exécuter",
+      "done": "Terminé"
     }
   }
 }

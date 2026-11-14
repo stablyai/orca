@@ -55,7 +55,7 @@ export async function runStructuredCompaction(
     return prior.phase === 'committed'
       ? prior
       : {
-          command: 'compact',
+          command: params.command,
           state: 'unknown',
           ...conversationCommandFailure(agentSessionFailureFact('compactionUnconfirmed'))
         }
@@ -77,7 +77,7 @@ export async function runStructuredCompaction(
     // Queued cards own any later refusal feedback.
     return {
       ...accepted,
-      value: { command: 'compact', state: 'completed', queued: accepted.value.queued }
+      value: { command: params.command, state: 'completed', queued: accepted.value.queued }
     }
   }
   const settled = await host.waitForSendSettlement(sessionId, accepted.value.clientMessageId, {
@@ -91,7 +91,7 @@ export async function runStructuredCompaction(
       settled && 'submission' in settled.value ? settled.value.submission : undefined,
       {
         ...structuredAgentSessionFailureWordsContext(context.deps.store.getConversation(sessionId)),
-        command: 'compact'
+        command: params.command
       }
     )
   }
@@ -104,30 +104,34 @@ function compactionReply(
 ): AgentSessionConversationCommandResult {
   const error = (reason: string | null, fallback: string) => (reason ?? fallback).slice(0, 4096)
   if (!submission || isQueuedAgentJournalSubmission(submission)) {
-    return { command: 'compact', state: 'unknown', error: 'The command has not started yet.' }
+    return {
+      command: context.command ?? 'compact',
+      state: 'unknown',
+      error: 'The command has not started yet.'
+    }
   }
   if (submission.dispatchState === 'rejected') {
     // Preserve legacy row reasons when no structured failure fact exists.
     const rejection = readAgentSessionFailureFact(submission.rejection)
     return rejection
       ? {
-          command: 'compact',
+          command: context.command ?? 'compact',
           state: 'completed',
           ...conversationCommandFailure(rejection, context)
         }
       : {
-          command: 'compact',
+          command: context.command ?? 'compact',
           state: 'completed',
           error: error(submission.reason, 'The command was not run.')
         }
   }
   return submission.dispatchState === 'unknown'
     ? {
-        command: 'compact',
+        command: context.command ?? 'compact',
         state: 'unknown',
         error: error(submission.reason, 'The command may not have run.')
       }
-    : { command: 'compact', state: 'completed' }
+    : { command: context.command ?? 'compact', state: 'completed' }
 }
 
 function acceptStructuredConversationCommand(
@@ -139,6 +143,8 @@ function acceptStructuredConversationCommand(
 ): Promise<AgentSessionMutationResult<ConversationCommandAcceptance>> {
   const plan = conversationCommandPlan({
     envelope: params.envelope,
+    command: params.command,
+    ...(params.review ? { review: params.review } : {}),
     ...(params.instructions ? { instructions: params.instructions } : {}),
     ...(params.delivery ? { delivery: params.delivery } : {}),
     priorRecord
@@ -166,7 +172,11 @@ function acceptUnderSerialize(
         // Queue first so commands obey the same holds as sends before active-work admission.
         const queued = await maybeQueueStructuredAgentSessionSend(context, ctx, {
           envelope: params.envelope,
-          body: structuredAgentSessionCompactBody(params.instructions),
+          body: structuredAgentSessionCompactBody(
+            params.instructions,
+            params.command,
+            params.review
+          ),
           ...(params.userSend ? { userSend: params.userSend } : {}),
           ...(params.delivery ? { delivery: params.delivery } : {})
         })
@@ -189,10 +199,17 @@ function acceptUnderSerialize(
           conversationCommandBlocked(
             ctx,
             record,
-            compactionChildWork(ctx.agents.capabilities(record.provider), () => ({
-              views: context.readChildWork(ctx.sessionId),
-              open: context.childWorkOpen(ctx.sessionId)
-            })),
+            compactionChildWork(
+              {
+                compactBesideBackgroundTasks:
+                  params.command === 'review' ||
+                  ctx.agents.capabilities(record.provider)?.compactBesideBackgroundTasks
+              },
+              () => ({
+                views: context.readChildWork(ctx.sessionId),
+                open: context.childWorkOpen(ctx.sessionId)
+              })
+            ),
             context.sessions.get(ctx.sessionId)?.child ? undefined : 'at-rest'
           )
         const blocked =

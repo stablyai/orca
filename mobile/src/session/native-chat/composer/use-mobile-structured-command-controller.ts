@@ -7,6 +7,7 @@ type MobileStructuredAgentOptions = ReturnType<typeof useMobileStructuredAgentOp
 export function useMobileStructuredCommandController(options: MobileStructuredAgentOptions) {
   const {
     compactInstructions,
+    cleanBackgroundTerminals,
     conversationCommands,
     invokeStructuredOption,
     optionSnapshot,
@@ -18,10 +19,12 @@ export function useMobileStructuredCommandController(options: MobileStructuredAg
       setOption: setStructuredOption,
       invokeAction: invokeStructuredOption,
       conversationCommands,
-      compactInstructions
+      compactInstructions,
+      cleanBackgroundTerminals
     }),
     [
       compactInstructions,
+      cleanBackgroundTerminals,
       conversationCommands,
       invokeStructuredOption,
       optionSnapshot,

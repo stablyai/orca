@@ -19062,7 +19062,9 @@
         "commandAfterAnswer": "Responda a la pregunta o aprobación del agente y luego ejecute /{{command}}.",
         "pluginInputRequired": "{{agent}} se detuvo porque el complemento «{{plugin}}» espera una entrada en un panel de terminal. Desactiva el complemento para las sesiones de chat o ejecuta la tarea en un terminal de {{agent}}.",
         "modelUnavailableUpdate": "{{agent}} no pudo usar {{detail}}. Actualiza {{agent}} a {{minimumVersion}} o posterior para conservarlo tras un reinicio, o elige otro modelo y vuelve a enviar.",
-        "modelNotSelected": "{{agent}} no tiene ningún modelo seleccionado. Comprueba la selección del modelo y el inicio de sesión de {{agent}}, y vuelve a enviar."
+        "modelNotSelected": "{{agent}} no tiene ningún modelo seleccionado. Comprueba la selección del modelo y el inicio de sesión de {{agent}}, y vuelve a enviar.",
+        "reviewFailed": "Codex no pudo realizar la revisión. Vuelve a intentar /review.",
+        "reviewSettingsUnsupported": "Actualiza Codex para revisar con otro modelo o vuelve a {{detail}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "No se pudo cargar el historial de este chat.",
@@ -21865,7 +21867,8 @@
   "common": {
     "retry": "Reintentar",
     "cancel": "Cancelar",
-    "delete": "Borrar"
+    "delete": "Borrar",
+    "back": "Atrás"
   },
   "terminal": {
     "codexTerminalServerIsolationNotice": {
@@ -23258,6 +23261,17 @@
   "nativeChat": {
     "math": {
       "scrollDisplayEquation": "Desplazar ecuación en bloque"
+    },
+    "review": {
+      "baseBranch": "Revisar contra una rama base",
+      "uncommittedChanges": "Revisar cambios sin confirmar",
+      "commit": "Revisar un commit",
+      "custom": "Instrucciones de revisión personalizadas",
+      "loadFailed": "Codex no pudo cargar los objetivos de revisión. Vuelve a intentar /review.",
+      "instructions": "Introduce las instrucciones de revisión",
+      "searchBranches": "Buscar ramas…",
+      "searchCommits": "Buscar commits…",
+      "title": "Revisar cambios"
     }
   },
   "runtime": {

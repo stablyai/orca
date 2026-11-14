@@ -1,3 +1,8 @@
+import { createNativeChatReviewMenu } from '../../../../../../shared/native-chat/input/native-chat-review-menu'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import type { RuntimeGitLocalBranches } from '../../../../../../shared/runtime-worktree-contracts'
+import type { GitHistoryResult } from '../../../../../../shared/git/history/git-history-types'
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
@@ -11,7 +16,7 @@ import type { NativeChatPaneForks } from '@/components/native-chat/messages/acti
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
-import type { Translate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
 function nativeChatSessionAttachmentNotReadyNotice(
@@ -106,6 +111,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.agent,
     controller.acceptsImages
   )
+  const t = useTranslate()
   const { fork, sideChat } = forks
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
@@ -162,14 +168,58 @@ export function useNativeChatStructuredComposerTransport(args: {
           {
             agent: props.agent,
             snapshot: controller.optionSnapshot,
-            invokeAction: async (id) => {
-              setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
+            invokeAction: async (id, review) => {
+              let menu
+              if (review && worktreeId) {
+                const worktree = toRuntimeWorktreeSelector(worktreeId)
+                const branches = async () =>
+                  (
+                    await callRuntimeRpc<RuntimeGitLocalBranches>(
+                      props.target,
+                      'git.localBranches',
+                      { worktree }
+                    )
+                  ).branches
+                menu = createNativeChatReviewMenu({
+                  copy: {
+                    baseBranch: t('nativeChat.review.baseBranch', 'Review against a base branch'),
+                    uncommittedChanges: t(
+                      'nativeChat.review.uncommittedChanges',
+                      'Review uncommitted changes'
+                    ),
+                    commit: t('nativeChat.review.commit', 'Review a commit'),
+                    custom: t('nativeChat.review.custom', 'Custom review instructions'),
+                    loadFailed: t(
+                      'nativeChat.review.loadFailed',
+                      'Codex could not load review targets. Try /review again.'
+                    )
+                  },
+                  hasGit: !worktreeId.startsWith('folder:'),
+                  branches,
+                  commits: async () =>
+                    (
+                      await callRuntimeRpc<GitHistoryResult>(props.target, 'git.history', {
+                        worktree,
+                        limit: 100
+                      })
+                    ).items,
+                  run: review,
+                  onError
+                })
+              }
+              setOptionPickerRequest({
+                id,
+                ...(menu ? { review: menu } : {}),
+                consume: () => setOptionPickerRequest(null)
+              })
               return true
             },
             setOption: controller.setStructuredOption,
             sessionCommands: controller.sessionCommands,
             conversationCommands: controller.conversationCommands,
             compactInstructions: controller.compactInstructions,
+            cleanBackgroundTerminals: controller.cleanBackgroundTerminals,
+            cleanBackgroundTerminalsCommand: controller.cleanBackgroundTerminalsCommand,
             runConversationCommand: controller.runConversationCommand,
             ...(changeThreadGoal ? { changeThreadGoal } : {})
           },
@@ -188,6 +238,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
       compactInstructions: controller.compactInstructions,
+      cleanBackgroundTerminals: controller.cleanBackgroundTerminals,
       optionSnapshot: controller.optionSnapshot,
       optionPickerRequest,
       sessionCommands: controller.sessionCommands,
@@ -212,6 +263,7 @@ export function useNativeChatStructuredComposerTransport(args: {
         : {})
     }
   }, [
+    t,
     acceptsImages,
     controller,
     fork,

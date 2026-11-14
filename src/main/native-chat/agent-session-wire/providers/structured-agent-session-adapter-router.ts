@@ -117,6 +117,21 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return compact(input)
   }
 
+  review: NonNullable<Adapter['review']> = (input) => {
+    const review = this.owner(input.sessionId).review
+    if (!review) {
+      throw new Error('Review is unavailable for this provider.')
+    }
+    return review(input)
+  }
+  cleanBackgroundTerminals: NonNullable<Adapter['cleanBackgroundTerminals']> = (input) => {
+    const clean = this.owner(input.sessionId).cleanBackgroundTerminals
+    if (!clean) {
+      throw new Error('Background-terminal cleanup is unavailable for this provider.')
+    }
+    return clean(input)
+  }
+
   cancelTurn: Adapter['cancelTurn'] = (input) => this.owner(input.sessionId).cancelTurn(input)
 
   changeThreadGoal: NonNullable<Adapter['changeThreadGoal']> = (input) => {

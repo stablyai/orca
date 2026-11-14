@@ -237,6 +237,7 @@ export function useMobileNativeChatController(args: {
         optionSurface: structuredNativeChat.optionSurface,
         conversationCommands: structuredNativeChat.conversationCommands,
         compactInstructions: structuredNativeChat.compactInstructions,
+        cleanBackgroundTerminals: structuredNativeChat.cleanBackgroundTerminals,
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
         appliesOnAttach: structuredNativeChat.appliesOnAttach,

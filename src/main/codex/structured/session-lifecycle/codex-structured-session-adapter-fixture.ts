@@ -127,10 +127,15 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       closeCount: 0,
       pid: 4321,
       closed: false,
-      request: async (method, params) => {
+      request: async (method, params, options) => {
         connection.calls.push({ method, params })
         const route = routes[method]
         const answer = route ? route(params) : {}
+        if (method === 'review/start') {
+          const result = await answer
+          options?.onReply?.(result)
+          return result
+        }
         // Turn calls keep the answers their tests script; a start's calls end with the child.
         if (!(answer instanceof Promise) || !STARTUP_METHODS.has(method)) {
           return answer

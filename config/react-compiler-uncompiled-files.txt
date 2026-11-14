@@ -28,6 +28,7 @@ src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-s
 src/renderer/src/components/editor/markdown-preview/search/use-markdown-preview-search-reveal.ts
 src/renderer/src/components/editor/markdown-preview/viewport/use-markdown-preview-scroll-anchor.ts
 src/renderer/src/components/github-item-dialog/inspect-pull-request/pr-files-combined-diff-body.tsx
+src/renderer/src/components/native-chat/session/options/controls/NativeChatReviewChoices.tsx
 src/renderer/src/components/native-chat/tools/runs/NativeChatToolRunMembers.tsx
 src/renderer/src/components/native-chat/tools/runs/use-native-chat-tool-run-window.ts
 src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorerVirtualRows.tsx

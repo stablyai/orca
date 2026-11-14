@@ -253,6 +253,14 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.commandAfterAnswer,
         values
       ),
+    reviewFailed: () =>
+      translate('components.native-chat.failureWords.reviewFailed', COPY.reviewFailed),
+    reviewSettingsUnsupported: (values) =>
+      translate(
+        'components.native-chat.failureWords.reviewSettingsUnsupported',
+        COPY.reviewSettingsUnsupported,
+        values
+      ),
     compactionFailed: () =>
       translate('components.native-chat.failureWords.compactionFailed', COPY.compactionFailed),
     compactionFailedQuoted: (values) =>

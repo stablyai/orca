@@ -1,3 +1,4 @@
+import { handleCodexReviewNotification } from './codex-review-notification'
 import { createCodexProviderActivityReader } from '../../../native-chat/agent-session-wire/providers/provider-frame-activity'
 import { recordCodexContextUsage } from './codex-context-usage'
 import { CODEX_TOKEN_USAGE_METHOD } from '../background-work/codex-subagent-activity'
@@ -185,6 +186,15 @@ function createCodexTranslation(
         goals.clear()
         return CODEX_JOURNAL_ADMITTED
       }
+      const review = handleCodexReviewNotification(
+        event,
+        deps.primaryThreadId?.() ?? null,
+        commands,
+        turnBoundaries
+      )
+      if (review) {
+        return review
+      }
       if (event.type === 'notification') {
         const streamResult = items.streams.handle(event.threadId, event.method, event.params)
         if (streamResult.handled) {
@@ -277,6 +287,8 @@ function createCodexTranslation(
       return publishActivity(event, unhandled)
     },
     beginCommand: (command) => commands.begin(command),
+    isReviewDelegateStart: commands.isReviewDelegateStart.bind(commands),
+    claimCommandTurn: commands.claim.bind(commands),
     forgetCommand: (turnId) => commands.forget(turnId),
     commandProviderTurnId: (turnId) => commands.providerTurnId(turnId),
     cancelPrompt: (journalItemId) => prompts.cancel(journalItemId),

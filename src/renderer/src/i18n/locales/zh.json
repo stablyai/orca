@@ -18910,7 +18910,9 @@
         "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
         "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
         "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
-        "selectedModel": "所选模型"
+        "selectedModel": "所选模型",
+        "reviewFailed": "Codex 无法执行审查。请重试 /review。",
+        "reviewSettingsUnsupported": "请更新 Codex 以使用其他模型审查，或切换回 {{detail}}。"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录",
@@ -21716,7 +21718,8 @@
     "retry": "重试",
     "cancel": "取消",
     "unassigned": "未分配",
-    "delete": "删除"
+    "delete": "删除",
+    "back": "返回"
   },
   "fileExplorer": {
     "root": {
@@ -22696,6 +22699,17 @@
   "nativeChat": {
     "math": {
       "scrollDisplayEquation": "滚动显示公式"
+    },
+    "review": {
+      "baseBranch": "与基础分支比较",
+      "uncommittedChanges": "审查未提交的更改",
+      "commit": "审查一个提交",
+      "custom": "自定义审查指令",
+      "loadFailed": "Codex 无法加载审查目标。请重试 /review。",
+      "instructions": "输入审查指令",
+      "searchBranches": "搜索分支…",
+      "searchCommits": "搜索提交…",
+      "title": "审查更改"
     }
   },
   "quitAndStopAllSessions": {

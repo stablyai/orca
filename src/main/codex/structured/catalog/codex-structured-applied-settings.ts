@@ -80,13 +80,28 @@ export class CodexAppliedSettings {
     }
   }
 
-  attempt(choices: Settings): () => void {
-    if (this.equivalent(choices)) {
-      return () => {}
-    }
+  attempt(choices: Settings) {
     const write = { model: choices.model, effort: choices.effort }
     this.pending.add(write)
-    return () => this.pending.delete(write)
+    return {
+      discard: () => this.pending.delete(write),
+      acknowledge: () => {
+        if (!this.pending.has(write)) {
+          return
+        }
+        // Thread-scoped replies prove this write and every earlier write have finished.
+        for (const pending of this.pending) {
+          this.pending.delete(pending)
+          if (pending === write) {
+            break
+          }
+        }
+      }
+    }
+  }
+
+  hasPendingUpdates(): boolean {
+    return this.pending.size > 0
   }
 
   private equivalent(choices: Settings): boolean {
@@ -133,7 +148,7 @@ export class CodexAppliedSettings {
     }
     void changed.promise.catch(() => {})
     this.listeners.add(check)
-    const discard = this.attempt(choices)
+    const attempt = this.attempt(choices)
     const expired = Promise.withResolvers<never>()
     const timer = setTimeout(
       () => expired.reject(new Error('codex settings application timed out')),
@@ -156,7 +171,7 @@ export class CodexAppliedSettings {
             isCodexAppServerRequestError(error) ||
             codexMethodUnavailable(error, 'thread/settings/update')
           ) {
-            discard()
+            attempt.discard()
             onRefused?.()
             if (codexMethodUnavailable(error, 'thread/settings/update')) {
               this.unsupported = true
@@ -172,6 +187,7 @@ export class CodexAppliedSettings {
         await changed.promise
       })()
       await waitForPromiseWithSignal(Promise.race([work, expired.promise]), signal)
+      attempt.acknowledge()
       return { ok: true }
     } catch {
       throwIfSignalAborted(signal)

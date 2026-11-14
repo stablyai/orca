@@ -1,3 +1,4 @@
+import { commandFailureSentences } from './agent-session-command-failure-words'
 import {
   isSubmissionRejectionFact,
   type AgentSessionFailureFact,
@@ -72,7 +73,7 @@ export type AgentSessionFailureWordsContext = {
   usageLimitReset?: AgentSessionUsageLimitResetWords
 }
 
-type Sentence = (
+export type Sentence = (
   context: AgentSessionFailureWordsContext,
   fact: AgentSessionFailureFact,
   surface: AgentSessionFailureSurface,
@@ -234,9 +235,7 @@ const FAILURE_SENTENCES = {
   commandRefused: (context, fact, _surface, say) =>
     commandRefusedByReason(say, context, fact) ??
     say(context.retryControl ? 'commandRefused' : 'commandRefusedTryAgain'),
-  compactionFailed: (_context, fact, _surface, say) =>
-    quotingPersonDetail(say, 'compactionFailed', 'compactionFailedQuoted', fact.detail),
-  compactionUnconfirmed: (_context, _fact, _surface, say) => say('compactionUnconfirmed'),
+  ...commandFailureSentences,
   cancelUnconfirmed: ({ stopNotice }, _fact, _surface, say) =>
     stopNotice ? AGENT_SESSION_GOAL_CONTROL_COPY[stopNotice] : say('cancelUnconfirmed'),
   // The agent was reached and declined, so the sentence says that, not that the Stop was lost.

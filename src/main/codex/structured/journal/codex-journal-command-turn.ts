@@ -46,6 +46,35 @@ export class CodexJournalCommandTurn {
     return command
   }
 
+  reviewTurn(): string | null | undefined {
+    if (this.awaiting?.name === 'review') {
+      return null
+    }
+    for (const [id, carried] of this.carried) {
+      if (carried.command.name === 'review') {
+        return id
+      }
+    }
+    return undefined
+  }
+
+  isReviewDelegateStart(params: unknown): boolean {
+    const reviewTurn = this.reviewTurn()
+    const turn = readCodexJournalRecord(readCodexJournalRecord(params).turn)
+    return (
+      reviewTurn !== undefined &&
+      typeof turn.rootTurnId === 'string' &&
+      turn.rootTurnId !== turn.id &&
+      (reviewTurn === null || turn.rootTurnId === reviewTurn)
+    )
+  }
+
+  forgetPendingReview(): void {
+    if (this.awaiting?.name === 'review') {
+      this.awaiting = null
+    }
+  }
+
   isCarrying(providerTurnId: string): boolean {
     return this.carried.has(providerTurnId)
   }
@@ -91,11 +120,18 @@ export class CodexJournalCommandTurn {
     }
     const { command } = carried
     const detail = ended.error === null ? undefined : providerDiagnostic(ended.error, 'person')
-    const verdict = structuredCompactionOutcome({
-      compacted: carried.compacted,
-      interruptRequested: ended.status === 'interrupted',
-      failed: ended.status !== 'completed' || detail ? (detail ? { detail } : {}) : null
-    })
+    const verdict =
+      command.name === 'review'
+        ? ended.status === 'interrupted'
+          ? { outcome: 'cancellation' as const }
+          : ended.status === 'completed' && !detail
+            ? { outcome: 'success' as const }
+            : { outcome: 'failure' as const, failure: { kind: 'reviewFailed' as const } }
+        : structuredCompactionOutcome({
+            compacted: carried.compacted,
+            interruptRequested: ended.status === 'interrupted',
+            failed: ended.status !== 'completed' || detail ? (detail ? { detail } : {}) : null
+          })
     const turnScope = { kind: 'turn' as const, turnItemId: agentJournalItemKey(command.identity) }
     return [
       // Successful compaction already has Codex's marker; do not add a second status row.

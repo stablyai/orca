@@ -28,7 +28,8 @@ export const MENU_ROWS_PER_GROUP = 10
 export type MobileComposerStructuredCatalog = {
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
   reported: readonly AgentSessionSlashCommand[] | undefined
-  conversationCommands: readonly AgentSessionConversationCommand[]
+  conversationCommands: readonly AgentSessionConversationCommand[] | undefined
+  cleanBackgroundTerminals?: boolean
   compactInstructions?: boolean
 }
 
@@ -64,12 +65,19 @@ export function mobileComposerCatalog({
         structured.conversationCommands,
         reported,
         structured.compactInstructions,
-        interactionModeSupported
+        interactionModeSupported,
+        structured.cleanBackgroundTerminals
       )
     : getAgentAnsweredNativeChatCommands(agent)
   return {
     profile: getNativeChatAgentProfile(agent),
-    commands: nativeChatPickerCommands(agent, commands, discovery.skills),
+    commands: nativeChatPickerCommands(
+      agent,
+      commands,
+      discovery.skills,
+      structured ? structured.conversationCommands : [],
+      structured?.cleanBackgroundTerminals
+    ),
     discovery,
     sessionSkills: nativeChatSessionSkills(agent, reported)
   }
