@@ -15,6 +15,10 @@ export type NativeChatSendOptions = {
   clearInput?: string | null
   /** For launch-draft replacement, confirm empty input and widen to maximal clearing if residue remains. */
   confirmCleared?: () => boolean
+  /** Reads the agent composer's current text; null when the terminal cannot be read. */
+  readInputLine?: () => string | null
+  /** The text just written, so a leftover in the composer can be told apart from new typing. */
+  submittedText?: string
 }
 
 export function clearUnsubmittedAgentInput(ptyId: string, options?: NativeChatSendOptions): void {
