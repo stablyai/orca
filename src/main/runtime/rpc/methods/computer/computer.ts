@@ -55,7 +55,7 @@ export const COMPUTER_METHODS = [
     handler: async (params) => {
       const { openComputerUsePermissions } =
         await import('../../../../computer/macos-permissions/macos-computer-use-permissions')
-      return openComputerUsePermissions(params.id)
+      return openComputerUsePermissions(params.id, { skipGranted: params.skipGranted === true })
     }
   }),
   defineMethod({

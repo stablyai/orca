@@ -116,7 +116,7 @@ import {
 import { ensureWindowsAppDataPath } from './windows-startup/windows-app-data-path'
 
 export type MainProcessPreflightOptions = {
-  focusExistingWindow: () => void
+  focusExistingWindow: (request: { background?: boolean }) => void
   requestDesktopActivation: (argv?: readonly string[]) => void
 }
 
@@ -166,10 +166,10 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   state.desktopActivationGate = createServeDesktopActivationGate({
     // Hold activation until the startup window exists; early second-instance activation otherwise opens a duplicate and aborts launch.
     initialState: 'initializing',
-    activateWindow: () => {
+    activateWindow: (request) => {
       // Updater replacement must not resurrect the old bundle.
       if (!isQuittingForUpdate()) {
-        options.focusExistingWindow()
+        options.focusExistingWindow(request)
       }
     },
     onBlocked: (reason) => console.error(`[serve] Desktop activation blocked: ${reason}`)

@@ -217,7 +217,9 @@ export const Hotkey = ComputerObserveTargetBase.extend({
 })
 
 export const ComputerPermissions = z.object({
-  id: z.enum(['accessibility', 'screenshots']).optional()
+  id: z.enum(['accessibility', 'screenshots']).optional(),
+  // Older hosts drop it and open as before; Settings buttons leave it off so a click always opens.
+  skipGranted: z.boolean().optional()
 })
 
 export const PasteText = ComputerObserveTargetBase.extend({
