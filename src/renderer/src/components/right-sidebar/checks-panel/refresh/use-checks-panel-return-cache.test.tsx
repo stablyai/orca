@@ -61,7 +61,7 @@ it.each(['background', 'fresh'] as const)(
           pool.enqueue(
             'env-1',
             'files.read',
-            // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider time holds the real admission slot.
+            // ast-grep-ignore: test-no-real-time-wait-tsx -- Fake-clock provider time holds the real admission slot.
             () => new Promise((resolve) => setTimeout(resolve, 21_000))
           )
         )
@@ -82,7 +82,7 @@ it.each(['background', 'fresh'] as const)(
         'github.prChecks',
         async () => {
           read.admittedAt = Date.now()
-          // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider completion preserves the tested response ordering.
+          // ast-grep-ignore: test-no-real-time-wait-tsx -- Fake-clock provider completion preserves the tested response ordering.
           await new Promise((resolve) => setTimeout(resolve, 2_000))
           read.completedAt = Date.now()
           if (

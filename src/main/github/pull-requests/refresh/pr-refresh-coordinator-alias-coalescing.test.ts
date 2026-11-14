@@ -163,6 +163,7 @@ describe('pr-refresh-coordinator', () => {
     getPRForBranchOutcomeMock.mockImplementation(async () => ({
       kind: 'found',
       pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
+      // ast-grep-ignore: test-no-wall-clock -- Outcome time advances with the fake-clock follow-up.
       fetchedAt: Date.now()
     }))
     const first = makeCandidate({
@@ -209,6 +210,7 @@ describe('pr-refresh-coordinator', () => {
     getPRForBranchOutcomeMock.mockImplementation(async () => ({
       kind: 'found',
       pr: makePR({ checksStatus: 'pending' }),
+      // ast-grep-ignore: test-no-wall-clock -- Outcome time advances with the fake-clock follow-up.
       fetchedAt: Date.now()
     }))
     const first = makeCandidate({

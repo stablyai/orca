@@ -267,7 +267,7 @@ describe('checks detail timer follows PR auto-refresh cadence changes while moun
           pending.push(
             pool.enqueue('env-1', 'files.read', async () => {
               blocker.admittedAt = Date.now()
-              // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider time holds the real admission slot.
+              // ast-grep-ignore: test-no-real-time-wait-tsx -- Fake-clock provider time holds the real admission slot.
               await new Promise((resolve) => setTimeout(resolve, 21_000))
               blocker.doneAt = Date.now()
             })
@@ -286,7 +286,7 @@ describe('checks detail timer follows PR auto-refresh cadence changes while moun
           'github.prChecks',
           async () => {
             operation.admittedAt = Date.now()
-            // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider completion preserves the tested response ordering.
+            // ast-grep-ignore: test-no-real-time-wait-tsx -- Fake-clock provider completion preserves the tested response ordering.
             await new Promise((resolve) => setTimeout(resolve, 2_000))
             const paced =
               operation.background &&
