@@ -15,7 +15,7 @@ import {
   orchestrationSenderName,
   structuredChatNaming,
   captureMirroredTabs,
-  terminalNameInputs,
+  paneNamingTab,
   type MirroredTabs,
   type SenderHookRow,
   type SenderNamingLayout,
@@ -49,6 +49,7 @@ type RuntimeSenderNameDeps = {
   getTerminalPaneKey: (handle: string) => string | null
   /** The workspace session this host mirrors. */
   getWorkspaceSession: (worktreeId: string) => MirroredTabs | null | undefined
+  isWorkspaceSessionOwned?: (worktreeId: string) => boolean
   /** The person's "generate tab titles" setting, which decides whether a generated title names a tab. */
   getGeneratedTitlesEnabled: () => boolean
   getAgentStatusSnapshotForPane: (paneKey: string) => readonly SenderHookRow[] | undefined
@@ -133,7 +134,10 @@ export class RuntimeOrchestrationSenderNames {
   agentRowNamer(): (source: AgentRowNamingSource) => string | null {
     // A pass reads the setting and each worktree's session at most once, however many rows it lists.
     let generatedTitlesEnabled: boolean | undefined
-    const tabs = captureMirroredTabs(this.deps.getWorkspaceSession)
+    const tabs = captureMirroredTabs(
+      this.deps.getWorkspaceSession,
+      this.deps.isWorkspaceSessionOwned ?? (() => false)
+    )
     const session = tabs.session
     const chatSources = this.chatSources(session)
     return (source) => {
@@ -306,13 +310,7 @@ export class RuntimeOrchestrationSenderNames {
         )
     const trackedTitle = record.ptyId ? this.deps.getTrackedTitle(record.ptyId) : null
     return {
-      tab: tab
-        ? {
-            ...terminalNameInputs(tab),
-            title: tab.title ?? '',
-            customTitle: tab.customTitle ?? null
-          }
-        : null,
+      tab: paneNamingTab(tab, this.deps.isWorkspaceSessionOwned?.(record.worktreeId) === true),
       paneTitle:
         trackedTitle ??
         splitPaneTitle(

@@ -105,6 +105,7 @@ export class StateSerializationSecretHandlingOperations {
       dirtyDomains,
       stateToSave,
       complete,
+      pendingEncryption: pendingEncryption || this.runtime.protectedSecrets.hasPendingEncryption(),
       protectedSecretUpdates,
       automationRuns,
       serializeRoot: projection

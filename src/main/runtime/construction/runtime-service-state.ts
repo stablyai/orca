@@ -276,6 +276,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getPtyAgents: (ptyId) => this.ptysById.get(ptyId),
     getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
     getWorkspaceSession: (worktreeId) => this.borrowWorkspaceSessionForWorktree(worktreeId),
+    isWorkspaceSessionOwned: (worktreeId) => this.isWorkspaceSessionOwnedForWorktree(worktreeId),
     getGeneratedTitlesEnabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,
     getAgentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
     getAgentStatusSnapshotForPane: (paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey),

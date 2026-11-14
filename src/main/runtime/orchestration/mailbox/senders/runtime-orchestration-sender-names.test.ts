@@ -221,3 +221,25 @@ it('uses exact saved custody for follow-up dispatch identity and refuses a later
     .run('p:2', next.id)
   expect(names().sender(`dispatch:${next.id}`).agent).toBeUndefined()
 })
+
+it('names an exposed selected row without reading dormant tab getters', () => {
+  const dormant = { id: 'tab_dormant' }
+  Object.defineProperty(dormant, 'aiVaultTitle', {
+    enumerable: true,
+    get() {
+      throw new Error('dormant getter read')
+    }
+  })
+  session = { tabsByWorktree: { [WORKTREE]: [{ id: 'tab_selected', title: 'Selected' }, dormant] } }
+  const name = names().agentRowNamer()
+  expect(
+    name({
+      tabId: 'tab_selected',
+      worktreeId: WORKTREE,
+      ptyId: null,
+      paneKey: null,
+      agentType: 'codex',
+      providerSessionId: undefined
+    })
+  ).toBe('Selected')
+})

@@ -6,6 +6,8 @@ import {
 import { borrowWorkspaceSession } from './loading-store/workspace-sessions/session-host-partitions'
 import { describe, it, expect, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { makeSessionWithTerminalBuffers } from './persistence-session-fixtures'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 import {
   createWorkerMaintenanceFixture,
@@ -106,6 +108,41 @@ describe('worker persistence avoids synchronous profile filesystem calls', () =>
       }
     }
   )
+
+  it('persists an alias retained by a refused layout admission before a detached patch', async () => {
+    const { store, readState } = await createWorkerMaintenanceFixture()
+    const input = makeSessionWithTerminalBuffers()
+    admitDetachedWorkspaceSessionInput(store, input)
+    setDetachedWorkspaceSession(store, input)
+    await store.flushPendingOrThrowAsync()
+    let retained: WorkspaceSessionState | undefined
+    const result = await store.applyLayoutCommand(
+      {
+        type: 'renameTab',
+        workspace: 'local-repo::/local',
+        tabId: 'local-tab',
+        kind: 'generated',
+        title: 'refused'
+      },
+      [],
+      {
+        admit: (partitions) => {
+          retained = partitions?.[0]
+          return false
+        }
+      }
+    )
+    expect(result.ok).toBe(false)
+    if (!retained) {
+      throw new Error('Admission did not receive its partition')
+    }
+    retained.tabsByWorktree['local-repo::/local'][0].title = 'retained after refusal'
+    patchDetachedWorkspaceSession(store, { activeTabId: 'later' })
+    await store.flushPendingOrThrowAsync()
+    expect(readState().workspaceSession.tabsByWorktree['local-repo::/local'][0].title).toBe(
+      'retained after refusal'
+    )
+  })
 
   it('saves a retained getter edit after ACK and an unrelated detached publication', async () => {
     const { store, readState } = await createWorkerMaintenanceFixture()

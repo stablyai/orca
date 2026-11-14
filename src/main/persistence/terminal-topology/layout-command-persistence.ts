@@ -107,7 +107,7 @@ export class LayoutCommandPersistence {
     )
     const admitted = (): DurableProfileStateMutation<LayoutApplyOutcome> =>
       run.admit &&
-      !run.admit(resolved.map((hostId) => borrowWorkspaceSession(context.sessions, hostId)))
+      !run.admit(resolved.map((hostId) => context.sessions.getWorkspaceSession(hostId)))
         ? { value: { ok: false, code: 'tab_not_found' }, persist: false }
         : commit()
     // Applied closes must stay closed even when persistence fails.

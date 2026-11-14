@@ -41,7 +41,11 @@ export function writeToDiskSync(
         intent.restoreIntent()
         return false
       }
-      if (captured.stateHash !== null && canReuseDurableProfileState(runtime, captured.stateHash)) {
+      if (
+        !captured.bypassEquality &&
+        captured.stateHash !== null &&
+        canReuseDurableProfileState(runtime, captured.stateHash)
+      ) {
         captured.acknowledge()
       } else {
         if (captured.write) {

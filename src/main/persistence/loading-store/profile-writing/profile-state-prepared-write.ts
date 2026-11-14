@@ -19,6 +19,7 @@ import {
 export type CapturedProfileStateWrite = {
   protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
   acknowledge: () => void
+  bypassEquality?: boolean
 } & (
   | { write: PreparedProfileStateWrite; stateHash: null; payload?: never }
   | {
@@ -34,6 +35,7 @@ type PreparedWriteProjection = {
   stateToSave: Record<string, unknown>
   dirtyDomains: ReadonlySet<string> | null
   complete: boolean
+  pendingEncryption?: boolean
   protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
   automationRuns?: readonly AutomationRun[]
   serializeRoot?: () => {
@@ -49,6 +51,7 @@ export function capturePreparedProfileStateWrite({
   stateToSave,
   dirtyDomains,
   complete,
+  pendingEncryption = false,
   protectedSecretUpdates,
   automationRuns,
   serializeRoot
@@ -76,6 +79,7 @@ export function capturePreparedProfileStateWrite({
     }
     const serialized = serializeRoot!()
     return {
+      bypassEquality: pendingEncryption,
       domains: serialized.domains,
       get payload() {
         return serialized.payload

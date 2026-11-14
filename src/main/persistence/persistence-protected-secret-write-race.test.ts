@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getSecretStore, setSecretStore } from '../../shared/secret-store'
 import {
   createWorkerMaintenanceFixture,
+  createSqliteMaintenanceFixture,
   maintenanceBarrier
 } from './loading-store/profile-writing/profile-state-maintenance-fixture'
 import { Store } from './loading-store/store'
@@ -83,6 +84,41 @@ describe('protected-secret async write retention', () => {
       code: 'profile-state-revision-conflict'
     })
   })
+
+  it.each(['worker', 'sync'])(
+    'persists a recovered proxy while a cookie remains pending (%s)',
+    async (mode) => {
+      let proxyRecovered = false
+      const proxy = 'http://synthetic.invalid:8080'
+      setSecretStore({
+        isEncryptionAvailable: () => true,
+        encryptString: (plaintext) => {
+          if (plaintext === 'synthetic-cookie' || (plaintext === proxy && !proxyRecovered)) {
+            throw new Error('synthetic encryption failure')
+          }
+          return Buffer.from(`enc:${plaintext}`)
+        },
+        decryptString: (ciphertext) => ciphertext.toString().slice(4),
+        describeProtectionGap: () => null
+      })
+      const fixture =
+        mode === 'worker'
+          ? await createWorkerMaintenanceFixture()
+          : createSqliteMaintenanceFixture()
+      const { store } = fixture
+      const readSettings = () =>
+        'readState' in fixture
+          ? fixture.readState().settings
+          : JSON.parse(fixture.authority.readSerializedState() ?? '{}').settings
+      store.updateSettings({ opencodeSessionCookie: 'synthetic-cookie', httpProxyUrl: proxy })
+      await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+      expect(readSettings().httpProxyUrl).toBe('')
+      proxyRecovered = true
+      await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+      expect(readSettings().httpProxyUrl).toBe(Buffer.from(`enc:${proxy}`).toString('base64'))
+      expect(readSettings().opencodeSessionCookie).toBe('')
+    }
+  )
 
   it('does not retain ciphertext from a rejected worker write after a newer secret arrives', async () => {
     const { store, authority, peer, dataFile, readState } = await createWorkerMaintenanceFixture()
