@@ -6772,6 +6772,9 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "This is the <strong>main worktree</strong> (the original clone directory)."
         },
+        "SleepingWorkspacesFooter": {
+          "sleeping": "Sleeping"
+        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Show in worktree list",
           "ad99f4eea9": "Keep hidden",
