@@ -14,7 +14,7 @@ import {
 } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../src/shared/agent-session/structured-agent-session-reducer'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
-import { claudeProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { structuredRewindCut } from '../../src/main/native-chat/agent-session-wire/rewind/structured-rewind-cut'
 import { completeTestJournalRewind } from '../../src/main/native-chat/agent-session-wire/rewind/structured-rewind-completion.test-support'

@@ -5,7 +5,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { activeStructuredAgentSessionTurnId } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'

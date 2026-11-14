@@ -1,5 +1,5 @@
 import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usage-limit-chain'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary

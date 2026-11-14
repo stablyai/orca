@@ -20,7 +20,7 @@ import { applyJournalDomainSubmission } from './journal-domain-submission-admiss
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainCommandTurn } from './journal-domain-command-turn'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
 const databases: Database.Database[] = []

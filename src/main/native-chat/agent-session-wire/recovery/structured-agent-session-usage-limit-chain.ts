@@ -7,7 +7,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isStructuredAgentSessionCommandEntry } from '../../../../shared/agent-session/structured-agent-session-command-entry'
 import type { AgentSessionUsageLimit } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import { journalSqlReads } from '../../agent-session-journal/journal-sql-reads'
 import {

@@ -10,7 +10,7 @@ import type { AgentType } from '../../../shared/agent-status/contracts/agent-sta
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { cancelledJournalPromptBody } from '../agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import type {
   JournalLifecycleIdentityMutationInput,

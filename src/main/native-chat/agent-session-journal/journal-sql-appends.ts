@@ -31,14 +31,14 @@ import type { JournalSqlStoreOperation, JournalSqlStorePrepare } from './journal
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import type { JournalWriterStep, JournalStepsResult } from './writing/journal-writer-step'
-import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import type { JournalWriterSettled } from './journal-sql-failure'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { claimJournalAutomaticSubmission } from './journal-sql-automatic-submission'
 import type { JournalAutomaticSelection } from './journal-automatic-submission'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
-import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { JournalRewindCut } from './journal-domain-rewind-cut'
 
 /**

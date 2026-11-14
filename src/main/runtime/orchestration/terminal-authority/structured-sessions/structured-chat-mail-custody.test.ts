@@ -4,7 +4,7 @@ import { journalOf, queuedCardTexts } from './structured-chat-coordinator-journa
 // its mailbox, and that mailbox still this chat's. The queue asks at handover; cleanup is visible only.
 
 import { describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'

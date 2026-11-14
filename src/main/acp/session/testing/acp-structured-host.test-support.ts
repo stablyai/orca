@@ -1,7 +1,7 @@
 import type { FakeAcpChild } from '../../process/testing/acp-scripted-connection.test-fixture'
 import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { messageText } from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/providers/structured-agent-registry'

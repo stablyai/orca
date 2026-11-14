@@ -2,7 +2,7 @@
 // expected changes presentation, never whether the dead child remains recorded.
 
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { PROVIDER_EXIT_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import { PROVIDER_EXIT_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import type { StructuredAgentSessionEndedEvent } from '../providers/structured-agent-session-adapter'

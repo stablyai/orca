@@ -1,9 +1,9 @@
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 // Open Dispatches retain active work; chats at rest remain mail recipients until tab retirement. Process liveness and close proof remain separate.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

@@ -1,17 +1,17 @@
 import { useMemo } from 'react'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
-import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
   NATIVE_CHAT_EMPTY_TURN_FOLD,
   nativeChatTurnFold,
   nativeChatTurnFoldRow,
   type NativeChatTurnFold
-} from '../../../../../src/shared/native-chat/transcript/native-chat-turn-fold'
+} from '../../../../../src/shared/native-chat/transcript/folding/native-chat-turn-fold'
 import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
 } from '../../../../../src/shared/native-chat/native-chat-trailing-run'
-import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   nativeChatWorkRunMember,

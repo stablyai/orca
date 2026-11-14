@@ -3,7 +3,7 @@ import { openTestJournalHostDatabase } from '../store-lifecycle/journal-host-dat
 import type { createFixture } from './queued-message-pause-contract-test-fixture'
 import { describe, expect, it } from 'vitest'
 import { agentSessionRecordFixture } from '../../testing/agent-session-record-test-fixture'
-import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import type { JournalAutomaticSelection } from '../journal-automatic-submission'
 
 export function registerQueuedMessageStopPauseTests(

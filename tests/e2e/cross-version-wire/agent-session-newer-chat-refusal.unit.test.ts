@@ -11,7 +11,7 @@ import type {
   AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
 import {
   closeTestJournalHostDatabase,

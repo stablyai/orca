@@ -7,7 +7,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { requiresTerminalSettlement } from '../../agent-session-journal/item-lifecycle/journal-terminal-settlement'
 
 import {

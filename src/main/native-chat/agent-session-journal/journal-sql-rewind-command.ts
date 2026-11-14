@@ -1,12 +1,12 @@
 import { isDeepStrictEqual } from 'node:util'
 import type Database from '../../sqlite/sync-database'
 import { isReadableAgentSessionStoreRecord } from '../../runtime/agent-session/records/agent-session-store-row-rules'
-import { decodePersistedAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { decodePersistedAgentSessionRecord } from '../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   agentSessionJournalProviderHandle,
   claudeProviderHandle
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalWriterCommand } from './journal-writer-command'
 import { JournalSqlScope } from './journal-sql-scope'

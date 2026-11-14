@@ -14,7 +14,7 @@ import {
   openTestAgentSessionRecordStore,
   withTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { claudeProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionSubscribeEvent

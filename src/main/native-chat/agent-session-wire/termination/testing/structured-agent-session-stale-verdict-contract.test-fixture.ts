@@ -2,7 +2,7 @@ import { agentJournalItemKey } from '../../../../../shared/agent-session/journal
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
 import { turnVerdictFromDeathEvidence } from '../structured-agent-session-stale-turn-verdict'
 
 export const THREAD = 'thread-1'

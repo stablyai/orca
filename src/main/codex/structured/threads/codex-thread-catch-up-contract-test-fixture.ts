@@ -7,7 +7,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session/jo
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalWriterOperation } from '../../../native-chat/agent-session-journal/journal-writer-command'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener

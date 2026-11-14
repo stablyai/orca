@@ -4,7 +4,7 @@ import { agentTurnVerdict } from '../../../shared/agent-status/lifecycle/agent-t
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   isStructuredAgentSessionCommandTurn,
   isStructuredAgentSessionCommandEntry

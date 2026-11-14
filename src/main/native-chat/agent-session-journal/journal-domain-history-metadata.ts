@@ -1,12 +1,12 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   namedSubagents,
   subagentFoldKey,
   subagentItemBlock
-} from '../../../shared/native-chat/transcript/native-chat-subagent-items'
+} from '../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import { isSubagentRow } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { journalDomainItemWire } from './journal-domain-item-wire'
 export { journalDomainItemWire } from './journal-domain-item-wire'

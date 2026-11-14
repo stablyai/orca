@@ -14,7 +14,7 @@ import {
   agentSessionOperationKey,
   settleAgentSessionOperation,
   type AgentSessionOperationRow
-} from '../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import {
   editPersistedTestAgentSessionStore,

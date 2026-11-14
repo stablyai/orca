@@ -32,7 +32,7 @@ import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/nati
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './conversation/turns/use-native-chat-terminal-turn-timing'
 import { shouldPruneLaunchPrompt } from './session/terminal/delivery/native-chat-pending'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
+import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 import {
   useNativeChatPendingDelivery,
   useNativeChatOptimisticSend

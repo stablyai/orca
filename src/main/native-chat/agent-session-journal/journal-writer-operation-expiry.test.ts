@@ -4,7 +4,7 @@ import { pruneJournalWriterOperations } from './journal-writer-operation-expiry'
 import {
   pendingAgentSessionOperationRow,
   agentSessionOperationKey
-} from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import { runJournalTransaction } from './database/journal-database'
 
 const cleanups: (() => void)[] = []

@@ -13,7 +13,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import {
   codexProviderHandle,
   agentSessionJournalProviderHandle
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type {

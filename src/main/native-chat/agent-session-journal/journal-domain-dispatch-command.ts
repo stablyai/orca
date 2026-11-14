@@ -4,7 +4,7 @@ import {
   agentSessionSendDeliversStoppedHistory,
   agentSessionStoppedHistoryOwed,
   selectStoppedHistory
-} from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+} from '../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import type { JournalDomainDispatchOperation } from './journal-domain-dispatch'
 import type { JournalWriterOperation } from './journal-writer-command'
 import type { JournalDomainSubmissionTarget } from './journal-domain-submission-records'

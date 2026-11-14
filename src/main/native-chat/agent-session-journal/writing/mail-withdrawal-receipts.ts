@@ -6,7 +6,7 @@ import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionDomainFingerprint,
   structuredAgentSessionPayloadFingerprint
-} from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+} from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import type { JournalMailAttempt } from '../journal-mail-observation'
 import { commandReceiptSchema } from './command-receipt-schema'
 import { insertCommandReceiptIfAbsent } from './command-receipt-table'

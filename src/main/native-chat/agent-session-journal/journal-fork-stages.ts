@@ -8,7 +8,7 @@ import type { NativeCopyOrigin } from './context-epochs/journal-history-origin'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { assertJournalFence } from './writing/journal-write-guards'
 import { validateJournalForkSource, type JournalForkSourceProof } from './journal-fork-source-proof'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export type JournalForkStageBegin = {
   target: JournalWriterTarget

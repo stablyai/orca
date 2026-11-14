@@ -2,7 +2,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import { readJournalInputItem } from '../input-order/journal-input-obligations'
 import { journalItemLifecycleState } from '../journal-item-status-metadata'

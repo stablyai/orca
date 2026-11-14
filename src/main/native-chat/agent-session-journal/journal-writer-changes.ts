@@ -3,7 +3,7 @@ import type { JournalOpenRecoveryResult } from './journal-sql-open-command'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attachment-inverse'
-import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type {
   AgentJournalRenderItem,
   AgentJournalAcceptanceReceipt

@@ -1,5 +1,5 @@
 import { clearSuccessor } from './agent-session-sender-identity-revision'
-import type * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import type * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
@@ -7,7 +7,7 @@ import {
   agentSessionOperationKey,
   type AgentSessionOperationDecision,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
   evaluateAgentSessionMutationOperation,
   type claimAgentSessionOperationInto,
@@ -17,14 +17,14 @@ import {
   type AgentSessionOperationAdmission
 } from '../ownership/agent-session-operation-admission'
 import { isAgentSessionClaimKeyVerifiable } from '../ownership/agent-session-claim-key-retention'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAgentSessionWorkspaceAttention } from './agent-session-workspace-attention'
-import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
+import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionProcessIdentityCommit } from '../ownership/agent-session-lease-transitions'
 import type {
   AgentSessionFailedAcquisitionSettlement,

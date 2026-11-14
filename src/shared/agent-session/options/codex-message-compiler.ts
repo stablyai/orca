@@ -1,9 +1,9 @@
-import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
-import { decodeStructuredAgentSessionOptionValue } from './structured-agent-session-option-codec'
+import type { AgentSessionExecutionOptions } from './protocol/agent-session-execution-options'
+import { decodeStructuredAgentSessionOptionValue } from './selection/structured-agent-session-option-codec'
 import {
   effectiveServiceTier,
   STANDARD_SERVICE_TIER
-} from './structured-agent-session-effective-tier'
+} from './reconciliation/structured-agent-session-effective-tier'
 
 export const CODEX_MESSAGE_CONTROL_KEYS = [
   'model',

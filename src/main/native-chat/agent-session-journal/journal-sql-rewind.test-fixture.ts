@@ -4,19 +4,19 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import {
   encodeAgentSessionRecord,
   decodePersistedAgentSessionRecord
-} from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import {
   codexProviderHandle,
   claudeProviderHandle
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   agentSessionOperationKey,
   pendingAgentSessionOperationRow
-} from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import { domainLifecycleFixture } from './journal-domain-lifecycle.test-fixture'
 import { planJournalDomainRewindCut } from './journal-domain-rewind-cut'

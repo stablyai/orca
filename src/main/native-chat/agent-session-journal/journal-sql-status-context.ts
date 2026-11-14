@@ -13,7 +13,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'

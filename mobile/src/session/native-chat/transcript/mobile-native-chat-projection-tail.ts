@@ -2,12 +2,12 @@ import type { AgentType } from '../../../../../src/shared/agent-status/contracts
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatToolFoldKind } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { isOrphanRowId } from '../../../../../src/shared/native-chat/tools/native-chat-folded-tool-results'
-import { subagentItemBlock } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-items'
+import { subagentItemBlock } from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import {
   hasImagePromptMarker,
   imageSourcePathsFromMessage,
   normalizeImageTranscriptUnit
-} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
+} from '../../../../../src/shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 import type { MobileNativeChatProjection } from './mobile-native-chat-projection'
 import {
   prepareMobileNativeChatSource,
@@ -18,7 +18,7 @@ import {
   buildNativeChatFoldUnit,
   groupNativeChatFoldUnitMembers,
   type NativeChatFoldUnit as Unit
-} from '../../../../../src/shared/native-chat/transcript/native-chat-fold-units'
+} from '../../../../../src/shared/native-chat/transcript/folding/native-chat-fold-units'
 import { finishMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
 // A tail harness row that is its own image unit and no roster member leaves every earlier unit as it was.

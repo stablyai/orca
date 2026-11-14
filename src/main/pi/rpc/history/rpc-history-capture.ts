@@ -1,4 +1,4 @@
-import type { AgentSessionProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { readPiEntries } from './rpc-history-catch-up'

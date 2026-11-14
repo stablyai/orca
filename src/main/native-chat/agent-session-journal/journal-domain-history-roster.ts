@@ -1,7 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemSubagentId } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { namedSubagents } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
+import { namedSubagents } from '../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import { offPageSubagentRoster } from '../agent-session-wire/publication/history/agent-session-history-subagent-roster'
 
 /** One indexed lookup per unnamed page subagent finds its earliest visible naming row. */

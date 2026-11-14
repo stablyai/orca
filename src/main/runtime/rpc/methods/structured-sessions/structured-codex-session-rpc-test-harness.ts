@@ -10,7 +10,7 @@ import type {
 } from '../../../../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection'
 import { refuseUnroutedSteer } from '../../../../codex/structured/turns/codex-structured-dispatch-test-support'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY

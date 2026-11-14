@@ -3,7 +3,7 @@ import type {
   AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'

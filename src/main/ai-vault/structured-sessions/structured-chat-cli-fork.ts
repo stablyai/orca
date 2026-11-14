@@ -6,9 +6,9 @@ import {
   agentForksConversations,
   agentForksThroughChat
 } from '../../../shared/agent-launch/startup/agent-resume-argv'
-import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { pendingAgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { pendingAgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type {
   AiVaultPrepareChatForkArgs,
   AiVaultPrepareSessionResumeResult,

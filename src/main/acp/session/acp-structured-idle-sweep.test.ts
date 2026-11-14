@@ -1,6 +1,6 @@
 import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { closeProviderTimelineRigs } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   HOST_TEST_SESSION as SESSION,

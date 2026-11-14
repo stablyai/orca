@@ -7,7 +7,7 @@ import {
 import {
   classifyNativeChatSend,
   type NativeChatSendClassification
-} from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
+} from '../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
 
 // Terminal mobile chat lacks desktop-owned command answers and reply rows.
 

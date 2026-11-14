@@ -8,7 +8,7 @@ import {
   openTestJournalHostDatabase
 } from '../store-lifecycle/journal-host-database-test-support'
 import { seedTestJournalHistoricalRows } from './journal-historical-inputs.test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { decodeJournalOutcome } from '../outcomes/journal-outcome-codec'
 import {
   AgentSessionJournalError,

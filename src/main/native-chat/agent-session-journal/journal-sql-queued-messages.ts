@@ -19,7 +19,7 @@ import type { QueuedMessageOwed } from './queued-messages/queued-message-consume
 import type { JournalMailCustody } from './journal-writer-host-facts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type {
   AgentSessionQueuedMessageMoveAnchor,
   AgentSessionQueuedMessageMoveResult,

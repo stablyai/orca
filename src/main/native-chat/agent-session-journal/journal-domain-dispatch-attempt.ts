@@ -7,7 +7,7 @@ import {
 } from './journal-domain-submission-columns'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { stoppedHistoryCandidate } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+import { stoppedHistoryCandidate } from '../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import type { ResolveDispatchInput } from './journal-store-contracts'
 import type { JournalDomainDispatchOperation } from './journal-domain-dispatch'
 import type {

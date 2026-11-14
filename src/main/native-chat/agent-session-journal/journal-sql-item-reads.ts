@@ -15,7 +15,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
 import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import {
   journalThreadGoalSource,

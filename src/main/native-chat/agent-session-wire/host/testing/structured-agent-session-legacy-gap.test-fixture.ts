@@ -1,4 +1,4 @@
-import { agentSessionJournalProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { insertCommandReceiptIfAbsent } from '../../../agent-session-journal/writing/command-receipt-table'
 import { writeCommandReceiptTestRecord } from '../../../agent-session-journal/writing/command-receipt-test-support'
 import {

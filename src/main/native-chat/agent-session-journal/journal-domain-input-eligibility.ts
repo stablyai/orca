@@ -1,4 +1,4 @@
-import { decodePersistedAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { decodePersistedAgentSessionRecord } from '../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { isReadableAgentSessionStoreRecord } from '../../runtime/agent-session/records/agent-session-store-row-rules'
 import type { JournalCurrentWorkAuthority, JournalObserverResult } from './journal-observer-read'
 import { JournalSqlStatusContext } from './journal-sql-status-context'

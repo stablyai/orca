@@ -7,7 +7,7 @@ import {
   agentJournalSubmissionKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalAcceptanceReceipt } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { dispatchWasWithdrawn } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import type { JournalWriterOperation } from './journal-writer-command'

@@ -19,7 +19,7 @@ import { settleStructuredAgentSessionLateDispatch } from '../operations/structur
 import * as agentStart from '../startup/structured-agent-session-agent-start'
 import { joinClosingStructuredAgentSessionChild } from '../termination/structured-agent-session-child-close'
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
-import type { AgentSessionRewindParams } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindParams } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import { rewindStructuredAgentSession } from '../rewind/structured-agent-session-rewind'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 

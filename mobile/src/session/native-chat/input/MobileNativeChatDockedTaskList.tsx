@@ -5,7 +5,7 @@ import {
   nativeChatCompletedTaskCount,
   nativeChatTaskLabel,
   type NativeChatTaskList
-} from '../../../../../src/shared/native-chat/input/native-chat-task-list'
+} from '../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

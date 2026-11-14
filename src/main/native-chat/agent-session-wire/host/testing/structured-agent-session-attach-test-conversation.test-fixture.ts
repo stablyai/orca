@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { JournalSqlDatabase } from '../../../agent-session-journal/database/journal-sql-database'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'

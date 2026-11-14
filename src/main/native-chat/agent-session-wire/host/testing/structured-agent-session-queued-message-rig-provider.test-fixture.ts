@@ -1,4 +1,4 @@
-import type { AgentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import { vi, type Mock } from 'vitest'
@@ -8,7 +8,7 @@ import { activeProviderContext } from '../../../../../shared/agent-session/agent
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'

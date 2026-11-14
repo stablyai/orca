@@ -8,7 +8,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { acceptStopTarget } from './structured-agent-session-stop-acceptance'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   noteStructuredAgentSessionStopUnconfirmed,
   writeStructuredAgentSessionStopNote

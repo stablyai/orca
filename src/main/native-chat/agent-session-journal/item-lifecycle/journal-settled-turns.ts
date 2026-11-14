@@ -1,4 +1,4 @@
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 
 /** Turn rows a commit left terminal, in write order; another writer's Stop reaches producers this way. */

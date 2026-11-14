@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   agentSessionProviderHandleKey,
   claudeProviderHandle
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { scaleDirectory, scaleRecord } from './agent-session-scale.test-fixture'
 import {
   openTestAgentSessionRecordStore,

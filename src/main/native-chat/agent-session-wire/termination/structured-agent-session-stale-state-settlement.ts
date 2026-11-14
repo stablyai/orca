@@ -8,7 +8,7 @@ import {
   type AgentJournalRenderItem,
   type AgentJournalItemBody
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { journalPendingSubmissionResolutions } from '../../agent-session-journal/submissions/journal-pending-submission-recovery'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'

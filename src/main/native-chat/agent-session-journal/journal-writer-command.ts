@@ -1,7 +1,7 @@
 import type { JournalForkInstall } from './journal-fork-stages'
 import type { JournalSendAdmission } from './journal-send-admission'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
 import type {
@@ -40,7 +40,7 @@ import type { JournalWriterEffect } from './journal-writer-effects'
 import type { JournalWriterHostFacts } from './journal-writer-host-facts'
 import type { JournalWriterStep } from './writing/journal-writer-step'
 import type { JournalDomainEditLeaseOperation } from './journal-domain-edit-leases'
-import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { JournalRewindCut } from './journal-domain-rewind-cut'
 
 /** The writer chooses the projection epoch; callers identify only their live open handle. */

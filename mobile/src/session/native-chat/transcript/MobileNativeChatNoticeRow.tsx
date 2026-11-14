@@ -21,7 +21,7 @@ import {
   readWholeAgentSessionFailureFact
 } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
-import { agentSessionSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-setup-commands'
+import { agentSessionSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
   MobileNativeChatForkedFromContext,

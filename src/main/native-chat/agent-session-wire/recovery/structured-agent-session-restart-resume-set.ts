@@ -3,15 +3,15 @@
 
 import type { AgentSessionAnyRefusalDetails } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger,
   AgentSessionResumeWork
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import type { AgentSessionRestartActivity } from '../../../../shared/agent-session/lifecycle/agent-session-restart-activity'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
+import type { AgentSessionRestartActivity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import { isResumableStructuredAgentSessionRecord } from './structured-agent-session-resume-eligibility'
 import {
   normalizeOptionalField,

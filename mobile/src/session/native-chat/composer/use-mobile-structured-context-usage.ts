@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import { selectStructuredAgentSessionContextUsage } from '../../../../../src/shared/agent-session/structured-agent-session-context-usage'
 import {
   summarizeContextUsage,

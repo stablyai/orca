@@ -1,4 +1,4 @@
-import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { isDeepStrictEqual } from 'node:util'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 import { AgentSessionTabTable } from '../agent-session-tab-table'

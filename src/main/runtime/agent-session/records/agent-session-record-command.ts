@@ -1,12 +1,12 @@
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
-import { withAcquiredAgentSessionAccount } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
+import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
+import { withAcquiredAgentSessionAccount } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import {
   cancelAgentSessionUsageLimitContinue,
   type UsageLimitContinueIdentity
-} from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import type { AgentSessionLastTurn } from '../../../../shared/agent-session/lifecycle/agent-session-last-turn'
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
+import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import type { AgentSessionLastTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-last-turn'
 import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { recordAgentSessionAcquisitionExit } from '../agent-session-acquisition-exit-transition'
 import {

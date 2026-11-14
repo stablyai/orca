@@ -30,7 +30,7 @@ import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { acpNamedTextKey } from '../timeline/acp-turn-messages'
 import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
 import { AcpLoadHistory } from './acp-history-replay'

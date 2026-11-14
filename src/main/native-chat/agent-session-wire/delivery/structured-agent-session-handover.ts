@@ -12,7 +12,7 @@ import {
   agentSessionFailureFact,
   providerDiagnosticOf
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { isAbortSignalReason } from '../../../../shared/abort-signal-reason'
 import { isAgentSessionOptionRejectedError } from '../options/structured-agent-session-option-error'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -24,8 +24,8 @@ import {
   handOverStructuredAgentSessionCommand,
   structuredAgentSessionHandoverOrigin
 } from '../operations/structured-agent-session-command-turn'
-import type { StoppedHistoryDelivery } from '../../../../shared/agent-session/lifecycle/agent-session-stopped-history'
-import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+import type { StoppedHistoryDelivery } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
+import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import {
   markStructuredAgentSessionInputUnadmitted,
   beginStructuredAgentSessionHandover,

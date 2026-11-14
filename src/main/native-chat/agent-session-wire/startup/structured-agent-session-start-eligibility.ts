@@ -6,7 +6,7 @@ import {
   type AgentSessionWireRefusalCode
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRefusalDetailsByCode } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
-import { terminalOwnerRefusalMessage } from '../../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
+import { terminalOwnerRefusalMessage } from '../../../../shared/agent-session/lifecycle/leases/agent-session-legacy-handoff-lease'
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import { hostCanStartRecord } from '../providers/structured-agent-session-provider-support'

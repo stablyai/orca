@@ -2,7 +2,7 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import type {
   AgentSessionOperationClaim,
   AgentSessionOperationDecision
-} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import { newChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {

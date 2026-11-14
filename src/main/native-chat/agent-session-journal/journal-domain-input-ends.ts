@@ -6,7 +6,7 @@ import type {
   AgentJournalStatusItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { readCodexErrorWillRetry } from '../../codex/app-server/codex-structured-thread-facts'
 import type { JournalInputEnd } from './input-order/journal-input-obligations'
 import type { JournalDomainSubmissionStoredFacts } from './journal-domain-submission-records'

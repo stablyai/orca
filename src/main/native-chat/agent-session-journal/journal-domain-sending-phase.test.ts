@@ -14,7 +14,7 @@ import { openJournalDatabase, runJournalTransaction } from './database/journal-d
 import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-epoch.test-fixture'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import type { JournalRow } from './durable-rows/journal-row-schema'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { prepareJournalDomainImport } from './journal-domain-import'
 import {
   finishJournalDomainImport,

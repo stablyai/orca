@@ -1,5 +1,5 @@
 import { rewindRefusal } from '../rewind/structured-rewind-refusal'
-import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
   agentSessionRefusalFromReference,
   readAgentSessionRefusalReference,

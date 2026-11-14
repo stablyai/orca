@@ -8,7 +8,7 @@ import { CommandReceiptExistsError } from '../../agent-session-journal/writing/c
 
 import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
 
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 

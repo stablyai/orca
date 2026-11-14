@@ -14,7 +14,7 @@ import { createDeferredStructuredAgentSessionEventSink } from '../../native-chat
 import { createClaudeJournalTranslator } from '../structured/journal/claude-structured-journal-translation'
 import { testEventSinkLogging } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { StructuredAgentSessionSnapshotRoutes } from '../../native-chat/agent-session-wire/host/structured-agent-session-snapshot-routes'
-import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 // Captured restart order: resumed frames retain original spawn IDs while announcements name new resume calls.
 

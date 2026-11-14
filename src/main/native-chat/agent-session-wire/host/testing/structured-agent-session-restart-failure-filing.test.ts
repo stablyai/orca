@@ -5,7 +5,7 @@ import {
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE } from '../../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+import { AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { StructuredAgentSessionResumeAdmission } from '../../recovery/structured-agent-session-restart-resume-runner'
 import {
   interruptedRestart,

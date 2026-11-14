@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionDeadGenerationInput } from './structured-agent-session-dead-generation-settlement'

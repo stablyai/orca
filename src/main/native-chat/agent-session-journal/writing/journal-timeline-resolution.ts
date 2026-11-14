@@ -11,7 +11,7 @@ import {
   type AgentJournalMessageItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 export type JournalResolvedItem = {
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
@@ -38,7 +38,7 @@ import {
 } from '../../agent-session-timeline/agent-journal-turn-failure-revision'
 import { resolveClaudeBackgroundTaskIdentity } from '../../../claude/background-tasks/claude-background-task-identity'
 import { isBackgroundTaskBlock } from '../../../../shared/native-chat/native-chat-types'
-import { backgroundTaskJournalBody } from '../../../../shared/native-chat/input/native-chat-background-task-row'
+import { backgroundTaskJournalBody } from '../../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import {
   resolveCodexGoalIdentity,
   type CodexGoalRowChoice

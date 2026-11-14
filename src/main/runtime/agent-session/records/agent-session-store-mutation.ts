@@ -1,5 +1,5 @@
 import { commitAgentSessionRewindCompletion } from '../agent-session-rewind-completion'
-import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   applyAgentSessionStoreCommand,
@@ -10,10 +10,10 @@ import type {
   AgentSessionForkedFrom,
   AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { cancelAgentSessionUsageLimitContinue } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
+import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
+import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
+import { cancelAgentSessionUsageLimitContinue } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import {
   insertAcceptedAgentSessionOperationInto,
   settleAgentSessionOperationInto,

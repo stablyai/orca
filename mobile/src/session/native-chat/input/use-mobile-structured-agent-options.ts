@@ -1,16 +1,16 @@
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { isAgentSessionHandleProvider } from '../../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
-import { structuredAgentSessionSeedCatalog } from '../../../../../src/shared/agent-session/options/structured-agent-session-seed-catalog'
+import { isAgentSessionHandleProvider } from '../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { structuredAgentSessionSeedCatalog } from '../../../../../src/shared/agent-session/options/model-catalog/structured-agent-session-seed-catalog'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection,
   structuredAgentSessionMessageSelection,
   structuredAgentSessionShownSnapshot
-} from '../../../../../src/shared/agent-session/options/structured-agent-session-option-view'
+} from '../../../../../src/shared/agent-session/options/view/structured-agent-session-option-view'
 import { agentChatPermissionModes } from '../../../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
-import { legacyHostPermissionDescriptor } from '../../../../../src/shared/agent-session/options/structured-agent-session-permission-option'
+import { legacyHostPermissionDescriptor } from '../../../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { StructuredAgentSessionHostSupport } from '../agent-session/mobile-structured-agent-session-host-support'
 import type { MobileStructuredAgentMutate } from '../agent-session/use-mobile-structured-agent-mutation'
@@ -23,9 +23,9 @@ import { mobileCreatedStructuredSession } from '../agent-session/mobile-created-
 import {
   structuredAgentSessionOptionAvailability,
   createStructuredAgentSessionOptionsWriteOwner
-} from '../../../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
+} from '../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
-import { lockedStructuredAgentSessionOptionSnapshot } from '../../../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
+import { lockedStructuredAgentSessionOptionSnapshot } from '../../../../../src/shared/agent-session/options/view/structured-agent-session-option-snapshot'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 

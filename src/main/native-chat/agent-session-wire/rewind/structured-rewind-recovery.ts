@@ -10,7 +10,7 @@ import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isDeepStrictEqual } from 'node:util'
 import { legacyRewindTurns, rewindJournalCut } from './structured-rewind-cut'
-import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'

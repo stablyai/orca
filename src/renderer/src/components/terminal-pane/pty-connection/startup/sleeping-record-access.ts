@@ -1,15 +1,13 @@
 import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
-import { launchConfigsEqual } from '../../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
+import { launchConfigsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-equivalence'
 import { useAppStore } from '@/store/index'
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import type { PtyConnectResult } from '../../pty-transport/pty-transport-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { findLegacyNumericSleepingRecord } from '../../../../../../shared/sleeping-record-legacy-pane-key'
 import { neutralTerminalTitle } from '../../../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-title-reset'
-import {
-  agentProviderSessionsEqual,
-  type SleepingAgentSessionRecord
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'

@@ -9,14 +9,14 @@ import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-c
 import {
   deriveNativeChatRowContent,
   nativeChatRowRendersContent
-} from '../native-chat/transcript/native-chat-row-content'
-import { withoutSentImagePromptMarkers } from '../native-chat/transcript/native-chat-image-transcript-markers'
+} from '../native-chat/transcript/row-content/native-chat-row-content'
+import { withoutSentImagePromptMarkers } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { iterateProcessOutputLines } from '../process-output-field-scanner'
 import { agentJournalSubmissionKey } from './journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from './requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from './view/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../native-chat/transcript/native-chat-transcript-projection'
-import { nativeChatTurnMembership } from '../native-chat/transcript/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../native-chat/transcript/turns/native-chat-turn-membership'
 
 /** Cap previews on the host because the rail hides prose beyond two lines. */
 export const AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS = 200

@@ -1,4 +1,4 @@
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { TrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionEventTarget } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 

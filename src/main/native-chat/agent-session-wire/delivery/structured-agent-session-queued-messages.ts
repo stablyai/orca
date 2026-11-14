@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession

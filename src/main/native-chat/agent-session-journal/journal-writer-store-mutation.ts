@@ -7,7 +7,7 @@ import {
   loadAgentSessionStoreRecordRow
 } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type Database from '../../sqlite/sync-database'
-import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import {
   applyAgentSessionStoreMutation,
   agentSessionStoreMutationKeys,

@@ -1,7 +1,7 @@
 import type { JournalInputContext, JournalInputLineage } from '../input-order/journal-input-lineage'
 import type { JournalItemEcho } from '../projection/journal-item-echo'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type * as journalTypes from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'

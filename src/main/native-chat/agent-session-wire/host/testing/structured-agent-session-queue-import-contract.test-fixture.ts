@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { seedTestJournalHistoricalRows } from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
 import {

@@ -8,9 +8,9 @@ import type { JournalSqlDatabase } from '../../agent-session-journal/database/jo
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../../agent-session-journal/journal-store-factory'
 import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import {
   attachFingerprintFields,
   journalIdentityFor,

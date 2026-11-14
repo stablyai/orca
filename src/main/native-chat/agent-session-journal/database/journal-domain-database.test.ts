@@ -28,7 +28,7 @@ import {
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { readMailWithdrawal } from '../writing/mail-withdrawal-receipts'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { migrateJournalDomainSchema } from '../journal-domain-schema'
 import { JOURNAL_DOMAIN_SCHEMA_001 } from './journal-domain-schema-001'
 

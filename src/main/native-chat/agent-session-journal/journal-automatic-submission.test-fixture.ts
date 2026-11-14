@@ -1,6 +1,6 @@
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
-import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import {
   domainLifecycleFixture,
   lifecycleFacts,

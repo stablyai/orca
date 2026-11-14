@@ -2,7 +2,7 @@ import { agentTurnVerdict } from '../../../shared/agent-status/lifecycle/agent-t
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { commandTurnsByBody } from '../../../shared/agent-session/structured-agent-session-command-entry'
 import { isStructuredAgentSessionNonRequestRow } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { nativeChatUsageLimitOfRow } from '../../../shared/native-chat/native-chat-usage-limit-cut'
@@ -10,7 +10,7 @@ import {
   orcaStopCauseOfRow,
   type NativeChatOrcaStopCut
 } from '../../../shared/native-chat/native-chat-orca-stop-cut'
-import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import { compareJournalStatusPositions, type JournalStatusItem } from './journal-status-items'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'

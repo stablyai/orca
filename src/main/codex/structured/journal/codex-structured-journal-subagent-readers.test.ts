@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/agent-session-wire'
-import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
+import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-activity'
 import { latestStructuredAgentSessionAssistantMessage } from '../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionThinking,
@@ -19,7 +19,7 @@ import { createCodexJournalTranslator } from './codex-structured-journal-transla
 import type { CodexThreadItem } from '../items/codex-thread-item-identity'
 import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-codex-children'
 const PARENT = 'thread-parent'

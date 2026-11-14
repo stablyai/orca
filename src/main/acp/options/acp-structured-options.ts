@@ -6,7 +6,7 @@ import type {
   AgentSessionSlashCommand
 } from '../../../shared/agent-session/agent-session-wire'
 
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import {
   unpickedSessionConfiguredChoice,

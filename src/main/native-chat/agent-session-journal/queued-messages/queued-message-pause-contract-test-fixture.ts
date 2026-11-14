@@ -16,7 +16,7 @@ import { parseJournalRow } from '../durable-rows/journal-row-schema'
 import { fields } from '../outcomes/journal-state-schema'
 import type { AgentSessionJournal } from '../journal-store'
 import { queuePauseHolding } from './queued-message-pause'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 export function createFixture() {

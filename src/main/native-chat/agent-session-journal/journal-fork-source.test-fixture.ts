@@ -1,7 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { insertJournalDomainItemRows } from './journal-domain-import-rows'
 

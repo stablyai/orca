@@ -1,6 +1,6 @@
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentSessionContextClear } from '../../../../shared/agent-session/agent-session-context-clear'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandTurnId } from '../../agent-session-wire/operations/structured-agent-session-command-turn'

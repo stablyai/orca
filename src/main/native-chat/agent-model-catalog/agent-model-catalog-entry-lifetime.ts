@@ -1,7 +1,7 @@
 import {
   independentAgentModelCatalog,
   usesModelSpecificAcpEfforts
-} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+} from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type { AgentModelCatalogFailures } from './agent-model-catalog-failures'
 import type { AgentModelCatalogPersistence } from './agent-model-catalog-persistence'
 import type { createAgentModelEffortDiscovery } from './agent-model-catalog-effort-discovery'

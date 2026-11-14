@@ -5,7 +5,7 @@ import type {
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalSqlScope } from './journal-sql-scope'
 import { journalDomainSubmission } from './journal-domain-status-inputs'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 
 const PAGE = 128
 

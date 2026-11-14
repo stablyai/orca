@@ -7,7 +7,7 @@ import { isLogicalClientCutoverError } from '../../../transport/connection/logic
 import { nativeChatTerminalWrite } from '../../../terminal/session/mobile-session-terminal-operations'
 import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
 import { nativeChatStopSendsSecondEscape } from '../../../../../src/shared/native-chat/native-chat-agent-support'
-import { NATIVE_CHAT_QUESTION_STEP_MS } from '../../../../../src/shared/native-chat/input/native-chat-answer-stepping'
+import { NATIVE_CHAT_QUESTION_STEP_MS } from '../../../../../src/shared/native-chat/input/questions/native-chat-answer-stepping'
 
 // Resolves false only when no Escape could have landed, so the chat may offer Stop again.
 export function useMobileNativeChatStop(args: {

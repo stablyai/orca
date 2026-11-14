@@ -4,7 +4,7 @@ import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { claudeAgentRowFacts } from '../../claude/subagents/claude-subagent-journaled-identities'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { journalDomainOutlineSource } from './journal-domain-outline-source'

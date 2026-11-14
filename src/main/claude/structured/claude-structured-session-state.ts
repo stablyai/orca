@@ -25,7 +25,7 @@ import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-dec
 import type { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from '../command-catalog/claude-at-rest-commands'
 import type { ClaudeInitProof } from './claude-structured-init-proof'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-invocation'
 import type { ClaudeInitializeFacts } from './claude-structured-session-startup'

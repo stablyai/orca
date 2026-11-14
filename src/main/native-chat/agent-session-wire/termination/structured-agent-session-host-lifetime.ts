@@ -20,7 +20,7 @@ import type {
 } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionChildExit } from './structured-agent-session-child-exit-record'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-stop-cause'
-import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   recordStructuredAgentSessionShutdownCut,
   runningRootTurnItemId

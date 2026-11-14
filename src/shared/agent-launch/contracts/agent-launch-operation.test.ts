@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { computeAgentLaunchFingerprint } from './agent-launch-operation'
-import { canonicalAgentSessionDigest } from '../../agent-session/lifecycle/agent-session-mutation-envelope'
+import { canonicalAgentSessionDigest } from '../../agent-session/lifecycle/operations/agent-session-mutation-envelope'
 
 describe('transient cwd observation is not launch intent', () => {
   const create = {

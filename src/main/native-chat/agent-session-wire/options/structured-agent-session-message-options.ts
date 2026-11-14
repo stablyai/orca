@@ -4,7 +4,7 @@ import type { AgentSessionJournalReads } from '../../agent-session-journal/journ
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 
 /** A different Codex control needs a new turn: steer has no choice parameters. */
 export async function waitsForCodexTurnOptions(

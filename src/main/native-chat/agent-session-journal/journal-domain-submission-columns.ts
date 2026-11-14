@@ -7,7 +7,7 @@ import { classifyDispatchRejection } from '../../../shared/agent-session/request
 import {
   refusedBeforeWrite,
   stoppedHistoryCandidate
-} from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+} from '../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 
 export const JOURNAL_DOMAIN_SUBMISSION_COLUMNS = [
   'submitted_at',

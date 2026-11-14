@@ -1,5 +1,5 @@
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { backgroundTaskJournalBody } from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { backgroundTaskJournalBody } from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission

@@ -40,7 +40,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
 import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const runtimeMocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock(

@@ -10,7 +10,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { projectStructuredItemToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { nativeChatToolFoldKind } from '../../../shared/native-chat/tools/native-chat-tool-fold'

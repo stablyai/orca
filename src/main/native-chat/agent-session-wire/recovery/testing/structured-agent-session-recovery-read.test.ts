@@ -10,7 +10,7 @@ import type {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { latestNativeChatUsageLimitCut } from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
-import { agentSessionRecordFixture } from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { readStructuredSessionRecovery } from '../structured-agent-session-recovery-read'
 import * as recoveryOptions from '../../../../runtime/agent-session/lifecycle/structured-session-recovery-options'
 

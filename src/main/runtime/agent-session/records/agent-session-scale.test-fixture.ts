@@ -2,11 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, vi } from 'vitest'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener

@@ -6,7 +6,7 @@ import { orchestrationMigrationData } from '../../../shared/orchestration/orches
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from '../identity/terminal-identity'
-import { injectedSessionAddress } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
+import { injectedSessionAddress } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 
 export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {

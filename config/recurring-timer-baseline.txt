@@ -45,7 +45,7 @@
 1 src/main/plugins/catalog/plugin-auto-updater.ts
 1 src/main/plugins/catalog/plugin-kill-list-service.ts
 1 src/main/plugins/installation/plugin-git-repository.ts
-1 src/main/plugins/plugin-service-housekeeping.ts
+1 src/main/plugins/development/plugin-service-housekeeping.ts
 1 src/main/rate-limits/service/service-polling.ts
 1 src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts

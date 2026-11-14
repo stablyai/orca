@@ -9,7 +9,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalThreadGoal } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult

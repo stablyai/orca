@@ -19,7 +19,7 @@ import { seedTestJournalHistoricalRows } from '../replay/journal-historical-inpu
 import {
   agentSessionJournalProviderHandle,
   claudeProviderHandle
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export function registerJournalRowContextUsageTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

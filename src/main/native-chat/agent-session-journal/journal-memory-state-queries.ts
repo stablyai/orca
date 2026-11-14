@@ -4,7 +4,7 @@ import { latestAgentSessionContextClearSequence } from '../../../shared/agent-se
 import { newestStructuredAgentSessionTurnBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { memoryJournalEchoClaimant } from './projection/journal-item-echo'
 import { memoryLatestAcceptedSendUnopened } from './context-epochs/journal-stop-turn-end'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import { journalInputPresentationMember } from './input-order/journal-input-obligations'
 import { readJournalUsageLimitContinueIdentity } from './journal-status-cuts'

@@ -5,7 +5,7 @@ import {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import '../../providers/structured-agent-session-adapter'
 import { AgentSessionAcquisitionRootExitObservedError } from '../../acquisition/structured-agent-session-acquisition-errors'
-import { withNativeChatCutTurnNotices } from '../../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../../../shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -19,7 +19,7 @@ import {
   openTestAgentSessionRecordStore,
   openTestAgentSessionDatabase
 } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { parseAgentSessionResumeMarker } from '../../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import { parseAgentSessionResumeMarker } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import * as reducer from '../../../agent-session-journal/projection/journal-reducer'

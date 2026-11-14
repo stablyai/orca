@@ -3,7 +3,7 @@ import { Text } from 'react-native'
 import {
   getNativeChatMessageDay,
   getNativeChatMessageTimeFormatter
-} from '../../../../../src/shared/native-chat/transcript/native-chat-message-time'
+} from '../../../../../src/shared/native-chat/transcript/messages/native-chat-message-time'
 import { useSharedNowSnapshot } from '../../../hooks/use-now'
 import { colors, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

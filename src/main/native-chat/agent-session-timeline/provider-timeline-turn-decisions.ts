@@ -3,7 +3,7 @@ import {
   type AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { agentJournalTurnRowReservedBytes } from './agent-journal-turn-row-revision'
 import { providerTimelineRequest } from './provider-timeline-context'
 import type {

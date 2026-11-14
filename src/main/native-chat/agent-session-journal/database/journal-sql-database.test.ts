@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openJournalDatabase } from './journal-database'
 import { journalDatabasePath } from './journal-host-database'
 import { JOURNAL_DOMAIN_SCHEMA_VERSION } from './journal-domain-migrations'
@@ -20,7 +20,7 @@ import {
   storedTestAgentSessionRecord
 } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { CommandReceiptExistsError } from '../writing/command-receipt-transaction'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 
 const roots: string[] = []
 const databases: JournalSqlDatabase[] = []

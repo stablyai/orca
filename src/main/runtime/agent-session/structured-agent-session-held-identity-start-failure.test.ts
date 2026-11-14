@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import type * as TimersPromises from 'node:timers/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import {
   hostTestAttachParams,
   hostTestMessage,

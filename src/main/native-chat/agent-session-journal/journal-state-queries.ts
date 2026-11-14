@@ -6,7 +6,7 @@ import type {
 import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalInputCard, JournalInputEntry } from './input-order/journal-input-lineage'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
-import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 
 /** Each live range query names its population; whole-state restore/export remains memory-only. */
 export type JournalStateQueries = {

@@ -1,11 +1,11 @@
 import { usableJournalHistoryOrigin } from '../../agent-session-journal/context-epochs/journal-history-origin'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type {
   AgentSessionRewindParams,
   AgentSessionRewindRecord,
   AgentSessionRewindResult
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+} from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { runWithReadyStructuredAgentSessionOperation } from '../operations/structured-agent-session-ready-operation'

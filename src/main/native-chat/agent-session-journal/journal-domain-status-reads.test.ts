@@ -6,7 +6,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import {
   codexProviderHandle,
   agentSessionJournalProviderHandle
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { JournalRow } from './durable-rows/journal-row-schema'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import { openJournalDatabase, runJournalTransaction } from './database/journal-database'

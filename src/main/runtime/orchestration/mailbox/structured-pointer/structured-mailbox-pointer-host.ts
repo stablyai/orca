@@ -7,7 +7,7 @@ import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-sessio
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
 import type { StructuredSessionGateFacts } from './structured-session-pointer-delivery'
 import {
@@ -16,7 +16,7 @@ import {
 } from '../../turn-delivery/send-agent-turn'
 import { subscribeForRedrive } from './structured-session-journal-redrive'
 import type { JournalPublication } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../../../shared/agent-session/agent-session-context-clear'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */

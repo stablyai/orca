@@ -1,7 +1,7 @@
 import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
 import { z } from 'zod'
 import { AgentJournalTurnScopeSchema } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
-import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalHistoryOrigin } from '../context-epochs/journal-history-origin'

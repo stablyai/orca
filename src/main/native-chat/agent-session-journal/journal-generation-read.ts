@@ -6,7 +6,7 @@ import type {
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalSqlScope } from './journal-sql-scope'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { readJournalDomainGeneration } from './journal-domain-generation-reads'
 
 export type JournalGenerationRead = {

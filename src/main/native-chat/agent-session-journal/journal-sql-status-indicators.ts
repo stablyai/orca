@@ -1,6 +1,6 @@
 import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import { stopIsAPersons, type JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { readJournalSqlFirstInputId } from './journal-sql-status-inputs'

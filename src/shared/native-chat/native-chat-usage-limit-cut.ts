@@ -1,6 +1,6 @@
 // Derive usage-limit cuts from journal rows on each read for Continue; never store derived state.
 
-import { readAgentJournalTurn } from '../agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../agent-session/lifecycle/records/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
 import { readAgentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
 import type {
@@ -8,7 +8,7 @@ import type {
   AgentJournalSubmission
 } from '../agent-session/journal/agent-session-journal-types'
 import type { AgentSessionUsageLimit } from '../agent-session/failures/agent-session-usage-limit'
-import type { UsageLimitContinueIdentity } from '../agent-session/lifecycle/agent-session-usage-limit-continue'
+import type { UsageLimitContinueIdentity } from '../agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import { findInNativeChatTurn, latestNativeChatTurnSinceRequest } from './native-chat-orca-stop-cut'
 
 /** What the agent is sent when the person continues a turn its usage limit ended. */

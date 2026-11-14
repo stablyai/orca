@@ -2,7 +2,7 @@ import { readTestHostJournal } from '../../../native-chat/agent-session-journal/
 // Reopened chats publish before initialize; later startup failure must reach the visible transcript.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { hostTestMessage } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { waitForStructuredAgentSessionRecovery } from '../structured-agent-session-runtime'

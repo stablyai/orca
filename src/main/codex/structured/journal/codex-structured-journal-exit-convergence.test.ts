@@ -8,13 +8,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener
@@ -28,7 +28,7 @@ import {
 } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-child-exit'
 import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { structuredAgentSessionHandoverAuthority } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-handing-over'
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { applyAgentSessionRecordCommand } from '../../../runtime/agent-session/records/agent-session-record-command'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { handleCodexSessionExit } from '../session-lifecycle/codex-structured-session-close'

@@ -1,5 +1,5 @@
 import type Database from '../../sqlite/sync-database'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { JournalWriterCommand } from './journal-writer-command'
 import { applyJournalDomainContextCommand } from './journal-domain-context-command'
 import { finishJournalSqlCommand } from './journal-sql-command-result'

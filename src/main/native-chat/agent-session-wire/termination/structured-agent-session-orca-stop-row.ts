@@ -2,14 +2,14 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import {
   AGENT_SESSION_ORCA_STOP_PRESENTATION,
   isAgentSessionOrcaStopCause
-} from '../../../../shared/agent-session/lifecycle/agent-session-orca-stop'
-import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-orca-stop'
+import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
 } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { orcaShutdownRowClientMessageId } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'

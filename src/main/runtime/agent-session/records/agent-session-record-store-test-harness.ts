@@ -3,12 +3,12 @@ import { afterAll } from 'vitest'
 /** Centralize store fixtures in the worker-owned journal DB; closeTestAgentSessionRecordStores owns their cleanup. */
 
 import { resolve } from 'node:path'
-import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
+import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
+import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/leases/agent-session-legacy-handoff-lease'
 import {
   encodePersistedAgentSessionProviderHandle,
   isAgentSessionProviderHandle
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   initializeJournalDomainDatabase,

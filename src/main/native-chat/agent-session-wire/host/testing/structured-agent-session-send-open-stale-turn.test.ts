@@ -4,8 +4,8 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/
 
 import { cp, rm } from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   openTestAgentSessionRecordStore,
   openTestAgentSessionDatabase

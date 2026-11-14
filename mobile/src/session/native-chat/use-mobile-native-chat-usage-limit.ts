@@ -13,7 +13,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentJournalCursor } from '../../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { mobileStructuredSessionStatusFeed } from './agent-session/mobile-structured-session-status-feed'
 import { callAgentSession } from './agent-session/mobile-structured-agent-session-rpc'

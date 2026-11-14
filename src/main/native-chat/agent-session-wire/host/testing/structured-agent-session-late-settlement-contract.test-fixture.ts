@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import {
@@ -27,7 +27,7 @@ import {
 } from './structured-agent-session-host-test-data.test-fixture'
 import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-fixture'
 

@@ -3,7 +3,7 @@ import {
   agentJournalItemKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   forkDependencies,
   omitForkPresentation

@@ -7,7 +7,7 @@ import {
 import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { journalDomainStopNote, refreshJournalDomainStopNotes } from './journal-domain-stop-notes'
 import {

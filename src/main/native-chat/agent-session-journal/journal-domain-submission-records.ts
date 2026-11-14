@@ -13,7 +13,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'

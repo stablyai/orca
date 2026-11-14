@@ -18,8 +18,8 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type {
   AskAnswerSelection,
   NativeChatAnswerSource
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+} from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'

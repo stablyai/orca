@@ -402,7 +402,7 @@
 2 test-no-wall-clock:src/main/daemon/server/testing/daemon-idle-shutdown.test.ts
 2 test-no-wall-clock:src/main/daemon/shell-readiness/testing/terminal-shell-recovery-barrier.test.ts
 1 test-no-wall-clock:src/main/daemon/terminal-host/testing/terminal-session-teardown.test.ts
-2 test-no-wall-clock:src/main/daemon/transport/framing/testing/daemon-stream-binary-negotiation.test.ts
+1 test-no-wall-clock:src/main/daemon/transport/framing/testing/daemon-stream-binary-negotiation.test.ts
 2 test-no-wall-clock:src/main/external-conversations/external-conversation-cancel-settlement.test.ts
 3 test-no-wall-clock:src/main/external-conversations/external-conversation-cancel.test.ts
 2 test-no-wall-clock:src/main/git/command-runner/host-routing/git-command-resolution-windows-checkout.test.ts
@@ -448,7 +448,7 @@
 4 test-no-wall-clock:src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts
 5 test-no-wall-clock:src/main/rate-limits/service/service-account-target-selection.test.ts
 1 test-no-wall-clock:src/main/rate-limits/service/service-cursor-usage.test.ts
-3 test-no-wall-clock:src/main/rate-limits/service/service-minimax-usage.test.ts
+1 test-no-wall-clock:src/main/rate-limits/service/service-minimax-usage.test.ts
 3 test-no-wall-clock:src/main/rate-limits/service/service-zcode-usage.test.ts
 1 test-no-wall-clock:src/main/runtime/agent-session/lifecycle/structured-codex-child-work-runtime.test.ts
 2 test-no-wall-clock:src/main/runtime/agent-session/structured-agent-session-held-signal.test.ts

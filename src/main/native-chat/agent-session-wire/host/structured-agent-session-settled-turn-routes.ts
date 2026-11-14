@@ -1,6 +1,6 @@
 import type { JournalWriterCommit } from '../../agent-session-journal/journal-writer-changes'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 type SettledTurnsListener = (turnItemIds: readonly string[]) => void

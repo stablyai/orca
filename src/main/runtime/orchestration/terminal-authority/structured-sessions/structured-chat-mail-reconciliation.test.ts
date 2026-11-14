@@ -1,7 +1,7 @@
 import { queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
 import { busyChat, settleTurn } from './structured-chat-mail-custody.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { JournalSqlOwner } from '../../../../native-chat/agent-session-journal/journal-sql-owner'

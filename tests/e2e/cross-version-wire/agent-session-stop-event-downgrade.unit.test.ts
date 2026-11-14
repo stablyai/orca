@@ -11,7 +11,7 @@ import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import Database from '../../../src/main/sqlite/sync-database'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import { readTestJournalItems } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'

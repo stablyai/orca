@@ -7,7 +7,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import {
   agentSessionJournalProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { JournalRow } from './durable-rows/journal-row-schema'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 

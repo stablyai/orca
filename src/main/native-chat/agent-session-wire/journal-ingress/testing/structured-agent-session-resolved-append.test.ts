@@ -16,7 +16,7 @@ import { createDeferredStructuredAgentSessionEventSink } from '../structured-age
 
 import type { StructuredAgentSessionEventTarget } from '../structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger.test-fixture'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const ROW: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'turn-row' }
 const RUNNING: AgentJournalTurnItem = {

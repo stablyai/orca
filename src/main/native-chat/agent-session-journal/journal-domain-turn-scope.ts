@@ -6,7 +6,7 @@ import type {
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { JournalDerivedTurnScope } from './projection/journal-derived-turn-scope'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 
 type Target = { sessionId: string; epoch: string }

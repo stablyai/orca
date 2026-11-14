@@ -12,7 +12,7 @@ import type { AgentJournalItemIdentity } from '../../../shared/agent-session/jou
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/writing/journal-lifecycle-mutation'
 import { lostLiveWorkJournalBody } from '../agent-session-journal/item-lifecycle/journal-subagent-liveness'
 import {
