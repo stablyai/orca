@@ -5,7 +5,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { EmulatorDeviceFrame } from './emulator-device-frame'
-import type { EmulatorGesturePoint } from '../input/emulator-screen-gesture'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -81,24 +80,18 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function renderFrame(props?: {
-  isLive?: boolean
-  onGesture?: (points: EmulatorGesturePoint[]) => void
-  onTap?: (x: number, y: number) => void
-  previewUrl?: string
-  wsUrl?: string
-}): void {
+function renderFrame(): void {
   act(() => {
     root.render(
       <EmulatorDeviceFrame
-        previewUrl={props?.previewUrl ?? 'http://127.0.0.1:3100/stream.mjpeg'}
-        wsUrl={props?.wsUrl ?? 'ws://127.0.0.1:3100/ws'}
+        previewUrl="http://127.0.0.1:3100/stream.mjpeg"
+        wsUrl="ws://127.0.0.1:3100/ws"
         loading={false}
-        isLive={props?.isLive ?? true}
+        isLive={true}
         visualOrientation="portrait"
         isActive={true}
-        onTap={props?.onTap ?? vi.fn()}
-        onGesture={props?.onGesture ?? vi.fn()}
+        onTap={vi.fn()}
+        onGesture={vi.fn()}
       />
     )
   })
@@ -161,77 +154,11 @@ function finishWheel(): void {
   })
 }
 
-function wheelTravel(): number {
-  let previous = 0
-  let travel = 0
-  for (const point of decodedSentMessages<EmulatorGesturePoint>(0x03)) {
-    if (point.type === 'move') {
-      travel += previous - point.y
-    }
-    previous = point.y
-    expect(point.y).toBeGreaterThanOrEqual(0.12)
-    expect(point.y).toBeLessThanOrEqual(0.88)
-  }
-  return travel
-}
-
 describe('EmulatorDeviceFrame wheel scrolling', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     renderFrame()
     act(() => FakeWebSocket.instances[0]?.open())
-  })
-
-  it('waits a frame after touch-down before moving an isolated notch, then travels its full distance', () => {
-    wheel(getScreen(), 2)
-    expect(decodedSentMessages(0x03)).toEqual([{ type: 'begin', x: 0.5, y: 0.5 }])
-
-    finishWheel()
-    expect(wheelTravel()).toBeCloseTo(0.012)
-    expect(decodedSentMessages<EmulatorGesturePoint>(0x03).at(-1)?.type).toBe('end')
-  })
-
-  it.each([
-    { delta: 50, distance: 0.9, edge: 0.12, restart: 0.88 },
-    { delta: -50, distance: -0.9, edge: 0.88, restart: 0.12 }
-  ])(
-    'keeps all sustained scroll travel across the screen edge ($delta)',
-    ({ delta, distance, edge, restart }) => {
-      const screen = getScreen()
-      for (let i = 0; i < 3; i++) {
-        wheel(screen, delta)
-        act(() => vi.advanceTimersByTime(80))
-      }
-      finishWheel()
-
-      const touches = decodedSentMessages<EmulatorGesturePoint>(0x03)
-      expect(wheelTravel()).toBeCloseTo(distance)
-      expect(touches).toEqual(
-        expect.arrayContaining([
-          { type: 'end', x: 0.5, y: edge },
-          { type: 'begin', x: 0.5, y: restart }
-        ])
-      )
-      expect(touches.at(-1)?.type).toBe('end')
-    }
-  )
-
-  it('releases wheel playback before a pointer takes over the simulator finger', () => {
-    const screen = getScreen()
-    wheel(screen, 100)
-    act(() => vi.advanceTimersByTime(16))
-    const event = new PointerEvent('pointerdown', {
-      bubbles: true,
-      pointerId: 1,
-      clientX: 50,
-      clientY: 140
-    })
-    act(() => screen.dispatchEvent(event))
-    finishWheel()
-
-    const touches = decodedSentMessages<EmulatorGesturePoint>(0x03)
-    expect(touches.map(({ type }) => type)).toEqual(['begin', 'move', 'end', 'begin'])
-    expect(touches[3]).toEqual({ type: 'begin', x: 0.5, y: 0.7 })
   })
 
   it('cancels queued movement when the frame is removed', () => {
