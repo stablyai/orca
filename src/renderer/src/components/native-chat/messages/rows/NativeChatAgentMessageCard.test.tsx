@@ -208,6 +208,8 @@ vi.mock('sonner', async (importOriginal) => {
   }
 })
 beforeEach(() => {
+  // happy-dom's observer never reports, so let transcript images mount as if on screen.
+  vi.stubGlobal('IntersectionObserver', undefined)
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(2_000_000)
   resetSenderStore()
