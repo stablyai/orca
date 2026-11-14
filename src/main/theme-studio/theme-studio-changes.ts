@@ -121,7 +121,7 @@ export async function checkDraft(
         }
       )
     }
-    const label = `Fix ${fixed.join(', ')}`
+    const label = `Fix ${fixed.length} contrast finding${fixed.length === 1 ? '' : 's'}`
     core.session.commit(
       applyThemeStudioPatch(core.session.requireDraft(), patch).draft,
       label,

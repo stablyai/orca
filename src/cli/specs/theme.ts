@@ -3,7 +3,7 @@ import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boun
 import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 
 const RESULT_NOTE =
-  'Every change returns the draft revision, what changed, and `report`: per mode, the `issues` the contrast check found (tokens it leaves unpainted, the failing pair, `ratio` and `min`) with a `fix` value that passes. `report` is null when the window did not paint in time.'
+  'Every change returns the draft revision, what changed, `paint`, and `report`: per mode, the `findings` of the contrast check, each with an `id`, its `effect`, the failing pair with `ratio` and `min`, and `fixes` that pass. `report` is null when the window did not paint in time.'
 const MODE_NOTE =
   '--mode light|dark|both picks the variants to change; without it, the mode Orca shows now.'
 const CONCURRENCY_NOTE =
@@ -120,8 +120,9 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['theme', 'check'],
     summary: "Check the draft's contrast in both modes, and optionally fix it",
-    usage: 'orca theme check [--fix] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'if-revision', 'if-revision', 'fix'],
+    usage: 'orca theme check [--fix [--finding <id>]...] [--if-revision <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'if-revision', 'fix', 'finding'],
+    repeatableFlags: ['finding'],
     notes: [
       "The same check Orca runs before painting any theme: text keeps 4.5:1 on its surface (3:1 for file status colors), focus rings 2:1, borders stay visible. A token that fails shows Orca's built-in color instead, so a draft with issues looks different from what you set.",
       'Each finding has a stable `id`, the `effect` the person will see, up to two `fixes` (text-side and surface-side, each with `set`, `ratio` and `deltaE`, smallest change first, lightness only) and a ready `command`.',
