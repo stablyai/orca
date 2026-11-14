@@ -17,6 +17,7 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
     reportsFailure: false,
     explainsTurn: false,
     sendsBack: false,
+    steersTurn: false,
     ...overrides
   }
 }
@@ -163,5 +164,21 @@ describe('nativeChatTurnFold', () => {
     })
     expect([...foldedRows]).toEqual([1])
     expect([...nativeChatTurnAnswerRows(rows)]).toEqual([3])
+  })
+
+  it('keeps the reply to a steered message beside the turn’s final answer', () => {
+    const prompt = message('prompt', 'user', 'Do the task.')
+    const steer = message('steer', 'user', 'What port is that?')
+    const steerReply = message('steer-reply', 'assistant', 'The port is 8080.')
+    const finalReply = message('final', 'assistant', 'The task is done.')
+    const messages = [prompt, WORK, steer, steerReply, WORK, finalReply]
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'prompt', false))
+    const { foldedRows } = nativeChatTurnFold({
+      rows,
+      settledTurnKeys: new Set(['prompt']),
+      expandedTurnKeys: NONE
+    })
+    expect([...nativeChatTurnAnswerRows(rows)].sort()).toEqual([3, 5])
+    expect([...foldedRows].sort()).toEqual([1, 4])
   })
 })
