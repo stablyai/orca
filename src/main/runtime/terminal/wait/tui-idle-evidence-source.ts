@@ -35,6 +35,8 @@ export type TuiIdleEvidenceSource = {
   readRuledScreen?(ptyId: string | null | undefined): RuledScreen | null
   /** The PTY's quiet clock: its last output, else when main began receiving its silent stream. */
   getOutputClockAt?(ptyId: string | null | undefined): number | null
+  /** Whether mail delivery would type into this pane now (drafts, prompts and overlays hold it). */
+  isSettledForDelivery?(ptyId: string): boolean
 }
 
 /** One clock per terminal, read by ptyId. */

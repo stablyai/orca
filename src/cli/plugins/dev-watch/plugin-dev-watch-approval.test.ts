@@ -1,7 +1,7 @@
 import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 
-import '../../runtime/types'
+import '../../runtime/connection/types'
 import { createTerminalConfirm } from './plugin-dev-watch-approval'
 
 import './plugin-dev-watch-loop'

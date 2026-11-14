@@ -1,5 +1,15 @@
 import { EventEmitter } from 'node:events'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Callback fixtures exercise native execFile; Mac spawn capture has real-child coverage.
+const restorePlatform = vi.hoisted(() => {
+  const platform = process.platform
+  if (platform === 'darwin') {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+  }
+  return () => Object.defineProperty(process, 'platform', { value: platform })
+})
+afterAll(restorePlatform)
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
 vi.mock('node:child_process', () => ({

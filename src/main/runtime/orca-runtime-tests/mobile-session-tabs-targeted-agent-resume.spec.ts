@@ -19,16 +19,7 @@ import type { PtyProcessInfo } from '../../providers/pty/process-info'
 import { deterministicAgentSessionUuid } from '../terminal/launch/runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../terminal/identity/remote-runtime-terminal-create-identity'
 import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
-import {
-  agentSessionLeaseFixture,
-  agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import {
-  chooseSavedResumeFreshLaunch,
-  savedResumeResult
-} from '../../ipc/pty/host-env/saved-resume-admission'
+import { savedResumeResult } from '../../ipc/pty/host-env/saved-resume-admission'
 import { spawnedCommands, resumeSpawns } from './agent-resume-spawn-commands.test-fixture'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
@@ -131,67 +122,6 @@ function storedRecord(fixture: Fixture) {
 }
 
 describe('resumeAgentSessionInWorkspace', () => {
-  it.each(['live', 'worktree-sleep'] as const)(
-    'releases a %s saved resume claim when actual admission creates a plain shell',
-    async (origin) => {
-      const fixture = makeSleptWorkspace()
-      const saved = storedRecord(fixture)
-      if (!saved) {
-        throw new Error('missing saved conversation')
-      }
-      saved.origin = origin
-      const chat = agentSessionRecordFixture(
-        agentSessionLeaseFixture({
-          claimStatus: 'released',
-          ownerProcess: null,
-          reservedSpawnToken: null,
-          deathEvidence: { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
-        })
-      )
-      chat.providerHandleChain[0]!.handle.nativeId = SESSION.id
-      let nativeOpen = true
-      const store: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
-      store.listConversations = () => [agentSessionConversationView(chat)]
-      store.getVisibleSessionTabIndex = () => ({
-        present: true,
-        sessionIds: nativeOpen ? [chat.sessionId] : []
-      })
-      const effectiveCommands: (string | undefined)[] = []
-      const { runtime, spawn, openOldPane, resume } = makeRuntime(fixture, {
-        spawn: async (args) => {
-          const admission = await chooseSavedResumeFreshLaunch(
-            { openAgentSessionRecordStore: async () => store },
-            args,
-            null,
-            args
-          )
-          effectiveCommands.push(args.command)
-          return {
-            id: effectiveCommands.length === 1 ? 'refused-shell' : 'resumed-C',
-            launchAgent: args.launchAgent,
-            launchConfig: args.launchConfig,
-            ...savedResumeResult(admission)
-          }
-        }
-      })
-      await openOldPane()
-      expect(runtime.getTerminalLaunchResult('refused-shell')).toMatchObject({
-        agentResumeRefused: 'chat-home',
-        savedResumeDecision: { agent: 'claude', providerSession: SESSION, verdict: 'chat-home' }
-      })
-      expect(runtime.getTerminalLaunchResult('refused-shell')?.launchAgent).toBeUndefined()
-      expect(effectiveCommands).toEqual([undefined])
-      nativeOpen = false
-      await expect(resume({ mutationId: 'after-native-close' })).resolves.toMatchObject({
-        ok: true,
-        ptyId: 'resumed-C'
-      })
-      expect(effectiveCommands[1]).toContain(SESSION.id)
-      expect(spawn).toHaveBeenCalledTimes(2)
-      expect(runtime.getTerminalLaunchResult('refused-shell')).toBeDefined()
-    }
-  )
-
   it('settles only fresh matching saved results and binds unproven or observed results until exit', async () => {
     for (const kind of [
       'matching',

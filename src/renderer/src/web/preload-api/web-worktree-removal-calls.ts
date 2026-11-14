@@ -1,7 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archive-hook-removal-gate'
+import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import { callRuntimeResult } from './web-runtime-calls'
 import { invalidateRuntimeWorktreeCaches } from './web-runtime-session'

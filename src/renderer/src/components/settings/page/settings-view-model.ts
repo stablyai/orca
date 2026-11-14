@@ -1,3 +1,4 @@
+import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
 import { useCallback } from 'react'
 import type { SettingsNavGroup } from '@/components/settings/navigation/settings-navigation-types'
 import { translate } from '@/i18n/i18n'
@@ -48,6 +49,7 @@ export function useSettingsNavigationActions(
       if (sectionId !== activeSectionId && !(await confirmDiscardSourceControlAiPromptChanges())) {
         return
       }
+      cancelSettingsListReveal()
       const container = contentScrollRef.current
       if (container) {
         container.scrollTo({ top: 0 })
@@ -90,6 +92,7 @@ export function useSettingsNavigationActions(
         }
         releaseNativeAccounts()
       }
+      cancelSettingsListReveal()
       setHighlightedSettingsTarget(null)
       pendingNavSectionRef.current = sectionId
       pendingScrollTargetRef.current = result.targetId
@@ -134,12 +137,12 @@ export function useSettingsNavigationActions(
 export type SettingsNavigationActions = ReturnType<typeof useSettingsNavigationActions>
 
 export function buildSettingsViewModel(
-  model: SettingsStoreModel,
-  navigation: SettingsNavigationModel,
+  model: Pick<SettingsStoreModel, 'repos' | 'settingsSearchQuery' | 'activeSectionId'>,
+  navigation: Pick<SettingsNavigationModel, 'visibleNavSections' | 'neededSectionIds'>,
   t: Translate = translate
 ) {
   const generalNavSections = navigation.visibleNavSections.filter(
-    (section) => !section.id.startsWith('repo-')
+    (section) => section.group !== 'repositories'
   )
   const generalNavGroupDefinitions = getSettingsNavGroupDefinitionsForSearch(
     navigation.visibleNavSections,
@@ -153,7 +156,7 @@ export function buildSettingsViewModel(
     }))
     .filter((group) => group.sections.length > 0 || group.id === 'setup')
   const repoNavSections = navigation.visibleNavSections
-    .filter((section) => section.id.startsWith('repo-'))
+    .filter((section) => section.group === 'repositories')
     .map((section) => {
       const repo = model.repos.find((entry) => entry.id === section.id.replace('repo-', ''))
       return {

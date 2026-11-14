@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -48,6 +49,8 @@ export async function cleanUpDictatedText(
   }
   let stopped = false
   const cwd = cleanupFolder()
+  // Cleanups share the folder, so each gets its own cancel lane; a skip or timeout stops only its own agent.
+  const laneId = randomUUID()
   try {
     const resolved = resolveTextGenerationParams(settings, undefined, 'dictationCleanup')
     if (!resolved.ok) {
@@ -70,7 +73,7 @@ export async function cleanUpDictatedText(
       voice: settings.voice,
       terms: input.terms,
       params,
-      target: { kind: 'local', cwd, ...(prepared.env ? { env: prepared.env } : {}) }
+      target: { kind: 'local', cwd, laneId, ...(prepared.env ? { env: prepared.env } : {}) }
     })
     const outcome = await Promise.race([generation, stop.promise])
     if (typeof outcome === 'string') {
@@ -99,7 +102,7 @@ export async function cleanUpDictatedText(
     }
     // Stops the agent still running after a timeout or a skip.
     if (stopped) {
-      cancelLocalGeneration('dictation-cleanup', cwd)
+      cancelLocalGeneration('dictation-cleanup', cwd, laneId)
     }
   }
 }

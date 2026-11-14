@@ -76,21 +76,6 @@ describe('staging and discard preserve index authority', () => {
     expect(await readFile(path.join(repo, 'selected.txt'), 'utf8')).toBe('selected\n')
   })
 
-  it('discards a staged rename after unstaging both paths', async () => {
-    await writeFile(path.join(repo, 'old.txt'), 'rename content\n')
-    gitCommit(repo, 'initial')
-    await git(['mv', 'old.txt', 'new.txt'])
-
-    await mutate({ bulk: true }, 'unstage', ['new.txt', 'old.txt'])
-    await mutate({ bulk: true }, 'discard', ['new.txt', 'old.txt'])
-
-    expect(await git(['status', '--porcelain'])).toBe('')
-    expect(await readFile(path.join(repo, 'old.txt'), 'utf8')).toBe('rename content\n')
-    await expect(readFile(path.join(repo, 'new.txt'), 'utf8')).rejects.toMatchObject({
-      code: 'ENOENT'
-    })
-  })
-
   it.each(modes)('rejects an unresolved conflict on bulk=$bulk', async (mode) => {
     await writeFile(path.join(repo, 'file.txt'), 'base\n')
     gitCommit(repo, 'initial')

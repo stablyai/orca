@@ -77,5 +77,3 @@ describe('findUncollectedTestFiles', () => {
     ])
   })
 })
-
-// Why: cloud/ is outside the lint and format trees, so only these paths bring the check to a cloud-only diff.

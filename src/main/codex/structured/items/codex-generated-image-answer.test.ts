@@ -4,7 +4,8 @@ import { codexNonMessageIdentity } from './codex-thread-item-identity'
 import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { nativeChatGeneratedImageAnswers } from '../../../../shared/native-chat/transcript/native-chat-generated-image-answers'
+import { nativeChatGeneratedImageAnswers } from '../../../../shared/native-chat/transcript/images/native-chat-generated-image-answers'
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 
 it.each(['complete', 'sparse'])(
   'enriches %s authoritative saved generation once and preserves the result through replay',
@@ -42,7 +43,7 @@ it.each(['complete', 'sparse'])(
       ]
     }
     await c.open([], { returnedTurns: [supplied], paginate: false })
-    const saved = c.journal.item(key)!
+    const saved = (await c.journal.reads.item(key))!
     expect(saved.body).toEqual({
       kind: 'message',
       role: 'assistant',
@@ -51,7 +52,7 @@ it.each(['complete', 'sparse'])(
         { type: 'image-ref', path: '/tmp/elephant.png' }
       ]
     })
-    const messages = projectStructuredItemsToNativeChat(c.journal.snapshot().items)
+    const messages = projectStructuredItemsToNativeChat(await readTestJournalItems(c.journal))
     const projected = nativeChatGeneratedImageAnswers(
       messages,
       messages.map(() => 'turn-1'),
@@ -67,6 +68,6 @@ it.each(['complete', 'sparse'])(
       { type: 'image-ref', path: '/tmp/elephant.png' }
     ])
     await c.open([], { returnedTurns: [supplied], paginate: false })
-    expect(c.journal.item(key)).toEqual(saved)
+    expect(await c.journal.reads.item(key)).toEqual(saved)
   }
 )

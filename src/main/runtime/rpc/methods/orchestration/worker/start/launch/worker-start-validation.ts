@@ -2,7 +2,7 @@ import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
-import type { FederationAttachStartInput } from '../../../../../../../../shared/rpc-contract/orchestration-federation-start-params'
+import type { FederationAttachStartInput } from '../../../../../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createWorkerLaunchReceipt,

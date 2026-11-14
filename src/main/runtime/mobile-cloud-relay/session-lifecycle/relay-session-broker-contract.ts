@@ -30,6 +30,8 @@ export type RelaySessionBrokerOptions = {
   mobileSocketWiring: MobileSocketWiring
   isCurrent: () => boolean
   refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
+  /** The broker gave up on token refresh and closed; its owner should reconcile now, not at a tick. */
+  onSelfClose?: () => void
   resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
   measureRegionDecision?: (window: RelayRegionWindow) => Promise<RelayRegionDecision>
   onAssignedCellActive?: (cellUrl: string) => void

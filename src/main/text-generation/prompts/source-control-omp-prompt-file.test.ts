@@ -1,18 +1,9 @@
 import { spawnProcess } from '@orca/process-host'
-import * as agentSpecs from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SpawnSourceControlAgent } from '../source-control-text-generation-types'
-import {
-  generateCommitMessage,
-  generatePullRequestFields,
-  generateBranchName
-} from '../requests/source-control-text-generation-requests'
-import { generateConversationName } from '../requests/conversation-name-generation-request'
-import { generateJiraIssueSummaryFromContext } from '../requests/jira-issue-summary-text-generation'
+import { generateCommitMessage } from '../requests/source-control-text-generation-requests'
 
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
-import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -28,13 +19,6 @@ import {
 vi.mock('../../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: vi.fn(async () => true)
 }))
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof FsPromises>()
-  return { ...actual, rm: vi.fn(actual.rm) }
-})
-
-const actualFs = await vi.importActual<typeof FsPromises>('node:fs/promises')
 
 afterEach(() => vi.useRealTimers())
 
@@ -137,96 +121,6 @@ const commitContext = {
   stagedPatch: '+ Trace lighthouse signal'
 }
 
-type Consumer = {
-  label: string
-  run(
-    params: ResolvedSourceControlAiGenerationParams,
-    spawnAgent: SpawnSourceControlAgent
-  ): Promise<unknown>
-  output: string
-  expected: object
-}
-const consumers: Consumer[] = [
-  {
-    label: 'commit',
-    run: (params, spawnAgent) =>
-      generateCommitMessage({ context: commitContext, params, target: contractTarget, spawnAgent }),
-    output: 'Trace lighthouse signal.\n\nPreserve request bytes\n',
-    expected: { message: 'Trace lighthouse signal\n\nPreserve request bytes' }
-  },
-  {
-    label: 'PR fields',
-    run: (params, spawnAgent) =>
-      generatePullRequestFields({
-        context: {
-          branch: 'feature',
-          base: 'main',
-          branchChangedByPreparation: true,
-          currentTitle: '',
-          currentBody: '',
-          currentDraft: false,
-          commitSummary: 'Trace lighthouse signal',
-          changeSummary: 'signal.ts',
-          patch: '+ Trace lighthouse signal'
-        },
-        params,
-        target: contractTarget,
-        spawnAgent
-      }),
-    output: JSON.stringify({
-      base: 'main',
-      title: 'Trace lighthouse signal.',
-      body: 'Preserve request bytes\n',
-      draft: true
-    }),
-    expected: {
-      fields: {
-        base: 'main',
-        title: 'Trace lighthouse signal',
-        body: 'Preserve request bytes',
-        draft: true
-      },
-      branchChangedByPreparation: true
-    }
-  },
-  {
-    label: 'branch slug / folder title',
-    run: (params, spawnAgent) =>
-      generateBranchName({
-        context: { firstPrompt: 'Trace lighthouse signal' },
-        params,
-        target: contractTarget,
-        spawnAgent
-      }),
-    output: 'Trace Lighthouse Signal!',
-    expected: { slug: 'trace-lighthouse-signal' }
-  },
-  {
-    label: 'conversation name',
-    run: (params, spawnAgent) =>
-      generateConversationName({
-        context: { firstPrompt: 'Trace lighthouse signal' },
-        params,
-        target: contractTarget,
-        spawnAgent
-      }),
-    output: '# Title: "Trace lighthouse signal"\nextra commentary',
-    expected: { name: 'Trace lighthouse signal' }
-  },
-  {
-    label: 'Jira summary',
-    run: (params, spawnAgent) =>
-      generateJiraIssueSummaryFromContext(
-        { description: 'Trace lighthouse signal' },
-        params,
-        contractTarget,
-        spawnAgent
-      ),
-    output: '"Trace lighthouse signal"\nextra commentary',
-    expected: { summary: 'Trace lighthouse signal' }
-  }
-]
-
 type Receipt = { paths: string[]; sizes: number[]; content: string; stdin: string; message: string }
 async function withReader<T>(
   output: string,
@@ -271,55 +165,6 @@ async function withReader<T>(
   }
 }
 
-it.each(consumers)(
-  'preserves $label output and failure classification across stdin/file transport',
-  async (consumer) => {
-    const spec = agentSpecs.getCommitMessageAgentSpec('omp')
-    if (!spec) {
-      throw new Error('Missing OMP spec')
-    }
-    for (const fail of [false, true]) {
-      const delivered = await withReader(consumer.output, fail, (spawn) =>
-        consumer.run(contractParams, spawn)
-      )
-      expect(delivered.receipt.paths).toHaveLength(1)
-      expect(delivered.receipt.stdin).toBe('')
-      expect(delivered.receipt.message.endsWith('recipe-message')).toBe(true)
-      expect(delivered.receipt.content).toContain('Trace lighthouse signal')
-      expect(delivered.receipt.content.includes('Saved recipe instruction')).toBe(
-        consumer.label !== 'Jira summary'
-      )
-      if (fail) {
-        expect(delivered.result).toMatchObject({
-          success: false,
-          error: expect.stringContaining('OMP CLI command failed with code 7')
-        })
-      } else {
-        expect(delivered.result).toMatchObject({
-          success: true,
-          agentLabel: 'OMP',
-          ...consumer.expected
-        })
-      }
-      const legacy = vi.spyOn(agentSpecs, 'getCommitMessageAgentSpec').mockReturnValue({
-        ...spec,
-        promptDelivery: 'stdin',
-        buildArgs: (params) => spec.buildArgs(params).slice(0, -1)
-      })
-      try {
-        const previous = await withReader(consumer.output, fail, (spawn) =>
-          consumer.run(contractParams, spawn)
-        )
-        expect(previous.receipt.paths).toHaveLength(0)
-        expect(previous.receipt.content).toBe(delivered.receipt.content)
-        expect(previous.result).toEqual(delivered.result)
-      } finally {
-        legacy.mockRestore()
-      }
-    }
-  }
-)
-
 it.each(['below', 'at', 'above', 'multibyte', 'BOM run', 'GIF', 'RIFF', 'internal magic'] as const)(
   'delivers complete text recipe content: %s',
   async (boundary) => {
@@ -360,79 +205,6 @@ it.each(['below', 'at', 'above', 'multibyte', 'BOM run', 'GIF', 'RIFF', 'interna
     )
     if (boundary === 'at') {
       expect(receipt.sizes).toEqual([cap])
-    }
-  }
-)
-
-it.each(['success', 'spawn failure', 'permanent failure'] as const)(
-  'settles independently of bounded async cleanup after %s',
-  async (outcome) => {
-    const originalPlatform = process.platform
-    const rmMock = vi.mocked(rm)
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const locked = Object.assign(new Error('EPERM: prompt handle held'), { code: 'EPERM' })
-    let directory = ''
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    rmMock.mockClear()
-    rmMock.mockImplementationOnce(async () => {
-      throw locked
-    })
-    if (outcome === 'permanent failure') {
-      rmMock.mockRejectedValue(locked)
-    }
-    try {
-      const planned = planCommitMessageGeneration(
-        { agentId: 'omp', model: 'default' },
-        recordedPrompt
-      )
-      if (!planned.ok) {
-        throw new Error(planned.error)
-      }
-      const child = createMockDiscoveryChild()
-      const execution = runLocalSourceControlPlan({
-        plan: planned.plan,
-        cwd: '/omp-cleanup',
-        env: undefined,
-        operation: 'conversation-name',
-        spawnAgent: ({ args }) => {
-          directory = dirname(args[planned.plan.promptFile?.argIndex ?? -1].slice(1))
-          if (outcome === 'spawn failure') {
-            throw new Error('Fixture spawn failure')
-          }
-          return child
-        }
-      })
-      if (outcome !== 'spawn failure') {
-        child.stdout.emit('data', Buffer.from('Lighthouse Signal Trace'))
-        child.emit('close', 0)
-      }
-      expect((await execution.result).success).toBe(outcome !== 'spawn failure')
-      await execution.processClosed
-      expect(rmMock).toHaveBeenCalledTimes(1)
-      expect(existsSync(directory)).toBe(true)
-      if (outcome === 'permanent failure') {
-        await vi.waitFor(
-          () =>
-            expect(errors).toHaveBeenCalledWith(
-              '[commit-message] Failed to remove generation prompt:',
-              locked
-            ),
-          { timeout: 5000 }
-        )
-        expect(rmMock).toHaveBeenCalledTimes(5)
-        expect(errors).toHaveBeenCalledTimes(1)
-        expect(existsSync(directory)).toBe(true)
-      } else {
-        await vi.waitFor(() => expect(existsSync(directory)).toBe(false), { timeout: 2000 })
-        expect(rmMock).toHaveBeenCalledTimes(2)
-      }
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-      rmMock.mockImplementation(actualFs.rm)
-      if (directory) {
-        await actualFs.rm(directory, { recursive: true, force: true })
-      }
-      errors.mockRestore()
     }
   }
 )

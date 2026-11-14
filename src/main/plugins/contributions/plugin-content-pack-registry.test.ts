@@ -4,10 +4,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { fingerprintPluginConsent } from '../../../shared/plugins/approval/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
-import { PluginContentVerifier } from '../plugin-content-integrity'
-import { hashPluginTree } from '../plugin-content-hash'
+import { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import { hashPluginTree } from '../artifacts/plugin-content-hash'
 import { PluginContentPackRegistry } from './plugin-content-pack-registry'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 
 const roots: string[] = []
 

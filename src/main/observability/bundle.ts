@@ -22,6 +22,7 @@ export type CollectBundleOptions = {
   readonly arch: string
   readonly osRelease: string
   readonly orcaChannel: 'stable' | 'rc' | 'dev'
+  readonly nativeHangRecord?: Record<string, unknown>
 }
 
 export type CollectedBundle = {
@@ -172,6 +173,13 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
 
   const headerLine = JSON.stringify({ type: 'bundle-header', ...header })
   const headerBytes = Buffer.byteLength(`${headerLine}\n`)
+  const nativeLine = opts.nativeHangRecord
+    ? JSON.stringify(redactValue(opts.nativeHangRecord, 'server'))
+    : null
+  const nativeBytes = nativeLine ? Buffer.byteLength(nativeLine) + 1 : 0
+  if (headerBytes + nativeBytes > MAX_BUNDLE_BYTES) {
+    throw new Error('Saved freeze report exceeds the diagnostic attachment size limit.')
+  }
   const recordWindow = {
     cutoffMs,
     cutoffNanos,
@@ -179,7 +187,8 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
   }
 
   // Reserve daemon space so busy traces cannot crowd out OOM diagnostics.
-  const available = MAX_BUNDLE_BYTES - headerBytes
+  const available = MAX_BUNDLE_BYTES - headerBytes - nativeBytes
+  const traceReservation = nativeLine ? Math.min(256 * 1024, Math.floor(available / 2)) : 0
   // Collect up to the full cap, reserve the daemon floor, then return unused trace space.
   const daemonAll = opts.daemonLogFilePath
     ? collectNewestRecords(
@@ -188,16 +197,19 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
         recordWindow
       )
     : { lines: [], bytes: 0 }
-  const reserved = takeNewestLines(daemonAll.lines, Math.min(DAEMON_LOG_BUDGET_BYTES, available))
+  const reserved = takeNewestLines(
+    daemonAll.lines,
+    Math.min(DAEMON_LOG_BUDGET_BYTES, available - traceReservation)
+  )
   const traces = collectNewestRecords(
     listRotatedFiles(opts.traceFilePath, opts.maxFiles),
     available - reserved.bytes,
     recordWindow
   )
   const daemon = takeNewestLines(daemonAll.lines, available - traces.bytes)
-  const lines = [headerLine, ...traces.lines, ...daemon.lines]
+  const lines = [headerLine, ...(nativeLine ? [nativeLine] : []), ...traces.lines, ...daemon.lines]
   const spanCount = traces.lines.length + daemon.lines.length
-  const currentBytes = headerBytes + traces.bytes + daemon.bytes
+  const currentBytes = headerBytes + nativeBytes + traces.bytes + daemon.bytes
 
   const payload = `${lines.join('\n')}\n`
   return {

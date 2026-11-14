@@ -26,7 +26,7 @@ import {
   visualDocumentResultSchema
 } from './bridge-visual-verbs'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
-import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/mobile-file-media'
+import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/media/mobile-file-media'
 
 // Fence native-prefixed requests on-device; desktop allowlist refusal alone would hide leaked forwarding and depend on desktop version.
 // Native replies use existing frames/in-flight caps without runtime _meta; adding a verb needs a table row and handler, never a new frame kind.

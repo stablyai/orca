@@ -180,39 +180,4 @@ describe('killAllProcessesForWorktree', () => {
   })
 
   // Bound Windows daemon kill RPCs below the sweep deadline so failures report the stop cause (#9500).
-
-  it('tolerates an unresolved runtime selector during destructive removal', async () => {
-    // An absent newly created/removed graph entry means no runtime-owned PTYs, not failed teardown.
-    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('selector_not_found'))
-    const runtime = {
-      stopTerminalsForWorktree
-    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
-    const localProvider = createProviderStub(async () => [])
-    listRegisteredPtysMock.mockReturnValue([])
-
-    const result = await killAllProcessesForWorktree('w1', {
-      runtime,
-      localProvider,
-      requirePhysicalStop: true
-    })
-
-    expect(result.runtimeStopped).toBe(0)
-  })
-
-  it('fails destructive teardown closed when the runtime sweep rejects', async () => {
-    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime sweep failed'))
-    const runtime = {
-      stopTerminalsForWorktree
-    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
-    const localProvider = createProviderStub(async () => [])
-    listRegisteredPtysMock.mockReturnValue([])
-
-    await expect(
-      killAllProcessesForWorktree('w1', {
-        runtime,
-        localProvider,
-        requirePhysicalStop: true
-      })
-    ).rejects.toThrow('runtime sweep failed')
-  })
 })

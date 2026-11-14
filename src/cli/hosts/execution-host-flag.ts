@@ -19,7 +19,7 @@ import {
 } from './host-selector-alternatives'
 import { normalizeTypedName, stripWrappingQuotes } from '../../shared/typed-name-normalization'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { isLocalEnvironmentSelector } from './local-environment-selector'
 
 export type HostFlagRoutingSelection = {
@@ -75,8 +75,8 @@ export async function resolveHostFlagEnvironmentId(
   }
   const [{ resolveEnvironment }, { getDefaultUserDataPath }, { listEnvironments }] =
     await Promise.all([
-      import('../runtime/environments.js'),
-      import('../runtime/metadata.js'),
+      import('../runtime/pairing/environments.js'),
+      import('../runtime/profile/metadata.js'),
       import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
     ])
   const userDataPath = getDefaultUserDataPath()
@@ -217,8 +217,8 @@ export async function resolveHostFlagTarget(
     return host
   }
   const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
-    import('../runtime/environments.js'),
-    import('../runtime/metadata.js'),
+    import('../runtime/pairing/environments.js'),
+    import('../runtime/profile/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
   const environments = listEnvironments(getDefaultUserDataPath()).map((candidate) => ({
@@ -295,8 +295,8 @@ export async function resolveEnvironmentSelectorForStore(
   listSshTargetsForSuggestion: () => Promise<SshTargetSummary[]>
 ): Promise<string> {
   const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
-    import('../runtime/environments.js'),
-    import('../runtime/metadata.js'),
+    import('../runtime/pairing/environments.js'),
+    import('../runtime/profile/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
   const environments = listEnvironments(getDefaultUserDataPath()).map((candidate) => ({

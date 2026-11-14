@@ -100,7 +100,7 @@ export const AI_TEXT_ACTION_IDS = [
   'dictationCleanup'
 ] as const satisfies readonly AiTextActionId[]
 
-export function isGlobalAiTextAction(actionId: AiActionId): actionId is GlobalAiTextActionId {
+export function isGlobalAiTextAction(actionId: string): actionId is GlobalAiTextActionId {
   return actionId === 'conversationName' || actionId === 'dictationCleanup'
 }
 

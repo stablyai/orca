@@ -1,5 +1,6 @@
+import { reenterPackagedElectron } from './app-launch/packaged-cli-interpreter'
 import { randomUUID } from 'node:crypto'
-import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-session-contracts'
 import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import {
   isDurableMutation,
@@ -8,38 +9,38 @@ import {
   orchestrationMigrationData
 } from '../../shared/orchestration/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { openLocalOrca } from './open-local-orca'
-import { getDefaultUserDataPath, readMetadata } from './metadata'
-import {
-  getCliStatus,
-  getOfflineRuntimeAdmission,
-  type OfflineRuntimeAdmission,
-  projectRemoteAppStatus
-} from './status'
-import { sendRequest } from './transport'
-import { attachMutationRecovery, isRequestUnsent } from './client-error-recovery'
+import { openLocalOrca } from './app-launch/open-local-orca'
+import { getDefaultUserDataPath, readMetadata } from './profile/metadata'
+import { getCliStatus, getOfflineRuntimeAdmission } from './status/status'
+import type { OfflineRuntimeAdmission } from './status/status'
+import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
+import { sendRequest } from './connection/transport'
+import { attachMutationRecovery, isRequestUnsent } from './connection/client-error-recovery'
 import {
   RuntimeClientError,
   RuntimeRpcFailureError,
-  type RuntimeRpcSuccess,
   type RuntimeCallOptions
-} from './types'
+} from './connection/types'
+import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import {
   attachDurableMutationRecovery,
   attachLegacyTerminalPromptRecovery,
   attachUnverifiedTerminalPromptRecovery,
   didAnotherRuntimeHandleTerminalPrompt
-} from './terminal-prompt-mutation-recovery'
+} from './connection/terminal-prompt-mutation-recovery'
 import { recordRuntimeEnvironmentUsage } from '../../shared/remote-runtime/host-store/runtime-environment-usage-record'
-import { createRuntimeSourceFence, type RuntimeSourceFence } from './runtime-source-fence'
-import { resolveRemoteConnection } from './runtime-remote-pairing'
+import {
+  createRuntimeSourceFence,
+  type RuntimeSourceFence
+} from './connection/runtime-source-fence'
+import { resolveRemoteConnection } from './pairing/runtime-remote-pairing'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
 } from '../../shared/orchestration/orchestration-runtime-capabilities'
-import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
+import { RemoteRuntimeCompatGate } from './connection/remote-runtime-compat-gate'
 import { OrchestrationRequestEvidence } from '../orchestration/identity/orchestration-compatibility-envelope'
-import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
+import { getTimeoutMsParam, isWaitingCheck } from './connection/runtime-request-timeout'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartClientTimeoutMs,
@@ -54,7 +55,7 @@ import {
 const LONG_POLL_CLIENT_GRACE_MS = 10_000
 // The host records the launched agent in the caller's chat; older hosts ignore the evidence.
 
-const loadWebSocketTransport = async () => await import('./websocket-transport.js')
+const loadWebSocketTransport = async () => await import('./connection/websocket-transport.js')
 
 export class RuntimeClient {
   readonly userDataPath: string
@@ -304,6 +305,14 @@ export class RuntimeClient {
   }
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    return this.remote ? this.getCliStatus() : openLocalOrca(() => this.getCliStatus(), timeoutMs)
+    if (this.remote) {
+      return this.getCliStatus()
+    }
+    reenterPackagedElectron()
+    return openLocalOrca(
+      () => this.getCliStatus(),
+      (options) => this.call<{ requested: boolean }>('desktop.openWindowInBackground', {}, options),
+      timeoutMs
+    )
   }
 }

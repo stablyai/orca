@@ -9,8 +9,8 @@ import { applyManualRepoOrder } from '../../../../../../shared/manual-repo-order
 import { mergeFetchedHostProjectCatalog } from '../../../../../../shared/project-compatibility-host-merge'
 import { projectHostSetupProjectionFromRepos } from '../../../../../../shared/project-host-setup-projection'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
-import { buildSidebarProjectCatalog } from '../../../../../../shared/sidebar-list/sidebar-project-catalog'
-import { fetchPairedServerCatalog } from '../../../../../../shared/sidebar-list/paired-server-catalog'
+import { buildSidebarProjectCatalog } from '../../../../../../shared/sidebar-list/catalog/sidebar-project-catalog'
+import { fetchPairedServerCatalog } from '../../../../../../shared/sidebar-list/catalog/paired-server-catalog'
 import { group, mainWt, repo } from './sidebar-list-golden-factories.test-fixture'
 import type { SidebarInputsFeedDomain } from '../../../../../../main/runtime/sidebar-inputs/feed/sidebar-inputs-feed'
 

@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installServeService, uninstallServeService, type ServeServiceDeps } from './serve-service'
-import { resolveServiceCommand } from '../runtime/serve-app-launcher'
-import { serveSupervisorBrakePath } from '../runtime/serve-supervisor-brake'
+import { resolveServiceCommand } from '../runtime/app-launch/serve-app-launcher'
+import { serveSupervisorBrakePath } from '../runtime/serve/supervision/serve-supervisor-brake'
 
 describe('orca serve service', () => {
   let home: string

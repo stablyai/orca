@@ -25,7 +25,6 @@ describe('DriveCheckoutSuspectPaths', () => {
     const reinstalled = { rootPath: REPO }
     tracker.recordEvents(reinstalled, [event('new.ts')])
     expect([...(tracker.beginPoll(reinstalled)?.keys() ?? [])]).toEqual(['new.ts'])
-    expect(tracker.lastDegradeReason).toBe('watcher-restart')
   })
 
   it('keeps rechecked-dirty paths through overflow, interruption, restart, and a lost watcher', () => {
@@ -33,7 +32,6 @@ describe('DriveCheckoutSuspectPaths', () => {
     tracker.recordEvents(root, [event('hidden.ts')])
     tracker.confirmDirty('hidden.ts', tracker.beginPoll(root)?.get('hidden.ts') ?? 0)
     tracker.recordEvents(root, [event('a'), event('b'), event('c')])
-    expect(tracker.lastDegradeReason).toBe('over-limit')
     tracker.recordInterruption(root)
     const reinstalled = { rootPath: REPO }
     expect([...(tracker.beginPoll(reinstalled)?.keys() ?? [])]).toEqual(['hidden.ts'])

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { describe, expect, it, vi } from 'vitest'
 
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -33,7 +34,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
   /** The operation ids the coordinator's journal recorded for whole-mail turns. */
   async function mailSends(): Promise<string[]> {
-    const snapshot = await host.journalSnapshot(COORDINATOR)
+    const snapshot = await readTestHostJournal(host, COORDINATOR)
     return snapshot.submissions
       .filter((submission) =>
         snapshot.items.some(
@@ -61,9 +62,12 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(unread(`run:${runId}`)).toHaveLength(1)
 
     expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
-    await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
-    const revived = connectionFor(COORDINATOR)
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
+    const revived = await vi.waitFor(() => {
+      const connection = connectionFor(COORDINATOR)
+      expect(connection).not.toBe(chat)
+      expect(connection.turns).toHaveLength(1)
+      return connection
+    }, WAIT)
     expect(revived.turns[0]!.text).toContain('again')
     await settleTurn(COORDINATOR, 0)
     await edgesAnswered()

@@ -1,3 +1,7 @@
+import {
+  readTestJournalItems,
+  readTestJournalSubmissions
+} from '../journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -5,7 +9,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../journal-store'
@@ -79,11 +83,10 @@ export function registerJournalQueuedRejectionBatchTests(): void {
     await journal.appendLifecycleBatch(startFailureBatch())
 
     expect(journal.cursor().sequence).toBe(before + 3)
-    expect(journal.submissions().map((entry) => entry.dispatchState)).toEqual([
-      'rejected',
-      'rejected'
-    ])
-    const order = journal.snapshot().items.map((item) => item.itemId)
+    expect((await readTestJournalSubmissions(journal)).map((entry) => entry.dispatchState)).toEqual(
+      ['rejected', 'rejected']
+    )
+    const order = (await readTestJournalItems(journal)).map((item) => item.itemId)
     expect(order).toEqual([
       agentJournalSubmissionKey('first'),
       agentJournalSubmissionKey('second'),
@@ -100,7 +103,9 @@ export function registerJournalQueuedRejectionBatchTests(): void {
     )
 
     expect(journal.cursor().sequence).toBe(before)
-    expect(journal.submissions().map((entry) => entry.dispatchState)).toEqual(['pending'])
+    expect((await readTestJournalSubmissions(journal)).map((entry) => entry.dispatchState)).toEqual(
+      ['pending']
+    )
   })
 
   it('writes nothing when a Stop withdrew every queued message first', async () => {
@@ -110,12 +115,12 @@ export function registerJournalQueuedRejectionBatchTests(): void {
     })
 
     await Promise.all([
-      journal.rejectQueuedSubmissions(0, withdrawal),
+      journal.write({ kind: 'queued-reject', fence: 0, rejection: withdrawal }),
       journal.appendLifecycleBatch(startFailureBatch())
     ])
 
-    expect(journal.submissions()[0]?.rejection).toEqual({ kind: 'cancelled' })
-    expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
+    expect((await readTestJournalSubmissions(journal))[0]?.rejection).toEqual({ kind: 'cancelled' })
+    expect((await readTestJournalItems(journal)).map((item) => item.itemId)).toEqual([
       agentJournalSubmissionKey('first')
     ])
   })

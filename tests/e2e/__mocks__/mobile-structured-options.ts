@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
-import type { useMobileStructuredAgentOptions } from '../../../mobile/src/session/native-chat/input/use-mobile-structured-agent-options'
+import type { useMobileStructuredAgentOptions } from '../../../mobile/src/session/native-chat/input/session-options/use-mobile-structured-agent-options'
 
 /** Execute the real phone hook in root-only workers, which do not install Expo. */
 export async function loadMobileStructuredOptions(): Promise<
@@ -11,7 +11,9 @@ export async function loadMobileStructuredOptions(): Promise<
 > {
   const result = await build({
     entryPoints: [
-      resolve('mobile/src/session/native-chat/input/use-mobile-structured-agent-options.ts')
+      resolve(
+        'mobile/src/session/native-chat/input/session-options/use-mobile-structured-agent-options.ts'
+      )
     ],
     bundle: true,
     platform: 'node',

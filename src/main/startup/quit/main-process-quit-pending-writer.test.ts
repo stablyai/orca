@@ -1,5 +1,13 @@
 import { EventEmitter } from 'node:events'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from '../../persistence/persistence-test-harness'
 import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../shared/quit-teardown-deadline'
 
 const settled = () => vi.fn(async () => {})
@@ -8,17 +16,19 @@ const stopAgentHookServer = idle()
 const stopStructuredAgentSessionRuntime = settled()
 const beginSshShutdown = settled()
 const killAllPty = idle()
+const disconnectDaemon = settled()
+const closeAllWatchers = settled()
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
-  '../../ipc/filesystem/watchers/filesystem-watcher-shutdown': { closeAllWatchers: settled() },
+  '../../ipc/filesystem/watchers/filesystem-watcher-shutdown': { closeAllWatchers },
   '../../ipc/worktrees/creation/worktree-base-directory-watcher': {
     disposeWorktreeBaseDirectoryWatchers: settled()
   },
   '../../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
   '../../ipc/pty/kill-all': { killAllPty },
   '../../daemon/providers/lifecycle/daemon-provider-state': {
-    disconnectDaemon: settled(),
+    disconnectDaemon,
     shutdownDaemon: settled()
   },
   '../../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
@@ -63,9 +73,6 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../../git/refs/maintenance/local-repo-ref-maintenance': {
     awaitPackedRefsLockRelease: settled()
   },
-  '../../workspaces/removal/worktree-background-removal': {
-    stopBackgroundWorktreeRemovals: idle()
-  },
   '../../dock/unread-badge': { setUnreadDockBadgeCount: idle() },
   '../../tray/system-tray': { destroySystemTray: idle() },
   '../../telemetry/client': { shutdownTelemetry: settled() },
@@ -94,8 +101,11 @@ afterEach(() => {
 
 async function startQuit(
   flushFinalOrThrowAsync: () => Promise<void>,
-  services: Record<string, unknown> = {}
+  services: Record<string, unknown> = {},
+  beforeQuit?: () => Promise<void>
 ) {
+  disconnectDaemon.mockClear()
+  closeAllWatchers.mockClear()
   beginSshShutdown.mockClear()
   killAllPty.mockClear()
   vi.resetModules()
@@ -103,6 +113,7 @@ async function startQuit(
   const app = Object.assign(new EventEmitter(), { quit: vi.fn() })
   const admission = { release: vi.fn() }
   const store = {
+    flushPendingOrThrowAsync: settled(),
     flushFinalOrThrowAsync: vi.fn(flushFinalOrThrowAsync),
     freezeWritesAsync: settled()
   }
@@ -124,22 +135,78 @@ async function startQuit(
   const { quitTeardownStartGate } = await import('./quit-teardown-start-gate')
   quitTeardownStartGate.resetForTests()
   installMainProcessQuitHandlers()
+  await beforeQuit?.()
   app.emit('before-quit', { defaultPrevented: false })
   app.emit('will-quit', { preventDefault: vi.fn() })
   return { app, admission, store, state }
 }
 
-it('quits at the teardown deadline without releasing admission while the writer is pending', async () => {
-  const { app, admission, store, state } = await startQuit(() => new Promise<void>(() => {}))
-  await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS - 1)
-  expect(app.quit).not.toHaveBeenCalled()
-  await vi.advanceTimersByTimeAsync(1)
-  expect(app.quit).toHaveBeenCalledOnce()
-  expect(console.warn).toHaveBeenCalledWith('[shutdown] Quit teardown deadline reached', {
-    pendingTeardowns: ['state']
+it('checkpoints pane state during a held synchronous deletion, then saves later metadata before releasing ownership', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'orca-quit-checkpoint-'))
+  const { Store } = await import('../../persistence/loading-store/store')
+  const dataFile = join(directory, 'orca-data.json')
+  const profile = createSqliteTestStore(Store, { dataFile })
+  const savedTab = () => JSON.parse(readPersistedStateJson(dataFile)).workspaceSession.activeTabId
+  await profile.flushPendingOrThrowAsync({ fullCheckpoint: true })
+  const checkpointSaved = Promise.withResolvers<void>()
+  const savePending = profile.flushPendingOrThrowAsync.bind(profile)
+  vi.spyOn(profile, 'flushPendingOrThrowAsync').mockImplementation(async (...args) => {
+    try {
+      await savePending(...args)
+      checkpointSaved.resolve()
+    } catch (error) {
+      checkpointSaved.reject(error)
+      throw error
+    }
   })
-  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
-  expect(store.freezeWritesAsync).not.toHaveBeenCalled()
-  expect(admission.release).not.toHaveBeenCalled()
-  expect(state.profileStateAdmission).toBe(admission)
+  const final = vi.spyOn(profile, 'flushFinalOrThrowAsync')
+  const freeze = vi.spyOn(profile, 'freezeWritesAsync')
+  let release!: () => void
+  let captureGrid!: () => void
+  const grid = new Promise<void>((resolve) => {
+    captureGrid = () => {
+      profile.getWorkspaceSession().activeTabId = 'pane-grid-before-stop'
+      resolve()
+    }
+  })
+  const runtime = {
+    flushPaneGrids: () => grid,
+    getOffscreenBrowserBackend: () => null,
+    getAgentBrowserBridge: () => null,
+    getEmulatorBridge: () => null,
+    disposeSkillUploadSessions: async () => {},
+    getRuntimeId: () => undefined,
+    closeNotificationDismissals: async () => {}
+  }
+  try {
+    const { admission, app } = await startQuit(
+      async () => {},
+      { store: profile, runtime, watcherShutdownDone: false },
+      async () => {
+        const { worktreeRemovalLifetime } =
+          await import('../../workspaces/removal/worktree-removal-lifetime')
+        release = worktreeRemovalLifetime.acquirePreparation()
+      }
+    )
+    captureGrid()
+    await grid
+    await checkpointSaved.promise
+    expect(savedTab()).toBe('pane-grid-before-stop')
+    await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS)
+    expect(app.quit).toHaveBeenCalledOnce()
+    expect(final).not.toHaveBeenCalled()
+    expect(freeze).not.toHaveBeenCalled()
+    expect(admission.release).not.toHaveBeenCalled()
+    expect(closeAllWatchers).not.toHaveBeenCalled()
+    expect(disconnectDaemon).not.toHaveBeenCalled()
+    profile.getWorkspaceSession().activeTabId = 'metadata-after-delete'
+    release()
+    await vi.waitFor(() => expect(admission.release).toHaveBeenCalledOnce())
+    expect(savedTab()).toBe('metadata-after-delete')
+    expect(freeze).toHaveBeenCalledOnce()
+  } finally {
+    release?.()
+    await closeTestStores()
+    await rm(directory, { recursive: true, force: true })
+  }
 })

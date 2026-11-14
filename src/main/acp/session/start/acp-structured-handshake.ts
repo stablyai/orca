@@ -1,3 +1,4 @@
+import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import { observeAcpForkSupport } from '../../capabilities/acp-fork-support'
 import { acpSessionStartMeta } from '../../launch/acp-session-meta'
 import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
@@ -7,7 +8,7 @@ import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // this one never did; while a reopened session replays its history, nothing it sends is written
 // except context usage, and afterwards the turns of it the chat never saw are added once.
 
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import {
@@ -91,7 +92,7 @@ export async function initializeAcpStructuredSession(
   const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null
-  let takeover: ReturnType<typeof acpReopenTakeover> | null = null
+  let takeover: Awaited<ReturnType<typeof acpReopenTakeover>> | null = null
   let replayed: AcpLoadHistoryFrame[] | null = null
   const acceptSession = (accepted: NonNullable<typeof started>): void => {
     assertStarting()
@@ -119,7 +120,7 @@ export async function initializeAcpStructuredSession(
       attaching.translator.finishLoad()
     } catch (error) {
       withAcpStartupDiagnostic(error, connection, spec.dialect)
-      takeover = acpReopenTakeover(error, resume, {
+      takeover = await acpReopenTakeover(error, resume, {
         // An agent already exited, its output still draining, has no session to take over in.
         over: connection.closed || connection.exited || input.abandoned(),
         now: now(),
@@ -146,17 +147,22 @@ export async function initializeAcpStructuredSession(
     started.sessionId === resume?.sessionId &&
     acquire.events
   ) {
-    await catchUpAcpHistory({
-      frames: replayed,
-      identity: spec.historyCatchUp,
-      sink: acquire.events,
-      sessionId,
-      agent: spec.agent,
-      providerSessionId: started.sessionId,
-      dialect: spec.dialect,
-      assertCurrent: assertStarting,
-      ...(deps.logger ? { logger: deps.logger } : {})
-    })
+    const identity = spec.historyCatchUp
+    const sink = acquire.events
+    await withStructuredHistoryInvocation(child, input.signal, (signal) =>
+      catchUpAcpHistory({
+        signal,
+        frames: replayed,
+        identity,
+        sink,
+        sessionId,
+        agent: spec.agent,
+        providerSessionId: started.sessionId,
+        dialect: spec.dialect,
+        assertCurrent: assertStarting,
+        ...(deps.logger ? { logger: deps.logger } : {})
+      })
+    )
     assertStarting()
   }
   const childStops = await probeAcpChildStops(connection, spec.dialect, initialized)
@@ -209,7 +215,7 @@ export async function initializeAcpStructuredSession(
   }
   // Include warning rows missed by earlier failed starts.
   const lost = [
-    ...(launch.resume?.unannouncedLosses() ?? []),
+    ...(launch.resume?.lossKeys ?? []),
     ...(takeover?.replaces ? [takeover.replaces.key] : [])
   ]
   for (const key of lost) {

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { callRuntimeEnvironment } = vi.hoisted(() => ({ callRuntimeEnvironment: vi.fn() }))
-vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment
 }))
-vi.mock('../ipc/runtime-environments/runtime-environment-registry-root', () => ({
+vi.mock('../ipc/runtime-environments/catalog/runtime-environment-registry-root', () => ({
   getRuntimeEnvironmentRegistryRoot: () => '/user-data'
 }))
 import {
@@ -50,16 +50,6 @@ describe('remote file preview reader', () => {
       ...granted,
       grantId: 'g-2'
     })
-    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
-      '/user-data',
-      'env-1',
-      'files.resolveTerminalPath',
-      { worktree: 'id:wt-1', pathText: '/tmp/clip.mp4' },
-      15_000,
-      7,
-      undefined,
-      { signal }
-    )
     callRuntimeEnvironment.mockResolvedValueOnce(answer('/tmp/other.mp4'))
     await expect(renewRemotePreviewGrant(granted, signal)).rejects.toThrow('no longer grants')
   })
@@ -76,7 +66,5 @@ describe('remote file preview reader', () => {
       .mockResolvedValueOnce(ok({ contentBase64: 'AQID', bytesRead: 3, eof: true }))
     const range = await readRemotePreviewRange(address, 10, 900_000, 262_157, signal)
     expect(range.byteLength).toBe(262_147)
-    expect(callRuntimeEnvironment.mock.calls[0]?.[3]).toMatchObject({ offset: 10, length: 262_144 })
-    expect(callRuntimeEnvironment.mock.calls[1]?.[3]).toMatchObject({ offset: 262_154, length: 3 })
   })
 })

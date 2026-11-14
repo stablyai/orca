@@ -8,7 +8,7 @@ import {
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
-import { isLocalOnlyWorktreeMetaId } from '../../../../shared/worktree/local-only-worktree-meta-ids'
+import { isLocalOnlyWorktreeMetaId } from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
 import {
   pruneUnreferencedWorktreeIdentityMeta,
   resolveAliasIdentityKey

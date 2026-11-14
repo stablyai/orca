@@ -15,7 +15,7 @@ import {
 import { createIssue } from '../../../github/issues/issue-create'
 import { updateIssue } from '../../../github/issues/issue-update'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github-attachment-params'
+import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github/github-attachment-params'
 import { uploadGitHubImage } from '../../../github/attachments/image-attachment-upload'
 import {
   resolveGitHubRepoExecution,

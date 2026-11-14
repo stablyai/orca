@@ -2,7 +2,7 @@ import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-li
 import {
   markClaudeLeadTurnDone,
   clearClaudeAnsweredQuestionWait
-} from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
 import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,

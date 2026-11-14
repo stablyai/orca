@@ -1,6 +1,7 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { JournalStopAcceptor } from '../../../agent-session-journal/context-epochs/journal-stop-acceptance'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 
@@ -21,6 +22,10 @@ afterEach(async () => {
   await observationClock.restoreBeforeCleanup(() => rig.dispose())
 })
 
+function holdDraftDelivery(messageId: string): ReturnType<typeof holdDelivery> {
+  return holdDelivery(async () => (await rig.handoff(messageId)) !== undefined)
+}
+
 async function queuedDraft(text: string): Promise<string> {
   const queued = await rig.send(text, 'queue-if-active').result
   if (!queued.ok || !('queued' in queued.value)) {
@@ -30,7 +35,9 @@ async function queuedDraft(text: string): Promise<string> {
 }
 
 async function submissionIds(): Promise<string[]> {
-  return (await rig.host.journalSnapshot(SESSION)).submissions.map((entry) => entry.clientMessageId)
+  return (await readTestHostJournal(rig.host, SESSION)).submissions.map(
+    (entry) => entry.clientMessageId
+  )
 }
 
 async function handedOver(id: string): Promise<void> {
@@ -43,7 +50,7 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
   const b = await queuedDraft('B')
   const c = await queuedDraft('C')
   // Hold provider delivery after A is consumed.
-  const { release } = holdDelivery()
+  const { release } = holdDraftDelivery(a)
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
   const firstA = await rig.handoffId(a)
@@ -97,13 +104,21 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
 it('a Stop whose acceptance fails takes back no hand-off; the draft sends as it was', async () => {
   const working = await rig.workingSend()
   const a = await queuedDraft('A')
-  const { release } = holdDelivery()
+  const { release } = holdDraftDelivery(a)
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
   const firstA = await rig.handoffId(a)
-  const failing = vi
-    .spyOn(JournalStopAcceptor.prototype, 'accept')
-    .mockRejectedValueOnce(new Error('disk full'))
+  const write = AgentSessionJournal.prototype.write
+  const failing = vi.spyOn(AgentSessionJournal.prototype, 'write').mockImplementation(function (
+    this: AgentSessionJournal,
+    operation,
+    ...args
+  ) {
+    if (operation.kind === 'stop-accept') {
+      return Promise.reject(new Error('disk full'))
+    }
+    return write.call(this, operation, ...args)
+  })
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   try {
     const stopped = rig.stop()

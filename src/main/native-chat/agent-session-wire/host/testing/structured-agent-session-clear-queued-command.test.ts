@@ -10,7 +10,7 @@ import type { QueuedMessageTestRig } from './structured-agent-session-queued-mes
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 let rig: QueuedMessageTestRig
 beforeEach(async () => {
@@ -103,7 +103,7 @@ it('clear removes command cards from history and connected and reconnecting clie
   expect(await rig.drafts()).toEqual(expected)
   expect(await rig.queuePause()).toBeNull()
   expect(
-    rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.pauses()
+    await rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.pauses()
   ).toContainEqual(expect.objectContaining({ reason: 'cleared', messageIds: [first.id, last.id] }))
   for (const events of [connected, reconnecting]) {
     await eventually(() => {

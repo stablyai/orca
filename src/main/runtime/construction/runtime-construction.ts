@@ -1,5 +1,4 @@
-import { collectSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { collectLocalSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import type {
   RuntimeConstructionBindings as Bindings,
   RuntimeConstructionDependencies
@@ -136,11 +135,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     super()
     this.store = store
     installGitHubProjectAccounts(store, () => this.resolvedWorktrees.peek()?.worktrees ?? [])
-    this.legacyStructuredSessionTabIds = Object.freeze(
-      collectSavedStructuredAgentSessionIds(
-        store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
-      )
-    )
+    this.legacyStructuredSessionTabIds =
+      deps?.legacyStructuredSessionTabIds ?? collectLocalSavedStructuredAgentSessionIds(store)
     this.machineName.start()
     this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth

@@ -1,10 +1,10 @@
 import { getCellHeight, getCellWidth } from './cell-metrics'
 import { elementInRoot } from '../document-host-seams'
-import { TERMINAL_TEXT_SCALES } from '../../terminal-text-scales'
+import { TERMINAL_TEXT_SCALES } from '../../preferences/terminal-text-scales'
 import type { TerminalDocumentScope } from '../document-scope'
 import { scheduleDocumentFrame } from '../document-frame-registry'
 import { applyFitScale } from './fit-scale'
-import { fitDimensionsFromCell } from '../../terminal-grid-fit'
+import { fitDimensionsFromCell } from '../../viewport/terminal-grid-fit'
 
 // Re-init temporarily clears ready; latch prior readiness so width reflow cannot turn a transient error fatal.
 

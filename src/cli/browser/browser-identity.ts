@@ -8,7 +8,7 @@ import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 async function assertBrowserIdentitySupported({ client }: HandlerContext): Promise<void> {
   const status = await client.call<RuntimeStatus>('status.get')

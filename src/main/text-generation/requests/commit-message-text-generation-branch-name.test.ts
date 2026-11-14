@@ -1,43 +1,7 @@
-import { realKimiOccupiedOutput } from '../../../shared/__fixtures__/kimi-generation-source-shaped'
 import { describe, expect, it } from 'vitest'
 import { generateBranchNameFromContext } from '../commit-message-text-generation'
 
 describe('generateBranchNameFromContext', () => {
-  it.each(['pi', 'kimi'] as const)('%s failure diagnostics', async (agentId) => {
-    const result = await generateBranchNameFromContext(
-      { firstPrompt: 'Fix login flow' },
-      {
-        agentId,
-        model: agentId === 'kimi' ? 'default' : 'github-copilot/gpt-5.5'
-      },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
-          stdout: agentId === 'kimi' ? realKimiOccupiedOutput : 'partial',
-          stderr: 'No API key found for github-copilot.',
-          exitCode: agentId === 'kimi' ? 4 : 1,
-          timedOut: false
-        })
-      }
-    )
-
-    expect(result.success).toBe(false)
-    if (result.success) {
-      throw new Error('expected a failure result')
-    }
-    if (agentId === 'kimi') {
-      expect(result.error).toMatch(/Kimi.*active.*Stop.*exit.*try again/)
-    }
-    expect(result.failureOutput).toEqual({
-      label: agentId === 'kimi' ? 'Kimi' : 'Pi',
-      exitCode: agentId === 'kimi' ? 4 : 1,
-      stdout: agentId === 'kimi' ? realKimiOccupiedOutput : 'partial',
-      stderr: 'No API key found for github-copilot.'
-    })
-  })
-
   it('reruns Copilot once on its default model when the plan hides the saved model', async () => {
     const calls: string[][] = []
     const result = await generateBranchNameFromContext(

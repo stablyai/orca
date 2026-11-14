@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
   ComputerActionResult,
+  ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
@@ -20,6 +21,7 @@ import {
 } from './actions/desktop-script-action'
 import { validateComputerProviderActionParams } from '../action-contracts/computer-provider-action-validation'
 import { execBridge, mapBridgeError } from './desktop-script-provider-bridge'
+import { launchBridgeApp, listBridgeApps } from './desktop-script-apps'
 import {
   optionalNumberParam,
   optionalStringParam,
@@ -70,21 +72,16 @@ export class DesktopScriptProviderClient {
   }
 
   async listApps(): Promise<ComputerListAppsResult> {
-    const response = await this.callBridge({ tool: 'list_apps' })
-    return {
-      apps: (response.apps ?? []).map((app) => ({
-        name: app.name,
-        bundleId: app.bundleId ?? app.bundleIdentifier ?? null,
-        pid: app.pid,
-        isRunning: true,
-        lastUsedAt: null,
-        useCount: null
-      }))
-    }
+    return await listBridgeApps((request) => this.callBridge(request))
   }
 
   async capabilities(): Promise<ComputerProviderCapabilities> {
     return await this.readCapabilities()
+  }
+
+  async launchApp(params: Record<string, unknown>): Promise<ComputerLaunchAppResult> {
+    const capabilities = await this.readCapabilities()
+    return await launchBridgeApp(capabilities, (request) => this.callBridge(request), params)
   }
 
   async listWindows(params: Record<string, unknown>): Promise<ComputerListWindowsResult> {

@@ -6,7 +6,7 @@ import type { OpenFile } from '../types/open-file'
 import { captureEditorOpenLinkIntent } from './editor-open-target-group'
 import { removeGroupLayoutLeaf } from '../../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeLayout, makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 import '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
@@ -28,6 +28,13 @@ import {
   type NativeChatGitHubRepo
 } from './native-chat-github-repo'
 import { useNativeChatHoverPreview } from './use-native-chat-hover-preview'
+import {
+  createGitHubPreviewRouteStore,
+  type GitHubPreviewRouteStore
+} from './native-chat-github-route-store'
+
+const subscribeNothing = (): (() => void) => () => {}
+const readNoRepo = (): null => null
 
 function PeekFooter({ item }: { item: GitHubWorkItem }): React.JSX.Element {
   const t = useTranslate()
@@ -79,17 +86,23 @@ export type GitHubPeekSource =
   | { kind: 'repo'; repo: Repo }
   | { kind: 'routed'; authorityKey: HostAuthorityKey }
 
-function peekLookup(source: GitHubPeekSource, link: GitHubIssueOrPRLink) {
+function peekLookup(
+  source: GitHubPeekSource,
+  link: GitHubIssueOrPRLink,
+  key: string,
+  route: GitHubPreviewRouteStore | null
+) {
   return source.kind === 'repo'
     ? {
-        key: githubLinkPreviewKey(source.repo, link),
+        key,
         read: () => readCachedGitHubLinkPreview(source.repo, link),
         load: () => loadGitHubLinkPreview(source.repo, link)
       }
     : {
-        key: routedGitHubLinkPreviewKey(source.authorityKey, link),
-        read: () => readCachedRoutedGitHubLinkPreview(source.authorityKey, link),
-        load: () => loadRoutedGitHubLinkPreview(source.authorityKey, link)
+        key,
+        read: () =>
+          readCachedRoutedGitHubLinkPreview(source.authorityKey, link, route ?? undefined),
+        load: () => loadRoutedGitHubLinkPreview(source.authorityKey, link, route ?? undefined)
       }
 }
 
@@ -105,15 +118,30 @@ export function NativeChatGitHubPeekBody({
    *  Null shows just the name until then. Undefined for the chat repo's own links. */
   otherRepoFallback?: ReactNode
 }): ReactNode {
-  const key = useAppStore((state) =>
-    source.kind === 'repo'
-      ? githubLinkPreviewKey(source.repo, link)
-      : routedGitHubLinkPreviewKey(source.authorityKey, link, state.repos)
+  // Select the catalog itself so unrelated store updates don't rescan it for a route.
+  const routeRepos = useAppStore((state) => (source.kind === 'routed' ? state.repos : null))
+  const route = useMemo(
+    () =>
+      source.kind === 'routed'
+        ? createGitHubPreviewRouteStore(routeRepos ?? [], source.authorityKey, link)
+        : null,
+    [source, link, routeRepos]
+  )
+  const routedRepo = useSyncExternalStore(
+    route?.subscribe ?? subscribeNothing,
+    route?.read ?? readNoRepo
+  )
+  const key = useMemo(
+    () =>
+      source.kind === 'repo'
+        ? githubLinkPreviewKey(source.repo, link)
+        : routedGitHubLinkPreviewKey(source.authorityKey, link, routedRepo),
+    [source, link, routedRepo]
   )
   return (
     <GitHubPeekContent
       key={key}
-      lookup={peekLookup(source, link)}
+      lookup={peekLookup(source, link, key, route)}
       link={link}
       otherRepoFallback={otherRepoFallback}
     />

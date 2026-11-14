@@ -12,8 +12,10 @@ export type RunTerminalRetentionDeps = {
   listRuns: () => readonly AutomationRun[]
   /** Used, viewed, or unknown-use terminals belong to the user and must stay open. */
   terminalClientUse: (run: AutomationRun) => 'used' | 'unused' | 'unknown'
-  /** True only while the pane holds this run's PTY. */
+  /** True only while the pane holds this run's PTY and it has not exited. */
   runTerminalAlive: (run: AutomationRun) => boolean
+  /** True while the workspace layout still binds the run's pane to its PTY, as a sleep does to resume. */
+  runPaneKept: (run: AutomationRun) => boolean
   /** Require fresh proof that only an idle shell remains in the PTY. */
   shellAloneAtPrompt: (run: AutomationRun) => Promise<boolean>
   /** Close only this run's pane and PTY; preserve user-created splits. */
@@ -21,8 +23,8 @@ export type RunTerminalRetentionDeps = {
   runOwnsWorkspace: (run: AutomationRun) => boolean
   /** Preserve the resumable tab; return false if another terminal is live or sleep fails. */
   sleepRunWorkspace: (run: AutomationRun) => Promise<boolean>
-  /** Clear terminal references while preserving status, error and output. */
-  forgetRunTerminal: (run: AutomationRun) => Promise<void>
+  /** Clear terminal references while preserving status, error and output; keepPane clears only the PTY. */
+  forgetRunTerminal: (run: AutomationRun, keepPane?: boolean) => Promise<void>
   /** Serialize retention with dispatch to protect reused panes. */
   inAutomationLane: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
   now?: () => number
@@ -42,8 +44,8 @@ export function createRunTerminalRetention(deps: RunTerminalRetentionDeps): RunT
   const firstSeenAt = new Map<string, number>()
   let sweeping: Promise<void> | null = null
 
-  const forget = async (run: AutomationRun): Promise<void> => {
-    await deps.forgetRunTerminal(run)
+  const forget = async (run: AutomationRun, keepPane = false): Promise<void> => {
+    await deps.forgetRunTerminal(run, keepPane)
     firstSeenAt.delete(run.id)
   }
 
@@ -82,7 +84,8 @@ export function createRunTerminalRetention(deps: RunTerminalRetentionDeps): RunT
       try {
         if (!deps.runTerminalAlive(run)) {
           if (isFinalAutomationRunStatus(run.status)) {
-            await forget(run)
+            // A slept pane stays resumable from its keys; a closed one leaves nothing to open.
+            await forget(run, deps.runPaneKept(run))
           }
           continue
         }

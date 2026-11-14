@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { CodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection-types'
 import { optionSession } from '../../../../codex/structured/catalog/codex-structured-option-session.test-fixture'
 import {
-  readCodexAppliedInputOptions,
+  readCodexMessageSteeringInputs,
   resolvedCodexMessageOptions
 } from '../../../../codex/structured/turns/codex-structured-message-options'
 import { dispatchCodexTurn } from '../../../../codex/structured/turns/codex-structured-turn-start'
@@ -17,7 +17,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 
@@ -28,8 +28,10 @@ beforeEach(async () => {
   const native = optionSession(request)
   native.threadId = THREAD
   rig = await createQueuedMessageTestRig({ restartable: true })
-  rig.host.deps.adapter.readAppliedInputOptions = (input) =>
-    input.sessionId === SESSION ? readCodexAppliedInputOptions(native, input) : null
+  rig.host.deps.adapter.captureMessageSteeringInputs = (input) =>
+    input.sessionId === SESSION
+      ? readCodexMessageSteeringInputs(native, input)
+      : { kind: 'codex-unavailable' }
   rig.host.deps.adapter.holdsLiveProviderProcess = (sessionId, generation) =>
     sessionId === SESSION &&
     generation === native.acquisitionGeneration &&
@@ -80,7 +82,7 @@ it.each([
     await rig.settleAccepted(first, 'a')
     await publishRunningTurn(first)
     expect(
-      rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.newestTurn()
+      await rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.reads.newestTurn()
     ).toMatchObject({ state: 'running', userItemId: agentJournalSubmissionKey(first) })
     const held = rig.send('Use a different model', undefined, {
       carried: { model: 'model-b' }

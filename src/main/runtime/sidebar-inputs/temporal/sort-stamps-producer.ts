@@ -11,7 +11,7 @@ import {
   REST_PANE,
   type AgentPaneState,
   type SortStampEvent
-} from '../../../../shared/sidebar-list/sort-stamps'
+} from '../../../../shared/sidebar-list/sorting/sort-stamps'
 import type { TerminalSideEffectBatch } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import {
   agentPaneWorkspace,

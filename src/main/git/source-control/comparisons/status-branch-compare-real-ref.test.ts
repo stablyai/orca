@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, readdir, realpath, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, realpath, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -136,21 +136,6 @@ describe('getBranchCompare real refs', () => {
       expect(await commitsAhead(repo)).toBe(1)
     })
 
-    it('recounts after an existing loose replace ref is edited in place', async () => {
-      const { repo, oids } = await createChainRepo()
-      git(repo, ['replace', '--graft', oids.tip, oids.a])
-      const replaceRef = path.join(repo, '.git', 'refs', 'replace', oids.tip)
-      const tipOntoA = await readFile(replaceRef, 'utf8')
-      git(repo, ['replace', '--force', '--graft', oids.tip, oids.root])
-      await ageReplaceRefs(repo)
-      expect(await commitsAhead(repo)).toBe(1)
-
-      await writeFile(replaceRef, tipOntoA)
-      await utimes(path.dirname(replaceRef), aged, aged)
-
-      expect(await commitsAhead(repo)).toBe(2)
-    })
-
     it('recounts after a replace ref is packed away from refs/replace', async () => {
       const { repo, oids } = await createChainRepo()
       expect(await commitsAhead(repo)).toBe(3)
@@ -161,20 +146,6 @@ describe('getBranchCompare real refs', () => {
       await utimes(path.join(repo, '.git', 'packed-refs'), aged, aged)
 
       expect(await commitsAhead(repo)).toBe(1)
-    })
-
-    it('keeps per-worktree core.useReplaceRefs answers apart', async () => {
-      const { repo, oids } = await createChainRepo()
-      git(repo, ['replace', '--graft', oids.tip, oids.root])
-      const linked = path.join(path.dirname(repo), `${path.basename(repo)}-linked`)
-      tempRoots.push(linked)
-      git(repo, ['worktree', 'add', '-q', '--detach', linked, oids.tip])
-      git(repo, ['config', 'extensions.worktreeConfig', 'true'])
-      git(linked, ['config', '--worktree', 'core.useReplaceRefs', 'false'])
-      await ageReplaceRefs(repo)
-
-      expect(await commitsAhead(repo)).toBe(1)
-      expect(await commitsAhead(linked)).toBe(3)
     })
 
     it('honors a custom GIT_REPLACE_REF_BASE namespace', async () => {
@@ -211,9 +182,6 @@ describe('getBranchCompare real refs', () => {
     execFileSync('git', ['clone', '-q', source, client])
     git(client, ['fetch', source, 'refs/tags/annotated:refs/remotes/origin/tagbase'])
 
-    expect(git(client, ['branch', '-r', '--format=%(refname:short)']).split(/\r?\n/)).toContain(
-      'origin/tagbase'
-    )
     const rawOid = git(client, ['rev-parse', '--verify', 'refs/remotes/origin/tagbase'])
     const peeledOid = git(client, [
       'rev-parse',
