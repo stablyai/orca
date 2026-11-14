@@ -21,6 +21,7 @@ import {
   getResourceMemoryMetricCopy
 } from './resource-memory-metric-copy'
 import { formatMemory } from './resource-usage-metrics'
+import { sumRuntimeHostResources } from './runtime-host-resource-totals'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds
@@ -155,8 +156,13 @@ export function useResourceUsageDerivedModel({
     return countUnboundDaemonSessions(sessions, resourceSessionBindings)
   }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
 
+  // Why: server samples exist only while the view is open, so the closed badge stays local-only.
+  const hostTotals = useMemo(
+    () => sumRuntimeHostResources(runtimeHostResources),
+    [runtimeHostResources]
+  )
   // Share daemon inventory for open and closed counts; wake hints are bindings, not a live session count.
-  const triggerSessionCount = sessionCount
+  const triggerSessionCount = sessionCount === null ? null : sessionCount + hostTotals.sessionCount
 
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss',
@@ -168,8 +174,8 @@ export function useResourceUsageDerivedModel({
     : null
   const { totalMemory, totalCpu, memBadgeLabel, totalPrivateMemory, commitToneClass } =
     useMemo(() => {
-      const memory = resourceSnapshot?.totalMemory ?? 0
-      const cpu = resourceSnapshot?.totalCpu ?? 0
+      const memory = (resourceSnapshot?.totalMemory ?? 0) + hostTotals.memory
+      const cpu = (resourceSnapshot?.totalCpu ?? 0) + hostTotals.cpu
       const privateMemory = resourceSnapshot?.totalPrivateMemory
       return {
         totalMemory: memory,
@@ -181,7 +187,7 @@ export function useResourceUsageDerivedModel({
           hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
         })
       }
-    }, [resourceSnapshot])
+    }, [resourceSnapshot, hostTotals])
   const commitBadgeLabel =
     commitMetricCopy && totalPrivateMemory !== undefined ? formatMemory(totalPrivateMemory) : null
 
