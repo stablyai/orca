@@ -1,11 +1,19 @@
 import { execFile } from 'node:child_process'
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
 
 const run = promisify(execFile)
+const {
+  macTerminalHostPaths
+}: {
+  macTerminalHostPaths: (appPath: string) => { infoPlist: string; executable: string }
+} = createRequire(import.meta.url)(
+  '../../../../config/scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.cjs'
+)
 let root: string | undefined
 afterEach(async () => {
   if (root) {
@@ -26,11 +34,11 @@ it.skipIf(process.platform === 'win32').each([
     root = await realpath(await mkdtemp(join(tmpdir(), 'orca-mac-cli-')))
     const contents = join(root, 'Test.app', 'Contents')
     const bin = join(contents, 'Resources', 'bin')
-    const helper = join(contents, 'Helpers', 'Orca Agents.app', 'Contents')
+    const helper = macTerminalHostPaths(join(root, 'Test.app'))
     await Promise.all([
       mkdir(bin, { recursive: true }),
       mkdir(join(contents, 'MacOS'), { recursive: true }),
-      mkdir(join(helper, 'MacOS'), { recursive: true })
+      mkdir(dirname(helper.executable), { recursive: true })
     ])
     const systemVersion = join(root, 'SystemVersion.plist')
     await writeFile(
@@ -38,7 +46,7 @@ it.skipIf(process.platform === 'win32').each([
       `<plist><dict>\n<key>ProductVersion</key>\n<string>${version}</string>\n</dict></plist>\n`
     )
     await writeFile(
-      join(helper, 'Info.plist'),
+      helper.infoPlist,
       '<plist><dict>\n<key>LSMinimumSystemVersion</key>\n<string>13.5</string>\n</dict></plist>\n'
     )
     const shim = await readFile(join(__dirname, '../../../../resources/darwin/bin/orca'), 'utf8')
@@ -49,7 +57,7 @@ it.skipIf(process.platform === 'win32').each([
     )
     for (const [path, name] of [
       [join(contents, 'MacOS', 'Orca'), 'electron'],
-      [join(helper, 'MacOS', 'Orca Agents'), 'node']
+      [helper.executable, 'node']
     ]) {
       await writeFile(
         path,
