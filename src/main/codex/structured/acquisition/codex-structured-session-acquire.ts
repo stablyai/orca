@@ -3,7 +3,7 @@ import { codexLaunchedAccountHome } from '../launch/codex-structured-launch-reso
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput
@@ -169,7 +169,9 @@ export async function acquireCodexStructuredSession(input: {
             Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
           ),
         onSpawned: spawnIdentity.onSpawned,
+        onClose: (error) => attempt.historyCatchUp?.abort(error),
         onExit: (error, exit) => {
+          attempt.historyCatchUp?.abort()
           acquisition.appliedSettings.end()
           try {
             // Orca's own close or cancel ends no start; Codex ending on its own does, from the
@@ -252,6 +254,7 @@ export async function acquireCodexStructuredSession(input: {
       if (disposed) {
         return
       }
+      attempt.historyCatchUp?.abort()
       disposed = true
       unbindReadingControl?.()
       acquisition.prompts.clear()

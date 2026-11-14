@@ -1,5 +1,5 @@
 import type { DirectoryAccountAgentDefinition } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
-import { CLAUDE_STRUCTURED_HANDLE_NAMESPACE } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { CLAUDE_STRUCTURED_HANDLE_NAMESPACE } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { isClaudeStructuredOptionKey } from './launch/claude-structured-options'
 import { claudeFallbackModelOptions } from './launch/claude-structured-session-options'
 

@@ -1,7 +1,7 @@
 import { SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { useOptionalHostProtocolGates } from '../components/host-protocol-gates-context'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { useRouteRelaysCapability } from '../worktree/workspace-server-context'
+import { useRouteRelaysCapability } from '../worktree/execution-hosts/workspace-server-context'
 import { useHostEventStreamReady } from './host-event-router'
 import type { HostQuerySignal } from './host-query'
 

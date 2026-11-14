@@ -8,7 +8,7 @@ import { getHostContextLabel } from '../../../../src/shared/worktree/row-display
 import type { DesktopSidebarFacts } from '../../../../src/shared/sidebar-list/feed-facts/desktop-sidebar-facts'
 import type { SidebarFeedView } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
-import type { MobileViewState } from '../../worktree/workspace-view-settings'
+import type { MobileViewState } from '../../worktree/workspace-list/workspace-view-settings'
 
 // Mirror desktop UI/settings into the shared sidebar builder; resolved all-host scope matches desktop legacy scope.
 export function buildHostFeedView(args: {

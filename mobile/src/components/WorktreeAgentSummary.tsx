@@ -4,7 +4,7 @@ import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { agentDotState } from '../worktree/agent-row-display'
+import { agentDotState } from '../worktree/agent-lineage/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
 

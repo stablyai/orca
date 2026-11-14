@@ -8,7 +8,7 @@ import {
   descriptor,
   currentValue
 } from './use-structured-agent-session-options.test-fixture'
-import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { act, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 

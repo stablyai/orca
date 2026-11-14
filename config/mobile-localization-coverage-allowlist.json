@@ -238,28 +238,28 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "filePath": "mobile/src/session/native-chat/composer/dictation/MobileNativeChatComposerMic.tsx",
     "kind": "jsx-attribute:accessibilityLabel",
     "text": "Dictate",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "filePath": "mobile/src/session/native-chat/composer/dictation/MobileNativeChatComposerMic.tsx",
     "kind": "jsx-attribute:accessibilityLabel",
     "text": "Starting dictation",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "filePath": "mobile/src/session/native-chat/composer/dictation/MobileNativeChatComposerMic.tsx",
     "kind": "jsx-attribute:accessibilityLabel",
     "text": "Stop dictation",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "filePath": "mobile/src/session/native-chat/composer/dictation/MobileNativeChatComposerMic.tsx",
     "kind": "jsx-attribute:accessibilityLabel",
     "text": "Transcribing dictation",
     "dynamic": false,

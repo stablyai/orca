@@ -41,6 +41,7 @@ export type BridgeElement = {
   className?: string
   value?: string
   isSelected?: boolean
+  isDisabled?: boolean
   nativeWindowHandle?: number
   frame?: BridgeFrame | null
   actions?: string[]

@@ -1,5 +1,5 @@
-import type * as UseLiveWorktreeNameModule from '../../../worktree/use-live-worktree-name'
-import type * as HostWorktreeRefreshModule from '../../../worktree/host-worktree-refresh'
+import type * as UseLiveWorktreeNameModule from '../../../worktree/row-presentation/use-live-worktree-name'
+import type * as HostWorktreeRefreshModule from '../../../worktree/execution-hosts/host-worktree-refresh'
 import type * as HostListQueries from '../../../host-screen/catalog/host-list-queries'
 import type * as HostQueryModule from '../../../query/host-query'
 import { hookMount } from '../hook-mount'
@@ -18,7 +18,7 @@ export function clientEventStreamMountAdapters(
   return {
     'session.live-worktree-name': ({ client, effect }) => {
       const useLiveWorktreeName = modules.load<typeof UseLiveWorktreeNameModule>(
-        'mobile/src/worktree/use-live-worktree-name.ts'
+        'mobile/src/worktree/row-presentation/use-live-worktree-name.ts'
       ).useLiveWorktreeName
       let value: ReturnType<typeof useLiveWorktreeName> | undefined
       const screen = hookScreenMount(() => {
@@ -80,7 +80,7 @@ export function clientEventStreamMountAdapters(
     },
     'worktree.host-refresh': ({ client, effect }) => {
       const startHostWorktreeRefresh = modules.load<typeof HostWorktreeRefreshModule>(
-        'mobile/src/worktree/host-worktree-refresh.ts'
+        'mobile/src/worktree/execution-hosts/host-worktree-refresh.ts'
       ).startHostWorktreeRefresh
       const counts = { refreshWorktrees: 0, syncViewSettings: 0 }
       let stop: (() => void) | null = null

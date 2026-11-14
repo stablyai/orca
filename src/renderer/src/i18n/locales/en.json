@@ -76,6 +76,14 @@
     "failed": "Failed to open the file."
   },
   "sidebar": {
+    "worktreeCardsUpdateNotice": {
+      "newLabel": "New",
+      "title": "Worktree cards",
+      "exampleChildren": "1 child",
+      "statusCaption": "Title flags agents that need you",
+      "childrenCaption": "Parents sum up child worktrees",
+      "dismiss": "Dismiss"
+    },
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
       "description": "The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.",
@@ -252,6 +260,22 @@
       "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
       "keywordShow": "show",
       "keywordUnhide": "unhide"
+    },
+    "cardSlot": {
+      "needsYouLabel": "Waiting on you",
+      "failedLabel": "Last turn failed",
+      "markedUnread": "Marked unread by you",
+      "unread": "Unread result",
+      "working": "Working",
+      "monitoring": "Monitoring",
+      "offlineLabel": "Host offline",
+      "offline": "offline",
+      "needYouCount": "{{count}} need you",
+      "needsYou": "Needs you",
+      "failed": "Failed",
+      "detailsRow": "Details row",
+      "workspaceUnread": "Unread in this workspace",
+      "unreadTab": "Unread tab"
     }
   },
   "app": {
@@ -987,6 +1011,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Installed agents",
+      "availableRegion": "Agents available to install",
       "permissionsTitle": "Permissions",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",
@@ -1430,13 +1456,16 @@
         "recipeDescription": "Clean up dictated text before it lands."
       }
     },
+    "experimental": {},
     "groupHooks": {
       "title": "Project Settings > {{name}}",
       "example": "Example: create a worktree in each repo (this machine only)",
       "useExample": "Use this example",
       "description": "Scripts that run in this folder when a workspace is created. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
       "invalidSetup": "The file is present, but Orca could not find a valid setup script.",
-      "supportedKeys": "Define only the supported keys: `scripts` and `setup`."
+      "supportedKeys": "Define only the supported keys: `scripts` and `setup`.",
+      "supportedArchiveKeys": "Define only the supported keys: `scripts`, `setup`, and `archive`.",
+      "invalidArchive": "The file is present, but Orca could not find a valid setup or archive script."
     }
   },
   "menu": {
@@ -2665,9 +2694,9 @@
         "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
-        "titleOne": "macOS just interrupted an agent",
-        "titleMany": "macOS interrupted your agents {{count}}×",
-        "subtitle": "Full Disk Access stops these file prompts.",
+        "titleOne": "macOS just showed a file prompt",
+        "titleMany": "macOS showed {{count}} file prompts",
+        "subtitle": "Full Disk Access stops these prompts.",
         "enable": "Turn on Full Disk Access",
         "close": "Close",
         "dismiss": "Don't show again"
@@ -8690,12 +8719,6 @@
             "title": "Agent sleep",
             "toggleLabel": "Toggle agent sleep"
           },
-          "newWorktreeCardStyle": {
-            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "title": "New card style",
-            "toggleLabel": "Toggle new card style"
-          },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
@@ -8723,6 +8746,13 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "worktreeCardStyle": {
+            "title": "Card style",
+            "copy": "Choose how workspace cards look in the sidebar.",
+            "ariaLabel": "Card style",
+            "classic": "Classic",
+            "experimental": "Experimental"
           }
         },
         "FloatingWorkspacePane": {
@@ -10896,11 +10926,9 @@
             "newWorktreeCardStyle": {
               "card": "card",
               "cards": "cards",
-              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
               "menu": "menu",
               "metadata": "metadata",
               "status": "status",
-              "title": "New card style",
               "worktree": "worktree",
               "worktrees": "worktrees"
             },
@@ -10923,6 +10951,10 @@
               "inWindow": "in-window",
               "worktrees": "worktrees",
               "eaf17a7214": "Agent dashboard"
+            },
+            "worktreeCardStyle": {
+              "title": "Card style",
+              "description": "Choose how workspace cards look in the sidebar."
             }
           }
         },
@@ -14797,11 +14829,6 @@
             "locallyResolvedConflictOfKind": "Conflict resolved locally ({{kind}})",
             "locallyResolvedConflict": "Conflict resolved locally",
             "pushesToForkTarget": "Pushes to fork {{target}}",
-            "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
-            "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
-            "mergedReviewHeadMoved": "{{review}} is merged, but Orca could not confirm that it includes this branch’s current commits.",
-            "mergedReviewNothingLeft": "{{review}} is merged and includes this branch’s committed changes.",
-            "mergedReviewSafeToDelete": "{{review}} is merged and includes this branch’s committed changes. Ignored files may still be lost when deleting this workspace.",
             "abortRebaseConfirmTitle": "Abort rebase?",
             "abortMergeConfirmTitle": "Abort merge?",
             "abortRebaseConfirmDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
@@ -18145,7 +18172,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome extensions",
+                        "title": "Bring your Chrome extensions",
+                        "everydayTitle": "Your everyday browser tools, in Orca",
                         "body": "Install from the Chrome Web Store and pin them next to the address bar.",
                         "action": "Open Web Store",
                         "secondaryAction": "Got it"
@@ -21512,7 +21540,7 @@
         "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
         "failedDetail": "Your chat is unchanged. Try again.",
         "commandDescription": "Fork this chat from its latest response",
-        "commandWorking": "Wait for the response to finish, then fork.",
+        "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
         "commandNothing": "There’s no response to fork yet.",
         "commandTakesNoText": "Send /fork on its own, then write in the new chat."
       },

@@ -15,7 +15,7 @@ import {
 } from '../arguments/flags'
 import { queryComputerTreeText } from './computer-tree-query'
 import { runComputerWait } from './computer-wait-command'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   formatComputerAction,
   formatGetAppState,

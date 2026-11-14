@@ -12,11 +12,10 @@ import {
   note,
   noteId,
   ordinary,
-  rows,
   scope,
   turn,
   unconfirmed
-} from './agent-session-stop-note-contract-test-fixture'
+} from './agent-session-stop-note-contract.test-fixture'
 
 it('shrinks the triggering row window without dropping the dependent note', async () => {
   await turn('running')
@@ -37,7 +36,7 @@ it('shrinks the triggering row window without dropping the dependent note', asyn
     )
   }
   await turn('interrupted')
-  const first = readAgentSessionHistory(fixture.journal, {
+  const first = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'after',
     cursor: held,
@@ -47,7 +46,7 @@ it('shrinks the triggering row window without dropping the dependent note', asyn
     throw new Error(first.reset)
   }
   expect(first.page.hasNewer).toBe(true)
-  const next = readAgentSessionHistory(fixture.journal, {
+  const next = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'after',
     cursor: first.page.window.nextCursor,
@@ -74,16 +73,8 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
       }
     )
   }
-  const stored = rows()
-  const events: AgentSessionSubscribeEvent[] = []
-  new AgentSessionSubscribers().open({
-    id: 'reconnect',
-    sessionId: 'session-1',
-    journal: fixture.journal,
-    fence: 1,
-    cursor: fixture.journal.cursor(),
-    emit: (event) => events.push(event)
-  })
+  const stored = fixture.journal.physicalCursor()
+  const events = await refreshedEvents(false)
   const batches = events.flatMap((event) => (event.type === 'batch' ? [event.batch] : []))
   expect(batches.flatMap((batch) => batch.items)).toHaveLength(205)
   expect(
@@ -102,7 +93,7 @@ it('refreshes at the exact tip using bounded frames and no durable writes', asyn
           item.body.kind === 'status' && item.body.text === ordinary.text && !item.body.failure
       )
   ).toBe(true)
-  expect(rows()).toEqual(stored)
+  expect(fixture.journal.physicalCursor()).toEqual(stored)
 })
 
 it('refreshes a phone within its frames, in bounded pages', async () => {
@@ -117,16 +108,7 @@ it('refreshes a phone within its frames, in bounded pages', async () => {
       }
     )
   }
-  const events: AgentSessionSubscribeEvent[] = []
-  new AgentSessionSubscribers().open({
-    id: 'phone',
-    sessionId: 'session-1',
-    journal: fixture.journal,
-    fence: 1,
-    cursor: fixture.journal.cursor(),
-    emit: (event) => events.push(event),
-    boundedFrames: true
-  })
+  const events = await refreshedEvents(true)
   const batches = events.flatMap((event) => (event.type === 'batch' ? [event.batch] : []))
   expect(batches.filter((batch) => batch.items.length > 0)).toHaveLength(2)
   expect(batches.flatMap((batch) => batch.items)).toHaveLength(205)
@@ -136,3 +118,30 @@ it('refreshes a phone within its frames, in bounded pages', async () => {
     )
   }
 })
+
+async function refreshedEvents(boundedFrames: boolean): Promise<AgentSessionSubscribeEvent[]> {
+  const events: AgentSessionSubscribeEvent[] = []
+  const delivered = Promise.withResolvers<void>()
+  const close = new AgentSessionSubscribers().open({
+    id: 'reconnect',
+    sessionId: 'session-1',
+    journal: fixture.journal,
+    fence: 1,
+    cursor: fixture.journal.cursor(),
+    boundedFrames,
+    emit: (event) => {
+      events.push(event)
+      if (
+        events.flatMap((frame) => (frame.type === 'batch' ? frame.batch.items : [])).length >= 205
+      ) {
+        delivered.resolve()
+      }
+    }
+  })
+  try {
+    await delivered.promise
+    return events
+  } finally {
+    close()
+  }
+}

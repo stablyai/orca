@@ -28,8 +28,8 @@ import {
   workspaceNotes,
   type WorkspaceDetailLink,
   type WorkspaceOrigin
-} from '../../worktree/workspace-details-model'
-import type { Worktree } from '../../worktree/workspace-list-types'
+} from './workspace-details-model'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 

@@ -1,9 +1,9 @@
-import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+} from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionLease } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 /** Every settlement must clear durable restore and prune live worker chat tabs; leftover tabs can reattach released sessions outside orchestration accounting. */
 

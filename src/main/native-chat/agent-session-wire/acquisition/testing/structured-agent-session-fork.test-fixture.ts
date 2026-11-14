@@ -1,3 +1,5 @@
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { seedJournalForkSource } from '../../../agent-session-journal/journal-fork-source.test-fixture'
 import { vi } from 'vitest'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -5,13 +7,13 @@ import { agentSessionRecordFixture } from '../../../testing/agent-session-record
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { prepareStructuredAgentSessionFork } from '../structured-agent-session-fork'
 import type { StructuredAgentSessionHost } from '../../host/structured-agent-session-host'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
-import type { RestTestRig } from '../../host/testing/structured-agent-session-rest-test-rig'
+import type { RestTestRig } from '../../host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
 
 const SOURCE = '019e6b26-18e2-7103-b7a0-7ba6bb071123'
@@ -172,10 +174,13 @@ export function forkTestSource(rig: RestTestRig, agent: 'claude' | 'codex' = 'co
       }
     }
   )
+  const snapshots = { read: async (_id: string) => snapshot }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preparation reads only these source/store/adapter facets; destination founding uses the real rig host below.
   const host = {
     deps: {
+      journalDatabase: rig.host.deps.journalDatabase,
       store: {
+        getRecord: () => record,
         selectWritableRecord: () => ({ kind: 'writable' }),
         requireWritableRecord: () => record,
         listConversations: () => [],
@@ -186,7 +191,32 @@ export function forkTestSource(rig: RestTestRig, agent: 'claude' | 'codex' = 'co
       logger: { warn: vi.fn() },
       resolveWorkspacePath: async () => rig.root
     },
-    journalSnapshot: async () => snapshot
+    withForkSourceAdmission: async (_id: string, run: () => Promise<unknown>) => run(),
+    forkBoundary: async (
+      id: string,
+      selected: string,
+      anchor: string | undefined,
+      compare: boolean
+    ) => {
+      const current = await snapshots.read(id)
+      const sourceRecord = host.deps.store.requireWritableRecord(id)
+      await withTestAgentSessionDatabase(rig.root, (db) =>
+        seedJournalForkSource(db, current, sourceRecord)
+      )
+      const read = await rig.host.deps.journalDatabase.readers.point({
+        sessionId: id,
+        operation: {
+          kind: 'fork-boundary',
+          itemId: selected,
+          inheritedAnchor: anchor,
+          compareSubmissions: compare
+        }
+      })
+      if (read.kind !== 'fork-boundary') {
+        throw new Error('missing source boundary')
+      }
+      return read.boundary
+    }
   } as unknown as StructuredAgentSessionHost
   const intent = structuredAgentSessionCreateParams({
     sessionId: `${agent}_independent_child`,
@@ -211,6 +241,7 @@ export function forkTestSource(rig: RestTestRig, agent: 'claude' | 'codex' = 'co
   return {
     record,
     snapshot,
+    snapshots,
     copy,
     host,
     intent,

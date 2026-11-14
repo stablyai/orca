@@ -12,8 +12,8 @@ import { isPluginWorkerSourcePath } from '../../../shared/plugins/frames/plugin-
 import { resolvePluginModuleSpecifier } from '../panels/frame-serving/plugin-frame-module-resolution'
 import { formatPluginTranspileFailure } from '../panels/source-transpilation/plugin-source-transpile-failure'
 import { transpilePluginSource } from '../panels/source-transpilation/plugin-source-transpiler'
-import { pluginModuleCandidatePaths } from '../plugin-module-candidate-paths'
-import { transformPluginSource } from '../plugin-source-sucrase-transform'
+import { pluginModuleCandidatePaths } from '../source-loading/plugin-module-candidate-paths'
+import { transformPluginSource } from '../source-loading/plugin-source-sucrase-transform'
 import {
   isOrcaSpecifier,
   pluginWorkerOrcaImportMessage

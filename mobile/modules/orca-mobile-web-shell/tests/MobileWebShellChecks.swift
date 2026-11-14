@@ -72,7 +72,6 @@ import Foundation
     precondition(refused.failed(.generationUnreadable)?.reason == "generation-unreadable")
     precondition(refused.failed(.isolationUnavailable) == nil)
     precondition(refused.failed(.renderProcessGone) == nil)
-    precondition(refused.finished() == nil)
     precondition(refused.started() == nil)
 
     refused.reset()

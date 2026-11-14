@@ -8,7 +8,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { acceptStopTarget } from './structured-agent-session-stop-acceptance'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   noteStructuredAgentSessionStopUnconfirmed,
   writeStructuredAgentSessionStopNote
@@ -37,7 +37,7 @@ export async function runTargetedCancel(
     const capturedStops = params.captureStops?.(targets)
     const unreadable = params.childWork !== undefined && children === undefined
     const initialUnlisted = params.unlisted?.present() ?? false
-    if (targets.length === 0 && !unreadable && !(initialUnlisted && atRest(ctx))) {
+    if (targets.length === 0 && !unreadable && !(initialUnlisted && (await atRest(ctx)))) {
       return { ok: true, value: { ...named, cancelled: false } }
     }
     const accepted = await acceptStopTarget(ctx)
@@ -60,7 +60,7 @@ export async function runTargetedCancel(
     })
     return { ok: true, value: { ...named, cancelled } }
   }
-  const pending = prompt ? validatePendingPrompt(ctx, prompt) : undefined
+  const pending = prompt ? await validatePendingPrompt(ctx, prompt) : undefined
   if (!pending || pending.ok) {
     const accepted = await acceptStopTarget(ctx)
     if (!accepted.ok) {
@@ -75,8 +75,9 @@ export async function runTargetedCancel(
       const raised = pending?.ok ? pending.item.turnScope : undefined
       const raisedTurnId =
         raised?.kind === 'turn'
-          ? (readAgentJournalTurn(ctx.journal.itemBody(raised.turnItemId) ?? undefined)?.turnId ??
-            null)
+          ? (readAgentJournalTurn(
+              (await ctx.journal.reads.itemBody(raised.turnItemId)) ?? undefined
+            )?.turnId ?? null)
           : null
       await noteStructuredAgentSessionStopUnconfirmed(
         ctx,
@@ -88,8 +89,8 @@ export async function runTargetedCancel(
   }
 }
 
-function atRest(ctx: AgentSessionTurnContext): boolean {
-  return !isMainAgentWorking(ctx)
+async function atRest(ctx: AgentSessionTurnContext): Promise<boolean> {
+  return !(await isMainAgentWorking(ctx))
 }
 
 /** Tasks outlive their opening turn, so feedback is thread-scoped and keyed by Stop operation. */

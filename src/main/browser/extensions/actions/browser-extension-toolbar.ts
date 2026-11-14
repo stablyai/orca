@@ -1,3 +1,4 @@
+import { recordBrowserExtensionUsed } from '../../../telemetry/browser-extensions-banner'
 import { webContents } from 'electron'
 import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import type { BrowserExtensionActionResult } from '../../../../shared/browser/extensions/browser-extension-types'
@@ -24,6 +25,7 @@ import {
 import {
   browserExtensionColorToCss,
   iconFromPathSpec,
+  manifestHasOptionsPage,
   readManifestActionDefaults
 } from './browser-extension-action-state'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
@@ -66,12 +68,6 @@ function resolveToolbarPage(browserPageId: string): ToolbarPage | null {
   const contents = liveContents(browserManager.getGuestWebContentsId(browserPageId))
   const profileId = contents ? getBrowserExtensionProfileIdForSession(contents.session) : null
   return contents && profileId ? { contents, session: contents.session, profileId } : null
-}
-
-function manifestHasOptionsPage(extension: Electron.Extension): boolean {
-  const manifest: { options_ui?: { page?: unknown }; options_page?: unknown } =
-    extension.manifest ?? {}
-  return typeof (manifest.options_ui?.page ?? manifest.options_page) === 'string'
 }
 
 async function describeToolbarAction(
@@ -195,12 +191,14 @@ export function activateBrowserExtensionAction(args: {
     }
     if (details.popup !== '') {
       openPopupForPage(page, extension, details.popup, args.anchor)
-      return { ok: true }
-    }
-    if (args.popupOnly) {
+    } else if (args.popupOnly) {
       throw new BrowserExtensionApiError('This extension has no popup')
+    } else {
+      emitActionClicked(page.session, extension, page.contents.id)
     }
-    emitActionClicked(page.session, extension, page.contents.id)
+    if (!args.popupOnly) {
+      recordBrowserExtensionUsed()
+    }
     return { ok: true }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }

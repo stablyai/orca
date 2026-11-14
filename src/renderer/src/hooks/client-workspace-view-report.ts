@@ -3,7 +3,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ClientWorkspaceView } from '../../../shared/rpc-contract/client-ui/client-workspace-view-params'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { tryRuntimeTargetForWorktreeOwner } from '@/store/slices/worktrees/listing/worktree-owner-target'
-import { onScreenHostId } from '@/store/slices/workspace-attention/workspace-unread-flag'
+import { onScreenHostId } from '@/store/slices/workspace-attention/workspace-unread-flag-reads'
 import { presenceRemainingMs, subscribeAutoAckPresenceSignals } from './agent-auto-ack-presence'
 import type { AutoAckTabTarget } from './agent-auto-ack-targets'
 

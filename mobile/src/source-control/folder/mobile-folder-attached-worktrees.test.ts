@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../worktree/workspace-list-types'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import {
   findFolderWorkspaceRow,
   getFolderAttachedWorktrees

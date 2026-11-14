@@ -10,7 +10,7 @@ import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/ho
 import {
   agentSessionInstallCommand,
   agentSessionSignInCommand
-} from '../../../../../shared/agent-session/lifecycle/agent-session-setup-commands'
+} from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'

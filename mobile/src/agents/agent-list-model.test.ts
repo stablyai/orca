@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import type { HostWorktreeInfo } from '../worktree/home-worktree-info'
+import type { HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { buildAgentList, type AgentListSection } from './agent-list-model'
 import {
   selectActiveAgents,

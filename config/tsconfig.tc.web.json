@@ -32,7 +32,7 @@
     "../src/main/pi/rpc/options/rpc-model-schema.ts",
     "../src/main/pi/rpc/options/rpc-model-options.ts",
     "../src/shared/**/*",
-    "../mobile/src/worktree/worktree-agent-child-rows.ts",
+    "../mobile/src/worktree/agent-lineage/worktree-agent-child-rows.ts",
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/main/gitlab/requests/gitlab-response-mapping.ts",
     "../src/main/source-control/hosted-review-branch-cache.ts",

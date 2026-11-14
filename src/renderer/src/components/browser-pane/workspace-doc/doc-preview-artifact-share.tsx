@@ -6,7 +6,7 @@ import {
 import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
-import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
+import { isShareableHtmlPath } from '@/components/editor/panel/editor-artifact-upload'
 import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
 import {
   fileArtifactSourceKey,
@@ -94,7 +94,7 @@ async function readDocPreviewGrantFile(
 }
 
 /** Reads the document from the host its grant was minted for, never the one selected now. */
-export async function readDocPreviewArtifactRequest(
+async function readDocPreviewArtifactRequest(
   location: DocPreviewGrantLocation,
   filePath: string,
   sourceKey: string

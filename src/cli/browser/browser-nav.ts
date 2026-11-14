@@ -18,7 +18,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 

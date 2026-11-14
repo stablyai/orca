@@ -27,11 +27,11 @@ vi.mock('../../src/cli/runtime/launch', async (importOriginal) => ({
   serveOrcaApp: mocks.serveOrcaAppMock
 }))
 
-vi.mock('../../src/cli/runtime/metadata', async (importOriginal) => ({
+vi.mock('../../src/cli/runtime/profile/metadata', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDefaultUserDataPath: mocks.getDefaultUserDataPathMock
 }))
-vi.mock('../../src/cli/runtime/environments', () => ({
+vi.mock('../../src/cli/runtime/pairing/environments', () => ({
   addEnvironmentFromPairingCode: mocks.addEnvironmentFromPairingCodeMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()

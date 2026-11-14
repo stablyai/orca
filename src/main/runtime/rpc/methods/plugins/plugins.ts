@@ -1,6 +1,6 @@
 import { defineMethod, type RpcContext } from '../../core'
 import type { PluginFrameEntry } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
-import { listPluginsForClients } from '../../../../plugins/plugin-client-list'
+import { listPluginsForClients } from '../../../../plugins/discovery/plugin-client-list'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { PluginService } from '../../../../plugins/plugin-service'
 import type { PluginConsentRequest } from '../../../../../shared/plugins/approval/plugin-consent-request'
@@ -20,9 +20,12 @@ import {
 import {
   approvePluginFromCli,
   pluginCliApprovalRequest
-} from '../../../../plugins/plugin-cli-approval'
+} from '../../../../plugins/cli/plugin-cli-approval'
 import { PluginApprovalRequiredError } from '../../../../../shared/plugins/approval/plugin-cli-approval'
-import { loadPluginDevFolder, unloadPluginDevFolder } from '../../../../plugins/plugin-dev-folders'
+import {
+  loadPluginDevFolder,
+  unloadPluginDevFolder
+} from '../../../../plugins/development/plugin-dev-folders'
 
 /** Expose desktop IPC's plugin consent/actions over serve/headless RPC through the same PluginService permission boundary. */
 

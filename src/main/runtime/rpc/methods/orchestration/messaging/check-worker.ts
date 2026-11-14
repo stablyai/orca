@@ -1,42 +1,21 @@
+import type { WorkerMailboxCheckInput } from './check-worker-mailbox-input'
 import type { MessageRow, MessageType } from '../../../../orchestration/db/orchestration-records'
-import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
-import { acknowledgedOnlyReceipt, deliveryReceipt, exposeMessages } from './mailbox-message-receipt'
-import { routeAllMailboxPages } from './mailbox-page-routing'
+import {
+  acknowledgedOnlyReceipt,
+  deliveryReceipt,
+  exposeMessages,
+  withReportFollowUps
+} from './mailbox-message-receipt'
+import { routeAllMailboxPages, createDirectMailSnapshotRouter } from './mailbox-page-routing'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { interruptedAcknowledgedCheck } from '../routing'
+import type { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 import { currentDispatchAssigneeRun } from './recipient-routing'
-import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
-import type { z } from 'zod'
 
-type CheckParamsInput = z.infer<typeof CheckParams>
-type ActiveDispatch = NonNullable<ReturnType<OrchestrationDb['getActiveDispatchForIdentity']>>
-type RemoteAttachment = NonNullable<
-  ReturnType<OrchestrationDb['findActiveRemoteAttachmentForPane']>
->
-
-export async function checkWorkerMailbox(args: {
-  params: CheckParamsInput
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  handle: string
-  paneKey: string | undefined
-  typeFilter: MessageType[] | undefined
-  signal: AbortSignal | undefined
-  activeDispatch: ActiveDispatch | undefined
-  remoteAttachment: RemoteAttachment | undefined
-  wakeTypes?: MessageType[]
-  revalidateConsumer?: () => void
-  deferDelivery?: () => boolean
-  recordMutationReceipt?: (receipt: unknown) => void
-  /** An ack the enclosing Run check already applied, reported when this check applied none. */
-  runAcknowledged?: string
-  /** The caller's --ack came without --wait, so this check takes no new mail. */
-  acknowledgeOnly?: boolean
-}) {
+export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
   const {
     params,
     runtime,
@@ -73,16 +52,7 @@ export async function checkWorkerMailbox(args: {
     activeDispatch
       ? db.getDispatchContextById(workerMailbox.dispatchId)?.consumer_generation
       : db.getRemoteDispatchAttachment(workerMailbox.dispatchId)?.consumer_generation
-  const routeDirectSnapshot = async (
-    runId: string,
-    directHandle: string,
-    routePage: (throughSequence: number) => { routedCount: number; hasMore: boolean }
-  ): Promise<void> => {
-    const throughSequence = db.getLatestUnreadDirectMessageSequenceForRun(runId, directHandle)
-    if (throughSequence !== undefined) {
-      await routeAllMailboxPages(() => routePage(throughSequence), signal)
-    }
-  }
+  const routeDirectSnapshot = createDirectMailSnapshotRouter(db, signal)
   const revalidateWorkerMailbox = async (): Promise<void> => {
     if (activeDispatch) {
       const current = db.getActiveDispatchForIdentity(handle, paneKey)
@@ -206,26 +176,58 @@ export async function checkWorkerMailbox(args: {
       : {}
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const readPeek = () => db.getUnreadMessages(address, typeFilter)
-  const result = (batch: MailboxDeliveryBatch | undefined) =>
-    deliveryReceipt({
+  const result = (batch: MailboxDeliveryBatch | undefined) => {
+    const receipt = deliveryReceipt({
       mailbox: mailboxIdentity,
       batch,
       acknowledged: acknowledged?.delivery.id ?? args.runAcknowledged,
       format: params.format === true || params.inject === true
     })
-  // The receipt commits with the take, so --retry-request can always replay a handed-over batch.
-  const takeDelivery = (wakeTypes?: MessageType[]) => {
+    return batch?.finalResponse ? receipt : withReportFollowUps(db, receipt)
+  }
+  const takeDelivery = async (wakeTypes?: MessageType[], wake?: MessageWake) => {
     if (args.deferDelivery?.()) {
       return undefined
     }
+    const revalidate = () => {
+      args.revalidateCaller?.()
+      args.revalidateConsumer?.()
+      if (readCurrentGeneration() !== workerMailbox.generation) {
+        throw dispatchFenced()
+      }
+      if (activeDispatch) {
+        const current = db.getActiveDispatchForIdentity(handle, paneKey)
+        if (current?.id !== activeDispatch.id || !callerHoldsDispatchPane(current, paneKey)) {
+          throw dispatchFenced()
+        }
+      } else if (
+        !paneKey ||
+        db.findActiveRemoteAttachmentForPane(paneKey)?.dispatch_id !== workerMailbox.dispatchId ||
+        !db.isRemoteAttachmentProcessCurrent({
+          dispatchId: workerMailbox.dispatchId,
+          paneKey,
+          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
+        })
+      ) {
+        throw dispatchFenced()
+      }
+      if (args.deferDelivery?.()) {
+        throw dispatchFenced()
+      }
+    }
     try {
-      return db.takeMailboxDelivery({
-        runId: deliveryRunId,
-        mailboxHandle: address,
-        consumerGeneration: workerMailbox.generation,
-        consumerSource: activeDispatch ? 'dispatch' : 'attachment',
-        wakeTypes,
-        recordTaken: (taken) => args.recordMutationReceipt?.(result(taken))
+      return await args.reconciliation.takeRole({
+        mailbox: {
+          runId: deliveryRunId,
+          mailboxHandle: address,
+          consumerGeneration: workerMailbox.generation,
+          consumerSource: activeDispatch ? 'dispatch' : 'attachment',
+          wakeTypes
+        },
+        revalidate,
+        respond: result,
+        record: args.recordMutationReceipt,
+        wake
       })
     } catch (error) {
       throw asDispatchFence(error)
@@ -253,7 +255,7 @@ export async function checkWorkerMailbox(args: {
       }
     }
   } else {
-    const current = takeDelivery(params.wait ? typeFilter : args.wakeTypes)
+    const current = await takeDelivery(params.wait ? typeFilter : args.wakeTypes)
     if (current || !params.wait) {
       return result(current)
     }
@@ -289,9 +291,6 @@ export async function checkWorkerMailbox(args: {
       ...formatted(arrived)
     }
   }
-  const key = `${address}:${workerMailbox.generation}`
-  const batch = waitResult.share(key, () => takeDelivery(typeFilter))
-  // A waiter that shares another's take has no take transaction, so it receipts the batch on arrival.
-  args.recordMutationReceipt?.(result(batch))
+  const batch = await takeDelivery(typeFilter, waitResult)
   return result(batch)
 }

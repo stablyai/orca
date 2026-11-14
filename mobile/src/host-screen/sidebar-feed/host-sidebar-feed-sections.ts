@@ -14,18 +14,21 @@ import type {
   Section,
   Worktree,
   WorktreeHostContextView
-} from '../../worktree/workspace-list-types'
+} from '../../worktree/workspace-list/workspace-list-types'
 import {
   isLastVisitedWorktreeRow,
   type LastVisitedWorktreeOnHost
-} from '../../worktree/host-list-highlight'
+} from '../../worktree/row-presentation/host-list-highlight'
 import {
   resolveWorktreeHostId,
   type WorktreeHostContextOf
-} from '../../worktree/worktree-host-context-labels'
-import '../../worktree/workspace-list-sections'
-import { filterWorktrees } from '../../worktree/workspace-row-filtering'
-import { rowFiltersForView, type MobileViewState } from '../../worktree/workspace-view-settings'
+} from '../../worktree/row-presentation/worktree-host-context-labels'
+import '../../worktree/workspace-list/workspace-list-sections'
+import { filterWorktrees } from '../../worktree/workspace-list/workspace-row-filtering'
+import {
+  rowFiltersForView,
+  type MobileViewState
+} from '../../worktree/workspace-list/workspace-view-settings'
 import type { HiddenProjects } from '../../../../src/shared/hidden-projects'
 
 export type HostFeedListSources = {

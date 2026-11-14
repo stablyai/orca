@@ -6,7 +6,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import {
   HOST_MODEL_CATALOG_ACCOUNT_SETTINGS,
   withoutUnprovenNewLaunchDefault
-} from '../../../../../shared/agent-session/options/host-model-catalog-snapshot-rules'
+} from '../../../../../shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
 import { sourceControlActionAgentPicksModel } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
 import {
   hostModelCatalogGeneration,

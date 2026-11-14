@@ -14,9 +14,16 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../host-catalog/host-profile'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
-import { agentStateLabel, formatTimeAgo, type AgentDotState } from '../worktree/agent-row-display'
-import { isDisclosureOpen, toggleDisclosure } from '../worktree/agent-child-disclosure'
-import { areStructurallyEqual } from '../worktree/structural-equality'
+import {
+  agentStateLabel,
+  formatTimeAgo,
+  type AgentDotState
+} from '../worktree/agent-lineage/agent-row-display'
+import {
+  isDisclosureOpen,
+  toggleDisclosure
+} from '../worktree/agent-lineage/agent-child-disclosure'
+import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
 import type { AgentListSection } from './agent-list-model'
 import { agentStatusGroup, type AgentListRow } from './agent-list-rows'
 import { agentListPreview } from './agent-list-row-text'

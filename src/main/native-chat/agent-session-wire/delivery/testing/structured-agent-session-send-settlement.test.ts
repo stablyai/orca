@@ -7,8 +7,8 @@ import {
 function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): SendSettlementJournal {
   return {
     activeTurnId: () => null,
-    cursor: () => ({ epoch: 'epoch-1', sequence: dispatchState === 'pending' ? 1 : 2 }),
-    submission: () => ({
+    cursor: async () => ({ epoch: 'epoch-1', sequence: dispatchState === 'pending' ? 1 : 2 }),
+    submission: async () => ({
       clientMessageId: 'client-1',
       fence: 1,
       payloadFingerprint: 'fingerprint',
@@ -23,9 +23,9 @@ function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): SendSettlem
 
 function queuedJournal(activeTurnId: string | null, handedOver = false): SendSettlementJournal {
   return {
-    cursor: () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),
+    cursor: async () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),
     activeTurnId: () => activeTurnId,
-    submission: () => ({
+    submission: async () => ({
       clientMessageId: 'client-1',
       fence: 1,
       payloadFingerprint: 'fingerprint',
@@ -128,11 +128,11 @@ it('a row wait follows a replacement handoff and resolves withdrawal or returned
   const state: SendSettlementJournal = {
     ...journal('pending'),
     queuedSend: () => row,
-    submission: () => undefined
+    submission: async () => undefined
   }
   const settlements = new StructuredAgentSessionSendSettlement(() => state)
   const pending = settlements.wait('session-1', 'row')
-  const attempt = journal('pending').submission('client-1')!
+  const attempt = (await journal('pending').submission('client-1'))!
   row = { clientMessageId: 'row', submission: { ...attempt, clientMessageId: 'attempt-1' } }
   settlements.publish('session-1', state)
   row = { clientMessageId: 'row', queued: { messageId: 'row', position: 1, state: 'waiting' } }

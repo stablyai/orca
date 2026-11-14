@@ -1,4 +1,5 @@
-import { agentEntrySessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { retainedAgentExecutionHost } from './retained-agent-execution-host'
+import { agentEntrySessionStartedAt } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-start-time'
 import type { AppState } from '../../types'
 import type {
   AgentStatusEntry,
@@ -161,13 +162,14 @@ export function retainedAgentEntryFromLive(
 ): RetainedAgentEntry {
   const tab =
     findTabForAgentEntry(state, worktreeId, entry) ?? getRetainedFallbackTab(entry, worktreeId)
-  return {
+  const retained = {
     entry,
     worktreeId,
     tab,
     agentType,
     startedAt: agentEntrySessionStartedAt(entry)
   }
+  return { ...retained, executionHostId: retainedAgentExecutionHost(state, retained) }
 }
 
 export function shouldReplaceRetainedWithLive(

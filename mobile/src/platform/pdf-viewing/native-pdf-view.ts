@@ -15,7 +15,7 @@ import {
   type BridgePdfOpenParams
 } from '../../mobile-web-shell/bridge/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/bridge-host-errors'
-import { scopeRpcClientToExecutionHost } from '../../worktree/execution-host-scoped-rpc-client'
+import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import { discardUnreturnedMediaFile, freshCacheFolder } from '../media-picking/native-media-device'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

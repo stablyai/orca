@@ -11,7 +11,7 @@ import {
   agentSessionWriteKindForMethod as writeKind,
   type AgentSessionWriteFailure
 } from '../../../../../../../shared/agent-session/failures/agent-session-write-failure'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredSessionOperationId } from './structured-agent-session-operation-id'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'

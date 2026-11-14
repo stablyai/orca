@@ -6,19 +6,19 @@ import {
   buildAgentRowLineageTree,
   flattenAgentRowLineage,
   type AgentRowNode
-} from '../worktree/agent-row-lineage'
+} from '../worktree/agent-lineage/agent-row-lineage'
 import {
   collapsedChildrenSignalState,
   isDisclosureOpen,
   partitionIdleChildren,
   toggleDisclosure
-} from '../worktree/agent-child-disclosure'
-import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
+} from '../worktree/agent-lineage/agent-child-disclosure'
+import { agentDotState, type AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
 import { useSharedNow } from '../hooks/use-now'
-import { worktreeAgentChildRows } from '../worktree/worktree-agent-child-rows'
+import { worktreeAgentChildRows } from '../worktree/agent-lineage/worktree-agent-child-rows'
 
 type Props = {
   agents: RuntimeWorktreeAgentRow[]
