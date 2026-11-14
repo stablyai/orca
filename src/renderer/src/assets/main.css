@@ -1760,6 +1760,29 @@ html.native-shell .app-layout {
   box-shadow: none;
 }
 
+/* Lineage connectors: quiet enough to sit behind cards, strong enough to read the tree at a glance. */
+[data-worktree-lineage-guides] {
+  --worktree-lineage-guide-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 22%,
+    transparent
+  );
+}
+
+[data-worktree-lineage-guide='rail'],
+[data-worktree-lineage-guide='stem'] {
+  background-color: var(--worktree-lineage-guide-color);
+}
+
+[data-worktree-lineage-guide='branch'] {
+  border-color: var(--worktree-lineage-guide-color);
+}
+
+/* Why: title-only cards use py-2 instead of pt-1.25, which drops the title center by 3px. */
+[data-worktree-lineage-row]:has(> * [data-worktree-card-single-line]) {
+  --worktree-lineage-title-center: 19px;
+}
+
 /* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
 [data-worktree-family-segment],
 .dark [data-worktree-family-segment] {
