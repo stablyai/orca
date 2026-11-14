@@ -1,35 +1,85 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { closeTestJournalHostDatabases } from '../store-lifecycle/journal-host-database-test-support'
-import type { AgentSessionJournal } from '../journal-store'
-import { JournalWriteQueue } from './journal-write-queue'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { describe, expect, it } from 'vitest'
+import { createFixture } from '../store-lifecycle/journal-store-contract-test-fixture'
+import { JournalWriteQueue, type JournalWriteAdmission } from './journal-write-queue'
 
 export function registerJournalWriteQueueTests(): void {
-  void ({
-    sessionId: 'session-1',
-    workspaceId: 'workspace-1',
-    hostId: 'host-1',
-    agent: 'codex',
-    providerHandle: codexProviderHandle('thread-1')
-  } as const)
-
-  let root = ''
-  const opened: AgentSessionJournal[] = []
-
-  beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-journal-write-queue-'))
-  })
-
-  afterEach(async () => {
-    await Promise.allSettled(opened.splice(0).map((journal) => journal.close()))
-    await closeTestJournalHostDatabases()
-    await rm(root, { recursive: true, force: true })
-  })
+  const fixture = createFixture()
 
   describe('the journal write queue', () => {
+    it.each(['submission', 'queued'] as const)(
+      'publishes a committed %s when admission later rejects',
+      async (kind) => {
+        const journal = await fixture.open()
+        const published: string[] = []
+        journal.observeCommits((rows) => {
+          if (rows?.length) {
+            published.push('committed')
+          }
+        })
+        const fault = new Error('capsule release failed')
+        const admission: JournalWriteAdmission = async (write) => {
+          write()
+          throw fault
+        }
+        const body = {
+          kind: 'message' as const,
+          role: 'user' as const,
+          blocks: [{ type: 'text' as const, text: 'Resume the task' }]
+        }
+        const write =
+          kind === 'submission'
+            ? journal.appendSubmission(
+                { clientMessageId: 'resume-1', payloadFingerprint: 'resume-fp', body, fence: 1 },
+                undefined,
+                undefined,
+                undefined,
+                admission
+              )
+            : journal.queuedMessages.insert({ messageId: 'resume-1', body }, undefined, admission)
+        await expect(write).rejects.toBe(fault)
+        expect(published).toEqual(['committed'])
+        if (kind === 'submission') {
+          expect(journal.submission('resume-1')).toMatchObject({ clientMessageId: 'resume-1' })
+        } else {
+          expect(journal.queuedMessages.get('resume-1')).toMatchObject({ messageId: 'resume-1' })
+        }
+        await journal.queuedMessages.insert({ messageId: 'next', body })
+        expect(journal.queuedMessages.get('next')).toMatchObject({ messageId: 'next' })
+      }
+    )
+
+    it('does not publish an admission rejected before commit and preserves both post-commit faults', async () => {
+      const journal = await fixture.open()
+      const body = {
+        kind: 'message' as const,
+        role: 'user' as const,
+        blocks: [{ type: 'text' as const, text: 'Resume the task' }]
+      }
+      const lockFault = new Error('capsule release failed')
+      const publicationFault = new Error('observer unavailable')
+      journal.observeCommits(() => {
+        throw publicationFault
+      })
+      const before: JournalWriteAdmission = async () => {
+        throw lockFault
+      }
+      await expect(
+        journal.queuedMessages.insert({ messageId: 'not-accepted', body }, undefined, before)
+      ).rejects.toBe(lockFault)
+      expect(journal.queuedMessages.get('not-accepted')).toBeNull()
+      const after: JournalWriteAdmission = async (write) => {
+        write()
+        throw lockFault
+      }
+      await expect(
+        journal.queuedMessages.insert({ messageId: 'accepted', body }, undefined, after)
+      ).rejects.toMatchObject({
+        cause: lockFault,
+        errors: [lockFault, publicationFault]
+      })
+      expect(journal.queuedMessages.get('accepted')).toMatchObject({ messageId: 'accepted' })
+    })
+
     it('runs a write issued from inside a running one after it, in issue order', async () => {
       const queue = new JournalWriteQueue('session-1')
       const ran: string[] = []

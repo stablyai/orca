@@ -32,10 +32,24 @@ export class JournalWriteQueue {
     if (admission) {
       // Own the FIFO position before admission; no SQLite transaction spans its await.
       return this.join(() =>
-        admission(run).then((value) => {
-          published?.()
-          return value
-        })
+        admission(run).then(
+          (value) => {
+            published?.()
+            return value
+          },
+          (error: unknown) => {
+            try {
+              published?.()
+            } catch (publicationError) {
+              throw new AggregateError(
+                [error, publicationError],
+                'journal admission failed before publication completed',
+                { cause: error }
+              )
+            }
+            throw error
+          }
+        )
       )
     }
     return this.lineBusy ? this.join(run) : this.runNow(run)
@@ -82,7 +96,7 @@ export class JournalWriteQueue {
     return result
   }
 
-  private join<T>(run: () => T): Promise<T> {
+  private join<T>(run: () => T | PromiseLike<T>): Promise<T> {
     const started = this.writes.then(run)
     this.writes = started.catch(() => undefined)
     this.waiting++

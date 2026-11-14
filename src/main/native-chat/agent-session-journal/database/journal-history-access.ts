@@ -8,19 +8,20 @@ import { JournalRecoveryStopSummaries } from './journal-recovery-stop-summaries'
 const owners = new WeakMap<Database.Database, JournalHistoryAccess>()
 import {
   ensureJournalHistoryTables,
-  historySources,
   historyCoverage,
   historySourceKey,
   historyCovers,
-  journalHistoryCovered,
-  journalHistoryIncarnation,
   ensureHistoryCoverage,
-  prepareJournalStopHistory,
-  historyIdentity,
   type Source,
   type Page,
   type Demand
 } from './journal-history-source'
+import {
+  observeJournalHistory,
+  observedHistoryCovered,
+  prepareJournalStopHistory,
+  prepareJournalHistory
+} from './journal-history-observation'
 /** Derived access is optional; the journal and ordinary send never wait for its maintenance. */
 export class JournalHistoryAccess {
   readonly summaries = new JournalRecoveryStopSummaries()
@@ -53,25 +54,16 @@ export class JournalHistoryAccess {
     return this.prepareSources(sessionId, (source) => source.generation !== 0, signal)
   }
 
-  private async prepareSources(
+  private prepareSources(
     sessionId: string,
     include: (source: Source) => boolean,
     signal?: AbortSignal
   ): Promise<boolean> {
-    if (this.closed || this.unavailable || signal?.aborted) {
-      return false
-    }
-    try {
-      const identity = this.sourceIdentity(sessionId, true)
-      if (identity === null) {
-        return false
-      }
-      const sources = historySources(this.database.db, sessionId).filter(include)
-      const ready = await Promise.all(sources.map((source) => this.demand(source, signal)))
-      return ready.every(Boolean) && identity === this.sourceIdentity(sessionId)
-    } catch {
-      return false
-    }
+    return this.closed || this.unavailable || signal?.aborted
+      ? Promise.resolve(false)
+      : prepareJournalHistory(this.database, sessionId, include, (source) =>
+          this.demand(source, signal)
+        )
   }
 
   prepareStops(sessionId: string, signal?: AbortSignal) {
@@ -83,25 +75,31 @@ export class JournalHistoryAccess {
     )
   }
 
-  sourceIdentity = (sessionId: string, initialize = false) =>
-    historyIdentity(this.database, sessionId, initialize)
+  observe = (sessionId: string, initialize = false) =>
+    observeJournalHistory(this.database, sessionId, initialize)
+
+  sourceIdentity = (sessionId: string, initialize = false): string | null => {
+    try {
+      return this.observe(sessionId, initialize).identity
+    } catch {
+      return null
+    }
+  }
 
   retainSessions = (ids: readonly string[]): void => this.summaries.retain(ids)
   pinSessions = (ids: readonly string[]): (() => void) => this.summaries.pin(ids)
   retains = (id: string): boolean => this.summaries.retains(id)
 
   covered(sessionId: string, epoch: string, generation: number, through: number): boolean {
-    return (
-      !this.closed &&
-      !this.unavailable &&
-      journalHistoryCovered(this.database.db, sessionId, epoch, generation, through)
-    )
-  }
-
-  incarnation(sessionId: string, epoch: string, generation: number): string | null {
-    return this.closed || this.unavailable
-      ? null
-      : journalHistoryIncarnation(this.database.db, sessionId, epoch, generation)
+    try {
+      return (
+        !this.closed &&
+        !this.unavailable &&
+        observedHistoryCovered(this.observe(sessionId), epoch, generation, through)
+      )
+    } catch {
+      return false
+    }
   }
 
   async close(): Promise<void> {
@@ -163,15 +161,17 @@ export class JournalHistoryAccess {
       demands[0]!.source
     )
     try {
-      const current = historySources(this.database.db, source.sessionId).find(
-        (value) => historySourceKey(value) === key
-      )
-      if (!current || current.through < source.through) {
+      const observed = this.observe(source.sessionId)
+      const current = observed.sources.find(({ source: value }) => historySourceKey(value) === key)
+      if (!current || current.source.through < source.through) {
         this.finish(key, false)
         queueMicrotask(() => this.pump())
         return
       }
-      const saved = ensureHistoryCoverage(this.database, source)
+      const saved =
+        current.coverage?.dirty === 0
+          ? current.coverage
+          : ensureHistoryCoverage(this.database, source)
       if (historyCovers(source, saved, source.through)) {
         this.finish(key, true)
         queueMicrotask(() => this.pump())
@@ -223,13 +223,13 @@ export class JournalHistoryAccess {
     try {
       let published = false
       this.database.transaction((db) => {
-        const current = historySources(this.database.db, source.sessionId).find(
-          (value) => historySourceKey(value) === key
+        const current = this.observe(source.sessionId).sources.find(
+          ({ source: value }) => historySourceKey(value) === key
         )
-        const saved = historyCoverage(this.database.db, source)
+        const saved = current?.coverage
         if (
           !current ||
-          current.through < source.through ||
+          current.source.through < source.through ||
           !saved ||
           saved.dirty ||
           saved.incarnation !== incarnation
@@ -264,7 +264,7 @@ export class JournalHistoryAccess {
           source.generation
         )
         published = true
-      }, true)
+      })
       if (!published) {
         this.finish(key, false)
       } else {

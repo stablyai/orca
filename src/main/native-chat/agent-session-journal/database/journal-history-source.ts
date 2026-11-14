@@ -56,10 +56,10 @@ export function ensureJournalHistoryTables(db: Database.Database): void {
         WHERE generation = OLD.generation AND dirty = 0; END;`)
 }
 
-export function historySources(db: Database.Database, sessionId: string): Source[] {
+export function historySourceState(db: Database.Database, sessionId: string) {
   const epoch = readJournalSessionEpoch(db, sessionId)
   if (!epoch) {
-    return []
+    return { epoch, outcome: null, rawThrough: 0, sources: [] }
   }
   const source = journalOutcomeSource(db, sessionId, epoch)
   const raw = {
@@ -76,7 +76,7 @@ export function historySources(db: Database.Database, sessionId: string): Source
           .get(sessionId, epoch)?.seq ?? 0
       )
   }
-  return [
+  const sources: Source[] = [
     raw,
     ...(source
       ? [
@@ -90,6 +90,11 @@ export function historySources(db: Database.Database, sessionId: string): Source
         ]
       : [])
   ]
+  return { epoch, outcome: source, rawThrough: raw.through, sources }
+}
+
+export function historySources(db: Database.Database, sessionId: string): Source[] {
+  return historySourceState(db, sessionId).sources
 }
 
 export function historyCoverage(db: Database.Database, source: Source): Coverage | undefined {
@@ -152,85 +157,4 @@ export function ensureHistoryCoverage(database: JournalHostDatabase, source: Sou
     database.transaction(initialize)
   }
   return historyCoverage(database.db, source)!
-}
-
-export async function prepareJournalStopHistory(
-  database: JournalHostDatabase,
-  sessionId: string,
-  demand: (source: Source) => Promise<boolean>
-): Promise<'ready' | 'unknown' | 'unavailable'> {
-  let sources: Source[]
-  try {
-    sources = historySources(database.db, sessionId)
-  } catch {
-    return 'unknown'
-  }
-  try {
-    for (const source of sources) {
-      ensureHistoryCoverage(database, source)
-    }
-    const identity = historyIdentity(database, sessionId)
-    if (identity === null) {
-      return 'unavailable'
-    }
-    const ready = await Promise.all(sources.filter((source) => source.generation === 0).map(demand))
-    return ready.every(Boolean) && identity === historyIdentity(database, sessionId)
-      ? 'ready'
-      : 'unavailable'
-  } catch {
-    return 'unavailable'
-  }
-}
-
-/** Appends preserve identity; historical correction makes old admitted evidence unusable. */
-export function historyIdentity(
-  database: JournalHostDatabase,
-  sessionId: string,
-  initialize = false
-): string | null {
-  try {
-    const identities = historySources(database.db, sessionId).map((source) => {
-      const saved = initialize
-        ? ensureHistoryCoverage(database, source)
-        : historyCoverage(database.db, source)
-      if (!saved || saved.dirty !== 0) {
-        throw new Error('history identity is unavailable')
-      }
-      return [historySourceKey(source), saved.incarnation]
-    })
-    return JSON.stringify(identities)
-  } catch {
-    return null
-  }
-}
-
-export function journalHistoryCovered(
-  db: Database.Database,
-  sessionId: string,
-  epoch: string,
-  generation: number,
-  through: number
-): boolean {
-  try {
-    const source = historySources(db, sessionId).find(
-      (value) => value.epoch === epoch && value.generation === generation
-    )
-    const saved = source && historyCoverage(db, source)
-    return Boolean(source && saved && saved.dirty === 0 && historyCovers(source, saved, through))
-  } catch {
-    return false
-  }
-}
-
-export function journalHistoryIncarnation(
-  db: Database.Database,
-  sessionId: string,
-  epoch: string,
-  generation: number
-): string | null {
-  const source = historySources(db, sessionId).find(
-    (value) => value.epoch === epoch && value.generation === generation
-  )
-  const saved = source && historyCoverage(db, source)
-  return saved?.dirty === 0 ? saved.incarnation : null
 }

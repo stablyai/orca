@@ -20,6 +20,24 @@ import {
 
 afterEach(() => vi.restoreAllMocks())
 
+it('replays accepted restart work after a post-commit capsule failure without filing a refusal', async () => {
+  const { host, root, dispatch } = await interruptedRestart()
+  const accept = AgentSessionRecoveryCapsule.prototype.withSelectedResume
+  vi.spyOn(AgentSessionRecoveryCapsule.prototype, 'withSelectedResume').mockImplementationOnce(
+    async function (this: AgentSessionRecoveryCapsule, ...args) {
+      await accept.apply(this, args)
+      throw new Error('capsule release failed after acceptance')
+    }
+  )
+  const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
+  expect(result.failed).toEqual([])
+  expect((await host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
+  await host.restartResume.continueAfterRestart([SESSION], 'modal')
+  expect(dispatch).toHaveBeenCalledOnce()
+  expect((await host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+})
+
 it('keeps an accepted restart offer when its settlement cannot establish Stop history', async () => {
   const { host, root, store, dispatch } = await interruptedRestart()
   const database = openTestJournalHostDatabase(root)

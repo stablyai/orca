@@ -6,6 +6,10 @@ import { agentJournalItemSubagentId } from '../../../../shared/agent-session/jou
 import type Database from '../../../sqlite/sync-database'
 import { storedItem } from '../durable-rows/journal-storage-schema'
 import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
+import {
+  observedHistoryCovered,
+  observedHistoryIncarnation
+} from '../database/journal-history-observation'
 import { decodeJournalOutcome } from '../outcomes/journal-outcome-codec'
 import { outcomeFormat1Stored } from '../outcomes/journal-outcome-format-1'
 import { JournalOutcomeDecodeError } from '../writing/journal-write-guards'
@@ -31,7 +35,11 @@ export function readHistoricalJournalItemRevisions(
   revisions: Map<string, HistoricalJournalItemRevision[]>
   answers: Map<string | null, number>
 } {
-  const source = journalOutcomeSource(db, sessionId, epoch)
+  const observed = latestOnly ? undefined : journalHistoryAccess(db)?.observe(sessionId)
+  if (observed && observed.epoch !== epoch) {
+    throw new JournalOutcomeDecodeError('saved request epoch changed')
+  }
+  const source = observed ? observed.outcome : journalOutcomeSource(db, sessionId, epoch)
   const ids = new Set(itemIds)
   if (!latestOnly) {
     for (const [id, history] of raw.revisions) {
@@ -40,8 +48,10 @@ export function readHistoricalJournalItemRevisions(
       }
     }
     if (source) {
-      const access = journalHistoryAccess(db)
-      if (!access?.covered(sessionId, epoch, source.generation, source.through)) {
+      if (
+        !observed ||
+        !observedHistoryCovered(observed, epoch, source.generation, source.through)
+      ) {
         throw new JournalOutcomeDecodeError('saved request history is not ready')
       }
       for (const record of db
@@ -52,7 +62,7 @@ export function readHistoricalJournalItemRevisions(
           sessionId,
           epoch,
           source.generation,
-          access.incarnation(sessionId, epoch, source.generation),
+          observedHistoryIncarnation(observed, epoch, source.generation),
           source.through
         )) {
         ids.add(z.string().parse(JSON.parse(String(record.entry_key))))

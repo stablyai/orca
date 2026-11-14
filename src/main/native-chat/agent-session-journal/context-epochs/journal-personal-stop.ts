@@ -5,11 +5,16 @@ import { outcomeFormat3PauseMarks } from '../outcomes/journal-outcome-format-3'
 import { outcomeFormat1StoredScalars } from '../outcomes/journal-outcome-format-1'
 import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
 import { parseJournalRow } from '../durable-rows/journal-row-schema'
-import { readJournalSessionEpoch } from '../durable-rows/journal-row-table'
-import { journalOutcomeSource, type JournalOutcomeSource } from '../outcomes/journal-outcome-format'
+import type { JournalOutcomeSource } from '../outcomes/journal-outcome-format'
 import { decodeJournalOutcome } from '../outcomes/journal-outcome-codec'
 import { journalContextEpoch } from './journal-context-epoch'
 import { journalHistoryAccess } from '../database/journal-history-access'
+import { historySourceState } from '../database/journal-history-source'
+import {
+  observedHistoryCovered,
+  observedHistoryIncarnation,
+  type JournalHistoryObservation
+} from '../database/journal-history-observation'
 import {
   emptyJournalPersonalStops,
   rememberJournalPersonalStop,
@@ -155,34 +160,37 @@ export function readJournalPersonalStopFrontier(
   sessionId: string,
   refresh = false
 ): { context: string; frontier: JournalPersonalStopFrontier } | null {
-  const epoch = readJournalSessionEpoch(db, sessionId)
+  const access = journalHistoryAccess(db)
+  let observed: JournalHistoryObservation | undefined
+  try {
+    observed = access?.observe(sessionId, refresh)
+  } catch (error) {
+    if (!refresh) {
+      throw error
+    }
+  }
+  const current = observed ?? historySourceState(db, sessionId)
+  const epoch = current.epoch
   if (!epoch) {
     return null
   }
-  const source = journalOutcomeSource(db, sessionId, epoch)
-  const tip =
-    source?.through ??
-    Number(
-      db
-        .prepare(`SELECT MAX(seq) AS seq FROM journal_rows
-    WHERE session_id = ? AND epoch = ?`)
-        .get(sessionId, epoch)?.seq ?? 0
-    )
+  const source = current.outcome
+  const rawThrough = current.rawThrough
+  const tip = source?.through ?? rawThrough
   const key = `${epoch}:${source?.generation ?? 'raw'}:${source?.prefix ?? 0}:${tip}`
-  const access = journalHistoryAccess(db)
-  const identity = access?.sourceIdentity(sessionId, refresh) ?? null
-  const rawThrough = source?.prefix ?? tip
+  const identity = observed?.identity ?? null
+  const incarnation = observed ? observedHistoryIncarnation(observed, epoch, 0) : null
+  const outcomeIncarnation =
+    source && observed ? observedHistoryIncarnation(observed, epoch, source.generation) : null
   if (
     !refresh &&
-    (!access?.covered(sessionId, epoch, 0, rawThrough) ||
-      (source && !access.incarnation(sessionId, epoch, source.generation)))
+    (!observed ||
+      !observedHistoryCovered(observed, epoch, 0, rawThrough) ||
+      (source && !outcomeIncarnation))
   ) {
     throw new Error('chat retirement history is not ready')
   }
-  const incarnation = refresh ? null : (access?.incarnation(sessionId, epoch, 0) ?? null)
-  const outcomeIncarnation =
-    refresh || !source ? null : access?.incarnation(sessionId, epoch, source.generation)
-  const coverageKey = `${key}:${incarnation ?? 'refresh'}:${outcomeIncarnation ?? ''}`
+  const coverageKey = `${key}:${refresh ? 'refresh' : incarnation}:${refresh ? '' : (outcomeIncarnation ?? '')}`
   const cache = access?.personalStops
   let saved = cache?.get(sessionId)
   if (refresh || saved?.key !== coverageKey) {
