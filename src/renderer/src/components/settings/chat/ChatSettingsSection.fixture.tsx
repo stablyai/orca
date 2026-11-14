@@ -22,3 +22,13 @@ function ChatSettingsPreview(): React.JSX.Element | null {
 
 export const desktop = defineFixture({ width: 820, render: () => <ChatSettingsPreview /> })
 export const narrow = defineFixture({ width: 390, render: () => <ChatSettingsPreview /> })
+export const autoExpandTools = defineFixture({
+  width: 820,
+  setup: () => {
+    const settings = useAppStore.getState().settings
+    if (settings) {
+      useAppStore.setState({ settings: { ...settings, nativeChatAutoExpandTools: true } })
+    }
+  },
+  render: () => <ChatSettingsPreview />
+})

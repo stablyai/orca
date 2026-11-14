@@ -84,6 +84,7 @@ export function NativeChatResolvedView({
   const selectOwner = useMemo(() => createNativeChatRuntimeSelector(terminalTabId), [terminalTabId])
   const runtimeEnvironmentId = useAppStore(selectOwner)
   const keybindings = useAppStore((s) => s.keybindings)
+  const autoExpandTools = useAppStore((s) => s.settings?.nativeChatAutoExpandTools === true)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(terminalTabId)
   const session = useNativeChatRetainedSession({
     paneKey,
@@ -358,7 +359,7 @@ export function NativeChatResolvedView({
             session={sessionWithPending}
             isVisible={isVisible}
             isWorking={turnActive}
-            expandSignal={false}
+            expandSignal={autoExpandTools}
             {...turnTiming}
             awaitingInput={awaitingInput}
             deliveryNotices={deliveryNotices}
