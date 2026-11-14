@@ -23,6 +23,8 @@ export type ClaudeConversationForkWork = {
   destinationDirectory: string
   temporaryPath: string
   title?: string
+  /** A copy placed on another machine works in that machine's folder. */
+  rewriteCwd?: string
 }
 
 async function fork(input: ClaudeConversationForkWork) {
@@ -65,10 +67,13 @@ async function fork(input: ClaudeConversationForkWork) {
           return
         }
         await mkdir(input.destinationDirectory, { recursive: true })
+        const cwd = input.rewriteCwd
         await publishClaudeConversationTranscript(
           input.temporaryPath,
           join(input.destinationDirectory, `${key.sessionId}.jsonl`),
-          entries
+          cwd
+            ? entries.map((entry) => (typeof entry.cwd === 'string' ? { ...entry, cwd } : entry))
+            : entries
         )
       }
     }
