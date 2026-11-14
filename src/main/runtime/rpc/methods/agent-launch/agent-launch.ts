@@ -2,11 +2,11 @@
  * Keep worktree.create's PTY/handle contract for older clients.
  * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
 
-import { agentLaunchFeatureRequirement } from '../../agent-launch-feature-requirement'
+import { agentLaunchFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { AgentLaunchTabClosedError } from '../../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../../shared/agent-launch/contracts/agent-launch-operation'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import { agentSessionOperationKey } from '../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { agentSessionOperationKey } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
@@ -32,7 +32,7 @@ import {
   AgentLaunch,
   AgentLaunchReplay,
   type AgentLaunchParams
-} from '../../../../../shared/rpc-contract/agent-launch-params'
+} from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {
@@ -42,7 +42,7 @@ import {
 import {
   agentLaunchCallerNavigationId,
   callerRendersLaunchedChat,
-  selectAgentLaunchTabForCaller
+  selectLaunchedTab
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 import {
@@ -89,9 +89,7 @@ async function runAgentLaunch(
       }
       view.early?.surfacePublished(surface)
       replaySafe?.recordSurface(withPlacement(surface, view))
-      if (callerNavigationId !== null && view.presentation !== 'background') {
-        selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
-      }
+      selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
     }
   })
   return withPlacement(result, view)

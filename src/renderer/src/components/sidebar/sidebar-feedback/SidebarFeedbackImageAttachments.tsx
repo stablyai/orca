@@ -1,15 +1,17 @@
 import React from 'react'
 import { ImagePlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   FEEDBACK_IMAGE_FILE_ACCEPT,
-  MAX_FEEDBACK_IMAGE_COUNT,
-  MAX_FEEDBACK_IMAGE_TOTAL_BYTES,
   formatFeedbackImageSize,
   type FeedbackImageDraft
-} from '@/lib/feedback-image-attachments'
+} from '@/components/sidebar/sidebar-feedback/feedback-image-attachments'
+import {
+  MAX_FEEDBACK_IMAGE_COUNT,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+} from '../../../../../shared/feedback-image-limits'
 
 // Delay progress hints to avoid flashing during fast unshrunk reads.
 const PREPARING_HINT_DELAY_MS = 250

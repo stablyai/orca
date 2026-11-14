@@ -9,7 +9,7 @@ import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
   type SessionSearchIndexerHarness
-} from '../../ai-vault-search/session-search-indexer-test-fixture'
+} from '../../ai-vault-search/indexing/session-search-indexer-test-fixture'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
   type AiVaultServiceChildMessage,

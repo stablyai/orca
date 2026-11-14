@@ -1,5 +1,5 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -16,24 +16,23 @@ import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,
   type StructuredAgentSessionCreateSupport
-} from '../../../native-chat/structured-agent-session-create-support'
+} from '../../../native-chat/agent-launch/structured-agent-session-create-support'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
 import {
   refreshHostAgentBaseEnvironmentAfterMiss,
   resolveHostAgentBaseEnvironment,
   createStructuredAgentEnvironmentResolvers
 } from '../environment/structured-agent-shell-environment'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
-import { stripInheritedClaudeSessionEnv } from '../../../../shared/agent-launch/startup/claude-parent-session-env'
 
 export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
@@ -103,12 +102,8 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
   agent: string,
   settings: LaunchEnvironmentSettings
 ): Promise<Record<string, string>> {
-  const inherited = { ...(await resolveHostAgentBaseEnvironment(settings)) }
-  if (agent === 'claude') {
-    stripInheritedClaudeSessionEnv(inherited)
-  }
   return overlayEnvironmentVariables(
-    inherited,
+    await resolveHostAgentBaseEnvironment(settings),
     isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
     process.platform
   )

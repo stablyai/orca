@@ -2,7 +2,7 @@ import * as React from 'react'
 import { HexColorPicker } from 'react-colorful'
 
 import { normalizeRepoBadgeColor, resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from './button'
 import { Input } from './input'
 import { Label } from './label'

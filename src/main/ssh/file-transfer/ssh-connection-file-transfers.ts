@@ -1,6 +1,6 @@
 import type { SFTPWrapper } from 'ssh2'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { FileUploadSession } from '../../providers/filesystem-provider-contract'
+import type { FileUploadSession } from '../../providers/filesystem/provider-contract'
 import {
   resolveSftpTransferPathIfMapped,
   type SftpNamespacePathMapping
@@ -66,7 +66,7 @@ export async function downloadSshFile(
   if (!host.usesSystemSshTransport()) {
     const sftp = await host.sftp()
     try {
-      const { fastGetViaSftp } = await import('../../providers/ssh-filesystem-provider-sftp')
+      const { fastGetViaSftp } = await import('./sftp/sftp-download')
       await fastGetViaSftp(sftp, remotePath, localPath)
     } finally {
       sftp.end()

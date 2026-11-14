@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { buildJournalFileLock } from '../../native-build/build-journal-file-lock.mjs'
 // Build patched node-pty for current platform/arch/libc so deployment needs no compiler; compat slots also build COMPAT_SLOT_ADDONS.
 // Require repo patch: GLIBC symbol pins plus no-as-needed retain libutil/libpthread and prevent #9902.
 // Use pinned, hash-verified Node headers at N-API 8; glibc slots target 2.28, optional compat 2.17, musl stays separate.
@@ -254,6 +255,9 @@ async function build() {
     ? await compileCompatAddons({ slot, workDir: join(WORK_DIR, slot), nodeDir })
     : []
 
+  buildJournalFileLock(
+    join(buildDir, process.platform === 'win32' ? 'journal-file-lock.exe' : 'journal-file-lock')
+  )
   rmSync(slotDir, { recursive: true, force: true })
   const files = {}
   for (const [relative, source] of [

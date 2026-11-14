@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
-import { PluginContentVerifier } from '../plugin-content-integrity'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import type { PluginWorkerHandle } from './plugin-host-process'
+import { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import type { PluginWorkerHandle } from './parent-process/plugin-host-process-types'
 import { PluginWorkerController } from './plugin-worker-controller'
-import type { PluginWorkerFactory } from './plugin-worker-manager'
-import type { PluginLogBuffer } from '../plugin-log-buffer'
+import type { PluginWorkerFactory } from './worker-supervision/plugin-worker-startup'
+import type { PluginLogBuffer } from '../logging/plugin-log-buffer'
 
 const roots: string[] = []
 
@@ -63,14 +63,16 @@ function worker(commands: string[]): PluginWorkerHandle & { dispose: ReturnType<
 
 function controller(options: {
   factory: PluginWorkerFactory
-  verify: () => Promise<void>
+  verify?: () => Promise<void>
   isApproved: () => boolean
   isApprovalKept?: () => boolean
   logs?: PluginLogBuffer
 }): PluginWorkerController {
   const contentVerifier = new PluginContentVerifier()
-  contentVerifier.verify = options.verify
-  contentVerifier.verifyNow = options.verify
+  if (options.verify) {
+    contentVerifier.verify = options.verify
+    contentVerifier.verifyNow = options.verify
+  }
   return new PluginWorkerController({
     entryPath: '/host-entry.js',
     workerFactory: options.factory,

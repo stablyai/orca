@@ -3,7 +3,7 @@ import { renameSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import '../../../../shared/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
-import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
@@ -13,6 +13,7 @@ import {
   whenBrowserExtensionSessionsLoaded
 } from '../profile-sessions/browser-extension-session-loader'
 import { addUnpackedBrowserExtension } from '../browser-extension-management'
+import { closeBrowserExtensionProfileDocumentStores } from './browser-extension-profile-document-store'
 import { buildBrowserExtensionPageContextMenu } from '../context-menus/browser-extension-context-menu-host'
 import { recordActiveBrowserPage } from '../tabs-and-windows/browser-extension-tab-model'
 import { trackBrowserExtensionMainWindow } from '../tabs-and-windows/browser-extension-window-model'
@@ -81,9 +82,13 @@ function capture(message: string): void {
       status[key] =
         key === 'commands' ? [...(Array.isArray(status[key]) ? status[key] : []), value] : value
       writeStatus()
-      // Why quit, not exit: will-quit flushes the extension state the second launch replays.
+      // Why quit, not exit: will-quit flushes the extension state the second launch replays; sync
+      // storage saves last, as Orca's quit does.
       if (key === 'setup' && phase === 'first') {
-        setTimeout(() => app.quit(), 300)
+        setTimeout(
+          () => void closeBrowserExtensionProfileDocumentStores().then(() => app.quit()),
+          300
+        )
       }
     }
   }

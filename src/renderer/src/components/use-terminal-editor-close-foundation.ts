@@ -6,7 +6,7 @@ import {
 } from './terminal/window-close-running-work'
 import type { TerminalWorkspaceProjectionController } from './use-terminal-workspace-projection'
 import { runWithWindowCloseCheckpointScope } from './window-close-request-coordinator'
-import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
+import { showShutdownCheckpointFailureToast } from '@/app-shell/shutdown/shutdown-checkpoint-failure-toast'
 
 export function useTerminalEditorCloseFoundation(
   controller: TerminalWorkspaceProjectionController

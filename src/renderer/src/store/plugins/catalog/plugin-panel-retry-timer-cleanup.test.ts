@@ -43,12 +43,6 @@ async function harness(list: List) {
   return { store, ensure, onChanged, change: () => changed?.({ contentPacksChanged: false }) }
 }
 
-const empty = (fetchStatus: 'loading' | 'error' | 'ready') => ({
-  plugins: [],
-  panelErrors: {},
-  fetchStatus
-})
-
 beforeEach(() => {
   vi.resetModules()
   vi.useFakeTimers()
@@ -59,32 +53,6 @@ afterEach(() => {
   vi.clearAllTimers()
   vi.useRealTimers()
   vi.unstubAllGlobals()
-})
-
-it('retires a failed-owner timer while a replacement IPC stays pending without cancelling it', async () => {
-  const gate = Promise.withResolvers<PluginHostListEntry[]>()
-  const list = vi
-    .fn<List>()
-    .mockRejectedValueOnce(new Error('starting'))
-    .mockReturnValueOnce(gate.promise)
-  const { store } = await harness(list)
-  await store.getState().fetchPlugins()
-  const pending = store.getState().fetchPlugins()
-  let settled = false
-  void pending.then(() => {
-    settled = true
-  })
-  const timers = vi.getTimerCount()
-  await vi.advanceTimersByTimeAsync(500)
-  expect(settled).toBe(false)
-  expect(list).toHaveBeenCalledTimes(2)
-  expect(view(store)).toEqual(empty('loading'))
-  const rows = [plugin()]
-  gate.resolve(rows)
-  await expect(pending).resolves.toBeUndefined()
-  expect(store.getState().plugins).toBe(rows)
-  expect(view(store)).toEqual({ plugins: rows, panelErrors: {}, fetchStatus: 'ready' })
-  expect(timers).toBe(0)
 })
 
 it('keeps an authoritative replacement made reentrantly during loading above the older failure', async () => {

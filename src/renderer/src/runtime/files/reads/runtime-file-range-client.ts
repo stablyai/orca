@@ -2,7 +2,10 @@ import type { RuntimeFileReadChunkResult } from '../../../../../shared/file-cont
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { validateFileRangeRequest } from '../../../../../shared/file-content/file-range-read'
 import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
-import { assertExternalSshReadOwnership, canReadRelativeRuntimeFile } from '../runtime-file-routing'
+import {
+  assertExternalSshReadOwnership,
+  workspaceOrScratchFileAddress
+} from '../runtime-file-routing'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
@@ -45,10 +48,16 @@ export function rangeReadTarget(args: RuntimeFileReadArgs): RuntimeRemoteFileAdd
       ...pairing
     }
   }
-  if (!canReadRelativeRuntimeFile(args.relativePath)) {
+  const address = workspaceOrScratchFileAddress(args.worktreeId, args.relativePath, args.filePath)
+  if (!address) {
     throw new Error('Remote file is outside the owning runtime worktree')
   }
-  return { target, worktree, relativePath: args.relativePath, ...pairing }
+  return {
+    target,
+    worktree: address.worktreeSelector,
+    relativePath: address.relativePath,
+    ...pairing
+  }
 }
 
 export type RuntimeFileSnapshot = {

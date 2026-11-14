@@ -3,7 +3,7 @@ import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemera
 import { getEphemeralVmRecipeResultProjectRoot } from '../../../../../../shared/ephemeral-vm-recipes'
 import { useTranslate } from '@/i18n/use-translate'
 import { ephemeralVmCleanupErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../../../ui/button'
 
 type EphemeralVmRuntimeRowProps = {

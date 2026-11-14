@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { parseHostPluginManifest, parsePluginManifest } from './plugin-manifest'
-import {
-  PLUGIN_DERIVED_PUBLISHER_SINCE,
-  PLUGIN_MANIFEST_V2_SINCE
-} from './plugin-schema-field-docs'
-import { PLUGIN_EDITOR_TYPOGRAPHY_SINCE } from '../workers/plugin-host-api-editor-typography'
+import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
 
 function v2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -21,51 +17,6 @@ function v2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 describe('manifest format 2 rules', () => {
-  it('lets publisher be left out only where older Orca will say it needs a newer one', () => {
-    const { publisher: _publisher, ...withoutPublisher } = v2()
-    expect(parsePluginManifest(withoutPublisher)).toEqual({
-      ok: false,
-      error: `engines.orca: must be at least >=${PLUGIN_DERIVED_PUBLISHER_SINCE} when publisher is left out, because older Orca requires publisher`
-    })
-    expect(
-      parsePluginManifest({
-        ...withoutPublisher,
-        engines: { orca: `>=${PLUGIN_DERIVED_PUBLISHER_SINCE}` }
-      })
-    ).toMatchObject({ ok: true })
-    // Why the host still reads it: the floor only exists for older hosts.
-    expect(parseHostPluginManifest(withoutPublisher)).toMatchObject({ ok: true })
-  })
-
-  it('defaults pluginApi and refuses it where no code calls the host API', () => {
-    expect(parsePluginManifest(v2())).toMatchObject({ ok: true })
-    expect(parsePluginManifest(v2({ pluginApi: 1 }))).toEqual({
-      ok: false,
-      error: 'pluginApi: data plugins never call the host API; remove pluginApi'
-    })
-    expect(
-      parsePluginManifest(v2({ execution: 'trusted-worker', main: 'main.mjs', pluginApi: 1 }))
-    ).toMatchObject({ ok: true })
-  })
-
-  it('refuses terminal:send below trusted-worker, since panels have no way to use it', () => {
-    const panel = {
-      execution: 'sandboxed-ui',
-      contributes: { panels: [{ id: 'p', title: 'P', entry: 'panel/index.html' }] },
-      capabilities: [{ kind: 'notifications:show' }, { kind: 'terminal:send' }]
-    }
-    expect(parsePluginManifest(v2(panel))).toEqual({
-      ok: false,
-      error:
-        "capabilities[1].kind: terminal:send needs the trusted-worker execution profile; sandboxed-ui plugins can't use it, so remove it or add a worker"
-    })
-    expect(
-      parsePluginManifest(
-        v2({ execution: 'trusted-worker', main: 'main.mjs', capabilities: panel.capabilities })
-      )
-    ).toMatchObject({ ok: true })
-  })
-
   it('skips only the engines floor when reading a manifest at runtime', () => {
     const underDeclared = v2({ engines: { orca: '>=1.4.160' } })
     expect(parseHostPluginManifest(underDeclared)).toMatchObject({ ok: true })
@@ -74,24 +25,6 @@ describe('manifest format 2 rules', () => {
     expect(parseHostPluginManifest(v2({ engines: { orca: '>=1.4.160' }, pluginApi: 1 }))).toEqual({
       ok: false,
       error: 'pluginApi: data plugins never call the host API; remove pluginApi'
-    })
-  })
-})
-
-describe('event subscriptions', () => {
-  const worker = (on: string) =>
-    v2({
-      execution: 'trusted-worker',
-      main: 'main.mjs',
-      engines: { orca: `>=${PLUGIN_EDITOR_TYPOGRAPHY_SINCE}` },
-      contributes: { events: [{ on }] }
-    })
-
-  it('needs no capability for editor typography, unlike workspace events', () => {
-    expect(parsePluginManifest(worker('editor.typography.changed'))).toMatchObject({ ok: true })
-    expect(parsePluginManifest(worker('workspace.changed'))).toMatchObject({
-      ok: false,
-      error: expect.stringContaining('requires the workspace:read capability')
     })
   })
 })

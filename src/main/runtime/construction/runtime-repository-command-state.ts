@@ -3,7 +3,7 @@ import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
 import { RuntimeGitLabQueryCommands } from '../integrations/gitlab/runtime-gitlab-query-commands'
-import { recordGitLabProjectRecent } from '../../gitlab/gitlab-project-recents'
+import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
 import { RuntimeGitLabMutationCommands } from '../integrations/gitlab/runtime-gitlab-mutation-commands'
 import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
 import { RuntimeGitHubReviewMutationCommands } from '../integrations/github/runtime-github-review-mutation-commands'
@@ -14,13 +14,15 @@ import { RuntimeRepositoryIssueCommand } from '../repositories/runtime-repositor
 import { ClientHostedBrowserRowPublisher } from '../browser/client-pages/client-hosted-browser-row-publication'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
-import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
 import {
   createBranchSwitchHost,
   storeBackedBranchSwitchSources
 } from '../integrations/git/runtime-branch-switch-host'
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
+import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
+import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
   protected readonly gitCommands = new RuntimeGitCommands({
@@ -156,7 +158,14 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
   protected readonly gitHubProjectCommands = new RuntimeGitHubProjectCommands()
 
   protected readonly repositoryHooks = new RuntimeRepositoryHooksCommands({
-    resolveRepo: (selector) => this.resolveRepoSelector(selector)
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    readCreateSourceHooks: (repo, source) =>
+      readCreateSourceSetupHooks({
+        repo,
+        source,
+        runtime: this.remoteFetches,
+        gitOptions: getWorktreeCreatePrefetchGitOptions(this.requireStore(), repo)
+      })
   })
 
   protected readonly repositoryIssueCommand = new RuntimeRepositoryIssueCommand({

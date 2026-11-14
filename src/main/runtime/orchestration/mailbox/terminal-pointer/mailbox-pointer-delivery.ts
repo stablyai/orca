@@ -59,7 +59,13 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   ): void {
     const db = this.deps.getDb()
     const mailboxHandle = options.mailboxHandle
-    if (!db || (!mailboxHandle.startsWith('run:') && !mailboxHandle.startsWith('dispatch:'))) {
+    const isOwnDirectMailbox = mailboxHandle === terminal.handle
+    if (
+      !db ||
+      (!isOwnDirectMailbox &&
+        !mailboxHandle.startsWith('run:') &&
+        !mailboxHandle.startsWith('dispatch:'))
+    ) {
       return
     }
     const { ptyId } = terminal
@@ -102,7 +108,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       db,
       mailboxHandle,
       waiters,
-      reservedTypes: options.reservedTypes
+      reservedTypes: options.reservedTypes,
+      excludeRunOwnedDirect: isOwnDirectMailbox
     })
     if (unread.length === 0) {
       return

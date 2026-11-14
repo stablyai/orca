@@ -1,19 +1,16 @@
 import type { AgentSessionAcquisition } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import { claudeLaunchPermissions } from './claude-structured-inbound-control'
-import {
-  resolveClaudeReplayTurn,
-  withClaudeReplaySettlements
-} from '../claude-replay-turn-resolution'
-import { claudeStartedUnechoedSend } from '../claude-command-lifecycle'
-import { claudeSessionStateEndsTurn } from '../claude-session-state-turn-over'
-import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
+import * as replay from './turns/claude-replay-turn-resolution'
+import { claudeStartedUnechoedSend } from './turns/claude-command-lifecycle'
+import { claudeSessionStateEndsTurn } from './turns/claude-session-state-turn-over'
+import { settleClaudeTurnEndWaiters } from './turns/claude-request-end-wait'
 import * as proof from './claude-structured-init-proof'
-import { claudeConfigDirEnvPatch } from '../claude-config-dir-pin'
+import { claudeConfigDirEnvPatch } from './launch/claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
-import { ClaudePromptRegistry } from '../claude-prompt-registry'
+import { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from './launch/claude-structured-spawn-options'
-import { observeClaudeFrameModels } from './claude-structured-execution-observations'
+import { observeClaudeExecutionModel } from './claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from './launch/claude-structured-session-options'
 import {
   createClaudeSessionPublication,
@@ -23,18 +20,15 @@ import {
 import type * as sessionState from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
 import { claudeStartupError, claudeStartupExit } from './claude-structured-session-startup-exit'
-import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
+import { readClaudeTranscriptEntryUuid } from '../transcripts/claude-transcript-entry-uuid'
 import { claudeTurnResumePointWriter } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from './launch/claude-structured-acquisition-launch'
 import * as journal from './journal/claude-structured-session-journal-control'
-import { isRootClaudeFrame } from '../claude-turn-opening'
+import { isRootClaudeFrame } from './turns/claude-turn-opening'
 import { createClaudeStartupOutcome, endsClaudeStartup } from './claude-structured-startup-outcome'
-import { claudeStartupResultError } from '../claude-stream-json-exit-error'
-import {
-  claudePluginUiRecovery,
-  ignoresClaudeRetiredConnection
-} from './claude-structured-plugin-ui-recovery'
+import { claudeStartupResultError } from '../sdk-transport/claude-stream-json-exit-error'
+import * as ui from './claude-structured-plugin-ui-recovery'
 
 export async function acquireClaudeSession({
   input,
@@ -62,6 +56,7 @@ export async function acquireClaudeSession({
   // Owned by this acquisition alone, so a late frame cannot fail a replacement's open.
   const startup = createClaudeStartupOutcome()
   const childFailed = (error: Error, ended?: Promise<unknown>): void => {
+    liveSession?.historyCatchUp?.abort()
     childEnded ??= error
     void (ended ? ended.then(startup.fail) : endsClaudeStartup(error) && startup.fail(error))
     initProof.reject(error)
@@ -77,12 +72,12 @@ export async function acquireClaudeSession({
   const contextActivity = translator?.contextActivity ?? 0
   const recordTurnEnd = claudeTurnResumePointWriter(sessionId, sessions, deps)
   const observedOptions: sessionState.ClaudeSession['reportedOptions'] = {}
-  const handlePluginUi = claudePluginUiRecovery(delivery, () => liveSession)
+  const handlePluginUi = ui.claudePluginUiRecovery(delivery, () => liveSession)
   const deliver = (payload: unknown, run: () => void): void =>
     callbacks.deliver(attempt, sessionId, run, payload)
   const onMessage = (message: Record<string, unknown>): void => {
     if (
-      ignoresClaudeRetiredConnection(liveSession, sessions.get(sessionId), exits.get(sessionId))
+      ui.ignoresClaudeRetiredConnection(liveSession, sessions.get(sessionId), exits.get(sessionId))
     ) {
       return
     }
@@ -106,7 +101,7 @@ export async function acquireClaudeSession({
       }
     }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
-    const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
+    const modelReport = observeClaudeExecutionModel(liveSession, init?.model)
     if (init) {
       initProof.resolve(init)
       if (liveSession) {
@@ -131,7 +126,9 @@ export async function acquireClaudeSession({
     // Publish the echoed turn before settling its send to avoid transient idle status.
     const settlements: sessionState.ClaudeLateDispatchOutcome[] = []
     const turnOrigin = liveSession
-      ? resolveClaudeReplayTurn(liveSession, message, (settlement) => settlements.push(settlement))
+      ? replay.resolveClaudeReplayTurn(liveSession, message, (settlement) =>
+          settlements.push(settlement)
+        )
       : null
     const startsTurn = turnOrigin !== null
     // Use host time for turn endpoints; provider timestamps may use a different clock.
@@ -139,7 +136,7 @@ export async function acquireClaudeSession({
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
     const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
-    withClaudeReplaySettlements(
+    replay.withClaudeReplaySettlements(
       liveSession,
       settlements,
       () =>
@@ -152,7 +149,6 @@ export async function acquireClaudeSession({
               acquisitionGeneration: liveSession.acquisitionGeneration,
               reportedOptions: {
                 ...modelReport,
-                reportedModel: liveSession.reportedOptions.reportedModel,
                 reportedPermissionMode: observedOptions.reportedPermissionMode
               }
             })
@@ -290,7 +286,8 @@ export async function acquireClaudeSession({
       callbacks,
       sessions,
       exits,
-      recordPhase: input.recordPhase
+      recordPhase: input.recordPhase,
+      ...(input.events?.snapshotCurrent ? { snapshotCurrent: input.events.snapshotCurrent } : {})
     })
     return acquisition
   } catch (error) {

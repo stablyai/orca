@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CheckStatus, PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type {
+  CheckStatus,
+  PRInfo
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type {
   WorkspaceLineage,

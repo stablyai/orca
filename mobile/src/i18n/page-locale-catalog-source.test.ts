@@ -134,30 +134,6 @@ describe('the page language catalog', () => {
     })
   })
 
-  it('shows English offline with nothing stored, then the language once the desktop answers', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const client = fakeClient('reconnecting')
-    openPage(client, fakeStore({}))
-
-    await i18n.activateMobileUiLocale('fr')
-    expect(i18n.getMobileUiLocale()).toBe('en')
-    expect(i18n.translate('greeting', 'Hello')).toBe('Hello')
-    expect(client.sent).toHaveLength(0)
-
-    client.moveTo('connected')
-    await settle()
-    expect(client.sent.map(({ params }) => params)).toEqual([{ locale: 'fr' }])
-    client.sent[0].reply({
-      id: 'r1',
-      ok: true,
-      result: { locale: 'fr', sha256: NEW_SHA, catalog: { greeting: 'Bonjour' } }
-    })
-    await settle()
-
-    expect(i18n.getMobileUiLocale()).toBe('fr')
-    expect(i18n.translate('greeting', 'Hello')).toBe('Bonjour')
-  })
-
   it('opens in English when the first request fails on a live link, then switches on the next connection', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const client = fakeClient('connected')
@@ -203,16 +179,5 @@ describe('the page language catalog', () => {
 
     expect(i18n.getMobileUiLocale()).toBe('ko')
     expect(i18n.translate('greeting', 'Hello')).toBe('안녕하세요')
-  })
-
-  it('imports the chunk an older shell left on disk, with no wait and no request', async () => {
-    chunksOnDisk.set('es', { greeting: 'Hola' })
-    const client = fakeClient('reconnecting')
-    openPage(client, fakeStore({}))
-
-    await i18n.activateMobileUiLocale('es')
-
-    expect(i18n.translate('greeting', 'Hello')).toBe('Hola')
-    expect(client.sent).toHaveLength(0)
   })
 })

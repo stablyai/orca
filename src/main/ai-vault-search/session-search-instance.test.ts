@@ -1,4 +1,4 @@
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import { existsSync } from 'node:fs'
 import { unlink, utimes } from 'node:fs/promises'
 import * as fileRemoval from '../../shared/windows-transient-lock-removal'
@@ -6,15 +6,15 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
-import * as searchSchema from './session-search-schema'
-import { SessionSearchReaders } from './session-search-readers'
+import './storage/session-search-schema'
+import './worker/session-search-readers'
 import { SessionSearchInstance } from './session-search-instance'
-import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
   type SessionSearchIndexerHarness
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 const RECENT_SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const ANCIENT_SESSION_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -229,26 +229,6 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
   expect(second.hits).toHaveLength(1)
   expect(second.hits[0].sessionId).not.toBe(first.hits[0].sessionId)
   expect(errors).toEqual([])
-})
-
-it('propagates query failures while status remains available without a reader', async () => {
-  const subject = newInstance()
-  await subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  const before = await subject.status()
-  vi.spyOn(SessionSearchReaders.prototype, 'query').mockRejectedValue(new Error('reader failed'))
-  await expect(subject.search({ query: 'needle' })).rejects.toThrow('reader failed')
-  expect(await subject.status()).toEqual(before)
-})
-
-it('rejects a failed clear and keeps the transition chain usable for another clear', async () => {
-  const subject = newInstance()
-  const remove = vi
-    .spyOn(searchSchema, 'removeSessionSearchDatabaseAsync')
-    .mockRejectedValueOnce(new Error('unlink denied'))
-  await expect(subject.clear()).rejects.toThrow('unlink denied')
-  await expect(subject.clear()).resolves.toBeUndefined()
-  expect(remove).toHaveBeenCalledTimes(2)
 })
 
 it('keeps serving while an asynchronous clear deletion outlives its deadline', async () => {

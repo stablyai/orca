@@ -1,14 +1,14 @@
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
+import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
+import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
+import { resolveLinkOpenSidePlacement } from '../../links/placement/adjacent-link-open-group'
 import type { AppState } from '@/store/types'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
-import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import type { OpenWorkspaceBrowserTabRequest } from '../workspace/workspace-browser-tab-open'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
-import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import { resolveLinkOpenSidePlacement } from '../../adjacent-link-open-group'
 
 export type HttpLinkBrowserPlacement = { targetGroupId: string } | { split: TabSplitTarget }
 

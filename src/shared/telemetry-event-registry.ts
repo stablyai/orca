@@ -30,6 +30,7 @@ import {
   daemonAuditEligibilitySchema,
   daemonFolderAccessNoticeSchema,
   daemonLifecycleSchema,
+  daemonPtyCwdDenialCaptureSchema,
   daemonPtyCwdVerdictSchema,
   daemonStartFailedSchema,
   mainThreadHangDetectedSchema,
@@ -110,6 +111,7 @@ import {
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
 import { pluginInstalledSchema } from './telemetry-plugin-event-schemas'
+import { browserExtensionsEventSchemas } from './browser/extensions/browser-extensions-banner'
 import {
   firstAgentInteractionSchema,
   meaningfulActivityDaySchema
@@ -168,6 +170,7 @@ export const eventSchemas = {
   daemon_async_io_health: daemonAsyncIoHealthSchema,
   daemon_pty_cwd_denied: daemonPtyCwdVerdictSchema,
   daemon_pty_cwd_readable: daemonPtyCwdVerdictSchema,
+  daemon_pty_cwd_denial_capture: daemonPtyCwdDenialCaptureSchema,
   daemon_folder_access_notice: daemonFolderAccessNoticeSchema,
   daemon_audit_eligibility: daemonAuditEligibilitySchema,
   runtime_rpc_start_failed: runtimeRpcStartFailedSchema,
@@ -257,5 +260,7 @@ export const eventSchemas = {
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
-  plugin_installed: pluginInstalledSchema
+  plugin_installed: pluginInstalledSchema,
+
+  ...browserExtensionsEventSchemas
 } as const

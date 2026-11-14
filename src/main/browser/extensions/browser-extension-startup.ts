@@ -56,7 +56,7 @@ export function initializeBrowserExtensionSupport(options: {
 }
 
 /**
- * The experimental setting changed while Orca runs. Off unloads every profile's extensions and
+ * The extensions setting changed while Orca runs. Off unloads every profile's extensions and
  * keeps their data; on loads them into every open profile, as a launch would.
  */
 export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {

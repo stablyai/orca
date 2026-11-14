@@ -1,7 +1,7 @@
 // A terminal that survives a quit in a workspace the window never opened must stream to main after relaunch.
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeTerminalSummary } from '../../src/shared/runtime-types'
 import { expect, test } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'

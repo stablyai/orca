@@ -1,4 +1,4 @@
-import { highestUsageKey } from '../usage/highest-usage-key'
+import { highestUsageKey } from '../usage/rollups/highest-usage-key'
 import type {
   MuseUsageBreakdownKind,
   MuseUsageBreakdownRow,

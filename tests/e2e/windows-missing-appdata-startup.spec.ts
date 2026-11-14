@@ -8,7 +8,7 @@ import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-pr
 import { assertElectronResolvedIsolatedHome } from './helpers/electron-home-isolation'
 import { isolatedServeProfile } from './helpers/orca-serve-cli-host'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import { RuntimeClientError } from '../../src/cli/runtime/types'
+import { RuntimeClientError } from '../../src/cli/runtime/connection/types'
 
 // Regression: a profile-less Windows session (e.g. `orca serve` over SSH) has no roaming AppData,
 // and Electron 43 crashed natively resolving userData before Orca pinned it.
@@ -61,7 +61,10 @@ test('orca serve starts on Windows when the home has no AppData folder', async (
           try {
             return (await client.getCliStatus()).result.app.desktopWindowStatus
           } catch (error) {
-            if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
+            if (
+              error instanceof RuntimeClientError &&
+              (error.code === 'runtime_unavailable' || error.code === 'runtime_timeout')
+            ) {
               return 'starting'
             }
             throw error

@@ -703,7 +703,6 @@
       "automations": "Automations"
     },
     "hostScreenOverlays": {
-      "deleteWorktree": "Delete Worktree",
       "deleteConfirmMessage": "Delete \"{{name}}\" ({{branch}})?",
       "deleteDestroysEnvironment": "This also destroys the environment \"{{environment}}\" that Orca created for it, with any uncommitted work and running terminals on it.",
       "deleteKeepsEnvironment": "The environment \"{{environment}}\" that Orca created for it keeps running: its recipe has no destroy step.",
@@ -714,8 +713,7 @@
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
-      "deleteFailed": "Failed to delete \"{{name}}\"",
-      "deleteAnyway": "Delete Anyway"
+      "deleteFailed": "Failed to delete \"{{name}}\""
     },
     "workspaceRenameSheet": {
       "title": "Rename Workspace",
@@ -820,6 +818,8 @@
   "webShell": {
     "shellStateScreen": {
       "isolationUnavailable": "This device's WebView is too old to open the workspace safely.",
+      "isolationUnavailableAndroid": "Orca needs Android System WebView or Chrome 101 or newer. Update it from the Play Store, or pick a newer one in Developer options > WebView implementation.",
+      "webViewInUse": "This device has {{name}} {{version}}.",
       "downloadFailed": "The latest app could not be downloaded from this host.",
       "hostProfileUnreadable": "Could not read this host on your device. Try again.",
       "statusUnreadable": "Could not read this host's status. Go back and reopen it.",
@@ -1563,7 +1563,6 @@
       "unresolve": "Unresolve",
       "resolve": "Resolve",
       "replyPlaceholder": "Write a reply…",
-      "deleteConfirmTitle": "Delete comment?",
       "deleteConfirmMessage": "This permanently deletes the comment on GitHub."
     },
     "commentsSection": {
@@ -2054,9 +2053,7 @@
     },
     "queuedCardText": {
       "showLessHint": "Shows less of the message",
-      "showMoreHint": "Shows the whole message",
-      "showLess": "Show less",
-      "showMore": "Show more"
+      "showMoreHint": "Shows the whole message"
     },
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
@@ -2066,9 +2063,8 @@
       "sendHint": "Send this message",
       "steer": "Steer",
       "send": "Send",
-      "deleteHint": "Delete this queued message",
       "moreActions": "More actions",
-      "showLessHint": "Shows less of the message"
+      "you": "You"
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Commands can't be saved in a queued message.",
@@ -2182,10 +2178,10 @@
       "renameTerminal": "Rename Terminal",
       "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
-      "allowAutoClose": "Allow Auto-Close"
+      "allowAutoClose": "Allow Auto-Close",
+      "agents": "Agents"
     },
     "tabStrip": {
-      "tabStatus": "{{title}}, {{status}}",
       "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
       "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
@@ -2236,7 +2232,6 @@
       "newCommand": "New quick command"
     },
     "quickCommandsSheet": {
-      "deleteConfirmTitle": "Delete \"{{label}}\"?",
       "untitled": "Untitled",
       "deleteConfirmMessage": "This quick command will be removed from your saved list.",
       "editTitle": "Edit Quick Command",
@@ -2542,6 +2537,10 @@
     "useAccessorySelection": {
       "copyFailed": "Couldn't copy",
       "selectionCleared": "Selection cleared (scrolled out of buffer)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Couldn't close the tab. Try again.",
+      "closeFailedDesktopNotReady": "Couldn't close the tab. Orca on your computer is still loading. Try again in a moment."
     },
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
@@ -2887,8 +2886,6 @@
     },
     "presentation": {
       "loadingTabs": "Loading tabs",
-      "oneTab": "1 tab",
-      "tabCount": "{{tabCount}} tabs",
       "tapToRetry": "{{status}} — tap to retry"
     },
     "documentReaders": {
@@ -2926,6 +2923,29 @@
       "skip": "Skip",
       "stop": "Stop",
       "yes": "Yes"
+    },
+    "tabsSheet": {
+      "needsYou": "Needs you",
+      "working": "Working",
+      "everythingElse": "Everything else",
+      "open": "Open",
+      "closeTab": "Close {{title}}"
+    },
+    "tabRows": {
+      "browser": "Browser",
+      "markdown": "Markdown note",
+      "file": "File",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
+    "tabBar": {
+      "oneTab": "1 tab",
+      "tabCount": "{{count}} tabs",
+      "anotherNeedsYou": "another tab needs you",
+      "actionsHint": "Shows actions for this tab",
+      "next": "Next tab",
+      "previous": "Previous tab",
+      "hint": "Shows all tabs"
     }
   },
   "chat": {
@@ -2967,7 +2987,12 @@
       "skip": "Skip",
       "step": "Step {{step}}",
       "other": "Other…",
-      "answerPlaceholder": "Type your answer"
+      "answerPlaceholder": "Type your answer",
+      "optionPreview": "{{option}} preview",
+      "previewPosition": "{{current}} of {{total}}",
+      "chosen": "Chosen",
+      "chooseThis": "Choose this",
+      "viewPreview": "View"
     },
     "permission": {
       "reason": "Reason: ",
@@ -2995,10 +3020,16 @@
       "clearAll": "Clear all",
       "resumeSending": "Resume sending the queued messages",
       "resume": "Resume",
-      "title": "Queued messages",
       "pausedState": "Paused",
       "queuedState": "Queued",
-      "editMessage": "Edit message"
+      "editMessage": "Edit message",
+      "showLess": "Show less",
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "deleteMessage": "Delete message",
+      "queuedCount_one": "{{count}} queued message",
+      "queuedCount_other": "{{count}} queued messages",
+      "foldNeedsAttention": "{{more}}, a message needs attention"
     },
     "offlineQueue": {
       "failed": "Couldn't send — tap Send to retry",
@@ -3366,6 +3397,8 @@
     },
     "agentMessage": {
       "startedWorker": "Started worker",
+      "reopenedWorker": "Reopened worker",
+      "sentFollowUpToWorker": "Sent follow-up to worker",
       "handedOffToAgent": "Handed off to agent",
       "startedAgent": "Started agent",
       "taskFromCoordinator": "Task from coordinator",
@@ -3456,7 +3489,12 @@
       "commitThenPullPush": "Commit, then pull and push",
       "resolveConflicts": "Resolve conflicts before committing",
       "stageFile": "Stage at least one file to commit",
-      "enterMessage": "Enter a commit message to commit"
+      "enterMessage": "Enter a commit message to commit",
+      "statusConflicts": "Conflicts",
+      "statusNothingStaged": "Nothing staged",
+      "statusNeedsMessage": "Needs message",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch"
     },
     "createPrAction": {
       "createReview": "Create {{titleLabel}}",
@@ -3533,7 +3571,15 @@
       "nothingToPushTo": "Nothing to push to {{upstreamName}}",
       "nothingToForcePushTo": "Nothing to force push to {{upstreamName}}",
       "rebaseFromNamedBase": "Rebase from {{baseRef}}",
-      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}"
+      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}",
+      "statusUpToDate": "Up to date",
+      "statusSetsUpstream": "Sets upstream",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch",
+      "statusMayFail": "May fail",
+      "statusPublished": "Published",
+      "statusStashFirst": "Stash first",
+      "statusReplaces": "Replaces ↓{{behind}}"
     },
     "actions": {
       "createPr": "Create PR",
@@ -3886,7 +3932,10 @@
       "planAgentUnsupported": "Agent \"{{agent}}\" does not support AI commit messages.",
       "planModelUnavailable": "Model \"{{model}}\" is not available for {{label}}.",
       "planModelWithoutThinking": "Model \"{{model}}\" does not support a thinking effort level.",
-      "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}."
+      "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "Command template is empty for dictation cleanup.",
+      "dictationCleanupAgentUnsupported": "Choose a supported agent for AI cleanup in Settings -> Voice -> Cleanup. Supported agents: {{agents}}, or Custom command.",
+      "agentCannotGenerateDictationCleanup": "Agent \"{{agent}}\" does not support dictation cleanup. Supported agents: {{agents}}, or Custom command."
     },
     "conflictActions": {
       "resolveFile": "{{action}}: {{path}}",
@@ -4533,6 +4582,12 @@
       "createFailed": "Failed to create workspace"
     },
     "hostedMerge": {
+      "confirmGitHubMerge": "Merge PR #{{number}}?",
+      "confirmGitHubSquash": "Squash and merge PR #{{number}}?",
+      "confirmGitHubRebase": "Rebase and merge PR #{{number}}?",
+      "confirmGitLabMerge": "Merge merge request #{{number}}?",
+      "confirmGitLabSquash": "Squash and merge merge request #{{number}}?",
+      "confirmGitLabRebase": "Rebase and merge merge request #{{number}}?",
       "merged": "Merged",
       "closed": "Closed",
       "conflicts": "Conflicts",
@@ -4713,7 +4768,6 @@
       "completed": "Completed",
       "couldNotStart": "Could not start",
       "skipped": "Skipped",
-      "deleteAutomationTitle": "Delete automation?",
       "deleteRetained": "Delete “{{name}}” and its retained runs?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Could not verify the original agent pane. Reconnect and try again.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "The original agent pane is no longer available to open. Saved output remains here.",

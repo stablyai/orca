@@ -7,7 +7,7 @@ import {
   readAgentCliVersion,
   type AgentCliVersionReader
 } from '../../../agent-launch/preflight/agent-cli-version-probe'
-import { AgentCliInstallationError } from '../../../native-chat/agent-cli-installation-error'
+import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
 import type { StructuredAgentLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import {
   resolveProviderChildEnv,

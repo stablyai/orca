@@ -6,7 +6,7 @@ import {
 } from './agent-launch-settings'
 import { legacyLaunchTextUpdates } from './agent-launch-permission-updates'
 import { composeAgentLaunchProfile } from './tui-agent-launch-defaults'
-import { structuredLaunchSeedOptions } from '../../native-chat/input/native-chat-session-option-defaults'
+import { structuredLaunchSeedOptions } from '../../native-chat/input/session-options/native-chat-session-option-defaults'
 import { createGlobalSettingsFixture } from '../../global-settings-test-fixture'
 import { quoteStartupArg, tokenizeStartupCommand } from '../startup/tui-agent-startup-shell'
 

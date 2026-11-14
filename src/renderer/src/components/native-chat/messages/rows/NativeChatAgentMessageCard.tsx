@@ -4,7 +4,7 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -35,6 +35,13 @@ function heading(
   switch (agentMessageHeading(from, message)) {
     case 'started':
       return t('components.native-chat.agentMessage.startedWorker', 'Started worker')
+    case 'reopened-worker':
+      return t('components.native-chat.agentMessage.reopenedWorker', 'Reopened worker')
+    case 'followed-up-worker':
+      return t(
+        'components.native-chat.agentMessage.sentFollowUpToWorker',
+        'Sent follow-up to worker'
+      )
     case 'handed-off':
       return t('components.native-chat.agentMessage.handedOffToAgent', 'Handed off to agent')
     case 'started-agent':

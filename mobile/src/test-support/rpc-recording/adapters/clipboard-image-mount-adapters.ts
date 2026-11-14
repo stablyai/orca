@@ -1,7 +1,7 @@
 import type * as MobileClipboardImageModule from '../../../files/attachments/mobile-clipboard-image'
 import type * as MobileImageAttachmentModule from '../../../files/attachments/mobile-image-attachment'
-import type * as MobileNativeChatImageAttachment from '../../../session/native-chat/composer/mobile-native-chat-image-attachment'
-import type * as MobileNativeChatImageSend from '../../../session/native-chat/composer/mobile-native-chat-image-send'
+import type * as MobileNativeChatImageAttachment from '../../../session/native-chat/composer/attachments/mobile-native-chat-image-attachment'
+import type * as MobileNativeChatImageSend from '../../../session/native-chat/composer/delivery/mobile-native-chat-image-send'
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -53,10 +53,9 @@ export function clipboardImageMountAdapters(
             mountFixture<Parameters<typeof attach>[1]>({
               client,
               terminal: TERMINAL,
-              deviceToken: name === 'anonymous' ? null : DEVICE_TOKEN,
+              deviceToken: DEVICE_TOKEN,
               getConnectionId: () => Promise.resolve(CONNECTION),
-              pickImage: () =>
-                Promise.resolve(name === 'cancelled' ? null : { base64: IMAGE_BASE64 }),
+              pickImage: () => Promise.resolve({ base64: IMAGE_BASE64 }),
               onUploadStart: () => effect('upload-start', {}),
               beforeTerminalSend: (terminal: string) => {
                 effect('before-terminal-send', { terminal })
@@ -79,7 +78,7 @@ export function clipboardImageMountAdapters(
     },
     'nativeChat.image-upload': ({ client, effect }) => {
       const upload = modules.load<typeof MobileNativeChatImageAttachment>(
-        'mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts'
+        'mobile/src/session/native-chat/composer/attachments/mobile-native-chat-image-attachment.ts'
       ).uploadMobileNativeChatImages
       let uploaded: unknown = 'unuploaded'
       let failure: unknown = null
@@ -91,11 +90,9 @@ export function clipboardImageMountAdapters(
               client,
               getConnectionId: () => Promise.resolve(CONNECTION),
               pickImages: () =>
-                name === 'cancelled'
-                  ? []
-                  : name === 'two'
-                    ? [{ base64: IMAGE_BASE64 }, { base64: IMAGE_BASE64, uri: 'file:///b.png' }]
-                    : [{ base64: IMAGE_BASE64, uri: 'file:///a.png' }],
+                name === 'two'
+                  ? [{ base64: IMAGE_BASE64 }, { base64: IMAGE_BASE64, uri: 'file:///b.png' }]
+                  : [{ base64: IMAGE_BASE64, uri: 'file:///a.png' }],
               onUploadStart: () => effect('upload-start', {}),
               onImageUploaded: (image) => effect('image-uploaded', image)
             })
@@ -115,7 +112,7 @@ export function clipboardImageMountAdapters(
     },
     'nativeChat.image-paste': ({ client }) => {
       const paste = modules.load<typeof MobileNativeChatImageSend>(
-        'mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts'
+        'mobile/src/session/native-chat/composer/delivery/mobile-native-chat-image-send.ts'
       ).pasteMobileNativeChatImagePaths
       let pasted: unknown = 'unpasted'
       let failure: unknown = null
@@ -125,10 +122,9 @@ export function clipboardImageMountAdapters(
             mountFixture<Parameters<typeof paste>[0]>({
               client,
               terminal: TERMINAL,
-              deviceToken: name === 'anonymous' ? null : DEVICE_TOKEN,
+              deviceToken: DEVICE_TOKEN,
               imagePaths: name === 'two' ? ['/tmp/a.png', '/tmp/b.png'] : ['/tmp/a.png'],
-              followedByText: name !== 'trailing',
-              ...(name === 'burst' ? { clearInput: '' } : {})
+              followedByText: true
             })
           ).then(
             (value: unknown) => {

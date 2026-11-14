@@ -6,7 +6,7 @@ import {
   shouldExtraSectionLeadPaletteSections,
   shouldIntentSectionLeadPaletteSections,
   shouldOpenTabsLeadPaletteSections
-} from '@/lib/cmd-j-section-leadership'
+} from '@/lib/workspace/search/palette/cmd-j-section-leadership'
 import {
   capPaletteSection,
   layoutMultiPrimaryPaletteSections,

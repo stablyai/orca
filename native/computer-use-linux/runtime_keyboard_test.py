@@ -10,22 +10,12 @@ import unittest
 from pathlib import Path
 
 
-class FakeKeySynthType:
-    PRESSRELEASE = "pressrelease"
-    SYM = "sym"
-    STRING = "string"
-
-
-KEYSYMS = {"Return": 0xFF0D, "Tab": 0xFF09, "Escape": 0xFF1B, "Left": 0xFF51, "Down": 0xFF54}
-
-
 def load_runtime():
     gi = types.ModuleType("gi")
     repository = types.ModuleType("gi.repository")
     gi.require_version = lambda *_: None
-    repository.Atspi = types.SimpleNamespace(KeySynthType=FakeKeySynthType, generate_keyboard_event=None,
-                                            set_timeout=lambda *_: None)
-    repository.Gdk = types.SimpleNamespace(keyval_from_name=KEYSYMS.__getitem__)
+    repository.Atspi = types.SimpleNamespace(set_timeout=lambda *_: None)
+    repository.Gdk = types.SimpleNamespace()
     repository.GdkPixbuf = types.SimpleNamespace()
     gi.repository = repository
     sys.modules["gi"] = gi

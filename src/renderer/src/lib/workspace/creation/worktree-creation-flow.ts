@@ -174,7 +174,8 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     provisioningLog: undefined,
     environmentCheck: undefined,
     checkoutProgress: undefined,
-    worktreeId: undefined
+    worktreeId: undefined,
+    chatHandedOffAt: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

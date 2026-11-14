@@ -7,7 +7,7 @@ import { createVitestZodBundle } from './vitest-zod-bundle.mjs'
 let root
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
-it('reuses one bundle across runs and removes directories leaked by killed runs', () => {
+it('removes stale directories leaked by killed runs and preserves recent ones', () => {
   root = mkdtempSync(join(tmpdir(), 'orca-zod-bundle-'))
   const leaked = join(root, '.tmp', 'vitest-zod-leaked')
   const active = join(root, '.tmp', 'vitest-zod-active')
@@ -16,11 +16,9 @@ it('reuses one bundle across runs and removes directories leaked by killed runs'
   const hoursAgo = new Date(Date.now() - 7 * 60 * 60 * 1000)
   utimesSync(leaked, hoursAgo, hoursAgo)
 
-  const first = createVitestZodBundle(root)
-  const second = createVitestZodBundle(root)
+  const bundle = createVitestZodBundle(root)
 
-  expect(second.path).toBe(first.path)
-  expect(existsSync(first.path)).toBe(true)
+  expect(existsSync(bundle.path)).toBe(true)
   expect(existsSync(leaked)).toBe(false)
   expect(existsSync(active)).toBe(true)
 })

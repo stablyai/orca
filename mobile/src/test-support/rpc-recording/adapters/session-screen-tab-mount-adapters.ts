@@ -2,7 +2,7 @@ import type * as UseMobileSessionContentCreateActionsModule from '../../../sessi
 import type * as UseMobileSessionCloseActionsModule from '../../../session/tabs/use-mobile-session-close-actions'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
-import type { TerminalRecord } from '../../../terminal/session/mobile-terminal-records'
+import type { TerminalRecord } from '../../../terminal/session/inventory/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -10,7 +10,7 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const WORKSPACE = 'workspace-1'
 const HANDLE = 'terminal-1'
 
-// Project the real tab list so refused rename/close writes cannot masquerade as successful local erasure.
+// Project the real tab list so refused closes cannot masquerade as successful local erasure.
 export function sessionScreenTabMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -104,8 +104,6 @@ export function sessionScreenTabMountAdapters(
       let sessionTabs: MobileSessionTab[] = sessionTabsRef.current
       let activeHandle: string | null = HANDLE
       const activeHandleRef: { current: string | null } = { current: HANDLE }
-      const renameTarget: { handle: string } | null = { handle: HANDLE }
-      const timers: ReturnType<typeof setTimeout>[] = []
       let actions: ReturnType<typeof useClose>
       const hook = hookMount(() => {
         actions = useClose(
@@ -129,37 +127,24 @@ export function sessionScreenTabMountAdapters(
             setActiveSessionTabId: () => {},
             activeSessionTabIdRef: { current: 'tab-1' },
             selectedSessionTabIdRef: { current: 'tab-1' },
-            renameTarget,
-            setRenameTarget: () => {},
             terminalRefs: { current: new Map() },
             initializedHandlesRef: { current: new Set([HANDLE]) },
             activeHandleRef,
             activeSessionTabTypeRef: { current: 'terminal' },
             pendingSelectionRef: { current: null },
             pendingBrowserFocusPageIdRef: { current: null },
-            scheduleDelayedAction: (callback: () => void, delayMs: number) => {
-              timers.push(setTimeout(callback, delayMs))
-            },
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
+            showToast: (message: string) => effect('toast', { message }),
             subscribeToTerminal: (handle: string) => {
               effect('subscribe-terminal', { handle })
               return true
-            },
-            fetchTerminals: () => {
-              effect('fetch-terminals', {})
-              return Promise.resolve(true)
             }
           })
         )
       })
       hook.mount()
       return {
-        action(name, args) {
-          if (name === 'rename') {
-            return performHookAction(() =>
-              actions.handleRenameTerminal(String(args.title ?? 'renamed'))
-            )
-          }
+        action(name) {
           if (name === 'close-terminal') {
             return performHookAction(() =>
               actions.handleCloseTerminal({ handle: HANDLE, title: 'Terminal', isActive: true })
@@ -171,12 +156,7 @@ export function sessionScreenTabMountAdapters(
           throw new Error(`Unknown tab close action: ${name}`)
         },
         state: () => ({ terminals, sessionTabs, activeHandle }),
-        dispose: () => {
-          for (const timer of timers) {
-            clearTimeout(timer)
-          }
-          hook.unmount()
-        }
+        dispose: hook.unmount
       }
     }
   }

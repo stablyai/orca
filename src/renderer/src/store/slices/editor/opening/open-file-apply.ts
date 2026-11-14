@@ -1,6 +1,6 @@
 import { editorOpenTabBarOrder } from '../tabs/workspace-editor-files'
 import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { getRecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
 import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
@@ -15,8 +15,7 @@ import {
   getReusableOpenFileModes,
   isSameEditorOwner,
   matchesEditorMode,
-  resolveEditorFileIdForOwner,
-  shouldRequestExistingFileContentReload
+  resolveEditorFileIdForOwner
 } from '../file-ids/editor-file-ids'
 import {
   buildEditorActiveResult,
@@ -32,6 +31,8 @@ import {
 } from '../tabs/workspace-editor-item'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, insertSplitGroup } from '../../tabs/tabs-group-actions'
+import { translate } from '@/i18n/i18n'
+import { refreshExistingOpenFile } from './open-file-existing-tab-refresh'
 
 export type OpenFileApplyScratch = {
   editorItemFileId: string
@@ -62,7 +63,15 @@ export function applyOpenFileToState(
         options?.executionHostId
       )
     } catch (error) {
-      toast.error(extractIpcErrorMessage(error, 'Failed to resolve file owner.'))
+      toast.error(
+        extractIpcErrorMessage(
+          error,
+          translate(
+            'components.toastFallbacks.fileOwnerResolveFailed',
+            'Failed to resolve file owner.'
+          )
+        )
+      )
       // Why: mirrored tabs can arrive before their graph row; allow convergence while mutation paths still fail closed without provenance.
     }
   }
@@ -119,79 +128,20 @@ export function applyOpenFileToState(
   const activeResult =
     options?.selection === 'none' ? {} : buildEditorActiveResult(s, placementId, id)
   if (existing) {
-    const updatedPreview = isPreview ? existing.isPreview : false
-    const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
-    const refreshExternalSshProvenance = file.externalSshTargetId !== undefined
-    const nextOperationProvenance = refreshExternalSshProvenance
-      ? operationProvenance
-      : (existing.operationProvenance ?? operationProvenance)
-    // Why: a re-click mints a fresh grant; the old one may have expired.
-    const nextGrantId = file.terminalArtifactGrantId ?? existing.terminalArtifactGrantId
-    const fileContentReloadNonce = shouldRequestExistingFileContentReload(
+    const refreshed = refreshExistingOpenFile({
       existing,
-      file.mode,
-      options
-    )
-      ? (existing.fileContentReloadNonce ?? 0) + 1
-      : existing.fileContentReloadNonce
-    // Normal open explicitly enables editing of a View Log; View Log must never downgrade an already writable tab.
-    const nextReadOnly = existing.readOnly === true && file.readOnly === true ? true : undefined
-    const nextLiveTail = file.liveTail === true && nextReadOnly === true ? true : undefined
-    const needsExistingUpdate =
-      existing.mode !== file.mode ||
-      existing.diffSource !== file.diffSource ||
-      existing.branchCompare?.compareVersion !== file.branchCompare?.compareVersion ||
-      existing.commitCompare?.compareVersion !== file.commitCompare?.compareVersion ||
-      existing.conflict?.kind !== file.conflict?.kind ||
-      existing.conflict?.conflictKind !== file.conflict?.conflictKind ||
-      existing.conflict?.conflictStatus !== file.conflict?.conflictStatus ||
-      existing.conflictReview?.snapshotTimestamp !== file.conflictReview?.snapshotTimestamp ||
-      existing.isPreview !== updatedPreview ||
-      existing.language !== file.language ||
-      existing.relativePath !== file.relativePath ||
-      existing.worktreeId !== file.worktreeId ||
-      existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
-      existing.externalSshTargetId !== nextExternalSshTargetId ||
-      existing.terminalArtifactGrantId !== nextGrantId ||
-      refreshExternalSshProvenance ||
-      existing.operationProvenance !== nextOperationProvenance ||
-      existing.fileContentReloadNonce !== fileContentReloadNonce ||
-      existing.readOnly !== nextReadOnly ||
-      existing.liveTail !== nextLiveTail
-    if (!needsExistingUpdate) {
+      file,
+      options,
+      isPreview,
+      runtimeEnvironmentId,
+      operationProvenance
+    })
+    if (!refreshed) {
       return { ...splitState, ...activeResult }
     }
     return {
       ...splitState,
-      openFiles: s.openFiles.map((f) =>
-        f.id === id
-          ? {
-              ...f,
-              relativePath: file.relativePath,
-              worktreeId: file.worktreeId,
-              language: file.language,
-              runtimeEnvironmentId,
-              externalSshTargetId: nextExternalSshTargetId,
-              terminalArtifactGrantId: nextGrantId,
-              operationProvenance: nextOperationProvenance,
-              mode: file.mode,
-              diffSource: file.diffSource,
-              branchCompare: file.branchCompare,
-              commitCompare: file.commitCompare,
-              branchOldPath: file.branchOldPath,
-              combinedAlternate: file.combinedAlternate,
-              combinedAreaFilter: file.combinedAreaFilter,
-              commitEntriesSnapshot: file.commitEntriesSnapshot,
-              conflict: file.conflict,
-              skippedConflicts: file.skippedConflicts,
-              conflictReview: file.conflictReview,
-              isPreview: updatedPreview,
-              fileContentReloadNonce,
-              readOnly: nextReadOnly,
-              liveTail: nextLiveTail
-            }
-          : f
-      ),
+      openFiles: s.openFiles.map((f) => (f.id === id ? refreshed : f)),
       ...activeResult
     }
   }

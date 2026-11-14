@@ -9,7 +9,7 @@ import {
   repoHostMatchesRunContext
 } from './automation-run-context-host-match'
 import { evaluateRuntimeCompat } from '../../../../../shared/protocol-compat'
-import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import {

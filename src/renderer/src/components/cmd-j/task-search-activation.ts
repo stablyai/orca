@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal/removal-visibility'
 import { useAppStore } from '@/store'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
@@ -12,7 +13,8 @@ import {
 } from '../../../../shared/workspace-name'
 import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
-import { buildLinearIssueLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
+
+import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   haveConflictingTaskSourceAccounts,
@@ -55,7 +57,7 @@ export function findCmdJTaskWorkspace(
     return undefined
   }
   return workspaces
-    .filter((workspace) => !workspace.isArchived)
+    .filter((workspace) => !workspace.isArchived && !isWorktreeRetiredByRemoval(workspace))
     .find((workspace) =>
       getWorkspaceAttachments(workspace).some((item) => {
         if (
@@ -80,7 +82,7 @@ export function openCmdJTask(result: CmdJTaskSearchResult, createWorkspace = fal
   if (createWorkspace) {
     const linkedWorkItem: LinkedWorkItemSummary =
       task.provider === 'linear'
-        ? buildLinearIssueLinkedWorkItem(task.issue)
+        ? buildLinearWorkspaceSource(task.issue)
         : {
             provider: task.provider,
             type: 'issue',

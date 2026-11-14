@@ -2,11 +2,12 @@
 
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+
 import {
   collectAgentPaneConversations,
   resolvePaneAgentConversation,
   resolvePaneLastAgentConversation
-} from '@/lib/agent-session/history/title-sync/ai-vault-tab-title-requests'
+} from '../../lib/agent-session/identity/pane-agent-conversations'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultListArgs,

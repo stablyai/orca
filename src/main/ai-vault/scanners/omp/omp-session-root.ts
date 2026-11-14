@@ -1,19 +1,8 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, normalize, parse, resolve, win32 } from 'node:path'
-import { normalizeAgentSessionsDir } from '../../session-scanner-values'
-
-function normalizedProfile(value: string | undefined): string | undefined | null {
-  const profile = value?.trim()
-  if (!profile || profile === 'default') {
-    return undefined
-  }
-  return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(profile) &&
-    !profile.endsWith('.') &&
-    !/^(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\..*)?$/i.test(profile)
-    ? profile
-    : null
-}
+import { normalizeAgentSessionsDir } from '../../discovery/agent-session-directories'
+import { normalizedOmpProfile } from '../../../../shared/omp-profile'
 
 function safeRoot(value: string): string {
   const trimmed = value.trim()
@@ -46,7 +35,7 @@ export function resolveOmpSessionsDir(
   if (env.OMP_CODING_AGENT_DIR?.trim()) {
     return safeRoot(normalizeAgentSessionsDir(env.OMP_CODING_AGENT_DIR, '.omp'))
   }
-  const profile = normalizedProfile(
+  const profile = normalizedOmpProfile(
     env.OMP_PROFILE !== undefined ? env.OMP_PROFILE : env.PI_PROFILE
   )
   if (profile === null) {
@@ -55,7 +44,7 @@ export function resolveOmpSessionsDir(
   const baseConfig = join(home, env.PI_CONFIG_DIR || '.omp')
   const configRoot = profile ? join(baseConfig, 'profiles', profile) : baseConfig
   const defaultAgent = join(configRoot, 'agent')
-  const inheritedProfile = normalizedProfile(env.PI_PROFILE)
+  const inheritedProfile = normalizedOmpProfile(env.PI_PROFILE)
   const inheritedAgent = inheritedProfile
     ? join(baseConfig, 'profiles', inheritedProfile, 'agent')
     : undefined
@@ -77,4 +66,47 @@ export function resolveOmpSessionsDir(
     }
   }
   return safeRoot(join(agentDir, 'sessions'))
+}
+
+/** Existing session dirs of named profiles: each OMP run picks its profile from its own env, not Orca's. */
+export function ompProfileSessionsDirs(
+  options: {
+    env?: NodeJS.ProcessEnv
+    homeDir?: string
+    platform?: NodeJS.Platform
+  } = {}
+): string[] {
+  const env = options.env ?? process.env
+  const home = options.homeDir ?? homedir()
+  const platform = options.platform ?? process.platform
+  // The legacy override pins one location; enumeration would widen it.
+  if (env.OMP_CODING_AGENT_DIR?.trim()) {
+    return []
+  }
+  const profilesDir = join(home, env.PI_CONFIG_DIR || '.omp', 'profiles')
+  const xdgProfilesDir =
+    (platform === 'linux' || platform === 'darwin') && env.XDG_DATA_HOME
+      ? join(env.XDG_DATA_HOME, 'omp', 'profiles')
+      : undefined
+  const names = new Set(
+    [profilesDir, xdgProfilesDir].flatMap((dir) => (dir ? profileDirNames(dir) : []))
+  )
+  return [...names]
+    .sort()
+    .flatMap((name) => [
+      // OMP writes here once the profile's XDG dir exists, so ID lookup must find it before older copies.
+      ...(xdgProfilesDir ? [join(xdgProfilesDir, name, 'sessions')] : []),
+      join(profilesDir, name, 'agent', 'sessions')
+    ])
+    .filter((dir) => existsSync(dir))
+}
+
+function profileDirNames(profilesDir: string): string[] {
+  try {
+    return readdirSync(profilesDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && normalizedOmpProfile(entry.name) === entry.name)
+      .map((entry) => entry.name)
+  } catch {
+    return []
+  }
 }

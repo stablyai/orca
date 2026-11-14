@@ -1,14 +1,12 @@
-import { openExistingStructuredSession } from '@/lib/open-existing-structured-session'
+import { openExistingStructuredSession } from '@/lib/agent-session/open/open-existing-structured-session'
 import { ALL_TUI_AGENTS } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isStructuredAgentSessionIdFor } from '../../../../../shared/agent-session/structured-agent-session-create'
-import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   activateAndRevealWorktree,
   activateAndRevealFolderWorkspace
 } from '@/lib/workspace/activation/worktree-activation'
-import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { activateWslMovedWorkspace } from '@/lib/workspace/activation/wsl-moved-chat-activation'
 import { useAppStore } from '@/store/index'
 import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
@@ -17,6 +15,8 @@ import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/n
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { buildAutomationRunOpenLayout } from './automation-run-pane-layout'
+import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import type { AutomationsPageActionContext } from '../automations-page-action-context'
 
 let cancelPendingReveal: (() => void) | undefined

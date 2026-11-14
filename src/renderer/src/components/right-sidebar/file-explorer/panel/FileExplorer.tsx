@@ -16,7 +16,7 @@ import { FileExplorerScopeNotice } from './FileExplorerScopeNotice'
 import { useFileExplorerRootNavigation } from '../navigation/use-file-explorer-root-navigation'
 import { useFileExplorerScopeTransition } from '../navigation/use-file-explorer-scope-transition'
 import { basename } from '@/lib/path'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getVisibleFileExplorerWorktreePath } from '../navigation/file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
@@ -41,7 +41,7 @@ import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-me
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pane-state'
 import { useWslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
-import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
+import { useWslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
@@ -57,7 +57,7 @@ function FileExplorerFiles(): React.JSX.Element {
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
   const wslHostUnavailable = useWslHostUnavailableReason(activeWorktreeId)
-  const stoppedWslHost = useStoppedWslHost(activeWorktreeId)
+  const stoppedWslHost = useWslHostReadOutage(activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   // Why: a folder workspace has no repo row, so only the catalog owner names its SSH host.

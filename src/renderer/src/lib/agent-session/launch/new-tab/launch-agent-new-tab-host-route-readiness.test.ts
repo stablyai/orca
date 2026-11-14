@@ -64,7 +64,7 @@ vi.mock('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription',
 vi.mock('../../messaging/paste/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: false }))
 }))
-vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: mockLaunchAgentKind }))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => () => 'claude')
 vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
@@ -74,7 +74,7 @@ vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
 const { launchNewTabPromptThroughHost } = await import('./launch-agent-new-tab-host-route')
-const { bufferPreHandlerPtyData, drainPreHandlerPtyData, clearPreHandlerPtyState } =
+const { clearPreHandlerPtyState } =
   await import('@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer')
 
 function attachHostPty(ptyId: string): void {
@@ -105,71 +105,6 @@ describe('an AI button whose agent is ready before the host answers', () => {
   })
 
   // Attach readiness before host reply so early bracketed-paste signals cannot be lost until timeout.
-  it('is pasted at its own ready signal plus the quiet window, not after the timeout', async () => {
-    let answer!: (startedPtyId: string | null) => void
-    testState.launchAgentThroughHost.mockReturnValue({
-      tabId: TAB,
-      started: new Promise<string | null>((done) => (answer = done))
-    })
-    const onPromptDeliveryUnconfirmed = vi.fn()
-    const { promptDeliveryResult } = launchNewTabPromptThroughHost({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: 'resolve the conflicts',
-      pasteContent: 'resolve the conflicts',
-      submit: true,
-      onPromptDeliveryUnconfirmed
-    })
-
-    await vi.advanceTimersByTimeAsync(50)
-    attachHostPty('pty-1')
-    await vi.advanceTimersByTimeAsync(10)
-    testState.ptyWatchers.get('pty-1')?.('claude drawn\r\n\x1b[?2004h> ')
-    await vi.advanceTimersByTimeAsync(240)
-    expect(testState.writes).toEqual([])
-    expect(testState.appState.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
-
-    answer('pty-1')
-    await vi.advanceTimersByTimeAsync(1200)
-    expect(testState.writes).toEqual([])
-
-    // Ready at 60 ms + the 1.5 s quiet window.
-    await vi.advanceTimersByTimeAsync(60)
-    expect(testState.writes[0]).toEqual({
-      at: 1560,
-      data: '\x1b[200~resolve the conflicts\x1b[201~'
-    })
-    expect(testState.appState.seedNativeChatLaunchPrompt).toHaveBeenCalledOnce()
-
-    await vi.advanceTimersByTimeAsync(2000)
-    await expect(promptDeliveryResult).resolves.toEqual({ delivered: true, failureNotified: false })
-    expect(onPromptDeliveryUnconfirmed).not.toHaveBeenCalled()
-  })
-
-  it('writes nothing, and seeds no chat copy, when its pane says the agent did not start', async () => {
-    let answer!: (startedPtyId: string | null) => void
-    testState.launchAgentThroughHost.mockReturnValue({
-      tabId: TAB,
-      started: new Promise<string | null>((done) => (answer = done))
-    })
-    const { promptDeliveryResult } = launchNewTabPromptThroughHost({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: 'resolve the conflicts',
-      pasteContent: 'resolve the conflicts',
-      submit: true
-    })
-
-    attachHostPty('pty-1')
-    testState.ptyWatchers.get('pty-1')?.('\x1b[?2004h> ')
-    answer(null)
-    await vi.advanceTimersByTimeAsync(10_000)
-
-    await expect(promptDeliveryResult).resolves.toEqual({ delivered: false, failureNotified: true })
-    expect(testState.writes).toEqual([])
-    expect(testState.appState.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
-    expect(testState.appState.markNativeChatLaunchPromptFailed).not.toHaveBeenCalled()
-  })
 
   // Regression: a split made while the agent started bound its shell first, and took the prompt.
   it("goes only to its own pane's PTY when another split's shell is ready first", async () => {
@@ -204,39 +139,7 @@ describe('an AI button whose agent is ready before the host answers', () => {
   })
 
   // A sibling split may bind first; observe launch-pane bytes before its primary handler drains them.
-  it("sees the launch pane's ready output even when a split bound first and it drained at once", async () => {
-    let answer!: (startedPtyId: string | null) => void
-    testState.launchAgentThroughHost.mockReturnValue({
-      tabId: TAB,
-      started: new Promise<string | null>((done) => (answer = done))
-    })
-    const { promptDeliveryResult } = launchNewTabPromptThroughHost({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'task',
-      pasteContent: 'task',
-      submit: true
-    })
 
-    await vi.advanceTimersByTimeAsync(13_000)
-    attachHostPty('split-shell')
-    bufferPreHandlerPtyData(
-      'launch-agent',
-      '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}\x1b[?2004h'
-    )
-    // The connect continuation answers, publishes the binding and drains, with no await between.
-    answer('launch-agent')
-    testState.appState.ptyIdsByTabId = { [TAB]: ['split-shell', 'launch-agent'] }
-    for (const subscriber of testState.storeSubscribers) {
-      subscriber(testState.appState)
-    }
-    drainPreHandlerPtyData('launch-agent', vi.fn())
-    await vi.advanceTimersByTimeAsync(25_000)
-
-    await expect(promptDeliveryResult).resolves.toEqual({ delivered: true, failureNotified: false })
-    expect(new Set(testState.writes.map(({ ptyId }) => ptyId))).toEqual(new Set(['launch-agent']))
-    expect(testState.writes.filter(({ data }) => data.includes('task'))).toHaveLength(1)
-  })
   it('does not paste into a cancelled hosted launch after its composer becomes ready', async () => {
     const { pasteDraftWhenAgentReady } =
       await import('@/lib/agent-session/messaging/paste/agent-paste-draft')

@@ -1,5 +1,5 @@
 import type { MutableRefObject } from 'react'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 export type BrowserClientPageGuestLossReason = 'unreadable' | 'destroyed' | 'render-process-gone'
 

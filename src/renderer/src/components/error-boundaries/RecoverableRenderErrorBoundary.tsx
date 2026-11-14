@@ -1,9 +1,9 @@
 import React from 'react'
 import { AlertTriangle, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { isLazyChunkLoadError } from '@/lib/lazy-with-retry'
-import { reportReactErrorBoundaryCrash } from '@/lib/react-error-boundary-reporting'
+import { cn } from '@/lib/class-names'
+import { isLazyChunkLoadError } from '@/app-shell/startup/lazy-with-retry'
+import { reportReactErrorBoundaryCrash } from '@/diagnostics/crash-reporting/react-error-boundary-reporting'
 import type { ReactErrorBoundaryReportArgs } from '../../../../shared/crash-reporting'
 import { translate } from '@/i18n/i18n'
 

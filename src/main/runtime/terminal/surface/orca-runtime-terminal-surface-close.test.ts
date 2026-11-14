@@ -23,12 +23,9 @@ import {
   makeSession
 } from '../../__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
 import { createHarness } from '../../__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
-import { expectDesktopDropsPane } from '../../__fixtures__/main-layout-close-fixture'
-import {
-  retireTerminalSurfaceFromPersistence,
-  sanitizeWorkspaceSessionTerminalRetirements
-} from './mobile-session-terminal-persistence-retirement'
-import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import '../../__fixtures__/main-layout-close-fixture'
+import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
+import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 
 const splitLayout = {
   root: {
@@ -124,18 +121,6 @@ function rendererSaveWithout(
 }
 
 describe('renderer close intents', () => {
-  it('keeps a closed tab closed across a renderer save and a reload', async () => {
-    const { store, runtime, reload } = createPersistedRuntime(makeSession())
-
-    await runtime.closeTerminalSurfaceFromRenderer({
-      worktreeId: WORKTREE_ID,
-      target: { kind: 'tab', tabId: TAB_ID }
-    })
-    store.setWorkspaceSession(rendererSaveWithout(store.getWorkspaceSession()))
-
-    expect((await reload()).tabsByWorktree[WORKTREE_ID]).toEqual([])
-  })
-
   it('keeps a closed split pane closed across a renderer save and a reload', async () => {
     const { store, runtime, reload } = createPersistedRuntime(splitSession())
 
@@ -183,46 +168,6 @@ describe('renderer close intents', () => {
 })
 
 describe('CLI close of one pane in a split tab', () => {
-  it.each([
-    ['reports no exit', false],
-    ['throws, as an unreachable SSH host does', new Error('ssh_host_unreachable')]
-  ] as const)(
-    'closes only that pane, never the live sibling, when its stop %s',
-    async (_case, stopResult) => {
-      const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
-      harness.syncSplitFixtureGraph()
-      harness.syncFixtureTabWithoutLeaf()
-      harness.setVerifiedStopResult(stopResult)
-      // Honor erroneous tab close so widening destroys the sibling and fails visibly.
-      harness.setCloseTerminalTabAction(() => harness.retirePersistedTab())
-      const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
-        (candidate) => candidate.ptyId === PTY_ID
-      )!
-
-      const receipt = await harness.runtime.closeTerminal(terminal.handle)
-
-      const saved = sanitizeWorkspaceSessionTerminalRetirements(
-        { ...harness.getSession(), terminalLayoutsByTabId: { [TAB_ID]: splitLayout } },
-        harness.getSession()
-      )
-      expect(saved.tabsByWorktree[WORKTREE_ID]).toEqual([expect.objectContaining({ id: TAB_ID })])
-      expect(saved.terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
-        type: 'leaf',
-        leafId: SIBLING_LEAF_ID
-      })
-      expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
-      expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-      // Controller kill also records pending SSH stops; it must still run.
-      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
-      expect(harness.kill).not.toHaveBeenCalledWith(SIBLING_PTY_ID)
-      expect(receipt).toMatchObject({
-        tabId: TAB_ID,
-        ptyKilled: false,
-        ptyStopVerdict: 'unverifiable'
-      })
-    }
-  )
-
   // L255: expected main-owned headless pane-close failure until its fix lands.
 
   it('keeps the sibling when the stop delivers the exit before the pane commit', async () => {

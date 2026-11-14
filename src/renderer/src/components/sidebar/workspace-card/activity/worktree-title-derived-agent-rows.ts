@@ -1,5 +1,5 @@
 import type { TitleDerivedAgentRowsInput } from './title-derived-agent-row-input'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import {
   isClaudeManagementTitle,
@@ -8,6 +8,7 @@ import {
 
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
 import { getAgentLabel } from '../../../../../../shared/agent-status/title/agent-title-identity'
+import { jcodePaneTitleStatus } from '../../../../../../shared/agent-status/title/providers/jcode-terminal-title'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import type {
   AgentStatusEntry,
@@ -182,7 +183,8 @@ function buildTitleDerivedAgentRow(args: {
     return null
   }
   // Why: the title sets activity only; a plain title on a process-identified pane is idle.
-  const status = titleStatus ?? 'idle'
+  // Jcode's own tail outranks agent names its conversation title happens to mention.
+  const status = jcodePaneTitleStatus(title, agentType) ?? titleStatus ?? 'idle'
   const rowLabel =
     agentType === titleAgentType &&
     label &&

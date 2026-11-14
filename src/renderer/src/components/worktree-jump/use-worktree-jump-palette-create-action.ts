@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react'
-import { subscribeCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
+import { subscribeCmdJRowIndexJump } from '@/lib/workspace/search/palette/cmd-j-row-index-jump'
 import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'

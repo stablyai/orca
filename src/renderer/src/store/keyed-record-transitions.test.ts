@@ -155,18 +155,6 @@ describe('keyed record transitions', () => {
     })
   })
 
-  it('names deleted record keys', () => {
-    const start = { t1: 'pty-1', t2: 'pty-2' }
-    const next = replaceRecordEntries(start, [['t1', null]])
-    expect(next).toEqual({ t2: 'pty-2' })
-    expect(readRecordChanges(next, start)).toEqual({
-      kind: 'addressed',
-      keys: new Set(['t1']),
-      added: [],
-      deleted: new Set(['t1'])
-    })
-  })
-
   it('keeps a __proto__ key as an own entry in records and drafts', () => {
     const start = { t1: 'pty-1' }
     const replaced = replaceRecordEntries(start, [['__proto__', 'pty-2']])

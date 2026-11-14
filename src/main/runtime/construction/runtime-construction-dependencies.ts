@@ -1,6 +1,6 @@
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 import type {
   RuntimeTerminalAgentStatusEvent,
@@ -23,6 +23,8 @@ import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep
 import type { SessionSearchSettingsApply } from '../integrations/ai-vault/runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {
+  /** A host that opened the saved-chat store before construction passes the ids it used. */
+  legacyStructuredSessionTabIds?: readonly string[]
   getSetupTerminalTitle?: () => string
   getLocalProvider?: () => IPtyProvider
   prepareClaudeAuth?: PrepareClaudeAuth
@@ -33,6 +35,7 @@ export type RuntimeConstructionDependencies = {
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
+  getPublicAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   structuredAgentStatusSink?: StructuredAgentSessionStatusSink
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
   getAgentProviderSessionSnapshot?: (tabId?: string) => AgentStatusIpcPayload[]

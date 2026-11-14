@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from 'react'
 import { chatFontSizeActionForEvent } from './native-chat-font-size'
 import { writeNativeChatFontSize } from './native-chat-font-size-write'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '../../../store/index'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'

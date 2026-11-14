@@ -1,17 +1,12 @@
-import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
-import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { useAppStore } from '@/store/index'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import {
-  resolveWorktreeOperationRouteResult,
-  type WorktreeOperationRouteResolution
-} from '@/lib/workspace/ownership/worktree-operation-route'
+import { resolveWorktreeOperationRouteResult } from '@/lib/workspace/ownership/worktree-operation-route'
+import type { WorktreeOperationRouteResolution } from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   createNativeChatTabOwnerSelector,
   findNativeChatTabOwnerWorktreeId
 } from '../../pane/ownership/native-chat-tab-owner'
-import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import { captureDirectSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mutation-expectation'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
@@ -21,12 +16,15 @@ import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-ta
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
-import { firstRegisteredStructuredChatTab } from '@/lib/structured-chat-tab-index'
+import { firstRegisteredStructuredChatTab } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 
 /** The transcript must not read until ownership and its path are both known. */
 export type NativeChatImageRuntimeContext = RuntimeFileOperationArgs | null

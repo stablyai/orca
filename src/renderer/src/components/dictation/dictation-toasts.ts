@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
-import { compactIpcErrorMessage } from '@/lib/ipc-error'
+import { compactIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { hostDictationErrorMessage } from '../../../../shared/host-dictation-error-messages'
 import { SPEECH_MODEL_NEEDS_UPDATE_ERROR } from '../../../../shared/speech-model-retirement'
 

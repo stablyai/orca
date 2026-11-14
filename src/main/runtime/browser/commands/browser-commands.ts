@@ -81,6 +81,7 @@ export class RuntimeBrowserCommands {
   readonly browserProceedCertificate: RuntimeBrowserTabQueries['browserProceedCertificate']
   readonly browserTabShow: RuntimeBrowserTabQueries['browserTabShow']
   readonly browserTabCurrent: RuntimeBrowserTabQueries['browserTabCurrent']
+  readonly browserTabAnnotations: RuntimeBrowserTabQueries['browserTabAnnotations']
   readonly browserTabSwitch: RuntimeBrowserTabQueries['browserTabSwitch']
   readonly browserTabCreate: RuntimeBrowserTabCreation['browserTabCreate']
   readonly browserOpenUrlOnClient: RuntimeBrowserTabCreation['browserOpenUrlOnClient']
@@ -187,6 +188,7 @@ export class RuntimeBrowserCommands {
     this.browserProceedCertificate = queries.browserProceedCertificate.bind(queries)
     this.browserTabShow = queries.browserTabShow.bind(queries)
     this.browserTabCurrent = queries.browserTabCurrent.bind(queries)
+    this.browserTabAnnotations = queries.browserTabAnnotations.bind(queries)
     this.browserTabSwitch = queries.browserTabSwitch.bind(queries)
     this.browserTabCreate = creation.browserTabCreate.bind(creation)
     this.browserOpenUrlOnClient = creation.browserOpenUrlOnClient.bind(creation)

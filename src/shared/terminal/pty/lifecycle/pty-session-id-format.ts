@@ -29,6 +29,11 @@ export function isPtySessionIdOwnedByWorktree(sessionId: string, worktreeId: str
   return separatorIdx === -1 || sessionId.slice(0, separatorIdx) === worktreeId
 }
 
+/** Bare counter ids from the in-process local provider; a start never reattaches one by id alone, only through a pane main already binds it to. */
+export function isLocalCounterPtyId(sessionId: string): boolean {
+  return /^\d+$/.test(sessionId)
+}
+
 const SERVE_PTY_SESSION_TAG = 'serve-'
 
 /** Serve ids carry their workspace like daemon-minted ids so inventory never re-files them by cwd (#36716). */

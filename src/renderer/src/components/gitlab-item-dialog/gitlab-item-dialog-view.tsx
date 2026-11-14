@@ -12,7 +12,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useTranslate } from '@/i18n/use-translate'
 import { hasBoundedCommentBodyText } from '@/lib/source-control/review/comments/comment-body-submit-state'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { normalizeGitLabLabels, StateBadge } from '../gitlab-item-dialog-parts'
 import { GitLabConversationTab } from './gitlab-conversation-tab'

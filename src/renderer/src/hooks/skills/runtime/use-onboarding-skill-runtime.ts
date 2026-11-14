@@ -14,7 +14,7 @@ import {
   bundledSkillTargetKey,
   type BundledSkillTarget
 } from '@/lib/skills/runtime/bundled-skill-target'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { useAppStore } from '@/store/index'
 import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'

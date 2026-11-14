@@ -16,7 +16,7 @@ import { parseAgentHookJson } from './request-body'
 import { GROK_HOME_ENVELOPE_MAX_LENGTH, GROK_SESSION_CWD_MAX_LENGTH } from './listener-limits'
 import { readLastAssistantFromTranscriptOnce } from './transcript-reader'
 import { isGrokEvent } from './provider-event-names'
-import { isAntigravityStopStillBusy } from './providers/antigravity-event-rules'
+import { isAntigravityStopStillBusy } from './providers/antigravity/antigravity-event-rules'
 
 export function parseHookBodyPayloadRecord(body: unknown): Record<string, unknown> | null {
   if (typeof body !== 'object' || body === null) {

@@ -6,7 +6,7 @@ import {
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
 } from '../workers/transcripts/worker-output-cursor'
-import type { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
+import type { resolvePinnedFederatedServer } from './pinned-federated-server'
 
 // Old peers expose only terminal reads; retain fences and cursor scope instead of silently degrading transcript cursors.
 export async function readLegacyFederatedTerminal(args: {

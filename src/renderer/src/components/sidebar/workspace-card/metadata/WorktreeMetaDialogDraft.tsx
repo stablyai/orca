@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { getWorktreeMetaDialogOwner } from './worktree-meta-dialog-owner'
 import { Plus } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -88,6 +91,8 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
     items: getWorkspaceAttachments(worktree ?? {})
   }))
   const [displayNameInput, setDisplayNameInput] = useState(initial.displayName)
+  // Why: retyping the automatic branch name is still an explicit name, so editing pins it.
+  const [displayNameEdited, setDisplayNameEdited] = useState(false)
   const [commentInput, setCommentInput] = useState(initial.comment)
   const [items, setItems] = useState<WorkspaceAttachment[]>(initial.items)
   const [notesOpen, setNotesOpen] = useState(
@@ -111,7 +116,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
     setSaveError(null)
     try {
       const updates = {
-        ...(displayNameInput.trim() !== initial.displayName
+        ...(displayNameEdited || displayNameInput.trim() !== initial.displayName
           ? { displayName: displayNameInput.trim() }
           : {}),
         ...(commentInput.trim() !== initial.comment ? { comment: commentInput.trim() } : {}),
@@ -217,7 +222,10 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
             disabled={saving}
             inputRef={displayNameInputRef}
             onEnter={handleSave}
-            onValueChange={setDisplayNameInput}
+            onValueChange={(value) => {
+              setDisplayNameInput(value)
+              setDisplayNameEdited(true)
+            }}
             portalContainer={dialogElement}
             value={displayNameInput}
           />

@@ -3,7 +3,10 @@ import { Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { useWorkerAutoClose, workerKeepOpenLabel } from '@/lib/worker-auto-close'
+import {
+  useWorkerAutoClose,
+  workerKeepOpenLabel
+} from '@/runtime/agent-orchestration/worker-auto-close'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatWorkerAutoCloseCountdown } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'

@@ -14,7 +14,7 @@ import {
 } from '../../ui/dropdown-menu'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getOpenInAppPreset,
   isOpenInAppPresetAdded,

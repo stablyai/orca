@@ -6,7 +6,7 @@ import type {
 import type { AESEncryptionKey } from 'expo-crypto'
 import { Directory, Paths } from 'expo-file-system'
 import { AppState } from 'react-native'
-import { createExpoGenerationFileSystem } from '../mobile-web-shell/generation-store-file-system'
+import { createExpoGenerationFileSystem } from '../mobile-web-shell/generations/generation-store-file-system'
 import { loadStoredHostProfiles } from '../host-catalog/host-metadata-store'
 import {
   readPairingKeychainItem,

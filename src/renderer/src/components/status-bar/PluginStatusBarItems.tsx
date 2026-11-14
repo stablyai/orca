@@ -1,10 +1,10 @@
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PluginDeclarativeIconGlyph } from '@/components/plugins/declarative/plugin-declarative-icons'
-import { executePluginCommand } from '@/lib/plugin-command-execution'
+import { executePluginCommand } from '@/lib/plugins/commands/plugin-command-execution'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { pluginCommandUnavailableReason } from '@/components/plugins/page/plugin-contribution-action-availability'
 import {
   usePluginStatusBarItems,

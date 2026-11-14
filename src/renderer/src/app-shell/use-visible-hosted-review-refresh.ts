@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
-import { useAppStore } from '@/store'
-import { isWindowVisible } from '@/lib/window-visibility-interval'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { onRuntimeEnvironmentRevisionsChanged } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { useAppStore } from '@/store/index'
+import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { createVisibleHostedReviewRefreshScheduler } from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
-import { getWorkspaceReferenceRefreshTargets } from '@/components/sidebar/workspace-card/review/workspace-reference-refresh-targets'
+import { createWorkspaceReferenceRefreshTargetsSelector } from '@/components/sidebar/workspace-card/review/workspace-reference-refresh-targets'
 import {
   getVisibleHostedReviewRefreshTargets,
   visibleHostedReviewRefreshInputsChanged
@@ -15,29 +16,45 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
       return
     }
     const scheduler = createVisibleHostedReviewRefreshScheduler()
-    const update = (): void => {
+    const selectedOnly = isWebClientLocation()
+    const selectReferences = createWorkspaceReferenceRefreshTargetsSelector({ selectedOnly })
+    let hostedTargets: ReturnType<typeof getVisibleHostedReviewRefreshTargets> = []
+    let referenceTargets: ReturnType<typeof selectReferences> = []
+    const update = (reviewInputsChanged: boolean): void => {
+      if (!isWindowVisible()) {
+        return
+      }
       const state = useAppStore.getState()
-      const selectedOnly = isWebClientLocation()
+      const references = selectReferences(state, reviewInputsChanged)
+      if (!reviewInputsChanged && references === referenceTargets) {
+        return
+      }
+      referenceTargets = references
+      if (reviewInputsChanged) {
+        hostedTargets = getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, {
+          selectedOnly
+        })
+      }
       scheduler.update([
-        ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, { selectedOnly }),
-        ...getWorkspaceReferenceRefreshTargets(state, { selectedOnly })
+        // Collapsed review rollups also need background reads on paired clients; this shared queue bounds them.
+        ...hostedTargets,
+        ...referenceTargets
       ])
     }
     const visibilityChanged = (): void => {
       scheduler.setVisible(false)
-      update()
+      update(true)
       scheduler.setVisible(isWindowVisible())
     }
     const unsubscribe = useAppStore.subscribe((state, previous) => {
-      if (visibleHostedReviewRefreshInputsChanged(state, previous)) {
-        update()
-      }
+      update(visibleHostedReviewRefreshInputsChanged(state, previous))
     })
-    update()
+    const stopRevisionChanges = onRuntimeEnvironmentRevisionsChanged(() => update(true))
     visibilityChanged()
     document.addEventListener('visibilitychange', visibilityChanged)
     return () => {
       unsubscribe()
+      stopRevisionChanges()
       document.removeEventListener('visibilitychange', visibilityChanged)
       scheduler.dispose()
     }

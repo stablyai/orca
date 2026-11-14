@@ -2,12 +2,10 @@
 
 /** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
 } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
-
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess
@@ -17,35 +15,31 @@ import {
   isTerminalLeafId,
   makePaneKey
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import {
-  type TerminalProcessInspection as RuntimeTerminalProcessInspection,
-  isClientOnlyUnverifiableInspection
-} from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { isClientOnlyUnverifiableInspection } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   getCodexSelectionLaneKey,
-  normalizeCodexAccountSelectionTarget,
-  type CodexAccountSelectionTarget
+  normalizeCodexAccountSelectionTarget
 } from '../../../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
+import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
+import { resolveAgentAccountRestartResumeStartup } from '../agent-account-restart-startup'
+import { isSessionHeldByAnotherPane } from '../../identity/claude-session-pane-holders'
+import { isClaudePaneOnAccount, resolveClaudePaneFolder } from './claude-pane-account-folder'
+import type { ClaudeHostFolders } from './claude-pane-account-folder'
+import {
+  getCodexAccountSwitchLaneMatcher,
+  isForeignMachineCodexPtyId,
+  isLocalCodexSelectionLaneKey,
+  resolveCodexPaneSelectionLane
+} from '../codex-pane-selection-lane'
+import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
 } from '../../../../../../shared/managed-account-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
-import { resolveAgentAccountRestartResumeStartup } from '../agent-account-restart-startup'
-import { isSessionHeldByAnotherPane } from '../../identity/claude-session-pane-holders'
-import {
-  isClaudePaneOnAccount,
-  resolveClaudePaneFolder,
-  type ClaudeHostFolders
-} from './claude-pane-account-folder'
-import {
-  getCodexAccountSwitchLaneMatcher,
-  isForeignMachineCodexPtyId,
-  isLocalCodexSelectionLaneKey,
-  resolveCodexPaneSelectionLane
-} from '../../../codex-pane-selection-lane'
 
 export type ClaudeSessionMoveCandidate = {
   ptyId: string

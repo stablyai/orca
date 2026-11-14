@@ -1,4 +1,5 @@
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import '@/diagnostics/telemetry/telemetry'
+import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type {
   PathSource,

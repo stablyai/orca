@@ -1,3 +1,4 @@
+import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
 import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
@@ -5,9 +6,9 @@ import { useAppStore } from '../../../store/index'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { resolveAppearanceAccordionDeepLink } from '../appearance/appearance-usage-percentage-search'
 import { registerWindowCloseGuard } from '../../window-close-request-coordinator'
-import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
+import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { translate } from '@/i18n/i18n'
 import {
   getSettingsTargetHostSelection,
@@ -204,6 +205,7 @@ export function useSettingsPageEffects(
     if (settingsNavigationTarget.pane === 'general') {
       setGeneralSubPage(resolveGeneralSubPage(settingsNavigationTarget.sectionId))
     }
+    cancelSettingsListReveal()
     consumeSettingsNavigation(settingsNavigationTarget)
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId

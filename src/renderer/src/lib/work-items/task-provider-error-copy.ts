@@ -1,7 +1,7 @@
 import type { TaskProviderErrorCode } from '../../../../shared/work-items/task-provider-failure'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { displayIpcErrorMessage } from '../ipc-error'
+import { displayIpcErrorMessage } from '../../runtime/errors/ipc-error'
 
 const COPY: Record<TaskProviderErrorCode, () => string> = {
   'linear.issuesLoadFailed': () =>

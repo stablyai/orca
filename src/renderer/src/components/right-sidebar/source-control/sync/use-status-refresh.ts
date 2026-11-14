@@ -6,7 +6,7 @@ import {
   resolveWorktreeGitCopyNow,
   worktreeGitCopyHostId,
   worktreeCopyPushTarget
-} from '@/lib/worktree-git-copy'
+} from '@/lib/workspace/ownership/worktree-git-copy'
 import {
   getLocalPathOpenOwnerForRoute,
   isLocalPathOpenBlocked
@@ -17,7 +17,7 @@ import {
   markHugeRepoWarningDismissed
 } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
 import type { PullRequestGenerationContext } from '@/store/slices/hosted-review/generation/pull-request-generation-state'

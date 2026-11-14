@@ -1,19 +1,17 @@
-import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
 import { useAppStore } from '@/store/index'
-import {
-  openPlannedFileBrowserLink,
-  type FileBrowserLinkTarget
-} from '@/lib/browser/documents/file-preview-link-open'
-import type {
-  BrowserLinkOpenContext,
-  BrowserOpenOutcome
-} from '@/lib/browser/navigation/browser-link-destination'
+import { openPlannedFileBrowserLink } from '@/lib/browser/documents/file-preview-link-open'
+import type { FileBrowserLinkTarget } from '@/lib/browser/documents/file-preview-link-open'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import {
   getWorkspaceFilePreviewPlan,
   openFileInBrowserTab
 } from '@/lib/browser/documents/file-preview'
+import type {
+  BrowserLinkOpenContext,
+  BrowserOpenOutcome
+} from '@/lib/browser/navigation/browser-link-destination'
 
 export async function openResolvedHtmlFileInBrowser(
   params: FileBrowserLinkTarget & {

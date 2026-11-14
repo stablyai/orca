@@ -8,7 +8,7 @@ import {
 } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import { useEffect } from 'react'
 import { createPluginContentListStore } from '../catalog/plugin-content-list-store'
-import { refreshedTerminalPluginPalettes } from '../../../lib/terminal-plugin-palettes'
+import { refreshedTerminalPluginPalettes } from '../../../lib/terminal/themes/terminal-plugin-palettes'
 import {
   applyPluginAppTheme,
   readCachedPluginAppTheme

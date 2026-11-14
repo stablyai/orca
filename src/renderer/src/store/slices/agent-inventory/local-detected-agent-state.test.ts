@@ -62,6 +62,24 @@ describe('local detected agent context lifecycle', () => {
     })
   })
 
+  it('sends explicit catalog intent even while an automatic refresh is pending', async () => {
+    const store = createTestStore([])
+    const automaticReply = Promise.withResolvers<{ agents: string[] }>()
+    refreshAgents.mockImplementation((args) =>
+      args?.userInitiated ? Promise.resolve({ agents: ['grok'] }) : automaticReply.promise
+    )
+    const automatic = store.getState().refreshDetectedAgents()
+    const explicit = store.getState().refreshDetectedAgents(undefined, { userInitiated: true })
+    expect(store.getState().refreshDetectedAgents(undefined, { userInitiated: true })).toBe(
+      explicit
+    )
+    expect(await explicit).toEqual(['grok'])
+    automaticReply.resolve({ agents: ['claude'] })
+    await automatic
+    expect(store.getState().detectedAgentIds).toEqual(['grok'])
+    expect(refreshAgents).toHaveBeenCalledWith(expect.objectContaining({ userInitiated: true }))
+  })
+
   it('keeps complete Settings inventory separate from automatic probes in either completion order', async () => {
     const store = createTestStore([])
     const resolveDetection = new Map<boolean, (ids: string[]) => void>()

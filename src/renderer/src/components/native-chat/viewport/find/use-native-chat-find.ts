@@ -9,7 +9,7 @@ import {
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '../../../../store/index'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'

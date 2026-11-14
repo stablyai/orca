@@ -1,5 +1,5 @@
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import { useAppStore } from '@/store'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import { useAppStore } from '@/store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
 

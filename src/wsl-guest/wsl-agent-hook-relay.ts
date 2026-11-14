@@ -5,21 +5,21 @@ import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-listener
 import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../shared/claude-agent-view'
 import { homedir } from 'node:os'
 
-import { RELAY_SENTINEL } from './protocol'
-import { RelayDispatcher } from './dispatcher'
-import { RelayAgentHookServer } from './agent-hook-server'
-import { registerWslHookFsHandlers } from './wsl-hook-fs-bridge'
-import { PluginOverlayManager } from './plugin-overlay'
-import { createInstallPluginsHandler } from './wsl-install-plugins-handler'
-import { PreflightHandler } from './preflight-handler'
+import { RELAY_SENTINEL } from './transport/wire/protocol'
+import { RelayDispatcher } from './transport/publication/dispatcher'
+import { RelayAgentHookServer } from './agent-hooks/server/agent-hook-server'
+import { registerWslHookFsHandlers } from './commands/wsl-hook-fs-bridge'
+import { PluginOverlayManager } from './plugins/overlays/plugin-overlay'
+import { createInstallPluginsHandler } from './plugins/installation/wsl-install-plugins-handler'
+import { PreflightHandler } from './commands/preflight-handler'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
   AGENT_HOOK_PANE_ROOT_METHOD
 } from '../shared/agent-hook-listener/transport/agent-hook-relay'
-import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
+import { publishAgentHookEnvelope } from './agent-hooks/publication/agent-hook-envelope-publication'
 import { createLocalHookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
-import { createRelayPaneRootResolver } from './relay-pane-root'
+import { createRelayPaneRootResolver } from './agent-hooks/presence/relay-pane-root'
 import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_RELAY_INSTANCE_ENV,

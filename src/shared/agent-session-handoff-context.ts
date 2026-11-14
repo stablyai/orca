@@ -11,6 +11,7 @@ import { MAX_CONTEXT_CHARS } from './agent-session/requests/agent-session-contex
 import { agentJournalToolCallLifecycle } from './agent-journal-tool-call-lifecycle'
 import { withoutNativeChatVisualDirectiveLines } from './native-chat/native-chat-visual-directive'
 import { workerTranscriptBlockFallbacks } from './worker-transcript-text'
+import { isInlineDataUrl } from './native-chat/native-chat-inline-data-url'
 
 const MAX_TOOL_CHARS = 8_000
 const MAX_MESSAGE_CHARS = 8_000
@@ -74,7 +75,7 @@ function prioritizeConversation(messages: readonly NativeChatMessage[]): Convers
         text =
           message.role === 'user' ? block.text : withoutNativeChatVisualDirectiveLines(block.text)
       } else if (block.type === 'image-ref') {
-        text = `[image] ${excerpt(block.path ?? block.url ?? block.alt ?? 'image omitted', MAX_MESSAGE_CHARS / 2)}`
+        text = `[image] ${excerpt(block.path ?? (block.url && !isInlineDataUrl(block.url) ? block.url : null) ?? block.alt ?? 'image omitted', MAX_MESSAGE_CHARS / 2)}`
       }
       return text.trim() ? [{ messageIndex, blockIndex, text }] : []
     })

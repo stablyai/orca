@@ -5,6 +5,17 @@ import {
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
 
+// Structured metadata is not user-facing diagnostic text.
+export function acpErrorDataWords(data: unknown): string | undefined {
+  const words =
+    typeof data === 'string'
+      ? data
+      : typeof data === 'object' && data !== null && 'details' in data
+        ? data.details
+        : undefined
+  return typeof words === 'string' && words.trim() ? words : undefined
+}
+
 export class AcpRpcError extends Error {
   constructor(
     readonly code: number,

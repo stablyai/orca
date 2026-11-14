@@ -56,7 +56,8 @@ type ProviderInvocation = {
 export type DetectedWorktreeRefreshLeaseRegistry = {
   acquire(
     publicKey: string,
-    input: DetectedWorktreeRefreshProviderInput
+    input: DetectedWorktreeRefreshProviderInput,
+    fresh?: boolean
   ): DetectedWorktreeRefreshLease
   getActiveCounts(): { providerInvocations: number; waiterLeases: number }
 }
@@ -198,15 +199,19 @@ export function createDetectedWorktreeRefreshLeaseRegistry(
 
   const acquire = (
     publicKey: string,
-    input: DetectedWorktreeRefreshProviderInput
+    input: DetectedWorktreeRefreshProviderInput,
+    // A fresh listing must not join one that may have read metadata before a newer write.
+    fresh = false
   ): DetectedWorktreeRefreshLease => {
-    const invocation =
-      [...(invocationsByPublicKey.get(publicKey) ?? [])].find(
-        (candidate) =>
-          !candidate.settled &&
-          !candidate.cancelAttempted &&
-          requestsAreCompatible(candidate.request, input)
-      ) ?? startInvocation(publicKey, input)
+    const joinable = fresh
+      ? undefined
+      : [...(invocationsByPublicKey.get(publicKey) ?? [])].find(
+          (candidate) =>
+            !candidate.settled &&
+            !candidate.cancelAttempted &&
+            requestsAreCompatible(candidate.request, input)
+        )
+    const invocation = joinable ?? startInvocation(publicKey, input)
     const waiterLeaseId = mintWaiterLeaseId()
     let resolveResult!: (result: HostQualifiedDetectedWorktreeResult) => void
     let rejectResult!: (error: unknown) => void

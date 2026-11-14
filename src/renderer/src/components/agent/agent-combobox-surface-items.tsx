@@ -13,7 +13,7 @@ import {
   rowLabel,
   rowTitle
 } from '@/components/tab-bar/tab-agent-row-presentation'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'

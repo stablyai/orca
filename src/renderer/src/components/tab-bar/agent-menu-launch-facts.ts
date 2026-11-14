@@ -21,7 +21,7 @@ import {
   runtimeHostContactForEntry
 } from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 
 /** Identity facts for the picker's owner and acquisition keys; readiness stays out of them. */

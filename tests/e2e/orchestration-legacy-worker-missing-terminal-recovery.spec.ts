@@ -13,7 +13,7 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import { DaemonClient } from '../../src/main/daemon/transport/client/daemon-client'
 import {
   getDaemonSocketPath,

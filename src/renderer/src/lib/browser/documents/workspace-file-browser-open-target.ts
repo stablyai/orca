@@ -4,12 +4,28 @@ import { basename } from '@/lib/path'
 import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store/index'
+import { translate } from '@/i18n/i18n'
 
 /** Still the answer for flows that need a real `file://` URL (e.g. dropping a file on a browser pane). */
 export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
   'Open in Orca Browser is only available for local files.'
 export const TWIN_FILE_BROWSER_UNSUPPORTED_MESSAGE =
   'This project is on more than one host, so Orca cannot tell which copy to open.'
+
+/** Localized lazily: a module constant would freeze the language at import time. */
+export function remoteFileBrowserUnsupportedMessage(): string {
+  return translate(
+    'renderer.lib.filePreview.remoteFileUnsupported',
+    'Open in Orca Browser is only available for local files.'
+  )
+}
+
+export function twinFileBrowserUnsupportedMessage(): string {
+  return translate(
+    'renderer.lib.filePreview.twinFileUnsupported',
+    'This project is on more than one host, so Orca cannot tell which copy to open.'
+  )
+}
 
 export type WorkspaceFileBrowserOpenTarget =
   | {
@@ -34,7 +50,7 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
     return {
       status: 'unsupported',
       reason: 'remote-worktree',
-      message: TWIN_FILE_BROWSER_UNSUPPORTED_MESSAGE
+      message: twinFileBrowserUnsupportedMessage()
     }
   }
   if (
@@ -45,7 +61,7 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
     return {
       status: 'unsupported',
       reason: 'remote-worktree',
-      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
+      message: remoteFileBrowserUnsupportedMessage()
     }
   }
 

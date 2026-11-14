@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '../../ipc-error'
+import { extractIpcErrorMessage } from '../../../runtime/errors/ipc-error'
 
 const homeUnavailable = (): string =>
   translate(

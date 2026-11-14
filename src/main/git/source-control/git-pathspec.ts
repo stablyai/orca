@@ -2,12 +2,10 @@ import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS
 } from '../../../shared/windows-command-line-budget'
-import {
-  resolveGitCommandWithoutProbe,
-  wslDistroForCommand
-} from '../command-runner/git-command-resolution'
-import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../wsl-windows-checkout-git-config'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import { resolveGitCommandWithoutProbe } from '../command-runner/host-routing/git-command-resolution'
+import { wslDistroForCommand } from '../../../shared/wsl-paths'
+import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../command-runner/host-routing/wsl-windows-checkout-git-config'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 
 /** Ceiling on argv entries per invocation; under WSL the byte budget bites first. */
 const BULK_CHUNK_SIZE = 100

@@ -1,5 +1,5 @@
 import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-environment'
-import { recordCoalescedDurableCrashBreadcrumb } from '../../crash-reporting/durable-crash-breadcrumb'
+import { recordCoalescedDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 
 /**
  * Guard Windows PID-based kills; stale metrics must not prevent root termination through its handle.

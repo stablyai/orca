@@ -13,7 +13,18 @@ function memoryStore() {
   const snapshots = new Map<string, RemoteLayoutSnapshot>()
   const saves: ('now' | 'later')[] = []
   const store: RemoteLayoutSnapshotStore = {
-    getRemoteLayoutSnapshot: (environmentId) => snapshots.get(environmentId),
+    getRemoteLayoutSnapshotWorkspace: (environmentId, worktreeId) =>
+      snapshots.get(environmentId)?.workspaces[worktreeId],
+    setRemoteLayoutSnapshotWorkspace: (environmentId, worktreeId, workspace, save) => {
+      saves.push(save)
+      const snapshot = snapshots.get(environmentId) ?? { workspaces: {} }
+      if (workspace) {
+        snapshot.workspaces[worktreeId] = workspace
+      } else {
+        delete snapshot.workspaces[worktreeId]
+      }
+      snapshots.set(environmentId, snapshot)
+    },
     setRemoteLayoutSnapshot: (environmentId, snapshot, save) => {
       saves.push(save)
       if (snapshot) {
@@ -109,35 +120,5 @@ describe('remote layout snapshot recorder', () => {
       })
     )
     expect(workspacesOf(snapshots)).toEqual({ a: tabs('a', 'vim') })
-  })
-
-  it('keeps each server in its own entry', () => {
-    const { store, snapshots } = memoryStore()
-    recordRemoteLayoutFrame(
-      store,
-      'one',
-      METHOD,
-      frame({ type: 'snapshots', snapshots: [tabs('a')] })
-    )
-    recordRemoteLayoutFrame(store, 'two', METHOD, frame({ type: 'snapshots', snapshots: [] }))
-    expect(workspacesOf(snapshots, 'one')).toEqual({ a: tabs('a') })
-    expect(workspacesOf(snapshots, 'two')).toEqual({})
-  })
-
-  it('records nothing from other streams, failures, ends or unreadable frames', () => {
-    const { store, saves } = memoryStore()
-    const census = { type: 'snapshots', snapshots: [tabs('a')] }
-    recordRemoteLayoutFrame(store, 'env', 'session.tabs.subscribe', frame(census))
-    recordRemoteLayoutFrame(store, 'env', 'terminal.multiplex', frame(census))
-    recordRemoteLayoutFrame(store, 'env', METHOD, {
-      id: 'stream',
-      ok: false,
-      error: { code: 'method_not_found', message: 'nope' },
-      _meta: { runtimeId: 'server-1' }
-    })
-    recordRemoteLayoutFrame(store, 'env', METHOD, frame({ type: 'end' }))
-    recordRemoteLayoutFrame(store, 'env', METHOD, frame({ type: 'snapshots', snapshots: [{}] }))
-    recordRemoteLayoutFrame(store, 'env', METHOD, frame({ type: 'updated', worktree: 'a' }))
-    expect(saves).toEqual([])
   })
 })

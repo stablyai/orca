@@ -1,5 +1,5 @@
 import { clampUtf8TextTail } from '../../../../../../shared/utf8-byte-limits'
-import { flattenRetainedSlice } from '../../../../lib/flatten-retained-slice'
+import { flattenRetainedSlice } from '../../../../lib/terminal/output/flatten-retained-slice'
 
 export type EagerBufferChunk = {
   data: string

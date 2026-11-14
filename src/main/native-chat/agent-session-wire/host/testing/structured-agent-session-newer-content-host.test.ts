@@ -2,11 +2,11 @@ import { cp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemBody } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   adapter,
@@ -15,15 +15,15 @@ import {
   envelope,
   hostTestState,
   replaceHostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 const relaunchedRoots: string[] = []
 
@@ -86,7 +86,7 @@ async function relaunch(): Promise<StructuredAgentSessionHost> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestAgentSessionDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     now: () => NOW

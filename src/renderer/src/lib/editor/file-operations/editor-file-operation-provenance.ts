@@ -1,23 +1,24 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import type { AppState } from '@/store/types'
-import type { HostAuthority } from '../../../../../shared/host-authority'
 import { findFolderWorkspaceOwner } from '../../workspace/ownership/folder-workspace-runtime-owner'
 import { resolveOwner } from '../../workspace/ownership/resolve-owner'
-import { captureDirectSshMutationExpectation } from '../../ssh-mutation-expectation'
+import { captureDirectSshMutationExpectation } from '../../../runtime/hosts/ssh/ssh-mutation-expectation'
 import {
   assertWorktreeOperationGenerationSnapshotCurrent,
-  captureWorktreeOperationGenerationSnapshot,
-  type WorktreeOperationGenerationSnapshot
+  captureWorktreeOperationGenerationSnapshot
 } from '../../workspace/ownership/worktree-operation-generation'
+import type { WorktreeOperationGenerationSnapshot } from '../../workspace/ownership/worktree-operation-generation'
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute,
-  resolveWorktreeOperationRouteResultForHost,
-  type WorktreeOperationRoute,
-  type WorktreeOperationRouteResolution,
-  type WorktreeOperationRouteState
+  resolveWorktreeOperationRouteResultForHost
+} from '../../workspace/ownership/worktree-operation-route'
+import type {
+  WorktreeOperationRoute,
+  WorktreeOperationRouteResolution,
+  WorktreeOperationRouteState
 } from '../../workspace/ownership/worktree-operation-route'
 import { resolveExplicitWorktreeOperationRouteResult } from '../../workspace/ownership/worktree-operation-catalog-route'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
@@ -26,6 +27,8 @@ import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
+import type { HostAuthority } from '../../../../../shared/host-authority'
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot

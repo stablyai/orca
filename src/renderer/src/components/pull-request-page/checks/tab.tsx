@@ -1,8 +1,8 @@
-import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
 import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   createGitHubChecksTabState,
@@ -10,6 +10,7 @@ import {
   toggleGitHubChecksTabExpandedKey,
   type GitHubChecksContextOwner
 } from '@/components/github-checks-tab-state'
+
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import {
   getCheckCounts,
@@ -18,23 +19,21 @@ import {
 } from '@/components/pr-check-counts'
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import {
+  getTaskSourceCacheScope,
+  type TaskSourceContext
+} from '../../../../../shared/work-items/task-source-context'
+
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import {
   canUseGitHubRepoContext,
   getGitHubSourceRuntimeHost
 } from '@/lib/work-items/github/github-source-runtime-context'
-import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
-import type {
-  GitHubWorkItem,
-  GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { refreshPullRequestChecks } from './refresh'
 import { rerunPullRequestChecks } from './rerun'
 import { requestPullRequestCheckDetails } from './details-request'
@@ -44,6 +43,11 @@ import { CheckRow } from './row'
 import { ChecksFixDialog } from './fix-dialog'
 import { ChecksTabLayouts } from './layouts'
 import { useTranslate } from '@/i18n/use-translate'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 
 export function ChecksTab({
   item,

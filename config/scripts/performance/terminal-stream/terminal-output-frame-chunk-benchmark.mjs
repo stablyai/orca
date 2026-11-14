@@ -50,7 +50,10 @@ if (ROUNDS % 2 !== 0) {
 }
 
 const CHUNK_SOURCE = readFileSync(
-  new URL('../../../../src/main/runtime/rpc/terminal-output-frame-chunks.ts', import.meta.url),
+  new URL(
+    '../../../../src/main/runtime/rpc/terminal/terminal-output-frame-chunks.ts',
+    import.meta.url
+  ),
   'utf8'
 )
 
@@ -101,7 +104,10 @@ const { TerminalStreamOpcode, encodeTerminalStreamJson, encodeTerminalStreamText
     .href
 )
 const { exceedsTerminalStreamChunkBytes, iterateTerminalOutputFrameChunks } = await import(
-  new URL('../../../../src/main/runtime/rpc/terminal-output-frame-chunks.ts', import.meta.url).href
+  new URL(
+    '../../../../src/main/runtime/rpc/terminal/terminal-output-frame-chunks.ts',
+    import.meta.url
+  ).href
 )
 
 function previousGate(data) {

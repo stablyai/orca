@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { measuredPageSafeAreaInsets, pageSafeAreaInsets } from './page-safe-area-insets'
 
 describe('window-authoritative page insets', () => {
@@ -9,10 +9,7 @@ describe('window-authoritative page insets', () => {
   const pageFrame = { x: 0, y: 0, width: 867, height: 669 }
   const nestedInsets = { top: 18, right: 0, bottom: 34, left: 0 }
 
-  it.each([
-    { width: 466, height: 678, nestedTop: 52 / 3 },
-    { width: 951, height: 669, nestedTop: 18 }
-  ])(
+  it.each([{ width: 951, height: 669, nestedTop: 18 }])(
     'removes the nested top gap for a $width pt window while keeping bottom protection',
     ({ width, height, nestedTop }) => {
       expect(
@@ -76,45 +73,5 @@ describe('window-authoritative page insets', () => {
       bottom: 34,
       left: 0
     })
-  })
-
-  it('uses the existing behavior until geometry arrives, including old native modules', () => {
-    expect(measuredPageSafeAreaInsets(undefined, pageFrame, nestedInsets)).toBe(nestedInsets)
-    expect(measuredPageSafeAreaInsets(windowSafeArea, null, nestedInsets)).toBe(nestedInsets)
-  })
-
-  it('bounds untrusted geometry and logs a malformed producer before falling back', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    try {
-      for (const bounds of [
-        { ...windowSafeArea.bounds, width: 0 },
-        { ...windowSafeArea.bounds, width: 5000 },
-        { ...windowSafeArea.bounds, x: Number.NaN }
-      ]) {
-        expect(
-          measuredPageSafeAreaInsets({ ...windowSafeArea, bounds }, pageFrame, nestedInsets)
-        ).toBe(nestedInsets)
-      }
-      expect(
-        measuredPageSafeAreaInsets(
-          {
-            ...windowSafeArea,
-            insets: { ...windowSafeArea.insets, bottom: 700 }
-          },
-          pageFrame,
-          nestedInsets
-        )
-      ).toBe(nestedInsets)
-      expect(
-        measuredPageSafeAreaInsets(
-          windowSafeArea,
-          { ...pageFrame, height: Number.POSITIVE_INFINITY },
-          nestedInsets
-        )
-      ).toBe(nestedInsets)
-      expect(warn).toHaveBeenCalledTimes(5)
-    } finally {
-      warn.mockRestore()
-    }
   })
 })

@@ -4,9 +4,9 @@ import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
 import { ListRow } from '../components/list/ListGroup'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { NotificationPermissionState } from '../notifications/notification-permissions'
+import type { NotificationPermissionState } from '../notifications/delivery-policy/notification-permissions'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { MobileSwitch } from '../components/MobileSwitch'
+import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {

@@ -3,9 +3,9 @@ import {
   discardSpareDocument,
   prepareSpareDocument
 } from '../../modules/orca-mobile-web-shell/src/spare-document'
-import type { GenerationStore } from './generation-store'
-import { generationDirectoryPath } from './generation-store-file-system'
-import { deriveHostCacheKey } from './host-cache-key'
+import type { GenerationStore } from './generations/generation-store'
+import { generationDirectoryPath } from './generations/generation-store-file-system'
+import { deriveHostCacheKey } from './generations/host-cache-key'
 import { mintShellSessionId } from './shell-session-id'
 
 // A Home entry claims the spare about 0.2 s after the tap on a simulator; a native screen keeps it no longer.

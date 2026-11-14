@@ -1,6 +1,6 @@
 /** Build catalog input only from mirrored store state. Fold query results into the separate health projection so cache commits cannot trigger generation changes/cancellation. */
 
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import { translateLocalExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY } from '../../../../../shared/automations/automation-runtime-capabilities'
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
@@ -113,7 +113,7 @@ export function buildAutomationHostCatalogSource(
 ): AutomationHostCatalogInput {
   return {
     desktop: {
-      label: source.desktopLabel ?? getLocalExecutionHostLabel(),
+      label: source.desktopLabel ?? translateLocalExecutionHostLabel(),
       // Desktop records status when dialing; no state for a hydrated target means never connected.
       ssh: toSshMirror(source.desktopSsh, 'disconnected'),
       ...withOrphanCount(orphanCountFor(source, { kind: 'desktop' }))

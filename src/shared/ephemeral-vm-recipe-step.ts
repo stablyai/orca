@@ -40,6 +40,7 @@ export function runRecipeStep(
     resultSchemaVersion: getEphemeralVmRecipeResultSchemaVersion(args.recipe),
     ...(stdin === undefined ? {} : { stdin }),
     env: args.env,
+    ...(args.recipe.passEnv ? { passEnv: args.recipe.passEnv } : {}),
     maxCaptureBytes: args.maxCaptureBytes,
     signal: args.signal,
     onSpawn: args.onSpawn,

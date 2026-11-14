@@ -1,5 +1,5 @@
-import { useAppStore } from '@/store'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { useAppStore } from '@/store/index'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/speech-types'
 import {
   findSpeechModelUpdateTarget,

@@ -1,4 +1,4 @@
-import '../unused-default-rpc-methods.test-fixture'
+import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { PinnedPortUnavailableError } from '../ws-transport'
+import { PinnedPortUnavailableError } from '../transports/websocket/ws-transport'
 
 const holders: Server[] = []
 

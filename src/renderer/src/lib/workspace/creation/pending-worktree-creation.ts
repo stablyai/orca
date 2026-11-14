@@ -16,7 +16,7 @@ import type {
   SetupDecision,
   WorktreeCheckoutProgress
 } from '../../../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../../shared/worktree/creation/launch-types'
 
 import type { AgentStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-startup-payload'
@@ -176,6 +176,8 @@ export type PendingWorktreeCreation = {
   heldChatSkills?: readonly AgentJournalSkillRef[]
   /** The launch owns the captured input until its replacement surface is published. */
   chatInputHandedOff?: boolean
+  /** When the worktree was ready and the chat's agent began starting. */
+  chatHandedOffAt?: number
   request: WorktreeCreationRequest
 }
 

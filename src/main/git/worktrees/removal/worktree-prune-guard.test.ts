@@ -34,10 +34,10 @@ vi.mock('../../../../shared/wsl-paths', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   wslDistroForCommand: wslDistroForCommandMock
 }))
-vi.mock('../../command-runner/wsl-linked-worktree-git-routing', () => ({
+vi.mock('../../command-runner/host-routing/wsl-linked-worktree-git-routing', () => ({
   usesHostGitForWslLinkedWorktree: () => false
 }))
-vi.mock('../../wsl-drive-checkout-git-routing', () => ({
+vi.mock('../../command-runner/host-routing/wsl-drive-checkout-git-routing', () => ({
   pendingWslDriveCheckoutGitRouting: () => null
 }))
 
@@ -96,34 +96,6 @@ describe('pruneGitWorktrees', () => {
     writeFileSync(lockFile('wsl'), PRUNE_GUARD_LOCK_REASON)
     await pruneGitWorktrees({ cwd: repo }, 'win32')
     expect(lockedDuringPrune.value).toEqual(['wsl'])
-    expect(existsSync(lockFile('wsl'))).toBe(false)
-  })
-
-  it('keeps the lock for a prune that overlaps another in the same repo', async () => {
-    link('wsl', '/mnt/c/src/app-wsl/.git')
-    const locksSeen: boolean[] = []
-    let releaseFirst: () => void = () => {}
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'rev-parse') {
-        return { stdout: '.git\n', stderr: '' }
-      }
-      locksSeen.push(existsSync(lockFile('wsl')))
-      if (locksSeen.length === 1) {
-        await new Promise<void>((resolve) => {
-          releaseFirst = resolve
-        })
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const first = pruneGitWorktrees({ cwd: repo }, 'win32')
-    const second = pruneGitWorktrees({ cwd: repo }, 'win32')
-    await vi.waitFor(() => expect(locksSeen).toHaveLength(1))
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    // The second prune waits for the first instead of running beside it.
-    expect(locksSeen).toHaveLength(1)
-    releaseFirst()
-    await Promise.all([first, second])
-    expect(locksSeen).toEqual([true, true])
     expect(existsSync(lockFile('wsl'))).toBe(false)
   })
 

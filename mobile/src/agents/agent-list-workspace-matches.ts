@@ -1,4 +1,4 @@
-import type { HomeWorkspaceEntry } from '../worktree/home-worktree-info'
+import type { HomeWorkspaceEntry } from '../worktree/catalog/home-worktree-info'
 import { fieldsMatchQueryWords } from './agent-list-row-text'
 import type { AgentListInput } from './agent-list-rows'
 

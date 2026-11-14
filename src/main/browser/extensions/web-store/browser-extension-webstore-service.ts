@@ -131,7 +131,10 @@ export async function installBrowserExtensionFromWebStore(
   renderer: Electron.WebContents
 ): Promise<BrowserExtensionWebStoreInstallResult> {
   if (!isBrowserExtensionSupportEnabled()) {
-    return { status: 'failed', error: 'Turn on browser extensions in Settings › Experimental' }
+    return {
+      status: 'failed',
+      error: 'Turn on browser extensions in Settings › Browser › Extensions'
+    }
   }
   const extensionId = parseChromeWebStoreExtensionInput(input)
   if (!extensionId) {

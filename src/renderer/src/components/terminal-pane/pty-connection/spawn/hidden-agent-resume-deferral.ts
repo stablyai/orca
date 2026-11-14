@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { takeSleepingAgentWakeRequest } from '@/lib/sleeping-agent-wake-requests'
+import { takeSleepingAgentWakeRequest } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import {
   holdPaneResumeUntilShown,
   releasePaneResumeHold

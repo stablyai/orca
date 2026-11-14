@@ -9,7 +9,7 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import type { HostedTerminalQuickCommand } from '@/hooks/use-terminal-quick-command-hosts'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type TabBarQuickCommandItemProps = {
   entry: HostedTerminalQuickCommand

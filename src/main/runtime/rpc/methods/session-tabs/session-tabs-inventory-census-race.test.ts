@@ -118,8 +118,19 @@ function deferredPtyInventory(): {
   }
 }
 
+class CensusRuntime extends OrcaRuntimeService {
+  projectedFrames = 0
+  protected override projectMobileSessionTabsForClient(
+    snapshot: RuntimeMobileSessionTabsResult,
+    clientId?: string
+  ) {
+    this.projectedFrames += 1
+    return super.projectMobileSessionTabsForClient(snapshot, clientId)
+  }
+}
+
 function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSnapshot[] = []) {
-  const runtime = new OrcaRuntimeService()
+  const runtime = new CensusRuntime()
   runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: initialSnapshots })
   const census = deferredPtyInventory()
   const internals = runtime as unknown as RuntimeInventoryInternals
@@ -648,3 +659,45 @@ describe('session tabs inventory census boundary', () => {
     expect(emit).not.toHaveBeenCalled()
   })
 })
+
+it.each(['subsumed', 'invalidated', 'aborted'] as const)(
+  'does not owe completion for %s held census candidates never emitted',
+  async (caseName) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const h = createRuntimeHarness()
+    try {
+      const created = runtimeSnapshot('wt-census-race', 1)
+      h.publish([created])
+      if (caseName === 'invalidated') {
+        for (let index = 0; index < 300; index += 1) {
+          h.publish(index % 2 ? [created] : [])
+        }
+      }
+      if (caseName === 'aborted') {
+        h.runtime.cleanupSubscription(
+          'session.tabs:conn-runtime-census-race:*:req-runtime-census-race'
+        )
+      }
+      vi.setSystemTime(Date.now() + 46_000)
+      h.census.resolve(completePtyInventory())
+      if (caseName === 'aborted') {
+        await expect(h.pending).rejects.toThrow('client_disconnected')
+        expect(h.emit).not.toHaveBeenCalled()
+      } else {
+        await h.pending
+        expect(h.emit.mock.calls).toHaveLength(1)
+        expect(h.emit.mock.calls[0]?.[0]).toMatchObject({ type: 'snapshots' })
+      }
+      h.runtime.projectedFrames = 0
+      const outputs = h.emit.mock.calls.length
+      h.runtime.markClientHostedPagesReconciled('paired-runtime-census-race')
+      expect(h.runtime.projectedFrames).toBe(0)
+      expect(h.emit.mock.calls).toHaveLength(outputs)
+    } finally {
+      h.runtime.cleanupSubscription(
+        'session.tabs:conn-runtime-census-race:*:req-runtime-census-race'
+      )
+      vi.useRealTimers()
+    }
+  }
+)

@@ -2,7 +2,7 @@ import { CheckCircle2, Cloud, Unlink } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type OpenAiTranscriptionSettingsRowProps = {
   /** 'compatible' is the base URL + model provider, set up in its own dialog. */

@@ -6,7 +6,7 @@ import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/skills/installation/a
 import { ArrowRightLeft, GitBranch, ListChecks, Workflow, type LucideIcon } from 'lucide-react'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import type { SkillUsageExample } from '@/lib/skills/examples/skill-usage-example'
-import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
+import { getOrchestrationUsageExamples } from '@/components/orchestration/setup/orchestration-usage-examples'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -22,13 +22,14 @@ import { SkillUsageExamplesSection } from '../../skills/examples/SkillUsageExamp
 import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { resolveNestedWorkerMaxDepth } from '../../../../../shared/orchestration/workers/nested-worker-depth'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { NumberField } from '../form-controls/SettingsFormControls'
 import {
   getNestedWorkerDepthDescription,
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
 import { OrchestrationWorkerAutoReleaseSetting } from './OrchestrationWorkerAutoReleaseSetting'
+import { OrchestrationCoordinatorApprovalsSetting } from './OrchestrationCoordinatorApprovalsSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 const EXAMPLE_ICONS = {
@@ -165,6 +166,12 @@ export function OrchestrationPane({
         ) : null}
         {showLocalRuntimeSettings ? (
           <OrchestrationWorkerAutoReleaseSetting
+            settings={settings}
+            updateSettings={updateSettings}
+          />
+        ) : null}
+        {showLocalRuntimeSettings ? (
+          <OrchestrationCoordinatorApprovalsSetting
             settings={settings}
             updateSettings={updateSettings}
           />

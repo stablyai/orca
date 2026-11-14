@@ -1,15 +1,18 @@
 import {
   hydrateBrowserDrivers,
   setDriverForBrowserPage
-} from '@/lib/pane-manager/browser-mobile-driver-state'
+} from '@/runtime/browser/ownership/browser-mobile-driver-state'
 import { registerBrowserRemoteViewerIpcBridge } from './browser-remote-viewer-ipc-bridge'
 import {
   applyClientHostedBrowserRows,
   hydrateClientHostedBrowserRows
-} from '@/lib/pane-manager/client-hosted-browser-row-state'
+} from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hosted-browser-rows'
 import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
-import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  setFitOverride,
+  hydrateOverrides
+} from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
 import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 import { useAppStore } from '../../store/index'

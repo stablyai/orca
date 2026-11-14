@@ -3,8 +3,8 @@ import {
   isLocalPathOpenBlocked,
   type LocalPathOpenOwner
 } from '../files/os-open/local-path-open-guard'
-import { getRendererAppPlatform } from '../renderer-app-platform'
-import { isWebClientLocation } from '../web-client-location'
+import { getRendererAppPlatform } from '../../app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '../../app-shell/platform/web-client-location'
 
 export function formatClipboardFilePath(filePath: string, owner: LocalPathOpenOwner): string {
   if (

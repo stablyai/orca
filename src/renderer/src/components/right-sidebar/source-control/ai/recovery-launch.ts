@@ -15,9 +15,10 @@ import type { AppState } from '@/store/types'
 
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   ensureDetectedAgentsForWorktree,
@@ -209,8 +210,8 @@ export async function launchSourceControlRecoveryAgentWithDefault({
       settings: store.settings
     }
   )
-  const result = launchAgentInNewTab({
-    requestId: newAgentLaunchRequestId(),
+  const result = launchAgentInNewTabWithOutcome({
+    requestId: createNonSecureContextUuid(),
     ...(placementWorkspaceId && !inPlace ? { activate: false } : {}),
     agent,
     worktreeId: inPlace ?? activeWorktreeId,

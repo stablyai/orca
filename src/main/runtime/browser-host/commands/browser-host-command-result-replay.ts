@@ -68,3 +68,15 @@ export function replaySettledBrowserHostCommand(
   }
   return false
 }
+
+export function hasOutstandingBrowserHostPageCreation(
+  page: BrowserHostCommandPageState | undefined,
+  generation: number
+): boolean {
+  return Boolean(
+    page?.generation === generation &&
+    [...page.records.values()].some(
+      (record) => !record.settled && record.event.command.type === 'createPage'
+    )
+  )
+}

@@ -10,7 +10,7 @@ import {
 import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 /** Route private command overrides to the owning host without changing shared hook settings. */
 export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): void {

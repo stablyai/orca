@@ -21,10 +21,10 @@ import {
   clearRuntimeEnvironmentManualDisconnect,
   isRuntimeEnvironmentManuallyDisconnected,
   markRuntimeEnvironmentManuallyDisconnected
-} from '../runtime-environments/runtime-environment-manual-disconnect'
-import { getRuntimeEnvironmentStatusOwner } from '../runtime-environments/runtime-environment-request-connections'
+} from '../runtime-environments/connectivity/runtime-environment-manual-disconnect'
+import { getRuntimeEnvironmentStatusOwner } from '../runtime-environments/connections/runtime-environment-request-connections'
 import { disconnectRegisteredSshTarget } from './ssh-session-teardown'
-import { noteRuntimeEnvironmentConnectRequested } from '../runtime-environments/runtime-environment-pairing-refusal-registry'
+import { noteRuntimeEnvironmentConnectRequested } from '../runtime-environments/pairing/runtime-environment-pairing-refusal-registry'
 import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/authentication/ssh-credential-decline'
 
 /** Managed server and SSH host share user disconnect intent; only explicit Connect may restore either. */

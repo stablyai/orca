@@ -1,4 +1,4 @@
-import { focusPanePreservingOverlays } from './pane-overlay-focus'
+import { focusPanePreservingOverlays } from './pane-focus/pane-overlay-focus'
 import type {
   ManagedPane,
   ManagedPaneInternal,
@@ -6,10 +6,14 @@ import type {
   PaneActivationOptions
 } from './pane-manager-types'
 import type { PaneManagerHost } from './pane-manager-host'
-import { applyPaneOpacity, applyDividerStyles, applyRootBackground } from './pane-divider'
+import {
+  applyPaneOpacity,
+  applyDividerStyles,
+  applyRootBackground
+} from './pane-layout/pane-divider'
 import { openTerminal } from './pane-lifecycle'
 import { createPaneDOM } from '@/lib/pane-manager/pane-dom-creation'
-import { shouldFollowMouseFocus } from './focus-follows-mouse'
+import { shouldFollowMouseFocus } from './pane-focus/focus-follows-mouse'
 import { toPublicPane } from './pane-public-view'
 
 export function applyManagedPaneStyles(host: PaneManagerHost): void {

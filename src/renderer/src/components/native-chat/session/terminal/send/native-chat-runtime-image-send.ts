@@ -3,12 +3,12 @@ import { agentImagePasteWrites } from '../../../../../../../shared/agent-image-p
 import { agentImagePastePath } from '../../../../../../../shared/agent-image-paste-path'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
-import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../../../../shared/native-chat/input/native-chat-answer-stepping'
+import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../../../../shared/native-chat/input/questions/native-chat-answer-stepping'
 import {
   buildNativeChatImagePasteBytes,
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
-} from '../../../../../../../shared/native-chat/input/native-chat-paste-bytes'
+} from '../../../../../../../shared/native-chat/input/composer/native-chat-paste-bytes'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
 import {
   clearConfirmDurationMs,

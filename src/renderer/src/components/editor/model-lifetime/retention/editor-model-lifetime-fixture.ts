@@ -14,7 +14,7 @@ import {
   diffViewStateCache,
   editorViewStateCache,
   pdfViewPositionCache
-} from '@/lib/scroll-cache'
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 const workspace = 'model-fixture::/fixture/workspace'
 const models: monaco.editor.ITextModel[] = []

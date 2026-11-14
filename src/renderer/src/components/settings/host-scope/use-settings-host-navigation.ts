@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { SettingsNavigationTarget } from '@/lib/settings-navigation-types'
+import type { SettingsNavigationTarget } from '@/components/settings/navigation/settings-navigation-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 /** A chat-scoped account view lasts only for this Settings visit. */

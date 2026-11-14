@@ -10,7 +10,7 @@ import type {
   SkillSourceKind
 } from '../../../../../shared/skills'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
-import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
+import { markOrchestrationSetupComplete } from '@/components/orchestration/setup/orchestration-setup-state'
 import {
   discoverInstalledAgentSkills,
   getCachedSkillDiscovery,
@@ -18,6 +18,7 @@ import {
 } from './installed-agent-skill-discovery'
 import {
   getInstalledAgentSkillVerdict,
+  isClaudeDesktopSyncedSkill,
   type InstalledAgentSkillScan
 } from './installed-agent-skill-verdict'
 import {
@@ -92,7 +93,7 @@ export function hasInstalledAgentSkillNamed(
     if (options.agent && !agentReadsSkill(options.agent, skill, options.sources ?? [])) {
       return false
     }
-    if (!skill.installed) {
+    if (!skill.installed || isClaudeDesktopSyncedSkill(skill)) {
       return false
     }
     if (options.sourceKinds && !options.sourceKinds.includes(skill.sourceKind)) {

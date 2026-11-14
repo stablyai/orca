@@ -6,7 +6,7 @@ import {
 import { hostRouteForAuthority, type HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { AppState } from '../../../types'
-import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/workspace/ownership/duplicate-paired-servers'
 import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from './worktree-slice-constants'
 
 /** Transport to the worktree's owner (on `executionHostId` when given), or `null` when unresolved. */

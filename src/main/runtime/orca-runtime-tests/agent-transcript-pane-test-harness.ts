@@ -31,6 +31,7 @@ export type TranscriptPaneOptions = {
   shellForegroundProven?: boolean
   paneRootPid?: number
   onShellForegroundProof?: () => void
+  onWrite?: (data: string) => void
 }
 
 function transcriptLayoutStore(): RuntimeStore {
@@ -87,7 +88,10 @@ export async function createTranscriptPane(
         ...(options.isReattach ? { isReattach: true as const } : {})
       }))
     ),
-    write: () => true,
+    write: (_id: string, data: string) => {
+      options.onWrite?.(data)
+      return true
+    },
     kill: () => true,
     getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {

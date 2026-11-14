@@ -1,3 +1,5 @@
+import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import { projectSessionTabsForClient } from './session-tabs-client-projection'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type { RpcContext } from '../../core'
 
@@ -33,4 +35,35 @@ export async function collectSessionTabsInventory(
     inventory: collected,
     changeSequence: collected.changeSequence
   }
+}
+
+export function clientUnderstandsAuthoritativeInventory(context: RpcContext): boolean {
+  return (
+    context.clientCapabilities?.includes(
+      SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY
+    ) === true
+  )
+}
+
+function projectInventory(
+  inventory: SessionTabsInventory,
+  context: RpcContext
+): SessionTabsInventory {
+  return {
+    snapshots: inventory.snapshots.map((snapshot) =>
+      projectSessionTabsForClient(snapshot, context.clientKind, context.clientCapabilities)
+    ),
+    ...(inventory.authoritative && clientUnderstandsAuthoritativeInventory(context)
+      ? { authoritative: true as const }
+      : {})
+  }
+}
+
+export async function listSessionTabsInventory(context: RpcContext): Promise<SessionTabsInventory> {
+  const result = projectInventory((await collectSessionTabsInventory(context)).inventory, context)
+  if (context.signal?.aborted) {
+    throw new Error('client_disconnected')
+  }
+  context.runtime.observeClientHostedPageSnapshots?.(result.snapshots, context.pairedDeviceId)
+  return result
 }

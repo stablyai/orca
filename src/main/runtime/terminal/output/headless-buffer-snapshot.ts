@@ -50,38 +50,55 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     }
     await state.writeChain
     await state.ownership.settle()
-    // Why: normal history is separated from an active alternate frame, so the
-    // caller's scrollback policy can be honored without painting it into alt.
-    const scrollbackRows = opts.scrollbackRows ?? 0
-    const snapshot = state.emulator.getSnapshot({ scrollbackRows })
-    const terminalOwner = state.ownership.owner
-    const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
-    return data.length > 0 || opts.includeEmpty === true
-      ? this.preferTrackedLastTitle(ptyId, {
-          data,
-          frameRestoreAnsi: snapshot.frameRestoreAnsi,
-          cols: snapshot.cols,
-          rows: snapshot.rows,
-          cwd: snapshot.cwd ?? this.terminalCwdByPtyId.get(ptyId),
-          lastTitle: snapshot.lastTitle,
-          seq: state.outputSequence,
-          source: 'headless' as const,
-          oscLinks: snapshot.oscLinks,
-          scrollbackAnsi: snapshot.scrollbackAnsi,
-          // Capture flags at the image's stream position to prevent duplicate/out-of-order replay pushes and pops.
-          ...(parseTerminalKittyKeyboardFlags(snapshot.modes?.kittyKeyboardFlags) !== undefined
-            ? { kittyKeyboardFlags: snapshot.modes.kittyKeyboardFlags }
-            : {}),
-          ...(snapshot.pendingEscapeTailAnsi
-            ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
-            : {}),
-          ...(terminalOwner ? { terminalOwner } : {}),
-          // Alt snapshots must preserve xterm history used for TUI scroll-up after tab return.
-          alternateScreen: snapshot.modes?.alternateScreen ?? state.emulator.isAlternateScreen,
-          // Do not fold into data: the restorer's later reset would abort this partial escape.
-          pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi
-        })
-      : null
+    // Capture image and applied progress in the same ordered operation as parsing.
+    const completion = state.writeChain.then(() => {
+      const current =
+        this.headlessTerminals.get(ptyId) ??
+        (this.ptysById.get(ptyId)?.connected === true
+          ? undefined
+          : this.headlessExitHolds.get(ptyId)?.exited)
+      if (current !== state) {
+        return null
+      }
+      // Why: normal history is separated from an active alternate frame, so the
+      // caller's scrollback policy can be honored without painting it into alt.
+      const scrollbackRows = opts.scrollbackRows ?? 0
+      const snapshot = state.emulator.getSnapshot({ scrollbackRows })
+      const terminalOwner = state.ownership.owner
+      const pendingEscapeTailAnsi =
+        state.rendererSeedSeq !== undefined
+          ? state.rendererSeedEscapeTail
+          : snapshot.pendingEscapeTailAnsi
+      const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
+      return data.length > 0 || opts.includeEmpty === true
+        ? this.preferTrackedLastTitle(ptyId, {
+            data,
+            frameRestoreAnsi: snapshot.frameRestoreAnsi,
+            cols: snapshot.cols,
+            rows: snapshot.rows,
+            cwd: snapshot.cwd ?? this.terminalCwdByPtyId.get(ptyId),
+            lastTitle: snapshot.lastTitle,
+            seq: state.outputSequence,
+            source: 'headless' as const,
+            oscLinks: snapshot.oscLinks,
+            scrollbackAnsi: snapshot.scrollbackAnsi,
+            // Capture flags at the image's stream position to prevent duplicate/out-of-order replay pushes and pops.
+            ...(parseTerminalKittyKeyboardFlags(snapshot.modes?.kittyKeyboardFlags) !== undefined
+              ? { kittyKeyboardFlags: snapshot.modes.kittyKeyboardFlags }
+              : {}),
+            ...(terminalOwner ? { terminalOwner } : {}),
+            // Alt snapshots must preserve xterm history used for TUI scroll-up after tab return.
+            alternateScreen: snapshot.modes?.alternateScreen ?? state.emulator.isAlternateScreen,
+            // Do not fold into data: the restorer's later reset would abort this partial escape.
+            pendingEscapeTailAnsi
+          })
+        : null
+    })
+    state.writeChain = completion.then(
+      () => {},
+      () => {}
+    )
+    return completion
   }
 
   /** Keeps the PTY's model readable through its exit until released, so a stream mid-publication can still serialize it. */

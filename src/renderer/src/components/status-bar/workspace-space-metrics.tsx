@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   getWorkspaceSpaceScanDateTimeLabel,
   getWorkspaceSpaceScanTimeLabel
 } from './workspace-space-format'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 
 export function Metric({
   label,

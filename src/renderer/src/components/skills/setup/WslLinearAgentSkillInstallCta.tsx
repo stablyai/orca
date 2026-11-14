@@ -19,7 +19,7 @@ import {
 } from '@/lib/skills/installation/agent-feature-install-commands'
 import { getLinearAgentSkillUpdateTarget } from '@/lib/skills/installation/linear-agent-skill-update-target'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getLinearAgentSkillSetupInlineRuntimeCopy } from '../../sidebar/linear-agent-skill-setup-copy'
 import {
   getLinearPromptSkillDiscoveryTarget,

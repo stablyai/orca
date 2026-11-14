@@ -15,8 +15,8 @@ import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
-} from '../windows-shell-args'
-import type { PtySpawnOptions } from '../pty-provider-contract'
+} from '../shell-launch/windows/shell-args'
+import type { PtySpawnOptions } from '../pty/provider-contract'
 
 export function finalizeWindowsLocalPtySpawnEnvironment(args: {
   spawn: PtySpawnOptions

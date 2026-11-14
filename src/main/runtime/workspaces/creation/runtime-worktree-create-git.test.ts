@@ -70,3 +70,35 @@ describe('explicit local branch reuse on the execution host', () => {
     expect(worktrees).not.toHaveBeenCalled()
   })
 })
+
+describe('filesystem aliases of checked-out branches', () => {
+  const nfcBranch = 'feature/수신'.normalize('NFC')
+  const nfdBranch = nfcBranch.normalize('NFD')
+
+  function mockGit(checkedOutBranch: string, listRef: (ref: string) => string): void {
+    git.mockImplementation(async (args: string[]) =>
+      args[0] === 'for-each-ref' ? { stdout: listRef(args[2]) } : { stdout: 'abc123\n' }
+    )
+    worktrees.mockResolvedValue([{ path: '/busy', branch: `refs/heads/${checkedOutBranch}` }])
+  }
+
+  it('rejects an NFD name that macOS Git resolves to a checked-out NFC branch (#18447)', async () => {
+    mockGit(nfcBranch, () => `refs/heads/${nfcBranch}\n`)
+
+    await expect(canCheckoutExistingLocalBranch('/repo', nfdBranch, nfdBranch)).resolves.toBe(false)
+  })
+
+  it('rejects a case alias of a checked-out branch on a case-insensitive filesystem', async () => {
+    mockGit('feature/test', () => '')
+
+    await expect(
+      canCheckoutExistingLocalBranch('/repo', 'feature/TEST', 'feature/TEST')
+    ).resolves.toBe(false)
+  })
+
+  it('allows a distinct alias on filesystems that store both spellings', async () => {
+    mockGit(nfcBranch, (ref) => `${ref}\n`)
+
+    await expect(canCheckoutExistingLocalBranch('/repo', nfdBranch, nfdBranch)).resolves.toBe(true)
+  })
+})

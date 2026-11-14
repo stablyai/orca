@@ -1,18 +1,18 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   captureWorkspaceSelection,
-  restoreWorkspaceSelection,
-  type WorkspaceSelection
+  restoreWorkspaceSelection
 } from '@/lib/workspace/ownership/active-workspace-host'
+import type { WorkspaceSelection } from '@/lib/workspace/ownership/active-workspace-host'
 import {
   clearWorktreeSleepIntent,
   markWorktreeSleepIntent,
   withWorktreeSleepTeardown
-} from '@/lib/worktree-sleep-intent'
-import type { HostTerminalStop } from '@/store/terminals/terminal-actions'
-import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace-sleep'
+} from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { preserveSidebarWorktreePosition } from './sleep-worktree-sidebar-position'
 import { toastWorkspaceSleepOutcome } from './sleep-worktree-flow'
+import type { HostTerminalStop } from '@/store/terminals/terminal-actions'
+import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace-sleep'
 
 type FollowedSleep = {
   settle: (stop: HostTerminalStop) => void

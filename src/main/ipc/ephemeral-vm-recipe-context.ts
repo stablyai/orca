@@ -110,11 +110,12 @@ export function getRuntimeRecipeContext(
     // holds the same recipe, so a different checkout later placed there can't run its scripts.
     const fallback = runtime.recipe && runtime.repoPath ? runtime.recipe : null
     if (fallback && runtime.repoPath) {
-      const sameRecipe = (loadHooks(runtime.repoPath)?.environmentRecipes ?? []).some(
+      const sameRecipe = (loadHooks(runtime.repoPath)?.environmentRecipes ?? []).find(
         (entry) => entry.id === fallback.id && entry.create === fallback.create
       )
       if (sameRecipe) {
-        return { runtime, repoPath: runtime.repoPath, recipe: fallback }
+        const passEnv = sameRecipe.passEnv ? { passEnv: sameRecipe.passEnv } : {}
+        return { runtime, repoPath: runtime.repoPath, recipe: { ...fallback, ...passEnv } }
       }
     }
     throw new EphemeralVmFailureError(
@@ -128,11 +129,15 @@ export function getRuntimeRecipeContext(
   // Snapshots never persist timeoutSeconds, so take the repo's current limits (lifecycle commands stay
   // snapshotted). Only when the repo recipe has the same create command, so a different recipe that
   // later took this id (e.g. a repo recipe shadowing a plugin one) cannot impose its limits.
-  const limits =
-    repoRecipe?.timeoutSeconds && repoRecipe.create === runtime.recipe?.create
+  // passEnv follows the same rule, so suspend/resume/destroy see the environment create saw.
+  const sameCreate = repoRecipe !== undefined && repoRecipe.create === runtime.recipe?.create
+  const fromRepo = {
+    ...(sameCreate && repoRecipe.timeoutSeconds
       ? { timeoutSeconds: repoRecipe.timeoutSeconds }
-      : {}
-  const recipe = runtime.recipe ? { ...runtime.recipe, ...limits } : repoRecipe
+      : {}),
+    ...(sameCreate && repoRecipe.passEnv ? { passEnv: repoRecipe.passEnv } : {})
+  }
+  const recipe = runtime.recipe ? { ...runtime.recipe, ...fromRepo } : repoRecipe
   if (!recipe) {
     throw new EphemeralVmFailureError(
       ephemeralVmFailure('recipeNotFound', { recipeId: runtime.recipeId })

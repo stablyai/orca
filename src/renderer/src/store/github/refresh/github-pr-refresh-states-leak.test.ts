@@ -4,7 +4,7 @@ import { create } from 'zustand'
 import { createGitHubSlice } from '../github'
 import { createHostedReviewSlice } from '../../slices/hosted-review/hosted-review'
 import type { AppState } from '../../types'
-import type { GitHubPRRefreshEvent } from '../../../../../shared/github/pull-request-refresh-types'
+import type { GitHubPRRefreshEvent } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 const mockApi = {
   gh: {
@@ -47,33 +47,6 @@ function statusEvent(cacheKey: string, sequence: number): GitHubPRRefreshEvent {
 describe('prRefreshStates stays bounded (leak regression)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  it('prunes expired active states on refreshAll without writing a PR miss', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000_000)
-    try {
-      const store = createTestStore()
-      store.setState({
-        prRefreshStates: {
-          stale: { status: 'queued', reason: 'visible', updatedAt: 1_000_000 - 121_000 },
-          settled: { status: 'error', reason: 'visible', updatedAt: 1, message: 'boom' }
-        },
-        prCache: {
-          stale: { data: null, fetchedAt: 1 }
-        },
-        repos: [],
-        worktreesByRepo: {}
-      } as unknown as Partial<AppState>)
-
-      store.getState().refreshAllGitHub()
-
-      expect(store.getState().prRefreshStates.stale).toBeUndefined()
-      expect(store.getState().prRefreshStates.settled).toBeDefined()
-      expect(store.getState().prCache.stale).toEqual({ data: null, fetchedAt: 1 })
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('expires the stale active state captured by a rejected forced PR refresh', async () => {

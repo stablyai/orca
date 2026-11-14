@@ -1,3 +1,5 @@
+import type { ProfileSaveDomains } from '../profile-save-domains'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   ProjectGroup,
@@ -15,7 +17,7 @@ import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/se
 
 export type ProjectGroupMutationOperations = {
   state: PersistedState
-  scheduleSave: () => void
+  scheduleSave: (domains: ProfileSaveDomains) => void
   removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
 }
@@ -27,8 +29,8 @@ export class ProjectGroupPersistenceOperations {
     return this.operations.state
   }
 
-  private scheduleSave(): void {
-    this.operations.scheduleSave()
+  private scheduleSave(domains: ProfileSaveDomains): void {
+    this.operations.scheduleSave(domains)
   }
 
   private removeWorkspaceLineageForRemovedFolder(folderWorkspaceId: string): void {
@@ -68,7 +70,7 @@ export class ProjectGroupPersistenceOperations {
       group.rootProjectOrder = rootProjectOrder
     }
     this.state.projectGroups = [...(this.state.projectGroups ?? []), group]
-    this.scheduleSave()
+    this.scheduleSave(['projectGroups'])
     return group
   }
 
@@ -78,7 +80,7 @@ export class ProjectGroupPersistenceOperations {
       return null
     }
     this.applyGroupUpdate(group, updates)
-    this.scheduleSave()
+    this.scheduleSave(['projectGroups'])
     return group
   }
 
@@ -93,7 +95,7 @@ export class ProjectGroupPersistenceOperations {
       return group
     })
     if (updated.length > 0) {
-      this.scheduleSave()
+      this.scheduleSave(['projectGroups'])
     }
     return updated
   }
@@ -118,6 +120,9 @@ export class ProjectGroupPersistenceOperations {
     }
     if (updates.color !== undefined) {
       group.color = typeof updates.color === 'string' ? updates.color : null
+    }
+    if (updates.hookSettings !== undefined) {
+      group.hookSettings = updates.hookSettings
     }
     group.updatedAt = Date.now()
   }
@@ -150,7 +155,15 @@ export class ProjectGroupPersistenceOperations {
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
     )
     this.pruneMobileClientTabSelections((worktreeId) => removedFolderWorkspaceKeys.has(worktreeId))
-    this.scheduleSave()
+    this.scheduleSave([
+      'projectGroups',
+      'repos',
+      'folderWorkspaces',
+      'workspaceLineageByChildKey',
+      'crossStoreLineageByChildKey',
+      ...WORKSPACE_SESSION_DOMAINS,
+      'mobileClientTabSelectionsByDeviceId'
+    ])
     return true
   }
 }

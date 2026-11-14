@@ -1,10 +1,10 @@
 import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { createRuntimePath } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   DEFAULT_SEARCH_ENGINE,

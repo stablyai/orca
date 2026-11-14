@@ -6,7 +6,7 @@ import type { Event as WatcherEvent } from '@parcel/watcher'
 import { queueWatcherEvents } from './filesystem-watcher-event-batch'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
-import * as watcherChildRegistry from '../watcher-process/parcel-watcher-child-registry'
+import * as watcherChildRegistry from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
 import { createDebouncedBatch, type DebouncedBatch } from './filesystem-watcher-batch-control'
 import { spawnWslWatcherProcess } from './wsl-watcher-spawn'
 

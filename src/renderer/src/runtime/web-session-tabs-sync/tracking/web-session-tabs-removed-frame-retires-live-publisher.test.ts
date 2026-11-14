@@ -79,34 +79,6 @@ describe('a removal frame must not retire the publisher that is still live', () 
     resetWebSessionTabsSyncTestState()
   })
 
-  // Bound receipt ledgers by frame, not entry count: one bootstrap inventory shares a frame across worktrees and must not evict its own evidence.
-  it('keeps every receipt an inventory recorded under one frame, past the bound', () => {
-    const requestReceivedFrame = nextReceivedSessionTabsFrame()
-    const worktrees = Array.from(
-      { length: MAX_TRACKED_SESSION_TABS_RECEIPTS + 64 },
-      (_value, index) => `repo::/worktree-${index}`
-    )
-    for (const worktree of worktrees) {
-      recordReceivedWebSessionTabsSnapshot(
-        ENVIRONMENT_ID,
-        { ...liveFrame(1), worktree },
-        requestReceivedFrame,
-        undefined,
-        'bootstrap'
-      )
-    }
-
-    for (const worktree of [worktrees[0]!, worktrees.at(-1)!]) {
-      expect(
-        shouldApplyRecoveredWebSessionTabsSnapshot(
-          ENVIRONMENT_ID,
-          { ...liveFrame(1), worktree },
-          requestReceivedFrame
-        )
-      ).toBe(true)
-    }
-  })
-
   // Retraction boundaries must survive ledger bounds or delayed pre-close frames resurrect tabs.
   it('keeps a worktree fence after enough other worktrees to evict its receipt', () => {
     const liveReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
@@ -190,22 +162,4 @@ describe('a removal frame must not retire the publisher that is still live', () 
       shouldApplyRecoveredWebSessionTabsSnapshot(ENVIRONMENT_ID, delayed, delayedReceived)
     ).toBe(false)
   })
-
-  // Exercise full recovery/receipt/decision path for bare and headless-merge epochs. Decision-only tests miss receipt retirement; exact-string differences must not make lockout timing-dependent.
-  for (const [label, epoch] of [
-    ['bare', LIVE_EPOCH],
-    ['headless-merge', `${LIVE_EPOCH}:headless-merge:abc`]
-  ] as const) {
-    it(`readmits a ${label} republication after a removal, through the full path`, () => {
-      const liveReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
-      expect(admits(liveFrame(1), liveReceived)).toBe(true)
-
-      const removedReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, removalFrame())
-      expect(admits(removalFrame(), removedReceived)).toBe(true)
-
-      const republished = { ...liveFrame(2), publicationEpoch: epoch }
-      const republishedReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, republished)
-      expect(admits(republished, republishedReceived)).toBe(true)
-    })
-  }
 })

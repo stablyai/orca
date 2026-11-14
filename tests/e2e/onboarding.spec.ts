@@ -219,7 +219,7 @@ test.describe('Onboarding flow', () => {
     const startingTheme = await getDocumentThemeClass(orcaPage)
     const oppositeTheme: 'dark' | 'light' = startingTheme === 'dark' ? 'light' : 'dark'
     const oppositeTileName = oppositeTheme === 'light' ? /Bright & crisp/ : /Easy on the eyes/
-    await orcaPage.getByRole('button', { name: oppositeTileName }).click()
+    await orcaPage.getByRole('radio', { name: oppositeTileName }).click()
     await expect
       .poll(async () => getDocumentThemeClass(orcaPage), { timeout: 5_000 })
       .toBe(oppositeTheme)

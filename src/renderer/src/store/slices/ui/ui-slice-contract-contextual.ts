@@ -7,7 +7,7 @@ import type { FeatureTipId, FeatureTipSeenId } from '../../../../../shared/featu
 import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import type { OrcaHookTrustKind } from '../../../../../shared/orca-hook-trust-entries'
-import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
+import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
 export type UISliceContextual = {
@@ -133,6 +133,8 @@ export type UISliceContextual = {
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean
   markCodexSharedSettingsNoticeSeen: () => void
+  worktreeCardsUpdateNoticeSeen: boolean
+  markWorktreeCardsUpdateNoticeSeen: () => void
   claudeDiffPanelNoticeSeen: boolean
   markClaudeDiffPanelNoticeSeen: () => void
 }

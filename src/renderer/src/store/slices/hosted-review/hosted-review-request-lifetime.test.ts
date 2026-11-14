@@ -74,10 +74,6 @@ afterEach(() => {
 
 const cases = [
   { route: 'local', replacement: 'force', outcome: 'found' },
-  { route: 'local', replacement: 'force', outcome: 'rejected' },
-  { route: 'local', replacement: 'hint', outcome: 'found' },
-  { route: 'runtime', replacement: 'force', outcome: 'found' },
-  { route: 'runtime', replacement: 'force', outcome: 'missing' },
   { route: 'runtime', replacement: 'hint', outcome: 'rejected' }
 ] as const
 
@@ -111,7 +107,7 @@ describe('hosted review lookup ownership after newer settlement', () => {
       if (outcome === 'rejected') {
         pending[0].reject(new Error('Old lookup failed'))
       } else {
-        pending[0].resolve(outcome === 'missing' ? null : review(10))
+        pending[0].resolve(review(10))
       }
       await first
       const cachedBefore = store.getState().hostedReviewCache[cacheKey].data

@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-request-refresh-types'
+import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { bypassesGitHubPRRefreshFreshness } from './pr-refresh-state'
 import {
