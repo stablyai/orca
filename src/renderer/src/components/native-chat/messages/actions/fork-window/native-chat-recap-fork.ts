@@ -38,8 +38,8 @@ export function nativeChatForkRecapPrompt(
   )
 }
 
-/** Starts `agent` in the workspace with a recap of this chat through the fork point as its first
- *  message. Your message, when forking from one, follows the recap and stays unsent. */
+/** Starts `agent` in the workspace with a recap of this chat through the fork point staged unsent
+ *  (forking never calls a model); your message, when forking from one, follows the recap. */
 export async function runNativeChatRecapFork(input: {
   recap: string
   agent: TuiAgent
@@ -56,7 +56,7 @@ export async function runNativeChatRecapFork(input: {
     worktreeId: input.worktreeId,
     ...(worktree?.path ? { initialCwd: worktree.path } : {}),
     launchSource: 'native_chat',
-    ...(input.draft ? { keepPromptUnsent: true } : {}),
+    keepPromptUnsent: true,
     ...(input.signal ? { signal: input.signal } : {})
   })
 }
