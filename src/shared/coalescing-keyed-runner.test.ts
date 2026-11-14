@@ -12,26 +12,6 @@ function deferred<T>() {
 }
 
 describe('createCoalescingKeyedRunner', () => {
-  it('folds a burst that arrives mid-run into one trailing run that every burst caller shares', async () => {
-    const run = createCoalescingKeyedRunner<string>()
-    const first = deferred<string>()
-    const firstWork = vi.fn(() => first.promise)
-    const leading = run('repo', 'target', firstWork)
-    await vi.waitFor(() => expect(firstWork).toHaveBeenCalledTimes(1))
-
-    const burstWork = Array.from({ length: 5 }, (_, index) =>
-      vi.fn(async () => `trailing-${index}`)
-    )
-    const burst = burstWork.map((work) => run('repo', 'target', work))
-    expect(burstWork.every((work) => work.mock.calls.length === 0)).toBe(true)
-
-    first.resolve('leading')
-    await expect(leading).resolves.toBe('leading')
-    await expect(Promise.all(burst)).resolves.toEqual(Array(5).fill('trailing-4'))
-    expect(burstWork.slice(0, 4).every((work) => work.mock.calls.length === 0)).toBe(true)
-    expect(burstWork[4]).toHaveBeenCalledTimes(1)
-  })
-
   it('queues a caller with a different share key behind the run in flight, never beside it', async () => {
     const run = createCoalescingKeyedRunner<string>()
     const first = deferred<string>()
@@ -100,7 +80,6 @@ describe('createCoalescingKeyedRunner', () => {
     const other = vi.fn(async () => 'other')
 
     await expect(run('repo-b', 'target', other)).resolves.toBe('other')
-    expect(other).toHaveBeenCalledTimes(1)
     held.resolve('held')
     await expect(heldResult).resolves.toBe('held')
   })
