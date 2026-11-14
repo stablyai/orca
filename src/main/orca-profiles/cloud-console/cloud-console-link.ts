@@ -1,6 +1,6 @@
-// Opens a web console page in the system browser (never an in-app view). It first asks auth for a
-// single-use login code so the browser lands signed in; when that fails for any reason the page
-// opens without one and the browser asks the person to sign in. The code is never logged or kept.
+// Opens a web console page in the system browser (never an in-app view) through a single-use ticket
+// URL from auth, so the browser lands signed in; when that fails for any reason the console opens
+// without one and the browser asks the person to sign in. The ticket is never logged or kept.
 import { app, shell } from 'electron'
 import type {
   OrcaCloudConsoleOpenResult,
@@ -17,21 +17,42 @@ import { extractErrorCode } from '../cloud-org/profile-cloud-org-members-client'
 import { runOrgMemberCall } from '../cloud-org/profile-cloud-org-members-service'
 import { ensureActiveOrcaProfile } from '../profile-index-store'
 import {
-  CLOUD_CONSOLE_CODE_FIELD,
-  CLOUD_CONSOLE_CODE_TIMEOUT_MS,
-  cloudConsoleCodeUrl,
+  CLOUD_CONSOLE_TICKET_TIMEOUT_MS,
+  cloudConsoleFallbackUrl,
   cloudConsoleOrigin,
-  cloudConsolePageUrl
+  cloudConsoleTicketUrl
 } from './cloud-console-config'
 
-/** Auth's answer to the code request; anything but a non-empty string is no code. */
-export async function requestCloudConsoleCode(
+/**
+ * The ticket URL from auth, opened as-is; null for anything that isn't an http(s) URL on the
+ * console's or auth's own origin, so a bad answer can never send the browser elsewhere.
+ */
+export function acceptedTicketUrl(
+  value: unknown,
+  allowedOrigins: readonly string[]
+): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  try {
+    const url = new URL(value)
+    const web = url.protocol === 'https:' || url.protocol === 'http:'
+    return web && !url.username && !url.password && allowedOrigins.includes(url.origin)
+      ? value
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** Asks auth for a single-use console ticket; answers its `url` unchecked (see acceptedTicketUrl). */
+export async function requestCloudConsoleTicket(
   config: Pick<OrcaCloudAuthConfig, 'apiBaseUrl'>,
   session: Pick<OrcaCloudSession, 'accessToken'>,
   args: { section: OrcaCloudConsoleSection; orgId: string | null },
   fetchImpl: typeof fetch = fetch
-): Promise<string | null> {
-  const response = await fetchImpl(cloudConsoleCodeUrl(config), {
+): Promise<unknown> {
+  const response = await fetchImpl(cloudConsoleTicketUrl(config), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -40,24 +61,20 @@ export async function requestCloudConsoleCode(
     body: JSON.stringify({ page: args.section, ...(args.orgId ? { orgId: args.orgId } : {}) }),
     // Never follow a redirect with the access token attached.
     redirect: 'error',
-    signal: AbortSignal.timeout(CLOUD_CONSOLE_CODE_TIMEOUT_MS)
+    signal: AbortSignal.timeout(CLOUD_CONSOLE_TICKET_TIMEOUT_MS)
   })
   if (!response.ok) {
     throw new OrcaCloudRequestError(response.status, await extractErrorCode(response))
   }
   const body: unknown = await response.json().catch(() => null)
-  const code =
-    typeof body === 'object' && body !== null && CLOUD_CONSOLE_CODE_FIELD in body
-      ? body[CLOUD_CONSOLE_CODE_FIELD]
-      : undefined
-  return typeof code === 'string' && code.trim() ? code.trim() : null
+  return typeof body === 'object' && body !== null && 'url' in body ? body.url : null
 }
 
-async function mintCode(
+async function mintTicketUrl(
   config: OrcaCloudAuthConfig,
   userDataPath: string,
   section: OrcaCloudConsoleSection
-): Promise<string | null> {
+): Promise<unknown> {
   if (isOrcaCloudDevAuthEnabled()) {
     return null
   }
@@ -67,7 +84,7 @@ async function mintCode(
   }
   const orgId = active.profile.cloud.activeOrgId ?? null
   const result = await runOrgMemberCall(config, active, userDataPath, (session) =>
-    requestCloudConsoleCode(config, session, { section, orgId })
+    requestCloudConsoleTicket(config, session, { section, orgId })
   )
   return result.status === 'ok' ? result.value : null
 }
@@ -83,10 +100,13 @@ export async function openOrcaCloudConsole(
   }
   const { config } = configState
   const origin = cloudConsoleOrigin(config, process.env, !app.isPackaged)
-  const code = await mintCode(config, userDataPath, section).catch(() => null)
+  const ticketUrl = acceptedTicketUrl(
+    await mintTicketUrl(config, userDataPath, section).catch(() => null),
+    [origin, new URL(config.apiBaseUrl).origin]
+  )
   try {
-    await openExternal(cloudConsolePageUrl(origin, section, code))
-    return { status: 'opened', signedIn: code !== null }
+    await openExternal(ticketUrl ?? cloudConsoleFallbackUrl(origin))
+    return { status: 'opened', signedIn: ticketUrl !== null }
   } catch (error) {
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
   }
