@@ -116,6 +116,7 @@
       "./plugins/android-release-signing.js",
       "./plugins/android-navigation-bar-theme.js",
       "./plugins/android-device-transfer-rules.js",
+      "./plugins/android-retired-app-name.js",
       "./plugins/ios-pod-deployment-target-floor.js",
       "./plugins/ios-scene-lifecycle.js",
       "./plugins/ios-bundle-phase-quoted-script-path.js",

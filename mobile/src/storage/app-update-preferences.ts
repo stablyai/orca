@@ -60,3 +60,20 @@ export async function saveAppUpdateCheck(checkedAt: number, latest: KnownAppUpda
 export async function saveDismissedAppUpdateVersion(version: string): Promise<void> {
   await AsyncStorage.setItem(DISMISSED_VERSION_KEY, version)
 }
+
+const KEPT_RETIRED_APP_AT_KEY = 'orca:appUpdate:keptRetiredAppAt'
+
+/** When the person last chose to keep the retired GitHub app, or null. */
+export async function loadKeptRetiredAppAt(): Promise<number | null> {
+  try {
+    const raw = await AsyncStorage.getItem(KEPT_RETIRED_APP_AT_KEY)
+    const keptAt = raw === null ? null : Number(raw)
+    return keptAt !== null && Number.isFinite(keptAt) ? keptAt : null
+  } catch {
+    return null
+  }
+}
+
+export async function saveKeptRetiredAppAt(keptAt: number): Promise<void> {
+  await AsyncStorage.setItem(KEPT_RETIRED_APP_AT_KEY, String(keptAt))
+}

@@ -31,7 +31,8 @@ import { loadHostCatalog } from '../src/host-catalog/host-store'
 import { usePairingLinks } from '../src/navigation/use-pairing-links'
 import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
 import { recoverMobileRelayPairing } from '../src/pairing/mobile-relay-pairing-recovery'
-import { appUpdateChecker } from '../src/app-update/app-update-runtime'
+import { appUpdateChecker, isRetiredGithubAndroidApp } from '../src/app-update/app-update-runtime'
+import { AppMoveScreen } from '../src/app-move/AppMoveScreen'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { SideRailProvider } from '../src/layout/side-rail'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
@@ -239,6 +240,7 @@ export default function RootLayout() {
               </Stack>
             </SideSafeArea>
           </SideRailProvider>
+          {isRetiredGithubAndroidApp ? <AppMoveScreen /> : null}
         </View>
       </OrcaQueryProvider>
     </RpcClientProvider>

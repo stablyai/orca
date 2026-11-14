@@ -136,6 +136,33 @@
       "title": "终端"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca 现已上架 Google Play",
+      "description": "此应用仍可继续使用，但今后的更新将通过 Google Play 提供。切换只需几分钟。",
+      "installTitle": "从 Google Play 安装 Orca",
+      "installDescription": "现在就可以安装，随时随地。",
+      "openGooglePlay": "打开 Google Play",
+      "cantUseGooglePlay": "我无法使用 Google Play"
+    },
+    "download": {
+      "title": "获取新版 Orca 应用",
+      "description": "此应用仍可继续使用，但今后的更新和安全修复将通过新应用提供。切换只需几分钟。",
+      "installTitle": "下载新应用",
+      "installDescription": "如果手机询问，请允许浏览器安装应用。",
+      "download": "下载",
+      "keepThisVersion": "继续使用此版本",
+      "keepThisVersionNote": "你将收不到安全修复。我们会在一周后再提醒你。"
+    },
+    "pairTitle": "与电脑配对",
+    "pairDescription": "在电脑上的 Orca 中，前往“设置” → “移动端”，然后扫描二维码。",
+    "deleteTitle": "删除此应用",
+    "deleteDescription": "等新应用显示出你的智能体后再删除。在此之前，请继续使用此应用。",
+    "dataKept": "你的智能体、聊天和工作区都保存在电脑上，因此在新应用中也能全部看到。",
+    "banner": {
+      "seeHowToSwitch": "查看如何切换"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "URL"

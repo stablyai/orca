@@ -151,6 +151,33 @@
       "title": "Terminal"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "O Orca agora está no Google Play",
+      "description": "Este app continua funcionando, mas as atualizações agora vêm do Google Play. A troca leva só alguns minutos.",
+      "installTitle": "Instale o Orca pelo Google Play",
+      "installDescription": "Você pode fazer isso agora, de onde estiver.",
+      "openGooglePlay": "Abrir o Google Play",
+      "cantUseGooglePlay": "Não consigo usar o Google Play"
+    },
+    "download": {
+      "title": "Baixe o novo app do Orca",
+      "description": "Este app continua funcionando, mas as atualizações e correções de segurança agora vêm pelo novo app. A troca leva só alguns minutos.",
+      "installTitle": "Baixe o novo app",
+      "installDescription": "Se o celular pedir, permita que o navegador instale apps.",
+      "download": "Baixar",
+      "keepThisVersion": "Continuar usando esta versão",
+      "keepThisVersionNote": "Você vai ficar sem as correções de segurança. Vamos lembrar você em uma semana."
+    },
+    "pairTitle": "Pareie com o seu computador",
+    "pairDescription": "No Orca do seu computador, vá em Configurações → Mobile e escaneie o código.",
+    "deleteTitle": "Exclua este app",
+    "deleteDescription": "Assim que o novo app mostrar seus agentes. Até lá, continue usando este.",
+    "dataKept": "Seus agentes, chats e workspaces ficam salvos no seu computador, então você verá tudo no novo app.",
+    "banner": {
+      "seeHowToSwitch": "Veja como trocar"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "URL"
