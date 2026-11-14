@@ -6,8 +6,8 @@ import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane
 /** Which live terminal orchestration types mail into, and the handle it is known by. */
 export abstract class OrcaRuntimeWithMailboxTerminalIdentity extends OrcaRuntimeWithGetPtyRecordForPaneKey {
   terminalAgentInputMode(handle: string): 'noninteractive' | undefined {
-    const pty = this.getLivePtyForHandle(handle)?.pty
-    const sample = pty ? this.ptyForegroundAgent.startup.read(pty.ptyId) : undefined
+    const ptyId = this.getTerminalPtyIdForHandle(handle)
+    const sample = ptyId ? this.ptyForegroundAgent.startup.read(ptyId) : undefined
     return sample?.kind === 'agent' ? sample.inputMode : undefined
   }
 

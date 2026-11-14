@@ -5,11 +5,17 @@ import { findLastCompleteOscTitleRange } from './terminal-osc-title-range'
 import { extractLastOscTitle } from '../../../../shared/agent-status/title/osc-title-extraction'
 import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
 import { TerminalPublishedOutputRings } from './terminal-published-output-ring'
-import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import type {
+  RuntimeHeadlessTerminal,
+  RuntimePtyWorktreeRecord
+} from '../records/runtime-terminal-state-records'
 import { readLaunchCommandOutput } from '../wait/launched-agent-exit-watch'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   protected abstract wakeInterestedTerminalDelivery(ptyId: string): void
+  protected abstract readWholeScreenModel(
+    ptyId: string | null | undefined
+  ): RuntimeHeadlessTerminal | null
 
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
   private readonly publishedOutputRings = new TerminalPublishedOutputRings()

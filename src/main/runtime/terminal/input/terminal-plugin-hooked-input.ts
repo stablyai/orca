@@ -22,6 +22,8 @@ type TerminalSendAction = { text?: string; enter?: boolean; interrupt?: boolean 
  *  `agent.prompt.before`), in order per terminal; with no plugin listing one, a write adds no
  *  await. */
 export abstract class OrcaRuntimeWithPluginHookedTerminalInput extends OrcaRuntimeWithControllerKnowsPtyIsLive {
+  abstract assertTerminalAgentPromptInputSupported(handle: string): void
+
   protected readonly pluginHookOrder = new TerminalPluginHookOrder()
 
   protected getPtyAgent(ptyId: string): TerminalAgent | null {

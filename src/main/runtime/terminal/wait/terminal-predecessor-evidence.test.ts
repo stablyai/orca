@@ -115,7 +115,7 @@ it('applies the existing grammar once to the selected eligible anchor and bottom
   const text = 'header complete\nheader incomplete'
   const find = compileTextAnchor(
     { region: 'text', find: { lastOf: 'header' }, after: { contains: 'complete' } },
-    { state: 'idle', strength: 'strong', requiresQuiet: false }
+    { state: 'idle' }
   )
   // Use exact suffix wording so the latest header fails despite an earlier eligible complete one.
   const input = text.replace('incomplete', 'unfinished')
@@ -268,14 +268,16 @@ it.each([100, 1000])(
     const owner = {}
     const scope = { owner, epoch: 2 }
     let comparisons = 0
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: relational comparisons coerce these test coordinates to their exact numeric values, including in the copied index.
-    const coordinate = (value: number) =>
-      ({
+    const coordinate = (value: number): number => {
+      const cell = {
         [Symbol.toPrimitive]: () => {
           comparisons++
           return value
         }
-      }) as unknown as number
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: numeric coercion counts comparisons on the copied index without altering coordinate values.
+      return cell as unknown as number
+    }
     const runs = Array.from({ length: count }, (_, index) => ({
       start: coordinate(index * 4),
       end: coordinate(index * 4 + 3),

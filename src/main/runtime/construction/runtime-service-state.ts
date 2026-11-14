@@ -50,6 +50,8 @@ import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-scr
 import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
+  protected abstract readonly ptyOutputSequenceById: Map<string, number>
+
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()

@@ -15,7 +15,8 @@ import { appendNormalizedToTailBuffer } from './tail/terminal-tail-buffer'
 import { normalizeTerminalChunk } from './terminal-ansi-normalization'
 import {
   observeTerminalCommandPaint,
-  type TerminalCommandPaint
+  type TerminalCommandPaint,
+  type TerminalCommandBoundary
 } from '../input/terminal-command-paint'
 import { appendCompletedTerminalTranscript, buildPreview } from './tail/terminal-tail-state'
 import {
@@ -25,6 +26,11 @@ import {
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   abstract readKnownTerminalAlternateScreen(ptyId: string): boolean | undefined
+  protected abstract wakeInterestedTerminalDelivery(ptyId: string): void
+  protected abstract retireAgentPromptOperationsForBoundary(
+    ptyId: string,
+    boundary: TerminalCommandBoundary
+  ): void
   protected abstract clearAgentPromptCorrelationForPty(ptyId: string): void
   protected abstract recordOsc7MetadataForPty(
     ptyId: string,

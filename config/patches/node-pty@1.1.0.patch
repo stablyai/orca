@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 5f63978b07ab50aaf7523219a2170ec737a6b5db..b4110a7c781d505ae581436cec68a10bf600734a 100644
+index 5f63978..b4110a7 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -1,13 +1,18 @@
@@ -81,7 +81,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..b4110a7c781d505ae581436cec68a10b
            ]
          }
 diff --git a/deps/winpty/src/winpty.gyp b/deps/winpty/src/winpty.gyp
-index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8360130ef 100644
+index 1ac5758..e619813 100644
 --- a/deps/winpty/src/winpty.gyp
 +++ b/deps/winpty/src/winpty.gyp
 @@ -10,7 +10,7 @@
@@ -123,7 +123,7 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8
                  # Specify this setting here to override a setting from somewhere
                  # else, such as node's common.gypi.
 diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
-index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441e02a974c 100644
+index 8c4fca9..0a01730 100644
 --- a/lib/conpty_console_list_agent.js
 +++ b/lib/conpty_console_list_agent.js
 @@ -10,7 +10,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
@@ -144,7 +144,7 @@ index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441
  //# sourceMappingURL=conpty_console_list_agent.js.map
 \ No newline at end of file
 diff --git a/lib/terminal.js b/lib/terminal.js
-index e2f9bc9131077b53ebc32d207207ad82804ff185..6c63bfaaf75128d88f9a2efece13476348780cfd 100644
+index e2f9bc9..6c63bfa 100644
 --- a/lib/terminal.js
 +++ b/lib/terminal.js
 @@ -172,6 +172,21 @@ var Terminal = /** @class */ (function () {
@@ -170,7 +170,7 @@ index e2f9bc9131077b53ebc32d207207ad82804ff185..6c63bfaaf75128d88f9a2efece134763
      Terminal.prototype._parseEnv = function (env) {
          var keys = Object.keys(env || {});
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71ededb01f 100644
+index 1ec12f7..0cda061 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -188,7 +188,16 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
-@@ -234,6 +238,11 @@ var UnixTerminal = /** @class */ (function (_super) {
+@@ -229,11 +233,20 @@ var UnixTerminal = /** @class */ (function (_super) {
+         }
+         catch (e) { /* swallow */ }
+     };
++    UnixTerminal.prototype.getForegroundProcessGroup = function () {
++        if (this._fd < 0) return null;
++        return typeof pty.foregroundProcessGroup === 'function' ? pty.foregroundProcessGroup(this._fd) : undefined;
++    };
+     Object.defineProperty(UnixTerminal.prototype, "process", {
+         /**
           * Gets the name of the process.
           */
          get: function () {
@@ -200,7 +209,7 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
              if (process.platform === 'darwin') {
                  var title = pty.process(this._fd);
                  return (title !== 'kernel_task') ? title : this._file;
-@@ -250,6 +259,11 @@ var UnixTerminal = /** @class */ (function (_super) {
+@@ -250,6 +263,11 @@ var UnixTerminal = /** @class */ (function (_super) {
          if (cols <= 0 || rows <= 0 || isNaN(cols) || isNaN(rows) || cols === Infinity || rows === Infinity) {
              throw new Error('resizing must be done using positive cols and rows');
          }
@@ -212,7 +221,7 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
          pty.resize(this._fd, cols, rows);
          this._cols = cols;
          this._rows = rows;
-@@ -273,6 +287,13 @@ var UnixTerminal = /** @class */ (function (_super) {
+@@ -273,6 +291,13 @@ var UnixTerminal = /** @class */ (function (_super) {
      return UnixTerminal;
  }(terminal_1.Terminal));
  exports.UnixTerminal = UnixTerminal;
@@ -226,7 +235,7 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
  /**
   * A custom write stream that writes directly to a file descriptor with proper
   * handling of backpressure and errors. This avoids some event loop exhaustion
-@@ -285,10 +306,17 @@ var CustomWriteStream = /** @class */ (function () {
+@@ -285,10 +310,17 @@ var CustomWriteStream = /** @class */ (function () {
          this._writeQueue = [];
      }
      CustomWriteStream.prototype.dispose = function () {
@@ -245,7 +254,7 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
          // Writes are put in a queue and processed asynchronously in order to handle
          // backpressure from the kernel buffer.
          var buffer = typeof data === 'string'
-@@ -304,7 +332,8 @@ var CustomWriteStream = /** @class */ (function () {
+@@ -304,7 +336,8 @@ var CustomWriteStream = /** @class */ (function () {
      CustomWriteStream.prototype._processWriteQueue = function () {
          var _this = this;
          this._writeImmediate = undefined;
@@ -255,7 +264,7 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
              return;
          }
          var task = this._writeQueue[0];
-@@ -314,9 +343,9 @@ var CustomWriteStream = /** @class */ (function () {
+@@ -314,9 +347,9 @@ var CustomWriteStream = /** @class */ (function () {
          fs.write(this._fd, task.buffer, task.offset, function (err, written) {
              if (err) {
                  if ('code' in err && err.code === 'EAGAIN') {
@@ -269,7 +278,7 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
                  else {
                      // Stop processing immediately on unexpected error and log
 diff --git a/lib/utils.js b/lib/utils.js
-index af7918b6902a105a7c49813bc0bb4d687d87a7d4..1fca29d71f11ece98b8224b81ab78a6bc5b41a6d 100644
+index af7918b..1fca29d 100644
 --- a/lib/utils.js
 +++ b/lib/utils.js
 @@ -15,8 +15,8 @@ function assign(target) {
@@ -283,8 +292,223 @@ index af7918b6902a105a7c49813bc0bb4d687d87a7d4..1fca29d71f11ece98b8224b81ab78a6b
      // Check relative to the parent dir for unbundled and then the current dir for bundled
      var relative = ['..', '.'];
      var lastError;
+diff --git a/lib/windowsConoutConnection.js b/lib/windowsConoutConnection.js
+index 1be15ca..f33b053 100644
+--- a/lib/windowsConoutConnection.js
++++ b/lib/windowsConoutConnection.js
+@@ -74,6 +74,15 @@ var ConoutConnection = /** @class */ (function () {
+         };
+         var scriptPath = __dirname.replace('node_modules.asar', 'node_modules.asar.unpacked');
+         this._worker = new worker_threads_1.Worker(path_1.join(scriptPath, 'worker/conoutSocketWorker.js'), { workerData: workerData });
++        this._onFailed = new eventEmitter2_1.EventEmitter2();
++        // Orca: without a listener a dead worker's error is rethrown process-wide. Report the exit
++        // instead, so a relay that dies before it connects still ends its terminal.
++        this._worker.on('error', function () { });
++        this._worker.on('exit', function () {
++            if (!_this._isDisposed) {
++                _this._onFailed.fire();
++            }
++        });
+         this._worker.on('message', function (message) {
+             switch (message) {
+                 case 1 /* READY */:
+@@ -89,6 +98,11 @@ var ConoutConnection = /** @class */ (function () {
+         enumerable: false,
+         configurable: true
+     });
++    Object.defineProperty(ConoutConnection.prototype, "onFailed", {
++        get: function () { return this._onFailed.event; },
++        enumerable: false,
++        configurable: true
++    });
+     ConoutConnection.prototype.dispose = function () {
+         if (!this._useConptyDll && this._isDisposed) {
+             return;
+diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+index a358ffb..8cb91ef 100644
+--- a/lib/windowsPtyAgent.js
++++ b/lib/windowsPtyAgent.js
+@@ -75,6 +75,10 @@ var WindowsPtyAgent = /** @class */ (function () {
+         this._conoutSocketWorker.onReady(function () {
+             _this._conoutSocketWorker.connectSocket(_this._outSocket);
+         });
++        // Orca: surface a dead relay through the output socket's own error path.
++        this._conoutSocketWorker.onFailed(function () {
++            _this._outSocket.destroy(new Error('ConPTY output relay exited'));
++        });
+         this._outSocket.on('connect', function () {
+             _this._outSocket.emit('ready_datapipe');
+         });
+@@ -136,6 +140,9 @@ var WindowsPtyAgent = /** @class */ (function () {
+         if (this._useConpty) {
+             if (!this._useConptyDll) {
+                 this._inSocket.readable = false;
++                // The non-DLL path previously only flipped `readable`, leaving the
++                // conin PipeWrap alive until the host exited (#947).
++                this._inSocket.destroy();
+                 this._outSocket.readable = false;
+                 this._getConsoleProcessList().then(function (consoleProcessList) {
+                     consoleProcessList.forEach(function (pid) {
+@@ -154,9 +161,10 @@ var WindowsPtyAgent = /** @class */ (function () {
+                 // Close the input write handle to signal the end of session.
+                 this._inSocket.destroy();
+                 this._ptyNative.kill(this._pty, this._useConptyDll);
+-                this._outSocket.on('data', function () {
+-                    _this._conoutSocketWorker.dispose();
+-                });
++                // Orca: dispose unconditionally, as the non-DLL branch above does.
++                // Waiting for another 'data' event leaks the conout worker on every
++                // self-exiting shell, because no more data ever arrives (F24).
++                this._conoutSocketWorker.dispose();
+             }
+         }
+         else {
+@@ -182,6 +190,11 @@ var WindowsPtyAgent = /** @class */ (function () {
+         var _this = this;
+         return new Promise(function (resolve) {
+             var agent = child_process_1.fork(path.join(__dirname, 'conpty_console_list_agent'), [_this._innerPid.toString()]);
++            // Orca: an unhandled fork or IPC error would be rethrown process-wide.
++            agent.on('error', function () {
++                clearTimeout(timeout);
++                resolve([_this._innerPid]);
++            });
+             agent.on('message', function (message) {
+                 clearTimeout(timeout);
+                 resolve(message.consoleProcessList);
+diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
+index 3c38f89..d6423d5 100644
+--- a/lib/windowsTerminal.js
++++ b/lib/windowsTerminal.js
+@@ -50,6 +50,29 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         // Create new termal.
+         _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
+         _this._socket = _this._agent.outSocket;
++        // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
++        var outputCloseEmitsExit = false;
++        var killedBeforeReady = false;
++        _this._socket.on('error', function () {
++            // Orca: retire only this terminal. Rethrowing an unlisted code (write UNKNOWN, ECONNRESET)
++            // killed every PTY in the process; consumer listeners still receive the error.
++            _this._close();
++            if (_this._isReady || killedBeforeReady) {
++                return;
++            }
++            // Before the first output kill() stays deferred forever, so end the shell here.
++            killedBeforeReady = true;
++            try {
++                _this._agent.kill();
++            }
++            catch (_a) {
++                // The shell may already be gone; the terminal is retired either way.
++            }
++            // Before the relay connects no 'close' handler reports exit.
++            if (!outputCloseEmitsExit) {
++                _this.emit('exit', _this._agent.exitCode);
++            }
++        });
+         // Not available until `ready` event emitted.
+         _this._pid = _this._agent.innerPid;
+         _this._fd = _this._agent.fd;
+@@ -57,6 +80,7 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         // The forked windows terminal is not available until `ready` event is
+         // emitted.
+         _this._socket.on('ready_datapipe', function () {
++            outputCloseEmitsExit = true;
+             // Run deferreds and set ready state once the first data event is received.
+             _this._socket.once('data', function () {
+                 // Wait until the first data event is fired then we can run deferreds.
+@@ -76,23 +100,6 @@ var WindowsTerminal = /** @class */ (function (_super) {
+                     _this._deferreds = [];
+                 }
+             });
+-            // Shutdown if `error` event is emitted.
+-            _this._socket.on('error', function (err) {
+-                // Close terminal session.
+-                _this._close();
+-                // EIO, happens when someone closes our child process: the only process
+-                // in the terminal.
+-                // node < 0.6.14: errno 5
+-                // node >= 0.6.14: read EIO
+-                if (err.code) {
+-                    if (~err.code.indexOf('errno 5') || ~err.code.indexOf('EIO'))
+-                        return;
+-                }
+-                // Throw anything else.
+-                if (_this.listeners('error').length < 2) {
+-                    throw err;
+-                }
+-            });
+             // Cleanup after the socket is closed.
+             _this._socket.on('close', function () {
+                 _this.emit('exit', _this._agent.exitCode);
+@@ -103,6 +110,20 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         _this._name = name;
+         _this._readable = true;
+         _this._writable = true;
++        // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
++        // errors such as write EAGAIN to uncaughtException and kills every PTY in the daemon.
++        _this._agent.inSocket.on('error', function () {
++            if (!_this._writable) {
++                return;
++            }
++            _this._close();
++            try {
++                _this._agent.kill();
++            }
++            catch (_a) {
++                // The failing pipe may have raced process exit; the terminal is already unwritable.
++            }
++        });
+         _this._forwardEvents();
+         return _this;
+     }
+@@ -196,4 +217,4 @@ var WindowsTerminal = /** @class */ (function (_super) {
+     return WindowsTerminal;
+ }(terminal_1.Terminal));
+ exports.WindowsTerminal = WindowsTerminal;
+-//# sourceMappingURL=windowsTerminal.js.map
+\ No newline at end of file
++//# sourceMappingURL=windowsTerminal.js.map
+diff --git a/lib/worker/conoutSocketWorker.js b/lib/worker/conoutSocketWorker.js
+index 0451e2c..6b4ed50 100644
+--- a/lib/worker/conoutSocketWorker.js
++++ b/lib/worker/conoutSocketWorker.js
+@@ -9,10 +9,33 @@ var conout_1 = require("../shared/conout");
+ var conoutPipeName = worker_threads_1.workerData.conoutPipeName;
+ var conoutSocket = new net_1.Socket();
+ conoutSocket.setEncoding('utf8');
++// Orca: an unhandled stream error crashes this worker, and Node rethrows it on the main thread as
++// an uncaughtException that kills every PTY in the process (write EPIPE/UNKNOWN once the reader
++// closed: #26877, #33350). Contain errors per terminal and keep draining ConPTY output.
++var workerSockets = new Set();
++var drainConout = function () {
++    conoutSocket.resume();
++};
++conoutSocket.on('error', function () {
++    // Closing the reader ends this terminal instead of leaving it waiting for output.
++    workerSockets.forEach(function (workerSocket) { return workerSocket.destroy(); });
++});
+ conoutSocket.connect(conoutPipeName, function () {
+     var server = net_1.createServer(function (workerSocket) {
++        if (conoutSocket.destroyed) {
++            workerSocket.destroy();
++            return;
++        }
++        workerSockets.add(workerSocket);
++        workerSocket.on('error', function () { });
+         conoutSocket.pipe(workerSocket);
++        // After pipe() so its unpipe-and-pause runs first; an undrained conout can block ClosePseudoConsole.
++        workerSocket.on('close', function () {
++            workerSockets.delete(workerSocket);
++            drainConout();
++        });
+     });
++    server.on('error', drainConout);
+     server.listen(conout_1.getWorkerPipeName(conoutPipeName));
+     if (!worker_threads_1.parentPort) {
+         throw new Error('worker_threads parentPort is null');
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
-index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
+index 181ccab..67f31fa 100644
 --- a/src/conpty_console_list_agent.ts
 +++ b/src/conpty_console_list_agent.ts
 @@ -10,6 +10,12 @@ import { loadNativeModule } from './utils';
@@ -301,8 +525,20 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
 +}
  process.send!({ consoleProcessList });
  process.exit(0);
+diff --git a/src/native.d.ts b/src/native.d.ts
+index c53e086..4c4291b 100644
+--- a/src/native.d.ts
++++ b/src/native.d.ts
+@@ -19,6 +19,7 @@ interface IWinptyNative {
+ }
+ 
+ interface IUnixNative {
++  foregroundProcessGroup?(fd: number): number | null;
+   fork(file: string, args: string[], parsedEnv: string[], cwd: string, cols: number, rows: number, uid: number, gid: number, useUtf8: boolean, helperPath: string, onExitCallback: (code: number, signal: number) => void): IUnixProcess;
+   open(cols: number, rows: number): IUnixOpenProcess;
+   process(fd: number, pty?: string): string;
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc9c93ca19 100644
+index 7b4b9e1..0c99bac 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,8 +23,11 @@
@@ -367,7 +603,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  #endif
  
  /* NSIG - macro for highest signal + 1, should be defined */
-@@ -169,6 +208,7 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pid_t pid) {
+@@ -167,6 +206,7 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pid_t pid) {
          }
        }
      }
@@ -554,7 +790,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,84 +841,585 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,93 +841,612 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -1164,7 +1400,21 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  /**
   * Init
   */
-@@ -793,6 +1429,12 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+ 
++Napi::Value PtyForegroundGroup(const Napi::CallbackInfo& info) {
++  Napi::Env env = info.Env();
++  if (info.Length() != 1 || !info[0].IsNumber()) {
++    throw Napi::TypeError::New(env, "Expected a PTY master descriptor");
++  }
++  const int fd = info[0].As<Napi::Number>().Int32Value();
++  const pid_t group = fd < 0 ? -1 : tcgetpgrp(fd);
++  if (group > 0) return Napi::Number::New(env, group);
++  return env.Null();
++}
++
+ Napi::Object init(Napi::Env env, Napi::Object exports) {
++  exports.Set("foregroundProcessGroup", Napi::Function::New(env, PtyForegroundGroup));
+   exports.Set("fork",    Napi::Function::New(env, PtyFork));
    exports.Set("open",    Napi::Function::New(env, PtyOpen));
    exports.Set("resize",  Napi::Function::New(env, PtyResize));
    exports.Set("process", Napi::Function::New(env, PtyGetProc));
@@ -1178,10 +1428,26 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  }
  
 diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
-index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650dad503ec6 100644
+index 98733dc..591bbc0 100644
 --- a/src/unixTerminal.ts
 +++ b/src/unixTerminal.ts
-@@ -306,6 +306,14 @@ interface IWriteTask {
+@@ -252,6 +252,15 @@ export class UnixTerminal extends Terminal {
+     } catch (e) { /* swallow */ }
+   }
+ 
++  /**
++   * Gets the foreground process group from the master: null once the master is closed,
++   * undefined when the native addon predates this export.
++   */
++  public getForegroundProcessGroup(): number | null | undefined {
++    if (this._fd < 0) return null;
++    return typeof pty.foregroundProcessGroup === 'function' ? pty.foregroundProcessGroup(this._fd) : undefined;
++  }
++
+   /**
+    * Gets the name of the process.
+    */
+@@ -306,6 +315,14 @@ interface IWriteTask {
    offset: number;
  }
  
@@ -1196,7 +1462,7 @@ index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650d
  /**
   * A custom write stream that writes directly to a file descriptor with proper
   * handling of backpressure and errors. This avoids some event loop exhaustion
-@@ -314,20 +322,28 @@ interface IWriteTask {
+@@ -314,20 +331,28 @@ interface IWriteTask {
  class CustomWriteStream implements IDisposable {
  
    private readonly _writeQueue: IWriteTask[] = [];
@@ -1228,7 +1494,7 @@ index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650d
      // Writes are put in a queue and processed asynchronously in order to handle
      // backpressure from the kernel buffer.
      const buffer = typeof data === 'string'
-@@ -345,7 +361,8 @@ class CustomWriteStream implements IDisposable {
+@@ -345,7 +370,8 @@ class CustomWriteStream implements IDisposable {
    private _processWriteQueue(): void {
      this._writeImmediate = undefined;
  
@@ -1238,7 +1504,7 @@ index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650d
        return;
      }
  
-@@ -357,9 +374,9 @@ class CustomWriteStream implements IDisposable {
+@@ -357,9 +383,9 @@ class CustomWriteStream implements IDisposable {
      fs.write(this._fd, task.buffer, task.offset, (err, written) => {
        if (err) {
          if ('code' in err && err.code === 'EAGAIN') {
@@ -1252,7 +1518,7 @@ index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650d
            // Stop processing immediately on unexpected error and log
            this._writeQueue.length = 0;
 diff --git a/src/utils.ts b/src/utils.ts
-index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..4bc8d760fe00e208f211570930cd163b77901810 100644
+index 81a70c7..4bc8d76 100644
 --- a/src/utils.ts
 +++ b/src/utils.ts
 @@ -10,8 +10,8 @@ export function assign(target: any, ...sources: any[]): any {
@@ -1267,7 +1533,7 @@ index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..4bc8d760fe00e208f211570930cd163b
    const relative = ['..', '.'];
    let lastError: unknown;
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d64..5239ba4e40 100644
+index 7b286d3..e95c857 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
 @@ -18,6 +18,8 @@
@@ -1562,18 +1828,7 @@ index 7b286d3d64..5239ba4e40 100644
 +      (HMODULE)hLibrary,
 +      useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
 +  }
- 
--  if (handle != nullptr) {
--    HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
--    bool fLoadedDll = hLibrary != nullptr;
--    if (fLoadedDll)
--    {
--      PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
--        (HMODULE)hLibrary,
--        useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
--      if (pfnClosePseudoConsole)
--      {
--        pfnClosePseudoConsole(handle->hpc);
++
 +  // Orca: the baton now outlives the shell, so this runs on a self-exited pty
 +  // too -- that is the whole point. Take what we need under the lock: the
 +  // watcher thread nulls hShell the moment the shell dies, and TerminateProcess
@@ -1604,7 +1859,7 @@ index 7b286d3d64..5239ba4e40 100644
 +          hShellDup = nullptr;
 +          TerminateProcess(handle->hShell, 1);
 +        }
-       }
++      }
 +      if (handle->shellExited) {
 +        const bool removed = remove_pty_baton_locked(id);
 +        assert(removed);
@@ -1613,12 +1868,23 @@ index 7b286d3d64..5239ba4e40 100644
 +      // Else the shell is still running and the watcher frees the baton.
 +    }
 +  }
-+
+ 
+-  if (handle != nullptr) {
+-    HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+-    bool fLoadedDll = hLibrary != nullptr;
+-    if (fLoadedDll)
 +  // Why outside the lock: ClosePseudoConsole blocks until the conout side has
 +  // drained, and the watcher must be able to take the lock while it does.
 +  if (owed) {
 +    if (pfnClosePseudoConsole)
-+    {
+     {
+-      PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
+-        (HMODULE)hLibrary,
+-        useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
+-      if (pfnClosePseudoConsole)
+-      {
+-        pfnClosePseudoConsole(handle->hpc);
+-      }
 +      pfnClosePseudoConsole(hpc);
      }
 -    if (useConptyDll) {
@@ -1810,221 +2076,11 @@ index 7b286d3d64..5239ba4e40 100644
    return exports;
  };
  
-diff --git a/lib/windowsConoutConnection.js b/lib/windowsConoutConnection.js
---- a/lib/windowsConoutConnection.js
-+++ b/lib/windowsConoutConnection.js
-@@ -74,6 +74,15 @@
-         };
-         var scriptPath = __dirname.replace('node_modules.asar', 'node_modules.asar.unpacked');
-         this._worker = new worker_threads_1.Worker(path_1.join(scriptPath, 'worker/conoutSocketWorker.js'), { workerData: workerData });
-+        this._onFailed = new eventEmitter2_1.EventEmitter2();
-+        // Orca: without a listener a dead worker's error is rethrown process-wide. Report the exit
-+        // instead, so a relay that dies before it connects still ends its terminal.
-+        this._worker.on('error', function () { });
-+        this._worker.on('exit', function () {
-+            if (!_this._isDisposed) {
-+                _this._onFailed.fire();
-+            }
-+        });
-         this._worker.on('message', function (message) {
-             switch (message) {
-                 case 1 /* READY */:
-@@ -89,6 +98,11 @@
-         enumerable: false,
-         configurable: true
-     });
-+    Object.defineProperty(ConoutConnection.prototype, "onFailed", {
-+        get: function () { return this._onFailed.event; },
-+        enumerable: false,
-+        configurable: true
-+    });
-     ConoutConnection.prototype.dispose = function () {
-         if (!this._useConptyDll && this._isDisposed) {
-             return;
-diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
---- a/lib/windowsPtyAgent.js
-+++ b/lib/windowsPtyAgent.js
-@@ -75,6 +75,10 @@
-         this._conoutSocketWorker.onReady(function () {
-             _this._conoutSocketWorker.connectSocket(_this._outSocket);
-         });
-+        // Orca: surface a dead relay through the output socket's own error path.
-+        this._conoutSocketWorker.onFailed(function () {
-+            _this._outSocket.destroy(new Error('ConPTY output relay exited'));
-+        });
-         this._outSocket.on('connect', function () {
-             _this._outSocket.emit('ready_datapipe');
-         });
-@@ -136,6 +140,9 @@
-         if (this._useConpty) {
-             if (!this._useConptyDll) {
-                 this._inSocket.readable = false;
-+                // The non-DLL path previously only flipped `readable`, leaving the
-+                // conin PipeWrap alive until the host exited (#947).
-+                this._inSocket.destroy();
-                 this._outSocket.readable = false;
-                 this._getConsoleProcessList().then(function (consoleProcessList) {
-                     consoleProcessList.forEach(function (pid) {
-@@ -154,9 +161,10 @@
-                 // Close the input write handle to signal the end of session.
-                 this._inSocket.destroy();
-                 this._ptyNative.kill(this._pty, this._useConptyDll);
--                this._outSocket.on('data', function () {
--                    _this._conoutSocketWorker.dispose();
--                });
-+                // Orca: dispose unconditionally, as the non-DLL branch above does.
-+                // Waiting for another 'data' event leaks the conout worker on every
-+                // self-exiting shell, because no more data ever arrives (F24).
-+                this._conoutSocketWorker.dispose();
-             }
-         }
-         else {
-@@ -182,6 +190,11 @@
-         var _this = this;
-         return new Promise(function (resolve) {
-             var agent = child_process_1.fork(path.join(__dirname, 'conpty_console_list_agent'), [_this._innerPid.toString()]);
-+            // Orca: an unhandled fork or IPC error would be rethrown process-wide.
-+            agent.on('error', function () {
-+                clearTimeout(timeout);
-+                resolve([_this._innerPid]);
-+            });
-             agent.on('message', function (message) {
-                 clearTimeout(timeout);
-                 resolve(message.consoleProcessList);
-diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
---- a/lib/windowsTerminal.js
-+++ b/lib/windowsTerminal.js
-@@ -50,6 +50,29 @@
-         // Create new termal.
-         _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
-         _this._socket = _this._agent.outSocket;
-+        // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
-+        var outputCloseEmitsExit = false;
-+        var killedBeforeReady = false;
-+        _this._socket.on('error', function () {
-+            // Orca: retire only this terminal. Rethrowing an unlisted code (write UNKNOWN, ECONNRESET)
-+            // killed every PTY in the process; consumer listeners still receive the error.
-+            _this._close();
-+            if (_this._isReady || killedBeforeReady) {
-+                return;
-+            }
-+            // Before the first output kill() stays deferred forever, so end the shell here.
-+            killedBeforeReady = true;
-+            try {
-+                _this._agent.kill();
-+            }
-+            catch (_a) {
-+                // The shell may already be gone; the terminal is retired either way.
-+            }
-+            // Before the relay connects no 'close' handler reports exit.
-+            if (!outputCloseEmitsExit) {
-+                _this.emit('exit', _this._agent.exitCode);
-+            }
-+        });
-         // Not available until `ready` event emitted.
-         _this._pid = _this._agent.innerPid;
-         _this._fd = _this._agent.fd;
-@@ -57,6 +80,7 @@
-         // The forked windows terminal is not available until `ready` event is
-         // emitted.
-         _this._socket.on('ready_datapipe', function () {
-+            outputCloseEmitsExit = true;
-             // Run deferreds and set ready state once the first data event is received.
-             _this._socket.once('data', function () {
-                 // Wait until the first data event is fired then we can run deferreds.
-@@ -76,23 +100,6 @@
-                     _this._deferreds = [];
-                 }
-             });
--            // Shutdown if `error` event is emitted.
--            _this._socket.on('error', function (err) {
--                // Close terminal session.
--                _this._close();
--                // EIO, happens when someone closes our child process: the only process
--                // in the terminal.
--                // node < 0.6.14: errno 5
--                // node >= 0.6.14: read EIO
--                if (err.code) {
--                    if (~err.code.indexOf('errno 5') || ~err.code.indexOf('EIO'))
--                        return;
--                }
--                // Throw anything else.
--                if (_this.listeners('error').length < 2) {
--                    throw err;
--                }
--            });
-             // Cleanup after the socket is closed.
-             _this._socket.on('close', function () {
-                 _this.emit('exit', _this._agent.exitCode);
-@@ -103,6 +110,20 @@
-         _this._name = name;
-         _this._readable = true;
-         _this._writable = true;
-+        // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
-+        // errors such as write EAGAIN to uncaughtException and kills every PTY in the daemon.
-+        _this._agent.inSocket.on('error', function () {
-+            if (!_this._writable) {
-+                return;
-+            }
-+            _this._close();
-+            try {
-+                _this._agent.kill();
-+            }
-+            catch (_a) {
-+                // The failing pipe may have raced process exit; the terminal is already unwritable.
-+            }
-+        });
-         _this._forwardEvents();
-         return _this;
-     }
-@@ -196,4 +217,4 @@
-     return WindowsTerminal;
- }(terminal_1.Terminal));
- exports.WindowsTerminal = WindowsTerminal;
--//# sourceMappingURL=windowsTerminal.js.map
-\ No newline at end of file
-+//# sourceMappingURL=windowsTerminal.js.map
-diff --git a/lib/worker/conoutSocketWorker.js b/lib/worker/conoutSocketWorker.js
---- a/lib/worker/conoutSocketWorker.js
-+++ b/lib/worker/conoutSocketWorker.js
-@@ -9,10 +9,33 @@
- var conoutPipeName = worker_threads_1.workerData.conoutPipeName;
- var conoutSocket = new net_1.Socket();
- conoutSocket.setEncoding('utf8');
-+// Orca: an unhandled stream error crashes this worker, and Node rethrows it on the main thread as
-+// an uncaughtException that kills every PTY in the process (write EPIPE/UNKNOWN once the reader
-+// closed: #26877, #33350). Contain errors per terminal and keep draining ConPTY output.
-+var workerSockets = new Set();
-+var drainConout = function () {
-+    conoutSocket.resume();
-+};
-+conoutSocket.on('error', function () {
-+    // Closing the reader ends this terminal instead of leaving it waiting for output.
-+    workerSockets.forEach(function (workerSocket) { return workerSocket.destroy(); });
-+});
- conoutSocket.connect(conoutPipeName, function () {
-     var server = net_1.createServer(function (workerSocket) {
-+        if (conoutSocket.destroyed) {
-+            workerSocket.destroy();
-+            return;
-+        }
-+        workerSockets.add(workerSocket);
-+        workerSocket.on('error', function () { });
-         conoutSocket.pipe(workerSocket);
-+        // After pipe() so its unpipe-and-pause runs first; an undrained conout can block ClosePseudoConsole.
-+        workerSocket.on('close', function () {
-+            workerSockets.delete(workerSocket);
-+            drainConout();
-+        });
-     });
-+    server.on('error', drainConout);
-     server.listen(conout_1.getWorkerPipeName(conoutPipeName));
-     if (!worker_threads_1.parentPort) {
-         throw new Error('worker_threads parentPort is null');
 diff --git a/src/windowsConoutConnection.ts b/src/windowsConoutConnection.ts
+index fa2d62d..7f6fb8b 100644
 --- a/src/windowsConoutConnection.ts
 +++ b/src/windowsConoutConnection.ts
-@@ -35,6 +35,8 @@
+@@ -35,6 +35,8 @@ export class ConoutConnection implements IDisposable {
  
    private _onReady = new EventEmitter2<void>();
    public get onReady(): IEvent<void> { return this._onReady.event; }
@@ -2033,7 +2089,7 @@ diff --git a/src/windowsConoutConnection.ts b/src/windowsConoutConnection.ts
  
    constructor(
      private _conoutPipeName: string,
-@@ -45,6 +47,14 @@
+@@ -45,6 +47,14 @@ export class ConoutConnection implements IDisposable {
      };
      const scriptPath = __dirname.replace('node_modules.asar', 'node_modules.asar.unpacked');
      this._worker = new Worker(join(scriptPath, 'worker/conoutSocketWorker.js'), { workerData });
@@ -2049,9 +2105,10 @@ diff --git a/src/windowsConoutConnection.ts b/src/windowsConoutConnection.ts
        switch (message) {
          case ConoutWorkerMessage.READY:
 diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
+index d705444..4a2a50a 100644
 --- a/src/windowsPtyAgent.ts
 +++ b/src/windowsPtyAgent.ts
-@@ -103,6 +103,10 @@
+@@ -103,6 +103,10 @@ export class WindowsPtyAgent {
      this._conoutSocketWorker.onReady(() => {
        this._conoutSocketWorker.connectSocket(this._outSocket);
      });
@@ -2062,7 +2119,7 @@ diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
      this._outSocket.on('connect', () => {
        this._outSocket.emit('ready_datapipe');
      });
-@@ -143,6 +147,9 @@
+@@ -143,6 +147,9 @@ export class WindowsPtyAgent {
      if (this._useConpty) {
        if (!this._useConptyDll) {
          this._inSocket.readable = false;
@@ -2072,7 +2129,7 @@ diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
          this._outSocket.readable = false;
          this._getConsoleProcessList().then(consoleProcessList => {
            consoleProcessList.forEach((pid: number) => {
-@@ -159,9 +166,10 @@
+@@ -159,9 +166,10 @@ export class WindowsPtyAgent {
          // Close the input write handle to signal the end of session.
          this._inSocket.destroy();
          (this._ptyNative as IConptyNative).kill(this._pty, this._useConptyDll);
@@ -2086,7 +2143,7 @@ diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
        }
      } else {
        // Because pty.kill closes the handle, it will kill most processes by itself.
-@@ -185,6 +193,11 @@
+@@ -185,6 +193,11 @@ export class WindowsPtyAgent {
    private _getConsoleProcessList(): Promise<number[]> {
      return new Promise<number[]>(resolve => {
        const agent = fork(path.join(__dirname, 'conpty_console_list_agent'), [ this._innerPid.toString() ]);
@@ -2099,9 +2156,10 @@ diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
          clearTimeout(timeout);
          resolve(message.consoleProcessList);
 diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
+index 13f6c6d..92d8f26 100644
 --- a/src/windowsTerminal.ts
 +++ b/src/windowsTerminal.ts
-@@ -51,6 +51,29 @@
+@@ -51,6 +51,29 @@ export class WindowsTerminal extends Terminal {
      this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
      this._socket = this._agent.outSocket;
  
@@ -2131,7 +2189,7 @@ diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
      // Not available until `ready` event emitted.
      this._pid = this._agent.innerPid;
      this._fd = this._agent.fd;
-@@ -59,6 +82,7 @@
+@@ -59,6 +82,7 @@ export class WindowsTerminal extends Terminal {
      // The forked windows terminal is not available until `ready` event is
      // emitted.
      this._socket.on('ready_datapipe', () => {
@@ -2139,7 +2197,7 @@ diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
  
        // Run deferreds and set ready state once the first data event is received.
        this._socket.once('data', () => {
-@@ -82,25 +106,6 @@
+@@ -82,25 +106,6 @@ export class WindowsTerminal extends Terminal {
          }
        });
  
@@ -2165,7 +2223,7 @@ diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
        // Cleanup after the socket is closed.
        this._socket.on('close', () => {
          this.emit('exit', this._agent.exitCode);
-@@ -114,6 +119,19 @@
+@@ -114,6 +119,19 @@ export class WindowsTerminal extends Terminal {
  
      this._readable = true;
      this._writable = true;
@@ -2186,9 +2244,10 @@ diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
      this._forwardEvents();
    }
 diff --git a/src/worker/conoutSocketWorker.ts b/src/worker/conoutSocketWorker.ts
+index 79a4148..2a40458 100644
 --- a/src/worker/conoutSocketWorker.ts
 +++ b/src/worker/conoutSocketWorker.ts
-@@ -10,10 +10,33 @@
+@@ -10,10 +10,33 @@ const { conoutPipeName } = (workerData as IWorkerData);
  
  const conoutSocket = new Socket();
  conoutSocket.setEncoding('utf8');
@@ -2222,67 +2281,11 @@ diff --git a/src/worker/conoutSocketWorker.ts b/src/worker/conoutSocketWorker.ts
    server.listen(getWorkerPipeName(conoutPipeName));
    if (!parentPort) {
      throw new Error('worker_threads parentPort is null');
-diff --git a/src/unix/pty.cc b/src/unix/pty.cc
---- a/src/unix/pty.cc
-+++ b/src/unix/pty.cc
-@@ -1337,7 +1337,19 @@
-  * Init
-  */
--
-+
-+Napi::Value PtyForegroundGroup(const Napi::CallbackInfo& info) {
-+  Napi::Env env = info.Env();
-+  if (info.Length() != 1 || !info[0].IsNumber()) {
-+    throw Napi::TypeError::New(env, "Expected a PTY master descriptor");
-+  }
-+  const int fd = info[0].As<Napi::Number>().Int32Value();
-+  const pid_t group = fd < 0 ? -1 : tcgetpgrp(fd);
-+  if (group > 0) return Napi::Number::New(env, group);
-+  return env.Null();
-+}
-+
- Napi::Object init(Napi::Env env, Napi::Object exports) {
-+  exports.Set("foregroundProcessGroup", Napi::Function::New(env, PtyForegroundGroup));
-   exports.Set("fork",    Napi::Function::New(env, PtyFork));
-   exports.Set("open",    Napi::Function::New(env, PtyOpen));
-   exports.Set("resize",  Napi::Function::New(env, PtyResize));
-diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
---- a/src/unixTerminal.ts
-+++ b/src/unixTerminal.ts
-@@ -252,6 +252,15 @@
-     } catch (e) { /* swallow */ }
-   }
- 
-+  /**
-+   * Gets the foreground process group from the master: null once the master is closed,
-+   * undefined when the native addon predates this export.
-+   */
-+  public getForegroundProcessGroup(): number | null | undefined {
-+    if (this._fd < 0) return null;
-+    return typeof pty.foregroundProcessGroup === 'function' ? pty.foregroundProcessGroup(this._fd) : undefined;
-+  }
-+
-   /**
-    * Gets the name of the process.
-    */
-diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
---- a/lib/unixTerminal.js
-+++ b/lib/unixTerminal.js
-@@ -233,6 +233,10 @@
-         }
-         catch (e) { /* swallow */ }
-     };
-+    UnixTerminal.prototype.getForegroundProcessGroup = function () {
-+        if (this._fd < 0) return null;
-+        return typeof pty.foregroundProcessGroup === 'function' ? pty.foregroundProcessGroup(this._fd) : undefined;
-+    };
-     Object.defineProperty(UnixTerminal.prototype, "process", {
-         /**
-          * Gets the name of the process.
 diff --git a/typings/node-pty.d.ts b/typings/node-pty.d.ts
+index 6f050ff..4b4705a 100644
 --- a/typings/node-pty.d.ts
 +++ b/typings/node-pty.d.ts
-@@ -114,6 +114,7 @@
+@@ -114,6 +114,7 @@ declare module 'node-pty' {
     * An interface representing a pseudoterminal, on Windows this is emulated via the winpty library.
     */
    export interface IPty {
@@ -2290,15 +2293,3 @@ diff --git a/typings/node-pty.d.ts b/typings/node-pty.d.ts
      /**
       * The process ID of the outer process.
       */
-diff --git a/src/native.d.ts b/src/native.d.ts
---- a/src/native.d.ts
-+++ b/src/native.d.ts
-@@ -19,6 +19,7 @@
- }
--
-+
- interface IUnixNative {
-+  foregroundProcessGroup?(fd: number): number | null;
-   fork(file: string, args: string[], parsedEnv: string[], cwd: string, cols: number, rows: number, uid: number, gid: number, useUtf8: boolean, helperPath: string, onExitCallback: (code: number, signal: number) => void): IUnixProcess;
-   open(cols: number, rows: number): IUnixOpenProcess;
-   process(fd: number, pty?: string): string;

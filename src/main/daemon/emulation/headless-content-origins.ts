@@ -110,11 +110,11 @@ export class HeadlessContentOrigins {
     })
   }
 
-  private printed(line: OriginBufferLine, index: number, width: number): void {
+  private printed(line: OriginBufferLine, index: number, width: number, code: number): void {
     if (width === 0) {
       return
     }
-    const origin = line.getString(index) ? this.origin : undefined
+    const origin = code ? this.origin : undefined
     const pending = this.pending
     if (pending?.line === line && pending.end === index && pending.origin === origin) {
       pending.end += width
@@ -188,7 +188,7 @@ export class HeadlessContentOrigins {
     line.setCellFromCodepoint = (index, code, width, attrs) => {
       print.call(line, index, code, width, attrs)
       if (!edits.collect(index, true)) {
-        this.printed(line, index, width)
+        this.printed(line, index, width, code)
       }
     }
     const setData = line.set
@@ -200,7 +200,30 @@ export class HeadlessContentOrigins {
     }
     const combine = line.addCodepointToCell
     line.addCodepointToCell = (index, code, width) => {
+      const pending = this.pending
+      if (
+        pending?.line === line &&
+        pending.start <= index &&
+        index < pending.end &&
+        pending.origin === this.origin
+      ) {
+        combine.call(line, index, code, width)
+        return
+      }
       const state = this.state(line)
+      const baseOrigin = terminalOriginAt(state.runs, index)
+      if (
+        !state.components.has(index) &&
+        (baseOrigin === this.origin ||
+          (baseOrigin &&
+            this.origin &&
+            baseOrigin.owner === this.origin.owner &&
+            baseOrigin.epoch === this.origin.epoch))
+      ) {
+        combine.call(line, index, code, width)
+        this.revision++
+        return
+      }
       const before = line.getString(index)
       const base =
         state.components.get(index) ??

@@ -43,6 +43,8 @@ import {
 } from '../../terminal/wait/launch-composer-watch'
 
 export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithForegroundInspection {
+  abstract terminalAgentInputMode(handle: string): 'noninteractive' | undefined
+
   protected abstract toAgentSessionOptions(
     preferences: AgentLaunchPreferences | undefined
   ): Record<string, string> | undefined
@@ -255,12 +257,12 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         ) {
           return ready
         }
-        await this.waitForTerminal(handle, {
+        const result = await this.waitForTerminal(handle, {
           condition: 'tui-idle',
           timeoutMs: Math.max(1, deadline - performance.now()),
           signal: stop.signal
         })
-        return target.ptyId
+        return result.satisfied ? target.ptyId : null
       }
     )
   }

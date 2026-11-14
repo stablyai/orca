@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   createTranscriptPane,
@@ -45,61 +47,71 @@ it.each([
     onWrite: (data) => writes.push(data)
   })
   vi.useFakeTimers()
-  const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 20_000 })
-  await vi.advanceTimersByTimeAsync(3_000)
-  await expect(waiting).resolves.toMatchObject({ satisfied: true })
-  // Settlement removes its observation listener; the same current capability must reach send.
-  expect(runtime.terminalAgentInputMode(handle)).toBe('noninteractive')
-  expect(runtime.readTerminalMailHold(handle)).toEqual({ kind: 'busy-program' })
-  await expect(
-    runtime.sendTerminalAgentPrompt(handle, 'not an MCP request', { inputKind: 'driving' })
-  ).rejects.toThrow('terminal_guard_not_writable')
-  const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-  for (const type of ['desktop', 'mobile']) {
-    const reply = dispatcher.dispatch(
-      {
-        id: type,
-        authToken: 'token',
-        method: 'terminal.send',
-        params: {
-          terminal: handle,
-          text: 'not an MCP request',
-          enter: true,
-          agentPrompt: true,
-          client: { id: type, type }
-        }
-      },
-      { caller: { kind: 'paired-device', deviceId: 'pair' } }
+  try {
+    const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 20_000 })
+    await vi.advanceTimersByTimeAsync(4_000)
+    await expect(waiting).resolves.toMatchObject({ satisfied: true })
+    // Settlement removes its observation listener; the same current capability must reach send.
+    expect(runtime.terminalAgentInputMode(handle)).toBe('noninteractive')
+    expect(runtime.readTerminalMailHold(handle)).toEqual({ kind: 'busy-program' })
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'not an MCP request', { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_guard_not_writable')
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    for (const type of ['desktop', 'mobile']) {
+      const reply = dispatcher.dispatch(
+        {
+          id: type,
+          authToken: 'token',
+          method: 'terminal.send',
+          params: {
+            terminal: handle,
+            text: 'not an MCP request',
+            enter: true,
+            agentPrompt: true,
+            client: { id: type, type }
+          }
+        },
+        { caller: { kind: 'paired-device', deviceId: 'pair' } }
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(reply).resolves.toMatchObject({
+        ok: true,
+        result: { send: { accepted: false, bytesWritten: 0 } }
+      })
+    }
+    expect(writes).toEqual([])
+    const raw = runtime.sendTerminal(
+      handle,
+      { text: 'raw protocol input' },
+      { inputKind: 'driving' }
     )
     await vi.advanceTimersByTimeAsync(0)
-    await expect(reply).resolves.toMatchObject({
-      ok: true,
-      result: { send: { accepted: false, bytesWritten: 0 } }
+    await expect(raw).resolves.toMatchObject({ accepted: true })
+    expect(writes).toEqual(['raw protocol input'])
+    // Repeated qualified completion retires the fact even when already at rest.
+    runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b]133;D;0\x07', Date.now())
+    expect(runtime.terminalAgentInputMode(handle)).toBeUndefined()
+    runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b]133;D;0\x07', Date.now())
+    expect(runtime.terminalAgentInputMode(handle)).toBeUndefined()
+    if (sample.foregroundObservation?.verdict === 'observed') {
+      delete sample.foregroundObservation.inputMode
+    }
+    runtime.onPtyData(
+      TRANSCRIPT_PANE_PTY_ID,
+      '\x1b]133;C\x07\x1b]0;claude\x07\x1b[?2031h\x1b[?2004h❯\u00a0',
+      Date.now()
+    )
+    const interactive = runtime.waitForTerminal(handle, {
+      condition: 'tui-idle',
+      timeoutMs: 20_000
     })
+    await vi.advanceTimersByTimeAsync(4_000)
+    await expect(interactive).resolves.toMatchObject({ satisfied: true })
+    expect(runtime.terminalAgentInputMode(handle)).toBeUndefined()
+  } finally {
+    runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
   }
-  expect(writes).toEqual([])
-  const raw = runtime.sendTerminal(handle, { text: 'raw protocol input' }, { inputKind: 'driving' })
-  await vi.advanceTimersByTimeAsync(0)
-  await expect(raw).resolves.toMatchObject({ accepted: true })
-  expect(writes).toEqual(['raw protocol input'])
-  // Repeated qualified completion retires the fact even when already at rest.
-  runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b]133;D;0\x07', Date.now())
-  expect(runtime.terminalAgentInputMode(handle)).toBeUndefined()
-  runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b]133;D;0\x07', Date.now())
-  expect(runtime.terminalAgentInputMode(handle)).toBeUndefined()
-  if (sample.foregroundObservation?.verdict === 'observed') {
-    delete sample.foregroundObservation.inputMode
-  }
-  runtime.onPtyData(
-    TRANSCRIPT_PANE_PTY_ID,
-    '\x1b]133;C\x07\x1b]0;claude\x07\x1b[?2031h\x1b[?2004h❯\u00a0',
-    Date.now()
-  )
-  const interactive = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 20_000 })
-  await vi.advanceTimersByTimeAsync(3_000)
-  await expect(interactive).resolves.toMatchObject({ satisfied: true })
-  expect(runtime.terminalAgentInputMode(handle)).toBeUndefined()
-  runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
 })
 
 it('leaves interactive empty-option Claude on its composer contract when mode is absent', async () => {
@@ -157,4 +169,34 @@ it('shares known-Claude enrichment across a thousand concurrent waiters and reti
   await vi.advanceTimersByTimeAsync(60_000)
   expect(reads).toHaveBeenCalledTimes(stopped)
   runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
+})
+
+it('keeps a blocked generic transition from reporting composer readiness', async () => {
+  const sample = inspection(['claude', 'mcp', 'serve'])
+  const base = join(__dirname, '../../__fixtures__/claude-dialog-trust-workspace')
+  const size: { cols: number; rows: number } = JSON.parse(readFileSync(`${base}.meta.json`, 'utf8'))
+  const { runtime, handle } = await createTranscriptPane({
+    paneTitle: 'Terminal',
+    foregroundProcess: 'claude',
+    launchAgent: 'claude',
+    size,
+    data: '\x1b]133;C\x07\x1b]0;claude\x07',
+    processInspection: sample
+  })
+  vi.useFakeTimers()
+  try {
+    const composer = runtime.waitForFreshWorkerComposer(handle, 'claude', 20_000)
+    const result = expect(composer).rejects.toThrow('timeout')
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(runtime.terminalAgentInputMode(handle)).toBe('noninteractive')
+    if (sample.foregroundObservation?.verdict === 'observed') {
+      delete sample.foregroundObservation.inputMode
+    }
+    runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, readFileSync(`${base}.txt`, 'utf8'), Date.now())
+    await runtime.getTerminalInteractiveWait(handle)
+    await vi.advanceTimersByTimeAsync(4_000)
+    await result
+  } finally {
+    runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
+  }
 })

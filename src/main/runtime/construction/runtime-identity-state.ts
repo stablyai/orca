@@ -32,10 +32,8 @@ import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-t
 import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
-import type { KeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailing-edge-coalescer'
 import { createMobileSessionTabsNotifyCoalescer } from '../session-lifecycle/publication/mobile-session-tabs-notify-coalescer'
 
-import type { MobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { createMobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { TerminalFocusNavigationCoalescer } from '../terminal/focus/terminal-focus-navigation-coalescer'
 import type {
@@ -256,12 +254,11 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     this.intentionalPtyStops.noteSpawnCommit(commit.id)
   }
 
-  protected readonly mobileSessionTabsNotifyCoalescer: KeyedTrailingEdgeCoalescer =
-    createMobileSessionTabsNotifyCoalescer((worktreeId) =>
-      this.flushScheduledMobileSessionTabsChanged(worktreeId)
-    )
+  protected readonly mobileSessionTabsNotifyCoalescer = createMobileSessionTabsNotifyCoalescer(
+    (worktreeId) => this.flushScheduledMobileSessionTabsChanged(worktreeId)
+  )
 
-  protected readonly mobileSessionTabsAgentStatusHeartbeat: MobileSessionTabsAgentStatusHeartbeat =
+  protected readonly mobileSessionTabsAgentStatusHeartbeat =
     createMobileSessionTabsAgentStatusHeartbeat(
       (ptyId) => this.getMobileSessionWorktreeIdsForPty(ptyId),
       (worktreeId) => this.touchMobileSessionTabsForWorktree(worktreeId)
@@ -351,7 +348,11 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
     getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
-    startupObservation: this.ptyForegroundAgent.startup,
+    startupObservation: {
+      read: (ptyId) => this.ptyForegroundAgent.startup.read(ptyId),
+      watch: (ptyId, changed) => this.ptyForegroundAgent.startup.watch(ptyId, changed),
+      refresh: (ptyId) => this.ptyForegroundAgent.startup.refresh(ptyId)
+    },
     isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId)
   }
 
