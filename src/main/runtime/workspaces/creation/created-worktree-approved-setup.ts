@@ -1,4 +1,8 @@
+import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
+import { scopeHooksToRepoKind } from '../../../../shared/folder-workspace-hooks'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import type { RunApprovedWorktreeSetupResult } from '../../../../shared/worktree/create-types'
 import {
@@ -20,8 +24,12 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { WorktreeTerminalProvisioningArgs } from '../startup/runtime-worktree-terminal-provisioning'
 
 type ApprovedSetupRuntime = {
-  showManagedWorktree: (selector: string) => Promise<Pick<Worktree, 'id' | 'repoId' | 'path'>>
-  requireStore: () => Pick<RuntimeStore, 'getRepo' | 'getSettings'>
+  showManagedWorktree: (
+    selector: string,
+    requiredHostId?: undefined,
+    options?: { matchFolders?: boolean }
+  ) => Promise<Pick<Worktree, 'id' | 'repoId' | 'path' | 'displayName'>>
+  requireStore: () => Pick<RuntimeStore, 'getRepo' | 'getSettings' | 'getProjectGroups'>
   provisionManagedWorktreeTerminals: (args: WorktreeTerminalProvisioningArgs) => Promise<unknown>
 }
 
@@ -35,13 +43,21 @@ export async function runApprovedCreatedWorktreeSetup(
   approvedSetupHash: string,
   options: { wslUserAct?: true } = {}
 ): Promise<RunApprovedWorktreeSetupResult> {
-  const worktree = await runtime.showManagedWorktree(worktreeSelector)
+  const worktree = await runtime.showManagedWorktree(worktreeSelector, undefined, {
+    matchFolders: true
+  })
   const store = runtime.requireStore()
-  const repo = store.getRepo(worktree.repoId)
-  if (!repo || isFolderRepo(repo)) {
+  const groupId = projectGroupIdFromRepoId(worktree.repoId)
+  const group = groupId
+    ? store.getProjectGroups?.().find((entry) => entry.id === groupId)
+    : undefined
+  const storedRepo = groupId ? undefined : store.getRepo(worktree.repoId)
+  const repo = group ? projectGroupHookOwner(group) : storedRepo
+  const hooksRoot = group ? group.parentPath : worktree.path
+  if (!repo || !hooksRoot || (isFolderRepo(repo) && !isRepoOnCatalogHost(repo))) {
     return { status: 'not_configured' }
   }
-  const yamlHooks = loadHooks(worktree.path)
+  const yamlHooks = scopeHooksToRepoKind(repo, loadHooks(hooksRoot))
   const mismatch = checkCreatedWorktreeSetupTrust(repo, yamlHooks, 'run', { approvedSetupHash })
   if (mismatch) {
     return { status: 'mismatch', setupTrustMismatch: mismatch }
@@ -50,11 +66,12 @@ export async function runApprovedCreatedWorktreeSetup(
   const setup = setupScript
     ? await createSetupRunnerScript(
         repo,
-        worktree.path,
+        hooksRoot,
         setupScript,
-        getLocalProjectWorktreeGitOptions(store, repo),
+        storedRepo ? getLocalProjectWorktreeGitOptions(store, storedRepo) : undefined,
         resolveSetupRunnerShell(store.getSettings()),
-        yamlHooks?.setupAgentStartupPolicy
+        yamlHooks?.setupAgentStartupPolicy,
+        { worktreeId: worktree.id, displayName: worktree.displayName, workspacePath: worktree.path }
       )
     : undefined
   // The create already opened the command-less default tabs.
@@ -66,7 +83,7 @@ export async function runApprovedCreatedWorktreeSetup(
     worktreeSelector: `id:${worktree.id}`,
     worktreeId: worktree.id,
     worktreePath: worktree.path,
-    ...(setup ? { setup } : {}),
+    ...(setup ? { setup: { ...setup, ...(group ? { cwd: hooksRoot } : {}) } } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     hasStartupTerminal: true,
     setupCommandPlatform: getSetupRunnerCommandPlatformForPath(

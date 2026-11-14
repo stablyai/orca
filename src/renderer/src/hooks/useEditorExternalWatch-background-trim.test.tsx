@@ -28,9 +28,12 @@ const harness = vi.hoisted(() => {
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
-    getState: () => ({ openFiles: [] })
-  })
+  useAppStore: Object.assign(
+    (selector: (state: unknown) => unknown) => selector({ openFiles: [] }),
+    {
+      getState: () => ({ openFiles: [] })
+    }
+  )
 }))
 vi.mock('./editor-external-watch-targets', () => ({
   selectEditorExternalWatchTargets: () => ({
@@ -47,9 +50,9 @@ vi.mock('./editor-runtime-file-watch', () => ({
     _target: unknown,
     _onPayload: unknown,
     _onError: unknown,
-    onFirstReady?: () => void
+    onCatchUp?: () => void
   ) => {
-    harness.runtimeReady.current = onFirstReady
+    harness.runtimeReady.current = onCatchUp
     return harness.runtimeUnsubscribe
   }
 }))

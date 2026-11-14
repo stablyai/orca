@@ -19,15 +19,15 @@ import type { WslMoveUseLocallyResult } from '../../../shared/wsl-move/wsl-moved
 import {
   listPendingWslMoveRendererRewrites,
   recordWslMoveRendererStoreRewritten
-} from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
+} from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import {
   cancelWslMove,
   isAnyWslMoveRunning
-} from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { moveProjectsToWslHost } from '../../persistence/moving-wsl-projects/wsl-move-driver'
-import { previewWslMove } from '../../persistence/moving-wsl-projects/wsl-move-driver-preview'
-import type { WslMoveDriverDeps } from '../../persistence/moving-wsl-projects/wsl-move-driver-ports'
-import { listUnfinishedWslMoves } from '../../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
+import { previewWslMove } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-preview'
+import type { WslMoveDriverDeps } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
+import { listUnfinishedWslMoves } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-host-automations-rewrite'
 import { runTrackedWslMove } from '../../telemetry/wsl-move-telemetry'
 import { runTrackedWslMoveUndo } from '../../telemetry/wsl-move-undo-telemetry'
 

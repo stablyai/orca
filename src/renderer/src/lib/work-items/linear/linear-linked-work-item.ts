@@ -27,10 +27,6 @@ export function getLinearLinkedWorkItemBranchName(
     : undefined
 }
 
-export function buildLinearIssueLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummary {
-  return buildLinearWorkspaceSource(issue)
-}
-
 export function buildLinearIssueComposerData(issue: LinearIssue, source: TaskSourceContext | null) {
   const sourceContext = source
     ? normalizeTaskSourceContext({
@@ -47,7 +43,7 @@ export function buildLinearIssueComposerData(issue: LinearIssue, source: TaskSou
     : null
   return {
     prefilledName: getLinearIssueWorkspaceName(issue),
-    linkedWorkItem: buildLinearIssueLinkedWorkItem(issue),
+    linkedWorkItem: buildLinearWorkspaceSource(issue),
     ...(sourceContext ? { taskSourceContext: sourceContext } : {})
   }
 }

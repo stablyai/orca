@@ -51,6 +51,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleSleepSubtreeWithVm,
     handleTogglePin,
     handleToggleRead,
+    showsUnread,
     hasAnyContextLineage,
     isDeleting,
     isMultiContext,
@@ -135,13 +136,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           onClickCapture={suppressOpeningPointerEvent}
           onCloseAutoFocus={handleCloseAutoFocus}
         >
-          <DropdownMenuLabel>
-            <span className="block max-w-60 truncate">
-              {isMultiContext || !worktree.displayName
-                ? t('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')
-                : worktree.displayName}
-            </span>
-          </DropdownMenuLabel>
+          {/* Why: the highlighted card already names a single worktree. */}
+          {isMultiContext && (
+            <DropdownMenuLabel>
+              {t('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
+            </DropdownMenuLabel>
+          )}
           {!isMultiContext && <WorktreeWslHostStartMenuItem worktreeId={worktree.id} />}
           {isMultiContext ? (
             sleepItems
@@ -165,8 +165,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           )}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-              {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
-              {worktree.isUnread
+              {showsUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
+              {showsUnread
                 ? t('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
                 : t('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
             </DropdownMenuItem>

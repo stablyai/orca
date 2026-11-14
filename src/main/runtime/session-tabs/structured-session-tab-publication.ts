@@ -9,7 +9,7 @@ import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-sessi
 import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
 import type { StructuredSessionSurface } from '../agent-session/structured-agent-session-close'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-order'
+import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-groups/tab-order'
 import {
   chatTabId,
   resolveChatTabPlacement,

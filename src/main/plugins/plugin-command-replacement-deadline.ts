@@ -1,4 +1,4 @@
-import { PluginHostCallError } from './workers/plugin-host-call-scope'
+import { PluginHostCallError } from './workers/host-api/plugin-host-call-scope'
 
 type ReplacementRun = {
   pluginKey: string

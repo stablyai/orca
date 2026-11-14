@@ -6,13 +6,13 @@ import {
 } from '../../../opencode-usage/opencode-database-discovery'
 import { tableExists } from '../../../opencode-usage/schema-helpers'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { resolveOpenCodeDataDirectory } from '../../../opencode/opencode-data-directory'
+import { resolveOpenCodeDataDirectory } from '../../../opencode/accounts/opencode-data-directory'
 import Database from '../../../sqlite/sync-database'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 import {
   detectOpenCodeCredentialBackend,
   type OpenCodeCredentialBackend
-} from '../../../opencode/opencode-credential-backend'
+} from '../../../opencode/accounts/opencode-credential-backend'
 
 const OPENCODE_GO_INTEGRATION_ID = 'opencode-go'
 // models.dev shares this variable between OpenCode and Go.

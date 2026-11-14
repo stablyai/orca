@@ -9,11 +9,11 @@ import { useIpynbDocumentEditing } from './useIpynbDocumentEditing'
 import { EMPTY_EDITOR_BUFFER_VIEW_INDEX as NO_SHARING } from '@/store/slices/editor/buffers/editor-buffer-views'
 import type * as StaleViewEdit from '../../save/flush/editor-stale-view-edit'
 import { notifyStaleViewEditRejected } from '../../save/flush/editor-stale-view-edit'
+import { discardEditorBuffer } from '../../save/flush/discard-editor-file-changes'
 
 vi.mock('../../save/flush/editor-stale-view-edit', async (importOriginal) => ({
   ...(await importOriginal<typeof StaleViewEdit>()),
-  notifyStaleViewEditRejected: vi.fn(),
-  staleViewEditEpoch: vi.fn(() => 0)
+  notifyStaleViewEditRejected: vi.fn()
 }))
 
 function renderSplitPanes(initialContent: string) {
@@ -127,6 +127,32 @@ describe('notebook document editing lifecycle', () => {
     const externalContent = notebookContent('external source')
     hook.rerender({ content: externalContent })
     expect(Object.hasOwn(hook.result.current.sourceDrafts, 'a')).toBe(false)
+  })
+
+  it('drops pending discarded cells and accepts typing begun afterwards', async () => {
+    const content = notebookContent()
+    const committed: string[] = []
+    const hook = renderHook(() =>
+      useIpynbDocumentEditing({
+        content,
+        fileId: 'discard-notebook',
+        notebook: parseIpynb(content),
+        onContentChange: (text) => committed.push(text),
+        onDirtyStateHint: vi.fn(),
+        onDeactivateEditor: vi.fn()
+      })
+    )
+    await act(async () => {
+      hook.result.current.updateCellSource(0, 'discarded draft')
+      const release = await discardEditorBuffer('discard-notebook')
+      release()
+    })
+    expect(parseIpynb(committed.at(-1)!).cells[0]?.source).toBe('a')
+    act(() => {
+      hook.result.current.updateCellSource(0, 'new draft')
+      flushPendingEditorBuffer(NO_SHARING, 'discard-notebook')
+    })
+    expect(parseIpynb(committed.at(-1)!).cells[0]?.source).toBe('new draft')
   })
 
   it('does not republish unchanged text when flushed with no pending typing', () => {

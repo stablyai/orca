@@ -26,7 +26,7 @@ import {
   verifyWorktreePreparationLockAtPath,
   WorktreePreparationLockOwnershipError
 } from './worktree-preparation-lock'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 
 export function gitCleanupOptions(
   cwd: string,

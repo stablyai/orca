@@ -58,7 +58,7 @@ export function useRemoteBrowserPageStream({
   pendingFrameDecodeRef: React.MutableRefObject<number>
   streamBridgeRef: React.MutableRefObject<RemoteBrowserStreamBridge>
   isActiveRef: React.RefObject<boolean>
-  applyTabInfo: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
+  applyTabInfo: (tab: BrowserTabInfo) => void
   clearStreamFrame: () => void
   closeMissingRemotePage: (remotePageId?: string | null) => void
   clearPendingRemoteWheel: () => void

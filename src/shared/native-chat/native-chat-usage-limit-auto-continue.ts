@@ -7,17 +7,30 @@ type PublishedUsageLimitContinue = AgentSessionStatusSummary['usageLimitContinue
 export type NativeChatUsageLimitContinueState = NonNullable<PublishedUsageLimitContinue>['state']
 export type NativeChatUsageLimitAutoContinueKind = 'off' | 'scheduled' | 'cancelled'
 
+type CutKey = Pick<NativeChatUsageLimitCut, 'turnItemId' | 'resetsAt'> | null | undefined
+
+const publishedForCut = (published: PublishedUsageLimitContinue, cut: CutKey) =>
+  cut?.resetsAt !== undefined &&
+  published !== undefined &&
+  published.turnItemId === cut.turnItemId &&
+  published.resetsAt === cut.resetsAt
+    ? published
+    : undefined
+
 /** The host's published state for exactly this cut; undefined when it speaks of another one. */
 export function usageLimitContinueStateForCut(
   published: PublishedUsageLimitContinue,
-  cut: Pick<NativeChatUsageLimitCut, 'turnItemId' | 'resetsAt'> | null | undefined
+  cut: CutKey
 ): NativeChatUsageLimitContinueState | undefined {
-  return cut?.resetsAt !== undefined &&
-    published !== undefined &&
-    published.turnItemId === cut.turnItemId &&
-    published.resetsAt === cut.resetsAt
-    ? published.state
-    : undefined
+  return publishedForCut(published, cut)?.state
+}
+
+/** When Orca continues this cut: a later reset the account still shows spent, or earlier after a switch. */
+export function usageLimitContinueAtForCut(
+  published: PublishedUsageLimitContinue,
+  cut: CutKey
+): number | undefined {
+  return publishedForCut(published, cut)?.continueAt ?? cut?.resetsAt
 }
 
 /** Null hides the line. "Off" only points at this machine's own setting, so other hosts hide it. */

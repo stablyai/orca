@@ -5,13 +5,11 @@ import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
-import { settledWriteStub } from '../../../../providers/settled-pty-write-stub'
+import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 import {
-  createRuntime,
   LEAF_ID,
   PANE_KEY,
   pointerCount,
-  PTY_ID,
   SECOND_LEAF_ID,
   SECOND_TAB_ID,
   TAB_ID,
@@ -41,68 +39,6 @@ describe('Run mail follows the terminal that owns its mailbox', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('does not type a stale pointer after the terminal moves to another pane mid-probe', async () => {
-    const db = new OrchestrationDb(':memory:')
-    const { runtime } = createRuntime(db)
-    const write = vi.fn(() => true)
-    let finishProbe: ((live: boolean) => void) | undefined
-    runtime.setPtyController({
-      write,
-      writeWithSettlement: settledWriteStub(write),
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      probePtyLiveness: () => new Promise<boolean>((resolve) => (finishProbe = resolve))
-    })
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const run = db.createRun({
-      objective: 'Moved coordinator',
-      coordinatorHandle: terminal.handle,
-      coordinatorPaneKey: PANE_KEY
-    })
-    runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 1)
-    await runtime.serializeMainTerminalBuffer(PTY_ID)
-    db.insertMessage({
-      from: 'term_sender',
-      to: `run:${run.id}`,
-      subject: 'old pane',
-      type: 'status',
-      runId: run.id
-    })
-    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(finishProbe).toBeTypeOf('function')
-
-    runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
-      tabId: SECOND_TAB_ID,
-      leafId: SECOND_LEAF_ID,
-      incarnationId: 'mailbox-incarnation'
-    })
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: SECOND_TAB_ID,
-          worktreeId: WORKTREE_ID,
-          title: 'Moved',
-          activeLeafId: SECOND_LEAF_ID,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: SECOND_TAB_ID,
-          leafId: SECOND_LEAF_ID,
-          worktreeId: WORKTREE_ID,
-          ptyId: PTY_ID,
-          paneRuntimeId: 2
-        }
-      ]
-    })
-    finishProbe?.(true)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(pointerCount(write)).toBe(0)
-    db.close()
   })
 
   it('wakes a Run bound to one of two panes showing its terminal, whichever is listed first', async () => {

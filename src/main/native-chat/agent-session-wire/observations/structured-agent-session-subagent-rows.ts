@@ -181,7 +181,7 @@ export class StructuredAgentSessionSubagentRows {
   }
 }
 
-/** Retain saved name, tokens and parent when a later run lacks them. */
+/** Retain saved name, tokens, parent, role and model when a later run lacks them. */
 function subagentRowBlock(
   child: AgentChildWorkRowView,
   id: string,
@@ -201,6 +201,12 @@ function subagentRowBlock(
       : saved.run === run
         ? (saved.startedAt ?? child.firstObservedAt)
         : child.observedAt
+  const agentType = child.agentType ?? saved?.agentType
+  const model = child.model ?? saved?.model
+  const effort = child.effort ?? saved?.effort
+  const operation = state === 'working' ? child.operation : undefined
+  // A new run's silence must not repeat the previous run's result.
+  const lastMessage = child.lastMessage ?? (saved?.run === run ? saved.lastMessage : undefined)
   return {
     type: 'subagent',
     id,
@@ -209,6 +215,18 @@ function subagentRowBlock(
     ...(tokens !== undefined ? { tokens } : {}),
     startedAt,
     ...(state !== 'working' && child.settledAt !== undefined ? { settledAt: child.settledAt } : {}),
+    ...(agentType !== undefined ? { agentType } : {}),
+    ...(model !== undefined ? { model } : {}),
+    ...(effort !== undefined ? { effort } : {}),
+    ...(operation !== undefined
+      ? {
+          operation: {
+            toolName: operation.toolName,
+            ...(operation.input !== undefined ? { input: operation.input } : {})
+          }
+        }
+      : {}),
+    ...(lastMessage !== undefined ? { lastMessage } : {}),
     groupId: saved?.groupId ?? (scope.kind === 'turn' ? scope.turnItemId : THREAD_GROUP),
     ...(parent !== undefined ? { parentId: parent } : {}),
     run,

@@ -1,6 +1,9 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { SourceControlScope } from '../panel/worktree-scope'
-import { sourceControlFileWatchRuntimeEnvironmentId } from './worktree-git-owner-target'
+import {
+  sourceControlFileWatchRuntimeEnvironmentId,
+  useWorktreeGitOwnerTarget
+} from './worktree-git-owner-target'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
@@ -19,10 +22,11 @@ import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
 } from '@/app-shell/platform/passive-macos-app-data-access'
-import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useGitStatusUpstreamRefWatch } from './use-git-status-upstream-ref-watch'
+import { useGitStatusTurnCompletion } from './use-git-status-turn-completion'
 import {
   admissionTierForGitStatusRefreshReason,
   createGitStatusRefreshPacing,
@@ -228,7 +232,8 @@ export function useWorktreeGitStatusObservation(
         slowTaskBackoff: SLOW_GIT_POLL_BACKOFF,
         pacing,
         // Agents editing files behind another app must not drive (remote) git status every 3s.
-        cadenceScale: windowPollSlowdown
+        cadenceScale: windowPollSlowdown,
+        activityCadenceScale: () => (windowPollSlowdown() === 1 ? 1 : 20)
       }
     )
     statusSchedulerRef.current = scheduler
@@ -249,6 +254,15 @@ export function useWorktreeGitStatusObservation(
   )
 
   useRefreshOnHostContact(activeExecutionHostId, statusSchedulerRef, canApplyScheduledStatusRef)
+
+  const ownerTarget = useWorktreeGitOwnerTarget(activeWorktreeId, activeExecutionHostId)
+  useGitStatusTurnCompletion(
+    ownerTarget,
+    activeExecutionHostId,
+    activeWorktreeId,
+    canFetchActiveWorktreeGitStatus,
+    statusSchedulerRef
+  )
 
   const previousConsumerVisibilityRef = useRef({
     worktreeId: activeWorktreeId,

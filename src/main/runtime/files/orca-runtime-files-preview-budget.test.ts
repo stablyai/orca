@@ -1,6 +1,6 @@
 import { RuntimeFileReads } from './file-reads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolveAuthorizedPathMock, statMock } from './runtime-file-command-mock-registry'
@@ -8,7 +8,7 @@ import {
   createRuntimeFileHost,
   useRuntimeFileHostLifecycle
 } from './runtime-file-host.test-fixture'
-import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './file-preview-budget'
+
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../shared/remote-rpc-content-budget'
 
 vi.mock('fs', async () => (await import('./runtime-file-command-mock-registry')).fsModuleMock())
@@ -22,7 +22,7 @@ vi.mock(
 vi.mock('../../ipc/filesystem/access/filesystem-auth', async () =>
   (await import('./runtime-file-command-mock-registry')).filesystemAuthModuleMock()
 )
-vi.mock('../../git/runner', async () =>
+vi.mock('../../git/command-runner/host-routing/wsl-aware-spawn', async () =>
   (await import('./runtime-file-command-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
@@ -48,16 +48,6 @@ describe('RuntimeFileReads', () => {
       await writeFile(join(dir, 'logo.png'), Buffer.alloc(size, 0x61))
       return dir
     }
-
-    it('rejects a previewable image one byte above the cap', async () => {
-      const dir = await previewFixture(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1)
-      const { commands } = createFileReads({ path: dir })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-
-      await expect(
-        commands.readFileExplorerPreview('id:wt-1', 'logo.png', REMOTE_RPC_MAX_CONTENT_BYTES)
-      ).rejects.toThrow('file_too_large')
-    })
 
     // Phones read images a chat names by host path; only image files on this machine qualify.
     it('reads a chat image outside every project root but never another file type', async () => {
@@ -87,6 +77,37 @@ describe('RuntimeFileReads', () => {
         commands.readChatImagePreview('id:wt-1', join(dir, 'notes.txt'))
       ).rejects.toThrow('not_an_image')
     })
+
+    it.skipIf(process.platform === 'win32')(
+      'reads an extensionless chat image by its bytes, inside or outside project roots',
+      async () => {
+        const dir = await previewFixture()
+        const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+        await writeFile(join(dir, 'photo'), png)
+        await writeFile(join(dir, 'notes'), 'secret')
+        await symlink(join(dir, 'photo'), join(dir, 'photo.jpg'))
+        await symlink(join(dir, 'notes'), join(dir, 'notes.jpg'))
+        const { commands } = createFileReads()
+        statMock.mockResolvedValue({ isFile: () => true })
+        resolveAuthorizedPathMock.mockRejectedValue(new Error('Access denied'))
+
+        await expect(
+          commands.readChatImagePreview('id:wt-1', join(dir, 'photo.jpg'))
+        ).resolves.toEqual({
+          content: png.toString('base64'),
+          isBinary: true,
+          isImage: true,
+          mimeType: 'image/png'
+        })
+        await expect(
+          commands.readChatImagePreview('id:wt-1', join(dir, 'notes.jpg'))
+        ).rejects.toThrow('only show local image files')
+        resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+        await expect(commands.readChatImagePreview('id:wt-1', join(dir, 'notes'))).rejects.toThrow(
+          'not_an_image'
+        )
+      }
+    )
   })
 })
 

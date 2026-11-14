@@ -356,8 +356,7 @@
       "pausedState": "已暫停",
       "queuedState": "已排隊",
       "resume": "繼續",
-      "resumeSending": "繼續傳送排隊的訊息",
-      "title": "排隊的訊息"
+      "resumeSending": "繼續傳送排隊的訊息"
     },
     "offlineQueue": {
       "failed": "無法傳送 — 點按「傳送」重試",
@@ -1590,7 +1589,6 @@
       "deleteConfirmMessage": "要刪除「{{name}}」（{{branch}}）嗎？",
       "deleteDestroysEnvironment": "這也會銷毀 Orca 為其建立的環境「{{environment}}」，包括其中未提交的變更和正在執行的終端機。",
       "deleteKeepsEnvironment": "Orca 為其建立的環境「{{environment}}」會繼續執行：其配方沒有銷毀步驟。",
-      "deleteWorktree": "刪除工作樹",
       "pin": "固定",
       "primaryWorktreeDeleteHint": "主工作樹不能刪除。請改為移除專案。",
       "removeHost": "移除主機",
@@ -1762,7 +1760,6 @@
       "daysAgo_one": "{{count}} 天前",
       "daysAgo_other": "{{count}} 天前",
       "deleteConfirmMessage": "這會永久刪除 GitHub 上的留言。",
-      "deleteConfirmTitle": "刪除留言？",
       "editPlaceholder": "編輯留言…",
       "hoursAgo_one": "{{count}} 小時前",
       "hoursAgo_other": "{{count}} 小時前",
@@ -2317,20 +2314,16 @@
       "loadFailed": "無法載入 PR"
     },
     "queuedCardText": {
-      "showLess": "收合",
       "showLessHint": "顯示較少訊息內容",
-      "showMore": "顯示更多",
       "showMoreHint": "顯示完整訊息"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "刪除這則排隊中的訊息",
       "images_one": "{{count}} 張圖片",
       "images_other": "{{count}} 張圖片",
       "moreActions": "更多操作",
       "send": "傳送",
       "sendAgainHint": "再次傳送此訊息",
       "sendHint": "傳送此訊息",
-      "showLessHint": "顯示較少訊息內容",
       "steer": "引導",
       "steerHint": "提交且不中斷模型"
     },
@@ -2387,7 +2380,6 @@
       "addTitle": "新增快速命令",
       "chooseAgentTitle": "選擇代理程式",
       "deleteConfirmMessage": "該快速命令將從您儲存的清單中刪除。",
-      "deleteConfirmTitle": "要刪除「{{label}}」嗎？",
       "editTitle": "編輯快速命令",
       "editorDescription": "儲存終端機命令或代理程式提示詞，方便快速取用。",
       "title": "快速命令",
@@ -2493,6 +2485,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "加入附件失敗（重新連線中）"
+    },
+    "useCloseActions": {
+      "closeFailed": "無法關閉分頁。請再試一次。",
+      "closeFailedDesktopNotReady": "無法關閉分頁。電腦上的 Orca 仍在載入中，請稍後再試。"
     },
     "useContentCreateActions": {
       "browserCommandFailed": "瀏覽器命令執行失敗",
@@ -3360,6 +3356,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "要合併 PR #{{number}} 嗎？",
+      "confirmGitHubSquash": "要將 PR #{{number}} 的提交壓縮後合併嗎？",
+      "confirmGitHubRebase": "要將 PR #{{number}} 變基後合併嗎？",
+      "confirmGitLabMerge": "要合併合併請求 #{{number}} 嗎？",
+      "confirmGitLabSquash": "要將合併請求 #{{number}} 的提交壓縮後合併嗎？",
+      "confirmGitLabRebase": "要將合併請求 #{{number}} 變基後合併嗎？",
       "merged": "已合併",
       "closed": "已關閉",
       "conflicts": "有衝突",
@@ -4101,7 +4103,6 @@
       "outcome": "結果",
       "allOutcomes": "所有結果",
       "couldNotStart": "無法啟動",
-      "deleteAutomationTitle": "刪除自動化？",
       "deleteRetained": "刪除「{{name}}」及其保留的執行？",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "無法驗證原始代理程式窗格。請重新連線後再試。",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "原始代理程式窗格已無法開啟。已儲存的輸出仍保留在此處。",

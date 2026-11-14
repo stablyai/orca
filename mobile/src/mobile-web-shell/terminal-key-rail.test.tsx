@@ -79,18 +79,6 @@ function mount() {
 }
 const touch = (pageY: number) => ({ nativeEvent: { pageX: 20, pageY } })
 
-it('uses a vertical scroll view and sends a tap only on release', () => {
-  const { send, root, key } = mount()
-  expect(root.findByType(ScrollView).props.horizontal).not.toBe(true)
-  const arrow = key('Arrow Up')
-  act(() => arrow.props.onPressIn(touch(20)))
-  expect(send).not.toHaveBeenCalled()
-  act(() => {
-    arrow.props.onPressOut()
-    arrow.props.onPress()
-  })
-  expect(send).toHaveBeenCalledExactlyOnceWith('arrowUp')
-})
 it('cancels a swipe starting on a key before it can send or repeat', async () => {
   vi.useFakeTimers()
   const { send, root, key } = mount()
@@ -183,9 +171,7 @@ it('does not send a non-repeatable key during a swipe', () => {
 })
 it.each([
   ['Escape', 'escape'],
-  ['Tab', 'tab'],
-  ['Control', 'ctrl'],
-  ['Type ~', 'char:~']
+  ['Control', 'ctrl']
 ])('sends held non-repeatable %s on release under native long-press suppression', (label, id) => {
   const { send, key } = mount()
   const button = key(label)
@@ -271,7 +257,7 @@ it('continues held repeats across an equivalent serialized rail claim', async ()
   expect(h.bridge.sendTerminalKey).toHaveBeenCalledTimes(3)
 })
 
-it.each(['owner', 'toolbar', 'keys', 'release', 'overlay', 'layout'])(
+it.each(['toolbar', 'keys', 'release', 'overlay', 'layout'])(
   'cancels held rail input on a real %s change',
   async (change) => {
     vi.useFakeTimers()

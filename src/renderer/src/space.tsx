@@ -18,7 +18,7 @@ import { buildAppFontFamily } from './app-shell/appearance/app-font-family'
 import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
 import { I18nProvider } from './i18n/I18nProvider'
 import { useAppStore } from './store/index'
-import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
 
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()

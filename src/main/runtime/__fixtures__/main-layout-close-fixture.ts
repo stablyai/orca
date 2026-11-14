@@ -1,18 +1,18 @@
 import { expect, type Mock } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type {
   LayoutApplyOutcome,
   LayoutCommand
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { DurableProfileStateMutation } from '../../persistence/loading-store/store-runtime-state'
-import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
-import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
+import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
+import { applyCommandToSession } from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import {
   isTerminalClose,
   keptOnWriteFailure
-} from '../../persistence/terminal-topology/terminal-close-write-failure'
+} from '../../persistence/terminal-topology/command-application/terminal-close-write-failure'
 
 type SessionCell = {
   get: () => WorkspaceSessionState

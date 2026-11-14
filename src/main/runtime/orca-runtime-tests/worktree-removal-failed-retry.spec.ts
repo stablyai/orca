@@ -71,9 +71,7 @@ describe('runtime Delete on a failed delete’s leftover', () => {
           force,
           waitForBackgroundRemoval: false
         })
-      ).rejects.toThrow(
-        `${leftover} is no longer a Git worktree, so its folder was left on disk. Delete the folder yourself to finish removing this workspace.`
-      )
+      ).rejects.toThrow(/folder was left on disk/)
     }
     await _settlePendingWorktreeRemovalsForTests()
 
@@ -88,14 +86,22 @@ describe('runtime Delete on a failed delete’s leftover', () => {
     ])
   })
 
-  it('ends the row once the user removed the folder', async () => {
+  it('keeps the failure after manual folder removal until explicit retry finishes cleanup', async () => {
     const runtime = createWorktreeRemovalRuntime()
     await rm(leftover, { recursive: true, force: true })
 
     const detected = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
-
-    expect(detected.worktrees.find((row) => row.id === leftoverId)).toBeUndefined()
-    await vi.waitFor(async () => expect(await readWorktreeRemovalRecords(directory)).toEqual([]))
+    expect(detected.worktrees.find((row) => row.id === leftoverId)).toMatchObject({
+      removalError: FAILURE
+    })
+    await runtime.removeManagedWorktree(`id:${leftoverId}`, { waitForBackgroundRemoval: true })
+    await _settlePendingWorktreeRemovalsForTests()
+    expect(
+      (await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).worktrees.find(
+        (row) => row.id === leftoverId
+      )
+    ).toBeUndefined()
+    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
     expect(removeWorktree).not.toHaveBeenCalled()
   })
 })

@@ -1,18 +1,12 @@
 import { useRef } from 'react'
-import type {
-  LayoutChangeEvent,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  ScrollView,
-  TextInput
-} from 'react-native'
+import type { LayoutChangeEvent, ScrollViewInstance } from 'react-native'
+import type { MobileTextInputHandle } from '../../../platform/text-input/text-input-handle'
 
 // Keep a focused reply in view when its card shrinks above the keyboard.
 export function useMobileNativeChatReplyScroll() {
-  const scrollRef = useRef<ScrollView>(null)
-  const inputRef = useRef<TextInput>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
+  const inputRef = useRef<MobileTextInputHandle>(null)
   const viewportHeight = useRef(0)
-  const scrollOffset = useRef(0)
   const revealReply = (): void => {
     if (inputRef.current?.isFocused()) {
       scrollRef.current?.scrollToEnd({ animated: false })
@@ -27,31 +21,5 @@ export function useMobileNativeChatReplyScroll() {
       revealReply()
     }
   }
-  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>): void => {
-    scrollOffset.current = event.nativeEvent.contentOffset.y
-  }
-  // Scroll just enough to show content that opened below the visible edge, never past its top.
-  const revealContent = (top: number, bottom: number): void => {
-    const hidden = bottom - (scrollOffset.current + viewportHeight.current)
-    if (viewportHeight.current > 0 && hidden > 0) {
-      scrollRef.current?.scrollTo({
-        y: Math.min(scrollOffset.current + hidden, top),
-        animated: true
-      })
-    }
-  }
-  const scrollViewProps = {
-    ref: scrollRef,
-    onLayout: onViewportLayout,
-    onScroll,
-    scrollEventThrottle: 16
-  }
-  return {
-    scrollRef,
-    inputRef,
-    revealReply,
-    onViewportLayout,
-    scrollViewProps,
-    revealContent
-  }
+  return { scrollRef, inputRef, revealReply, onViewportLayout }
 }

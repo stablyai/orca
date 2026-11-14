@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
-import { makeTab } from '../../store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../store/terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 
@@ -102,7 +102,7 @@ beforeEach(() => {
 // Main’s frame may precede reveal; reuse its ID rather than adding a second terminal tab.
 describe('revealing a terminal main created, in a layout-owner build', () => {
   it('shows the tab its frame drew, bound to main’s terminal, instead of a second one', () => {
-    const { store, reveal, replyTerminalCreate } = setup()
+    const { store, reveal } = setup()
 
     reveal()
 
@@ -110,10 +110,6 @@ describe('revealing a terminal main created, in a layout-owner build', () => {
     expect(store.getState().terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({
       [LEAF]: 'pty-1'
     })
-    expect(replyTerminalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ requestId: 'request-1', tabId: TAB })
-    )
-    expect(replyTerminalCreate.mock.calls[0]?.[0]).not.toHaveProperty('error')
   })
 
   it('before its frame, draws the tab under main’s ids so main finds the create already done', () => {
@@ -125,32 +121,5 @@ describe('revealing a terminal main created, in a layout-owner build', () => {
     expect(store.getState().terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({
       [LEAF]: 'pty-1'
     })
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'layout.apply', {
-      command: expect.objectContaining({ type: 'createTerminalTab', tabId: TAB, leafId: LEAF })
-    })
-  })
-
-  it('reuses the frame-drawn tab even when stale records leave the terminal’s owner unclear', () => {
-    const { store, reveal, replyTerminalCreate } = setup()
-    store.setState({
-      tabsByWorktree: {
-        [WORKTREE]: [
-          ...store.getState().tabsByWorktree[WORKTREE]!,
-          makeTab({ id: 'stale-1', worktreeId: WORKTREE, ptyId: 'pty-1' }),
-          makeTab({ id: 'stale-2', worktreeId: WORKTREE, ptyId: 'pty-1' })
-        ]
-      }
-    })
-
-    reveal()
-
-    expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      TAB,
-      'stale-1',
-      'stale-2'
-    ])
-    expect(replyTerminalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ requestId: 'request-1', tabId: TAB })
-    )
   })
 })

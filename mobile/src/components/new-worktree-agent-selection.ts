@@ -1,8 +1,8 @@
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { translate } from '../i18n/mobile-i18n'
-import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
-import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
-import { pickWorkspaceAgent } from '../tasks/workspace-agent-selection'
+import { MOBILE_AGENT_CATALOG } from '../agents/mobile-agent-catalog'
+import { isMobileTuiAgentEnabled } from '../agents/mobile-tui-agents'
+import { pickWorkspaceAgent } from '../new-workspace/creation/workspace-agent-selection'
 
 export type NewWorktreeRuntimeSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null

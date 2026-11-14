@@ -1,6 +1,4 @@
-import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { createClaudeCatalogOptions } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
-import type { CatalogModel } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import { catalogModelsFromModelDiscovery } from '../../../../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
 import {
   getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
@@ -13,19 +11,19 @@ import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-o
 import {
   getLocalProjectExecutionRuntimeContext,
   getWslDistroFromPath
-} from '@/lib/local-preflight-context'
+} from '@/runtime/hosts/preflight/local-preflight-context'
 import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
-import {
-  getRuntimeGitScope,
-  type RuntimeGitContext
-} from '@/runtime/source-control/git/runtime-git-client-context'
+import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { useAppStore } from '@/store/index'
+import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
+import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { CatalogModel } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
 } from '../../../../../../../shared/agent-session/agent-session-wire'
-import { useAppStore } from '@/store/index'
-import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 
 export type NativeChatModelDiscoveryContext = {
   hostKey: string

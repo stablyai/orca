@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { removeFillerWords } from './dictation-filler-words'
-import { createDictationTextPipeline } from './dictation-text-pipeline'
 
 describe('removeFillerWords', () => {
   it.each([
@@ -44,27 +43,10 @@ describe('removeFillerWords', () => {
     expect(removeFillerWords('Er kommt, hmm, morgen.', undefined)).toBe('Er kommt morgen.')
     expect(removeFillerWords('呃，好的。', undefined)).toBe('呃，好的。')
   })
-})
 
-describe('createDictationTextPipeline', () => {
-  it('reads the language from a single-language model before the setting', () => {
-    const clean = createDictationTextPipeline({ language: 'en' }, { dictationLanguage: 'de' })
-    expect(clean?.('Äh, um, ship it.')).toBe('Äh ship it.')
-  })
-
-  it('reads the language from the setting for a multilingual model that takes it', () => {
-    const clean = createDictationTextPipeline(
-      { language: 'multilingual', dictationLanguages: ['de', 'en'] },
-      { dictationLanguage: 'de' }
+  it('leaves the correction cue for AI cleanup, and drops fillers elsewhere', () => {
+    expect(removeFillerWords('Ship it at four, uh, hmm no, at five.', ['en'], 'hmm no')).toBe(
+      'Ship it at four hmm no, at five.'
     )
-    expect(clean?.('Äh, um fünf Uhr.')).toBe('Um fünf Uhr.')
-  })
-
-  it('ignores a language setting the model ignores', () => {
-    const clean = createDictationTextPipeline(
-      { language: 'multilingual' },
-      { dictationLanguage: 'en' }
-    )
-    expect(clean?.('Er hat um zehn Uhr angerufen.')).toBe('Er hat um zehn Uhr angerufen.')
   })
 })

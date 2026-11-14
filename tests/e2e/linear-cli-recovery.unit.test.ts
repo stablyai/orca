@@ -3,11 +3,18 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { LINEAR_AGENT_ACCESS_METHODS } from '../../src/main/runtime/rpc/methods/integrations/linear/linear-agent-access'
-import { connect, getClient, testConnection } from '../../src/main/linear/client'
-import { updateIssueForAgent } from '../../src/main/linear/linear-issue-mutations'
-import { writeIssueRelation } from '../../src/main/linear/issue-relation-write'
-import { sendLinearData, serveLinearHttp } from '../../src/main/linear/linear-sdk-http.test-fixture'
-import { LinearAgentAccessError } from '../../src/main/linear/issue-context/errors'
+import {
+  connect,
+  getClient,
+  testConnection
+} from '../../src/main/linear/accounts/linear-account-client'
+import { updateIssueForAgent } from '../../src/main/linear/issues/linear-issue-mutations'
+import { writeIssueRelation } from '../../src/main/linear/issues/issue-relation-write'
+import {
+  sendLinearData,
+  serveLinearHttp
+} from '../../src/main/linear/requests/linear-sdk-http.test-fixture'
+import { LinearAgentAccessError } from '../../src/main/linear/issues/context/linear-access-errors'
 import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
 import { main } from '../../src/cli/index'
 
@@ -27,11 +34,21 @@ const boundary = vi.hoisted(() => ({
     email: 'proof@example.invalid'
   }
 }))
-vi.mock('../../src/cli/runtime-client', async () => {
+vi.mock('../../src/cli/runtime/client', async () => {
   const { createRuntimeClientModuleMock } = await import('../../src/cli/index-test-harness.js')
   return createRuntimeClientModuleMock(boundary)
 })
-vi.mock('../../src/main/linear/linear-token-store', () => ({
+
+vi.mock('../../src/cli/runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: boundary.serveOrcaAppMock
+}))
+
+vi.mock('../../src/cli/runtime/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: boundary.getDefaultUserDataPathMock
+}))
+vi.mock('../../src/main/linear/accounts/linear-token-store', () => ({
   loadToken: () => 'local-proof-token',
   saveWorkspaceToken: boundary.save,
   getWorkspaceTokenProtection: () => null,
@@ -39,7 +56,7 @@ vi.mock('../../src/main/linear/linear-token-store', () => ({
   clearTokenFile: vi.fn(),
   replaceLegacyWorkspace: vi.fn()
 }))
-vi.mock('../../src/main/linear/linear-workspace-registry', () => ({
+vi.mock('../../src/main/linear/accounts/linear-workspace-registry', () => ({
   getWorkspaceState: () => ({
     workspaces: [boundary.workspace],
     activeWorkspaceId: boundary.workspace.id,

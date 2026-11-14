@@ -19,7 +19,7 @@ import {
   type EditingTarget
 } from '../../../ssh-host-form/ssh-target-draft'
 import { useTranslate } from '@/i18n/use-translate'
-import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
 
 type SshTargetFormProps = {
   open: boolean

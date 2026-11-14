@@ -23,7 +23,8 @@ import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-s
 vi.mock(
   '../../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
   async (importOriginal) => {
-    const query = await import('../../../transcript-opencode-sqlite-query')
+    const query =
+      await import('../../../transcript-history/opencode/transcript-opencode-sqlite-query')
     return {
       ...(await importOriginal<object>()),
       readOpenCodeTranscriptPageViaWorker: async (

@@ -39,10 +39,15 @@ export function lookupOrcaAgentSession(
   if (record) {
     return { kind: 'found', record }
   }
-  const owner = store
-    .listRecords()
-    .find((candidate) => candidate.providerHandleChain.some(({ handle }) => handle.nativeId === id))
-  return owner ? { kind: 'provider-id', orcaSessionId: owner.sessionId } : { kind: 'unknown' }
+  // The store's commit-kept alias index answers without walking the history.
+  const owner = store.providerAliasOwner
+    ? store.providerAliasOwner(id)
+    : (store
+        .listRecords()
+        .find((candidate) =>
+          candidate.providerHandleChain.some(({ handle }) => handle.nativeId === id)
+        )?.sessionId ?? null)
+  return owner ? { kind: 'provider-id', orcaSessionId: owner } : { kind: 'unknown' }
 }
 
 export type StructuredSessionMailReach =

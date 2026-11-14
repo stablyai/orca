@@ -1,4 +1,4 @@
-import type { PRCheckAnnotation } from '../../../../../../shared/github/check-types'
+import type { PRCheckAnnotation } from '../../../../../../shared/github/checks/check-types'
 import {
   relativePathInsideRoot,
   resolveRuntimePath

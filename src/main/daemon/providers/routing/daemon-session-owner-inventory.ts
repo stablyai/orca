@@ -1,9 +1,10 @@
-import type { IPtyProvider, PtyProcessInfo } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { DaemonSessionOwnerResolution } from './daemon-session-owner-resolution'
 import { TerminalSessionOwnerUnverifiedError } from '../../protocol/daemon-errors'
 import { chooseSessionOwner, type OwnerCandidate } from './daemon-session-owner-choice'
 import { randomUUID } from 'node:crypto'
-import { worktreePtyOwnership } from '../../../providers/worktree-pty-ownership'
+import { worktreePtyOwnership } from '../../../providers/pty/worktree-ownership'
 
 export type ProviderInventory<T> = {
   provider: T

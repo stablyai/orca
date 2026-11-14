@@ -11,7 +11,10 @@ import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import type { OrchestrationPartyIdentity as OrchestrationParty } from '../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { readAgentSessionRecordStore } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
-import { refuseUndeliverableSessionRecipient } from './messaging/session-recipient'
+import {
+  refuseUndeliverableSessionRecipient,
+  resolveTerminalAgentRecipient
+} from './messaging/session-recipient'
 
 const NO_EFFECTS = 'No effects were applied.'
 
@@ -31,11 +34,14 @@ export async function admitChatAssignee(
 ): Promise<AgentSessionConversationView> {
   // A failed install leaves no store, which the refusal below names.
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  const terminalRecipient = await resolveTerminalAgentRecipient(sessionId)
+  // Read after every wait: the store this admission checks is the one it then observes.
   const store = readAgentSessionRecordStore()
   const refusal = refuseUndeliverableSessionRecipient(
     { sessionId, address: formatOrcaSessionAddress(sessionId) },
     store,
     db,
+    terminalRecipient,
     NO_EFFECTS
   )
   if (refusal) {

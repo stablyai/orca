@@ -11,6 +11,7 @@ import {
 } from '../../../../../shared/execution-host'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { translateLocalExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -71,7 +72,7 @@ export function SessionHistorySettingsPane({
   const servers = isWebClient ? [] : environments
   const localEntry: SessionSearchComputerEntry = {
     id: LOCAL_EXECUTION_HOST_ID,
-    name: getLocalExecutionHostLabel(),
+    name: translateLocalExecutionHostLabel(getLocalExecutionHostLabel()),
     state: policy.enabled ? 'on' : 'off'
   }
   const serverEntries = servers.map((environment) => ({
@@ -190,7 +191,7 @@ export function SessionHistorySettingsPane({
               )
             : t(
                 'sessionHistory.settings.computersConsent',
-                'Each computer keeps a searchable copy of its own agent conversations. Nothing leaves that computer.'
+                'Each computer keeps its own searchable index of agent conversations. Authenticated paired clients can receive search results.'
               )}
         </p>
       </div>

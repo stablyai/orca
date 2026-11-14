@@ -62,6 +62,8 @@ export type AgentModelCatalogService = {
 
 export type AgentModelCatalogReadParams = {
   agent: string
+  /** Older readers follow only actual wait expiry, so retain their terminal wait. */
+  progress?: boolean
   records?: AgentModelCatalogReadRecords | null
   operation?: AgentModelCatalogReadOperation
   /** Original explicit operation budget, shared with compatibility saved-scope continuation. */

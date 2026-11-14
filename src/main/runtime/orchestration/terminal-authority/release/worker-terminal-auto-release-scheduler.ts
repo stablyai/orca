@@ -1,6 +1,6 @@
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
 import { reconcileRequestedWorkerTerminalReleases } from './worker-terminal-release-reconciliation'
-import { releaseFederatedWorkerAtHomeDeadline } from '../../legacy-remote-home/legacy-remote-home'
+import { releaseFederatedWorkerAtHomeDeadline } from '../../legacy-remote-home/federated-worker-home-auto-release'
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 

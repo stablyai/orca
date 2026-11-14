@@ -1,4 +1,4 @@
-import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
+import type { WorktreeCardDetails } from '../../../src/shared/worktree/row-display/card-properties'
 import type { Worktree } from './workspace-list-types'
 
 export type WorktreeMetaGlyphPresence = {

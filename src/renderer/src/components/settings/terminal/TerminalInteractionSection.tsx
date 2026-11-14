@@ -21,7 +21,7 @@ import {
 import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
   normalizeTerminalTuiMouseWheelMultiplier
-} from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
+} from '@/lib/pane-manager/terminal-input/pane-terminal-tui-wheel-reports'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TerminalInteractionSectionProps = {

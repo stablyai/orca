@@ -137,7 +137,18 @@ export type NativeChatSubagentEntry = {
   startedAt?: number
   /** Epoch ms the entry latched terminal. */
   settledAt?: number
+  /** The child's role (Claude's `subagent_type`), when it has one. */
+  agentType?: string
+  model?: string
+  /** Reasoning effort, in the provider's own words. */
+  effort?: string
+  /** The tool it is running now; only while it works. */
+  operation?: NativeChatSubagentOperation
+  /** The newest thing it said; once settled, its result. */
+  lastMessage?: string
 }
+
+export type NativeChatSubagentOperation = { toolName: string; input?: string }
 
 /** Provider-neutral roster revised in place by Claude/Codex activity. */
 export type NativeChatSubagentGroupBlock = {
@@ -238,6 +249,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   agentStart?: true
   /** On a creation fact: the agent was launched on its own, not started as a supervised worker. */
   agentHandoff?: true
+  /** On a worker's creation fact: a message continued a finished worker, in its reopened conversation or a fresh one. */
+  agentFollowUp?: 'reopened' | 'fresh'
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
   /** Client-only terminal echo placement relative to the current streaming reply. */

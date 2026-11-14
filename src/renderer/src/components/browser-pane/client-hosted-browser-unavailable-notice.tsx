@@ -20,12 +20,12 @@ import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browse
 export function ClientHostedBrowserUnavailableNotice({
   runtimeEnvironmentId,
   worktreeId,
-  lastCommittedUrl,
+  reopenUrl,
   placementHostClientId
 }: {
   runtimeEnvironmentId: string
   worktreeId: string
-  lastCommittedUrl: string
+  reopenUrl: string
   placementHostClientId: string | null
 }): React.JSX.Element {
   const t = useTranslate()
@@ -87,7 +87,7 @@ export function ClientHostedBrowserUnavailableNotice({
             <ReopenBrowserPageOnServerButton
               environmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
-              lastCommittedUrl={lastCommittedUrl}
+              reopenUrl={reopenUrl}
             />
           </>
         ) : null}

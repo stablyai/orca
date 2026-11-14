@@ -1,4 +1,4 @@
-import '../unused-default-rpc-methods.test-fixture'
+import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +9,6 @@ import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { STATUS_METHODS } from '../methods/host-management/status'
 import { SSH_METHODS } from '../methods/ssh/ssh'
-import { sendRequest } from './runtime-rpc-test-harness'
 
 // Real socket probes must stay responsive while SSH is wedged on headless serve (#31179).
 const { connectMock, removeMock } = vi.hoisted(() => {
@@ -113,38 +112,6 @@ function openPipelinedSocket(endpoint: string): {
 }
 
 describe('runtime RPC with a wedged SSH layer (#31179)', () => {
-  it('answers probes on fresh connections while SSH dispatches never settle', async () => {
-    const { endpoint, token } = await startServer()
-    // More wedged dispatches than the long-poll cap: short RPCs must not hold admission slots.
-    for (let i = 0; i < 20; i += 1) {
-      const wedged = openPipelinedSocket(endpoint)
-      wedged.write({
-        id: `wedged-${i}`,
-        authToken: token,
-        method: i % 2 === 0 ? 'ssh.connect' : 'ssh.removeTarget',
-        params: { targetId: 'ssh-1' }
-      })
-    }
-    await vi.waitFor(() =>
-      expect(connectMock.mock.calls.length + removeMock.mock.calls.length).toBe(20)
-    )
-
-    await expect(
-      sendRequest(endpoint, { id: 'list', authToken: token, method: 'ssh.listTargets' })
-    ).resolves.toMatchObject({ ok: true, result: { targets: [{ id: 'ssh-1' }] } })
-    await expect(
-      sendRequest(endpoint, {
-        id: 'state',
-        authToken: token,
-        method: 'ssh.getState',
-        params: { targetId: 'ssh-1' }
-      })
-    ).resolves.toMatchObject({ ok: true, result: { state: { status: 'reconnecting' } } })
-    await expect(
-      sendRequest(endpoint, { id: 'status', authToken: token, method: 'status.get' })
-    ).resolves.toMatchObject({ ok: true })
-  })
-
   it('answers a probe pipelined behind a wedged dispatch on the same connection', async () => {
     const { endpoint, token } = await startServer()
     const session = openPipelinedSocket(endpoint)

@@ -28,7 +28,6 @@ function fixture(decision: AgentWorkspaceTrustDecision | undefined, globalEnable
   })
 }
 
-export const undecided = fixture(undefined)
 export const preTrust = fixture('pre-trust')
 export const agentAsks = fixture('agent-asks')
 export const globalOff = fixture('pre-trust', false)

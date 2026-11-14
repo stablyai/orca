@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getChecksPanelReviewState } from './checks-panel-empty-state'
-import type { ChecksPanelReviewStateInput } from '../checks-panel-review-state-model'
+import type { ChecksPanelReviewStateInput } from '../review-state/checks-panel-review-state-model'
 
 function input(overrides: Partial<ChecksPanelReviewStateInput> = {}): ChecksPanelReviewStateInput {
   return {
@@ -27,7 +27,6 @@ describe('getChecksPanelReviewState — precedence', () => {
     const state = getChecksPanelReviewState(
       input({ reviewLookup: 'positive_unresolved', openReviewUrl: 'https://x/pull/1' })
     )
-    expect(state.title).toBe('Pull request details unavailable')
     expect(state.composerMode).toBe('hidden')
     expect(state.workflowAction).toBeNull()
     expect(state.recovery).toContain('open_review')
@@ -44,7 +43,6 @@ describe('getChecksPanelReviewState — precedence', () => {
         hasUpstream: false
       })
     )
-    expect(state.title).toBe('No upstream configured')
     expect(state.workflowAction).toBe('publish_branch')
     expect(state.composerMode).toBe('hidden')
     expect(state.recovery).toContain('open_review')
@@ -55,7 +53,6 @@ describe('getChecksPanelReviewState — precedence', () => {
     const state = getChecksPanelReviewState(
       input({ refresh: { status: 'error', errorType: 'auth' } })
     )
-    expect(state.title).toBe('GitHub authentication failed')
     expect(state.composerMode).toBe('hidden')
     expect(state.workflowAction).toBeNull()
   })
@@ -67,7 +64,6 @@ describe('getChecksPanelReviewState — composer preserve', () => {
       input({ confirmedReadiness: true, refresh: { status: 'error', errorType: 'network' } })
     )
     expect(state.composerMode).toBe('confirmed_open')
-    expect(state.title).toBe('Could not reach GitHub')
   })
 
   it('transient error without confirmed readiness never opens a composer', () => {

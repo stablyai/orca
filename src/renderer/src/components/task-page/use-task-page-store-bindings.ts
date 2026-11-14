@@ -2,8 +2,8 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
-import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
-import { getLocalPreflightContext } from '@/lib/local-preflight-context'
+import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey

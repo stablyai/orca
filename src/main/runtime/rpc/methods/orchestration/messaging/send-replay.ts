@@ -5,7 +5,7 @@ import {
   readMutationReplayNudge,
   readWorkerDoneReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-receipt'
+} from '../../../orchestration/mutations/orchestration-mutation-receipt'
 import { replayMutationNudge } from './mutation-replay-nudge'
 import type { SendParams } from './send-params'
 import { followThroughWorkerReport, settledDispatchId } from './settled-worker-follow-through'

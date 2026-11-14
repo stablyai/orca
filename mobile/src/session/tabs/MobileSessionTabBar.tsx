@@ -10,20 +10,23 @@ import Animated, {
   withSequence,
   withTiming
 } from 'react-native-reanimated'
-import { triggerMediumImpact, triggerSelection } from '../../platform/haptics'
+import { triggerMediumImpact, triggerSelection } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { AgentStateDot } from '../../components/AgentStateDot'
 import { ArrivalFade } from '../../components/ArrivalFade'
 import { useDrawerReducedMotion } from '../../components/bottom-drawer/bottom-drawer-constants'
 import { SHEET_CURVE } from '../../components/sheet-motion-values'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
-import { useKeyboardPersistingTaps } from '../../platform/keyboard-persisting-taps'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
+import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { useNow } from '../../hooks/use-now'
 import { agentStateLabel, type AgentDotState } from '../../worktree/agent-row-display'
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { buildMobileSessionTabRow, type MobileSessionTabRow } from './mobile-session-tab-rows'
+import {
+  buildMobileSessionTabSummary,
+  type MobileSessionTabSummary
+} from './mobile-session-tab-rows'
 import { MobileSessionTabMark } from './MobileSessionTabMark'
 import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
 import type { MobileSessionController } from '../use-mobile-session-controller'
@@ -84,11 +87,11 @@ export function MobileSessionTabBar({
   const keepsKeyboard = useKeyboardPersistingTaps('handled')
   const now = useNow(60_000)
   const rows = useMemo(
-    () => visibleTabs.map((tab) => buildMobileSessionTabRow(tab, terminals, now)),
+    () => visibleTabs.map((tab) => buildMobileSessionTabSummary(tab, terminals, now)),
     [visibleTabs, terminals, now]
   )
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
-  const active: MobileSessionTabRow | undefined = rows[activeIndex]
+  const active: MobileSessionTabSummary | undefined = rows[activeIndex]
   const previous = activeIndex > 0 ? rows[activeIndex - 1] : undefined
   const next = activeIndex !== -1 ? rows[activeIndex + 1] : undefined
   const othersNeedYou = rows.some(
@@ -108,7 +111,7 @@ export function MobileSessionTabBar({
         ? { duration: 0, reduceMotion: ReduceMotion.Never }
         : { duration: SWIPE_SETTLE_MS, easing: Easing.bezier(...SHEET_CURVE) }
     )
-  const step = (target: MobileSessionTabRow | undefined, direction: 1 | -1) => {
+  const step = (target: MobileSessionTabSummary | undefined, direction: 1 | -1) => {
     if (!target) {
       offset.value = settle(0)
       return
@@ -130,9 +133,14 @@ export function MobileSessionTabBar({
       const target = event.translationX > 0 ? previous : next
       offset.value = target ? event.translationX : event.translationX * EDGE_RESISTANCE
     })
-    .onEnd((event) => {
+    .onEnd((event, success) => {
       // oxlint-disable-next-line react/purity -- runs when the drag ends, never during render.
       dragEndedAtRef.current = Date.now()
+      // An interrupted drag (touch cancelled, another gesture took over) never switches tabs.
+      if (!success) {
+        offset.value = settle(0)
+        return
+      }
       const direction = event.translationX > 0 ? 1 : -1
       const flicked =
         Math.abs(event.velocityX) > FLICK_VELOCITY && Math.sign(event.velocityX) === direction
@@ -264,7 +272,7 @@ export function MobileSessionTabBar({
       ) : null}
       <MobileSessionTabsSheet
         controller={controller}
-        rows={rows}
+        tabs={rows}
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
       />

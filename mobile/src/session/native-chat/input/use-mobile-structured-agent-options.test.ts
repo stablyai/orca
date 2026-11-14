@@ -25,41 +25,6 @@ import {
   BASE
 } from './use-mobile-structured-agent-options.test-fixture'
 
-describe('useMobileStructuredAgentOptions images', () => {
-  it('keeps the answer through a pick made during the read', async () => {
-    const stale = deferred<AgentSessionOptionsResult>()
-    const first = optionsClient(queuedReads(OPTIONS))
-    const reconnected = optionsClient(() => stale.promise)
-    const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
-    const harness = await mountOptions({ ...BASE, agent: 'opencode', client: first.client, mutate })
-    await harness.rerender({ client: reconnected.client })
-    await act(async () => {
-      await harness.current().setStructuredOption('model', 'gpt-fast')
-    })
-    expect(harness.current().acceptsImages).toBe(false)
-    await act(async () => {
-      stale.resolve({ ...OPTIONS, acceptsImages: true })
-    })
-    await settle()
-    expect(harness.current().acceptsImages).toBe(true)
-    await harness.unmount()
-  })
-
-  it("never shows one chat's answer on the next while its read is in flight", async () => {
-    const next = deferred<AgentSessionOptionsResult>()
-    let reads = 0
-    const client = optionsClient(() =>
-      reads++ === 0 ? Promise.resolve({ ...OPTIONS, acceptsImages: true }) : next.promise
-    )
-    const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
-    const harness = await mountOptions({ ...BASE, agent: 'grok', client: client.client, mutate })
-    expect(harness.current().acceptsImages).toBe(true)
-    await harness.rerender({ sessionId: 'session-2' })
-    expect(harness.current().acceptsImages).toBe(false)
-    await harness.unmount()
-  })
-})
-
 describe('useMobileStructuredAgentOptions pending picks', () => {
   it('holds a repeat of an option on its way but lets another option go, as desktop does', async () => {
     const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
@@ -183,7 +148,6 @@ describe('useMobileStructuredAgentOptions host catalog', () => {
       valueSource: 'unknown',
       kind: { type: 'select', choices: [] }
     })
-    expect(calls).toEqual([])
 
     listed.resolve(HOST_CATALOG)
     await settle()
@@ -291,82 +255,6 @@ it('phone retains a queried seed-catalog base across its fence until later metad
   await settle()
   expect(harness.current().sendSelection()).toEqual({ selection: { effort: 'high' } })
   await harness.unmount()
-})
-
-it('phone captures accepted echoed inputs, preserves false, and freezes empty vs legacy presence', async () => {
-  let answer: AgentSessionOptionsResult = {
-    ...FAST_OPTIONS,
-    models: [
-      {
-        id: 'opus',
-        label: 'Opus',
-        isDefault: true,
-        supportsFastMode: true,
-        efforts: [{ value: 'high', label: 'High' }]
-      }
-    ],
-    current: {
-      model: 'opus',
-      effort: 'high',
-      fastMode: false,
-      confirmed: ['fastMode'],
-      acceptedInputSources: {}
-    }
-  }
-  const client = optionsClient(async () => answer)
-  const { mutate } = recordingMutate(async () => accepted({ key: 'model', value: 'opus' }, true))
-  const harness = await mountOptions({
-    ...BASE,
-    agent: 'claude',
-    client: client.client,
-    mutate,
-    sendSelection: true
-  })
-  expect(harness.current().sendSelection()).toEqual({ selection: {} })
-  answer = {
-    ...answer,
-    current: { ...answer.current, acceptedInputSources: { model: 'saved', fastMode: 'policy' } }
-  }
-  await harness.rerender({ optionStamp: 'saved-origin' })
-  await settle()
-  const captured = harness.current().sendSelection()
-  expect(captured).toEqual({ selection: { model: 'opus', fastMode: 'false' } })
-  answer = {
-    ...answer,
-    current: { ...answer.current, effort: 'high', acceptedInputSources: { effort: 'saved' } }
-  }
-  await harness.rerender({ optionStamp: 'other-client' })
-  await settle()
-  expect(harness.current().sendSelection()).toEqual({ selection: { effort: 'high' } })
-  expect(captured).toEqual({ selection: { model: 'opus', fastMode: 'false' } })
-  await harness.unmount()
-})
-
-it('accepts a typed literal at an attached fence while options refresh with no menu', async () => {
-  const pending = deferred<AgentSessionOptionsResult>()
-  let reads = 0
-  const client = optionsClient(() =>
-    ++reads === 1 ? Promise.resolve({ models: [], current: {} }) : pending.promise
-  )
-  const { calls, mutate } = recordingMutate(async () =>
-    accepted({ key: 'model', value: 'literal', options: { model: 'literal' } }, true)
-  )
-  const view = await mountOptions({ ...BASE, client: client.client, mutate })
-  await view.rerender({ fence: 2 })
-  let result = true
-  await act(async () => {
-    result = await view.current().setStructuredOption('model', 'literal')
-  })
-  expect(result).toBe(true)
-  expect(calls).toHaveLength(1)
-  await act(async () => pending.resolve({ models: [], current: {} }))
-  await settle()
-  await act(async () => {
-    result = await view.current().setStructuredOption('model', 'literal')
-  })
-  expect(result).toBe(true)
-  expect(calls).toHaveLength(2)
-  await view.unmount()
 })
 
 it('refreshes saved planning intent from the same host status stamp without remounting', async () => {

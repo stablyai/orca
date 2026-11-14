@@ -45,6 +45,9 @@ export function UsageFilterRadioGroup<Value extends string>({
 
 type UsageTrackingPaneShellProps = {
   title: ReactNode
+  failure?: string | null
+  stateKnown?: boolean
+  retry?: { label: string; onRefresh: () => void | Promise<void> }
   enableLabel: string
   onEnabledChange: (enabled: boolean) => void
 } & (
@@ -78,9 +81,20 @@ export function UsageTrackingPaneShell(props: UsageTrackingPaneShellProps): Reac
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">{props.title}</h3>
             <p className="text-sm text-muted-foreground">{props.disabledDescription}</p>
+            {props.failure && (
+              <p role="alert" className="text-xs text-destructive">
+                {props.failure}
+              </p>
+            )}
+            {props.failure && props.retry && (
+              <Button variant="outline" size="sm" onClick={() => void props.retry?.onRefresh()}>
+                {props.retry.label}
+              </Button>
+            )}
           </div>
           <Switch
             checked={false}
+            disabled={props.stateKnown === false}
             aria-label={props.enableLabel}
             onCheckedChange={props.onEnabledChange}
           />
@@ -95,6 +109,11 @@ export function UsageTrackingPaneShell(props: UsageTrackingPaneShellProps): Reac
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-foreground">{props.title}</h3>
           <p className="mt-1 text-xs text-muted-foreground">{props.status}</p>
+          {props.failure && (
+            <p role="alert" className="mt-1 text-xs text-destructive">
+              {props.failure}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start">
           {props.headerAction}

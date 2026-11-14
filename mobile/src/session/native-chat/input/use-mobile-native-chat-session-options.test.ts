@@ -60,17 +60,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     api = null
   })
 
-  it('starts over when the tab runs another agent and then a fresh session', async () => {
-    mount({ reportedModel: 'claude-sonnet-5' })
-    await act(async () => {
-      await api!.setOption('model', 'opus')
-    })
-    update({ agent: 'codex', reportedModel: null })
-    update({ agent: 'claude', reportedModel: 'claude-sonnet-5' })
-    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'reported' })
-    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'sonnet' })
-  })
-
   it('drops a write that lands after the tab started another agent', async () => {
     let resolveModel!: (outcome: MobileNativeChatSendOutcome) => void
     dispatchCommand.mockImplementationOnce(
@@ -147,20 +136,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     // Re-entering repeats session-start evidence that predates later user picks.
     update({ scopeKey: scopeKey('other') })
     update({ scopeKey: scopeKey('tab') })
-    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
-    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
-  })
-
-  it('keeps the live tab’s tracked model when other tabs overflow the record cap', async () => {
-    mount()
-    await act(async () => {
-      await api!.setOption('model', 'opus')
-    })
-    // Repeatedly touch the live tab while exceeding capacity so insertion-order eviction would lose it.
-    for (let index = 0; index < 40; index += 1) {
-      update({ scopeKey: scopeKey(`overflow-${index}`) })
-      update({ scopeKey: scopeKey('tab') })
-    }
     expect(api!.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
     expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
   })

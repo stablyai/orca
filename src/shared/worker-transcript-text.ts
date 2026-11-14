@@ -7,6 +7,7 @@ import {
 } from './native-chat/transcript/native-chat-subagent-summary'
 import { subagentFallbackText } from './native-chat/transcript/native-chat-subagent-items'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
+import { isInlineDataUrl } from './native-chat/native-chat-inline-data-url'
 
 export function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
   const fallbacks = workerTranscriptBlockFallbacks(message.blocks)
@@ -21,7 +22,7 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
       return `[tool result${block.isError ? ' error' : ''}] ${block.output}`
     }
     if (block.type === 'image-ref') {
-      return block.url ? `[image] ${block.url}` : `[image omitted]`
+      return block.url && !isInlineDataUrl(block.url) ? `[image] ${block.url}` : `[image omitted]`
     }
     if (
       block.type === 'background-task' ||

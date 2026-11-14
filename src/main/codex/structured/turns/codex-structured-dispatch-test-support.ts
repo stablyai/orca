@@ -99,6 +99,7 @@ export async function acquiredCodexAdapter(input: {
   sink?: StructuredAgentSessionEventSink
   requestTimeoutMs?: number
   permissionMode?: AgentChatPermissionChoice
+  onHeldSendsChanged?: CodexStructuredSessionAdapterDeps['onHeldSendsChanged']
 }): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -114,6 +115,7 @@ export async function acquiredCodexAdapter(input: {
     onDispatchSettledLate: (settlement) => {
       input.settlements.push(settlement)
     },
+    ...(input.onHeldSendsChanged ? { onHeldSendsChanged: input.onHeldSendsChanged } : {}),
     ...(input.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: input.requestTimeoutMs })
   })
   const identity: AgentSessionJournalIdentity = {

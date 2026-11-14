@@ -1,9 +1,9 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import '../mobile-file-preview-operations'
+import '../preview/mobile-file-preview-operations'
 import { fileTapOpenedSchema } from './mobile-file-tap-reply-schema'
 import '../../agent-history/mobile-ai-vault-resume-reply-schema'
-import '../../browser/mobile-session-browser-reply-schema'
+import '../../browser/tab-navigation/mobile-session-browser-reply-schema'
 
 // Best-effort taps skip refused opens; explicit Changes-screen opens instead show the host error.
 export const fileTapOpenRun = bindDeferredRpcOperation(

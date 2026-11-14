@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot
-} from '../crash-reporting/crash-breadcrumb-store'
+} from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 
 vi.mock('electron', () => ({

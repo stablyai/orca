@@ -26,6 +26,9 @@ export const MobileNativeChatLowerGeometryContext = createContext<{
 
 export const MobileNativeChatComposerPresenceContext = createContext(true)
 
+/** A prompt card sits under the queue: the queue closes its own box instead of tucking into a composer. */
+export const MobileNativeChatQueueAbovePromptContext = createContext(false)
+
 export function useMobileNativeChatLowerGeometry() {
   return useContext(MobileNativeChatLowerGeometryContext)
 }

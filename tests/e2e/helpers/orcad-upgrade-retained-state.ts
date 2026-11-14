@@ -4,7 +4,7 @@ import { worktreeWorkspaceKey } from '../../../src/shared/workspace-scope'
 import { toSshExecutionHostId } from '../../../src/shared/execution-host'
 import { mutateStoppedProfileState } from './persisted-profile-state'
 import type { RelayEraProfile } from './orcad-upgrade-profile'
-import { mergeWorktreeMetaForWrite } from '../../../src/main/persistence/loading-store/worktree-meta-write-normalization'
+import { mergeWorktreeMetaForWrite } from '../../../src/main/persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
 
 /** Released clients can leave cross-host parents, closed-pane resumes and stale local snapshots. */
 export function seedRetainedUpgradeState(

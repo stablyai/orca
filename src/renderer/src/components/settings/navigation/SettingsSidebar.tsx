@@ -1,26 +1,32 @@
-import type { RefObject } from 'react'
-import { useMemo } from 'react'
-import { ArrowLeft, Search, Server } from 'lucide-react'
+import type { KeyboardEvent, RefObject } from 'react'
+import { useDeferredValue, useId, useMemo, useState } from 'react'
+import { ArrowLeft, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../../shared/repo-icon'
 import type {
   SettingsNavIcon,
   SettingsNavInstallStatus
 } from '@/components/settings/navigation/settings-navigation-types'
-import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity } from '../../../../../shared/github/repositories/repository-identity'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '../../repo/repo-icon'
 import { RepoForkIndicator } from '../../repo/repo-fork-indicator'
 import { Button } from '../../ui/button'
-import { Input } from '../../ui/input'
 import { SetupGuideProgressRing } from '../../setup-guide/SetupGuideProgressRing'
-import { useSettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
-import type { SettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
+import {
+  useSettingsSetupGuideProgress,
+  type SettingsSetupGuideProgress
+} from '../setup-guide/settings-setup-guide-progress'
+
 import { useTranslate } from '@/i18n/use-translate'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { useAppStore } from '@/store/index'
+import {
+  rankSettingsSearchResults,
+  SETTINGS_SEARCH_RESULT_LIMIT,
+  type SettingsSearchResult
+} from './settings-search-results'
+import { SettingsSearchField, SettingsSearchResultsList } from './SettingsSidebarSearch'
 
 type NavSection = {
   id: string
@@ -48,50 +54,12 @@ type SettingsSidebarProps = {
   settings: GlobalSettings | null
   generalGroups: NavGroup[]
   repoSections: RepoNavSection[]
-  hasRepos: boolean
+  searchCandidates: readonly SettingsSearchResult[]
   searchInputRef?: RefObject<HTMLInputElement | null>
   searchAutoFocus?: boolean
   onBack: () => void
   onSelectSection: (sectionId: string) => void
-}
-
-function SettingsSearchField({
-  searchInputRef,
-  searchAutoFocus = false
-}: Pick<SettingsSidebarProps, 'searchInputRef' | 'searchAutoFocus'>): React.JSX.Element {
-  const t = useTranslate()
-  const searchQuery = useAppStore((state) => state.settingsSearchInputQuery)
-  const onSearchChange = useAppStore((state) => state.setSettingsSearchQuery)
-  const searchShortcutCombos = useShortcutKeyComboDetails('settings.search')
-
-  return (
-    <div className="border-b border-worktree-sidebar-border px-3 py-3">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          ref={searchInputRef}
-          autoFocus={searchAutoFocus}
-          value={searchQuery}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder={t('auto.components.settings.SettingsSidebar.dbceaa8840', 'Search settings')}
-          className="bg-background/60 pl-9 pr-14 text-[13px]"
-        />
-        {searchQuery === '' ? (
-          <span className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
-            {searchShortcutCombos.map((combo) => (
-              <ShortcutKeyCombo
-                key={combo.keys.join('-')}
-                keys={combo.keys}
-                doubleTap={combo.doubleTap}
-                className="inline-flex gap-0.5"
-                separatorClassName="text-[10px] text-muted-foreground"
-              />
-            ))}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  )
+  onOpenSearchResult: (result: SettingsSearchResult) => void
 }
 
 type VisibleInstallStatus = Extract<
@@ -138,7 +106,11 @@ function SettingsSetupGuideNavRow({
         done={progress.doneCount}
         total={progress.total}
         sizeClassName="size-4"
-        tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
+        tooltipLabel={t(
+          'auto.components.settings.SettingsSidebar.progressComplete',
+          '{{value0}}/{{value1}} complete',
+          { value0: progress.doneCount, value1: progress.total }
+        )}
       />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[13px] font-medium leading-4">
@@ -154,13 +126,79 @@ export function SettingsSidebar({
   settings,
   generalGroups,
   repoSections,
-  hasRepos,
+  searchCandidates,
   searchInputRef,
   searchAutoFocus = false,
   onBack,
-  onSelectSection
+  onSelectSection,
+  onOpenSearchResult
 }: SettingsSidebarProps): React.JSX.Element {
   const t = useTranslate()
+  const searchQuery = useAppStore((state) => state.settingsSearchInputQuery)
+  const setSearchQuery = useAppStore((state) => state.setSettingsSearchQuery)
+  const listboxId = useId()
+  // Ranking follows the deferred query so a large catalog never blocks typing.
+  const deferredSearchQuery = useDeferredValue(searchQuery)
+  const rankedResults = useMemo(
+    () => rankSettingsSearchResults(deferredSearchQuery, searchCandidates),
+    [searchCandidates, deferredSearchQuery]
+  )
+  const searchResults = rankedResults.slice(0, SETTINGS_SEARCH_RESULT_LIMIT)
+  const hiddenResultCount = rankedResults.length - searchResults.length
+  const isSearching = searchQuery.trim() !== ''
+  // Nothing is selected until the user moves or picks; typing only changes the rows.
+  const [selectedResultKey, setSelectedResultKey] = useState<string | null>(null)
+  const selectedResultIndex = searchResults.findIndex((result) => result.key === selectedResultKey)
+  const selectedResult = selectedResultIndex === -1 ? undefined : searchResults[selectedResultIndex]
+  const repoSectionById = useMemo(
+    () => new Map(repoSections.map((section) => [section.id, section] as const)),
+    [repoSections]
+  )
+  const groupTitleById = useMemo(
+    () => new Map(generalGroups.map((group) => [group.id, group.title] as const)),
+    [generalGroups]
+  )
+  const getOptionId = (index: number): string => `${listboxId}-option-${index}`
+
+  const pickResult = (result: SettingsSearchResult): void => {
+    setSelectedResultKey(result.key)
+    onOpenSearchResult(result)
+  }
+  const changeSearchQuery = (query: string): void => {
+    setSearchQuery(query)
+    setSelectedResultKey(null)
+  }
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.nativeEvent.isComposing) {
+      return
+    }
+    if (event.key === 'Escape' && searchQuery !== '') {
+      // Keep the page-level Escape from closing Settings while clearing search.
+      event.preventDefault()
+      changeSearchQuery('')
+      return
+    }
+    if (!isSearching || searchResults.length === 0) {
+      return
+    }
+    const count = searchResults.length
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const nextIndex =
+        selectedResultIndex === -1
+          ? event.key === 'ArrowDown'
+            ? 0
+            : count - 1
+          : (selectedResultIndex + (event.key === 'ArrowDown' ? 1 : -1) + count) % count
+      setSelectedResultKey(searchResults[nextIndex].key)
+      document.getElementById(getOptionId(nextIndex))?.scrollIntoView({ block: 'nearest' })
+      return
+    }
+    if (event.key === 'Enter' && selectedResult) {
+      event.preventDefault()
+      pickResult(selectedResult)
+    }
+  }
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
   const leftSidebarStyle = useMemo(() => resolveLeftSidebarStyleVariables(settings), [settings])
   const setupActive = activeSectionId === 'setup-guide'
@@ -193,7 +231,8 @@ export function SettingsSidebar({
       className="flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar"
       style={leftSidebarStyle}
     >
-      <div className="border-b border-worktree-sidebar-border px-3 py-3">
+      {/* Same 48px height as SettingsHeader so both bottom borders meet in one line. */}
+      <div className="box-border flex h-12 shrink-0 items-center border-b border-worktree-sidebar-border px-3">
         <Button
           variant="ghost"
           size="sm"
@@ -205,9 +244,34 @@ export function SettingsSidebar({
         </Button>
       </div>
 
-      <SettingsSearchField searchInputRef={searchInputRef} searchAutoFocus={searchAutoFocus} />
+      <SettingsSearchField
+        searchInputRef={searchInputRef}
+        searchAutoFocus={searchAutoFocus}
+        query={searchQuery}
+        listboxId={listboxId}
+        expanded={isSearching && searchResults.length > 0}
+        activeOptionId={selectedResult ? getOptionId(selectedResultIndex) : undefined}
+        onQueryChange={changeSearchQuery}
+        onKeyDown={handleSearchKeyDown}
+      />
 
-      {showSetupGuideTopRow ? (
+      {isSearching ? (
+        <SettingsSearchResultsList
+          results={searchResults}
+          selectedIndex={selectedResultIndex}
+          query={searchQuery}
+          listboxId={listboxId}
+          getOptionId={getOptionId}
+          repoSectionById={repoSectionById}
+          groupTitleById={groupTitleById}
+          hiddenResultCount={hiddenResultCount}
+          // The deferred ranking can trail typing by a frame; don't announce a false empty state.
+          pending={deferredSearchQuery !== searchQuery}
+          onSelect={pickResult}
+        />
+      ) : null}
+
+      {!isSearching && showSetupGuideTopRow ? (
         <div className="border-b border-worktree-sidebar-border px-3 py-3">
           <SettingsSetupGuideNavRow
             progress={setupGuideProgress}
@@ -217,18 +281,56 @@ export function SettingsSidebar({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
-        <div className="space-y-5">
-          {generalGroups.map((group) => (
-            <div key={group.id} className="space-y-2">
+      {/* Not rendered while searching so typing never re-renders every project row. */}
+      {isSearching ? null : (
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
+          <div className="space-y-5">
+            {generalGroups.map((group) => (
+              <div key={group.id} className="space-y-2">
+                <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  {group.title}
+                </p>
+                <div className="space-y-1">
+                  {group.sections
+                    .filter((section) => section.id !== 'setup-guide')
+                    .map((section) => {
+                      const Icon = section.icon
+                      const isActive = activeSectionId === section.id
+
+                      return (
+                        <button
+                          key={section.id}
+                          aria-current={isActive ? 'page' : undefined}
+                          data-current={isActive ? 'true' : undefined}
+                          onClick={() => onSelectSection(section.id)}
+                          className={navItemClassName(isActive)}
+                        >
+                          <Icon className="size-4 shrink-0" />
+                          <span className="truncate">{section.title}</span>
+                          {isVisibleInstallStatus(section.installStatus) ? (
+                            <span className={installStatusClassName}>
+                              {installStatusLabel(section.installStatus)}
+                            </span>
+                          ) : section.badge ? (
+                            <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                              {section.badge}
+                            </span>
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                </div>
+              </div>
+            ))}
+
+            <div className="space-y-2">
               <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {group.title}
+                {t('auto.components.settings.SettingsSidebar.5c9669ff9c', 'Projects')}
               </p>
-              <div className="space-y-1">
-                {group.sections
-                  .filter((section) => section.id !== 'setup-guide')
-                  .map((section) => {
-                    const Icon = section.icon
+
+              {repoSections.length > 0 ? (
+                <div className="space-y-1">
+                  {repoSections.map((section) => {
                     const isActive = activeSectionId === section.id
 
                     return (
@@ -239,76 +341,36 @@ export function SettingsSidebar({
                         onClick={() => onSelectSection(section.id)}
                         className={navItemClassName(isActive)}
                       >
-                        <Icon className="size-4 shrink-0" />
+                        <RepoIconGlyph
+                          repoIcon={section.repoIcon}
+                          color={section.badgeColor}
+                          className="size-4 shrink-0 text-muted-foreground"
+                          iconClassName="size-3.5"
+                        />
                         <span className="truncate">{section.title}</span>
-                        {isVisibleInstallStatus(section.installStatus) ? (
-                          <span className={installStatusClassName}>
-                            {installStatusLabel(section.installStatus)}
+                        <RepoForkIndicator upstream={section.upstream} />
+                        {section.isRemote && (
+                          <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+                            <Server className="size-3" />
+                            {t('auto.components.settings.SettingsSidebar.e0900f83e7', 'SSH')}
                           </span>
-                        ) : section.badge ? (
-                          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                            {section.badge}
-                          </span>
-                        ) : null}
+                        )}
                       </button>
                     )
                   })}
-              </div>
+                </div>
+              ) : (
+                <p className="px-3 text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.settings.SettingsSidebar.df38d612b7',
+                    'No projects added yet.'
+                  )}
+                </p>
+              )}
             </div>
-          ))}
-
-          <div className="space-y-2">
-            <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              {t('auto.components.settings.SettingsSidebar.5c9669ff9c', 'Projects')}
-            </p>
-
-            {repoSections.length > 0 ? (
-              <div className="space-y-1">
-                {repoSections.map((section) => {
-                  const isActive = activeSectionId === section.id
-
-                  return (
-                    <button
-                      key={section.id}
-                      aria-current={isActive ? 'page' : undefined}
-                      data-current={isActive ? 'true' : undefined}
-                      onClick={() => onSelectSection(section.id)}
-                      className={navItemClassName(isActive)}
-                    >
-                      <RepoIconGlyph
-                        repoIcon={section.repoIcon}
-                        color={section.badgeColor}
-                        className="size-4 shrink-0 text-muted-foreground"
-                        iconClassName="size-3.5"
-                      />
-                      <span className="truncate">{section.title}</span>
-                      <RepoForkIndicator upstream={section.upstream} />
-                      {section.isRemote && (
-                        <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
-                          <Server className="size-3" />
-                          {t('auto.components.settings.SettingsSidebar.e0900f83e7', 'SSH')}
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="px-3 text-xs text-muted-foreground">
-                {hasRepos
-                  ? t(
-                      'auto.components.settings.SettingsSidebar.3e483e256b',
-                      'No matching project settings.'
-                    )
-                  : t(
-                      'auto.components.settings.SettingsSidebar.df38d612b7',
-                      'No projects added yet.'
-                    )}
-              </p>
-            )}
           </div>
         </div>
-      </div>
+      )}
     </aside>
   )
 }

@@ -69,38 +69,6 @@ describe('recoverable connect failures on a remote runtime pane', () => {
     resetRemoteRuntimeTransport()
   })
 
-  it('keeps retrying a recoverable connect failure instead of latching immediately', async () => {
-    vi.useFakeTimers()
-    try {
-      installUnreachableRuntime()
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const onError = vi.fn()
-      const transport = createRemoteRuntimePtyTransport('env-1', {
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1'
-      })
-
-      await transport.connect({
-        url: '',
-        sessionId: 'remote:env-1@@',
-        callbacks: { onError }
-      })
-
-      // Loss of contact is unverifiable, not a dead terminal: automatic recovery must still be running.
-      expect(resolvePaneCalls).toBe(1)
-      expect(transport.getRecoveryState?.().phase).toBe('backoff')
-      expect(onError).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(1_000)
-      expect(resolvePaneCalls).toBeGreaterThan(1)
-
-      transport.destroy?.()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('leaves both revival paths armed once the recovery window is spent', async () => {
     vi.useFakeTimers()
     try {

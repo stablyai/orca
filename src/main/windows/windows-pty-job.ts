@@ -1,6 +1,6 @@
 import type { IPty } from 'node-pty'
 import { createRequire } from 'node:module'
-import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 
 /** Kernel job handles own ConPTY descendants across PID reuse/reparenting (#9045/#10475/#10087). Per-PTY jobs make explicit teardown exact without kill-on-close, preserving background children on clean shell exit. */
 

@@ -153,7 +153,10 @@ function AutomationHostFilterRows({
 }): React.JSX.Element {
   const selected = new Set(selectedHostKeys)
   const rows = useBoundedHostRows(
-    entries.map((entry) => ({ id: entry.stableKey, label: entry.label })),
+    entries.map((entry) => ({
+      id: entry.stableKey,
+      label: entry.label
+    })),
     selected
   )
   return (

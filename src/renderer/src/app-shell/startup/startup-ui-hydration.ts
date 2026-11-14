@@ -3,9 +3,9 @@ import { replayPendingRuntimeRepoRemovalsForReadyServers } from '@/store/repos/p
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
-  DEFAULT_STATUS_BAR_ITEMS,
-  DEFAULT_WORKTREE_CARD_PROPERTIES
+  DEFAULT_STATUS_BAR_ITEMS
 } from '../../../../shared/constants'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/row-display/card-properties'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 
 export function hydratePersistedUIAfterStartupRead({
@@ -43,6 +43,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
+    activityBarPosition: 'top',
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',

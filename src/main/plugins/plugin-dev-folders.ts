@@ -8,7 +8,7 @@ import {
   PluginCliError
 } from '../../shared/plugins/approval/plugin-cli-approval'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
-import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
+import type { RpcCallerIdentity } from '../runtime/rpc/callers/rpc-caller-identity'
 import {
   approvePluginFromCli,
   type PluginCliApprovalOutcome,
