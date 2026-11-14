@@ -9,7 +9,7 @@ export class TestChild extends EventEmitter {
     return true
   })
   kill = vi.fn(() => true)
-  unref = vi.fn()
+  unref = vi.fn<() => void>()
   asChild(): ChildProcess {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements only the IPC child operations exercised by the service client.
     return this as unknown as ChildProcess

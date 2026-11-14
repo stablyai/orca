@@ -17,7 +17,9 @@ it.each([100, 1000])(
   async (n) => {
     const root = await scaleDirectory()
     await seedTestAgentSessionRecordStore(root, {
-      records: Array.from({ length: n }, (_, i) => scaleRecord(`chat-${i}`))
+      records: Array.from({ length: n }, (_, i) =>
+        scaleRecord(`chat-${String(i).padStart(5, '0')}`)
+      )
     })
     const store = await openTestAgentSessionRecordStore(root)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection reads only the real store on deps; no host operations are called.
@@ -30,11 +32,15 @@ it.each([100, 1000])(
       return listOwners(records)
     })
     const result = listResult()
-    const row = { ...result.sessions[0]!, agent: 'claude' as const, sessionId: 'provider-chat-0-0' }
+    const row = {
+      ...result.sessions[0]!,
+      agent: 'claude' as const,
+      sessionId: 'provider-chat-00000-0'
+    }
     const project = () =>
       projectStructuredAiVaultSessions({ ...result, sessions: [row] }, OPENS_EVERY_STRUCTURED_CHAT)
     project()
-    expect(project().sessions[0]?.structuredSession?.sessionId).toBe('chat-0')
+    expect(project().sessions[0]?.structuredSession?.sessionId).toBe('chat-00000')
     work.reset()
     recordsVisited.mockClear()
     for (let i = 0; i < 40; i++) {
@@ -45,7 +51,7 @@ it.each([100, 1000])(
     expect(recordsVisited.mock.calls.map(([count]) => count)).toEqual(
       Array.from({ length: 40 }, () => 1)
     )
-    await store.setConversationName('chat-0', 'Renamed')
+    await store.setConversationName('chat-00000', 'Renamed')
     work.reset()
     expect(project().sessions[0]?.title).toBe('Renamed')
     expect(work.counts.keyed).toBe(1)

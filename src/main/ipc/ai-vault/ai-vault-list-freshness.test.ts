@@ -1,6 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ scan: vi.fn(), runtime: vi.fn() }))
-vi.mock('electron', () => ({ app: { on: vi.fn() }, ipcMain: { handle: vi.fn(), on: vi.fn() } }))
+vi.mock('electron', () => ({
+  app: { on: vi.fn() },
+  ipcMain: { handle: vi.fn(), on: vi.fn() },
+  BrowserWindow: { getAllWindows: () => [] }
+}))
 vi.mock('../../ai-vault/scan-service/session-scanner-background', () => ({
   scanAiVaultSessionsInBackground: mocks.scan,
   clearAiVaultBackgroundRestartCircuit: vi.fn(),

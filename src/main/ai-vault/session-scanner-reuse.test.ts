@@ -13,8 +13,14 @@ import {
 } from './parse-cache/session-parse-cache-persistence'
 import * as readers from './transcripts/session-transcript-reader'
 
-vi.mock('node:fs/promises', { spy: true })
-vi.mock('node:fs', { spy: true })
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof fs>()
+  return { ...actual, stat: vi.fn(actual.stat), readFile: vi.fn(actual.readFile) }
+})
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof nodeFs>()
+  return { ...actual, createReadStream: vi.fn(actual.createReadStream) }
+})
 const temporary: string[] = []
 afterEach(async () => {
   vi.restoreAllMocks()
