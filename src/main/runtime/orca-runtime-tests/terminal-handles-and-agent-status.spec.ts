@@ -247,11 +247,11 @@ describe('OrcaRuntimeService', () => {
       })
     }
 
-    syncSurface('pty-bg')
+    await syncSurface('pty-bg')
     await runtime.listTerminals()
     const before = runtime.getTerminalProcessIncarnation(created.handle)
-    syncSurface(null)
-    syncSurface('pty-bg')
+    await syncSurface(null)
+    await syncSurface('pty-bg')
     await runtime.listTerminals()
 
     expect(runtime.getTerminalProcessIncarnation(created.handle)).toBe(before)
