@@ -1036,6 +1036,12 @@
       "keywordEndOfFile": "Dateiende",
       "62aa3336d9": "Abschließenden Zeilenumbruch einfügen"
     },
+    "editorGitChangeGutter": {
+      "title": "Git-Änderungsmarkierungen",
+      "description": "Hinzugefügte, geänderte und gelöschte Zeilen im Vergleich zum letzten Commit am Editorrand markieren. Standardmäßig deaktiviert.",
+      "keywordGit": "Git",
+      "keywordGutter": "Randleiste"
+    },
     "repositoryFormatter": {
       "description": "Den Formatierer dieses Projekts für „Beim Speichern formatieren“ verwenden.",
       "saveFailed": "Formatierungseinstellungen konnten nicht gespeichert werden.",

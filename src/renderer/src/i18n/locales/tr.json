@@ -1012,6 +1012,12 @@
       "keywordEndOfFile": "dosya sonu",
       "62aa3336d9": "Son satır sonunu ekle"
     },
+    "editorGitChangeGutter": {
+      "title": "Git değişiklik göstergeleri",
+      "description": "Son commit'e göre eklenen, değiştirilen ve silinen satırları kenar boşluğunda işaretleyin. Varsayılan olarak kapalıdır.",
+      "keywordGit": "git",
+      "keywordGutter": "kenar boşluğu"
+    },
     "repositoryFormatter": {
       "description": "Kaydederken biçimlendirmek için bu projenin biçimlendiricisini kullanın.",
       "saveFailed": "Biçimlendirici ayarları kaydedilemedi.",

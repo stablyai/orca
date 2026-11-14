@@ -552,6 +552,12 @@
       "keywordEndOfFile": "fin de archivo",
       "62aa3336d9": "Insertar salto de línea final"
     },
+    "editorGitChangeGutter": {
+      "title": "Indicadores de cambios de Git",
+      "description": "Marca en el margen las líneas añadidas, modificadas y eliminadas respecto al último commit. Desactivado de forma predeterminada.",
+      "keywordGit": "git",
+      "keywordGutter": "margen"
+    },
     "repositoryFormatter": {
       "description": "Usa el formateador de este proyecto para formatear al guardar.",
       "saveFailed": "No se pudo guardar la configuración del formateador.",
