@@ -1,6 +1,7 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import {
   isTerminalLinkActionActivation,
+  isTerminalLinkFloatingActivation,
   isTerminalLinkDirectActivation,
   isTerminalMiddleClickActivation
 } from './terminal-link-activation'
@@ -15,10 +16,12 @@ type DeferredPtyInput = {
 }
 
 export type TerminalLinkPtyMouseSuppression = IDisposable & {
+  /** Claim a pending deferred gesture once; repeated or ineligible claims return false. */
   claimAction: () => boolean
   handlePtyInput: (data: string, forward: (data: string) => void) => void
 }
 
+/** Reserve owned link clicks from child TUIs; replay deferred mouse input unless a handler claims it. */
 export function installTerminalLinkPtyMouseSuppression(
   terminal: Terminal,
   shouldSuppressMouseEvent: (event: MouseEvent) => boolean,
@@ -28,6 +31,7 @@ export function installTerminalLinkPtyMouseSuppression(
   const terminalElement = terminal.element
   const ownerDocument = terminalElement?.ownerDocument
   const ownerWindow = ownerDocument?.defaultView
+  let previousAltClickMovesCursor: boolean | undefined
   let previousMouseEventsRequireAlt: boolean | null = null
   let restoreQueued = false
   let deferredPtyInput: DeferredPtyInput[] | null = null
@@ -53,6 +57,17 @@ export function installTerminalLinkPtyMouseSuppression(
     restoreQueued = true
     queueMicrotask(restore)
   }
+  const restoreAltCursor = (): void => {
+    if (previousAltClickMovesCursor !== undefined) {
+      terminal.options.altClickMovesCursor = previousAltClickMovesCursor
+      previousAltClickMovesCursor = undefined
+    }
+  }
+  const releaseUnclaimedAltCursor = (): void => {
+    if (!actionClaimed) {
+      restoreAltCursor()
+    }
+  }
   const finishDeferredInput = (): void => {
     if (deferredInputFallbackTimer !== null) {
       ownerWindow?.clearTimeout(deferredInputFallbackTimer)
@@ -64,6 +79,7 @@ export function installTerminalLinkPtyMouseSuppression(
     capturesPtyInput = false
     actionClaimed = false
     removeDeferredListeners()
+    restoreAltCursor()
     if (shouldForward) {
       for (const input of deferred) {
         input.forward(input.data)
@@ -74,9 +90,15 @@ export function installTerminalLinkPtyMouseSuppression(
     capturesPtyInput = true
   }
   const handleMouseDown = (event: MouseEvent): void => {
-    if (isTerminalLinkActionActivation(event) && shouldDeferPlainMouseEvent(event)) {
+    const floating = isTerminalLinkFloatingActivation(event)
+    if ((isTerminalLinkActionActivation(event) || floating) && shouldDeferPlainMouseEvent(event)) {
       finishDeferredInput()
       deferredPtyInput = []
+      if (floating) {
+        // Alt mouseup otherwise moves the shell cursor even when its mouse reports are discarded.
+        previousAltClickMovesCursor = terminal.options.altClickMovesCursor ?? true
+        terminal.options.altClickMovesCursor = false
+      }
       addDeferredListeners()
       captureCurrentMouseEvent()
       return
@@ -116,7 +138,11 @@ export function installTerminalLinkPtyMouseSuppression(
     }
   }
   const handleBlur = (): void => {
-    finishDeferredInput()
+    if (actionClaimed) {
+      queueMicrotask(finishDeferredInput)
+    } else {
+      finishDeferredInput()
+    }
     restore()
   }
   const addDeferredListeners = (): void => {
@@ -127,6 +153,7 @@ export function installTerminalLinkPtyMouseSuppression(
     ownerDocument?.addEventListener('mousemove', handleDeferredMouseEvent, CAPTURE_LISTENER_OPTIONS)
     ownerDocument?.addEventListener('mousemove', releaseIneligibleDrag)
     ownerDocument?.addEventListener('mouseup', handleDeferredMouseEvent, CAPTURE_LISTENER_OPTIONS)
+    ownerDocument?.addEventListener('mouseup', releaseUnclaimedAltCursor)
     ownerDocument?.addEventListener('mouseleave', finishDeferredInput)
     ownerWindow?.addEventListener('mousedown', releaseCurrentMouseEvent)
     ownerWindow?.addEventListener('mousemove', releaseCurrentMouseEvent)
@@ -151,6 +178,7 @@ export function installTerminalLinkPtyMouseSuppression(
       handleDeferredMouseEvent,
       CAPTURE_LISTENER_OPTIONS
     )
+    ownerDocument?.removeEventListener('mouseup', releaseUnclaimedAltCursor)
     ownerDocument?.removeEventListener('mouseleave', finishDeferredInput)
     ownerWindow?.removeEventListener('mousedown', releaseCurrentMouseEvent)
     ownerWindow?.removeEventListener('mousemove', releaseCurrentMouseEvent)
@@ -164,7 +192,7 @@ export function installTerminalLinkPtyMouseSuppression(
   terminalElement?.addEventListener('mouseup', queueRestore, CAPTURE_LISTENER_OPTIONS)
   return {
     claimAction: () => {
-      if (deferredPtyInput === null) {
+      if (deferredPtyInput === null || actionClaimed) {
         return false
       }
       actionClaimed = true

@@ -9,6 +9,7 @@ import {
 import { isWebSessionBrowserPlacementGroupReserved } from '../browser/placement/web-session-browser-placement'
 import { buildHostToLocalTabIdMap, updateHostSessionTabIdMappings } from './layout-groups'
 
+/** Reconcile source workspace tabs and selection while excluding browser views placed elsewhere. */
 export function prepareWebSessionTabsSnapshotUnified(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBrowser>
 ) {
@@ -43,7 +44,10 @@ export function prepareWebSessionTabsSnapshotUnified(
       entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id)
     )
   )
-  const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)
+  const workspaceBrowserEntries = mirroredBrowserTabs.filter(
+    (entry) => entry.unifiedTab.worktreeId === worktreeId
+  )
+  const mirroredBrowserUnifiedTabs = workspaceBrowserEntries.map((entry) => entry.unifiedTab)
   const mirroredEditorUnifiedTabs = mirroredEditorTabs.map((entry) => entry.unifiedTab)
   const mirroredAgentUnifiedTabs = mirroredAgentTabs.map((entry) => entry.unifiedTab)
   const mirroredUnifiedTabs = [
@@ -73,7 +77,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     readyBrowserTabs.find((tab) => tab.isActive) ??
     null
   const activeMirroredBrowser = activeHostBrowser
-    ? (mirroredBrowserTabs.find(
+    ? (workspaceBrowserEntries.find(
         (entry) => entry.remotePageId === activeHostBrowser.browserPageId
       ) ?? null)
     : null
@@ -102,7 +106,7 @@ export function prepareWebSessionTabsSnapshotUnified(
       : null
   const intentMirroredBrowser =
     navigationIntentTab?.type === 'browser'
-      ? (mirroredBrowserTabs.find(
+      ? (workspaceBrowserEntries.find(
           (entry) =>
             entry.hostTabId === navigationIntentTab.id ||
             entry.remotePageId === navigationIntentTab.browserPageId
@@ -137,7 +141,11 @@ export function prepareWebSessionTabsSnapshotUnified(
     null
   const currentActiveBrowserStillExists =
     state.activeBrowserTabIdByWorktree[worktreeId] &&
-    (nextBrowserTabs ?? []).some((tab) => tab.id === state.activeBrowserTabIdByWorktree[worktreeId])
+    (nextBrowserTabs ?? []).some(
+      (tab) =>
+        tab.id === state.activeBrowserTabIdByWorktree[worktreeId] &&
+        nextUnifiedTabs?.some((view) => view.contentType === 'browser' && view.entityId === tab.id)
+    )
       ? state.activeBrowserTabIdByWorktree[worktreeId]
       : null
   const intentBrowserWorkspaceId =
@@ -148,8 +156,8 @@ export function prepareWebSessionTabsSnapshotUnified(
     intentBrowserWorkspaceId ??
     currentActiveBrowserStillExists ??
     (snapshot.activeTabType === 'browser'
-      ? (activeMirroredBrowserWorkspaceId ?? mirroredBrowserTabs[0]?.workspace.id)
-      : mirroredBrowserTabs[0]?.workspace.id) ??
+      ? (activeMirroredBrowserWorkspaceId ?? workspaceBrowserEntries[0]?.workspace.id)
+      : workspaceBrowserEntries[0]?.workspace.id) ??
     null
   const activeEditorFileIdForWorktree = state.activeFileIdByWorktree[worktreeId]
   const currentActiveEditorStillExists =
@@ -206,7 +214,7 @@ export function prepareWebSessionTabsSnapshotUnified(
       ? (activeMirroredAgentTabId ?? mirroredAgentUnifiedTabs[0]?.id ?? nextActiveTerminalId)
       : snapshot.activeTabType === 'browser'
         ? (activeMirroredBrowserTabId ??
-          mirroredBrowserTabs[0]?.unifiedTab.id ??
+          workspaceBrowserEntries[0]?.unifiedTab.id ??
           state.activeTabIdByWorktree[worktreeId] ??
           nextActiveTerminalId)
         : snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'

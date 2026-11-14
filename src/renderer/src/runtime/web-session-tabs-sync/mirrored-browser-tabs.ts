@@ -22,6 +22,7 @@ import { buildBrowserUnifiedTab } from './tab-builders'
 import { isReadyBrowserTab } from './terminal-surfaces'
 import { isBrowserPageOfAnotherHost } from './mirror-row-ownership'
 
+/** Locate a remote page’s client view across workspace placements without changing source ownership. */
 export function findBrowserWorkspaceForRemotePage(
   state: WebSessionTabsSyncState,
   worktreeId: string,
@@ -38,9 +39,9 @@ export function findBrowserWorkspaceForRemotePage(
           workspace,
           page,
           unifiedTab:
-            (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-              (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
-            ) ?? null
+            Object.values(state.unifiedTabsByWorktree)
+              .flat()
+              .find((tab) => tab.contentType === 'browser' && tab.entityId === workspace.id) ?? null
         }
       }
     }
@@ -173,6 +174,7 @@ export function resolveMirroredBrowserPageContent(
   }
 }
 
+/** Mirror host browser records while retaining existing client view placement and ownership. */
 export function buildMirroredBrowserTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
@@ -289,13 +291,16 @@ export function buildMirroredBrowserTabs(
       initializationPresentation: presentation,
       ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),
       ...(tab.placement ? { placement: tab.placement } : {}),
-      unifiedTab: buildBrowserUnifiedTab(
-        workspace,
-        tab,
-        existing?.unifiedTab ?? null,
-        groupId,
-        environmentId
-      ),
+      unifiedTab:
+        existing?.unifiedTab && existing.unifiedTab.worktreeId !== snapshot.worktree
+          ? existing.unifiedTab
+          : buildBrowserUnifiedTab(
+              workspace,
+              tab,
+              existing?.unifiedTab ?? null,
+              groupId,
+              environmentId
+            ),
       hostTabId: tab.id,
       ...(clientGroupId ? { clientGroupId } : {})
     }

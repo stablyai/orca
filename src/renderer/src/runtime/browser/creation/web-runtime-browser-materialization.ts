@@ -8,6 +8,7 @@ type BrowserMaterializationState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
+/** Check whether the host page has a client browser view, including views placed outside the source workspace. */
 export function hasMaterializedWebRuntimeBrowserPage(
   state: BrowserMaterializationState,
   environmentId: string,
@@ -28,11 +29,13 @@ export function hasMaterializedWebRuntimeBrowserPage(
     if (!hasRemotePage) {
       return false
     }
-    return (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
-      (tab) =>
-        tab.contentType === 'browser' &&
-        tab.entityId === workspace.id &&
-        (!expectedGroupId || tab.groupId === expectedGroupId)
-    )
+    return Object.values(state.unifiedTabsByWorktree)
+      .flat()
+      .some(
+        (tab) =>
+          tab.contentType === 'browser' &&
+          tab.entityId === workspace.id &&
+          (!expectedGroupId || tab.groupId === expectedGroupId)
+      )
   })
 }

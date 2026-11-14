@@ -160,6 +160,27 @@ describe('terminal link PTY mouse suppression', () => {
     expect(forwarded).toEqual(['key', '\x1b[<0;1;1M', '\x1b[<0;1;1m'])
   })
 
+  it('drops Alt-held mouse reports only after a link claims the click, once', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const { element, suppression } = createSuppression()
+    const forwarded: string[] = []
+    const forward = (data: string): void => {
+      forwarded.push(data)
+    }
+    element.addEventListener('mousedown', () =>
+      suppression.handlePtyInput('\x1b[<24;1;1M', forward)
+    )
+    element.addEventListener('mouseup', () => {
+      suppression.handlePtyInput('\x1b[<24;1;1m', forward)
+      expect(suppression.claimAction()).toBe(true)
+      expect(suppression.claimAction()).toBe(false)
+    })
+    element.dispatchEvent(mouseEvent('mousedown', { ctrlKey: true, altKey: true }))
+    element.dispatchEvent(mouseEvent('mouseup', { ctrlKey: true, altKey: true }))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(forwarded).toEqual([])
+  })
+
   it('flushes pending child input on blur', () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []

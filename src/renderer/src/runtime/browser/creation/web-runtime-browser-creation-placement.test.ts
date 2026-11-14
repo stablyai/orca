@@ -1,9 +1,13 @@
+import { applyWebSessionTabsSnapshot } from '../../web-session-tabs-sync/snapshot-api'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotModule from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import { useAppStore } from '../../../store/index'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { resetWebSessionBrowserPlacementsForTests } from '../placement/web-session-browser-placement'
 import {
+  makeSnapshot,
+  NOW,
   resetWebSessionTabsSyncTestState,
   ENV,
   WT
@@ -64,6 +68,82 @@ describe('paired browser creation placement', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('never selects a floating page as the source workspace browser fallback', async () => {
+    const opening = openLinkFromSource({ placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID })
+    const pageId = pendingCreates[0].params.page!
+    pendingCreates[0].resolve()
+    await opening
+    const snapshot = makeSnapshot(
+      [
+        {
+          id: 'host-floating',
+          browserWorkspaceId: `host-workspace-${pageId}`,
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          type: 'browser',
+          title: 'Floating page',
+          browserPageId: pageId,
+          url: 'https://example.com/',
+          isActive: true
+        }
+      ],
+      { snapshotVersion: 100, activeTabType: 'browser', activeTabId: 'host-floating' }
+    )
+    useAppStore.setState({ activeBrowserTabIdByWorktree: { [WT]: null } })
+    useAppStore.setState((state) => applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW + 100))
+    expect(useAppStore.getState().activeBrowserTabIdByWorktree[WT]).toBeNull()
+    const floatingView =
+      useAppStore.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]
+    expect(floatingView).toMatchObject({ worktreeId: 'global-floating-terminal' })
+    expect(
+      (useAppStore.getState().unifiedTabsByWorktree[WT] ?? []).some(
+        (tab) => tab.id === floatingView?.id
+      )
+    ).toBe(false)
+  })
+
+  it('places a remote page in floating while snapshots retain its original host and workspace', async () => {
+    const floating = FLOATING_TERMINAL_WORKTREE_ID
+    const before = useAppStore.getState().unifiedTabsByWorktree[WT]!.map((tab) => tab.id)
+    const opening = openLinkFromSource({
+      placementWorkspaceId: floating,
+      clientAfterTabId: undefined
+    })
+    const pageId = pendingCreates[0].params.page!
+    const staged = Object.values(useAppStore.getState().unifiedTabsByWorktree)
+      .flat()
+      .find((tab) =>
+        (useAppStore.getState().browserPagesByWorkspace[tab.entityId] ?? []).some(
+          (page) => page.id === pageId
+        )
+      )
+    expect(staged).toMatchObject({
+      worktreeId: 'global-floating-terminal',
+      executionHostId: 'local'
+    })
+    pendingCreates[0].resolve()
+    await expect(opening).resolves.toBe(true)
+    publishHostSnapshot()
+    const state = useAppStore.getState()
+    expect(state.unifiedTabsByWorktree[WT]!.map((tab) => tab.id)).toEqual(before)
+    expect(state.unifiedTabsByWorktree[floating]).toEqual([
+      expect.objectContaining({ id: staged!.id })
+    ])
+    expect(state.remoteBrowserPageHandlesByPageId[pageId]).toMatchObject({
+      environmentId: ENV,
+      remotePageId: pageId
+    })
+    expect(state.remoteBrowserPageHandlesByPageId[pageId]?.staged).toBeUndefined()
+    expect(state.browserPagesByWorkspace[staged!.entityId]).toEqual([
+      expect.objectContaining({ worktreeId: WT, browserRuntimeEnvironmentId: ENV })
+    ])
+    hostPages.splice(0)
+    publishHostSnapshot()
+    expect(useAppStore.getState().unifiedTabsByWorktree[floating] ?? []).toEqual([])
+    expect(useAppStore.getState().groupsByWorktree[floating]?.[0]?.tabOrder ?? []).toEqual([])
   })
 
   it('stages each background link after its source before any await and keeps source, 3, 2, 1', async () => {

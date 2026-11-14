@@ -7,9 +7,15 @@ import {
   terminalLinkWslDistro
 } from '../../host-files/terminal-file-path-mapping'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
-import { isTerminalLinkDirectActivation } from '../gestures/terminal-link-activation'
-import { requestTerminalLinkAction } from '../terminal-link-action-request'
-import type { TerminalLinkActionContext } from '../terminal-link-action-request'
+import {
+  isTerminalLinkDirectActivation,
+  isTerminalLinkFloatingActivation
+} from '../gestures/terminal-link-activation'
+import {
+  requestTerminalLinkAction,
+  claimTerminalFloatingLink,
+  type TerminalLinkActionContext
+} from '../terminal-link-action-request'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { translate } from '@/i18n/i18n'
 import {
@@ -49,6 +55,7 @@ export type FileLinkActions = Pick<
   'destination' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
 >
 
+/** Claim validated floating file chords or dispatch the existing direct and popover actions. */
 export function handleTerminalFileLink(
   filePath: string,
   line: number | null,
@@ -58,6 +65,13 @@ export function handleTerminalFileLink(
   actionContext?: TerminalLinkActionContext | null,
   actionDestination?: string
 ): boolean {
+  if (isTerminalLinkFloatingActivation(event)) {
+    if (!claimTerminalFloatingLink(event, actionContext)) {
+      return false
+    }
+    openDetectedFilePath(filePath, line, column, { ...deps, floatingWorkspace: true })
+    return true
+  }
   if (isTerminalLinkDirectActivation(event)) {
     event?.preventDefault?.()
     openDetectedFilePath(filePath, line, column, {

@@ -1,3 +1,9 @@
+import {
+  floatingWorkspaceToWorktree,
+  isFloatingWorkspaceId
+} from '../../../../../shared/floating-workspace-worktree'
+import { workspaceBrowserTabs } from '@/store/slices/browser/tabs/workspace-browser-tabs'
+import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-panel-reveal'
 import { useAppStore } from '@/store/index'
 import {
   activateBrowserWorkspaceTab,
@@ -26,6 +32,7 @@ export type BrowserPagePaletteActivationTarget = {
   worktreeId: string
 }
 
+/** Validate a palette page and activate its visible placement while retaining its backing host ownership. */
 export function activateBrowserPagePaletteResult({
   executionHostId,
   pageId,
@@ -33,19 +40,28 @@ export function activateBrowserPagePaletteResult({
   worktreeId
 }: BrowserPagePaletteActivationTarget): BrowserPagePaletteActivationResult {
   const initialState = useAppStore.getState()
-  const worktree = initialState.getKnownWorktreeById(worktreeId, executionHostId)
+  const floating = isFloatingWorkspaceId(worktreeId)
+  const worktree =
+    initialState.getKnownWorktreeById(worktreeId, executionHostId) ??
+    (floating && (!executionHostId || executionHostId === 'local')
+      ? floatingWorkspaceToWorktree('')
+      : null)
   // Check workspace first: removal also purges pages and must not look like a merely stale page.
   if (!worktree) {
     return { status: 'failed', reason: 'missing-worktree' }
   }
+  const workspaces = workspaceBrowserTabs(
+    initialState.browserTabsByWorktree,
+    worktreeId,
+    initialState.unifiedTabsByWorktree[worktreeId]
+  )
+  const matches = workspaces.filter((candidate) => candidate.id === workspaceId)
+  const workspace = matches.length === 1 ? matches[0] : undefined
   const page = (initialState.browserPagesByWorkspace[workspaceId] ?? []).find(
     (candidate) =>
       candidate.id === pageId &&
       candidate.workspaceId === workspaceId &&
-      candidate.worktreeId === worktreeId
-  )
-  const workspace = (initialState.browserTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) => candidate.id === workspaceId && candidate.worktreeId === worktreeId
+      candidate.worktreeId === workspace?.worktreeId
   )
   if (!page || !workspace) {
     return { status: 'failed', reason: 'missing-page' }
@@ -62,10 +78,9 @@ export function activateBrowserPagePaletteResult({
   ) {
     return { status: 'failed', reason: 'missing-tab' }
   }
-  const activated = activateAndRevealWorkspace(
-    worktree.id,
-    targetHostId ? { executionHostId: targetHostId } : {}
-  )
+  const activated =
+    floating ||
+    activateAndRevealWorkspace(worktree.id, targetHostId ? { executionHostId: targetHostId } : {})
   if (!activated) {
     return { status: 'blocked' }
   }
@@ -80,6 +95,9 @@ export function activateBrowserPagePaletteResult({
     })
   ) {
     return { status: 'failed', reason: 'missing-tab' }
+  }
+  if (floating) {
+    revealFloatingWorkspacePanel(useAppStore.getState())
   }
   return { status: 'activated', pageId, focusTarget }
 }

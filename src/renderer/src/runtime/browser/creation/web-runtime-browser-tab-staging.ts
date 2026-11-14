@@ -19,6 +19,8 @@ export type StagedWebRuntimeBrowserTab = {
 export function stageWebRuntimeBrowserTab(args: {
   environmentId: string
   worktreeId: string
+  /** Client tab destination; the staged page keeps worktreeId and environmentId as its owner. */
+  placementWorkspaceId?: string
   remotePageId: string
   url?: string
   title?: string
@@ -32,6 +34,7 @@ export function stageWebRuntimeBrowserTab(args: {
   const state = useAppStore.getState()
   try {
     const workspace = state.createBrowserTab(args.worktreeId, args.url ?? 'about:blank', {
+      placementWorkspaceId: args.placementWorkspaceId,
       activate: args.activate,
       browserPageId: args.remotePageId,
       browserRuntimeEnvironmentId: args.environmentId,
@@ -55,7 +58,7 @@ export function stageWebRuntimeBrowserTab(args: {
     })
     const tabId = useAppStore
       .getState()
-      .unifiedTabsByWorktree[args.worktreeId]?.find(
+      .unifiedTabsByWorktree[args.placementWorkspaceId ?? args.worktreeId]?.find(
         (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
       )?.id
     const staged = {
@@ -97,11 +100,11 @@ export function isStagedWebRuntimeBrowserTabLive(
 /** Follow staged tabs to their current group after a user move or materialization waits time out in the abandoned group. */
 export function resolveStagedWebRuntimeBrowserTabGroupId(
   staged: StagedWebRuntimeBrowserTab,
-  worktreeId: string
+  _worktreeId: string
 ): string | undefined {
-  return (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (tab) => tab.contentType === 'browser' && tab.entityId === staged.workspaceId
-  )?.groupId
+  return Object.values(useAppStore.getState().unifiedTabsByWorktree)
+    .flat()
+    .find((tab) => tab.contentType === 'browser' && tab.entityId === staged.workspaceId)?.groupId
 }
 
 function findWorkspaceIdForRemotePage(args: {

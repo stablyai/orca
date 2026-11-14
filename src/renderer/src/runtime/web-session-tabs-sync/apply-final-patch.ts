@@ -1,3 +1,5 @@
+import { recordDraft } from '@/store/keyed-record-transitions'
+import { createKeptWorktreeSurfacePruners } from '@/store/slices/tabs/kept-worktree-surface-pruning'
 import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
 import type { WebSessionTabsSyncState } from './state'
 import type { applyActiveStateUpdates } from './apply-active-state'
@@ -14,6 +16,7 @@ import { editorBufferIdForFile } from '../../store/slices/editor/buffers/editor-
 
 type FinalPatchContext = ReturnType<typeof applyActiveStateUpdates>
 
+/** Apply mirrored resources and prune retired browser views from foreign placements without changing their owners. */
 export function buildWebSessionTabsFinalPatch(
   context: FinalPatchContext
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
@@ -32,11 +35,11 @@ export function buildWebSessionTabsFinalPatch(
     mirroredTerminalIds,
     nextOpenFiles,
     nextBrowserTabsByWorktree,
-    nextUnifiedTabsByWorktree,
-    nextGroupsByWorktree,
+    nextUnifiedTabsByWorktree: unprunedUnifiedTabsByWorktree,
+    nextGroupsByWorktree: unprunedGroupsByWorktree,
     nextActiveGroupIdByWorktree,
     nextLayoutByWorktree,
-    nextTabBarOrderByWorktree,
+    nextTabBarOrderByWorktree: unprunedTabBarOrderByWorktree,
     nextPtyIdsByTabId,
     nextTerminalLayoutsByTabId,
     nextLocalOnlyScrollbackByTabId,
@@ -49,7 +52,7 @@ export function buildWebSessionTabsFinalPatch(
     nextRemoteBrowserPageHandlesByPageId,
     nextBrowserCertificateFailuresByPageId,
     nextActiveTabIdByWorktree,
-    nextActiveBrowserTabIdByWorktree,
+    nextActiveBrowserTabIdByWorktree: unprunedActiveBrowserTabIdByWorktree,
     nextActiveFileIdByWorktree,
     nextActiveTabId,
     nextActiveBrowserTabId,
@@ -116,6 +119,40 @@ export function buildWebSessionTabsFinalPatch(
             (file) => state.editorBufferIdOf?.[file.id] ?? editorBufferIdForFile(file, state)
           )
         )
+
+  const retiredBrowserIds = new Set(
+    [...context.removedBrowserWorkspaceIds].filter(
+      (id) => !context.nextBrowserTabs?.some((workspace) => workspace.id === id)
+    )
+  )
+  const pruners =
+    retiredBrowserIds.size > 0
+      ? createKeptWorktreeSurfacePruners(state, {
+          worktreeIds: new Set(
+            Object.keys(unprunedUnifiedTabsByWorktree).filter((id) => id !== worktreeId)
+          ),
+          browserTabIds: retiredBrowserIds,
+          terminalTabIds: new Set(),
+          fileIds: new Set(),
+          unifiedTabIds: new Set()
+        })
+      : null
+  const nextUnifiedTabsByWorktree =
+    pruners?.unifiedTabs(unprunedUnifiedTabsByWorktree) ?? unprunedUnifiedTabsByWorktree
+  const groupDraft = recordDraft(unprunedGroupsByWorktree)
+  if (pruners) {
+    for (const [id, groups] of Object.entries(unprunedGroupsByWorktree)) {
+      if (id !== worktreeId) {
+        groupDraft.set(id, pruners.entries.groups(groups))
+      }
+    }
+  }
+  const nextGroupsByWorktree = groupDraft.finish()
+  const nextTabBarOrderByWorktree =
+    pruners?.tabBarOrder(unprunedTabBarOrderByWorktree) ?? unprunedTabBarOrderByWorktree
+  const nextActiveBrowserTabIdByWorktree =
+    pruners?.activeBrowserTabIds(unprunedActiveBrowserTabIdByWorktree) ??
+    unprunedActiveBrowserTabIdByWorktree
 
   const patch: Partial<WebSessionTabsSyncState> = {
     ...runtimePaneTitlePatch,

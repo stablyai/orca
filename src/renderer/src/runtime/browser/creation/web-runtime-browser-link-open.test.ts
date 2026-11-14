@@ -1,7 +1,7 @@
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import '../../../store/testing/app-store-test-fixture'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../../shared/constants'
 import '../../../../../shared/session-tabs-runtime-capabilities'
 import '../../../../../shared/protocol-version'
 import '../../../lib/browser/navigation/http-link-in-group-availability'
@@ -94,6 +94,74 @@ function open(explicit = false) {
 }
 
 describe('runtime link opens through staging and materialization', () => {
+  it('completes a placed page with a host-assigned ID and an inferred runtime', async () => {
+    const opening = openWorkspaceBrowserTabForLink({
+      workspaceId: WT,
+      placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+      url: 'https://example.com/link',
+      intent: { kind: 'url' },
+      placementPreference: 'server',
+      linkContext: { linkIntent: null, isCurrentRequest: beginLinkOpenRequest() }
+    })
+    pendingCreates[0].resolve('host-assigned-page')
+    await expect(opening).resolves.toMatchObject({
+      status: 'opened',
+      result: { worktreeId: 'global-floating-terminal', executionHostId: 'local' }
+    })
+  })
+
+  it('opens remote loopback in floating without activating a tab in its source workspace', async () => {
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
+      floatingWorkspacePanelOpen: true
+    })
+    const original = useAppStore.getState()
+    const opening = openWorkspaceBrowserTabForLink({
+      workspaceId: WT,
+      placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+      url: 'http://localhost:3000/',
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: ENV,
+      placementPreference: 'server',
+      linkContext: { linkIntent: null, isCurrentRequest: beginLinkOpenRequest() }
+    })
+    pendingCreates[0].resolve()
+    await expect(opening).resolves.toMatchObject({
+      status: 'opened',
+      result: { worktreeId: 'global-floating-terminal', executionHostId: 'local' }
+    })
+    expect(window.api.runtimeEnvironments.call).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'browser.goto',
+        params: expect.objectContaining({
+          url: 'http://localhost:3000/',
+          worktree: 'id:repo::/worktree'
+        })
+      })
+    )
+    publishHostSnapshot()
+    const state = useAppStore.getState()
+    expect(state.activeWorktreeId).toBe(WT)
+    expect(state.activeBrowserTabIdByWorktree[WT]).toBe(original.activeBrowserTabIdByWorktree[WT])
+    expect(state.activeGroupIdByWorktree[WT]).toBe(G2)
+    const tab = state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]![0]
+    expect(state.browserPagesByWorkspace[tab.entityId]).toEqual([
+      expect.objectContaining({
+        worktreeId: WT,
+        browserRuntimeEnvironmentId: ENV
+      })
+    ])
+    expect(requestBrowserFocus).toHaveBeenCalledWith({
+      pageId: state.browserPagesByWorkspace[tab.entityId][0].id,
+      target: 'webview'
+    })
+    state.closeBrowserTab(tab.entityId)
+    expect(
+      useAppStore.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+    ).toEqual([])
+    expect(useAppStore.getState().activeWorktreeId).toBe(WT)
+  })
+
   it('does not request browser focus after a routed link completes with another pane focused', async () => {
     useAppStore.setState({
       settings: { ...getDefaultSettings('/home/test'), openLinksInApp: true }

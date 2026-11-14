@@ -129,6 +129,35 @@ describe('activateBrowserPagePaletteResult', () => {
     seedStore()
   })
 
+  it('activates a remote page through its local floating view', () => {
+    seedStore({
+      worktreesByRepo: { 'repo-1': [makeWorktree({ hostId: 'runtime:paired' })] },
+      browserPagesByWorkspace: { 'ws-1': [makePage({ browserRuntimeEnvironmentId: 'paired' })] },
+      unifiedTabsByWorktree: {
+        'global-floating-terminal': [
+          makeBrowserTab({ worktreeId: 'global-floating-terminal', executionHostId: 'local' })
+        ]
+      },
+      groupsByWorktree: {
+        'global-floating-terminal': [makeGroup({ worktreeId: 'global-floating-terminal' })]
+      }
+    })
+    expect(
+      activateBrowserPagePaletteResult({
+        ...target,
+        worktreeId: 'global-floating-terminal',
+        executionHostId: 'local'
+      })
+    ).toEqual({ status: 'activated', pageId: 'page-1', focusTarget: 'webview' })
+    expect(useAppStore.getState().activeBrowserTabIdByWorktree['global-floating-terminal']).toBe(
+      'ws-1'
+    )
+    expect(useAppStore.getState().activeWorktreeId).toBe('wt-1')
+    expect(
+      useAppStore.getState().browserPagesByWorkspace['ws-1'][0].browserRuntimeEnvironmentId
+    ).toBe('paired')
+  })
+
   it('rejects colliding child ids before mutating either host', () => {
     seedStore({
       worktreesByRepo: {

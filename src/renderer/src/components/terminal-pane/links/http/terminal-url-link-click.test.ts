@@ -1,6 +1,9 @@
 import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
+import {
+  registerHttpLinkStoreAccessor,
+  registerWorkspaceHttpLinkBrowserOpener
+} from '@/lib/browser/navigation/http-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 
@@ -447,6 +450,44 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(terminal.options.mouseEventsRequireAlt).toBe(true)
     disposable.dispose()
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+  })
+
+  it('routes a claimed floating chord to one browser with the full wrapped URL', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
+    const { terminal } = makeTerminal()
+    const createBrowserTab = vi.fn()
+    registerHttpLinkStoreAccessor(() => ({
+      settings: { openLinksInApp: false },
+      createBrowserTab,
+      setActiveWorktree: vi.fn()
+    }))
+    const event = Object.assign(mouseEventForRow(0, { altKey: true }), { shiftKey: false })
+    let claimed = false
+    const deps = {
+      terminal,
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp',
+      startupCwd: '/tmp',
+      linkActionContext: {
+        paneId: 1,
+        pointerGesture: { canRequestAction: () => true, dispose: () => {} },
+        claimPtyMouse: () => {
+          if (claimed) {
+            return false
+          }
+          claimed = true
+          return true
+        },
+        request: vi.fn(),
+        focusTerminal: vi.fn()
+      }
+    }
+    expect(handleTerminalWebLinkClick(URL_ROWS[0], event, deps)).toBe(true)
+    expect(handleTerminalWebLinkClick(URL_ROWS[0], event, deps)).toBe(false)
+    expect(createBrowserTab.mock.calls).toEqual([
+      ['global-floating-terminal', FULL_URL, expect.objectContaining({ activate: true })]
+    ])
+    expect(openUrlMock).not.toHaveBeenCalled()
   })
 
   it('leaves Alt-modified link gestures to the child TUI', () => {

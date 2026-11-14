@@ -61,6 +61,35 @@ describe('setActiveWorktree', () => {
     mockApi.worktrees.updateMeta.mockResolvedValue({})
   })
 
+  it('keeps a source-owned browser sibling selected in floating after close', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const floating = 'global-floating-terminal'
+    seedStore(store, {
+      worktreesByRepo: { repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })] },
+      activeWorktreeId: wt
+    })
+    main = await drawTabsFromMain(store)
+    const sibling = store
+      .getState()
+      .createBrowserTab(wt, 'https://sibling.example.com', { placementWorkspaceId: floating })
+    await settled()
+    const closing = store
+      .getState()
+      .createBrowserTab(wt, 'https://closing.example.com', { placementWorkspaceId: floating })
+    await settled()
+    store.getState().setActiveBrowserTab(closing.id, floating)
+    await settled()
+    store.getState().closeBrowserTab(closing.id)
+    await settled()
+    expect(store.getState().activeBrowserTabIdByWorktree[floating]).toBe(sibling.id)
+    expect(store.getState().activeTabTypeByWorktree[floating]).toBe('browser')
+    expect(store.getState().browserTabsByWorktree[wt]).toEqual([
+      expect.objectContaining({ id: sibling.id })
+    ])
+    expect(store.getState().activeWorktreeId).toBe(wt)
+  })
+
   it('uses unified MRU selection when closing an active browser tab', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

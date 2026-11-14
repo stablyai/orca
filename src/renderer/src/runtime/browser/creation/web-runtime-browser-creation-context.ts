@@ -33,6 +33,8 @@ import type { BrowserClientHostPlacementPreference } from '../../../../../shared
 
 export type CreateWebRuntimeSessionBrowserTabArgs = {
   worktreeId: string
+  /** Client-only tab placement; worktreeId remains the host RPC scope. */
+  placementWorkspaceId?: string
   isCurrentRequest?: () => boolean
   onMaterialized?: (remotePageId: string) => void
   environmentId?: string | null
@@ -71,13 +73,14 @@ export type WebRuntimeBrowserCreationContext = {
   expectedCurrentLocalTabId?: string | null
 }
 
+/** Capture source ownership, placement, and selection policy before staging a runtime browser tab. */
 export function createWebRuntimeBrowserCreationContext(
   args: CreateWebRuntimeSessionBrowserTabArgs,
   environmentId: string
 ): WebRuntimeBrowserCreationContext {
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
-  const shouldFocusOnCreate = args.focusOnCreate !== false
+  const shouldFocusOnCreate = args.focusOnCreate !== false && !args.placementWorkspaceId
   const provisionalPageId = createBrowserUuid()
   const advertisedCapabilities =
     useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities ??
@@ -99,7 +102,7 @@ export function createWebRuntimeBrowserCreationContext(
     intentOwner,
     callEnvironment,
     shouldFocusOnCreate,
-    shouldSelectWorktree: args.selectWorktree !== false,
+    shouldSelectWorktree: args.selectWorktree !== false && !args.placementWorkspaceId,
     provisionalPageId,
     hostSupportsKnownPageId,
     expectsClientHosting,
@@ -120,6 +123,7 @@ export function resolveWebRuntimeBrowserClientTargetGroupId(
     : (args.clientTargetGroupId ?? args.targetGroupId)
 }
 
+/** Publish the pending browser view at its requested client placement before the host creates its page. */
 export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreationContext): void {
   const { args, environmentId, intentOwner, provisionalPageId, shouldFocusOnCreate } = context
   throwIfE2eWebRuntimeBrowserCapabilityUnavailable()
@@ -142,7 +146,8 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
     environmentId,
     worktreeId: args.worktreeId,
     remotePageId: provisionalPageId,
-    activate: shouldFocusOnCreate,
+    placementWorkspaceId: args.placementWorkspaceId,
+    activate: args.focusOnCreate !== false,
     ...(args.url !== undefined ? { url: args.url } : {}),
     ...(args.stagedTitle !== undefined ? { title: args.stagedTitle } : {}),
     ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),

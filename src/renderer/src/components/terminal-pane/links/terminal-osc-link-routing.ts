@@ -8,6 +8,7 @@ import type { LinkHandlerDeps } from './files/terminal-link-handlers'
 import { classifyTerminalOscLinkTarget } from '../../../../../shared/terminal/links/terminal-osc-link-target'
 import {
   isTerminalLinkActionActivation,
+  isTerminalLinkFloatingActivation,
   isTerminalLinkDirectActivation
 } from './gestures/terminal-link-activation'
 import { handleTerminalHttpLink } from './http/terminal-url-link-hit-testing'
@@ -29,6 +30,7 @@ type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
     >
   >
 
+/** Accept desktop link actions while leaving unrelated OSC8 gestures to xterm. */
 function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boolean {
   if (!event) {
     return false
@@ -37,9 +39,14 @@ function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boole
     return false
   }
   // Desktop links require an intentional gesture; ordinary clicks/selecting must not open them. Mobile taps use WebView routing.
-  return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
+  return (
+    isTerminalLinkFloatingActivation(event) ||
+    isTerminalLinkDirectActivation(event) ||
+    isTerminalLinkActionActivation(event)
+  )
 }
 
+/** Validate an OSC8 target and route file or HTTP actions with the terminal’s source ownership. */
 export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
@@ -50,6 +57,7 @@ export function handleOscLink(
         'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro' | 'sourceTabId'
       >
     > & {
+      terminalHandle?: string | null
       sourceOwner?: HttpLinkSourceOwner
       requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
       linkActionContext?: TerminalLinkActionContext | null

@@ -5,11 +5,11 @@ import { useAppStore } from '@/store/index'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../../shared/constants'
 import { seedBrowserLinkTestStore, WORKSPACE, URL_TO_OPEN } from './browser-link-open.test-fixture'
 import '../../links/placement/link-open-intent'
+import { openRoutedHttpLink } from './http-link-destinations'
 import { openHttpLink } from './http-link-routing'
-import './http-link-destinations'
 import '../workspace/workspace-browser-tab-open'
 
 const OTHER_WORKSPACE = 'repo1::/other'
@@ -65,4 +65,26 @@ it('reports where an opened link went', () => {
   expect(
     openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE, sourceOwner: { kind: 'unknown' } })
   ).toBe('none')
+})
+
+it('opens a floating link beside the source without selecting the source browser layout', async () => {
+  const before = useAppStore.getState().unifiedTabsByWorktree[WORKSPACE]!.map((tab) => tab.id)
+  openRoutedHttpLink('https://example.com/floating-link', {
+    worktreeId: WORKSPACE,
+    sourceTabId: 'source',
+    sourceOwner: { kind: 'local' },
+    forceDestination: 'orca',
+    floatingWorkspace: true
+  })
+  await vi.waitFor(() =>
+    expect(
+      useAppStore.getState().browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+    ).toHaveLength(1)
+  )
+  const state = useAppStore.getState()
+  expect(state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => tab.id)).toEqual(before)
+  expect(state.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]?.url).toBe(
+    'https://example.com/floating-link'
+  )
+  expect(state.activeWorktreeId).toBe(WORKSPACE)
 })

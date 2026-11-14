@@ -2,6 +2,7 @@ import type { IBufferLine, IDisposable, Terminal } from '@xterm/xterm'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   isTerminalLinkDirectActivation as isTerminalHttpLinkActivation,
+  isTerminalLinkFloatingActivation,
   isTerminalOwnedLinkGesture
 } from '../gestures/terminal-link-activation'
 import {
@@ -10,7 +11,10 @@ import {
 } from '../gestures/terminal-link-pty-mouse-suppression'
 import { getTerminalBufferPositionForMouseEvent } from '../../input/pointer/terminal-mouse-buffer-position'
 import { findTerminalHttpLinkAtBufferPosition } from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
-import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-input/terminal-linkifier-hover-reset'
+import {
+  isTerminalLinkifierHoverActive,
+  isTerminalLinkifierHoverAtMouseEvent
+} from '@/lib/pane-manager/terminal-input/terminal-linkifier-hover-reset'
 import {
   buildHttpLinkActions,
   httpLinkDirectClickDestination,
@@ -21,6 +25,7 @@ import {
 } from '@/lib/browser/navigation/http-link-destinations'
 import {
   requestTerminalLinkAction,
+  claimTerminalFloatingLink,
   type TerminalLinkActionContext
 } from '../terminal-link-action-request'
 
@@ -42,27 +47,37 @@ type UrlLinkClickFallbackDeps = {
   /** Resolved per click: the pane's PTY (and its runtime binding) may not exist at install time. */
   getSourceOwner?: () => HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
-  getLinkActionContext?: () => TerminalLinkActionContext | null
+  getLinkActionContext?: (event?: MouseEvent) => TerminalLinkActionContext | null
   getActionDestinations?: () => HttpLinkActionDestinations
+  isValidatedFileLink?: (event: MouseEvent) => boolean
 }
 
 export type HttpLinkClickFallbackBinding = IDisposable & {
   ptyMouseSuppression: TerminalLinkPtyMouseSuppression
 }
 
+/** Allow desktop fallback only for gestures eligible for an Orca HTTP link action. */
 function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   if (event.defaultPrevented || (event.button !== 0 && event.button !== 1)) {
     return false
   }
-  // Why: Shift-only, Alt, and non-primary clicks remain available to the terminal or child TUI.
+  // Shift-only and unowned Alt chords remain available to the terminal or child TUI.
   return isTerminalOwnedLinkGesture(event)
 }
 
+/** Route a validated HTTP link through its source owner, claiming the floating chord once. */
 export function handleTerminalHttpLink(
   url: string,
   event: MouseEvent | undefined,
   deps: UrlLinkHitTestDeps
 ): boolean {
+  if (isTerminalLinkFloatingActivation(event)) {
+    if (!claimTerminalFloatingLink(event, deps.linkActionContext)) {
+      return false
+    }
+    openRoutedHttpLink(url, { ...deps, floatingWorkspace: true, forceDestination: 'orca' })
+    return true
+  }
   if (isTerminalHttpLinkActivation(event)) {
     const forceDestination =
       deps.actionDestinations &&
@@ -120,12 +135,17 @@ export function findHttpLinkAtTerminalMouseEvent(
     : null
 }
 
+/** Resolve HTTP targets under eligible clicks when the native linkifier has not activated them. */
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
 ): HttpLinkClickFallbackBinding {
   const isLinkMouseEvent = (event: MouseEvent): boolean => {
-    if (isTerminalLinkifierHoverActive(terminal)) {
+    if (
+      isTerminalLinkFloatingActivation(event)
+        ? isTerminalLinkifierHoverAtMouseEvent(terminal, event) || deps.isValidatedFileLink?.(event)
+        : isTerminalLinkifierHoverActive(terminal)
+    ) {
       return true
     }
     const position = getTerminalBufferPositionForMouseEvent(terminal, event)
@@ -138,10 +158,10 @@ export function installHttpLinkClickFallback(
     terminal,
     isLinkMouseEvent,
     (event) => {
-      const context = deps.getLinkActionContext?.()
+      const context = deps.getLinkActionContext?.(event)
       return Boolean(context?.pointerGesture.canRequestAction(event) && isLinkMouseEvent(event))
     },
-    (event) => Boolean(deps.getLinkActionContext?.()?.pointerGesture.canRequestAction(event))
+    (event) => Boolean(deps.getLinkActionContext?.(event)?.pointerGesture.canRequestAction(event))
   )
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {
@@ -157,7 +177,7 @@ export function installHttpLinkClickFallback(
         sourceTabId: deps.sourceTabId,
         sourceOwner: deps.getSourceOwner?.() ?? { kind: 'local' },
         requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
-        linkActionContext: deps.getLinkActionContext?.(),
+        linkActionContext: deps.getLinkActionContext?.(event),
         actionDestinations: deps.getActionDestinations?.()
       })
     )

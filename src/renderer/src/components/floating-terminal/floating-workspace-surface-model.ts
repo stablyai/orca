@@ -30,7 +30,7 @@ export function resolveFloatingWorkspaceSurfaceModel(
     (state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
   )
   const browserIds = new Set(
-    (state.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
+    Object.values(state.browserTabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
   const fileIds = new Set(state.openFiles.map((file) => file.id))
   const hasVisibleTab = tabs.some((tab) => {

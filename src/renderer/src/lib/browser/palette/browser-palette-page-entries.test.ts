@@ -74,6 +74,43 @@ const worktreeOrder = new Map([
 ])
 
 describe('buildSearchableBrowserPages', () => {
+  it('lists a remote source-owned page at its local floating placement', () => {
+    const entries = buildSearchableBrowserPages({
+      worktrees: [makeWorktree({ hostId: 'runtime:paired' })],
+      repoMap,
+      worktreeOrder,
+      browserTabsByWorktree: { 'wt-1': [makeWorkspace()] },
+      browserPagesByWorkspace: { 'ws-1': [makePage({ browserRuntimeEnvironmentId: 'paired' })] },
+      unifiedTabsByWorktree: {
+        'global-floating-terminal': [
+          {
+            id: 'floating-view',
+            entityId: 'ws-1',
+            worktreeId: 'global-floating-terminal',
+            executionHostId: 'local',
+            groupId: 'floating-group',
+            contentType: 'browser',
+            label: 'Docs',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      activeBrowserTabId: null,
+      activeWorktreeId: 'wt-1',
+      activeTabType: 'terminal'
+    })
+    expect(entries).toMatchObject([
+      {
+        worktree: { id: 'global-floating-terminal' },
+        executionHostId: 'local',
+        page: { worktreeId: 'wt-1', browserRuntimeEnvironmentId: 'paired' }
+      }
+    ])
+  })
+
   it('keeps same-id browser tabs isolated by execution host', () => {
     const sharedId = 'repo-shared::/workspace'
     const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
