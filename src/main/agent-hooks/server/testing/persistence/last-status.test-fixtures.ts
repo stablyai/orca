@@ -13,9 +13,13 @@ export function readSavedStatus(lastStatusPath: string): string {
   })
   try {
     const rows = db
-      .prepare('SELECT key, value FROM rows ORDER BY seq')
+      .prepare('SELECT CAST(key AS BLOB) AS key, value FROM rows ORDER BY seq')
       .all()
-      .map((row) => ({ key: String(row.key), json: String(row.value) }))
+      .map((row) => ({
+        key:
+          row.key instanceof Uint8Array ? Buffer.from(row.key).toString('utf8') : String(row.key),
+        json: String(row.value)
+      }))
     const { agentExits, ...file } = assemble(rows)
     return JSON.stringify(agentExits.length > 0 ? { ...file, agentExits } : file)
   } finally {

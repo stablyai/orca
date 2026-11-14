@@ -313,7 +313,7 @@ export abstract class AgentHookServerState {
     payload: AgentHookEventPayload | EnrichedAgentHookEventPayload,
     launchTokenHashOverride?: string
   ): AgentHookAuthorityEvidence | null
-  protected abstract scheduleStatusPersist(): void
+  protected abstract scheduleStatusPersist(turnBoundary?: boolean): void
   protected abstract runStatusPersist(): boolean
   protected abstract getStatusStore(): LastStatusStore | null
 

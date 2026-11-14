@@ -52,6 +52,28 @@ function restore(cache: KeyedJsonRowCache): unknown {
 }
 
 describe('keyed JSON row cache', () => {
+  it('restores and updates distinct composite keys containing NUL separators', () => {
+    const { path } = paths()
+    const options = { schemaVersion: 1, holdConnection: false }
+    new KeyedJsonRowCache(path, options).write([
+      { key: 'entry\u0000pane-a', json: '"first"' },
+      { key: 'entry\u0000pane-b', json: '"second"' }
+    ])
+    const reopened = new KeyedJsonRowCache(path, options)
+    expect(reopened.load(JSON.parse)).toEqual({
+      kind: 'rows',
+      rows: [
+        { key: 'entry\u0000pane-a', json: '"first"' },
+        { key: 'entry\u0000pane-b', json: '"second"' }
+      ]
+    })
+    reopened.write([{ key: 'entry\u0000pane-b', json: '"updated"' }])
+    expect(new KeyedJsonRowCache(path, options).load(JSON.parse)).toEqual({
+      kind: 'rows',
+      rows: [{ key: 'entry\u0000pane-b', json: '"updated"' }]
+    })
+  })
+
   it('saves exactly its own rows after another connection committed in between', () => {
     const { path } = paths()
     const first = new KeyedJsonRowCache(path, { schemaVersion: 1 })

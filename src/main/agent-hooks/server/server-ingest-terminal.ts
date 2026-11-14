@@ -289,7 +289,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       (previous.payload.state !== 'done' ||
         payload.state === 'done' ||
         previous.observation?.origin === 'launch' ||
-        (!newRun && previous.providerSessionOnly !== true))
+        (!newRun &&
+          previous.providerSessionOnly !== true &&
+          previous.agentPresence?.ended !== true))
         ? previous.providerSession
         : undefined
     // Without a new main-agent fact, preserve it only while the row's state and agent still match.

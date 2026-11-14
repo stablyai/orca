@@ -307,7 +307,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     this.commitStatusRowMutation(rowBefore, enriched)
     // Structured rows serialize nothing; skip the persistence walk for streaming chat updates.
     if (!enriched.structuredHost) {
-      this.scheduleStatusPersist()
+      this.scheduleTurnStatusPersist(previous, enriched)
     }
     this.notifyStatusChangeListeners()
     this.emitEnrichedStatus(

@@ -107,14 +107,38 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     }
   }
 
+  protected scheduleTurnStatusPersist(
+    previous: EnrichedAgentHookEventPayload | undefined,
+    next: EnrichedAgentHookEventPayload
+  ): void {
+    this.scheduleStatusPersist(
+      next.payload.prompt !== previous?.payload.prompt ||
+        // A new turn may repeat its prompt; opening it is the fact a crash must not lose.
+        (next.payload.state === 'working' && previous?.payload.state !== 'working') ||
+        (next.payload.mainAgent?.state === 'working' &&
+          previous?.payload.mainAgent?.state !== 'working') ||
+        ((next.payload.state === 'done' ||
+          next.payload.mainAgent?.state === 'done' ||
+          next.payload.turnCompletedAt !== undefined) &&
+          (next.payload.state !== previous?.payload.state ||
+            next.payload.turnCompletedAt !== previous?.payload.turnCompletedAt ||
+            next.payload.mainAgent?.state !== previous?.payload.mainAgent?.state ||
+            next.payload.mainAgent?.outcome !== previous?.payload.mainAgent?.outcome ||
+            next.payload.interrupted !== previous?.payload.interrupted ||
+            next.turnEndedAt !== previous?.turnEndedAt ||
+            next.payload.lastAssistantMessage !== previous?.payload.lastAssistantMessage))
+    )
+  }
+
   // Leading-edge throttling prevents event streams from postponing writes indefinitely (#26720).
-  protected scheduleStatusPersist(): void {
+  protected scheduleStatusPersist(turnBoundary = false): void {
     if (!this.lastStatusFilePath) {
       return
     }
     const now = Date.now()
-    // Persist authority changes immediately to preserve spool replay filtering after a crash.
-    const urgent = this.currentAuthorityFingerprint() !== this.lastPersistedAuthorityFingerprint
+    // Turn facts and authority must survive crashes without waiting for routine stream checkpoints.
+    const urgent =
+      turnBoundary || this.currentAuthorityFingerprint() !== this.lastPersistedAuthorityFingerprint
     // A wall-clock rollback must not defer persistence indefinitely.
     const throttledAt = urgent
       ? now
