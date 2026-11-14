@@ -41,6 +41,7 @@ import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
+import { NativeChatCollapsedNotice } from './NativeChatCollapsedNotice'
 import { formatUsageLimitResetClock } from '../../../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
@@ -77,12 +78,15 @@ function toneClass(tone: NativeChatNoticeTone): string {
 export function NativeChatNoticeRow({
   block,
   messageId,
-  agentName
+  agentName,
+  disclosureKeys
 }: {
   block: NativeChatTextBlock
   /** The transcript row's message, so a plan's code blocks keep their wrap past the row's mount. */
   messageId?: string
   agentName?: string
+  /** Where a collapsed notice's open choice is kept, newest first. */
+  disclosureKeys?: readonly string[]
 }): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
@@ -217,6 +221,9 @@ export function NativeChatNoticeRow({
         {payload?.head}
       </NativeChatDetailsDisclosure>
     )
+  }
+  if (look.kind === 'collapsed-notice') {
+    return <NativeChatCollapsedNotice block={block} look={look} disclosureKeys={disclosureKeys} />
   }
   // Name Orca and its host as the stop cause; without host context, preserve the original words.
   const { orcaStop } = block

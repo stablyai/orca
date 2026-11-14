@@ -12,6 +12,10 @@ export function withRetryCause(sentence: string, cause: string | undefined): str
   return cause ? `${sentence}\n${cause}` : sentence
 }
 
+export function isProviderRetryRateLimited(retry: AgentSessionProviderRetry | undefined): boolean {
+  return retry?.error === 'rate_limit' || retry?.status === 429
+}
+
 export function providerRetryWords(
   say: AgentSessionFailureSay,
   agent: AgentSessionFailureCopyValues,
@@ -19,12 +23,7 @@ export function providerRetryWords(
 ): string {
   return withRetryCause(
     joinSentences([
-      say(
-        retry?.error === 'rate_limit' || retry?.status === 429
-          ? 'providerRateLimited'
-          : 'providerRetrying',
-        agent
-      ),
+      say(isProviderRetryRateLimited(retry) ? 'providerRateLimited' : 'providerRetrying', agent),
       ...retryNumber(say, retry)
     ]),
     retry?.cause ?? retryLastError(say, retry)

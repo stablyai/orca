@@ -9,7 +9,9 @@ import {
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../agent-session/lifecycle/agent-session-orca-stop'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from './native-chat-stopped-before-start'
 import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../agent-session/agent-session-fork'
-import type { NativeChatBlock, NativeChatTextBlock } from './native-chat-types'
+import { readProviderRetry } from '../agent-session/failures/agent-session-failure'
+import { isProviderRetryRateLimited } from '../agent-session/failures/agent-session-provider-retry-words'
+import type { NativeChatBlock, NativeChatMessage, NativeChatTextBlock } from './native-chat-types'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',
@@ -38,6 +40,13 @@ export type NativeChatNoticeLook =
       decision: 'approved' | 'safety-review' | 'denied'
       agent: 'Codex' | 'Claude'
       tone: NativeChatNoticeTone
+    }
+  /** One summary line that opens the host's own text; counts only when the provider gave both. */
+  | {
+      kind: 'collapsed-notice'
+      label: 'retrying' | 'rate-limited' | 'configuration' | 'deprecation'
+      attempt?: number
+      maxRetries?: number
     }
   /** A boxed line with its icon when it has a tone; plain text when it has none. */
   | { kind: 'line'; tone: NativeChatNoticeTone | null }
@@ -93,9 +102,28 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   if (modelFallback) {
     return { kind: 'model-fallback', ...modelFallback }
   }
+  const collapsible = presentation === undefined && !block.orcaStop && block.text.trim() !== ''
+  if (collapsible && block.failure?.kind === 'providerRetrying') {
+    const retry = readProviderRetry(block.failure.retry)
+    return {
+      kind: 'collapsed-notice',
+      label: isProviderRetryRateLimited(retry) ? 'rate-limited' : 'retrying',
+      ...(retry?.attempt && retry.maxRetries
+        ? { attempt: retry.attempt, maxRetries: retry.maxRetries }
+        : {})
+    }
+  }
   // Declared notification kinds select disclosure; prose and nested failures do not.
   if (presentation === undefined && !block.failure && !block.orcaStop) {
     const frame = block.providerFrame
+    if (collapsible && frame?.provider === 'codex' && block.tone !== 'error') {
+      if (frame.kind === 'notification:configWarning') {
+        return { kind: 'collapsed-notice', label: 'configuration' }
+      }
+      if (frame.kind === 'notification:deprecationNotice') {
+        return { kind: 'collapsed-notice', label: 'deprecation' }
+      }
+    }
     if (frame?.provider === 'codex' && frame.kind === 'notification:guardianWarning') {
       // Codex also reports approvals here; its own TUI hides them by this prefix.
       const approved = block.text.startsWith('Automatic approval review approved (')
@@ -115,6 +143,14 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
     kind: 'line',
     tone: tone === 'warning' || tone === 'error' || tone === 'notice' ? tone : null
   }
+}
+
+/** Where a notice row's open choice may be stored, newest first: its own id, then its run's earlier retries. */
+export function nativeChatNoticeDisclosureKeys(
+  message: Pick<NativeChatMessage, 'id' | 'providerRetryRunIds'>
+): string[] {
+  const ids = message.providerRetryRunIds ?? [message.id]
+  return ids.map((_, index) => `notice:${ids[ids.length - 1 - index]}`)
 }
 
 /** The host writes "Forked from <name>"; the name is what links to the source. */

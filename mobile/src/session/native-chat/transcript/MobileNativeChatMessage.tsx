@@ -7,6 +7,11 @@ import { nativeChatToolRunViewedImages } from '../../../../../src/shared/native-
 import { selectActiveToolCall } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
 import * as Chat from '../../../../../src/shared/native-chat/native-chat-types'
 import {
+  nativeChatNoticeBlock,
+  nativeChatNoticeLook,
+  nativeChatNoticeDisclosureKeys
+} from '../../../../../src/shared/native-chat/native-chat-notice'
+import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
 } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
@@ -287,13 +292,15 @@ function MobileNativeChatMessageImpl({
       />
     )
   }
+  const notice = isSystem ? nativeChatNoticeBlock(drawnProse) : undefined
+  const collapsedNotice = notice && nativeChatNoticeLook(notice).kind === 'collapsed-notice'
   const proseRows = (blocks: Chat.NativeChatBlock[]) =>
     blocks.map((block, index) => proseRow(block, index, Chat.isTextBlock(block) ? block.text : ''))
   return (
     <>
       {turnStatusAbove ? statusRow : null}
       <View
-        style={[styles.row, isUser && styles.rowUser]}
+        style={[styles.row, collapsedNotice && styles.collapsedNoticeRow, isUser && styles.rowUser]}
         testID={mobileNativeChatRowId(rowKey ?? message.id)}
       >
         <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>
@@ -320,6 +327,7 @@ function MobileNativeChatMessageImpl({
                 <MobileNativeChatNoticeRow
                   blocks={drawnProse}
                   fontScale={fontScale}
+                  disclosureKeys={nativeChatNoticeDisclosureKeys(message)}
                   onLongPress={onLongPress}
                 />
               ) : null}

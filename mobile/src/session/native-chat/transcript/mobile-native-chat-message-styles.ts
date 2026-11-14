@@ -16,6 +16,9 @@ export const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm
   },
+  collapsedNoticeRow: {
+    paddingVertical: 0
+  },
   rowUser: {
     alignItems: 'flex-end'
   },

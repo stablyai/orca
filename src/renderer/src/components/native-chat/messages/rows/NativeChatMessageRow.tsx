@@ -11,7 +11,10 @@ import type {
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
 import { NativeChatReasoningRow } from '../reasoning/NativeChatReasoningRow'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
-import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/native-chat-notice'
+import {
+  nativeChatNoticeBlock,
+  nativeChatNoticeDisclosureKeys
+} from '../../../../../../shared/native-chat/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
 import { ProviderFrameRow } from '../diagnostics/NativeChatProviderDetails'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
@@ -136,7 +139,12 @@ export const MessageRow = memo(function MessageRow(
   if (notice) {
     return (
       <div ref={rowRef}>
-        <NativeChatNoticeRow block={notice} messageId={message.id} agentName={agentName} />
+        <NativeChatNoticeRow
+          block={notice}
+          messageId={message.id}
+          agentName={agentName}
+          disclosureKeys={nativeChatNoticeDisclosureKeys(message)}
+        />
       </div>
     )
   }
