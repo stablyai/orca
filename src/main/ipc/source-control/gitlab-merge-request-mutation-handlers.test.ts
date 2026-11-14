@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
-import { repo } from './gitlab-ipc-repository-fixture'
+import type { Repo } from '../../../shared/repo-types'
 import type * as RepoAccess from './gitlab-repo-access'
 
 const { ipcHandlers, updateMRMock, invalidateMock } = vi.hoisted(() => ({
@@ -16,11 +16,13 @@ vi.mock('electron', () => ({
     })
   }
 }))
-vi.mock('../../gitlab/merge-request-update', () => ({ updateMR: updateMRMock }))
+vi.mock('../../gitlab/merge-requests/merge-request-update', () => ({ updateMR: updateMRMock }))
 vi.mock('../../source-control/hosted-review-branch-cache', () => ({
   invalidateHostedReviewBranchCache: invalidateMock
 }))
-vi.mock('../../gitlab/mr-approval-batch', () => ({ refreshGitLabApprovals: vi.fn() }))
+vi.mock('../../gitlab/merge-requests/mr-approval-batch', () => ({
+  refreshGitLabApprovals: vi.fn()
+}))
 vi.mock('./gitlab-repo-access', async (importActual) => ({
   ...(await importActual<typeof RepoAccess>()),
   localGitOptionArgs: () => []
@@ -28,7 +30,14 @@ vi.mock('./gitlab-repo-access', async (importActual) => ({
 
 import { registerGitLabMergeRequestMutationHandlers } from './gitlab-merge-request-mutation-handlers'
 
-const store = { getRepos: () => [repo()], getRepo: () => undefined } as unknown as Store
+const repo: Repo = {
+  id: 'repo-local',
+  path: '/local/orca',
+  displayName: 'Orca',
+  badgeColor: '#737373',
+  addedAt: 1
+}
+const store = { getRepos: () => [repo], getRepo: () => undefined } as unknown as Store
 
 function updateMR(): unknown {
   return ipcHandlers.get('gitlab:updateMR')?.(null, {

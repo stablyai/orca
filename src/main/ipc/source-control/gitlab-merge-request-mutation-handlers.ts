@@ -24,7 +24,7 @@ import {
 } from './gitlab-repo-access'
 import { invalidateHostedReviewBranchCache } from '../../source-control/hosted-review-branch-cache'
 import { getStoredRepoExecutionHostId } from '../../workspaces/execution-host/repo-execution-host'
-import { refreshGitLabApprovals } from '../../gitlab/mr-approval-batch'
+import { refreshGitLabApprovals } from '../../gitlab/merge-requests/mr-approval-batch'
 
 export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
   ipcMain.handle(

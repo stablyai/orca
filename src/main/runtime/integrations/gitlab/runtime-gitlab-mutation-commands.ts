@@ -23,7 +23,7 @@ import { updateMR } from '../../../gitlab/merge-requests/merge-request-update'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { invalidateHostedReviewBranchCache } from '../../../source-control/hosted-review-branch-cache'
 import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
-import { refreshGitLabApprovals } from '../../../gitlab/mr-approval-batch'
+import { refreshGitLabApprovals } from '../../../gitlab/merge-requests/mr-approval-batch'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 
