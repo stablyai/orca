@@ -5,6 +5,7 @@ import { detectUiLanguage, shouldShowLanguageSwitcher } from './ui-locale'
 describe('system language detection', () => {
   it.each([
     ['en-US', 'en', 'supported'],
+    ['gl-ES', 'gl', 'supported'],
     ['zh-Hans-TW', 'zh', 'supported'],
     ['zh-Hant-CN', 'zh-Hant', 'supported'],
     ['zh-Latn-CN', 'en', 'unsupported'],
