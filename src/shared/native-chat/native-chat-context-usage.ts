@@ -32,7 +32,7 @@ export function deriveNativeChatContextUsage(
     if (isNativeChatCompactionBoundary(message) || isNativeChatContextClear(message)) {
       return null
     }
-    if (message.role !== 'assistant' || !message.usage) {
+    if ((message.role !== 'assistant' && message.role !== 'reasoning') || !message.usage) {
       continue
     }
     const usedTokens = contextTokensFromUsage(message.usage)

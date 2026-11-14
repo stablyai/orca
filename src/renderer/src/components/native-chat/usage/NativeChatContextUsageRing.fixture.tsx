@@ -30,3 +30,23 @@ export const deferredTools = defineFixture({
     frame.querySelector<HTMLButtonElement>('button[data-native-chat-context-usage]')?.click()
   }
 })
+
+export const terminalWithoutWindow = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-40 items-end justify-end bg-background p-4">
+      <NativeChatContextUsageRing
+        usage={{
+          usedTokens: 42_000,
+          windowTokens: null,
+          percentage: null,
+          estimated: true,
+          rows: []
+        }}
+      />
+    </div>
+  ),
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('button[data-native-chat-context-usage]')?.click()
+  }
+})

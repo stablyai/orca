@@ -166,7 +166,6 @@ export function useMobileNativeChatController(args: {
     stop: handleNativeChatStop
   })
   const activeTurn = activeChatStructured ? structuredNativeChat : terminalTurn
-  const nativeChatAgentWorking = activeTurn.isWorking
   const workingEpoch = terminalTurn.workingEpoch
   const placedChatPending = useMemo(
     () =>
@@ -220,7 +219,7 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
-  const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
+  const { nativeChatSessionOptions, recordCommand, nativeChatContextUsage } =
     useMobileNativeChatSessionOptionController({
       client,
       activeChatStructured,
@@ -229,10 +228,12 @@ export function useMobileNativeChatController(args: {
       dispatchCommand: handleNativeChatDispatchCommand,
       hostId,
       isTabChatView,
-      isWorking: nativeChatAgentWorking,
+      isWorking: activeTurn.isWorking,
       reportedModel: activeSessionTab?.agentStatus?.model ?? null,
+      messages: nativeChatSession.messages,
       modelSwitchCommand: activeSessionTab?.agentStatus?.modelSwitchCommand,
       structured: {
+        contextUsage: structuredNativeChat.contextUsage,
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
         optionSurface: structuredNativeChat.optionSurface,
         conversationCommands: structuredNativeChat.conversationCommands,
@@ -248,9 +249,9 @@ export function useMobileNativeChatController(args: {
       worktreeId
     })
   useLayoutEffect(() => {
-    recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
+    recordSessionOptionCommandRef.current = recordCommand
     appendComposerTextRef.current = appendComposerText
-  }, [appendComposerText, recordNativeChatSessionOptionCommand])
+  }, [appendComposerText, recordCommand])
 
   return {
     reportQueuedEditError: onSendError,
@@ -289,14 +290,14 @@ export function useMobileNativeChatController(args: {
     nativeChatReceipts: activeChatStructured ? structuredNativeChat.receipts : null,
     nativeChatActionablePromptIds: structuredNativeChat.actionablePromptIds,
     nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
-    nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
+    nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : activeTurn.isWorking,
     nativeChatSendFollowUp: activeChatStructured ? structuredNativeChat.sendFollowUp : null,
     nativeChatStreamingText: terminalTurn.streamingText,
     ...prompts,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : terminalTurn.stop,
     nativeChatQueued: structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
-    nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
+    nativeChatContextUsage,
     nativeChatInterruptedContinue: activeChatStructured
       ? structuredNativeChat.interruptedContinue
       : null,
