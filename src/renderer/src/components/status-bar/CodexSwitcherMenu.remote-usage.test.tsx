@@ -7,8 +7,11 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type * as ProviderAccountsClient from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useOwnerUsageRateLimits, type OwnerUsageRateLimits } from './use-owner-usage-rate-limits'
-import { CodexSwitcherMenu } from './CodexSwitcherMenu'
+import {
+  useOwnerUsageRateLimits,
+  type OwnerUsageRateLimits
+} from './usage/use-owner-usage-rate-limits'
+import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 
 const mocks = vi.hoisted(() => {
   const watchers: Parameters<typeof ProviderAccountsClient.watchProviderAccounts>[1][] = []

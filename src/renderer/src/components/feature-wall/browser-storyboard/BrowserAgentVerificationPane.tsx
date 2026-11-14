@@ -1,5 +1,5 @@
 import type { JSX, ReactNode } from 'react'
-import { ClaudeIcon } from '@/components/status-bar/icons'
+import { ClaudeIcon } from '@/components/status-bar/accounts/provider-icons'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'

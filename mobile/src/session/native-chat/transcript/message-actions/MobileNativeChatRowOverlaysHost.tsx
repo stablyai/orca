@@ -2,11 +2,11 @@ import { useCallback, useMemo } from 'react'
 import type { AgentSessionRewindSurface } from '../../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { triggerMediumImpact } from '../../../../platform/haptics/haptics'
-import { MobileNativeChatImageViewer } from '../../visual/MobileNativeChatImageViewer'
+import { MobileImageViewer } from '../../../../files/media/presentation/MobileImageViewer'
 import { MobileImageViewerActions } from '../../visual/MobileImageViewerActions'
 import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
 import { MobileLinkActionSheet } from './MobileLinkActionSheet'
-import { MarkdownLinkHandlerContext } from '../../../../components/markdown-link-handler'
+import { MarkdownLinkHandlerContext } from '../../../../components/markdown/links/markdown-link-handler'
 import {
   MobileNativeChatRowOverlaysContext,
   type MobileNativeChatViewedImage
@@ -59,11 +59,7 @@ export function MobileNativeChatRowOverlaysHost({
   const opened = useMemo(() => {
     const close = () => setShown(null)
     return shown?.image ? (
-      <MobileNativeChatImageViewer
-        {...shown.image}
-        actions={MobileImageViewerActions}
-        onClose={close}
-      />
+      <MobileImageViewer {...shown.image} actions={MobileImageViewerActions} onClose={close} />
     ) : shown?.actionsFor ? (
       <MobileNativeChatMessageActionsSheet message={shown.actionsFor} onClose={close} />
     ) : shown?.link ? (

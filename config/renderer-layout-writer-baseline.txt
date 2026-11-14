@@ -10,7 +10,7 @@
 1 src/renderer/src/components/sidebar/workspace-card/activity/use-worktree-activity-statuses.ts
 4 src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-send-target-inputs.ts
 4 src/renderer/src/components/sidebar/worktree-list/listing/use-agent-send-target.ts
-1 src/renderer/src/components/status-bar/workspace-space-decision-inputs.ts
+1 src/renderer/src/components/status-bar/workspace-storage/decisions/workspace-space-decision-inputs.ts
 2 src/renderer/src/components/tab-bar/terminal-tab-activity-status.ts
 3 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
 1 src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts

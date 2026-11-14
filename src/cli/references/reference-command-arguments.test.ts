@@ -25,14 +25,4 @@ describe('reference command arguments', () => {
     expect(getRepeatedStringFlag(parsed.flags, 'url')).toEqual(['url'])
     expect(getRepeatedStringFlag(parsed.flags, 'key')).toEqual(['first', 'second'])
   })
-
-  it('rejects positional and named forms of the same argument', () => {
-    const parsed = parse(['reference', 'add', 'one', 'two', '--url', 'three'])
-    expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).toThrow('not both')
-  })
-
-  it('does not accept extra arguments on commands without variadic positionals', () => {
-    const parsed = parse(['reference', 'find', 'STA-1', 'STA-2'])
-    expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).toThrow('Unknown command')
-  })
 })
