@@ -62,6 +62,7 @@ export default function AiVaultPanel({
   initialQuery = '',
   initialAgents,
   headerAction,
+  onSearchEscape,
   onSessionOpened,
   resumeHere
 }: AiVaultPanelProps): React.JSX.Element {
@@ -258,6 +259,8 @@ export default function AiVaultPanel({
 
   return (
     <div
+      // Why: only the sidebar host (which passes onSearchEscape) owns Agents shortcuts; the /resume dialog does not.
+      data-ai-vault-panel={onSearchEscape ? 'true' : undefined}
       className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar outline-none"
       {...aiVaultPanelKeyboardRootProps(keyboardRows ? listKeyboardRef : undefined)}
     >
@@ -278,6 +281,7 @@ export default function AiVaultPanel({
         adjustmentCount={viewAdjustmentCount}
         searchInputRef={searchInputRef}
         headerAction={headerAction}
+        onSearchEscape={onSearchEscape}
         onSearchKeyDown={
           keyboardRows ? (event) => listKeyboardRef.current?.handleKeyDown(event) : undefined
         }

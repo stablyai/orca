@@ -1,5 +1,6 @@
 import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { agentsShortcutHandlers } from './agents-shortcut-handlers'
 import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
@@ -277,6 +278,12 @@ export function createAppCommandHandlers(
           : revealRightSidebarTab('sidebar.sourceControl.toggle', 'source-control')
     ],
     ['sidebar.checks.toggle', () => revealRightSidebarTab('sidebar.checks.toggle', 'checks')],
-    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')]
+    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')],
+    ...agentsShortcutHandlers({
+      canRevealRightSidebar,
+      claim,
+      showAiVaultSearch: () => actions.showAiVaultSearchKeepingScope(),
+      closeRightSidebar: () => actions.setRightSidebarOpen(false)
+    })
   ])
 }

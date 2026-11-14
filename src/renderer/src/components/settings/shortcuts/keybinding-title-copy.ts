@@ -48,6 +48,11 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.44e8b7dcb5', 'Show source control'),
   'sidebar.checks.toggle': () => translate('keybindings.title.e37b19864c', 'Show checks'),
   'sidebar.ports.toggle': () => translate('keybindings.title.cb816639bd', 'Show ports'),
+  'sidebar.agents.toggle': () => translate('keybindings.title.sidebarAgentsToggle', 'Show agents'),
+  'sidebar.agents.scopeNext': () =>
+    translate('keybindings.title.sidebarAgentsScopeNext', 'Agents: next scope'),
+  'sidebar.agents.scopePrevious': () =>
+    translate('keybindings.title.sidebarAgentsScopePrevious', 'Agents: previous scope'),
   'sidebar.sleepingWorkspaces.toggle': () =>
     translate('keybindings.title.437260810f', 'Toggle sleeping workspaces'),
   'sidebar.focusWorktreeList': () =>
