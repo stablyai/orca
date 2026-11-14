@@ -4375,7 +4375,6 @@
       "src/renderer/src/components/editor/markdown-source-tools/monaco/monaco-markdown-doc-link-decorations.offset-scan.test.ts": 199,
       "src/renderer/src/components/editor/markdown-source-tools/monaco/monaco-markdown-doc-link-decorations.test.ts": 68,
       "src/renderer/src/components/editor/monaco-programmatic-sync.test.ts": 46,
-      "src/renderer/src/components/editor/pdf-view-position.test.ts": 74,
       "src/renderer/src/components/editor/pdf-viewer-zoom-ownership.test.tsx": 789,
       "src/renderer/src/components/editor/plugin-custom-editor-host.test.ts": 480,
       "src/renderer/src/components/editor/rich-markdown/raw-source/raw-markdown-html-line-break.test.ts": 2188,
