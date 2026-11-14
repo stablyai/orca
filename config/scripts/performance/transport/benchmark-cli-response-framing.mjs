@@ -16,16 +16,35 @@ const beforeSource = execFileSync('git', ['show', `${baselineRef}:${sourcePath}`
 })
 let chunks = []
 
-async function loadTransport(source) {
+async function loadTransport(source, sourceFile = sourcePath) {
   const built = await build({
-    stdin: { contents: source, loader: 'ts', resolveDir: dirname(resolve(sourcePath)) },
+    stdin: { contents: source, loader: 'ts', resolveDir: dirname(resolve(sourceFile)) },
     bundle: true,
     platform: 'node',
     format: 'cjs',
     write: false,
-    logLevel: 'silent'
+    logLevel: 'silent',
+    plugins: [
+      {
+        name: 'relocated-cli-runtime-baseline-owners',
+        setup(plugin) {
+          plugin.onResolve({ filter: /^\.\// }, ({ path, resolveDir }) => {
+            if (sourceFile !== sourcePath || resolveDir !== dirname(resolve(sourcePath))) {
+              return
+            }
+            const owners = {
+              './envelope-schema': 'src/shared/runtime-rpc-envelope.ts',
+              './types': 'src/cli/runtime/connection/types.ts',
+              './runtime-access-denied': 'src/cli/runtime/connection/runtime-access-denied.ts'
+            }
+            const owner = owners[path]
+            return owner ? { path: resolve(owner) } : undefined
+          })
+        }
+      }
+    ]
   })
-  const module = new Module(resolve(sourcePath))
+  const module = new Module(resolve(sourceFile))
   const originalRequire = module.require.bind(module)
   module.require = (name) => {
     if (name === 'node:crypto') {
@@ -50,12 +69,13 @@ async function loadTransport(source) {
       }
     }
   }
-  module._compile(built.outputFiles[0].text, resolve(sourcePath))
+  module._compile(built.outputFiles[0].text, resolve(sourceFile))
   return module.exports.sendRequest
 }
 
 const before = await loadTransport(beforeSource)
-const after = await loadTransport(readFileSync(sourcePath, 'utf8'))
+const currentSourcePath = 'src/cli/runtime/connection/transport.ts'
+const after = await loadTransport(readFileSync(currentSourcePath, 'utf8'), currentSourcePath)
 const metadata = {
   runtimeId: 'benchmark-runtime',
   authToken: 'benchmark-token',

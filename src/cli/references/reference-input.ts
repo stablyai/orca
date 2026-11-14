@@ -14,7 +14,7 @@ import {
 
 import type { HandlerContext } from '../dispatch/dispatch'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getOptionalStringFlag, getRepeatedStringFlag } from '../arguments/flags'
 import { resolveJiraTarget } from '../jira/jira-target'
 

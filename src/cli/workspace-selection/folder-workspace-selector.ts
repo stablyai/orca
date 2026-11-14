@@ -1,7 +1,7 @@
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export function mayNameFolderWorkspace(selector: string): boolean {
   return selector.startsWith('path:') || selector.startsWith('name:')

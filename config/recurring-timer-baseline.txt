@@ -4,8 +4,8 @@
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing intervals: pnpm check:recurring-timer-ratchet --prune
 1 src/cli/orchestration/messages/check-keepalive.ts
-1 src/cli/runtime/mac-app-update-bundle.ts
-1 src/cli/runtime/serve-supervised-service.ts
+1 src/cli/runtime/serve/updates/mac-app-update-bundle.ts
+1 src/cli/runtime/serve/supervision/serve-supervised-service.ts
 1 src/main/agent-hooks/server/server-opencode-binder.ts
 1 src/main/automations/observation/retained-run-reconciliation.ts
 1 src/main/automations/automation-service.ts

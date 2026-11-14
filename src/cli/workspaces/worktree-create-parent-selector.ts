@@ -1,6 +1,6 @@
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { getOptionalStringFlag } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalParentSelector } from '../workspace-selection/caller-folder-workspace'
 import { resolveParentEnvironment, type ParentEnvironment } from './worktree-parent-environment'
