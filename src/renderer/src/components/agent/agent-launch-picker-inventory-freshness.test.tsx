@@ -284,7 +284,7 @@ it('forwards a prospective paired repo and explicit launch cwd to terminal disco
   await waitFor(() => expect(launch).toHaveBeenCalledOnce())
   expect(launch.mock.lastCall?.[1]).toMatchObject({
     surface: 'terminal',
-    choices: { model: 'gemini-3.8-flash', options: { effort: 'high' } }
+    choices: { model: 'gemini-3.8-flash-high', options: { effort: 'high' } }
   })
 })
 

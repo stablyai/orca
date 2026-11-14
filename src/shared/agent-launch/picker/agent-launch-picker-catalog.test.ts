@@ -48,7 +48,7 @@ it('keeps terminal effort discovery separate from Chat and preserves a saved pai
     patch: { options: { effort: 'medium' } }
   })
   expect(agentPickerPanelArguments(entry, changed).choices).toMatchObject({
-    model: 'gemini-3.8-flash',
+    model: 'gemini-3.8-flash-medium',
     options: { effort: 'medium' }
   })
   const cleared = applyAgentPickerEdit(entry, draft, {

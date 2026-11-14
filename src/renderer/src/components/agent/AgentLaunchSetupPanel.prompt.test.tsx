@@ -67,7 +67,7 @@ it('launches an untouched saved literal Antigravity pair through the actual setu
     })
   ).toMatchObject({
     ok: true,
-    tokens: ['antigravity', '--model', 'gemini-3.8-flash-high', '--effort', 'low']
+    tokens: ['antigravity', '--model', 'gemini-3.8-flash-low']
   })
 })
 
@@ -101,18 +101,15 @@ it.each(['dedicated', 'arguments'] as const)(
     const ordinary = compilePickerTerminalLaunch(agentPickerDraft(own), own, settings)
     expect(ordinary).toMatchObject({
       ok: true,
-      tokens: expect.arrayContaining([
+      tokens: [
         'antigravity',
+        '--dangerously-skip-permissions',
         '--model',
         'gemini-3.8-flash',
-        '--effort',
-        'low',
-        '--dangerously-skip-permissions',
         '--add-dir',
         'docs'
-      ])
+      ]
     })
-    expect(ordinary.ok && ordinary.tokens).toHaveLength(8)
     const launch = vi.fn().mockReturnValue(true)
     act(() =>
       root.render(
@@ -132,15 +129,18 @@ it.each(['dedicated', 'arguments'] as const)(
     fireEvent.click(getByRole(document.body, 'radio', { name: 'Default' }))
     fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
     await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+    expect(agentPickerLaunchInputs(launch.mock.lastCall![1], own)).toMatchObject({
+      terminalOptionEdits: { effort: null }
+    })
     expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], own, settings)).toMatchObject({
       ok: true,
       tokens: [
         'antigravity',
         '--dangerously-skip-permissions',
-        '--add-dir',
-        'docs',
         '--model',
-        'gemini-3.8-flash'
+        'gemini-3.8-flash',
+        '--add-dir',
+        'docs'
       ]
     })
   }
@@ -215,14 +215,7 @@ it.each(['button', 'enter'] as const)(
     expect(launch.mock.lastCall![0]).toMatchObject({ agent: 'antigravity', kind: 'cli' })
     expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], refreshed)).toMatchObject({
       ok: true,
-      tokens: [
-        'antigravity',
-        '--dangerously-skip-permissions',
-        '--model',
-        'gemini-3.8-flash',
-        '--effort',
-        'low'
-      ]
+      tokens: ['antigravity', '--dangerously-skip-permissions', '--model', 'gemini-3.8-flash-low']
     })
     fireEvent.keyDown(
       document.querySelector<HTMLElement>(

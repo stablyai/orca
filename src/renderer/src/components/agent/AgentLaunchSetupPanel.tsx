@@ -176,7 +176,7 @@ export function AgentLaunchSetupPanel({
   const editsDefaults = mode === 'select' && !entry.textGeneration
   const note = agentLaunchSetupArgumentsNote(entry.label, options, !seed?.modelApply.cli?.length)
   const renderModelRow = (model: (typeof modelRows.rows)[number]) => {
-    const current = model.unlisted || (currentModel === model.id && !modelInArguments)
+    const current = model.unlisted || (displayModel === model.id && !modelInArguments)
     return (
       <CommandItem
         key={model.id}

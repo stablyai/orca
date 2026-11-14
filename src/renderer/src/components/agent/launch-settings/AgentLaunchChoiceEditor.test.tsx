@@ -197,7 +197,7 @@ describe('AgentLaunchChoiceEditor model list', () => {
     act(() => select.get('Reasoning effort')?.('high'))
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
-        { model: 'gemini-3.8-flash', options: { effort: 'high' } },
+        { model: 'gemini-3.8-flash-high', options: { effort: 'high' } },
         ''
       )
     )

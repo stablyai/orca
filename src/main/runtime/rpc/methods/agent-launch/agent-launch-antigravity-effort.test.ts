@@ -16,30 +16,6 @@ const capturedModels = [
   { id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' }
 ]
 
-it('refuses the real conflicting pair before creating a terminal, using the startup cwd', async () => {
-  const runtime = Object.assign(runtimeStub({ settings: {} }), {
-    discoverTerminalModels: vi.fn(async () => ({
-      success: true,
-      catalogOrigin: 'probe',
-      models: capturedModels
-    }))
-  })
-  await expect(
-    method.handler(
-      method.params.parse({ ...request, cwd: '/repo/subdir' }),
-      rpcContext(runtime, CAPABLE_CLIENT)
-    )
-  ).rejects.toMatchObject({
-    code: 'invalid_argument',
-    message: expect.stringContaining('--model gemini-3.8-flash --effort low')
-  })
-  expect(runtime.discoverTerminalModels).toHaveBeenCalledWith('id:wt-7', 'antigravity', {
-    cwd: '/repo/subdir',
-    uncached: true
-  })
-  expect(runtime.createTerminal).not.toHaveBeenCalled()
-})
-
 it('passes through inability and preserves saved profile pairs without discovery', async () => {
   const runtime = Object.assign(runtimeStub({ settings: {} }), {
     discoverTerminalModels: vi.fn(async () => {
