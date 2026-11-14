@@ -59,7 +59,10 @@ function shortLabel(
 }
 
 export function getTightestUsageSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
-  const sections = usedSections(p, t)
+  return tightestOf(p, usedSections(p, t))
+}
+
+function tightestOf(p: ProviderRateLimits, sections: UsageSection[]): UsageSection | null {
   if (sections.length === 0) {
     return null
   }
@@ -81,7 +84,10 @@ export function getUsageHeadlineSection(p: ProviderRateLimits, t?: Translate): U
       return { ...primary, label: shortLabel(p, primary, true) }
     }
   }
-  return getTightestUsageSection(p, t)
+  // Why: a model-scoped limit (Fable) blocks only that model, so it must not hide the account-wide windows.
+  const sections = usedSections(p, t)
+  const accountWide = sections.filter((section) => section.window !== p.fableWeekly)
+  return tightestOf(p, accountWide.length > 0 ? accountWide : sections)
 }
 
 function soonestResetLabel(sections: UsageSection[], now: number): string | null {
