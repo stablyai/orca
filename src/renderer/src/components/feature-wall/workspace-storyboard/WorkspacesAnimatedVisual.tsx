@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import { ClaudeIcon, OpenCodeGoIcon } from '../../status-bar/icons'
+import { ClaudeIcon, OpenCodeGoIcon } from '../../status-bar/accounts/provider-icons'
 
 type AgentKind = 'claude' | 'codex' | 'opencode'
 

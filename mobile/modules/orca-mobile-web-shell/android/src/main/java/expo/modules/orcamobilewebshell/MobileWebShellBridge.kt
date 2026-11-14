@@ -19,18 +19,8 @@ internal fun acceptsMobileWebShellBridgeFrame(
   hasCommittedDocument: Boolean
 ): Boolean = isMainFrame && isStringMessage && hasCommittedDocument
 
-/** Silently count refusals for tests without revealing the cap to the page. */
 internal class MobileWebShellBridgeGate {
-  var refusedCount = 0
-    private set
-
-  fun accepts(byteCount: Int): Boolean {
-    if (!acceptsMobileWebShellBridgeByteCount(byteCount)) {
-      refusedCount += 1
-      return false
-    }
-    return true
-  }
+  fun accepts(byteCount: Int): Boolean = acceptsMobileWebShellBridgeByteCount(byteCount)
 }
 
 /** What a prop update should do about the listener, decided before any WebView call. */

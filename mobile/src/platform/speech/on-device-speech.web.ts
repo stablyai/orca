@@ -1,7 +1,10 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { DictationTerm } from '../../../../src/shared/dictation-dictionary'
 import { createDictationTextPipeline } from '../../../../src/shared/dictation-text-pipeline'
-import { useNativeVerbs, type NativeVerbs } from '../../mobile-web-shell/bridge/use-native-verbs'
+import {
+  useNativeVerbs,
+  type NativeVerbs
+} from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import type { OnDeviceSpeech } from './on-device-speech-contract'
 import { onDeviceSpeechLocale } from './on-device-speech-locale'
 

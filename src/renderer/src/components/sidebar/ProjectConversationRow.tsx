@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { ConversationPreference } from '../../../../shared/conversation-navigation-preferences'
@@ -27,7 +28,7 @@ export function ProjectConversationRow({
   onPreference: (patch: ConversationPreference) => Promise<void>
 }): React.JSX.Element {
   const t = useTranslate()
-  const savedTitle = useAiVaultSessionDisplayTitle(session)
+  const { title: savedTitle, forked } = useAiVaultSessionDisplayTitle(session)
   const title =
     projectConversationTitle(session, savedTitle) ||
     t('projectConversations.untitled', 'Untitled chat')
@@ -71,7 +72,9 @@ export function ProjectConversationRow({
             >
               <AgentIcon agent={session.agent} size={14} />
             </span>
-            <span className="min-w-0 flex-1 truncate">{title}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {forked ? <ForkMarkedName name={title} /> : title}
+            </span>
             {liveState === 'working' ? (
               <Loader2
                 aria-label={t('projectConversations.working', 'Working')}

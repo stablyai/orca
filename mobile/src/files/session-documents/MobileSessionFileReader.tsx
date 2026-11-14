@@ -11,16 +11,16 @@ import {
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
-import { MobileSyntaxSegments } from '../../components/MobileSyntaxSegments'
+import { MobileSyntaxSegments } from '../../components/code-presentation/MobileSyntaxSegments'
 import {
   buildPlainMobileDiffSyntaxLines,
   highlightMobileCode,
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
 } from './mobile-file-syntax'
-import { MobileHtmlPreview } from '../../components/MobileHtmlPreview'
-import { MobilePanZoomImage } from '../../components/MobilePanZoomImage'
-import { MobileSvgPreview } from '../../components/MobileSvgPreview'
+import { MobileHtmlPreview } from '../preview/documents/MobileHtmlPreview'
+import { MobilePanZoomImage } from '../media/presentation/MobilePanZoomImage'
+import { MobileSvgPreview } from '../preview/documents/MobileSvgPreview'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -30,11 +30,11 @@ import type {
   DiffCommentActions,
   DiffSyntaxState,
   RenderableDiffLine
-} from '../../source-control/review/mobile-review-comment-state'
+} from '../../source-control/review/review-notes/mobile-review-comment-state'
 import type { FileDocState, FileSyntaxState } from './session-document-state'
-import { DiffLineRow } from '../../source-control/review/MobileSessionDiffLineRow'
-import { sendableMobileDiffComments } from '../../source-control/review/mobile-diff-comments'
-import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
+import { DiffLineRow } from '../../source-control/review/review-notes/MobileSessionDiffLineRow'
+import { sendableMobileDiffComments } from '../../source-control/review/review-notes/mobile-diff-comments'
+import { MobileLoadErrorState, MobileStateView } from '../../components/feedback/MobileStateView'
 import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 
 type FileReaderProps = {
