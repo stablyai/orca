@@ -283,6 +283,7 @@ function SessionOptionPopover(props: {
         // Escape from a portaled child (the speed list) closes only that child.
         onKeyDown={(event) => {
           if (
+            !review &&
             event.key === 'Escape' &&
             !(event.target instanceof HTMLInputElement) &&
             event.target instanceof Node &&

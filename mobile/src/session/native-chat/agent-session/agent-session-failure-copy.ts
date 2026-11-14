@@ -79,6 +79,18 @@ const COPY: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyVa
       "Answer the agent's question or approval, then run /{{command}}.",
       values
     ),
+  reviewFailed: (values) =>
+    translate(
+      'session.failure.reviewFailed',
+      "Codex couldn't run the review. Try /review again.",
+      values
+    ),
+  reviewSettingsUnsupported: (values) =>
+    translate(
+      'session.failure.reviewSettingsUnsupported',
+      'Update Codex to review with a different model, or switch back to {{detail}}.',
+      values
+    ),
   compactionFailed: (values) =>
     translate('session.failure.compactionFailed', 'Compaction failed.', values),
   compactionFailedQuoted: (values) =>

@@ -10,7 +10,7 @@ export function useNativeChatSendClassification(
   agent: AgentType,
   commands: readonly SlashCommandSuggestion[],
   skillOrigin: RefObject<string | null>,
-  prefix: string | null
+  prefix: '$' | '/' | null
 ) {
   return useCallback(
     (value: string) => {

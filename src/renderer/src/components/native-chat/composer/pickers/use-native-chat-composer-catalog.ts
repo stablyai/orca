@@ -42,7 +42,6 @@ export function useNativeChatComposerCatalog(
         conversationCommands,
         reported,
         compactInstructions,
-        cleanBackgroundTerminals,
         interactionModeSupported,
         cleanBackgroundTerminals
       ),

@@ -18,7 +18,19 @@ it('carries a queued review target and accepted settings through a host restart'
   }))
   Object.assign(rig.host.deps.adapter, { review })
   try {
-    const working = await rig.workingSend({ model: 'gpt-6.1-sol', effort: 'high' })
+    for (const [key, value] of [
+      ['model', 'gpt-6.1-sol'],
+      ['effort', 'high']
+    ]) {
+      const fields = { key: key!, value: value! }
+      expect(
+        await rig.host.setOption(CALLER, {
+          envelope: rig.envelope(fields, 'agentSession.setOption', hostTestOperationId()),
+          ...fields
+        })
+      ).toMatchObject({ ok: true })
+    }
+    const working = await rig.workingSend()
     const fields = {
       command: 'review' as const,
       review: { type: 'baseBranch' as const, branch: 'release' },
