@@ -28,7 +28,6 @@ async function renderDialog(
   useAppStore.setState({ updateSettings })
   useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
     terminalTabId: 'tab-1',
-    tabLabel: 'dev server',
     copyKind: 'command',
     ...request
   })
@@ -109,7 +108,6 @@ describe('RunningTerminalCloseDialog', () => {
     await act(async () => {
       useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
         terminalTabId: 'tab-2',
-        tabLabel: 'build watcher',
         copyKind: 'command',
         onConfirm: nextOnConfirm
       })
@@ -127,6 +125,6 @@ describe('RunningTerminalCloseDialog', () => {
     })
     expect(onConfirm).toHaveBeenCalledTimes(1)
     expect(nextOnConfirm).toHaveBeenCalledTimes(1)
-    expect(document.body.textContent).not.toContain('build watcher')
+    expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
   })
 })

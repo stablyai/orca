@@ -3404,8 +3404,7 @@
             "stop_command_description": "이 terminal을 닫으면 내부에서 실행 중인 명령이 중지됩니다.",
             "dont_ask_again": "실행 중인 terminals에 대해 다시 묻지 않기",
             "stop_agent_confirm": "Agent 중지",
-            "stop_command_confirm": "중지하고 닫기",
-            "automatic_resume_warning": "이 터미널은 자동으로 재개되지 않습니다. 나중에 다시 시작하려면 취소하고 워크스페이스를 절전 모드로 전환하세요."
+            "stop_command_confirm": "중지하고 닫기"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "제어권 가져오기",

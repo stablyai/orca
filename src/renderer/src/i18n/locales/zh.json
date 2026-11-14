@@ -3599,8 +3599,7 @@
             "stop_command_description": "关闭此终端将停止其中正在运行的命令",
             "dont_ask_again": "对有运行中进程的终端不再询问",
             "stop_agent_confirm": "停止代理",
-            "stop_command_confirm": "停止并关闭",
-            "automatic_resume_warning": "此终端不会自动恢复，若要稍后恢复，请取消并让工作区进入休眠"
+            "stop_command_confirm": "停止并关闭"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "收回",

@@ -3404,8 +3404,7 @@
             "stop_command_description": "このターミナルを閉じると、その中で実行中のコマンドが停止します。",
             "dont_ask_again": "実行中のターミナルでは今後確認しない",
             "stop_agent_confirm": "Agent を停止",
-            "stop_command_confirm": "停止して閉じる",
-            "automatic_resume_warning": "このターミナルは自動的に再開されません。後で再開するには、ワークスペースをキャンセルしてスリープ状態にします。"
+            "stop_command_confirm": "停止して閉じる"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "操作を取り戻す",

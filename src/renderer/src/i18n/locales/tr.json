@@ -3933,7 +3933,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Bu terminal otomatik olarak devam etmeyecek. Daha sonra devam ettirmek için iptal edin ve çalışma alanını uyku moduna alın.",
             "1d1a7a9c1f": "İptal",
             "stop_agent_title": "Bu ajan durdurulsun mu?",
             "stop_command_title": "Çalışan komut durdurulsun mu?",
