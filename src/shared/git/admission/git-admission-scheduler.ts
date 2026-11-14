@@ -91,7 +91,9 @@ export class GitAdmissionScheduler {
     route: string | null
     budgetKeys: readonly string[]
   } {
-    const admissionClass = classifyGitCommand(request.args) === 'network' ? 'network' : 'general'
+    const admissionClass =
+      request.admissionClass ??
+      (classifyGitCommand(request.args) === 'network' ? 'network' : 'general')
     const route = routeKey(request)
     const keys: string[] = [admissionClass]
     if (route) {
@@ -110,17 +112,22 @@ export class GitAdmissionScheduler {
     }
     const isRoute = key.startsWith('route:')
     const isNetwork = key === 'network'
+    const isCheckout = key === 'checkout'
     budget = {
       baseCapacity: isRoute
         ? this.config.routeCap
         : isNetwork
           ? this.config.networkCap
-          : this.config.generalCap,
+          : isCheckout
+            ? this.config.checkoutCap
+            : this.config.generalCap,
       headroomCapacity: isRoute
         ? this.config.routeHeadroom
         : isNetwork
           ? this.config.networkHeadroom
-          : this.config.generalHeadroom,
+          : isCheckout
+            ? this.config.checkoutHeadroom
+            : this.config.generalHeadroom,
       baseUsed: 0,
       headroomUsed: 0
     }
@@ -130,7 +137,9 @@ export class GitAdmissionScheduler {
 
   private effectiveTier(waiter: AdmissionWaiter, now: number): number {
     const promotions = Math.floor((now - waiter.enqueuedAt) / this.config.agingMs)
-    return Math.max(0, ADMISSION_TIER_VALUE[waiter.tier] - promotions)
+    return waiter.tier === 'interactive'
+      ? 0
+      : Math.max(1, ADMISSION_TIER_VALUE[waiter.tier] - promotions)
   }
 
   private fits(waiter: AdmissionWaiter, slotKind: AdmissionSlotKind): boolean {

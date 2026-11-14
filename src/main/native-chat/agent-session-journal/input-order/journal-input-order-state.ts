@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../journal-memory-collections'
 import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -6,45 +7,32 @@ import type { AgentJournalCursor } from '../../../../shared/agent-session/journa
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow, JournalSubmissionRow } from '../durable-rows/journal-row-schema'
-import {
-  queryInputContext,
-  type JournalInputEntry,
-  type JournalInputCard,
-  type JournalInputLineageOwner
+import type {
+  JournalInputEntry,
+  JournalInputCard,
+  JournalInputLineageOwner
 } from './journal-input-lineage'
-import {
-  mergeInputPlaces,
-  type InputPlaceQuery,
-  type JournalInputPlaceIndex
-} from './journal-input-place-index'
+import type { InputPlaceQuery } from './journal-input-place-index'
 
 export type JournalInputPlace = JournalInputEntry & {
   coordinate: AgentJournalCursor
-  original?: AgentJournalCursor
 }
 
 export function readJournalInputPlace(
   state: JournalReducerState,
-  id: string,
-  originals: Map<string, AgentJournalCursor | undefined>,
-  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+  id: string
 ): JournalInputPlace | undefined {
   const own = state.inputEntries.get(id)
   const entry = state.submissions.get(id)
   if (!own || !entry) {
     return undefined
   }
-  if (own.context.basis === 'legacy' && !originals.has(id)) {
-    originals.set(id, originalAcceptance?.(id))
-  }
-  const original = originals.get(id)
   return {
     ...own,
     coordinate: {
       epoch: state.epoch,
       sequence: entry.acceptedSequence ?? entry.submittedSequence ?? 0
-    },
-    ...(original ? { original } : {})
+    }
   }
 }
 export function currentJournalInputIdentity(
@@ -62,16 +50,12 @@ export function currentJournalInputIdentity(
     : hasOverlay()
 }
 
-export function restoreJournalInputPlaces(state: JournalReducerState): number {
-  let legacyPlaces = 0
-  for (const [id, own] of state.inputEntries) {
+export function restoreJournalInputPlaces(state: JournalReducerState): void {
+  for (const [id] of memoryJournalMap(state.inputEntries)) {
     if (state.submissions.get(id)?.dispatchState !== 'pending') {
       state.inputEntries.delete(id)
-    } else if (own.context.basis === 'legacy') {
-      legacyPlaces++
     }
   }
-  return legacyPlaces
 }
 
 export function journalInputOrderChanged(
@@ -99,11 +83,10 @@ export function recordJournalInputAdmission(
   state: JournalReducerState,
   row: JournalRow,
   cards: LegacyQueueCardIndex,
-  originalAcceptance: ((id: string) => AgentJournalCursor | undefined) | undefined,
   releasePlace: (id: string) => void
-): boolean {
+): void {
   if (row.kind !== 'submission' || !row.handoverRecorded || row.queuedMessageId !== undefined) {
-    return false
+    return
   }
   if (state.inputEntries.has(row.clientMessageId)) {
     if (
@@ -112,41 +95,27 @@ export function recordJournalInputAdmission(
     ) {
       releasePlace(row.clientMessageId)
     } else {
-      return false
+      return
     }
   }
-  const place = cards.admission(state, row, originalAcceptance)
+  const place = cards.admission(state, row)
   state.inputEntries.set(row.clientMessageId, {
     context: place.context,
     ...(place.witnessCardId ? { witnessCardId: place.witnessCardId } : {})
   })
-  return place.context.basis === 'legacy'
 }
 
 export function readJournalInputAdmission(
   row: JournalSubmissionRow,
   cards: LegacyQueueCardIndex,
-  cut: number,
-  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+  cut: number
 ): JournalInputPlace {
   const coordinate = { epoch: row.epoch, sequence: row.seq }
-  const context = row.inputOrderContext ?? {
-    source: coordinate,
-    basis: 'legacy' as const,
-    cut
-  }
-  const original =
-    context.basis === 'legacy' ? originalAcceptance?.(row.clientMessageId) : undefined
-  const place: JournalInputPlace = { coordinate, context, ...(original ? { original } : {}) }
-  const exposed = row.inputOrderContext?.basis === 'legacy' ? cards.command() : undefined
-  const selected =
-    row.inputOrderContext?.basis === 'legacy'
-      ? exposed && cards.relation(exposed, place)
-        ? exposed
-        : undefined
-      : !row.inputOrderContext
-        ? cards.queryCurrent(place).command
-        : cards.query(place).command
+  const context = row.inputOrderContext
+    ? { ...row.inputOrderContext, basis: 'observed' as const }
+    : { source: coordinate, basis: 'observed' as const, cut }
+  const place: JournalInputPlace = { coordinate, context }
+  const selected = cards.query(place).command
   return { ...place, ...(selected ? { witnessCardId: selected.messageId } : {}) }
 }
 
@@ -158,47 +127,17 @@ export function releaseJournalInputHistory(
   lineage.releaseHistory((id) => {
     const keep = currentJournalInputIdentity(state, id, () => cards.hasOverlay(id))
     if (!keep) {
-      cards.releaseCard(id, state.lastSequence)
+      cards.releaseCard(id)
     }
     return keep
   })
-  cards.releaseHistory()
-}
-
-export function queryJournalInputCurrent(
-  place: JournalInputPlace,
-  coordinates: JournalInputPlaceIndex
-): InputPlaceQuery {
-  return queryInputContext(
-    place.context,
-    place.original,
-    (coordinate) => coordinates.query(coordinate.epoch, coordinate.sequence),
-    () => coordinates.allPlaces(),
-    mergeInputPlaces
-  )
 }
 
 export function journalInputCardPrecedes(
   lineage: JournalInputCard | undefined,
   place: JournalInputPlace
 ): boolean {
-  if (!lineage || lineage.introduced >= place.context.cut) {
-    return false
-  }
-  if (place.context.basis === 'observed') {
-    return true
-  }
-  if (!lineage.baseline) {
-    return false
-  }
-  const coordinate = lineage.baseline.coordinate
-  return queryInputContext(
-    place.context,
-    place.original,
-    (boundary) => coordinate?.epoch === boundary.epoch && coordinate.sequence < boundary.sequence,
-    () => true,
-    (a, b) => a || b
-  )
+  return lineage !== undefined && lineage.introduced < place.context.cut
 }
 
 export function gateJournalInputPlaces(result: InputPlaceQuery, failed: boolean): InputPlaceQuery {

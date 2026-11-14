@@ -2,14 +2,12 @@ import {
   parseNativeChatApprovalEnvelope,
   parseNativeChatFolderTrustEnvelope,
   parseNativeChatStartupMenuEnvelope
-} from './native-chat-approval-envelope'
+} from './approvals/native-chat-approval-envelope'
 import { formatAgentTypeLabel } from '../../agent-status/presentation/agent-type-label'
-import type {
-  AgentJournalApprovalItem,
-  AgentJournalApprovalSubject
-} from '../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalApprovalItem } from '../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalApprovalSubject } from '../../agent-session/journal/agent-session-journal-approval-subject'
 import { parseAskFromStatus, resolveNativeChatAsk } from './native-chat-ask'
-import type { AskPrompt } from './native-chat-ask-types'
+import type { AskPrompt } from './questions/native-chat-ask-types'
 import type { NativeChatMessage } from '../native-chat-types'
 import { parseOmpPlanReviewPrompt } from '../../omp-plan-review-prompt'
 

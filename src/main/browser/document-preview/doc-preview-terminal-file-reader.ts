@@ -1,6 +1,6 @@
 import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
-import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import {
   resolveCanonicalDocPreviewPath,
   resolveDocPreviewAuthorityPaths,

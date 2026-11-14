@@ -7,7 +7,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo
-} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getEligibleWorktreeParents } from '../parenting/worktree-parent-candidates'
 import { useEligibleFolderParents } from '../parenting/use-eligible-folder-parents'

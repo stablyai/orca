@@ -1,3 +1,4 @@
+import '../../../agent-hooks/server/testing/memory-agent-identity-store.test-fixture'
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 import { createHash } from 'node:crypto'

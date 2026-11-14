@@ -1,20 +1,20 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
 import {
   acceptPRCheckObservation,
   completePRCheckOwnerScope
-} from '../../../../src/shared/github/complete-pr-check-owner'
+} from '../../../../src/shared/github/checks/complete-pr-check-owner'
 import type {
   GitHubAssignableUser,
-  GitHubOwnerRepo,
   PRInfo
-} from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
 import {
   matchesGitHubWorkItemTarget,
   resolveGitHubWorkItemTarget
-} from '../../../../src/shared/github/work-item-target'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+} from '../../../../src/shared/github/work-items/work-item-target'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host'
 import { worktreeIdsEqual } from '../../../../src/shared/worktree/id'
 import { defineHostQuery, type HostQuerySignal, type HostSignalEvent } from '../../query/host-query'
@@ -24,7 +24,7 @@ import {
   type HostQueryTarget
 } from '../../query/host-query-key'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { clearMobileWorktreeReviewLink, fetchWorktreeGitHubPRLink } from '../mobile-pr-link'
+import { clearMobileWorktreeReviewLink, fetchWorktreeGitHubPRLink } from './mobile-pr-link'
 import {
   fetchAssignableUsers,
   fetchGithubRepoSlug,

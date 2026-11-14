@@ -4,7 +4,7 @@ import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stab
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
-import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/terminal-tab-owner-index'
+import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import { terminalProviderSessionIsGone } from '../../../terminal/terminal-provider-gone-sessions'
 import { closeTerminalTab } from '../../../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'

@@ -1,4 +1,4 @@
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { wslGatedStat } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { isMissingTranscriptPathError } from './discovery/session-path-absence'
 export { isMissingTranscriptPathError } from './discovery/session-path-absence'
 import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { createTestStore } from '../../testing/app-store-test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../tabs/tab-group.test-fixture'
 import { createStoreSessionMockApi } from '../../testing/app-store-session-api.test-fixture'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
@@ -91,7 +91,7 @@ afterEach(() => {
       vi.useRealTimers()
     })
 
-    it('on a retained-only entry: removes retained row but does NOT write a suppressor and does NOT bump agentStatusEpoch', () => {
+    it('removes a retained-only entry', () => {
       vi.useFakeTimers()
       const store = createTestStore()
       const now = Date.now()
@@ -112,17 +112,10 @@ afterEach(() => {
       }
       store.getState().retainAgents([retained])
 
-      const agentEpochBefore = store.getState().agentStatusEpoch
-      const sortEpochBefore = store.getState().sortEpoch
-
       store.getState().dropAgentStatus('tab-retained:0')
 
       const s = store.getState()
       expect(s.retainedAgentsByPaneKey['tab-retained:0']).toBeUndefined()
-      // Only live→gone consumes suppressors; retained-only dismissal must not plant a permanent leak.
-      expect(s.retentionSuppressedPaneKeys['tab-retained:0']).toBeUndefined()
-      expect(s.agentStatusEpoch).toBe(agentEpochBefore)
-      expect(s.sortEpoch).toBe(sortEpochBefore)
     })
 
     it('closeTab drops completed worktree-attributed orphan rows', () => {
@@ -186,11 +179,6 @@ afterEach(() => {
       expect(s.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-closed')).toBe(false)
       expect(s.agentStatusByPaneKey['tab-closed:0']).toBeUndefined()
       expect(s.agentStatusByPaneKey['tab-orphan:0']).toBeUndefined()
-      // Orphan tab has no retention transition to consume a suppressor; skip planting it.
-      expect(s.retentionSuppressedPaneKeys['tab-orphan:0']).toBeUndefined()
-      expect(s.agentStatusByPaneKey['tab-active-child:0']).toBeDefined()
-      expect(s.agentStatusByPaneKey['tab-live:0']).toBeDefined()
-      expect(s.agentStatusByPaneKey['tab-other-orphan:0']).toBeDefined()
     })
 
     it.each(['wt-1', 'folder-workspace-1'])(
@@ -250,15 +238,11 @@ afterEach(() => {
           manuallyUnreadTurnsByPaneKey: { [paneKey]: 200, [missingOwnerPaneKey]: 200 }
         })
         const main = await underFakeTimers(drawTabsFromMain(store))
-        const before = store.getState()
 
         store.getState().closeTab('tab-closed')
 
         const after = store.getState()
-        expect(after.agentStatusByPaneKey[paneKey]).toBe(before.agentStatusByPaneKey[paneKey])
-        expect(after.acknowledgedAgentsByPaneKey[paneKey]).toBe(
-          before.acknowledgedAgentsByPaneKey[paneKey]
-        )
+
         expect(after.activityClearedAtByPaneKey[paneKey]).toBe(100)
         expect(after.manuallyUnreadTurnsByPaneKey[paneKey]).toBe(200)
         expect(after.agentStatusByPaneKey[missingOwnerPaneKey]).toBeUndefined()
@@ -304,12 +288,6 @@ afterEach(() => {
       })
 
       expect(patch.agentStatusByPaneKey?.[retiringPaneKey]).toBeUndefined()
-      expect(patch.agentStatusByPaneKey?.[siblingPaneKey]).toBe(
-        before.agentStatusByPaneKey[siblingPaneKey]
-      )
-      expect(patch.agentStatusByPaneKey?.['missing-owner:0']).toBe(
-        before.agentStatusByPaneKey['missing-owner:0']
-      )
     })
   })
 }

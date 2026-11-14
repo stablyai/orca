@@ -1,13 +1,13 @@
 import { BoundedMap } from '../../../../shared/bounded-map'
-import { isDefaultGitHubHost } from '../../../../shared/github/repository-identity-key'
-import type { OwnerRepo } from '../../gh-utils'
-import type { GitHubRepoExecOptions } from '../../github-api-repository'
+import { isDefaultGitHubHost } from '../../../../shared/github/repositories/repository-identity-key'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { GitHubRepoExecOptions } from '../../repositories/github-api-repository'
 import {
   requestWorkItemSearch,
-  workItemSearchScope,
   WORK_ITEM_SEARCH_CACHE_MS,
   type WorkItemSearchType
 } from './work-item-search-batch'
+import { codeHostReadExecutionScope as workItemSearchScope } from '../../../source-control/code-host-read-execution-scope'
 
 type PageInfo = { endCursor: string | null; hasNextPage: boolean }
 export type SearchConnection<T> = { issueCount: number; pageInfo: PageInfo; nodes: T[] }

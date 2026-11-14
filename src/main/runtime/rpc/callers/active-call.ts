@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { isOrcaSessionId } from '../../../../shared/orca-session-address'
-import { isAgentRpcCaller, type RpcCallerIdentity } from './rpc-caller-identity'
+import type { RpcCallerIdentity } from './rpc-caller-identity'
 
 type ActiveRpcCall = {
   caller: RpcCallerIdentity | undefined
@@ -17,7 +17,7 @@ export function runWithActiveRpcCaller<T>(
 ): T {
   // Only this host's CLI can name a chat here; as in the handoff card, other callers act for a person.
   const agentSessionId =
-    isAgentRpcCaller(caller) && claimedAgentSessionId && isOrcaSessionId(claimedAgentSessionId)
+    caller?.kind === 'local-cli' && claimedAgentSessionId && isOrcaSessionId(claimedAgentSessionId)
       ? claimedAgentSessionId
       : undefined
   return activeCall.run({ caller, agentSessionId }, run)

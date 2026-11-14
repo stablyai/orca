@@ -100,7 +100,7 @@ function history(): AgentSessionHistoryPage {
     hasNewer: false
   }
 }
-export function addPrompt(id: string): void {
+export async function addPrompt(id: string): Promise<void> {
   fixture.items = [
     ...fixture.items,
     {
@@ -117,7 +117,7 @@ export function addPrompt(id: string): void {
       }
     }
   ]
-  fixture.hostFeed.observe(SESSION)
+  await fixture.hostFeed.observe(SESSION)
 }
 export function publishView(): void {
   fixture.journal?.({
@@ -179,7 +179,7 @@ export function dismissIds(): string[] {
     .map((event) => event.notificationId)
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
   vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   const directory = mkdtempSync(join(tmpdir(), 'orca-renderer-read-'))
@@ -232,7 +232,7 @@ beforeEach(() => {
         }
       ]
     ]),
-    readStatusState: () => projectStructuredAgentSessionStatusState(fixture.items),
+    readStatusState: async () => projectStructuredAgentSessionStatusState(fixture.items),
     readChildWork: () => undefined,
     now: hostClock
   })
@@ -265,7 +265,7 @@ beforeEach(() => {
       }
     }
   })
-  fixture.hostFeed.observe(SESSION)
+  await fixture.hostFeed.observe(SESSION)
   transport.away.mockResolvedValue(false)
   transport.supports.mockResolvedValue(true)
   transport.dismiss.mockResolvedValue({ dismissed: 0 })

@@ -1,3 +1,4 @@
+import { useSupportedGroupHookSettings } from '@/hooks/use-supported-group-hook-settings'
 import type { GeneralSubPage } from '../general/general-sub-pages'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
@@ -46,6 +47,7 @@ import {
 } from '@/components/sidebar/workspace-actions/deletion/removal-unsaved-files'
 
 export function useSettingsStoreModel() {
+  const hookSettingsGroups = useSupportedGroupHookSettings()
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -205,6 +207,7 @@ export function useSettingsStoreModel() {
   )
 
   return {
+    hookSettingsGroups,
     generalSubPage,
     setGeneralSubPage,
     settings,

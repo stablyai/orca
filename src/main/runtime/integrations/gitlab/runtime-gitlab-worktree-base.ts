@@ -16,7 +16,7 @@ import type { ProjectRuntimeResolutionStore } from '../../../workspaces/executio
 import { resolveRuntimeGitLabForkMrBase } from './runtime-gitlab-fork-mr-base'
 import { resolveRuntimeGitLabIssueSourceRemote } from './runtime-gitlab-issue-source-remote'
 import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
-import { resolvePrStartPointUnlessWslStopped } from '../../../github/pr-start-point-wsl-gate'
+import { resolvePrStartPointUnlessWslStopped } from '../../../github/pull-requests/start-points/pr-start-point-wsl-gate'
 
 export type RuntimeGitLabWorktreeBaseArgs = {
   repoSelector: string

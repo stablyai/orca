@@ -12,8 +12,8 @@ import {
   referenceLinearIssue,
   referenceRepo
 } from '../../src/renderer/src/components/sidebar/workspace-card/review/workspace-reference-fixtures.test-support'
-import { SmartWorkspaceSourceResultList } from '../../src/renderer/src/components/new-workspace/SmartWorkspaceSourceResultList'
-import { useWorkItemSourceSearch } from '../../src/renderer/src/components/new-workspace/use-work-item-source-search'
+import { SmartWorkspaceSourceResultList } from '../../src/renderer/src/components/new-workspace/source-search/SmartWorkspaceSourceResultList'
+import { useWorkItemSourceSearch } from '../../src/renderer/src/components/new-workspace/source-search/use-work-item-source-search'
 import type * as MainLinearClient from '../../src/main/linear/accounts/linear-account-client'
 import type * as RuntimeLinearClient from '@/runtime/linear/runtime-linear-client'
 import type * as RuntimeLinearIssueMutations from '@/runtime/linear/runtime-linear-issue-client'
@@ -216,12 +216,18 @@ vi.mock('@/runtime/hosts/preflight/local-preflight-context-key', () => ({
   localPreflightContextKey: () => 'test'
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('../../src/renderer/src/components/new-workspace/use-jira-source-connection', () => ({
-  useJiraSourceConnection: () => ({ status: null, loaded: false })
-}))
-vi.mock('../../src/renderer/src/components/new-workspace/use-jira-url-source', () => ({
-  useJiraUrlSource: () => ({ intent: false })
-}))
+vi.mock(
+  '../../src/renderer/src/components/new-workspace/source-search/use-jira-source-connection',
+  () => ({
+    useJiraSourceConnection: () => ({ status: null, loaded: false })
+  })
+)
+vi.mock(
+  '../../src/renderer/src/components/new-workspace/source-search/use-jira-url-source',
+  () => ({
+    useJiraUrlSource: () => ({ intent: false })
+  })
+)
 vi.mock('../../src/renderer/src/components/use-jira-project-inventory', () => ({
   useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
 }))

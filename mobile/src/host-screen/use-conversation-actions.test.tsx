@@ -15,7 +15,7 @@ import { buildProjectConversations } from './project-conversations'
 import { conversationHistory, conversationWorkspace } from './project-conversations.test-fixture'
 import { useConversationActions } from './use-conversation-actions'
 import { useHostScreenState } from './use-host-screen-state'
-import { useHostWorktreeActions } from './use-host-worktree-actions'
+import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-actions'
 import {
   useProjectConversations,
   type ProjectConversationsSource

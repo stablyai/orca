@@ -1,4 +1,3 @@
-import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import { AgentHistoryLoadState } from './AgentHistoryLoadState'
 import { scopeSegments } from './agent-history-scope-segments'
 import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
@@ -26,7 +25,8 @@ import {
   resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from './ai-vault-resume-preparation'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
+import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'

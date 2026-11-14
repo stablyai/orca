@@ -1,0 +1,315 @@
+import { RelayOriginRetirement } from './relay-origin-retirement'
+import type { RelayOriginPoolOptions } from './relay-origin-pool-options'
+import { RelayControlOrigin } from './relay-control-origin'
+import type { RelayControlClient } from '../control-channel/relay-control-client'
+import type { RelayDrainMessage } from '../control-channel/relay-control-protocol'
+import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
+import { RelayRetrySchedule } from '../authentication/relay-retry-schedule'
+import {
+  RelayHttpError,
+  requestRelayAssignment,
+  type RelayAssignment
+} from '../director/relay-http-client'
+import { RelayControlRotation } from './relay-control-rotation'
+import { RelayRecoveryEpisode } from './relay-recovery-episode'
+
+// Data-path recovery re-asks the director at most once a minute per host, whichever origin asks,
+// and keeps the old origin for a minute so phones mid-session on it are not cut off.
+const DATA_PATH_RECOVERY_INTERVAL_MS = 60_000
+const DATA_PATH_DRAIN_GRACE_MS = 60_000
+
+// The director answered and only a cell it newly named failed: retry that once sooner. Director
+// failures, and any cell failing again in the same episode (even alternating A, B, A), keep the
+// full backoff: every retry re-asks the director, so a short cap on dead cells would multiply
+// director load for every host on them.
+const CELL_CONNECT_RETRY_MAX_MS = 60_000
+
+export class RelayOriginPool {
+  private activeOrigin: RelayControlOrigin | null = null
+  private readonly origins = new Set<RelayControlOrigin>()
+  private readonly retirement = new RelayOriginRetirement(
+    () => this.activeOrigin,
+    (origin) => {
+      this.origins.delete(origin)
+    }
+  )
+  private readonly drainingOrigins = this.retirement.draining
+  private readonly basisOrigins = this.retirement.basis
+  private assignment: RelayAssignment | null = null
+  private deferredAssignment: RelayAssignment | null = null
+  // Cells that failed since the last success: each gets the short cap once.
+  private readonly failedCells = new Set<string>()
+  private relayJwt: string | null = null
+  private readonly rotation: RelayControlRotation
+  private rotationPromise: Promise<void> | null = null
+  private readonly drainRetry: RelayRetrySchedule
+  private readonly recovery = new RelayRecoveryEpisode()
+  private lastDataPathRecoveryAt: number | null = null
+  private closed = false
+
+  constructor(private readonly options: RelayOriginPoolOptions) {
+    this.drainRetry = new RelayRetrySchedule(options.random)
+    this.rotation = new RelayControlRotation({
+      ...options,
+      current: () => this.activeOrigin,
+      available: () => this.isCurrent(),
+      token: () => this.relayJwt,
+      assignment: () => this.assignment,
+      busy: () => Boolean(this.rotationPromise)
+    })
+  }
+
+  get activeAssignment(): RelayAssignment | null {
+    return this.assignment
+  }
+
+  get activeControl(): RelayControlClient | null {
+    return this.activeOrigin?.availableControl ?? null
+  }
+
+  controlForBasis(basisConnId: string): RelayControlClient | null {
+    return this.basisOrigins.get(basisConnId)?.availableControl ?? null
+  }
+
+  hasLiveControl(): boolean {
+    return this.activeOrigin?.hasLiveControl() ?? false
+  }
+
+  isRecovering(): boolean {
+    const retrying = Boolean(this.rotationPromise || this.drainRetry.pending)
+    return this.isCurrent() && retrying && this.recovery.trusted
+  }
+
+  applyAssignmentMetadata(assignment: RelayAssignment): boolean {
+    const current = this.assignment
+    if (!this.isCurrent() || !current || assignment.assignmentEpoch < current.assignmentEpoch) {
+      return false
+    }
+    if (assignment.assignmentEpoch > current.assignmentEpoch || this.rotationPromise) {
+      if (
+        !this.deferredAssignment ||
+        assignment.assignmentEpoch >= this.deferredAssignment.assignmentEpoch
+      ) {
+        this.deferredAssignment = assignment
+      }
+      return true
+    }
+    if (assignment.cellUrl !== current.cellUrl) {
+      return false
+    }
+    this.assignment = assignment
+    this.activeOrigin?.updateAssignment(assignment)
+    return true
+  }
+
+  async openInitial(assignment: RelayAssignment, relayJwt: string): Promise<void> {
+    this.assignment = assignment
+    this.relayJwt = relayJwt
+    const origin = this.createOrigin(assignment, relayJwt)
+    this.origins.add(origin)
+    await origin.open()
+    this.assertCurrent()
+    this.activeOrigin = origin
+    this.rotation.schedule()
+  }
+
+  refreshAuthorization(relayJwt: string): void {
+    this.relayJwt = relayJwt
+    for (const origin of this.origins) {
+      origin.refreshAuthorization(relayJwt)
+    }
+  }
+
+  closeNow(hostCloseReason?: RelayHostCloseReason): void {
+    if (this.closed) {
+      return
+    }
+    this.closed = true
+    this.rotation.cancel()
+    this.drainRetry.reset()
+    this.retirement.clear()
+    for (const origin of this.origins) {
+      origin.closeNow(hostCloseReason)
+    }
+    this.origins.clear()
+    this.activeOrigin = null
+  }
+
+  private createOrigin(assignment: RelayAssignment, relayJwt: string): RelayControlOrigin {
+    return new RelayControlOrigin({
+      ...this.options,
+      assignment,
+      relayJwt,
+      onConnectionOwned: (connectionId, origin) => {
+        if (this.isCurrent() && this.origins.has(origin)) {
+          this.basisOrigins.set(connectionId, origin)
+        }
+      },
+      onConnectionReleased: (connectionId, origin) => {
+        if (this.basisOrigins.get(connectionId) === origin) {
+          this.basisOrigins.delete(connectionId)
+        }
+        this.retirement.maybeClose(origin)
+      },
+      onDrain: (origin, message) => this.handleDrain(origin, message),
+      onDataPathUnhealthy: (origin) => this.handleDataPathUnhealthy(origin),
+      onPendingChanged: (origin) => this.retirement.maybeClose(origin),
+      onClose: (origin) => {
+        if (origin === this.activeOrigin && this.isCurrent()) {
+          this.options.onStatus('offline')
+          this.handleDrain(origin, {
+            type: 'drain',
+            graceMs: 0,
+            recovery: 'resolve-director'
+          })
+        }
+      }
+    })
+  }
+
+  private handleDataPathUnhealthy(origin: RelayControlOrigin): void {
+    const now = Date.now()
+    const recent =
+      this.lastDataPathRecoveryAt !== null &&
+      now - this.lastDataPathRecoveryAt < DATA_PATH_RECOVERY_INTERVAL_MS
+    if (origin !== this.activeOrigin || recent) {
+      return
+    }
+    this.lastDataPathRecoveryAt = now
+    console.warn(`[relay] data attaches failing; asking director again cell=${origin.cellUrl}`)
+    this.handleDrain(origin, {
+      type: 'drain',
+      graceMs: DATA_PATH_DRAIN_GRACE_MS,
+      recovery: 'resolve-director'
+    })
+  }
+
+  private handleDrain(origin: RelayControlOrigin, message: RelayDrainMessage): void {
+    if (!this.isCurrent() || !this.origins.has(origin)) {
+      return
+    }
+    if (!this.retirement.adopt(origin, message)) {
+      return
+    }
+    this.options.onStatus('draining')
+    if (!this.rotationPromise && !this.drainRetry.pending) {
+      this.recovery.begin()
+      this.rotationPromise = this.resolveDrainTarget(origin, message).finally(() => {
+        this.rotationPromise = null
+      })
+    }
+  }
+
+  private async resolveDrainTarget(
+    origin: RelayControlOrigin,
+    message: RelayDrainMessage
+  ): Promise<void> {
+    let answeredCellUrl: string | null = null
+    try {
+      if (!this.relayJwt) {
+        throw new Error('relay_authorization_unavailable')
+      }
+      const preferredRegion = await this.options.resolvePreferredRegion?.().catch(() => undefined)
+      this.assertCurrent()
+      // Migration targets must come from the configured director.
+      let assignment = await requestRelayAssignment({
+        directorUrl: this.options.directorUrl,
+        relayToken: this.relayJwt,
+        relayHostId: this.options.relayHostId,
+        reconnect: true,
+        preferredRegion,
+        isCurrent: () => this.isCurrent(),
+        fetch: this.options.fetch
+      })
+      this.assertCurrent()
+      if (
+        this.deferredAssignment &&
+        this.deferredAssignment.assignmentEpoch > assignment.assignmentEpoch
+      ) {
+        assignment = this.deferredAssignment
+      }
+      this.deferredAssignment = null
+      answeredCellUrl = assignment.cellUrl
+      if (assignment.cellUrl === origin.cellUrl) {
+        let rebound = false
+        try {
+          await origin.rebind(this.relayJwt, assignment)
+          rebound = true
+        } catch {
+          // A restarted cell lost the resume secret; failed rebind must recover with a fresh generation.
+          await this.activateTarget(origin, assignment, this.relayJwt, message.graceMs)
+        }
+        if (rebound) {
+          this.assertCurrent()
+          this.activeOrigin = origin
+          this.assignment = assignment
+          this.drainingOrigins.delete(origin)
+        }
+      } else {
+        await this.activateTarget(origin, assignment, this.relayJwt, message.graceMs)
+      }
+      this.options.onStatus('registered')
+      this.recovery.succeeded()
+      this.drainRetry.reset()
+      this.rotation.schedule()
+    } catch (error) {
+      if (this.isCurrent() && origin === this.activeOrigin) {
+        // Silent retries hid minutes of Director-503 recovery delays in the 2026-08 incident.
+        console.warn(
+          '[relay] control recovery attempt failed:',
+          error instanceof Error ? error.message : String(error)
+        )
+        this.recovery.failed(error)
+        const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
+        this.drainRetry.schedule(
+          retryAfterMs,
+          () => this.handleDrain(origin, message),
+          answeredCellUrl && this.isNewCellFailure(answeredCellUrl)
+            ? CELL_CONNECT_RETRY_MAX_MS
+            : undefined
+        )
+      }
+    }
+  }
+
+  private async activateTarget(
+    origin: RelayControlOrigin,
+    assignment: RelayAssignment,
+    relayJwt: string,
+    graceMs: number
+  ): Promise<void> {
+    const target = this.createOrigin(assignment, relayJwt)
+    this.origins.add(target)
+    try {
+      await target.open()
+      this.assertCurrent()
+    } catch (error) {
+      this.origins.delete(target)
+      target.closeNow()
+      throw error
+    }
+    this.activeOrigin = target
+    this.assignment = assignment
+    this.retirement.schedule(origin, graceMs)
+    this.retirement.maybeClose(origin)
+  }
+  // attempts is 0 only right after a success, which starts a new episode.
+  private isNewCellFailure(cellUrl: string): boolean {
+    if (this.drainRetry.attempts === 0) {
+      this.failedCells.clear()
+    }
+    const repeated = this.failedCells.has(cellUrl)
+    this.failedCells.add(cellUrl)
+    return !repeated
+  }
+
+  private assertCurrent(): void {
+    if (!this.isCurrent()) {
+      throw new Error('stale_relay_origin_pool')
+    }
+  }
+
+  private isCurrent(): boolean {
+    return !this.closed && this.options.isCurrent()
+  }
+}

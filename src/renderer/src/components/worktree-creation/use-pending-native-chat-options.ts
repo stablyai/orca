@@ -3,13 +3,13 @@ import { useAppStore } from '@/store'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
-import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/model-catalog/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
 } from '../../../../shared/agent-session/options/structured-agent-session-options'
-import { structuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import { structuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { joinHostModelListingWait } from '../../../../shared/host-model-listing-waits'
 import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
@@ -17,8 +17,8 @@ import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktre
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionShownSnapshot
-} from '../../../../shared/agent-session/options/structured-agent-session-option-view'
-import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+} from '../../../../shared/agent-session/options/view/structured-agent-session-option-view'
+import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'

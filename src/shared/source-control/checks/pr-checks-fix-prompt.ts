@@ -1,4 +1,4 @@
-import type { PRCheckDetail, PRCheckRunDetails } from '../../github/check-types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../github/checks/check-types'
 import { getCheckStatusLabel } from './pr-check-status-label'
 
 export const PROMPT_LOG_TAIL_LINES = 150

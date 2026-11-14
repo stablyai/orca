@@ -5,7 +5,7 @@ import {
   createWorktreeAgentRowsCache,
   startWorktreeAgentRowsCachePass,
   selectWorktreeAgentRowsCached
-} from '@/components/dashboard/worktree-agent-rows-cache'
+} from '@/components/dashboard/rows/worktree-agent-rows-cache'
 import { createWorktreeAgentFreshnessSelector } from '@/components/sidebar/workspace-card/activity/worktree-agent-freshness-selector'
 import '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { selectWorktreeAgentOrchestration as selectRuntimeAgentOrchestrationForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-orchestration-index'

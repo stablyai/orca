@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import type { MobileGitBranchCompareResult } from '../mobile-branch-compare'
-import type { MobileGitStatusResult } from '../mobile-git-status'
-import { resolveMobileBranchCompareBaseRef } from '../mobile-branch-base-ref'
+import type { MobileGitBranchCompareReply as MobileGitBranchCompareResult } from '../branches/git-compare-reply-schema'
+import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../git/git-status-reply-schema'
+import { resolveMobileBranchCompareBaseRef } from '../branches/mobile-branch-base-ref'
 import { fetchGithubRepoSlug } from './github-pr-rpc'
 import { branchContextCompareRead, branchContextStatusRead } from './mobile-diff-review-operations'
 

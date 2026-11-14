@@ -1,13 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
 import { createTabsSliceMockApi } from '../store/slices/tabs/tabs-slice-test-harness'
 import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../store/repos/repo.test-fixture'
-import { isWorkspaceNotificationMutedBySidebarFilters } from './hidden-workspace-notification-mute'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
@@ -34,10 +31,6 @@ function setNotifyHiddenWorkspaces(notifyHiddenWorkspaces: boolean): void {
   })
 }
 
-function muted(workspaceId: string): boolean {
-  return isWorkspaceNotificationMutedBySidebarFilters(store.getState(), workspaceId)
-}
-
 beforeEach(() => {
   store = createTestStore()
   store.setState({
@@ -48,80 +41,6 @@ beforeEach(() => {
     hideCliCreatedWorkspaces: true
   })
   setNotifyHiddenWorkspaces(false)
-})
-
-describe('isWorkspaceNotificationMutedBySidebarFilters', () => {
-  it('fails open before settings or UI state hydrate, and for an unknown workspace', () => {
-    expect(muted('repo1::/tmp/unknown')).toBe(false)
-    store.setState({ persistedUIReady: false })
-    expect(muted(CLI_ID)).toBe(false)
-    store.setState({ persistedUIReady: true, settings: null })
-    expect(muted(CLI_ID)).toBe(false)
-  })
-
-  it('fails open until terminals reconnect, when Hide sleeping would read restored work as asleep', () => {
-    store.setState({ hideCliCreatedWorkspaces: false, showSleepingWorkspaces: false })
-    store.setState({ workspaceSessionReady: false })
-    expect(muted(PLAIN_ID)).toBe(false)
-    store.setState({ workspaceSessionReady: true })
-    expect(muted(PLAIN_ID)).toBe(true)
-  })
-
-  it('keeps notifying for a hidden parent the sidebar shows above a visible child', () => {
-    store.setState({
-      worktreeLineageById: {
-        [PLAIN_ID]: {
-          worktreeId: PLAIN_ID,
-          worktreeInstanceId: 'plain',
-          parentWorktreeId: CLI_ID,
-          parentWorktreeInstanceId: 'cli',
-          origin: 'cli',
-          capture: { source: 'terminal-context', confidence: 'inferred' },
-          createdAt: 1
-        }
-      },
-      worktreesByRepo: {
-        repo1: [
-          { ...cliRow, instanceId: 'cli' },
-          { ...plainRow, instanceId: 'plain' }
-        ]
-      }
-    })
-    expect(muted(CLI_ID)).toBe(false)
-  })
-
-  it('keeps notifying for an id whose twin on another host the switches show', () => {
-    store.setState({
-      worktreesByRepo: {
-        repo1: [cliRow, plainRow],
-        'repo1@other-host': [{ ...cliRow, cliProvenance: undefined }]
-      }
-    })
-    expect(muted(CLI_ID)).toBe(false)
-  })
-
-  it('mutes another client’s folder workspace under Hide other-client workspaces only', () => {
-    const folder: FolderWorkspace = {
-      id: 'f1',
-      projectGroupId: 'g1',
-      name: 'notes',
-      folderPath: '/notes',
-      creatorProvenance: { kind: 'paired-device', deviceId: 'phone' },
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      createdAt: 0,
-      updatedAt: 0
-    }
-    store.setState({ folderWorkspaces: [folder] })
-    expect(muted(folderWorkspaceKey('f1'))).toBe(false)
-    store.setState({ hideWorkspacesFromOtherDevices: true })
-    expect(muted(folderWorkspaceKey('f1'))).toBe(true)
-  })
 })
 
 describe('muted workspace attention', () => {

@@ -1,9 +1,5 @@
-import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { isGenericConversationTitle } from '../../shared/project-conversation-list'
-import { conversationNameSeed } from '../../shared/source-control/ai/generation/conversation-name-generation'
-import type { JournalHostDatabase } from '../native-chat/agent-session-journal/database/journal-host-database'
-import { structuredConversationJournalPreview } from './structured-conversation-journal-preview'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import {
   isAiVaultAgent,
@@ -19,6 +15,9 @@ import type { StructuredChatOpener } from './structured-sessions/structured-sess
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { z } from 'zod'
 import { clearedInto } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
+import { isGenericConversationTitle } from '../../shared/project-conversation-list'
+import { conversationNameSeed } from '../../shared/source-control/ai/generation/conversation-name-generation'
+import type { StructuredConversationJournalPreview } from './structured-conversation-journal-preview'
 
 /** Project the existing record catalog; provider files remain optional evidence, never identity. */
 export function projectDurableAiVaultConversations(
@@ -26,7 +25,7 @@ export function projectDurableAiVaultConversations(
   records: readonly AgentSessionRecord[],
   opensChat: StructuredChatOpener,
   childSessionIds: ReadonlySet<string> = new Set(),
-  journalDatabase?: JournalHostDatabase
+  journalPreviews?: ReadonlyMap<string, StructuredConversationJournalPreview>
 ): AiVaultListResult {
   const excluded = new Set(childSessionIds)
   const recordsById = new Map(records.map((record) => [record.sessionId, record]))
@@ -79,7 +78,7 @@ export function projectDurableAiVaultConversations(
       : !previous ||
           previous.source === 'structured-record' ||
           isGenericConversationTitle(previous.title)
-        ? structuredConversationJournalPreview(journalDatabase, record)
+        ? (journalPreviews?.get(record.sessionId) ?? { conversationContent: 'unknown' as const })
         : { conversationContent: 'unknown' as const }
     const firstUserPrompt =
       previous?.firstUserPrompt?.trim() ||

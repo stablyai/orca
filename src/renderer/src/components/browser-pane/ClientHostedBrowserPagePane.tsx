@@ -1,3 +1,4 @@
+import { useClientHostedPageInitialization } from './navigate/use-client-hosted-page-initialization'
 import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { useBrowserAgentCursor } from './agent-cursor/use-browser-agent-cursor'
@@ -21,7 +22,6 @@ import { useBrowserClientHostedPermissionNotices } from './browser-client-hosted
 import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-intro-tour'
 import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
 import { watchBrowserClientPageGuestLoss } from './host-guest/browser-client-page-guest-loss'
-import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-recovery-window'
 import { useClientHostedBrowserMarkup } from './annotate/use-client-hosted-browser-markup'
 import BrowserFind from './assemble-chrome/BrowserFind'
 import { BrowserNavigationControlRow } from './assemble-chrome/browser-navigation-control-row'
@@ -43,22 +43,23 @@ import { BrowserNewTabPage } from './new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from './navigate/use-browser-page-reload-actions'
 import { consumeBrowserPageDeferredNavigation } from './navigate/browser-page-deferred-navigation'
 import { getBrowserDisplayTitle, toDisplayUrl } from './describe-page/browser-page-url-display'
-import type { ClientHostedBrowserPagePaneProps } from './describe-page/browser-page-types'
+import type { ClientHostedBrowserPagePaneProps as Props } from './describe-page/browser-page-types'
 import { BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME } from './host-guest/browser-page-viewport'
 import { BrowserDevToolsDock } from './devtools-dock/BrowserDevToolsDock'
 import { useBrowserDevToolsDockPageFlex } from './devtools-dock/browser-devtools-docked-pages'
 
-export function ClientHostedBrowserPagePane({
-  browserTab,
-  workspaceId,
-  runtimeEnvironmentId,
-  worktreeId,
-  placement,
-  isActive,
-  chromeShortcutScope,
-  onUpdatePageState,
-  onSetUrl
-}: ClientHostedBrowserPagePaneProps): React.JSX.Element {
+export function ClientHostedBrowserPagePane(props: Props) {
+  const {
+    browserTab,
+    workspaceId,
+    runtimeEnvironmentId,
+    worktreeId,
+    placement,
+    isActive,
+    chromeShortcutScope,
+    onUpdatePageState,
+    onSetUrl
+  } = props
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const devToolsPageFlex = useBrowserDevToolsDockPageFlex(browserTab.id)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
@@ -71,17 +72,11 @@ export function ClientHostedBrowserPagePane({
   const [findOpen, setFindOpen] = useState(false)
   const updatePageStateFromGuest = useEffectEvent(onUpdatePageState)
   const setUrlFromGuest = useEffectEvent(onSetUrl)
-  const addBrowserHistoryEntry = useAppStore((s) => s.addBrowserHistoryEntry)
-  const recordHistoryFromGuest = useEffectEvent(addBrowserHistoryEntry)
+  const recordHistoryFromGuest = useEffectEvent(useAppStore((s) => s.addBrowserHistoryEntry))
   const browserHostClientId = placement?.browserHostClientId ?? null
   const browserHostGeneration = placement?.browserHostGeneration ?? null
   const pageHostGeneration = placement?.pageHostGeneration ?? null
-  const restoredPageUnrecovered = useRestoredClientHostedRecoveryWindow({
-    browserPageId: browserTab.id,
-    environmentId: runtimeEnvironmentId,
-    placementPending: placement === null
-  })
-  // Main owns this guest; guest loss requires reopening on the server rather than local recreation.
+  const initialization = useClientHostedPageInitialization(props, attachmentError, loadFailureRef)
   const retryGuestRecoveryRef = useRef<() => void>(() => {})
   useLayoutEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
@@ -109,7 +104,8 @@ export function ClientHostedBrowserPagePane({
     })
   const zoom = useBrowserPageZoomFeedback()
   const reload = useBrowserPageReloadActions({
-    browserTab,
+    browserTab: initialization.reloadPage,
+    onInitializationAction: initialization.initializationAction,
     webviewRef,
     retryGuestRecoveryRef,
     onUpdatePageStateRef
@@ -130,6 +126,7 @@ export function ClientHostedBrowserPagePane({
   const navigateToUrl = useClientHostedPageUrlSubmission({
     browserTabId: browserTab.id,
     worktreeId,
+    onInitializationAction: initialization.initializationAction,
     webviewRef,
     activeLoadFailureRef: loadFailureRef,
     onUpdatePageState,
@@ -142,7 +139,6 @@ export function ClientHostedBrowserPagePane({
       .getState()
       .browserPagesByWorkspace[workspaceId]?.find((page) => page.id === browserTab.id)
   )
-  // The guest lives in a body-level host that paints above the pane, so the cursor joins it there.
   const getAgentCursorHost = useCallback(
     () => webviewRef.current?.parentElement ?? null,
     [webviewRef]
@@ -151,7 +147,10 @@ export function ClientHostedBrowserPagePane({
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
-    // Wait for host adoption before attaching an optimistic page the registry has not seen.
+    if (initialization.suppressAttachment) {
+      setAttachmentError(null)
+      return
+    }
     if (
       !viewport ||
       pageHostGeneration === null ||
@@ -297,6 +296,7 @@ export function ClientHostedBrowserPagePane({
     return cleanupGuest
   }, [
     browserTab.id,
+    initialization.suppressAttachment,
     browserHostClientId,
     browserHostGeneration,
     pageHostGeneration,
@@ -304,28 +304,21 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValueFromPage
   ])
 
-  const unavailable = Boolean(attachmentError) || restoredPageUnrecovered
-  const showFailureOverlay = !unavailable && Boolean(browserTab.loadError)
-
   const markup = useClientHostedBrowserMarkup({
     webviewRef,
     browserPageId: browserTab.id,
     runtimeEnvironmentId,
     placement,
     isActive,
-    unavailable,
-    showFailureOverlay
+    unavailable: initialization.unavailable,
+    showFailureOverlay: initialization.showFailureOverlay
   })
-
-  // Unrecovered pages have no pending load that could ever clear a loading indicator.
-  const loading = !restoredPageUnrecovered && (placement === null || browserTab.loading)
 
   return (
     <div
       className="relative flex h-full min-h-0 flex-1 flex-col bg-background"
       data-browser-page-pane-id={browserTab.id}
     >
-      {/* IPC-driven context menu in a Portal so position:fixed escapes ancestor transform/backdrop-filter containing blocks. */}
       <BrowserPageContextMenu
         browserPageId={browserTab.id}
         worktreeId={worktreeId}
@@ -364,7 +357,7 @@ export function ClientHostedBrowserPagePane({
                   presentation="client-hosted"
                 />
               }
-              loading={loading}
+              loading={initialization.loading}
               loadFailed={browserTab.loadError !== null}
             />
           }
@@ -390,21 +383,21 @@ export function ClientHostedBrowserPagePane({
             guestGeneration={pageHostGeneration}
           />
           <BrowserLinkStatusBubble browserPageId={browserTab.id} />
-          {showFailureOverlay ? (
+          {initialization.showFailureOverlay ? (
             <ClientHostedBrowserLoadFailure
               browserTab={browserTab}
               isActive={isActive}
               onRetry={() => reload.runReloadTrigger('reload')}
             />
           ) : null}
-          {unavailable ? (
+          {initialization.unavailable ? (
             <ClientHostedBrowserUnavailableNotice
               runtimeEnvironmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
               reopenUrl={browserTab.url}
               placementHostClientId={browserHostClientId}
             />
-          ) : isBlankBrowserUrl(browserTab.url) ? (
+          ) : initialization.showNewTab ? (
             <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} serversElsewhere />
           ) : null}
         </div>

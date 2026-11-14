@@ -1,7 +1,7 @@
 import React from 'react'
 import { ExternalLink } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { PRCheckAnnotation } from '../../../../../../shared/github/check-types'
+import type { PRCheckAnnotation } from '../../../../../../shared/github/checks/check-types'
 import { openAnnotationLocation } from '../actions/check-annotation-open'
 import { getOpenableAnnotationLine } from '../actions/check-annotation-path'
 import { formatAnnotationsForClipboard } from '../actions/check-run-clipboard-text'

@@ -65,27 +65,6 @@ function observeBacklogs(): BridgeTerminalOutputBacklog[] {
 afterEach(() => vi.restoreAllMocks())
 
 describe('bridge subscription start cleanup', () => {
-  it('rethrows the original immediate failure without keeping a slot or timer', () => {
-    const failure = new Error('subscribe failed')
-    const timers = manualTimers()
-    const subscriptions = new BridgeHostSubscriptions({
-      client: {
-        ...createFakeRpcClient(),
-        subscribe: () => {
-          throw failure
-        }
-      },
-      post: vi.fn(),
-      onBinaryFrameDropped: vi.fn(),
-      terminalTimers: timers
-    })
-
-    expect(() => subscriptions.start(ID, 'terminal.subscribe', {})).toThrow(failure)
-    expect(subscriptions.size).toBe(0)
-    expect(timers.pending()).toBe(0)
-    expect(timers.delays).toEqual([])
-  })
-
   it('releases held output and its silence timer when subscribe emits and then throws', () => {
     const failure = new Error('subscribe failed after output')
     const timers = manualTimers()

@@ -94,7 +94,13 @@ export function BrowserOpenSourceFileButton({ onOpen }: { onOpen: () => void }):
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button type="button" size="icon-xs" variant="ghost" aria-label={label} onClick={onOpen}>
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="muted-field-icon"
+          aria-label={label}
+          onClick={onOpen}
+        >
           <FileCode2 className="size-3.5" />
         </Button>
       </TooltipTrigger>

@@ -1,4 +1,4 @@
-import type { HandlerGroup } from '../handler-group-manifest'
+import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 export const JIRA_HANDLER_GROUP: HandlerGroup = {
   name: 'jira',

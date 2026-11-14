@@ -1,9 +1,9 @@
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { classifyAgentLaunchReplayRefusal } from '../../shared/agent-launch/contracts/agent-launch-replay-refusal'
 import {
   recoverableOrchestrationArgs,
   resolveOrchestrationCliExecutable
-} from '../runtime/orchestration-recovery-command'
+} from '../orchestration/recovery/orchestration-recovery-command'
 
 /** A lost reply never authorizes a new launch, even on hosts without a replay ledger. */
 export async function withCliAgentLaunchRecovery<T>(

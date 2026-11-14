@@ -1,13 +1,13 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { acquiredAgentSessionAccount } from '../../shared/agent-session/lifecycle/agent-session-acquired-account'
+import { acquiredAgentSessionAccount } from '../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   agentSessionAccountHome,
   type AgentSessionAccountHome,
   isLegacyAgentSessionAccountHome
-} from '../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/host/structured-provider-session-ownership'

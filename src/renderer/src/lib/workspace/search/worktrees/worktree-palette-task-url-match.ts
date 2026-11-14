@@ -9,8 +9,8 @@ import {
   parseGitHubIssueOrPRLink,
   type GitHubIssueOrPRLink,
   type RepoSlug
-} from '../../../../../../shared/github/links'
-import { githubRepoIdentityKey } from '../../../../../../shared/github/repository-identity-key'
+} from '../../../../../../shared/github/repositories/links'
+import { githubRepoIdentityKey } from '../../../../../../shared/github/repositories/repository-identity-key'
 import { parseGitLabIssueOrMRLink } from '../../../../../../shared/new-workspace/gitlab-links'
 import {
   parseJiraIssueUrl,

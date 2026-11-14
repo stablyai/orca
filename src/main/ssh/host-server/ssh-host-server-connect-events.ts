@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/orcad-managed-runtime'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { HostServerOnConnectResult } from './ssh-host-server-on-connect'
-import { classifyOrcadHostUnavailable } from '../../orcad/orcad-host-unavailable'
+import { classifyOrcadHostUnavailable } from '../../orcad/diagnostics/orcad-host-unavailable'
 
 export type HostServerConnectEvent =
   | {

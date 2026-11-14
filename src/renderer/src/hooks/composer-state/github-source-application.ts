@@ -19,7 +19,7 @@ type GitHubSourceApplicationInput = Pick<
 >
 
 import { useCallback } from 'react'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import '@/lib/workspace/creation/new-workspace'
 import {

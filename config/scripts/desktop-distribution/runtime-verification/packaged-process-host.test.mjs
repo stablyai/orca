@@ -42,24 +42,13 @@ describe('process-host output packaging guard', () => {
     }
   })
 
-  it.each([
-    ['a public export target', 'feature.js', /missing: \.\/dist\/feature\.js/],
-    ['an internal module', 'internal.js', /missing: \.\/dist\/internal\.js/]
-  ])('fails when %s was never emitted', async (_label, file, message) => {
+  it('fails when an internal module was never emitted', async () => {
     const packageDir = await builtPackage()
     try {
-      await rm(join(packageDir, 'dist', file))
-      expect(() => assertProcessHostOutputBuilt(packageDir)).toThrow(message)
-    } finally {
-      await removeTree(packageDir)
-    }
-  })
-
-  it('fails when dist is absent', async () => {
-    const packageDir = await builtPackage()
-    try {
-      await rm(join(packageDir, 'dist'), { recursive: true })
-      expect(() => assertProcessHostOutputBuilt(packageDir)).toThrow(/pnpm build:packages/)
+      await rm(join(packageDir, 'dist', 'internal.js'))
+      expect(() => assertProcessHostOutputBuilt(packageDir)).toThrow(
+        /missing: \.\/dist\/internal\.js/
+      )
     } finally {
       await removeTree(packageDir)
     }

@@ -1,20 +1,26 @@
+import type { PreparedPRBranchRead } from '../../../github/client/lookup/pr-for-branch-outcome'
+import type * as GithubRepositoryIdentityModule from '../../../github/repositories/github-repository-identity'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   GitHubPRRefreshReason,
   PRRefreshOutcome
-} from '../../../../shared/github/pull-request-refresh-types'
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type {
   GitHubRepoContext,
   LocalGitExecOptions
-} from '../../../github/github-repository-identity'
+} from '../../../github/repositories/github-repository-identity'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
-import { makePR } from '../../../github/pr-refresh-coordinator-test-harness'
+import { makePR } from '../../../github/pull-requests/refresh/pr-refresh-coordinator-test-harness'
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn() }))
-vi.mock('../../../github/gh-utils', () => ({
+vi.mock('../../../github/execution/github-operation-slots', () => ({
   acquire: vi.fn(async () => {}),
-  release: vi.fn(),
+  release: vi.fn()
+}))
+
+vi.mock('../../../github/repositories/github-repository-identity', async (importOriginal) => ({
+  ...(await importOriginal<typeof GithubRepositoryIdentityModule>()),
   githubRepoContext: (
     repoPath: string,
     connectionId: string | null,
@@ -25,8 +31,11 @@ vi.mock('../../../github/gh-utils', () => ({
 vi.mock('../../../github/client/lookup/branch-lookup-resolution', () => ({
   resolvePRForBranchOutcome: mocks.resolve
 }))
-vi.mock('../../../github/pr-refresh-coordinator', () => ({
-  runHostedPRRead: (_candidate: unknown, read: () => Promise<PRRefreshOutcome>) => read()
+vi.mock('../../../github/pull-requests/refresh/pr-refresh-coordinator', () => ({
+  runHostedPRRead: (
+    _candidate: unknown,
+    read: (() => Promise<PRRefreshOutcome>) | PreparedPRBranchRead
+  ) => (typeof read === 'function' ? read() : read.read())
 }))
 import { RuntimeHostedReviewCommands } from './runtime-hosted-review-commands'
 
@@ -148,6 +157,6 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
       userRefresh,
       clientKind
     )
-    expect(outcome.kind === 'found' ? outcome.pr.title : null).toBe(expected)
+    expect('kind' in outcome && outcome.kind === 'found' ? outcome.pr.title : null).toBe(expected)
   })
 })

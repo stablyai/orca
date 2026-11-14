@@ -1,4 +1,4 @@
-import type * as RuntimeMetadata from '../runtime/metadata'
+import type * as RuntimeMetadata from '../runtime/profile/metadata'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -63,7 +63,7 @@ vi.mock('../runtime/client', () => {
   return { RuntimeClient }
 })
 
-vi.mock('../runtime/metadata', async (importOriginal) => ({
+vi.mock('../runtime/profile/metadata', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeMetadata>()),
   getDefaultUserDataPath: getDefaultUserDataPathMock
 }))

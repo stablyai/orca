@@ -43,7 +43,7 @@ import {
   isSameClaudeLogin,
   type ClaudeFolderLogin
 } from '../../sign-in/claude-account-folder'
-import { resolveLoginShellEnvironment } from '../../../startup/login-shell-environment'
+import { resolveLoginShellEnvironment } from '../../../startup/shell-environment/login-shell-environment'
 
 export type ClaudeProfileRouterSettings = Pick<
   GlobalSettings,

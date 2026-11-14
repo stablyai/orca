@@ -1,11 +1,12 @@
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRFile } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { getIssue } from '../../../github/issues'
+import { getIssue } from '../../../github/issues/issues'
 import { getPRCheckDetails } from '../../../github/client/check/get-pr-check-details'
 import { getPRChecks } from '../../../github/client/check/get-pr-checks'
 import { getPRComments } from '../../../github/client/fetch/get-pr-comments'
-import { getPRFileContents } from '../../../github/work-item-details'
+import { getPRFileContents } from '../../../github/pull-requests/files/pull-request-file-contents'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]

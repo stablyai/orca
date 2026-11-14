@@ -96,13 +96,13 @@ export const WRITERS = [
   'src/renderer/src/store/slices/worktrees/session/worktree-identity-rename-state.ts',
   'src/renderer/src/store/slices/worktrees/session/worktree-slice-lookups.ts',
   'src/renderer/src/store/slices/worktrees/teardown/record-key-omission.ts',
-  'src/renderer/src/store/terminals/terminal-tab-close.ts',
-  'src/renderer/src/store/terminals/terminal-tab-creation.ts',
-  'src/renderer/src/store/terminals/terminal-tab-navigation.ts',
-  'src/renderer/src/store/terminals/terminal-tab-title-batch.ts',
-  'src/renderer/src/store/terminals/workspace-terminal-hydration-patch.ts',
-  'src/renderer/src/store/terminals/workspace-terminal-hydration.ts',
-  'src/renderer/src/store/terminals/workspace-terminal-reconnect.ts',
+  'src/renderer/src/store/terminals/retirement/terminal-tab-close.ts',
+  'src/renderer/src/store/terminals/tabs/creation/terminal-tab-creation.ts',
+  'src/renderer/src/store/terminals/tabs/terminal-tab-navigation.ts',
+  'src/renderer/src/store/terminals/tabs/presentation/terminal-tab-title-batch.ts',
+  'src/renderer/src/store/terminals/hydration/workspace-terminal-hydration-patch.ts',
+  'src/renderer/src/store/terminals/hydration/workspace-terminal-hydration.ts',
+  'src/renderer/src/store/terminals/hydration/workspace-terminal-reconnect.ts',
   'src/renderer/src/store/workspace-layout/frames/workspace-layout-frame-store-patch.ts'
 ]
 export const SEAM_FIELDS = new Set([

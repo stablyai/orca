@@ -1,4 +1,5 @@
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
+import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget,
@@ -20,6 +21,7 @@ type BrowserTabCreatePublicationBridge = Pick<
 
 export type BrowserTabCreatePublicationHost = {
   getAgentBrowserBridge(): BrowserTabCreatePublicationBridge | null
+  getRuntimeBrowserPageRegistry(): Pick<RuntimeBrowserPageRegistry, 'yieldSelection'>
   markHeadlessBrowserSessionTabActive?(
     worktreeId: string | undefined,
     browserPageId: string,
@@ -194,6 +196,11 @@ export function publishCreatedBrowserSessionTab(
       ?.getRegisteredTabs(publication.worktreeId)
       .get(publication.browserPageId)
     if (bridge && webContentsId != null) {
+      // Pageless commands prefer an active client page, so the new engine tab must take over from it.
+      // Yield first so the bridge's own tabs-changed publication carries the cleared client row.
+      if (publication.focus.startsActive) {
+        host.getRuntimeBrowserPageRegistry().yieldSelection(publication.worktreeId)
+      }
       bridge.setActiveTab(webContentsId, publication.worktreeId)
     }
   }

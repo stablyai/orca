@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
@@ -24,7 +25,7 @@ import {
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import type { AppState } from '../../../types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
@@ -89,7 +90,7 @@ export function resolveWorktreeCreateParent(
       (candidate) => getWorktreeHostIdentity(candidate) === requestedParentWorktreeId
     )
     // The pick outlives a destination change; a parent now on the creation host is an ordinary one.
-    if (row && !row.isArchived && !isOnCreationHost(row)) {
+    if (row && !row.isArchived && !isWorktreeRetiredByRemoval(row) && !isOnCreationHost(row)) {
       return {
         crossStoreParentRow: row,
         pickedParentWorktreeId: row.id,
@@ -97,7 +98,7 @@ export function resolveWorktreeCreateParent(
         staleBeforeCreate: false
       }
     }
-    if (!row || row.isArchived) {
+    if (!row || row.isArchived || isWorktreeRetiredByRemoval(row)) {
       return {
         pickedDisplayName: row ? resolveWorktreeDisplayName(row).trim() : null,
         staleBeforeCreate: true
@@ -109,8 +110,11 @@ export function resolveWorktreeCreateParent(
       isOnCreationHost
     )
   }
-  const usable = picked && !picked.isArchived ? picked.id : undefined
   const pickedDisplayName = picked ? resolveWorktreeDisplayName(picked).trim() : null
+  if (picked && isWorktreeRetiredByRemoval(picked)) {
+    return { pickedDisplayName, staleBeforeCreate: true }
+  }
+  const usable = picked && !picked.isArchived ? picked.id : undefined
   if (usable) {
     return {
       parentWorkspace: worktreeWorkspaceKey(usable),

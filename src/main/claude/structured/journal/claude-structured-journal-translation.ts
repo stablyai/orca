@@ -1,3 +1,4 @@
+import * as correctionRows from '../../subagents/claude-provisional-row-corrections'
 import { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type * as contract from './claude-journal-translator-contract'
@@ -13,10 +14,10 @@ import {
 } from '../launch/claude-structured-provider-fallback'
 import { ClaudeBackgroundTaskRows } from '../../background-tasks/claude-background-task-rows'
 import { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
-import { ClaudeProvisionalRowCorrections } from '../../subagents/claude-provisional-row-corrections'
 import { createClaudeStreamedThinking } from './claude-streamed-thinking'
 import { ClaudeSubagentIdentities } from '../../subagents/claude-subagent-identities'
 import { ClaudeJournaledSubagents } from '../../subagents/claude-subagent-journaled-identities'
+import type { ClaudeStopCheck } from '../../claude-stop-readings'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import {
@@ -69,7 +70,7 @@ export function createClaudeJournalTranslator(
   const fallbackId = deps.fallbackIdPrefix ?? 'acquisition'
   const providerFallback = createClaudeProviderFrameFallback(deps.sink, fallbackId, turnScope)
   const toolOrigins = new ClaudeToolOriginRegistry()
-  const journaled = new ClaudeJournaledSubagents(() => deps.sink.journalLinkage?.() ?? null)
+  const journaled = new ClaudeJournaledSubagents(() => deps.sink.journalSnapshot?.() ?? null)
   const taskInvocations = new ClaudeTaskInvocations(journaled)
   const subagents = new ClaudeSubagentIdentities({
     taskInvocations,
@@ -78,18 +79,10 @@ export function createClaudeJournalTranslator(
     journaled
   })
   const childQueries = claudeChildToolQueries({ tools, toolOrigins, linkage: subagents.linkage })
-  const corrections = new ClaudeProvisionalRowCorrections({
+  const corrections = new correctionRows.ClaudeProvisionalRowCorrections({
     ...subagents.linkage,
     turnScope,
-    rewrite: (identity, body, options) => {
-      // Keep refused corrections pending under backpressure; legacy sinks accept unconditionally.
-      const admission = deps.sink.tryAppendItem?.(identity, body, options)
-      if (admission === undefined) {
-        deps.sink.appendItem(identity, body, options)
-        return true
-      }
-      return admission.accepted
-    },
+    rewrite: correctionRows.claudeProvisionalCorrectionWriter(deps.sink),
     publish: () => deps.sink.publish()
   })
   const backgroundTasks = new ClaudeBackgroundTaskRows({
@@ -143,7 +136,7 @@ export function createClaudeJournalTranslator(
     turn,
     assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
     usageLimits: new ClaudeUsageLimits(),
-    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalLinkage?.()?.threadGoalSource())
+    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalSnapshot?.()?.threadGoal)
   }
 
   const resultContext: ClaudeResultJournalContext = {
@@ -154,12 +147,16 @@ export function createClaudeJournalTranslator(
     acceptStartupFailure: deps.acceptStartupFailure
   }
 
-  const finish = (observedAt: number, failed: boolean): void => {
+  const finish = (
+    observedAt: number,
+    failed: boolean,
+    stopCheck: ClaudeStopCheck | null = null
+  ): void => {
     prompts.retryPendingCancellations()
     flush()
     corrections.abandon()
     backgroundTasks.settleSession()
-    settleClaudeInterruptedTurn(turn, observedAt, failed)
+    settleClaudeInterruptedTurn(turn, observedAt, failed, stopCheck)
   }
   const handle = withClaudeConversationContent((event) => {
     if (event.type === 'retiring') {
@@ -288,6 +285,8 @@ export function createClaudeJournalTranslator(
     get finalOutputAdmitted() {
       return coverage.admitted
     },
+    markContextActivity: () => context.markActivity(),
+    subscribeContextActivity: (listener) => context.subscribeActivity(listener),
     subscribeContextUsageRequests: (listener) => context.subscribeReportRequests(listener),
     recordContextReport: (target, report, askedAt) => context.recordReport(target, report, askedAt),
     modelMayHaveChanged: () => context.modelMayHaveChanged(),

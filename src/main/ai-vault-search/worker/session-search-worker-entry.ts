@@ -237,7 +237,7 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
     case 'purge': {
       store.setRetentionCutoffMs(c.cutoff)
       const before = [...files.keys()]
-      await withSpan('aiVault.search.purge', () => store!.purgeOlderThan(c.cutoff))
+      await withSpan('aiVault.search.retentionPurge', () => store!.purgeOlderThan(c.cutoff))
       const remaining = new Map(rows().map((row) => [row.path, row]))
       const deltas = before.filter((p) => !remaining.has(p)).map(delta)
       return {

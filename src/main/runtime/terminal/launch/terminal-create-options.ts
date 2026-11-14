@@ -1,4 +1,4 @@
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig

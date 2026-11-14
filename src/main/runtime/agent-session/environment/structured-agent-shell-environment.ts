@@ -2,7 +2,7 @@ import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog
 import {
   loginShellEnvironmentRevision,
   resolveLoginShellEnvironment
-} from '../../../startup/login-shell-environment'
+} from '../../../startup/shell-environment/login-shell-environment'
 import { refreshAtRestCommandContext } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   cachedPersistedWindowsPathSegments,
@@ -204,7 +204,7 @@ export function createStructuredAgentEnvironmentResolvers(
   /** The shared base every agent's child env starts from, before its own overlay. */
   resolveBaseEnvironment: (cachedOnly?: boolean) => Promise<Record<string, string>>
   /** The base with the user's overlay for `agent` laid over it. */
-  resolveAgentEnvironment: (agent: string) => Promise<Record<string, string>>
+  resolveAgentEnvironment: (agent: string, cachedOnly?: boolean) => Promise<Record<string, string>>
   refreshAfterMissingProgram: (askedAt: number) => Promise<void>
   bindCatalogSources: (agents: readonly string[]) => () => void
 } {
@@ -245,7 +245,16 @@ export function createStructuredAgentEnvironmentResolvers(
                 overlays.get(agent),
                 process.platform
               )
-              return [agent, structuredAgentEnvironmentIdentity(effective)]
+              return [
+                agent,
+                structuredAgentEnvironmentIdentity(
+                  Object.fromEntries(
+                    Object.entries(effective).filter(([key]) =>
+                      process.platform === 'win32' ? key.toUpperCase() !== 'PATH' : key !== 'PATH'
+                    )
+                  )
+                )
+              ]
             })
           )
         }
@@ -256,9 +265,9 @@ export function createStructuredAgentEnvironmentResolvers(
       }
     },
     resolveBaseEnvironment: resolveBase,
-    resolveAgentEnvironment: async (agent) =>
+    resolveAgentEnvironment: async (agent, cachedOnly) =>
       overlayEnvironmentVariables(
-        await resolveBase(),
+        await resolveBase(cachedOnly),
         sources.resolveAgentLaunchEnv?.(agent),
         process.platform
       )

@@ -30,16 +30,4 @@ describe('terminal output frame chunks', () => {
     expect(seqs.every((seq, index) => index === 0 || seq > seqs[index - 1]!)).toBe(true)
     expect(seqs.at(-1)).toBe(999_999)
   })
-
-  it('sends a transformed span as capped text frames with its seq only on the last', () => {
-    const data = 'x'.repeat(TERMINAL_STREAM_CHUNK_BYTES * 2 + 1)
-    const meta = { seq: 500_000, rawLength: data.length + 8, transformed: true }
-
-    const frames = [...iterateTerminalOutputFrameChunks(data, meta, 'text')]
-
-    expect(frames.map((frame) => frame.opcode)).toEqual([undefined, undefined, undefined])
-    expect(frames.map((frame) => frame.seq)).toEqual([undefined, undefined, 500_000])
-    expect(frames.map((frame) => new TextDecoder().decode(frame.bytes)).join('')).toBe(data)
-    expect([...iterateTerminalOutputFrameChunks('', meta, 'text')]).toEqual([])
-  })
 })

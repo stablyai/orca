@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { sortProjectEntries } from '../../../../../../shared/project-section-order'
-import type { OrderedGroupEntry } from '../../../../../../shared/sidebar-list/worktree-group-entry'
+import type { OrderedGroupEntry } from '../../../../../../shared/sidebar-list/sections/worktree-group-entry'
 import { repo, worktree } from './worktree-list-groups-test-fixtures'
 
 function entry(

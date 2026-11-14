@@ -9,8 +9,8 @@ import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRepeatedStringFlag
-} from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+} from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export type SearchCommand =
   | { kind: 'index-status' }

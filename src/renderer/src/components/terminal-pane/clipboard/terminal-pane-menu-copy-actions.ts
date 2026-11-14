@@ -6,7 +6,7 @@ import { copyTerminalHandleForPane } from './terminal-handle-copy'
 import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 import { useAppStore } from '@/store/index'
-import { fencedCode } from '../../editor/selection-copy'
+import { fencedCode } from '../../editor/contextual-copy/selection-copy'
 import { formatNativeChatQuote } from '../../native-chat/selection-quotes/native-chat-quote-selection'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 

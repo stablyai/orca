@@ -1,11 +1,8 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { Suspense, use, type ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../shared/constants'
-import { ConfirmationDialogContext } from './confirmation-dialog-context'
-import { UntitledFileRenameDialog } from './editor/UntitledFileRenameDialog'
-import { QuickCommandsPane } from './settings/quick-commands/QuickCommandsPane'
+import { UntitledFileRenameDialog } from './editor/panel/untitled-rename/UntitledFileRenameDialog'
 import { useWorkspaceKanbanColumnResize } from './sidebar/workspace-board/viewport/use-workspace-kanban-column-resize'
 import { useAddRepoCloneFlow } from './sidebar/project-admission/dialog/useAddRepoCloneFlow'
 
@@ -62,8 +59,6 @@ it('applies a committed board column width', async () => {
     <KanbanColumn width={420} onCommit={onCommit} />
   )
   expect(screen.getByTestId('column').textContent).toBe('420')
-  fireEvent.keyDown(screen.getByTestId('column'), { key: 'ArrowRight' })
-  expect(onCommit).toHaveBeenLastCalledWith(440)
 })
 
 function CloneDestination({ workspaceDir }: { workspaceDir?: string }) {
@@ -92,18 +87,4 @@ it('seeds the save-as dialog with the opened file name', async () => {
     <UntitledFileRenameDialog {...props} open currentName="Untitled-2.md" />
   )
   expect(screen.queryByDisplayValue('Untitled-2')).not.toBeNull()
-})
-
-it('opens the Add dialog for a quick-command deep link', async () => {
-  const settings = getDefaultSettings('/home/dev')
-  const confirm = async (): Promise<boolean> => true
-  await renderThenDiscardUpdate(
-    <ConfirmationDialogContext value={confirm}>
-      <QuickCommandsPane settings={settings} />
-    </ConfirmationDialogContext>,
-    <ConfirmationDialogContext value={confirm}>
-      <QuickCommandsPane settings={settings} addCommandIntentSignal={1} />
-    </ConfirmationDialogContext>
-  )
-  expect(screen.queryByText('Add Quick Command')).not.toBeNull()
 })

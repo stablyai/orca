@@ -39,9 +39,9 @@ describe('browser extension data per Orca profile', () => {
     personal.dnr.updateBrowserExtensionDnrState('default', extension, {
       dynamicRules: [{ id: 1 }]
     })
-    personal.sync.flush()
+    await personal.sync.flush()
     personal.state.flush()
-    personal.dnr.getBrowserExtensionDnrStore().flush()
+    await personal.dnr.getBrowserExtensionDnrStore().flush()
     vi.resetModules()
 
     const work = await openStoresAs('work')

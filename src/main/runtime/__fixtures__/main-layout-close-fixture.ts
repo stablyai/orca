@@ -8,11 +8,11 @@ import type {
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { DurableProfileStateMutation } from '../../persistence/loading-store/store-runtime-state'
 import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
-import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
+import { applyCommandToSession } from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import {
   isTerminalClose,
   keptOnWriteFailure
-} from '../../persistence/terminal-topology/terminal-close-write-failure'
+} from '../../persistence/terminal-topology/command-application/terminal-close-write-failure'
 
 type SessionCell = {
   get: () => WorkspaceSessionState

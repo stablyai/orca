@@ -12,7 +12,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/managed-account-types'
-import { getFeatureWallUsageProviderConnection } from '../feature-wall-usage-tracking'
+import { getFeatureWallUsageProviderConnection } from '../completion/feature-wall-usage-tracking'
 import { useTranslate } from '@/i18n/use-translate'
 
 type ConnectAction = 'idle' | 'adding'

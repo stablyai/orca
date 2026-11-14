@@ -1,6 +1,6 @@
 import { projectedAccountHome } from '../structured-session-history-account'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { agentSessionOwnerObservationIsLive } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { agentSessionOwnerObservationIsLive } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { historyRowFallsBackToChatLabel } from '../../../shared/structured-chat-row-name'
@@ -17,16 +17,17 @@ import {
   terminalResumeBlocked,
   type StructuredProviderSessionOwnership
 } from '../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
-import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   sessionHistoryBinaryNames,
   type StructuredAgentResumeInvocation,
   type StructuredAgentSessionHistory
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import { commandName, commandProgramIndex, shellCommands } from './shell-command-words'
 import { projectDurableAiVaultConversations } from '../structured-conversation-navigation'
+import type { StructuredConversationJournalPreview } from '../structured-conversation-journal-preview'
 import { isGenericConversationTitle } from '../../../shared/project-conversation-list'
 
 /** Hide chat-owned rows from clients unable to open that agent’s chat. */
@@ -37,7 +38,11 @@ export const OPENS_EVERY_STRUCTURED_CHAT: StructuredChatOpener = () => true
 export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
   opensChat: StructuredChatOpener,
-  options?: { includeStructuredSessions?: boolean; childSessionIds?: ReadonlySet<string> | null }
+  options?: {
+    includeStructuredSessions?: boolean
+    childSessionIds?: ReadonlySet<string> | null
+    journalPreviews?: ReadonlyMap<string, StructuredConversationJournalPreview>
+  }
 ): AiVaultListResult {
   const owner = ownershipLookup()
   if (!owner) {
@@ -64,7 +69,7 @@ export function projectStructuredAiVaultSessions(
         getStructuredAgentSessionHost()?.deps.store.listRecords() ?? [],
         opensChat,
         options.childSessionIds,
-        getStructuredAgentSessionHost()?.deps.journalDatabase
+        options.journalPreviews
       )
     : projected
 }

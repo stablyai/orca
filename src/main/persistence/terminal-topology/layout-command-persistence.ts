@@ -7,7 +7,7 @@ import type {
   LayoutEffects,
   LayoutRefusalCode
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { LayoutLiveContext } from './terminal-pane-admission'
+import type { LayoutLiveContext } from './pane-admission/terminal-pane-admission'
 import {
   resolveHostId,
   type SessionHostPartitionOperations
@@ -22,22 +22,25 @@ import {
   applyEditorFileRenamesInPartitions,
   topologyCommitContext
 } from './terminal-topology-commit'
-import { keepFrozen } from './layout-command-commit'
-import { applyLayoutRenames } from './terminal-layout-renames-commit'
-import { isTerminalClose, keptOnWriteFailure } from './terminal-close-write-failure'
+import { keepFrozen } from './command-application/layout-command-commit'
+import { applyLayoutRenames } from './command-application/terminal-layout-renames-commit'
+import {
+  isTerminalClose,
+  keptOnWriteFailure
+} from './command-application/terminal-close-write-failure'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { moveTabAcrossPartitions } from './cross-partition-tab-move'
-import { writeRestorable } from './restorable-write'
-import { raisingBindingGenerations } from './layout-command-binding-generations'
+import { moveTabAcrossPartitions } from './pane-moves/cross-partition-tab-move'
+import { writeRestorable } from './command-application/restorable-write'
+import { raisingBindingGenerations } from './pane-ownership/layout-command-binding-generations'
 import {
   keepPartitionEditorViews,
   partitionEditorViewsOf
 } from '../loading-store/workspace-sessions/layout-editor-views'
-import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
+import { assignWorkspaceSessionPartition } from './pane-ownership/terminal-topology-membership'
 import {
   repairDuplicatePtyPanesMutation,
   type DuplicatePtyPaneTransfer
-} from './duplicate-pty-pane-repair'
+} from './pane-ownership/duplicate-pty-pane-repair'
 
 /** Scope publication so readers reload only changed partitions. */
 function writingOnly<T>(

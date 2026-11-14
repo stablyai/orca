@@ -18,7 +18,7 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { triggerMediumImpact } from '../platform/haptics'
+import { triggerMediumImpact } from '../platform/haptics/haptics'
 import {
   type DragReorderLayout,
   orderedKeysFromDragReorderPositions,
@@ -55,6 +55,7 @@ export function DragReorderRow({
   movable,
   disabled,
   presentation,
+  liftFromRow = false,
   onMeasure,
   shared,
   scrollOffsetY,
@@ -71,6 +72,7 @@ export function DragReorderRow({
   movable: boolean
   disabled: boolean
   presentation: 'settings' | 'plain'
+  liftFromRow?: boolean
   onMeasure: (key: string, height: number) => void
   shared: DragSharedState
   scrollOffsetY: SharedValue<number>
@@ -191,43 +193,56 @@ export function DragReorderRow({
     restingBackground
   ])
 
-  const handle = movable ? (
+  const grip = (
+    <Animated.View
+      style={[styles.handle, presentation === 'plain' && styles.queueHandle]}
+      accessible
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      accessibilityLabel={t('components.dragReorderRow.dragToReorder', 'Drag to reorder')}
+      accessibilityHint={t(
+        'components.dragReorderRow.reorderHint',
+        'Use the move up and move down actions to reorder without dragging'
+      )}
+      accessibilityActions={[
+        { name: 'moveUp', label: t('components.dragReorderRow.moveUp', 'Move up') },
+        { name: 'moveDown', label: t('components.dragReorderRow.moveDown', 'Move down') }
+      ]}
+      onAccessibilityAction={(event) => {
+        if (disabled) {
+          return
+        }
+        if (event.nativeEvent.actionName === 'moveUp') {
+          onAccessibilityMove(rowKey, -1)
+        } else if (event.nativeEvent.actionName === 'moveDown') {
+          onAccessibilityMove(rowKey, 1)
+        }
+      }}
+      hitSlop={{
+        top: 8,
+        bottom: 8,
+        left: 8,
+        right: presentation === 'plain' ? 24 : 8
+      }}
+    >
+      <GripVertical size={18} color={colors.textMuted} />
+    </Animated.View>
+  )
+  // Lifting from the whole row puts the one gesture there; the grip then only shows and moves by actions.
+  // Only the plain row carries the row gesture; a settings row keeps it on the grip.
+  const rowLifts = liftFromRow && movable && presentation === 'plain'
+  const handle = !movable ? null : rowLifts ? (
+    grip
+  ) : (
+    <GestureDetector gesture={pan}>{grip}</GestureDetector>
+  )
+  const plainContent = rowLifts ? (
     <GestureDetector gesture={pan}>
-      <Animated.View
-        style={[styles.handle, presentation === 'plain' && styles.queueHandle]}
-        accessible
-        accessibilityRole="button"
-        accessibilityState={{ disabled }}
-        accessibilityLabel={t('components.dragReorderRow.dragToReorder', 'Drag to reorder')}
-        accessibilityHint={t(
-          'components.dragReorderRow.reorderHint',
-          'Use the move up and move down actions to reorder without dragging'
-        )}
-        accessibilityActions={[
-          { name: 'moveUp', label: t('components.dragReorderRow.moveUp', 'Move up') },
-          { name: 'moveDown', label: t('components.dragReorderRow.moveDown', 'Move down') }
-        ]}
-        onAccessibilityAction={(event) => {
-          if (disabled) {
-            return
-          }
-          if (event.nativeEvent.actionName === 'moveUp') {
-            onAccessibilityMove(rowKey, -1)
-          } else if (event.nativeEvent.actionName === 'moveDown') {
-            onAccessibilityMove(rowKey, 1)
-          }
-        }}
-        hitSlop={{
-          top: 8,
-          bottom: 8,
-          left: 8,
-          right: presentation === 'plain' ? 24 : 8
-        }}
-      >
-        <GripVertical size={18} color={colors.textMuted} />
-      </Animated.View>
+      <View collapsable={false}>{renderContent(handle)}</View>
     </GestureDetector>
-  ) : null
+  ) : (
+    renderContent(handle)
+  )
   return (
     <Animated.View
       onLayout={(event) => onMeasure(rowKey, event.nativeEvent.layout.height)}
@@ -239,7 +254,7 @@ export function DragReorderRow({
       ]}
     >
       {presentation === 'plain' ? (
-        renderContent(handle)
+        plainContent
       ) : (
         <>
           <View style={styles.rowContent}>{renderContent(handle)}</View>

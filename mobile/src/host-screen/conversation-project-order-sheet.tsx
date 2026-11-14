@@ -1,5 +1,5 @@
 import { ActionSheetModal } from '../components/ActionSheetModal'
-import { projectOrderChoices } from './workspace-option-controls-copy'
+import { projectOrderChoices } from './workspace-options/workspace-option-controls-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { HostScreenController } from './use-host-screen-controller'
 import { conversationCopy } from './conversation-copy'
