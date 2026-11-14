@@ -18,7 +18,9 @@ const choiceSchema = z.looseObject({
   description: z.string().optional()
 })
 const propertySchema = z.looseObject({
-  type: z.enum(['string', 'boolean', 'array']),
+  type: z.enum(['string', 'boolean', 'array', 'number', 'integer']),
+  minimum: z.number().optional(),
+  maximum: z.number().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
   format: z.string().optional(),
@@ -41,13 +43,19 @@ const formSchema = z.object({
 type Choice = { value: string; label: string; description?: string }
 type Field = { key: string; otherKey?: string; choices?: Choice[]; question: AgentJournalQuestion }
 
+// Strict decimal: rejects hex, Infinity, and whitespace inside the number that Number() would accept.
+const NUMERIC_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i
+
 const unsupportedForm = () => new AcpRpcError(-32602, 'Unsupported ACP elicitation form')
 
-// A form field with no choices becomes a text answer; enums and arrays become pickable options.
+/** A field with no choices becomes a text answer; enums and arrays become pickable options. */
 function fieldChoices(
   property: z.infer<typeof propertySchema>,
   hasOther: boolean
 ): Choice[] | undefined {
+  if (property.type === 'number' || property.type === 'integer') {
+    return undefined
+  }
   if (property.type === 'boolean') {
     return [
       { value: 'true', label: 'Yes' },
@@ -66,6 +74,21 @@ function fieldChoices(
     throw unsupportedForm()
   }
   return choices
+}
+
+/** Whether a schema property expects a numeric answer. */
+function isNumeric(property: z.infer<typeof propertySchema>): boolean {
+  return property.type === 'number' || property.type === 'integer'
+}
+
+/** Describes the accepted number type and bounds so rejected answers can be corrected. */
+function numericRules(property: z.infer<typeof propertySchema>): string {
+  const bounds = [
+    property.minimum !== undefined ? `at least ${property.minimum}` : undefined,
+    property.maximum !== undefined ? `at most ${property.maximum}` : undefined
+  ].filter(Boolean)
+  const kind = property.type === 'integer' ? 'integer' : 'number'
+  return [kind, ...bounds].join(' ')
 }
 
 /** Keeps form field identity while presenting choices and text on the existing question card. */
@@ -126,10 +149,13 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
       ...(!choices
         ? {
             freeTextInput: {
-              allowEmpty: true,
+              // Blank is an answer only for text; an optional number is simply left out.
+              allowEmpty: !isNumeric(property) || !required.has(key),
               ...(typeof property.default === 'string'
                 ? { multiline: true, initialValue: property.default }
-                : {}),
+                : typeof property.default === 'number'
+                  ? { initialValue: String(property.default) }
+                  : {}),
               ...(property.description ? { placeholder: property.description } : {})
             }
           }
@@ -162,11 +188,33 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
       if (!answers || !isValidAgentSessionQuestionAnswers(questions, answers)) {
         throw new AcpRpcError(-32602, 'Question answer must answer every offered question')
       }
-      const content: Record<string, string | boolean | string[]> = {}
+      const content: Record<string, string | number | boolean | string[]> = {}
       for (const { key, otherKey, choices, question } of fields) {
         const answer = answers.find((entry) => entry.questionId === question.id)!
         if (!choices) {
-          content[key] = answer.other ?? ''
+          const text = answer.other ?? ''
+          const property = properties[key]!
+          if (!isNumeric(property)) {
+            content[key] = text
+            continue
+          }
+          // Validation already rejected a blank required answer, so a blank here is an omitted optional.
+          if (!text.trim()) {
+            continue
+          }
+          const value = NUMERIC_TEXT.test(text.trim()) ? Number(text) : Number.NaN
+          if (
+            !Number.isFinite(value) ||
+            (property.type === 'integer' && !Number.isInteger(value)) ||
+            (property.minimum !== undefined && value < property.minimum) ||
+            (property.maximum !== undefined && value > property.maximum)
+          ) {
+            throw new AcpRpcError(
+              -32602,
+              `Question answer must be a valid ${numericRules(property)}`
+            )
+          }
+          content[key] = value
           continue
         }
         const values = answer.optionIds.map(
