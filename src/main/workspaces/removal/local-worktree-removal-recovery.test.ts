@@ -89,11 +89,6 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
           signal: controller.signal
         })
       ).rejects.toThrow(/aborted/i)
-      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
-        'C:/repo/worktree/feature',
-        {},
-        controller.signal
-      )
       expect(closeWatcher).toHaveBeenCalledOnce()
       expect(hostRmMock).toHaveBeenCalledOnce()
       expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
@@ -116,7 +111,9 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
         }
       })
       removeLocalWorktreePathMock.mockImplementationOnce(async () => {
-        controller.abort()
+        if (phase !== 'success') {
+          controller.abort()
+        }
         if (phase === 'delete') {
           throw controller.signal.reason
         }

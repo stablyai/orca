@@ -1,13 +1,19 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+import type * as LocalWorktreeFilesystem from './local-worktree-filesystem'
 const { prove, missing, remove } = vi.hoisted(() => ({
   prove: vi.fn(),
   missing: vi.fn(),
   remove: vi.fn()
 }))
-vi.mock('./local-worktree-filesystem', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  removeLocalWorktreePath: remove
-}))
+vi.mock('./local-worktree-filesystem', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalWorktreeFilesystem>()
+  return {
+    ...actual,
+    prepareLocalWorktreeFilesystem: async (
+      ...args: Parameters<typeof actual.prepareLocalWorktreeFilesystem>
+    ) => ({ ...(await actual.prepareLocalWorktreeFilesystem(...args)), remove })
+  }
+})
 vi.mock('./worktree-removal-safety', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   canSafelyRemoveOrphanedWorktreeDirectory: prove,
@@ -35,7 +41,9 @@ it.each(['proof', 'watcher', 'delete', 'success'] as const)(
       }
     })
     remove.mockImplementationOnce(async () => {
-      controller.abort()
+      if (phase !== 'success') {
+        controller.abort()
+      }
       if (phase === 'delete') {
         throw controller.signal.reason
       }
