@@ -1,4 +1,5 @@
 import { Fragment } from 'react'
+import './native-chat-pane-header.css'
 import { MessageSquarePlus, SquareSplitVertical } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
@@ -49,13 +50,13 @@ export function NativeChatPaneHeader({
   )
   return (
     <div
-      className="pane-title-bar z-20"
+      className="pane-title-bar native-chat-pane-header z-20"
       data-chromeless=""
       data-active-pane={focused ? '' : undefined}
       data-pane-title-surface={light ? 'light' : 'dark'}
       style={HEADER_STYLE}
     >
-      <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+      <div className="pane-title-actions native-chat-pane-actions ml-auto flex shrink-0 items-center gap-0 rounded-md border bg-popover p-0.5 text-popover-foreground shadow-xs">
         {handOff && focused ? (
           <Tooltip>
             <TooltipTrigger asChild>

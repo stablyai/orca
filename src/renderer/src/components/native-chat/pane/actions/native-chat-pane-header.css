@@ -1,0 +1,58 @@
+.native-chat-appearance:has(> .native-chat-pane-header) .native-chat-transcript {
+  padding-top: calc(var(--spacing) * 10 + 2px);
+}
+
+.native-chat-appearance:has(> .native-chat-pane-header) [data-native-chat-older-history] {
+  justify-content: flex-start;
+  padding-inline: calc(var(--spacing) * 3);
+}
+
+.native-chat-pane-header.pane-title-bar[data-chromeless] {
+  height: auto;
+  align-items: flex-start;
+  padding: var(--spacing);
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions {
+  opacity: 0;
+}
+
+.native-chat-pane-header[data-active-pane] .native-chat-pane-actions,
+.native-chat-pane-header:hover .native-chat-pane-actions,
+.native-chat-pane-header:focus-within .native-chat-pane-actions {
+  opacity: 1;
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions > button {
+  width: calc(var(--spacing) * 7);
+  min-width: calc(var(--spacing) * 7);
+  height: calc(var(--spacing) * 7);
+  color: var(--popover-foreground);
+  opacity: 1;
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions > button::before {
+  display: none;
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions > button svg {
+  width: calc(var(--spacing) * 4);
+  height: calc(var(--spacing) * 4);
+  stroke-width: 2;
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions > button:hover,
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions > button:active,
+.native-chat-pane-header[data-chromeless]
+  .native-chat-pane-actions
+  > button[data-state='delayed-open'],
+.native-chat-pane-header[data-chromeless]
+  .native-chat-pane-actions
+  > button[data-state='instant-open'] {
+  color: var(--accent-foreground);
+  background: var(--accent);
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions > button:disabled {
+  opacity: 0.5;
+}
