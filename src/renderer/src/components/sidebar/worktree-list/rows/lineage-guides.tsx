@@ -1,11 +1,19 @@
 import React from 'react'
 import { cn } from '@/lib/class-names'
-import type { LineageRowGuides } from '../listing/lineage-row-projection'
+import type { LineageRail, LineageRowGuides } from '../listing/lineage-row-projection'
 
 // Why: the card's title row center; single-line cards override it in CSS via :has().
 const TITLE_CENTER = 'var(--worktree-lineage-title-center, 16px)'
 // Why: starts the stem just under the parent's status-lane icon instead of crossing it.
 const STEM_TOP_BELOW_TITLE = 12
+
+function railXs(rail: LineageRail | null): number[] {
+  const xs: number[] = []
+  for (let node = rail; node; node = node.next) {
+    xs.push(node.x)
+  }
+  return xs
+}
 
 /** Tree connectors for one virtual row; each row paints only its own slice so lines survive virtualization. */
 export function LineageGuides({
@@ -25,7 +33,7 @@ export function LineageGuides({
       data-worktree-lineage-guides=""
       className={cn('pointer-events-none absolute inset-0', hidden && 'opacity-0')}
     >
-      {guides.rails.map((x) => (
+      {railXs(guides.rails).map((x) => (
         <span
           key={x}
           data-worktree-lineage-guide="rail"
