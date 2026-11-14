@@ -3,9 +3,9 @@ import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../shared/dashboard-snapsho
 import type { FloatingWorkspaceWindowSnapshot } from '../../../../shared/floating-workspace-window'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { AppState } from '@/store/types'
-import { readDashboardClientHost } from '../dashboard/dashboard-client-host'
-import { resolveDashboardCardTerminalInput } from '../dashboard/dashboard-card-terminal-input'
-import { dashboardCardDotState } from '../dashboard/dashboard-row-bucket'
+import { readDashboardClientHost } from '../dashboard/snapshot/dashboard-client-host'
+import { resolveDashboardCardTerminalInput } from '../dashboard/snapshot/dashboard-card-terminal-input'
+import { dashboardCardDotState } from '../dashboard/rows/dashboard-row-bucket'
 
 /** The focused floating group's active tab; the window shows that one terminal pane only. */
 export function buildFloatingWorkspaceWindowSnapshot(

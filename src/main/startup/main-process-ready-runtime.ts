@@ -37,7 +37,8 @@ import {
   collectWorktreeTrashSweepRoots,
   sweepStaleWorktreeTrash
 } from '../workspaces/removal/worktree-trash'
-import { loadWorktreeRemovalRecordsForStore } from './workspace-startup/worktree-removal-records-load'
+import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
+import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
@@ -62,7 +63,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Renderers fork from zygotes that exist already, so this must land before the first window.
   await refuseRealtimeSchedulingUnderZeroRtTime()
   // Load interrupted deletion records before listings so first paint shows Deleting.
-  await loadWorktreeRemovalRecordsForStore(store)
+  await prepareWorktreeRemovalsForStore(store)
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
@@ -110,7 +111,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     ).catch((error) => {
       console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
     })
-    runtime.finishInterruptedWorktreeRemovals()
+    worktreeRemovalLifetime.resume(() => runtime.finishInterruptedWorktreeRemovals())
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   // Defer noncritical plugin-file refresh past first paint.
   runAfterFirstWindowShown(() => {

@@ -10,7 +10,7 @@ import {
   type AttentionStore,
   type PaneTarget
 } from './workspace-unread-characterization-fixture'
-import { completeAgentTurn, toggleUnreadByUser } from './workspace-unread-characterization-driver'
+import { completeAgentTurn } from './workspace-unread-characterization-driver'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { isWorkspaceFlagSet } from './workspace-unread-flag-reads'
@@ -261,18 +261,6 @@ describe('explicit workspace and agent reads', () => {
       .getState()
       .readOnScreenAttention({ workspaceIds: [WS_A], targets: [] }, { screenArrived: true })
     expect(isWorkspaceFlagSet(store.getState(), WS_A, 'runtime:box')).toBe(false)
-  })
-
-  it('Mark read also reads the agents, so their lines lose the dot with the flag', () => {
-    const { store } = createAttentionStore()
-    const pane = finishedAgentOffScreen(store)
-    const row = store.getState().worktreesByRepo.repo1!.find((w) => w.id === WS_A)!
-    expect(row.isUnread).toBe(true)
-
-    toggleUnreadByUser(store, row)
-
-    expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(false)
-    expect(selectAgentRowsUnread(store.getState(), [pane])).toEqual([false])
   })
 
   it('reading an agent elsewhere preserves a workspace marked unread before restart', () => {

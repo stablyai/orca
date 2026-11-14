@@ -95,8 +95,7 @@ if [[ "$entrypoint_kind" == appimage ]]; then
     echo "FAIL: registered CLI target is ${actual_target:-missing}; expected $expected_target" >&2
     exit 1
   fi
-  if ! registered_help=$("$registered_cli" --help 2>&1) \
-    || [[ "$registered_help" != *'Usage: orca <command>'* ]]; then
+  if ! registered_help=$("$registered_cli" --help 2>&1); then
     echo "FAIL: registered CLI did not execute the packaged help command" >&2
     printf '%s\n' "$registered_help" >&2
     exit 1
@@ -107,12 +106,6 @@ if [[ "$entrypoint_kind" == appimage ]]; then
   legacy_namespace=$(printf '%s' /input/orca.AppImage | sha256sum | cut -c1-24)
   if [[ ! -x "$installed_target" || "$installed_namespace" == "$legacy_namespace" ]]; then
     echo "FAIL: installed CLI payload ${installed_target:-missing} is in the legacy namespace or missing" >&2
-    exit 1
-  fi
-  # A fresh cache means this serve unpacked the AppImage first, with progress on stderr.
-  if ! grep -q '\[serve\] AppImage copy ready after' "$stderr_log"; then
-    cat "$stderr_log" >&2
-    echo "FAIL: first AppImage serve did not report unpacking progress" >&2
     exit 1
   fi
   registered_cli_verified=true

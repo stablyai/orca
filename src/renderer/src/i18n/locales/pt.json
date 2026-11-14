@@ -21673,7 +21673,8 @@
         "unconfirmed": "{{agent}} não conseguiu confirmar a ramificação",
         "unconfirmedDetail": "Ela pode ter sido aberta. Confira o histórico de sessões antes de tentar novamente.",
         "failed": "{{agent}} não conseguiu ramificar este chat",
-        "failedDetail": "Seu chat não foi alterado. Tente novamente."
+        "failedDetail": "Seu chat não foi alterado. Tente novamente.",
+        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar."
       },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",

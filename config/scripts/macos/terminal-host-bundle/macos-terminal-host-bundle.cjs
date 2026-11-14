@@ -43,6 +43,20 @@ const LOAD_CALL = /\b(?:require|import)\(/g
 const LITERAL_ARGUMENT = /^\s*([`'"])([^`'"$]+)\1\s*\)/
 const LIPO_ARCH_TO_NODE_ARCH = { x86_64: 'x64', arm64: 'arm64' }
 
+// electron-builder names the app bundle and its main executable after productFilename.
+function macAppExecutableName(appPath) {
+  return basename(appPath, '.app')
+}
+
+/** Throws unless the helper executable carries the app's main-executable UUID for every CPU type. */
+function assertMacTerminalHostUuid(appPath, appId) {
+  assertMacExecutableUuid(
+    macTerminalHostPaths(appPath).executable,
+    appId,
+    macAppExecutableName(appPath)
+  )
+}
+
 function macTerminalHostPaths(appPath) {
   const bundle = join(appPath, 'Contents', 'Helpers', `${MAC_TERMINAL_HOST_NAME}.app`)
   const contents = join(bundle, 'Contents')
@@ -284,9 +298,13 @@ function assembleMacTerminalHost({ appPath, nodeExecutable, iconPath, info }) {
   mkdirSync(join(paths.bundle, 'Contents', 'MacOS'), { recursive: true })
   cpSync(nodeExecutable, paths.executable)
   chmodSync(paths.executable, 0o755)
-  // Terminals' responsible process is this helper. Stock Node's UUID is shared by every install of that build
-  // (nvm, Homebrew, other apps), so Local Network privacy could attribute terminals to another program (#21988).
-  giveMacExecutableUniqueUuid(paths.executable, info.CFBundleIdentifier)
+  // Terminals' responsible process is this helper, and stock Node's UUID is shared by every install of that build (#21988).
+  // Local Network caches one UUID per bundle id, so the helper carries the app's: its own would flip that cache.
+  giveMacExecutableUniqueUuid(
+    paths.executable,
+    info.CFBundleIdentifier,
+    macAppExecutableName(appPath)
+  )
   cpSync(iconPath, paths.icon)
   cpSync(join(daemonOut, 'main'), join(paths.daemon, 'out', 'main'), { recursive: true })
   // Pins out/ to CommonJS so a stray parent package.json cannot change the loader.
@@ -392,7 +410,7 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
     })
   )
   try {
-    assertMacExecutableUuid(paths.executable, appId)
+    assertMacTerminalHostUuid(appPath, appId)
   } catch (error) {
     problems.push(error.message)
   }
@@ -436,6 +454,7 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
 module.exports = {
   MAC_TERMINAL_HOST_NAME,
   assembleMacTerminalHost,
+  assertMacTerminalHostUuid,
   buildMacTerminalHost,
   buildMacTerminalHostInfo,
   daemonBareRequires,
