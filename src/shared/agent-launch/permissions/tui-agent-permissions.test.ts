@@ -4,10 +4,16 @@ import {
   resolveAgentPermissionModeSummary,
   resolveNonAutoAgentPermissionMode,
   AUTO_TUI_AGENT_ARGS,
+  YOLO_TUI_AGENT_ARGS,
   YOLO_TUI_AGENT_ENV
 } from './tui-agent-permissions'
 
 describe('tui agent permissions', () => {
+  it('uses Genie Code permission arguments', () => {
+    expect(AUTO_TUI_AGENT_ARGS.genie).toBe('--approve-for-me')
+    expect(YOLO_TUI_AGENT_ARGS.genie).toBe('--dangerously-bypass-approvals-and-sandbox')
+  })
+
   it.each(['yolo', 'manual'] as const)(
     'applies auto to supporting agents while preserving the %s policy elsewhere',
     (mode) => {

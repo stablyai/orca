@@ -11,6 +11,7 @@ export const AGENT_KIND_VALUES = [
   'codebuddy',
   'openclaude',
   'codex',
+  'genie',
   'autohand',
   'opencode',
   'opencode2',

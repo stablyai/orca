@@ -38,6 +38,18 @@ describe('resolveAgentStartupPlanInputs', () => {
       }).shell
     ).toBeUndefined()
   })
+
+  it('passes Genie prompts after the option separator', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'genie',
+      prompt: 'review the migration',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("genie -- 'review the migration'")
+    expect(plan?.expectedProcess).toBe('genie')
+  })
 })
 
 describe('a picked session option outranks configured launch arguments', () => {
