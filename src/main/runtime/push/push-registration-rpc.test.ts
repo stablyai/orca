@@ -73,6 +73,14 @@ describe('notifications.registerPush', () => {
       registerPush.params!.safeParse({ ...REGISTER_PARAMS, deviceId: 'device-9' }).success
     ).toBe(false)
   })
+
+  it('accepts only a sealed-content format this host can produce, and only from Android', () => {
+    const params = method('notifications.registerPush').params!
+    const android = { ...REGISTER_PARAMS, platform: 'android', apnsEnvironment: undefined }
+    expect(params.safeParse({ ...android, sealedContent: 'e2e1' }).success).toBe(true)
+    expect(params.safeParse({ ...android, sealedContent: 'e2e9' }).success).toBe(false)
+    expect(params.safeParse({ ...REGISTER_PARAMS, sealedContent: 'e2e1' }).success).toBe(false)
+  })
 })
 
 describe('notifications.unregisterPush', () => {

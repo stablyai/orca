@@ -1,5 +1,4 @@
 // Push authenticates with host keys, independent of cloud sign-in; retain gateway registrations and durable cleanup for accountless hosts too.
-import { randomUUID } from 'node:crypto'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
@@ -12,6 +11,7 @@ import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { PushDispatcher } from './push-dispatcher'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
+import { buildTestPushNotification } from './push-test-notification'
 import {
   readMobilePushDeliveryMode,
   type MobilePushDeliveryMode
@@ -119,20 +119,14 @@ export class DesktopPushService {
     if (this.stopped || this.deliveryMode === 'disabled') {
       return { accepted: false, reason: 'unavailable' }
     }
+    // Fail closed like real pushes: a sealed phone with no token to seal with never gets readable text.
+    if (registration.sealedContent && !device.token) {
+      return { accepted: false, reason: 'rejected' }
+    }
     // Explicit tests target only the caller and bypass automatic activity filters.
     const result = await this.client.send({
       registrationIds: [registration.registrationId],
-      notification: {
-        source: 'terminal-bell',
-        agentState: null,
-        title: 'Test notification',
-        body: '',
-        notificationId: randomUUID(),
-        notificationEpoch: randomUUID(),
-        notificationSeq: 0,
-        expiresAt: Date.now() + 300_000,
-        sound: registration.filter.sound !== false
-      }
+      notification: buildTestPushNotification(registration, device.token ?? '')
     })
     if (!result.ok) {
       return {
@@ -267,7 +261,8 @@ export class DesktopPushService {
       const stored = this.registry.setPushRegistration(input.deviceId, {
         registrationId,
         filter: input.filter,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60_000
+        expiresAt: Date.now() + 7 * 24 * 60 * 60_000,
+        ...(input.sealedContent ? { sealedContent: input.sealedContent } : {})
       })
       // False means the device was removed or left mobile scope while the gateway
       // call was in flight.

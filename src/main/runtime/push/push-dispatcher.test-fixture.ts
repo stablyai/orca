@@ -18,7 +18,7 @@ export function registration(
 export type SendCall = Parameters<PushGatewayClient['send']>[0]
 
 export function createHarness(options: {
-  devices: { deviceId: string; pushRegistration?: MobilePushRegistration }[]
+  devices: { deviceId: string; token?: string; pushRegistration?: MobilePushRegistration }[]
   results?: PushSendResult[]
   sendImpl?: () => Promise<never>
 }): {
@@ -48,7 +48,9 @@ export function createHarness(options: {
     })
   } as unknown as PushGatewayClient
   const registry: PushDispatcherRegistry = {
-    listDevices: () => options.devices,
+    // Mapped on every read so suites that swap a registration in place still see it.
+    listDevices: () =>
+      options.devices.map((device) => ({ token: `token-${device.deviceId}`, ...device })),
     setPushRegistration: (deviceId, value) => {
       cleared.push(value === null ? deviceId : null)
       return true

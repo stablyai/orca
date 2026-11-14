@@ -20,6 +20,7 @@ import {
   sendRegister,
   sendUnregister
 } from './push-registration/mobile-push-registration-operations'
+import { hostSealsPushes } from './push-registration/push-register-params'
 import {
   loadPushNotificationsEnabled,
   loadRemotePushHostRegistrations,
@@ -131,6 +132,7 @@ async function reconcileHost(hostId: string): Promise<void> {
         return
       }
       state.supported = capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
+      state.sealable = hostSealsPushes(capabilities)
       state.connection.support?.complete(state.supported)
       void enqueueReconcile(hostId)
     })
@@ -168,7 +170,10 @@ async function reconcileHost(hostId: string): Promise<void> {
   ) {
     return
   }
-  if (!(await sendRegister(client, token, filter)) || hostsById.get(hostId) !== state) {
+  if (
+    !(await sendRegister(client, token, filter, state.sealable)) ||
+    hostsById.get(hostId) !== state
+  ) {
     return
   }
   if (generation !== consentGeneration) {
