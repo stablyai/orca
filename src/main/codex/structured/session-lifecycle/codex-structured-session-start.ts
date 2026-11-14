@@ -58,7 +58,7 @@ type CodexOpenContext = {
   translator: CodexJournalTranslator | null
   dispatchEchoes: CodexDispatchEchoes
   subagentExecutions: CodexSubagentExecutions
-  setPrimaryThreadId: (threadId: string) => void
+  setPrimaryThreadId: (threadId: string | null) => void
   forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
   unbindReadingControl?: () => void
 }
@@ -120,7 +120,8 @@ export async function openCodexStructuredSession(
       { ...threadLaunch, commandEnv },
       // Long rollout/MCP setup relies on the host ceiling and cancellation unless a timeout is supplied.
       deps.requestTimeoutMs ?? null,
-      openInput.signal
+      openInput.signal,
+      () => start.setPrimaryThreadId(null)
     ),
     openInput.signal
   )

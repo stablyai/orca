@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import {
   acquireReadyCodexForTest,
   adapterFor,
@@ -7,8 +8,11 @@ import {
   THREAD_ID
 } from './codex-structured-session-adapter-fixture'
 
-async function fixture(options: { resumed?: boolean; rerouteBeforeOpen?: boolean } = {}) {
+async function fixture(
+  options: { resumed?: boolean; rerouteBeforeOpen?: boolean; replaceUnsaved?: boolean } = {}
+) {
   const settings = { model: 'gpt-live', effort: 'low', modelProvider: 'openai' }
+  const openedThreadId = options.replaceUnsaved ? 'thread-replacement' : THREAD_ID
   const codex = fakeCodex({
     'account/read': () => ({
       account: { type: 'chatgpt', id: 'account-1', email: 'private@invalid.test', planType: 'pro' }
@@ -16,7 +20,7 @@ async function fixture(options: { resumed?: boolean; rerouteBeforeOpen?: boolean
     'thread/start': () => {
       if (options.rerouteBeforeOpen) {
         codex.connections[0]!.handlers.onNotification?.('model/rerouted', {
-          threadId: THREAD_ID,
+          threadId: openedThreadId,
           turnId: 'opening-turn',
           fromModel: 'gpt-live',
           toModel: 'gpt-other',
@@ -24,24 +28,37 @@ async function fixture(options: { resumed?: boolean; rerouteBeforeOpen?: boolean
         })
       }
       return {
-        thread: { id: THREAD_ID, modelProvider: 'openai', status: { type: 'idle' } },
+        thread: { id: openedThreadId, modelProvider: 'openai', status: { type: 'idle' } },
         model: 'gpt-live',
         reasoningEffort: 'low',
         modelProvider: 'openai'
       }
     },
-    'thread/resume': () => ({
-      thread: { id: THREAD_ID, modelProvider: 'openai', status: { type: 'idle' } },
-      model: 'gpt-live',
-      reasoningEffort: 'low',
-      modelProvider: 'openai'
-    })
+    'thread/resume': () => {
+      if (options.replaceUnsaved) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          `no rollout found for thread id ${THREAD_ID}`
+        )
+      }
+      return {
+        thread: { id: THREAD_ID, modelProvider: 'openai', status: { type: 'idle' } },
+        model: 'gpt-live',
+        reasoningEffort: 'low',
+        modelProvider: 'openai'
+      }
+    }
   })
-  const adapter = adapterFor(codex, { resumeThreadId: options.resumed ? THREAD_ID : null })
+  const adapter = adapterFor(codex, {
+    resumeThreadId: options.resumed ? THREAD_ID : null,
+    ...(options.replaceUnsaved ? { supersedeIfUnsaved: true } : {})
+  })
   await acquireReadyCodexForTest(adapter, {
-    identity: options.rerouteBeforeOpen
-      ? { ...identityFor('session-1'), providerHandle: null }
-      : identityFor('session-1'),
+    identity:
+      options.rerouteBeforeOpen && !options.replaceUnsaved
+        ? { ...identityFor('session-1'), providerHandle: null }
+        : identityFor('session-1'),
     fence: 7,
     spawnToken: 'spawn-9'
   })
@@ -161,6 +178,17 @@ it('keeps usage unknown when a reroute arrives before the primary opening reply'
   try {
     expect(await f.read()).toBeNull()
     f.usage()
+    expect(await f.read()).toBeNull()
+  } finally {
+    await f.adapter.closeAll()
+  }
+})
+
+it('keeps a replacement thread reroute unknown after its unsaved predecessor cannot resume', async () => {
+  const f = await fixture({ resumed: true, rerouteBeforeOpen: true, replaceUnsaved: true })
+  try {
+    expect(await f.read()).toBeNull()
+    f.usage(99, 'thread-replacement')
     expect(await f.read()).toBeNull()
   } finally {
     await f.adapter.closeAll()

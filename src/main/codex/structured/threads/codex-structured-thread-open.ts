@@ -81,7 +81,8 @@ export async function openCodexThread(
   },
   /** null: no deadline; the start that opens the thread bounds it (`signal`). */
   timeoutMs: number | null | undefined,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onStartingFreshThread?: () => void
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
   if (launch.execution && resumeThreadId) {
@@ -125,6 +126,7 @@ export async function openCodexThread(
   }
   const startThread = (): Promise<unknown> => {
     throwIfSignalAborted(signal)
+    onStartingFreshThread?.()
     return connection.request(
       'thread/start',
       { ...threadSettings, ...(launch.model ? { model: launch.model } : {}) },
