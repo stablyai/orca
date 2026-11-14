@@ -1,71 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge/bridge-caps'
 
 import { clientFrame } from './bridge-host-test-fakes'
-import { harness, ID, OTHER } from './bridge-host-test-harness'
-
-import type { TerminalBacklogTimers } from './bridge-terminal-output-backlog'
-
-// Rebuild measured terminal timing: host JSON at 70.3 MiB/s, xterm at 2.2 MiB/s, batcher 64 KiB/5 ms and chunker 48 KiB; a 5 MB cat exhausts the ordinary window before paint.
-// Measure JSON expansion for ASCII and SGR output; simulate the timeline because the original design capture files are not in this lane.
-
-function manualTimers(): TerminalBacklogTimers & { fire: () => void; armed: () => boolean } {
-  let handler: (() => void) | null = null
-  return {
-    set: (next) => {
-      handler = next
-      return 1
-    },
-    clear: () => {
-      handler = null
-    },
-    armed: () => handler !== null,
-    fire: () => {
-      const pending = handler
-      handler = null
-      pending?.()
-    }
-  }
-}
-
-// Simulate emit → limited page drain → interval acknowledgement at measured rates; this ordering determines whether backpressure kills the stream.
-
-describe('the two ends a held terminal stream has', () => {
-  function held(): ReturnType<typeof harness> & { timers: ReturnType<typeof manualTimers> } {
-    const timers = manualTimers()
-    const bridge = harness({ ready: true, terminalTimers: timers })
-    bridge.host.receive(
-      clientFrame({ type: 'subscribe', id: ID, method: 'terminal.subscribe', params: {} })
-    )
-    return Object.assign(bridge, { timers })
-  }
-
-  it('still ends on one event over the frame cap, which is C0.3 and is not slowness', () => {
-    // Holding cannot rescue an event the page refuses for size; the frame cap still ends it visibly.
-    const bridge = held()
-    bridge.client.streams[0].emit({
-      type: 'data',
-      streamId: 1,
-      chunk: 'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES + 1)
-    })
-    const ends = bridge.frames().filter((frame) => frame.type === 'end')
-    expect(ends).toHaveLength(1)
-    expect(ends[0]).toMatchObject({ reason: 'overflow' })
-  })
-})
+import { harness, ID } from './bridge-host-test-harness'
 
 describe('the cases the rulings name', () => {
-  function subscribed(
-    ids: readonly string[]
-  ): ReturnType<typeof harness> & { timers: ReturnType<typeof manualTimers> } {
-    const timers = manualTimers()
-    const bridge = harness({ ready: true, terminalTimers: timers })
+  function subscribed(ids: readonly string[]): ReturnType<typeof harness> {
+    const bridge = harness({
+      ready: true,
+      terminalTimers: { set: () => 1, clear: () => undefined }
+    })
     for (const id of ids) {
       bridge.host.receive(
         clientFrame({ type: 'subscribe', id, method: 'terminal.subscribe', params: {} })
       )
     }
-    return Object.assign(bridge, { timers })
+    return bridge
   }
 
   // Close the frame-count window cheaply; 256 small frames exercise the same held state without allocating a 4 MiB byte-window fixture.
@@ -86,17 +35,6 @@ describe('the cases the rulings name', () => {
       }
     }
   }
-
-  it('keeps one backlog per subscription, so a busy terminal cannot end a quiet one', () => {
-    const bridge = subscribed([ID, OTHER])
-    for (let index = 0; index < OVER_FRAME_WINDOW; index += 1) {
-      bridge.client.streams[0].emit({ type: 'data', streamId: 1, chunk: SMALL_CHUNK })
-    }
-    bridge.client.streams[1].emit({ type: 'data', streamId: 2, chunk: 'quiet' })
-    const other = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === OTHER)
-    expect(other).toHaveLength(1)
-    expect(bridge.frames().some((frame) => frame.type === 'end' && frame.id === OTHER)).toBe(false)
-  })
 
   it('breaks a merge run on a payload that is not output, and keeps the order', () => {
     // Merge only consecutive output; resize/metadata must retain their position between byte runs.

@@ -4,8 +4,14 @@ import { pathToFileURL } from 'node:url'
 import type * as TranscribeCpp from 'transcribe-cpp'
 import { appendDictationText } from '../../shared/dictation-transcript-spacing'
 import { resampleToRate } from './stt-audio-resample'
-import { OFFLINE_DECODE_CHUNK_SECONDS, OfflineAudioChunker } from './stt-offline-audio-chunker'
-import { VadPauseSegmenter } from './stt-vad-pause-segmenter'
+import {
+  type AudioSegmenter,
+  boundedChunks,
+  joinAudio,
+  OFFLINE_DECODE_CHUNK_SECONDS
+} from './stt-offline-audio-chunker'
+import { LiveDecode, warmUpLiveDecode } from './stt-live-decode'
+import { loadSileroVad, VadPauseSegmenter } from './stt-vad-pause-segmenter'
 import type { SttRecognizer, SttRecognizerInit, SttRecognizerPost } from './stt-recognizer'
 
 // Past ~8 threads decode slowed 2-4x under load in the 2026-11 benchmark; E-cores and SMT siblings
@@ -15,31 +21,11 @@ function performanceCoreThreads(): number {
   return Math.min(logical, 8, Math.max(4, Math.floor(logical / 2)))
 }
 
-// Without the detector, audio is still cut at the decode bound, just not at pauses.
-type AudioSegmenter = {
-  readonly heldSamples: number
-  readonly phraseOpen?: boolean
-  push(samples: Float32Array): Float32Array[] | Promise<Float32Array[]>
-  flush(): Float32Array[] | Promise<Float32Array[]>
-}
-
-function boundedChunks(sampleRate: number): AudioSegmenter {
-  const chunker = new OfflineAudioChunker(sampleRate)
-  return {
-    get heldSamples() {
-      return chunker.heldSamples
-    },
-    push: (samples) => chunker.push(samples),
-    flush: () => {
-      const rest = chunker.flush()
-      return rest ? [rest] : []
-    }
-  }
-}
-
 // Totals, not the nominal rate ratio: per-feed resampling rounds, and the drift would replay decoded audio.
 type StreamCoverage = {
   options: TranscribeCpp.TranscribeOptions
+  /** Streaming models only, unless another dictation already streams. */
+  live: LiveDecode | null
   segmenter: AudioSegmenter
   vad: TranscribeCpp.VadSession | null
   inputSamples: number
@@ -63,31 +49,8 @@ const SILENCE_COVERAGE_REPORT_SECONDS = 5
 
 // The CPU fallback keeps uncommitted audio for a replay and takes over 30 s of it for a stalled GPU.
 const COMMIT_AFTER_SECONDS = 20
-
-// Optional: without it dictation still works, with text only at the decode bound and at stop.
-async function loadSileroVad(
-  transcribe: typeof TranscribeCpp,
-  path: string | undefined,
-  sampleRate: number
-): Promise<TranscribeCpp.TranscribeModel | null> {
-  if (!path) {
-    return null
-  }
-  try {
-    // Tiny and per-frame; the CPU keeps it off a GPU that may fail over.
-    const model = await transcribe.TranscribeModel.load(path, { backend: 'cpu' })
-    if (model.vadInfo.sampleRate === sampleRate) {
-      return model
-    }
-    console.warn(
-      `[speech] Silero VAD needs ${model.vadInfo.sampleRate} Hz; this model takes ${sampleRate} Hz`
-    )
-    model.dispose()
-  } catch (error) {
-    console.warn('[speech] Silero VAD unavailable; text arrives at stop:', error)
-  }
-  return null
-}
+// A live dictation with no quiet to commit at restarts its stream by then, at a pause if it can.
+const LIVE_COMMIT_BY_SECONDS = 25
 
 export async function createTranscribeCppRecognizer(
   init: SttRecognizerInit,
@@ -127,10 +90,22 @@ export async function createTranscribeCppRecognizer(
   const vadModel = await loadSileroVad(transcribe, init.vadModelPath, modelRate)
   const streams = new Map<string, StreamCoverage>()
   const openStream = (streamId: string, vocabulary: readonly string[]): StreamCoverage => {
+    // A dictation that starts beside a live one is pause-cut, so the two don't take the model from each other per feed.
+    const live =
+      model.capabilities.supportsStreaming &&
+      ![...streams].some(([id, other]) => id !== streamId && other.live)
     // A VAD stream is per-dictation state, so each dictation gets its own session.
     const vad = vadModel?.createVadSession({ nThreads: 1 }) ?? null
     const stream: StreamCoverage = {
       options: streamOptions(vocabulary),
+      live: live
+        ? new LiveDecode(
+            session,
+            streamOptions(vocabulary),
+            modelRate,
+            vad && vadModel && { vad, frameSamples: vadModel.vadInfo.frameSamples }
+          )
+        : null,
       segmenter: boundedChunks(modelRate),
       vad,
       inputSamples: 0,
@@ -141,7 +116,7 @@ export async function createTranscribeCppRecognizer(
       speechPending: false,
       span: { audio: [], samples: 0, texts: [] }
     }
-    if (vad && vadModel) {
+    if (vad && vadModel && !live) {
       stream.segmenter = new VadPauseSegmenter(
         vad,
         modelRate,
@@ -149,15 +124,28 @@ export async function createTranscribeCppRecognizer(
         () => stream.slowPhraseDecodes < SLOW_PHRASE_DECODES_BEFORE_NO_CUTS
       )
     }
-    streams.get(streamId)?.vad?.dispose()
+    const replaced = streams.get(streamId)
+    if (replaced) {
+      dropStream(replaced)
+    }
     streams.set(streamId, stream)
     return stream
+  }
+
+  const dropStream = (stream: StreamCoverage) => {
+    stream.vad?.dispose()
+    stream.live?.reset()
   }
 
   const transcribeChunk = async (
     chunk: Float32Array,
     options: TranscribeCpp.TranscribeOptions
   ): Promise<string> => {
+    // transcribe-cpp lets one native stream hold the model at a time.
+    const holder = [...streams].find(([, other]) => other.live?.holdsModel)
+    if (holder) {
+      await endLive(...holder)
+    }
     try {
       return (await session.run(chunk, options)).text
     } catch (error) {
@@ -169,16 +157,13 @@ export async function createTranscribeCppRecognizer(
     }
   }
 
-  // The first run compiles GPU pipelines (seconds on Metal); pay it while loading, not on the first stop.
-  await transcribeChunk(new Float32Array(Math.round(modelRate / 2)), baseOptions)
-
   // Stream position (model-rate samples) the segmenter has handed on, less chunks still waiting to be decoded.
   const position = (stream: StreamCoverage, undecoded: number) =>
     stream.resampledSamples - stream.segmenter.heldSamples - undecoded
 
-  // Coverage is in input-rate samples so the host can trim the audio it keeps for a CPU replay.
-  const report = (streamId: string, stream: StreamCoverage, text: string, undecoded: number) => {
-    const covered = position(stream, undecoded)
+  // `covered`: stream position (model-rate samples) the posted text accounts for. Reported in input-rate samples
+  // so the host can trim the audio it keeps for a CPU replay.
+  const report = (streamId: string, stream: StreamCoverage, text: string, covered: number) => {
     stream.reportedSamples = covered
     post({
       type: 'chunk',
@@ -204,7 +189,7 @@ export async function createTranscribeCppRecognizer(
       audio.length === 1 && texts.length === 1
         ? texts[0]
         : (await transcribeChunk(joinAudio(audio), stream.options)).trim()
-    report(streamId, stream, text, undecoded)
+    report(streamId, stream, text, position(stream, undecoded))
   }
 
   /** `live`: decode each phrase as it ends for live text; at stop only the commit decodes. */
@@ -244,7 +229,7 @@ export async function createTranscribeCppRecognizer(
     }
     const dropped = position(stream, 0) - stream.reportedSamples
     if (stream.span.samples === 0 && dropped >= SILENCE_COVERAGE_REPORT_SECONDS * modelRate) {
-      report(streamId, stream, '', 0)
+      report(streamId, stream, '', position(stream, 0))
     }
   }
 
@@ -268,11 +253,49 @@ export async function createTranscribeCppRecognizer(
     }
   }
 
+  const feedLive = async (
+    streamId: string,
+    stream: StreamCoverage,
+    live: LiveDecode,
+    samples: Float32Array
+  ) => {
+    if (canceled.has(streamId)) {
+      return
+    }
+    const update = await live.feed(samples, stream.resampledSamples)
+    if (update?.type === 'partial') {
+      post({ type: 'partial', streamId, text: update.text })
+    } else if (update) {
+      const silence =
+        update.covered - stream.reportedSamples >= SILENCE_COVERAGE_REPORT_SECONDS * modelRate
+      if (update.text || silence) {
+        report(streamId, stream, update.text, update.covered)
+      }
+    }
+    const held = (stream.resampledSamples - stream.reportedSamples) / modelRate
+    if (held >= LIVE_COMMIT_BY_SECONDS || (held >= COMMIT_AFTER_SECONDS && live.atPause)) {
+      await endLive(streamId, stream)
+    }
+  }
+
+  // At stop, or when another dictation needs the model.
+  const endLive = async (streamId: string, stream: StreamCoverage) => {
+    const text = await stream.live?.end(!canceled.has(streamId))
+    if (text != null && !canceled.has(streamId)) {
+      report(streamId, stream, text, stream.resampledSamples)
+    }
+  }
+
   const closeStream = (streamId: string): StreamCoverage | undefined => {
     const stream = streams.get(streamId)
     streams.delete(streamId)
     return stream
   }
+
+  // The first decode compiles GPU pipelines (seconds on Metal); pay it while loading, not on the first stop.
+  await (model.capabilities.supportsStreaming
+    ? warmUpLiveDecode(session, baseOptions, modelRate)
+    : transcribeChunk(new Float32Array(Math.round(modelRate / 2)), baseOptions))
 
   return {
     open(streamId, vocabulary) {
@@ -286,11 +309,18 @@ export async function createTranscribeCppRecognizer(
       )
       stream.inputSamples += samples.length
       stream.resampledSamples += resampled.length
+      if (stream.live) {
+        await feedLive(streamId, stream, stream.live, resampled)
+        return
+      }
       const phrases = await stream.segmenter.push(resampled)
       // A cut phrase stays pending until its text is posted.
       notePendingSpeech(streamId, stream, phrases.length > 0 || !!stream.segmenter.phraseOpen)
-      await decode(streamId, stream, phrases, true)
-      notePendingSpeech(streamId, stream, !!stream.segmenter.phraseOpen)
+      // Only beside a live dictation, whose native stream each decode ends, so this one decodes only to commit.
+      const phraseText = !model.capabilities.supportsStreaming
+      await decode(streamId, stream, phrases, phraseText)
+      const textless = !phraseText && stream.span.samples > 0
+      notePendingSpeech(streamId, stream, !!stream.segmenter.phraseOpen || textless)
     },
     async finish(streamId) {
       const stream = closeStream(streamId)
@@ -298,32 +328,26 @@ export async function createTranscribeCppRecognizer(
         return
       }
       try {
+        if (stream.live) {
+          await endLive(streamId, stream)
+          return
+        }
         await decode(streamId, stream, await stream.segmenter.flush(), false)
         await commit(streamId, stream, 0)
         notePendingSpeech(streamId, stream, false)
       } finally {
-        stream.vad?.dispose()
+        dropStream(stream)
       }
     },
     discard(streamId) {
       canceled.delete(streamId)
-      closeStream(streamId)?.vad?.dispose()
+      const stream = closeStream(streamId)
+      if (stream) {
+        dropStream(stream)
+      }
     },
     cancel(streamId) {
       canceled.add(streamId)
     }
   }
-}
-
-function joinAudio(parts: Float32Array[]): Float32Array {
-  if (parts.length === 1) {
-    return parts[0]
-  }
-  const joined = new Float32Array(parts.reduce((total, part) => total + part.length, 0))
-  let offset = 0
-  for (const part of parts) {
-    joined.set(part, offset)
-    offset += part.length
-  }
-  return joined
 }

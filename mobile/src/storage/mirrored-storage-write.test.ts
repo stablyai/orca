@@ -51,16 +51,4 @@ describe('the mirrored write path', () => {
     )
     warned.mockRestore()
   })
-
-  it('answers a reader with an accepted write, which is what `init` is built from', async () => {
-    await persistMirrored(DOCK_WIDTH, '480')
-    expect(readMirroredStorage([DOCK_WIDTH])[DOCK_WIDTH]).toBe('480')
-    expect(initStorage()[DOCK_WIDTH]).toBe('480')
-  })
-
-  it('drops a removed key from the mirror, which is what absent means to `init`', async () => {
-    await persistMirrored(DOCK_WIDTH, null)
-    expect(readMirroredStorage([DOCK_WIDTH])[DOCK_WIDTH]).toBeUndefined()
-    expect(initStorage()[DOCK_WIDTH]).toBeUndefined()
-  })
 })

@@ -10,7 +10,7 @@ import {
   githubProjectIdentityKey as githubProjectKey,
   toGitHubProjectIdentity,
   type GitHubProjectIdentity as GitHubProjectRef
-} from '../../../../src/shared/github/project-identity'
+} from '../../../../src/shared/github/projects/project-identity'
 import { PickerModal } from '../../components/PickerModal'
 import { ListGroup, SectionHeader, ListRow } from '../../components/list/ListGroup'
 import { styles } from '../mobile-tasks-legacy-styles'

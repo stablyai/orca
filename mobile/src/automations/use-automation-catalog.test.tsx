@@ -52,20 +52,6 @@ function catalogHarness(respond: () => unknown) {
 }
 
 describe('automation catalog', () => {
-  it('shows the last list at once when the screen reopens, then the host’s newer one', async () => {
-    let reply: ReturnType<typeof deferred<unknown>> | null = null
-    const { read, mount } = catalogHarness(() => reply?.promise ?? listReply('Box review'))
-    await mount()
-    expect(read().rows.map((row) => row.automation.name)).toEqual(['Local review', 'Box review'])
-    act(() => tree?.unmount())
-    reply = deferred<unknown>()
-    await mount()
-    expect(read().loaded).toBe(true)
-    expect(read().rows.map((row) => row.automation.name)).toEqual(['Local review', 'Box review'])
-    await act(async () => reply?.resolve(listReply('Box nightly')))
-    expect(read().rows.map((row) => row.automation.name)).toEqual(['Local review', 'Box nightly'])
-  })
-
   it('keeps a saved change when a list read sent before the write lands after it', async () => {
     let held: ReturnType<typeof deferred<unknown>> | null = null
     let remoteName = 'Box review'

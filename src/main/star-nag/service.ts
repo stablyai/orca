@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
-import { checkOrcaStarred } from '../github/client'
+import { checkOrcaStarred } from '../github/client/fetch/orca-star'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import { track } from '../telemetry/client'

@@ -1,4 +1,4 @@
-import { startOrcadEventLoopWatchdog } from '../orcad/orcad-event-loop-watchdog'
+import { startOrcadEventLoopWatchdog } from '../orcad/diagnostics/orcad-event-loop-watchdog'
 
 export type BackendServiceCleanup = (state: { failed: boolean }) => void | Promise<void>
 

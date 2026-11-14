@@ -8,9 +8,9 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { Section } from '../worktree/workspace-list-types'
-import type { RepoLook } from './host-repo-looks'
+import type { RepoLook } from './catalog/host-repo-looks'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import { HostPendingCreationRow } from './host-pending-creation-row'
+import { HostPendingCreationRow } from './workspace-list/host-pending-creation-row'
 import type { HostScreenController } from './use-host-screen-controller'
 
 // Takes the header's own fields, not the section, so a poll that rebuilds sections skips unchanged headers.

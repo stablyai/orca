@@ -1,7 +1,10 @@
 import type { DiffComment, MobileDiffReviewState } from '../../../../src/shared/diff-comment-types'
-import type { MobileGitBranchCompareResult } from '../mobile-branch-compare'
-import type { MobileGitStatusResult } from '../mobile-git-status'
-import type { MobileGitChangedFile } from '../git-compare-reply-schema'
+import type {
+  MobileGitBranchCompareReply as MobileGitBranchCompareResult,
+  MobileGitChangedFile
+} from '../branches/git-compare-reply-schema'
+import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../git/git-status-reply-schema'
+
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { MobileDiffReviewFileDescriptor } from './mobile-diff-review-state'

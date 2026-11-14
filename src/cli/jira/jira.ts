@@ -11,13 +11,13 @@ import type {
   JiraUser
 } from '../../shared/jira/jira-types'
 import { isResolvedJiraIssueMatch, parseJiraIssueUrl } from '../../shared/jira/jira-issue-url'
-import type { CommandHandler, HandlerContext } from '../dispatch'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
-} from '../flags'
-import { printResult } from '../command-result-output'
+} from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import {
   formatJiraCommentList,
   formatJiraIssue,
@@ -29,7 +29,7 @@ import {
   formatJiraUserList
 } from './jira-format'
 import { resolveJiraTarget } from './jira-target'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { JIRA_WRITE_HANDLERS } from './jira-write'
 
 function issueTarget(context: HandlerContext) {

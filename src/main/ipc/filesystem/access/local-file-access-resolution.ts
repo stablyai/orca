@@ -8,7 +8,6 @@ import {
   type ResolveAuthorizedPathOptions
 } from './filesystem-auth'
 import { isDescendantOrEqual } from './filesystem-path-containment'
-import { filePreviewForPath } from '../../../../shared/file-preview/file-preview-kind'
 import { getFloatingWorkspaceFileRoots } from '../../floating-workspace-directory'
 import {
   isDeviceNamespacePath,
@@ -16,6 +15,7 @@ import {
   isWindowsReservedDeviceName
 } from '../../automatic-load-path-text'
 import { NOT_A_REGULAR_FILE_MESSAGE } from '../local-regular-file-read'
+import { isChatImageTarget } from './chat-image-target'
 import {
   realpathAcrossWslDriveMount,
   windowsFsPath
@@ -58,11 +58,6 @@ export async function resolveUserNamedRegularFile(
     throw new Error(NOT_A_REGULAR_FILE_MESSAGE)
   }
   return filePath
-}
-
-// Chat uses img rendering; PDF previews need a different surface.
-function isChatImage(filePath: string): boolean {
-  return filePreviewForPath(filePath)?.kind === 'image'
 }
 
 // Resolve path text first because devices can hide behind dot and parent segments.
@@ -124,7 +119,7 @@ async function resolveChatImagePath(targetPath: string, store: RuntimeStore): Pr
     await resolveDesktopAuthorizedPath(realTarget, store)
   }
   // A .png symlink to a secret is not an image.
-  if (!isChatImage(realTarget)) {
+  if (!(await isChatImageTarget(realTarget))) {
     throw new Error(CHAT_IMAGE_TYPE_MESSAGE)
   }
   return realTarget

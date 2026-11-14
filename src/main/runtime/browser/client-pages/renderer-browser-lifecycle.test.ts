@@ -53,7 +53,8 @@ function browserRuntime(closeTab = vi.fn(async (_pageId: string) => {}), runtime
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the bridge inventory is used by this lifecycle test.
   runtime.setAgentBrowserBridge({
     tabList: () => ({ tabs: [...livePages.values()] }),
-    getRemoteTabFaviconUrl: () => null
+    getRemoteTabFaviconUrl: () => null,
+    getPageNavigationState: () => null
   } as never)
   electronMocks.BrowserWindow.fromId.mockImplementation((id: number) =>
     id === 1 ? { isDestroyed: () => false } : null

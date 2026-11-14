@@ -1,4 +1,4 @@
-import type { WorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
+import type { WorktreeForceDeleteReason } from '../../../../shared/worktree/removal/removal'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type WorkspaceSpaceDeleteState = {

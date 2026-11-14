@@ -2,7 +2,7 @@ import {
   resumeInvocationFromOptions,
   sessionFileResumeTargetMatches,
   type StructuredAgentSessionHistory
-} from '../native-chat/structured-agent-cli-conversations'
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export const OMP_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['omp'],

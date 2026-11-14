@@ -78,6 +78,26 @@ describe('AgentLaunchChoiceEditor model list', () => {
     useAppStore.setState({ settings: initialSettings })
   })
 
+  it('shows later catalog updates while Settings stays open after initial progress', async () => {
+    const inventory = Promise.withResolvers<unknown>()
+    const enriched = Promise.withResolvers<unknown>()
+    call
+      .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
+      .mockReturnValueOnce(inventory.promise)
+      .mockReturnValueOnce(enriched.promise)
+    useAppStore.setState({ settings: getDefaultSettings('') })
+    renderEditor()
+    await act(async () => inventory.resolve({ ...LISTED, listingInProgress: true }))
+    await waitFor(() => expect(menus.get('Model')).toContain('gpt-6-astra'))
+    await act(async () =>
+      enriched.resolve({
+        ...LISTED,
+        models: [{ id: 'late-model', label: 'Late model', efforts: [] }]
+      })
+    )
+    await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'late-model']))
+  })
+
   it('shows the refreshed model after the agent command changes and ignores the older answer', async () => {
     let answerOlder: (catalog: unknown) => void = () => {}
     call.mockReturnValueOnce(new Promise((resolve) => (answerOlder = resolve)))

@@ -8,11 +8,11 @@ import {
   effectiveBuiltInWorktreeSourceVisibility,
   effectiveCustomWorktreeSourceVisibility,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../../../../shared/worktree/visibility-sources'
+} from '../../../../../../shared/worktree/visibility/visibility-sources'
 import {
   removeBuiltInWorktreeSourcePreference,
   removeCustomWorktreeSourcePreference
-} from '../../../../../../shared/worktree/visibility-source-preferences'
+} from '../../../../../../shared/worktree/visibility/visibility-source-preferences'
 import type { WorktreeVisibilitySourceRow } from '../sources/WorktreeVisibilitySourceList'
 import type { WorktreeVisibilitySourceMutation } from '../sources/worktree-visibility-source-mutation'
 import {

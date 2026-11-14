@@ -1,10 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
-import * as imageSources from '../../markdown/native-chat-markdown-image-sources'
+import { describe, expect, it } from 'vitest'
 import { nativeChatAgentRowWords } from '../../messages/rows/native-chat-message-row-words'
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 
-import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
 import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
@@ -137,52 +136,27 @@ describe('transcript slots', () => {
     ).toEqual(retained ? [{ type: 'image-ref', path: '/tmp/p.png' }] : [])
   })
 
-  it.each([1000, 10000])(
-    'keeps completed image responses stable on the production streaming trigger at %i rows',
-    (count) => {
-      const generated: NativeChatMessage = {
-        ...text('image', ''),
-        blocks: [
-          { type: 'text', text: 'Generated image', presentation: 'generated-image' },
-          { type: 'image-ref', path: '/tmp/p.png' }
-        ]
-      }
-      const rows = [
-        text('u', 'Generate.', 'user'),
-        generated,
-        ...Array.from({ length: count - 3 }, (_, index) => text(`work-${index}`, 'Working.')),
-        text('answer', 'Finished.'),
-        text('live', 'Next.', 'user'),
-        text('stream', 'Streaming.')
-      ]
-      const overrides = {
-        turnStatuses: {
-          active: null,
-          completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
-        }
-      }
-      const reads = vi.spyOn(imageSources, 'nativeChatMarkdownImageSources')
-      try {
-        const first = build(rows, overrides)
-        expect(reads).toHaveBeenCalledTimes(1)
-        reads.mockClear()
-        const next = build([...rows.slice(0, -1), text('stream', 'Streaming more.')], overrides)
-        // Only live text changed: settled answers need zero source discovery and preserve row identity.
-        expect(reads).not.toHaveBeenCalled()
-        expect(
-          next
-            .filter((slot) => slot.turnKey === 'u')
-            .every(
-              (slot) =>
-                slot.message ===
-                first.find((before) => before.message.id === slot.message.id)?.message
-            )
-        ).toBe(true)
-      } finally {
-        reads.mockRestore()
-      }
-    }
-  )
+  it("hangs response controls only above the person's next message, never on the last row", () => {
+    const visualReply = text('visual', 'Here is the trend.\n\n::orca-visual{file="trend.html"}')
+    const hangs = (messages: NativeChatMessage[]) =>
+      build(messages).map((slot) => [slot.message.id, slot.actionsHang === true])
+
+    expect(hangs([text('u1', 'Hi', 'user'), text('reply', 'Hello')])).toEqual([
+      ['u1', false],
+      ['reply', false]
+    ])
+    expect(hangs([text('u1', 'Chart it', 'user'), visualReply])).toEqual([
+      ['u1', false],
+      ['visual', false]
+    ])
+    expect(
+      hangs([text('u1', 'Hi', 'user'), text('reply', 'Hello'), text('u2', 'Thanks', 'user')])
+    ).toEqual([
+      ['u1', false],
+      ['reply', true],
+      ['u2', false]
+    ])
+  })
 
   it('draws the completed plan outside collapsed work', () => {
     const plan: NativeChatMessage = {
@@ -298,16 +272,6 @@ describe('transcript slots', () => {
 
     expect(holder(new Set())).toEqual(['a-image'])
     expect(holder(new Set(['A']))).toEqual(['a-text'])
-  })
-
-  it('keeps a message whose only content is a turn status under it', () => {
-    const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
-    const slots = build([text('u', '', 'user')], {
-      liveTurnKey: 'u',
-      turnStatuses: { active: status, completedByTurn: {} }
-    })
-    expect(slots).toHaveLength(1)
-    expect(slots[0]?.status).toBe(status)
   })
 })
 

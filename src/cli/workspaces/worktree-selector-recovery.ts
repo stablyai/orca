@@ -1,5 +1,5 @@
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { attachCliErrorData } from './worktree-setup-decision-recovery'
 
 // The runtime omits the typed selector from not-found errors; add it and its grammar at the CLI boundary.

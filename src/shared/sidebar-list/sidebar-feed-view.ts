@@ -4,7 +4,7 @@ import type { ProjectOrderBy } from '../ui-chrome-types'
 import type { WorkspaceRowFilters } from '../workspace-view/workspace-row-filters'
 import type { WorkspaceStatusDefinition } from '../worktree/types'
 import type { WorktreeGroupBy, PinnedWorktreeDisplayPolicy } from './row-types'
-import type { SortBy } from './smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../workspace-view/workspace-row-sort'
 
 /** The host's view settings a reader shows the list with; the host's own phone reads them off ui.get. */
 export type SidebarFeedView = {

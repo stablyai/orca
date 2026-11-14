@@ -1,5 +1,5 @@
 import { PRCheckEmptyDetails } from '@/components/pr-check-empty-details'
-import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
@@ -16,14 +16,17 @@ import {
   getGitHubSourceRuntimeHost
 } from '@/lib/work-items/github/github-source-runtime-context'
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+} from '../../../../../shared/github/work-items/work-item-types'
+import {
+  type TaskSourceContext,
+  getTaskSourceCacheScope
+} from '../../../../../shared/work-items/task-source-context'
+
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import {
   getCheckCountChips,

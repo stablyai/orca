@@ -1,6 +1,7 @@
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
 import { buildSectionRepoMap, type SectionRepo, type Worktree } from './workspace-list-sections'
+import { isRepoHidden } from '../../../src/shared/hidden-projects'
 
 export type WorkspaceSectionRepo = {
   /** Unique per host: two hosts can each hold a repo of the same name. */
@@ -26,7 +27,7 @@ export function buildFilterRepos(
   const seen = new Set<string>()
   return repos.flatMap((repo) => {
     const key = `${getRepoExecutionHostId(repo)}|${repo.id}`
-    if (seen.has(key)) {
+    if (seen.has(key) || isRepoHidden(repo)) {
       return []
     }
     seen.add(key)

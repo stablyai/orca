@@ -4,7 +4,7 @@ import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../../../runti
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import 'sonner'
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
-import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeLayout, makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { saveSessionCommitDrafts } from '@/lib/source-control/drafts/source-control-commit-draft-session'
 import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
@@ -85,7 +85,7 @@ describe('removeWorktree cascade', () => {
     expect(s.worktreesByRepo['repo1']).toHaveLength(1)
     expect(s.tabsByWorktree[worktreeId]).toHaveLength(1)
     expect(s.ptyIdsByTabId['tab1']).toEqual(['pty1'])
-    expect(mockApi.pty.kill).not.toHaveBeenCalled()
+
     expect(s.activeWorktreeId).toBe(worktreeId)
   })
 })

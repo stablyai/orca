@@ -1,11 +1,16 @@
-import { ghRepoExecOptions, githubRepoContext, type LocalGitExecOptions } from '../../gh-utils'
-import { getOriginGitHubApiRepository, type GitHubApiRepository } from '../../github-api-repository'
+import {
+  ghRepoExecOptions,
+  githubRepoContext,
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
+import { getOriginGitHubApiRepository } from '../../repositories/github-api-repository-remote-probe'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import {
   getRateLimit,
   repositoryRateLimitGuard,
   spendsSharedGitHubComQuota,
   type RateLimitBucketKind
-} from '../../rate-limit'
+} from '../../api/rate-limit'
 import type { GhExecOptions } from './../github-exec-scope'
 // REST branch lookup can fall back to GraphQL-backed gh commands; guard and debit both buckets.
 export const PR_BRANCH_LOOKUP_BUCKETS = ['core', 'graphql'] as const

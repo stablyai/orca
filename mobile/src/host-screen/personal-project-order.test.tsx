@@ -14,8 +14,8 @@ import {
   SetProjectPinnedParams
 } from '../../../src/shared/rpc-contract/personal-project-order-params'
 import type { Repo } from '../../../src/shared/repo-types'
-import { useHostWorktreeActions } from './use-host-worktree-actions'
-import { useHostViewSettings } from './use-host-view-settings'
+import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-actions'
+import { useHostViewSettings } from './view-settings/use-host-view-settings'
 import { useHostScreenState } from './use-host-screen-state'
 import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
@@ -32,7 +32,7 @@ vi.mock('../host-route-exit', () => ({ leaveHostRoute: () => {} }))
 vi.mock('../storage/mirrored-storage-keys', () => ({
   readMirroredKeyOrStore: async () => JSON.stringify({ hostId: 'host', worktreeId: 'b::/b' })
 }))
-vi.mock('./use-host-pending-view-changes', () => ({
+vi.mock('./view-settings/use-host-pending-view-changes', () => ({
   useSwitchedHostPendingViewChanges: () => null
 }))
 

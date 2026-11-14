@@ -1,8 +1,11 @@
 import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
-import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+import {
+  wslGatedReaddir,
+  wslGatedStat
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { timestampIso } from '../../parsing/session-scanner-accumulator'
 import { scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import type { AiVaultScanIssueText } from '../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'

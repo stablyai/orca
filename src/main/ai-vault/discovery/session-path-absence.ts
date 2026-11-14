@@ -1,4 +1,4 @@
-import { WslTranscriptFsError } from '../../native-chat/wsl-transcript-fs-error'
+import { WslTranscriptFsError } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 
 /** A missing file or folder is absence, not a refusal; WSL gate errors are always refusals. */
 export function isMissingTranscriptPathError(error: unknown): boolean {

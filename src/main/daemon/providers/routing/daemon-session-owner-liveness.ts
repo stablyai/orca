@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { OwnerInventory } from './daemon-session-owner-inventory'
 
 export async function probeDaemonSessionOwner<T extends IPtyProvider>(opts: {

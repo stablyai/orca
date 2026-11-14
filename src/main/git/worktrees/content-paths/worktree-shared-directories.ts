@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { checkIgnoredPaths } from '../../source-control/check-ignored-paths'
+import { checkIgnoredPaths } from '../../source-control/ignores/check-ignored-paths'
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { loadHooks } from '../../../workspace-hooks/hooks'
 import type { Repo } from '../../../../shared/repo-types'

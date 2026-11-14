@@ -43,6 +43,8 @@ function MemberDisclosureHarness({
           blocks={blocks}
           headerBlocks={blocks}
           disclosureId="message-1"
+          followKey={blocks.length}
+          startsAtEnd={false}
         />
       ) : null}
     </NativeChatDisclosureContext.Provider>

@@ -1,11 +1,14 @@
 import {
   projectContentField,
   projectContentFieldLabel
-} from '../../../../src/shared/github/project-content-field'
+} from '../../../../src/shared/github/projects/project-content-field'
 import { translate } from '../../i18n/mobile-i18n'
-import type { GitHubProjectTable as SharedGitHubProjectTable } from '../../../../src/shared/github/project-types'
-import { isIterationCurrent } from '../../../../src/shared/github/project-group-sort'
-import type { ProjectGroup } from '../../../../src/shared/github/project-group-sort'
+import type { GitHubProjectTable as SharedGitHubProjectTable } from '../../../../src/shared/github/projects/project-types'
+import {
+  isIterationCurrent,
+  type ProjectGroup
+} from '../../../../src/shared/github/projects/project-group-sort'
+
 import type { ProjectSortOverride } from '../task-list/mobile-tasks-options'
 import type {
   GitHubProjectField,

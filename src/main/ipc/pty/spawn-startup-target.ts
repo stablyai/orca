@@ -18,7 +18,8 @@ import {
   type LaunchScopeRuntimeStore
 } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import { resolveLocalPtyOptions } from '../../workspaces/execution-host/local-project-runtime-pty-options'
-import type { PtySpawnOptions, PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtySpawnOptions } from '../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import {
   holdPassiveRestoreOfStoppedWslDistro,
   wslHoldReadAnchor as wslHoldReadAnchorNow

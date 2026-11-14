@@ -1,11 +1,12 @@
-import { isPointerInsideProjectPinTier } from './project-header-drag-pin-tier'
+import { computeProjectPinTierDropPreview } from './project-header-drag-pin-tier'
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import {
-  computeProjectHeaderDropPreview,
-  measureProjectHeaderDragRects
-} from './project-header-drop'
+import { measureProjectHeaderDragRects } from './project-header-drop'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import {
   INITIAL_REPO_DRAG_STATE,
@@ -89,17 +90,7 @@ export function useRepoHeaderDrag({
       if (!session || !container) {
         return null
       }
-      if (!isPointerInsideProjectPinTier(session, pointerY, container)) {
-        return null
-      }
-      return computeProjectHeaderDropPreview({
-        pointerY,
-        containerTop: container.getBoundingClientRect().top,
-        scrollTop: container.scrollTop,
-        rects: session.headerRects,
-        sidebarRepoHeaderIds: session.sidebarRepoHeaderIds,
-        contentBottom: container.scrollHeight
-      })
+      return computeProjectPinTierDropPreview(session, pointerY, container)
     },
     []
   )
@@ -194,7 +185,9 @@ export function useRepoHeaderDrag({
         elapsedMs: frameTime - previousFrameTime
       })
       if (autoscroll) {
+        supersedeVirtualizedScrollAnchorRestore(container, autoscroll.scrollTop)
         container.scrollTop = autoscroll.scrollTop
+        requestVirtualizedScrollAnchorRecord(container)
         refreshHeaderRects()
       }
 
@@ -295,8 +288,7 @@ export function useRepoHeaderDrag({
       return
     }
     const body = document.body
-    const prevCursor = body.style.cursor
-    const prevUserSelect = body.style.userSelect
+    const { cursor: prevCursor, userSelect: prevUserSelect } = body.style
     body.style.cursor = 'grabbing'
     body.style.userSelect = 'none'
     return () => {

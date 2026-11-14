@@ -101,12 +101,8 @@ for (const workspace of ['worktree', 'folder'] as const) {
         '[managed-server-restart]',
         JSON.stringify({ before, after: serverPids(), workspace, worktreeId })
       )
-      const resumed = page.waitForEvent('console', {
-        predicate: (message) =>
-          message.text().startsWith('[file-change-event]') &&
-          message.text().includes('WATCH_RECOVERED.txt'),
-        timeout: 30_000
-      })
+      // Written while the restarted host may still be installing its watcher; the explorer must
+      // show it whichever of the watcher event or the post-install re-read reports it.
       execute(`printf 'watcher recovered\n' > '${rootPath}/WATCH_RECOVERED.txt'`)
       const created = await serverCall(page, environmentId, 'files.read', {
         worktree: `id:${worktreeId}`,
@@ -114,13 +110,11 @@ for (const workspace of ['worktree', 'folder'] as const) {
       })
       console.log('[host-post-restart-file]', created)
       expect(created).toContain('watcher recovered')
-      await resumed
-      console.log('[recovered-broker-event]', 'WATCH_RECOVERED.txt')
+      await expect(page.getByText('WATCH_RECOVERED.txt', { exact: true })).toBeVisible({
+        timeout: 180_000
+      })
       await page.screenshot({ path: testInfo.outputPath('remote-explorer-observed.png') })
       await expect(page.getByText('DURING_OUTAGE.txt', { exact: true })).toBeVisible({
-        timeout: 10_000
-      })
-      await expect(page.getByText('WATCH_RECOVERED.txt', { exact: true })).toBeVisible({
         timeout: 10_000
       })
       await page.screenshot({ path: testInfo.outputPath('remote-explorer-refreshed.png') })

@@ -9,8 +9,11 @@ import type {
   AiVaultAgent,
   AiVaultScanIssue
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { wslGatedReaddir, wslGatedStat } from '../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../native-chat/wsl-transcript-fs-error'
+import {
+  wslGatedReaddir,
+  wslGatedStat
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { recordSessionScanIssue, scanIssueTextFromError } from '../parsing/session-scan-issues'
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import type {

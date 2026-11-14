@@ -13,9 +13,7 @@ export type ComputerTreeQuery = {
 export function queryComputerTreeText(treeText: string, options: ComputerTreeQuery): string {
   const { header, elements, footer } = parseComputerTreeText(treeText)
   const needle = options.query?.toLowerCase()
-  const candidates = needle
-    ? elements.filter((element) => elementText(element).toLowerCase().includes(needle))
-    : elements
+  const candidates = needle ? computerTreeElementsMatching(elements, needle) : elements
   const shown =
     options.maxElements === undefined ? candidates : candidates.slice(0, options.maxElements)
   const shownSet = new Set(shown)
@@ -31,6 +29,29 @@ export function queryComputerTreeText(treeText: string, options: ComputerTreeQue
       ? `Showing the first ${shown.length} of ${elements.length} elements.`
       : null
   return joinComputerTreeText(header, note ? [note, ...body] : body, footer)
+}
+
+// Case-insensitive, like --query, over each element's line without its index.
+export function computerTreeElementsMatching(
+  elements: ComputerTreeElement[],
+  query: string
+): ComputerTreeElement[] {
+  const needle = query.toLowerCase()
+  return elements.filter((element) => elementText(element).toLowerCase().includes(needle))
+}
+
+// For hosts without `disabledElementIndexes`. Traits follow a role that may hold parentheses
+// (`12 button (selected, disabled) Save`), so a label reading `(disabled)` also matches.
+const DISABLED_TRAIT =
+  /\((?:(?:selected|expanded|settable), )*disabled(?:, (?:selected|expanded|settable))*\)/u
+
+export function isComputerTreeElementDisabled(
+  element: ComputerTreeElement,
+  disabledIndexes?: ReadonlySet<number>
+): boolean {
+  return disabledIndexes
+    ? disabledIndexes.has(element.index)
+    : DISABLED_TRAIT.test(element.lines[0])
 }
 
 function elementText(element: ComputerTreeElement): string {

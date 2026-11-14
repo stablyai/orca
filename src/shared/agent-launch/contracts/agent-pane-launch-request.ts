@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { AgentLaunch } from '../../rpc-contract/agent-launch-params'
+import type { AgentLaunch } from '../../rpc-contract/agent-launch/agent-launch-params'
 
 /** `agent.launch` params a pane hands its own spawn; main names the pane, and nothing is recorded. */
 export type AgentPaneLaunchRequest = {

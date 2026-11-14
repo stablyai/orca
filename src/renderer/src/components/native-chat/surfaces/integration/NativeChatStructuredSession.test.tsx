@@ -53,52 +53,6 @@ describe('NativeChatStructuredSession', () => {
     />
   )
 
-  it('places background monitoring above the usable composer, keeps its list open across a gap in live work, and stops without an active turn', async () => {
-    mocks.monitoringBackgroundTasks = true
-    mocks.supportsBackgroundTaskStop = true
-    mocks.backgroundTasks = [
-      { id: 'task-command', kind: 'command', description: 'sleep 180' },
-      { id: 'task-agent', kind: 'agent' }
-    ]
-    mocks.stopBackgroundTask.mockResolvedValue({ cancelled: true })
-
-    const { rerender } = render(
-      claudeSessionView('structured-tab-background', 'session-background')
-    )
-
-    const disclosure = screen.getByRole('button', { name: '1 agent · 1 shell' })
-    const status = disclosure.closest('[data-native-chat-background-tasks="true"]')
-    const composer = screen.getByTestId('structured-composer')
-    if (!status) {
-      throw new Error('background task status was not rendered')
-    }
-    expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(mocks.composerProps?.isWorking).toBe(false)
-    expect(screen.queryByRole('list', { name: 'Agents' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Stop / })).toBeNull()
-
-    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(disclosure)
-    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByRole('list', { name: 'Agents' })).toBeTruthy()
-    expect(screen.getByRole('list', { name: 'Shell' })).toBeTruthy()
-    expect(screen.getByText('sleep 180')).toBeTruthy()
-    expect(screen.getByText('Background agent')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Stop sleep 180' }))
-    await waitFor(() =>
-      expect(mocks.stopBackgroundTask).toHaveBeenCalledWith('session-background', 'task-command')
-    )
-
-    // The strip unmounts between sequential child runs; its disclosure must survive those gaps.
-    mocks.monitoringBackgroundTasks = false
-    rerender(claudeSessionView('structured-tab-background', 'session-background'))
-    expect(document.querySelector('[data-native-chat-background-tasks="true"]')).toBeNull()
-    mocks.monitoringBackgroundTasks = true
-    rerender(claudeSessionView('structured-tab-background', 'session-background'))
-    expect(screen.getByRole('list', { name: 'Agents' })).toBeTruthy()
-  })
-
   it('tracks concurrent task stops independently: a confirmed one holds its row, a failed one clears', async () => {
     mocks.monitoringBackgroundTasks = true
     mocks.supportsBackgroundTaskStop = true

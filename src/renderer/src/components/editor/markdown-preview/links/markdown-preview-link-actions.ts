@@ -7,18 +7,17 @@ import {
   showLocalPathOpenBlockedToast
 } from '@/lib/files/os-open/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/links/ownership/link-source-local-open-owner'
-import { openHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { translate } from '@/i18n/i18n'
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
+import { openMarkdownExternalUrl } from '../../markdown/link-routing/markdown-external-url-open'
 import { resolveMarkdownLinkTarget } from '../../markdown/link-routing/markdown-internal-links'
 import {
   fileUrlToAbsolutePath,
-  resolveMarkdownPreviewHref,
-  resolveMarkdownPreviewHttpOpenOptions
+  resolveMarkdownPreviewHref
 } from '../../markdown/link-routing/markdown-preview-links'
 import { parseMarkdownPreviewLineTarget } from './markdown-preview-editor-reveal'
 import {
@@ -49,6 +48,44 @@ export type MarkdownPreviewLinkContext = Pick<
 > &
   Pick<MarkdownPreviewViewport, 'scrollToAnchor'>
 
+export function isMarkdownPreviewExternalHttpHref(
+  href: string | undefined,
+  filePath: string
+): boolean {
+  if (!href) {
+    return false
+  }
+  const target = resolveMarkdownPreviewHref(href, filePath)
+  return target?.protocol === 'http:' || target?.protocol === 'https:'
+}
+
+export function handleMarkdownPreviewLinkAuxClick({
+  event,
+  href,
+  filePath,
+  context
+}: {
+  event: React.MouseEvent<HTMLAnchorElement>
+  href: string | undefined
+  filePath: string
+  context: Pick<MarkdownPreviewLinkContext, 'sourceOwner' | 'sourceRoutingWorktreeId'>
+}): void {
+  if (event.defaultPrevented || event.button !== 1 || !href) {
+    return
+  }
+  const target = resolveMarkdownPreviewHref(href, filePath)
+  if (!target || (target.protocol !== 'http:' && target.protocol !== 'https:')) {
+    return
+  }
+  event.preventDefault()
+  openMarkdownExternalUrl(target.toString(), {
+    state: useAppStore.getState(),
+    worktreeId: context.sourceRoutingWorktreeId,
+    sourceOwner: context.sourceOwner,
+    destination: 'system'
+  })
+}
+
 export async function handleMarkdownPreviewLinkClick({
   event,
   href,
@@ -67,7 +104,6 @@ export async function handleMarkdownPreviewLinkClick({
   event.preventDefault()
 
   const {
-    isMac,
     sourceOwner,
     sourceRoutingWorktreeId,
     resolvedSourceRuntimeEnvironmentId,
@@ -96,10 +132,12 @@ export async function handleMarkdownPreviewLinkClick({
   }
 
   if (target.protocol === 'http:' || target.protocol === 'https:') {
-    openHttpLink(
-      target.toString(),
-      resolveMarkdownPreviewHttpOpenOptions(event, isMac, sourceRoutingWorktreeId, sourceOwner)
-    )
+    openMarkdownExternalUrl(target.toString(), {
+      state: useAppStore.getState(),
+      worktreeId: sourceRoutingWorktreeId,
+      sourceOwner,
+      destination: 'orca'
+    })
     return
   }
 

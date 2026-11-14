@@ -66,7 +66,7 @@ export async function refreshPreparedWorktreeTip(
             '--hard',
             targetHead
           ],
-          gitExecOptions(preparedPath, refreshOptions)
+          { ...gitExecOptions(preparedPath, refreshOptions), admissionClass: 'checkout' }
         )
       )
       await verifyWorktreePreparationLockAtPath(lockPath, lockReason, refreshOptions.signal)

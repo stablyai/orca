@@ -9,7 +9,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspac
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../../shared/project-groups'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../../pty/scrollback/terminal-scrollback-snapshots'
-import { logStartupMilestone } from '../../../startup/startup-diagnostics'
+import { logStartupMilestone } from '../../../startup/diagnostics/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot
@@ -25,7 +25,7 @@ import {
   normalizeWorktreeLinkedItemMetadata
 } from '../../tracking-repos/worktree-metadata-normalization'
 import { backfillLegacyAutomationContexts } from '../../scheduling-automations/automation-context-migration'
-import { migrateAutomationOwners } from '../../../automations/automation-owner-migration'
+import { migrateAutomationOwners } from '../../../automations/ownership/automation-owner-migration'
 import {
   ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH,
   normalizeSshPtyConsumerRecovery

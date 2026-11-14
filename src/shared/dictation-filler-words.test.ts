@@ -43,4 +43,10 @@ describe('removeFillerWords', () => {
     expect(removeFillerWords('Er kommt, hmm, morgen.', undefined)).toBe('Er kommt morgen.')
     expect(removeFillerWords('呃，好的。', undefined)).toBe('呃，好的。')
   })
+
+  it('leaves the correction cue for AI cleanup, and drops fillers elsewhere', () => {
+    expect(removeFillerWords('Ship it at four, uh, hmm no, at five.', ['en'], 'hmm no')).toBe(
+      'Ship it at four hmm no, at five.'
+    )
+  })
 })

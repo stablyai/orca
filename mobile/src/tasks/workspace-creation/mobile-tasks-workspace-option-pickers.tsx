@@ -1,3 +1,4 @@
+import { branchRefLabels, branchRefLabel } from '../../../../src/shared/git/refs/branch-ref-label'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
@@ -24,6 +25,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
     workspaceBaseBranchResults,
     workspaceCreateDraft
   } = model
+  const labels = branchRefLabels(workspaceBaseBranchResults.map((branch) => branch.refName))
   return (
     <BottomDrawer
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceBaseBranchPicker}
@@ -70,9 +72,9 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
             {workspaceBaseBranchResults.map((branch) => (
               <ListRow
                 key={`${branch.refName}:${branch.localBranchName}`}
-                title={branch.refName}
+                title={labels.get(branch.refName) ?? branchRefLabel(branch.refName)}
                 subtitle={
-                  branch.localBranchName !== branch.refName
+                  branch.localBranchName !== branchRefLabel(branch.refName)
                     ? translate(
                         'tasks.workspaceOptionPickers.branchName',
                         'Branch name: {{name}}',

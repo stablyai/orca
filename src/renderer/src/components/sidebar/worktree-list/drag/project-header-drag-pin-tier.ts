@@ -1,3 +1,4 @@
+import { computeProjectHeaderDropPreview } from './project-header-drop'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
 
 export function isPointerInsideProjectPinTier(
@@ -14,4 +15,22 @@ export function isPointerInsideProjectPinTier(
   return Boolean(
     first && last && pointer >= first.top && pointer <= (last.sectionBottom ?? last.bottom)
   )
+}
+
+export function computeProjectPinTierDropPreview(
+  session: ProjectHeaderDragSession,
+  pointerY: number,
+  container: HTMLElement
+): { dropIndex: number; dropIndicatorY: number } | null {
+  if (!isPointerInsideProjectPinTier(session, pointerY, container)) {
+    return null
+  }
+  return computeProjectHeaderDropPreview({
+    pointerY,
+    containerTop: container.getBoundingClientRect().top,
+    scrollTop: container.scrollTop,
+    rects: session.headerRects,
+    sidebarRepoHeaderIds: session.sidebarRepoHeaderIds,
+    contentBottom: container.scrollHeight
+  })
 }

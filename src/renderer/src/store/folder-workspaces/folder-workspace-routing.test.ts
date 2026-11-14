@@ -14,7 +14,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 const recoveryNotice = vi.hoisted(() => vi.fn())
-vi.mock('@/components/editor/closed-unsaved-files-toast', () => ({
+vi.mock('@/components/editor/model-lifetime/retention/closed-unsaved-files-toast', () => ({
   showClosedUnsavedFilesToast: recoveryNotice
 }))
 

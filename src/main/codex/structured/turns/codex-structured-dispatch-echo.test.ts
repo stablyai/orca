@@ -73,7 +73,7 @@ it.each(['start', 'steer'] as const)(
 describe('the sends Codex holds', () => {
   const held = (echoes: ReturnType<typeof createCodexDispatchEchoes>) => [...echoes.heldSends()]
 
-  it('holds a send from its write until the turn it was answered into ends, echo or not', () => {
+  it('holds a replied start until its turn is published without consuming its echo', () => {
     const changes: string[] = []
     const echoes = createCodexDispatchEchoes(() => changes.push(held(echoes).join(',')))
     echoes.arm('sent')
@@ -82,10 +82,32 @@ describe('the sends Codex holds', () => {
     echoes.bindTurn('sent', 'thread-1', 'turn-1', 'start', echoes.tick())
     expect(held(echoes)).toEqual(['sent'])
 
-    // A hook can refuse input and complete the turn without echoing it.
-    echoes.endTurn('thread-1', 'turn-1', { status: 'completed' })
+    echoes.opened('thread-1', 'turn-1')
+    expect(held(echoes)).toEqual(['sent'])
+    echoes.published('thread-1', 'turn-1')
     expect(held(echoes)).toEqual([])
     expect(changes).toEqual([''])
+  })
+
+  it('releases a replied steer into a published turn while retaining exact late correlation', () => {
+    const echoes = createCodexDispatchEchoes()
+    echoes.published('thread-1', 'turn-1')
+    echoes.arm('steered')
+    echoes.expect('steered', 'thread-1', 'steer', [], 'turn-1')
+    expect(held(echoes)).toEqual(['steered'])
+    echoes.bindTurn('steered', 'thread-1', 'turn-1', 'steer', echoes.tick())
+    expect(held(echoes)).toEqual([])
+    expect(
+      readCodexDispatchEcho(
+        {
+          type: 'userMessage',
+          id: 'late-user',
+          clientId: 'steered'
+        },
+        CODEX_IDENTITY,
+        echoes
+      )?.clientMessageId
+    ).toBe('steered')
   })
 
   it('holds a send answered into no turn only while a status read after its answer says running', () => {

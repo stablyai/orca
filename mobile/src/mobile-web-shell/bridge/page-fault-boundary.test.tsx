@@ -26,28 +26,19 @@ afterEach(() => {
 })
 
 describe('the page fault boundary', () => {
-  it('reports once, because a faulted page never renders the tree that threw again', async () => {
-    const faults: unknown[] = []
-    const render = (): ReactElement => boundary(Throws, (error) => faults.push(error))
+  it('reports a thrown route once across the bridge, including subsequent renders', async () => {
+    const pair = createFakeBridgePortPair()
+    await pair.flush()
+    const render = (): ReactElement =>
+      boundary(Throws, (error) => {
+        pair.client.notifyPageFault(error)
+      })
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
       rendered.tree = create(render())
     })
     await act(async () => {
       rendered.tree?.update(render())
-    })
-    expect(faults).toEqual([FAILURE])
-  })
-
-  it('carries the throw across a real bridge to the shell that mounted the page', async () => {
-    const pair = createFakeBridgePortPair()
-    await pair.flush()
-    await act(async () => {
-      create(
-        boundary(Throws, (error) => {
-          pair.client.notifyPageFault(error)
-        })
-      )
     })
     await pair.flush()
     expect(pair.pageFaults).toEqual([

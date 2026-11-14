@@ -1,7 +1,7 @@
 import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-attention-capabilities'
 import '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import '../../../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
+import '../../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-capabilities'
 import '../../../../../shared/agent-session/agent-session-create-capabilities'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import '../../rpc/compatibility/runtime-capability-proof'

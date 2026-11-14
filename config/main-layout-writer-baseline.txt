@@ -8,8 +8,8 @@
 3 src/main/ipc/pty/pane/stable-owner.ts
 1 src/main/ipc/pty/spawn-commit-binding.ts
 1 src/main/ipc/renderer-shutdown-checkpoint.ts
-1 src/main/ipc/runtime-environments/runtime-environment-removal-cleanup.ts
-1 src/main/ipc/runtime-environments/runtime-environment-session-reconcile.ts
+1 src/main/ipc/runtime-environments/catalog/runtime-environment-removal-cleanup.ts
+1 src/main/ipc/runtime-environments/catalog/runtime-environment-session-reconcile.ts
 2 src/main/ipc/session.ts
 6 src/main/orca-profiles/project-transfer/profile-project-session-state.ts
 4 src/main/orca-profiles/project-transfer/profile-project-source-removal.ts
@@ -47,7 +47,7 @@
 5 src/main/persistence/restoring-sessions/session-owner-fields.ts
 12 src/main/persistence/restoring-sessions/session-owner-removal.ts
 2 src/main/persistence/restoring-sessions/workspace-pane-normalization.ts
-4 src/main/persistence/terminal-topology/terminal-topology-membership.ts
+4 src/main/persistence/terminal-topology/pane-ownership/terminal-topology-membership.ts
 1 src/main/persistence/tracking-repos/project-group-operations.ts
 4 src/main/persistence/tracking-repos/repo-worktree-pruning.ts
 3 src/main/persistence/tracking-repos/worktree-identity-migration.ts

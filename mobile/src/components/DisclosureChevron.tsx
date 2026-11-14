@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Animated, Easing, Platform } from 'react-native'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { SHEET_CURVE, SHEET_HEIGHT_DURATION_MS } from './sheet-motion-values'
 
 /** Turns its chevron with the AutoHeight it discloses: same curve, same duration. */
