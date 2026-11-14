@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path'
 import { resolveCodexCommand } from '../../../codex-cli/command'
+import { codexSpawnEnoent, isSpawnEnoent } from '../../../codex-cli/windows-only-agent-cli'
 import { isTransientSqliteContention } from '../../../sqlite/sqlite-read-failure'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { buildWslCodexAppServerArgs } from '../../../codex-cli/wsl-codex-command'
@@ -189,8 +190,9 @@ export async function readCodexThreadsForIndexHeal<T extends { threadId: string 
     const batch = threads.slice(offset, offset + readsPerServerSession)
     const timeoutMs = HEAL_BATCH_TIMEOUT_BASE_MS + HEAL_BATCH_TIMEOUT_PER_READ_MS * batch.length
     const settled: CodexSettledThreadRead[] = []
+    const invocation = buildInvocation(codexHomePath, timeoutMs)
     try {
-      await runSession(buildInvocation(codexHomePath, timeoutMs), async (rpc) => {
+      await runSession(invocation, async (rpc) => {
         let nextIndex = 0
         const worker = async (): Promise<void> => {
           while (nextIndex < batch.length && !shouldStop()) {
@@ -210,6 +212,15 @@ export async function readCodexThreadsForIndexHeal<T extends { threadId: string 
       }
       if (isCodexAppServerUnsupportedError(error)) {
         return 'unsupported'
+      }
+      if (error instanceof Error && isSpawnEnoent(error)) {
+        // A missing Codex CLI cannot heal anything; say so once and retry after it returns,
+        // instead of stack-tracing the spawn error on every startup.
+        console.warn(
+          '[codex-session-index-heal] Heal batch skipped:',
+          codexSpawnEnoent(invocation.command).message
+        )
+        return 'aborted'
       }
       console.warn('[codex-session-index-heal] Heal batch aborted:', error)
       return 'aborted'

@@ -501,6 +501,33 @@ describe('runCodexSessionIndexHeal', () => {
     expect(retried.healedThreads).toBe(2)
   })
 
+  it('skips healing with one quiet line when the Codex CLI is missing', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }]
+    })
+
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      // A bare command name with no PATH entries to find reproduces a purged Codex CLI.
+      buildInvocation: (_home, timeoutMs) => ({
+        command: 'codex',
+        cliPath: null,
+        args: [],
+        env: { PATH: '' },
+        timeoutMs
+      }),
+      interBatchDelayMs: 0
+    })
+
+    expect(summary.outcome).toBe('aborted')
+    expect(summary.healedThreads).toBe(0)
+    expect(rig.readLog().serverStarts).toBe(0)
+    expect(readLedgerOutcomes(rig.paths)).toEqual({})
+    const lines = warnSpy.mock.calls.map((call) => call.join(' '))
+    expect(lines).toEqual(['[codex-session-index-heal] Heal batch skipped: Codex CLI not found.'])
+    warnSpy.mockRestore()
+  })
+
   it('scopes audit and processed ledger records to the current Codex home', async () => {
     const currentId = threadId('1')
     const foreignId = threadId('2')
