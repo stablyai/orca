@@ -251,13 +251,17 @@ it('settles a settings timeout before review as refused and admits the next norm
     return { turn: { id: 'normal-after-settings' } }
   }
   expect(await host.send(CALLER, send)).toMatchObject({ ok: true })
-  const after = await host.journalSnapshot(SESSION)
-  expect(
-    after.submissions.find(
-      ({ clientMessageId }) => clientMessageId === send.envelope.clientOperationId
+  await vi.waitFor(async () => {
+    const after = await host.journalSnapshot(SESSION)
+    expect(
+      after.submissions.find(
+        ({ clientMessageId }) => clientMessageId === send.envelope.clientOperationId
+      )
+    ).toMatchObject({ dispatchState: 'accepted' })
+    expect(
+      after.items.map(({ body }) => readAgentJournalTurn(body)).filter(Boolean)
+    ).toContainEqual(
+      expect.objectContaining({ providerTurnId: 'normal-after-settings', state: 'running' })
     )
-  ).toMatchObject({ dispatchState: 'accepted' })
-  expect(after.items.map(({ body }) => readAgentJournalTurn(body)).filter(Boolean)).toContainEqual(
-    expect.objectContaining({ providerTurnId: 'normal-after-settings', state: 'running' })
-  )
+  })
 })
