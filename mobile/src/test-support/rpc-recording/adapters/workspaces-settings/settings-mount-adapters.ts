@@ -6,11 +6,13 @@ import { notifyManager, useQueryClient, type QueryClient } from '@tanstack/react
 import type * as HostListQueries from '../../../../host-screen/catalog/host-list-queries'
 import type * as ResumeMetadata from '../../../../agent-history/mobile-agent-history-resume-metadata'
 import { hostQueryKey, hostScopeKey } from '../../../../query/host-query-key'
-import type { OperationExposure } from '../../module-mounting/operation-module-loader'
+import type {
+  OperationExposure,
+  operationModuleLoader
+} from '../../module-mounting/operation-module-loader'
 import type { MountAdapter } from '../../scenarios/recording-scenario'
 import { hookMount } from '../../react-mounting/hook-mount'
 import { observableModel, projectObservable } from '../../react-mounting/observable-model'
-import type { operationModuleLoader } from '../../module-mounting/operation-module-loader'
 
 // TanStack's own default: notify on a zero-delay timer.
 const scheduleNotify = (callback: () => void) => setTimeout(callback, 0)
