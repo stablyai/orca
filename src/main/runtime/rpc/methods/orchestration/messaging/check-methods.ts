@@ -10,6 +10,7 @@ import { withRunCheckNext } from '../receipt-next'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { hasRunBindingKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
+import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 import {
   callerHoldsDispatchPane,
   dispatchFenced,
@@ -44,11 +45,19 @@ export const ORCHESTRATION_CHECK_METHODS = [
       const handle = params.terminal ?? 'unknown'
       const typeFilter = parseMessageTypes(params.types)
 
+      // A restart can reissue a surviving worker PTY's handle; the woken worker still checks with its env
+      // handle. Recover it by the Dispatch's exact recorded incarnation, as its ask and reports were.
+      const reporter = resolveWorkerReporterIdentity(runtime, db, {
+        from: handle,
+        authority: undefined,
+        hasSessionCaller: Boolean(orchestrationCaller),
+        evidence: orchestrationCompatibilityEvidence
+      })
       const caller = orchestrationCallerIdentity(runtime, {
         handle,
         session: orchestrationCaller,
         // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
-        paneKey: runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
+        paneKey: reporter.paneKey ?? params.terminalPaneKey
       })
       const paneKey = caller.paneKey ?? undefined
       const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
@@ -60,6 +69,25 @@ export const ORCHESTRATION_CHECK_METHODS = [
         }
         return withReportFollowUps(db, result)
       }
+      // A known worker's stale handle that exact recovery refused must not fall back to a by-handle or
+      // pane lookup, Run binding included: that could read its replaced Dispatch's mail, or a successor's
+      // instructions and Run mail in the same pane.
+      if (reporter.unrecoveredStaleWorker()) {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Terminal ${handle} no longer names a terminal, and its recorded worker process could not be recovered. Nothing was read.`
+        )
+      }
+      const { recovered } = reporter
+      // A recovered caller stays the exact Dispatch and process it was recovered as, at entry and after waits.
+      const recoveredLocalProcessCurrent = recovered
+        ? () =>
+            db.isDispatchProcessCurrent({
+              dispatchId: recovered.dispatchId,
+              paneKey: recovered.paneKey,
+              processIncarnation: reporter.processIncarnation()
+            })
+        : undefined
       if (params.run || boundRun) {
         const result = await checkRunMailbox({
           params,
@@ -87,15 +115,23 @@ export const ORCHESTRATION_CHECK_METHODS = [
       if (activeDispatch && !callerHoldsDispatchPane(activeDispatch, paneKey)) {
         throw dispatchFenced()
       }
+      if (
+        activeDispatch &&
+        recovered &&
+        (activeDispatch.id !== recovered.dispatchId || !recoveredLocalProcessCurrent?.())
+      ) {
+        throw dispatchFenced()
+      }
       const remoteAttachment =
         !activeDispatch && paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
       if (
         remoteAttachment &&
-        !db.isRemoteAttachmentProcessCurrent({
-          dispatchId: remoteAttachment.dispatch_id,
-          paneKey: paneKey ?? null,
-          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
-        })
+        ((recovered && remoteAttachment.dispatch_id !== recovered.dispatchId) ||
+          !db.isRemoteAttachmentProcessCurrent({
+            dispatchId: remoteAttachment.dispatch_id,
+            paneKey: paneKey ?? null,
+            processIncarnation: reporter.processIncarnation()
+          }))
       ) {
         throw new OrchestrationError(
           'dispatch_inactive',
@@ -114,6 +150,8 @@ export const ORCHESTRATION_CHECK_METHODS = [
             signal,
             activeDispatch,
             remoteAttachment,
+            processIncarnation: reporter.processIncarnation,
+            recoveredLocalProcessCurrent,
             recordMutationReceipt,
             acknowledgeOnly: !params.wait
           })

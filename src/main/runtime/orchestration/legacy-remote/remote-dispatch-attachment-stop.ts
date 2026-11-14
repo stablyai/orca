@@ -88,6 +88,20 @@ export function findLatestRemoteAttachmentForPane(
   return findRemoteAttachmentForPane(this, paneKey, '')
 }
 
+/** The newest remote Dispatch recorded for this exact terminal handle, finished or not. */
+export function findLatestRemoteAttachmentForTerminal(
+  this: OrchestrationDb,
+  terminalHandle: string
+): RemoteDispatchAttachmentRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
+  return this.db
+    .prepare(
+      `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
+       WHERE terminal_handle = ? ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(terminalHandle) as RemoteDispatchAttachmentRow | undefined
+}
+
 function findRemoteAttachmentForPane(
   db: OrchestrationDb,
   paneKey: string,
@@ -121,6 +135,7 @@ export type RemoteDispatchAttachmentStopMethods = {
   markRemoteAttachmentStopUnknown: typeof markRemoteAttachmentStopUnknown
   findActiveRemoteAttachmentForPane: typeof findActiveRemoteAttachmentForPane
   findLatestRemoteAttachmentForPane: typeof findLatestRemoteAttachmentForPane
+  findLatestRemoteAttachmentForTerminal: typeof findLatestRemoteAttachmentForTerminal
 }
 
 export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }): void {
@@ -129,6 +144,7 @@ export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }):
     settleRemoteAttachmentStop,
     markRemoteAttachmentStopUnknown,
     findActiveRemoteAttachmentForPane,
-    findLatestRemoteAttachmentForPane
+    findLatestRemoteAttachmentForPane,
+    findLatestRemoteAttachmentForTerminal
   })
 }

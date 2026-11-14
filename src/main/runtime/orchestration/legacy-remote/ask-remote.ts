@@ -20,6 +20,8 @@ export async function askRemoteRunHome(args: {
   dispatchId: string
   taskId: string
   workerState: WorkerDispatchState
+  /** Re-read at admission; for a restart-reissued handle it comes from the recovered incarnation. */
+  processIncarnation: () => string | null
 }): Promise<unknown> {
   const db = args.runtime.getOrchestrationDb()
   const timeoutMs = clampOrchestrationAskTimeoutMs(args.params.timeoutMs)
@@ -30,7 +32,7 @@ export async function askRemoteRunHome(args: {
     processCurrent: db.isRemoteAttachmentProcessCurrent({
       dispatchId: args.dispatchId,
       paneKey: args.paneKey,
-      processIncarnation: args.runtime.getTerminalProcessIncarnation(args.from)
+      processIncarnation: args.processIncarnation()
     })
   })
   const options =

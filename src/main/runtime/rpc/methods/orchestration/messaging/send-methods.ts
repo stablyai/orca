@@ -25,6 +25,7 @@ import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
+import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
@@ -66,15 +67,16 @@ export const ORCHESTRATION_SEND_METHODS = [
       ) => {
         const db = runtime.getOrchestrationDb()
         const from = params.from ?? 'unknown'
-        const attestedCaller =
-          orchestrationCompatibilityCallerAuthority?.terminalHandle === from
-            ? orchestrationCompatibilityCallerAuthority
-            : undefined
-        // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
+        const reporter = resolveWorkerReporterIdentity(runtime, db, {
+          from,
+          authority: orchestrationCompatibilityCallerAuthority,
+          hasSessionCaller: Boolean(orchestrationCaller),
+          evidence: orchestrationCompatibilityEvidence
+        })
         const sender = orchestrationCallerIdentity(runtime, {
           handle: from,
           session: orchestrationCaller,
-          paneKey: attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from)
+          paneKey: reporter.paneKey
         })
         const senderPaneKey = sender.paneKey ?? undefined
         // Why: a session caller was already bound to its own identity at the dispatch entry.
@@ -85,10 +87,7 @@ export const ORCHESTRATION_SEND_METHODS = [
             evidence: orchestrationCompatibilityEvidence
           })
         }
-        const processIncarnation = () =>
-          attestedCaller?.processIncarnation ??
-          runtime.getTerminalProcessIncarnation(from) ??
-          undefined
+        const processIncarnation = () => reporter.processIncarnation() ?? undefined
         const remoteAttachment = senderPaneKey
           ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
           : undefined
@@ -105,7 +104,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           })
         }
 
-        refuseFinishedRemoteWorker(db, senderPaneKey, params.to)
+        refuseFinishedRemoteWorker(db, { address: from, paneKey: senderPaneKey }, params.to)
         const runGroup =
           params.to &&
           isGroupAddress(params.to) &&
