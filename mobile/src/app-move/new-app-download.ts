@@ -1,8 +1,10 @@
 import { Linking } from 'react-native'
-import { findNewestInstallableRelease } from '../app-update/github-release-update-source'
+import {
+  ANDROID_RELEASE_TAG_PREFIX,
+  findNewestInstallableRelease
+} from '../app-update/github-release-update-source'
 
 export const NEW_APP_PLAY_URL = 'https://play.google.com/store/apps/details?id=dev.orca.app'
-const NEW_APP_TAG_PREFIX = 'android-v'
 const RELEASES_PAGE_URL = 'https://github.com/stablyai/orca/releases'
 const LOOKUP_TIMEOUT_MS = 10_000
 
@@ -12,7 +14,7 @@ async function newAppDownloadUrl(): Promise<string> {
   try {
     const release = await findNewestInstallableRelease(
       (input, init) => fetch(input, init),
-      NEW_APP_TAG_PREFIX,
+      ANDROID_RELEASE_TAG_PREFIX,
       controller.signal
     )
     return release?.apkUrl ?? RELEASES_PAGE_URL

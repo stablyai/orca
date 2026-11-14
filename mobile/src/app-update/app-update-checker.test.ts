@@ -75,6 +75,19 @@ describe('app update checker', () => {
     vi.useRealTimers()
   })
 
+  it('offers no stored update when the install has no update source', async () => {
+    const { deps } = harness({
+      stored: {
+        lastCheckedAt: T0,
+        latest: { version: '0.0.49', url: 'https://github.com/stablyai/orca/releases/tag/x' }
+      }
+    })
+    const checker = createAppUpdateChecker({ ...deps, source: null })
+    checker.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(checker.getSnapshot().available).toBeNull()
+  })
+
   it('bounds a check at 8 s and counts it as failed', async () => {
     const h = harness({ stored: { lastCheckedAt: T0 }, replies: ['hang'] })
     h.checker.start()
