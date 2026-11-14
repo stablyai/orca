@@ -28,6 +28,8 @@ export type LocalWorktreeFilesystem = {
   access: WorktreeProofAccess
   remove: (path: string) => Promise<void>
   assertCurrent: () => void
+  assertAuthorityCurrent: () => void
+  statPathAfterRemoval: WorktreeProofAccess['statPath']
 }
 
 const WSL_FILE_OPERATION_TIMEOUT_MS = 30_000
@@ -41,7 +43,8 @@ async function runWslCommand(
   distro: string,
   command: string,
   options: LocalWorktreeFilesystemOptions,
-  assertCurrent: () => void
+  assertCurrent: () => void,
+  assertSuccessful: () => void = assertCurrent
 ): Promise<string> {
   assertCurrent()
   const result = await runProcess({
@@ -51,11 +54,19 @@ async function runWslCommand(
     cwd: resolveWslInteropSpawnCwd(),
     timeoutMs: WSL_FILE_OPERATION_TIMEOUT_MS,
     signal: options.signal
-  }).finally(assertCurrent)
+  }).catch((error: unknown) => {
+    assertCurrent()
+    throw error
+  })
+  if (result.code === 0 && result.signal === null && !result.timedOut) {
+    assertSuccessful()
+  } else {
+    assertCurrent()
+  }
   if (result.timedOut) {
     throw new Error(`WSL filesystem command timed out after ${WSL_FILE_OPERATION_TIMEOUT_MS}ms`)
   }
-  if (result.code !== 0) {
+  if (result.code !== 0 || result.signal !== null) {
     throw Object.assign(new Error(describeWslProcessFailure(result)), {
       exitCode: result.code,
       stderr: result.stderr
@@ -81,29 +92,40 @@ export async function prepareLocalWorktreeFilesystem(
 ): Promise<LocalWorktreeFilesystem> {
   const distro = shouldUseWslFilesystem(options) ? options.wslDistro?.trim() : undefined
   const assertProofCurrent = (): void => {
-    throwIfSignalAborted(options.signal)
     if (distro && options.proofEpoch) {
       assertWslAutomountSnapshotCurrent(options.proofEpoch)
     }
   }
+  throwIfSignalAborted(options.signal)
   assertProofCurrent()
   if (distro && knownPaths.some(isWindowsDrivePath)) {
     await ensureWslAutomountRoot(distro, options.signal)
+    throwIfSignalAborted(options.signal)
     assertProofCurrent()
   }
   const snapshot = distro ? captureWslAutomountSnapshot(distro) : undefined
-  const assertCurrent = (): void => {
+  const assertAuthorityCurrent = (): void => {
     assertProofCurrent()
     if (snapshot) {
       assertWslAutomountSnapshotCurrent(snapshot)
     }
+  }
+  const assertCurrent = (): void => {
+    throwIfSignalAborted(options.signal)
+    assertAuthorityCurrent()
   }
   const runtimePath = (path: string): string =>
     distro ? (wslDrivePathForDistro(path, distro, snapshot) ?? toLinuxPath(path)) : path
   const filesystem: LocalWorktreeFilesystem = {
     runtimePath,
     assertCurrent,
+    assertAuthorityCurrent,
     access: getLocalWorktreePathAccess(options, runtimePath, assertCurrent),
+    statPathAfterRemoval: getLocalWorktreePathAccess(
+      { ...options, signal: undefined },
+      runtimePath,
+      assertAuthorityCurrent
+    ).statPath,
     remove: (path) => removeLocalWorktreePath(path, options, options.signal, filesystem)
   }
   assertCurrent()
@@ -180,7 +202,11 @@ export async function removeLocalWorktreePath(
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
     throwIfSignalAborted(signal)
-    await removeHostTree(targetPath, { signal }).finally(scope.assertCurrent)
+    await removeHostTree(targetPath, { signal }).catch((error: unknown) => {
+      scope.assertCurrent()
+      throw error
+    })
+    scope.assertAuthorityCurrent()
     return
   }
 
@@ -189,6 +215,7 @@ export async function removeLocalWorktreePath(
     distro,
     `rm -rf -- ${quotePosixShell(scope.runtimePath(targetPath))}`,
     { ...options, signal },
-    scope.assertCurrent
+    scope.assertCurrent,
+    scope.assertAuthorityCurrent
   )
 }

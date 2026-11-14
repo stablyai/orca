@@ -141,16 +141,25 @@ export async function recoverPartialLocalWorktreeRemoval(
     throwIfSignalAborted(args.signal)
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
-  filesystem.assertCurrent()
+  filesystem.assertAuthorityCurrent()
   const { branch, head } = args.registeredWorktree
   // Same -d policy as a normal delete: merged branches go, unmerged ones are preserved.
   const result = await deleteBranchOfUnregisteredWorktree(
     args.repoPath,
     args.canonicalWorktreePath,
     args.deleteBranch && branch ? { name: normalizeLocalBranchRef(branch), head } : null,
-    args.localWorktreeGitOptions
+    {
+      ...args.localWorktreeGitOptions,
+      canStart: () => {
+        if (args.localWorktreeGitOptions.canStart?.() === false) {
+          return false
+        }
+        filesystem.assertAuthorityCurrent()
+        return true
+      }
+    }
   )
-  filesystem.assertCurrent()
+  filesystem.assertAuthorityCurrent()
   return result
 }
 

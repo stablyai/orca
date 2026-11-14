@@ -111,9 +111,7 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
         }
       })
       removeLocalWorktreePathMock.mockImplementationOnce(async () => {
-        if (phase !== 'success') {
-          controller.abort()
-        }
+        controller.abort()
         if (phase === 'delete') {
           throw controller.signal.reason
         }

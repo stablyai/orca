@@ -30,16 +30,26 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
     access
   )
   filesystem.assertCurrent()
+  let removed = false
   if (safe) {
     await closeWatchers(path)
     filesystem.assertCurrent()
-    await filesystem.remove(path).catch(() => {})
-    filesystem.assertCurrent()
+    try {
+      await filesystem.remove(path)
+      removed = true
+    } catch {
+      filesystem.assertCurrent()
+    }
   } else {
     console.warn(`[worktrees] Refusing recursive cleanup for unproven worktree directory: ${path}`)
   }
-  const missing = await isWorktreePathMissing(runtimePath, access.statPath)
-  filesystem.assertCurrent()
+  const assertSettlement = removed ? filesystem.assertAuthorityCurrent : filesystem.assertCurrent
+  assertSettlement()
+  const missing = await isWorktreePathMissing(
+    runtimePath,
+    removed ? filesystem.statPathAfterRemoval : access.statPath
+  )
+  assertSettlement()
   if (!missing) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }

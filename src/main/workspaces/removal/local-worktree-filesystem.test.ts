@@ -25,6 +25,8 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 import { prepareLocalWorktreeFilesystem } from './local-worktree-filesystem'
+import { resetWslAutomountRootsForTests } from '../../wsl/filesystem/wsl-automount-root'
+import { settleWslAutomountRoot } from '../../wsl/filesystem/__fixtures__/wsl-automount-root-fixture'
 import '../../filesystem/host-tree-removal'
 import { isWorktreePathMissing } from './worktree-removal-safety'
 
@@ -60,12 +62,77 @@ describe('local worktree filesystem runtime access', () => {
     realpathMock.mockReset()
     readFileMock.mockReset()
     rmMock.mockReset()
+    resetWslAutomountRootsForTests()
     completeExecFile()
   })
 
   afterEach(() => {
+    resetWslAutomountRootsForTests()
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it('settles completed deletion after late cancellation while retaining namespace authority', async () => {
+    const nativeAbort = new AbortController()
+    const native = await prepareLocalWorktreeFilesystem(['/repo/feature'], {
+      signal: nativeAbort.signal
+    })
+    rmMock.mockImplementationOnce(async () => nativeAbort.abort())
+    await expect(native.remove('/repo/feature')).resolves.toBeUndefined()
+
+    await withPlatform('win32', async () => {
+      await settleWslAutomountRoot('Ubuntu', '/qamnt/')
+      const controller = new AbortController()
+      const filesystem = await prepareLocalWorktreeFilesystem(['C:/repo/feature'], {
+        wslDistro: 'Ubuntu',
+        signal: controller.signal
+      })
+      runProcessMock.mockImplementationOnce(async () => {
+        controller.abort()
+        return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+      })
+      await expect(filesystem.remove('C:/repo/feature')).resolves.toBeUndefined()
+      await expect(filesystem.access.statPath('/qamnt/c/repo/feature')).rejects.toBe(
+        controller.signal.reason
+      )
+      failExecFile(1, "stat: cannot statx '/qamnt/c/repo/feature': No such file or directory\n")
+      await expect(filesystem.statPathAfterRemoval('C:/repo/feature')).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
+      expect(runProcessMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          args: [
+            '-d',
+            'Ubuntu',
+            '--exec',
+            'sh',
+            '-c',
+            "LC_ALL=C stat -c %F -- '/qamnt/c/repo/feature'"
+          ],
+          signal: undefined
+        })
+      )
+
+      const cancelled = new AbortController()
+      const unfinished = await prepareLocalWorktreeFilesystem(['C:/repo/feature'], {
+        wslDistro: 'Ubuntu',
+        signal: cancelled.signal
+      })
+      runProcessMock.mockImplementationOnce(async () => {
+        cancelled.abort()
+        return { code: null, signal: 'SIGTERM', stdout: '', stderr: '', timedOut: false }
+      })
+      await expect(unfinished.remove('C:/repo/feature')).rejects.toBe(cancelled.signal.reason)
+
+      const obsolete = await prepareLocalWorktreeFilesystem(['C:/repo/feature'], {
+        wslDistro: 'Ubuntu'
+      })
+      runProcessMock.mockImplementationOnce(async () => {
+        resetWslAutomountRootsForTests()
+        return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+      })
+      await expect(obsolete.remove('C:/repo/feature')).rejects.toThrow('Ubuntu')
+    })
   })
 
   // Captured verbatim from live hosts: GNU coreutils 9.4 (Ubuntu 24.04) and BusyBox v1.36.1.

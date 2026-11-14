@@ -1,10 +1,15 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { resetWslAutomountRootsForTests } from '../../wsl/filesystem/wsl-automount-root'
+import { settleWslAutomountRoot } from '../../wsl/filesystem/__fixtures__/wsl-automount-root-fixture'
+import type * as WorktreeRemovalSafety from './worktree-removal-safety'
 import type * as LocalWorktreeFilesystem from './local-worktree-filesystem'
-const { prove, missing, remove } = vi.hoisted(() => ({
+const { prove, missing, remove, runProcessMock } = vi.hoisted(() => ({
   prove: vi.fn(),
   missing: vi.fn(),
-  remove: vi.fn()
+  remove: vi.fn(),
+  runProcessMock: vi.fn()
 }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 vi.mock('./local-worktree-filesystem', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalWorktreeFilesystem>()
   return {
@@ -20,51 +25,82 @@ vi.mock('./worktree-removal-safety', async (importOriginal) => ({
   isWorktreePathMissing: missing
 }))
 import { cleanupLocalOrphanedWorktreeDirectory } from './local-orphaned-worktree-cleanup'
-beforeEach(() => {
+beforeEach(async () => {
+  resetWslAutomountRootsForTests()
+  const actual = await vi.importActual<typeof WorktreeRemovalSafety>('./worktree-removal-safety')
   prove.mockReset().mockResolvedValue(true)
-  missing.mockReset().mockResolvedValue(true)
+  missing.mockReset().mockImplementation(actual.isWorktreePathMissing)
+  runProcessMock.mockReset().mockResolvedValue({
+    code: 1,
+    signal: null,
+    timedOut: false,
+    stdout: '',
+    stderr: "stat: cannot statx '/qamnt/c/repo/feature': No such file or directory\n"
+  })
   remove.mockReset().mockResolvedValue(undefined)
 })
-it.each(['proof', 'watcher', 'delete', 'success'] as const)(
+afterEach(() => {
+  resetWslAutomountRootsForTests()
+})
+it.each(['proof', 'watcher', 'delete', 'success', 'epoch'] as const)(
   'does not convert cancelled orphan cleanup into absent-path success at %s',
   async (phase) => {
-    const controller = new AbortController()
-    if (phase === 'proof') {
-      prove.mockImplementationOnce(async () => {
-        controller.abort()
-        return true
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      await settleWslAutomountRoot('Ubuntu', '/qamnt/')
+      const controller = new AbortController()
+      if (phase === 'proof') {
+        prove.mockImplementationOnce(async () => {
+          controller.abort()
+          return true
+        })
+      }
+      const watcher = vi.fn(async () => {
+        if (phase === 'watcher') {
+          controller.abort()
+        }
       })
-    }
-    const watcher = vi.fn(async () => {
-      if (phase === 'watcher') {
-        controller.abort()
+      remove.mockImplementationOnce(async () => {
+        if (phase !== 'epoch') {
+          controller.abort()
+        }
+        if (phase === 'delete') {
+          throw controller.signal.reason
+        }
+      })
+      if (phase === 'epoch') {
+        const actual = await vi.importActual<typeof WorktreeRemovalSafety>(
+          './worktree-removal-safety'
+        )
+        missing.mockImplementationOnce(async (...args) => {
+          const absent = await actual.isWorktreePathMissing(...args)
+          resetWslAutomountRootsForTests()
+          return absent
+        })
       }
-    })
-    remove.mockImplementationOnce(async () => {
-      if (phase !== 'success') {
-        controller.abort()
+      const pending = cleanupLocalOrphanedWorktreeDirectory(
+        'C:/repo',
+        'C:/repo/feature',
+        { wslDistro: 'Ubuntu' },
+        watcher,
+        controller.signal
+      )
+      if (phase === 'success') {
+        await expect(pending).resolves.toBeUndefined()
+        expect(missing).toHaveBeenCalledOnce()
+      } else if (phase === 'epoch') {
+        await expect(pending).rejects.toThrow('Ubuntu')
+      } else {
+        const error = await pending.catch((error: unknown) => error)
+        expect(error).toBe(controller.signal.reason)
+        expect(missing).not.toHaveBeenCalled()
       }
-      if (phase === 'delete') {
-        throw controller.signal.reason
+      if (phase === 'proof' || phase === 'watcher') {
+        expect(remove).not.toHaveBeenCalled()
       }
-    })
-    const pending = cleanupLocalOrphanedWorktreeDirectory(
-      '/repo',
-      '/repo/feature',
-      {},
-      watcher,
-      controller.signal
-    )
-    if (phase === 'success') {
-      await expect(pending).resolves.toBeUndefined()
-      expect(missing).toHaveBeenCalledOnce()
-    } else {
-      const error = await pending.catch((error: unknown) => error)
-      expect(error).toBe(controller.signal.reason)
-      expect(missing).not.toHaveBeenCalled()
-    }
-    if (phase === 'proof' || phase === 'watcher') {
-      expect(remove).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   }
 )
