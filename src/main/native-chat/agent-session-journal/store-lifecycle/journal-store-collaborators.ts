@@ -24,7 +24,6 @@ import { JournalSubmissionWriter } from '../submissions/journal-submission-write
 import { validateJournalDormantAnswer } from '../submissions/journal-dormant-answer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../journal-store'
-import type { JournalWriteBody } from '../writing/journal-write-queue'
 import {
   journalInputClaimsReceipt,
   journalAttachmentClaimsReceipt,
@@ -40,7 +39,7 @@ export type JournalStoreHost = {
   identity: AgentSessionJournalIdentity
   now: () => number
   mintEpoch: () => string
-  serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
+  serialize: ConstructorParameters<typeof JournalRowWriter>[0]['serialize']
   database: () => JournalHostDatabase
   state: () => JournalReducerState
   readOnly: () => boolean

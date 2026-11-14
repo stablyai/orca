@@ -26,6 +26,7 @@ it('keeps an accepted restart offer when its settlement cannot establish Stop hi
   const settle = AgentSessionRecoveryCapsule.prototype.settleResume
   let retained: string[] | undefined
   let failures: unknown
+  let historyUnavailable = false
   vi.spyOn(AgentSessionRecoveryCapsule.prototype, 'settleResume').mockImplementationOnce(
     async function (this: AgentSessionRecoveryCapsule, ...args) {
       // A historical correction after admission requires fresh retirement evidence.
@@ -37,6 +38,7 @@ it('keeps an accepted restart offer when its settlement cannot establish Stop hi
       const reading = vi.spyOn(database.db, 'prepare').mockImplementation((sql) => {
         if (!failed && sql.includes('seq >= ? AND seq <= ?') && sql.includes('stopEvent')) {
           failed = true
+          historyUnavailable = true
           throw new Error('retirement history temporarily unavailable')
         }
         return prepare(sql)
@@ -54,6 +56,7 @@ it('keeps an accepted restart offer when its settlement cannot establish Stop hi
   )
 
   await host.restartResume.continueAfterRestart([SESSION], 'modal')
+  expect(historyUnavailable).toBe(true)
   expect(retained).toEqual([SESSION])
   expect(failures).toEqual([])
   const submissions = (await host.journalSnapshot(SESSION)).submissions

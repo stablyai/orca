@@ -10,6 +10,16 @@ import {
   type RecoveryCapsuleState,
   type RecoveryEntry
 } from './agent-session-recovery-capsule-entries'
+import type { JournalWriteBody } from '../../../native-chat/agent-session-journal/writing/journal-write-queue'
+
+type ResumeFrontier = {
+  now: number
+  run: (
+    entries: ReadonlyMap<string, RecoveryEntry>,
+    failed: ReadonlyMap<string, AgentSessionResumeFailureRecord>
+  ) => () => void
+  reject: (error: unknown) => void
+}
 
 export type AgentSessionResumeSelection = {
   marker: AgentSessionResumeMarker
@@ -39,6 +49,8 @@ function selectedResume(
 }
 
 export class AgentSessionResumeSelections {
+  private readonly ready: ResumeFrontier[] = []
+  private draining = false
   constructor(
     private readonly deps: {
       withLock: <T>(apply: () => Promise<T>) => Promise<T>
@@ -116,26 +128,64 @@ export class AgentSessionResumeSelections {
     })
   }
 
-  /** The callback is only the send's short acceptance transaction, never provider startup. */
+  /** Callers own their write queue; each callback is one synchronous acceptance transaction. */
   withSelectedResume<T>(
     selection: AgentSessionResumeSelection,
     now: number,
-    accept: () => Promise<T>
+    accept: JournalWriteBody<T>
   ): Promise<{ selected: false } | { selected: true; value: T }> {
-    return this.deps.withLock(async () => {
-      const state = normalizeState(await this.deps.readState(), now)
-      const id = selection.marker.sessionId
-      if (
-        !selectedResume(
-          state.entries.find((entry) => entry.marker.sessionId === id),
-          state.failed.find((failure) => failure.marker.sessionId === id),
-          selection
-        )
-      ) {
-        return { selected: false }
+    return new Promise((resolve, reject) => {
+      this.ready.push({
+        now,
+        reject,
+        run: (entries, failed) => {
+          try {
+            const id = selection.marker.sessionId
+            const result = selectedResume(entries.get(id), failed.get(id), selection)
+              ? { selected: true as const, value: accept() }
+              : { selected: false as const }
+            return () => resolve(result)
+          } catch (error) {
+            return () => reject(error)
+          }
+        }
+      })
+      if (!this.draining) {
+        this.draining = true
+        void this.drainReady()
       }
-      return { selected: true, value: await accept() }
     })
+  }
+
+  private async drainReady(): Promise<void> {
+    let frontier: ResumeFrontier[] = []
+    try {
+      const settle = await this.deps.withLock(async () => {
+        // Arrivals after this capture belong to the next finite drain.
+        frontier = this.ready.splice(0)
+        const now = frontier.reduce((latest, peer) => Math.max(latest, peer.now), 0)
+        const state = normalizeState(await this.deps.readState(), now)
+        const entries = new Map(state.entries.map((entry) => [entry.marker.sessionId, entry]))
+        const failed = new Map(state.failed.map((failure) => [failure.marker.sessionId, failure]))
+        return frontier.map((peer) => peer.run(entries, failed))
+      })
+      settle.forEach((finish) => finish())
+    } catch (error) {
+      // Lock acquisition may fail before a frontier is captured.
+      if (frontier.length === 0) {
+        frontier = this.ready.splice(0)
+      }
+      frontier.forEach((peer) => peer.reject(error))
+    } finally {
+      if (this.ready.length) {
+        // Publication and queued dismissals get a turn before another fresh inventory read.
+        setImmediate(() => {
+          void this.drainReady()
+        })
+      } else {
+        this.draining = false
+      }
+    }
   }
 
   /** Reconcile receipts synchronously under the lock; retire only the captured witness/version. */

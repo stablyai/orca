@@ -1,4 +1,3 @@
-import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 
@@ -30,8 +29,8 @@ export abstract class AgentSessionRecordPublication {
 
   admittedSendCount = (sessionId: string) => this.transactions.admittedSendCount(sessionId)
 
-  commitOperationReceipt = (receipt: JournalOperationReceipt) =>
-    this.transactions.commitReceipt(receipt)
+  commitOperationReceipt = (...args: Parameters<AgentSessionStoreTransactions['commitReceipt']>) =>
+    this.transactions.commitReceipt(...args)
 
   readCommandReceipt = (...args: Parameters<AgentSessionStoreTransactions['readCommandReceipt']>) =>
     this.transactions.readCommandReceipt(...args)

@@ -1,3 +1,4 @@
+import type { JournalWriteAdmission } from '../../agent-session-journal/writing/journal-write-queue'
 import type { StructuredAgentSessionSendAcceptance } from './structured-agent-session-turns'
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
@@ -121,12 +122,16 @@ export function sendStructuredAgentSessionTurn(
             )
           }
           try {
-            const apply = () =>
-              runQueueableStructuredAgentSessionSend(context, ctx, params, () => plan.run(ctx))
+            const apply = (admission?: JournalWriteAdmission) => {
+              const sending = admission ? { ...ctx, sendAdmission: admission } : ctx
+              return runQueueableStructuredAgentSessionSend(context, sending, params, () =>
+                plan.run(sending)
+              )
+            }
             const sent = await (params.accept
-              ? params.accept(() => {
+              ? params.accept((admission) => {
                   accepted = true
-                  return apply()
+                  return apply(admission)
                 })
               : apply())
             if (!sent.ok) {

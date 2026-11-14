@@ -1,6 +1,7 @@
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
+import type { JournalWriteAdmission } from '../../../native-chat/agent-session-journal/writing/journal-write-queue'
 import { journalOpenRefusalError } from '../../../native-chat/agent-session-journal/replay/journal-open-failure'
 import { AgentSessionJournalError } from '../../../native-chat/agent-session-journal/writing/journal-write-guards'
 import {
@@ -229,11 +230,15 @@ export class AgentSessionStoreTransactions {
   }
 
   /** Commit a receipt separately when its command made no journal write. */
-  commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
-    const run = this.queue.then(() => {
+  commitReceipt(
+    receipt: JournalOperationReceipt,
+    admission?: JournalWriteAdmission
+  ): Promise<void> {
+    const write = () => {
       this.journalDatabase.transaction((db) => receipt.write(db))
       receipt.committed()
-    })
+    }
+    const run = this.queue.then(() => (admission ? admission(write) : write()))
     this.queue = run.catch(() => {})
     return run
   }

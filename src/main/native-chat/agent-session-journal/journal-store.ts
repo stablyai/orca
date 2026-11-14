@@ -91,7 +91,7 @@ export class AgentSessionJournal {
       identity: this.identity,
       now: options.now ?? (() => Date.now()),
       mintEpoch: options.mintEpoch ?? randomUUID,
-      serialize: (run) => this.queue.serialize(run),
+      serialize: (run, admission, published) => this.queue.serialize(run, admission, published),
       database: () => this.database,
       state: () => this.state,
       readOnly: () => this.database.readOnly,

@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { readRecoveryCapsule, publishRecoveryCapsule } from './agent-session-recovery-capsule-file'
 import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
+import type { JournalWriteBody } from '../../../native-chat/agent-session-journal/writing/journal-write-queue'
 import {
   MAX_FAILURE_FIELD_LENGTH,
   normalizeState,
@@ -47,7 +48,7 @@ export class AgentSessionRecoveryCapsule {
   withSelectedResume<T>(
     selection: AgentSessionResumeSelection,
     now: number,
-    accept: () => Promise<T>
+    accept: JournalWriteBody<T>
   ) {
     return this.selections.withSelectedResume(selection, now, accept)
   }

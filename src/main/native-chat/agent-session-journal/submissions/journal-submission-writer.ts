@@ -19,6 +19,7 @@ import {
 } from '../writing/journal-row-builders'
 import type { JournalRow, JournalSubmissionRow } from '../durable-rows/journal-row-schema'
 import type { JournalOperationReceipt, JournalRowWriter } from '../writing/journal-row-writer'
+import type { JournalWriteAdmission } from '../writing/journal-write-queue'
 import type {
   JournalSubmissionConsume,
   JournalSubmissionInput,
@@ -53,7 +54,8 @@ export class JournalSubmissionWriter {
       itemId: string
       expectedRevision: number
       contextEpoch: string
-    }
+    },
+    admission?: JournalWriteAdmission
   ): Promise<AgentJournalCursor> {
     const { claimAttachments, identity, queuedMessages, rowWriter, state } = this.deps
     const buildSubmission = journalSubmissionRowBuilder(state, identity, input, consume)
@@ -125,7 +127,8 @@ export class JournalSubmissionWriter {
             receipt?.committed()
           }
         },
-        (rows) => rows.at(-1)
+        (rows) => rows.at(-1),
+        admission
       )
       .then(rowCursor)
   }

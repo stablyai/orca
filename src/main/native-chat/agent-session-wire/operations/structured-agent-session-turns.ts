@@ -22,6 +22,7 @@ import type { AgentSessionSendResult } from '../../../../shared/agent-session/ag
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
+import type { JournalWriteAdmission } from '../../agent-session-journal/writing/journal-write-queue'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import {
   classifyJournalOpenFailure,
@@ -58,6 +59,7 @@ export type AgentSessionTurnContext = {
   failureTextContext?: AgentSessionFailureWordsContext
   /** Commit success alongside its accepting write or standalone receipt. */
   operationReceipt?: AgentSessionOperationReceipt
+  sendAdmission?: JournalWriteAdmission
   now: () => number
 }
 
@@ -72,7 +74,7 @@ export type TurnOutcome<TValue> =
   | { ok: false; refusal: AgentSessionWireRefusal }
 
 export type StructuredAgentSessionSendAcceptance = (
-  apply: () => Promise<TurnOutcome<AgentSessionSendResult>>
+  apply: (admission: JournalWriteAdmission) => Promise<TurnOutcome<AgentSessionSendResult>>
 ) => Promise<TurnOutcome<AgentSessionSendResult>>
 
 function invalid(
@@ -171,7 +173,9 @@ export async function performSend(
     await ctx.journal.appendSubmission(
       { ...input, options: captured.options, fence: ctx.fence, handoverRecorded: true },
       undefined,
-      ctx.operationReceipt
+      ctx.operationReceipt,
+      undefined,
+      ctx.sendAdmission
     )
   } catch (error) {
     forgetNativeChatPrompt(ctx.journal, input.clientMessageId)
