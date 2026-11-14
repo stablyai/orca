@@ -8,6 +8,11 @@ import {
   mobileNativeChatRowAnchor,
   type MobileNativeChatTailFollow
 } from './viewport/use-mobile-native-chat-tail-follow'
+import {
+  MobileNativeChatMeasuredCell,
+  MobileNativeChatMeasuredRows,
+  useMobileNativeChatNativeList
+} from './viewport/use-mobile-native-chat-native-list'
 
 type PageProps = ComponentProps<typeof MobileNativeChatPageList>
 
@@ -47,30 +52,44 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
       </MobileNativeChatPinchZoom>
     )
   }
+  return <NativeRowList {...props} />
+}
+
+function NativeRowList(props: Props): ReactElement {
+  const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
+  const { header, emptyStateView } = props
+  const native = useMobileNativeChatNativeList(rows, rowKeys.keyOf, tail.listProps.ref)
   return (
     <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
-      <FlatList
-        {...tail.listProps}
-        data={rows}
-        keyExtractor={rowKeys.keyOf}
-        renderItem={renderItem}
-        contentContainerStyle={contentContainerStyle}
-        // Let link/file taps land while the composer keyboard is up
-        // instead of being swallowed by the dismiss gesture.
-        keyboardShouldPersistTaps="handled"
-        onScroll={onScroll}
-        onScrollBeginDrag={tail.beginUserScroll}
-        onScrollEndDrag={tail.endUserDrag}
-        onMomentumScrollBegin={tail.beginMomentum}
-        onMomentumScrollEnd={tail.endMomentum}
-        scrollEventThrottle={32}
-        onContentSizeChange={tail.pinToTailAfterContentResize}
-        onLayout={tail.pinToTail}
-        maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
-        ListHeaderComponent={header ?? undefined}
-        ListFooterComponent={footer ?? undefined}
-        ListEmptyComponent={emptyStateView ?? undefined}
-      />
+      <MobileNativeChatMeasuredRows measure={native.measure}>
+        <FlatList
+          ref={native.ref}
+          data={rows}
+          keyExtractor={rowKeys.keyOf}
+          renderItem={renderItem}
+          contentContainerStyle={contentContainerStyle}
+          // Let link/file taps land while the composer keyboard is up
+          // instead of being swallowed by the dismiss gesture.
+          keyboardShouldPersistTaps="handled"
+          onScroll={(event) => {
+            native.noteScroll(event)
+            onScroll(event)
+          }}
+          CellRendererComponent={MobileNativeChatMeasuredCell}
+          onScrollToIndexFailed={native.onScrollToIndexFailed}
+          onScrollBeginDrag={tail.beginUserScroll}
+          onScrollEndDrag={tail.endUserDrag}
+          onMomentumScrollBegin={tail.beginMomentum}
+          onMomentumScrollEnd={tail.endMomentum}
+          scrollEventThrottle={32}
+          onContentSizeChange={tail.pinToTailAfterContentResize}
+          onLayout={tail.pinToTail}
+          maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
+          ListHeaderComponent={header ?? undefined}
+          ListFooterComponent={footer ?? undefined}
+          ListEmptyComponent={emptyStateView ?? undefined}
+        />
+      </MobileNativeChatMeasuredRows>
     </MobileNativeChatPinchZoom>
   )
 }

@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import {
+  saveMobileNativeChatPlace,
+  savedMobileNativeChatPlace,
+  type MobileNativeChatPlace,
+  type MobileNativeChatRestore
+} from './mobile-native-chat-saved-places'
 
 const AT_TAIL_SLOP = 80
 
@@ -28,6 +34,9 @@ function isAtTail(event: NativeScrollEvent): boolean {
 export type MobileNativeChatListHandle = {
   scrollToOffset: (params: { animated: boolean; offset: number }) => void
   scrollToEnd: (params: { animated: boolean }) => void
+  /** The reader's top row and how far into it the view starts; undefined with no row drawn. */
+  readPlace: () => MobileNativeChatPlace | undefined
+  restorePlace: (place: MobileNativeChatPlace) => MobileNativeChatRestore
 }
 
 export type MobileNativeChatTailFollow = {
@@ -36,6 +45,8 @@ export type MobileNativeChatTailFollow = {
     ref: (list: MobileNativeChatListHandle | null) => void
     isFollowing: () => boolean
     onEndDistance: (fromEnd: number, byReader: boolean) => void
+    /** Each commit of the list's rows: a restore waiting for its row tries again. */
+    onDrawn: () => void
   }
   showJumpToTail: boolean
   pinToTail: () => void
@@ -58,11 +69,15 @@ export function useMobileNativeChatTailFollow(args: {
 }): MobileNativeChatTailFollow {
   const { hasItems, scopeKey } = args
   const listRef = useRef<MobileNativeChatListHandle | null>(null)
-  const [following, setFollowingFlag] = useState(true)
-  const [atTail, setAtTailFlag] = useState(true)
+  // A chat the reader left away from its tail reopens there, even in a remounted view.
+  const [opened] = useState(() => savedMobileNativeChatPlace(scopeKey) ?? null)
+  const [following, setFollowingFlag] = useState(opened === null)
+  const [atTail, setAtTailFlag] = useState(opened === null)
   // Event handlers read intent at event time, before a re-render lands.
-  const followingRef = useRef(true)
-  const atTailRef = useRef(true)
+  const followingRef = useRef(opened === null)
+  const atTailRef = useRef(opened === null)
+  const restoreRef = useRef<MobileNativeChatPlace | null>(opened)
+  const retryRestore = useRef(() => {})
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
   const scopeKeyRef = useRef(scopeKey)
@@ -88,7 +103,24 @@ export function useMobileNativeChatTailFollow(args: {
     listRef.current = list
   }, [])
 
+  // Kept per chat, so switching back to it lands where the reader left it.
+  const rememberPlace = useCallback(() => {
+    const scope = scopeKeyRef.current
+    if (followingRef.current) {
+      saveMobileNativeChatPlace(scope, null)
+      return
+    }
+    const place = listRef.current?.readPlace()
+    if (place) {
+      saveMobileNativeChatPlace(scope, place)
+    }
+  }, [])
+
   const pinToTail = useCallback(() => {
+    if (restoreRef.current) {
+      retryRestore.current()
+      return
+    }
     if (followingRef.current && hasItems) {
       listRef.current?.scrollToEnd({ animated: false })
     }
@@ -96,6 +128,10 @@ export function useMobileNativeChatTailFollow(args: {
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, height: number) => {
+      if (restoreRef.current) {
+        retryRestore.current()
+        return
+      }
       if (followingRef.current && hasItems) {
         listRef.current?.scrollToOffset({ animated: false, offset: height })
       }
@@ -124,23 +160,58 @@ export function useMobileNativeChatTailFollow(args: {
     (fromEnd: number, byReader: boolean) => {
       setAtTail(fromEnd <= AT_TAIL_SLOP)
       if (byReader) {
+        restoreRef.current = null
         setFollowing(fromEnd <= 1)
+        rememberPlace()
       }
     },
-    [setAtTail, setFollowing]
+    [rememberPlace, setAtTail, setFollowing]
   )
 
   const jumpToTail = useCallback(() => {
     clearUserScrollSettle()
     userScrollActiveRef.current = false
+    restoreRef.current = null
     setAtTail(true)
     setFollowing(true)
+    rememberPlace()
     pinToTail()
-  }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
+  }, [clearUserScrollSettle, pinToTail, rememberPlace, setAtTail, setFollowing])
+
+  // A restore waits until its row is drawn; a row no longer in the chat sends the reader to the tail.
+  const tryRestore = useCallback(() => {
+    const place = restoreRef.current
+    const result = place ? listRef.current?.restorePlace(place) : undefined
+    if (result === undefined || result === 'pending') {
+      return
+    }
+    restoreRef.current = null
+    if (result === 'missing') {
+      jumpToTail()
+    }
+  }, [jumpToTail])
+
+  const openChat = useCallback(
+    (scope: string) => {
+      const place = savedMobileNativeChatPlace(scope)
+      if (!place) {
+        jumpToTail()
+        return
+      }
+      clearUserScrollSettle()
+      userScrollActiveRef.current = false
+      setAtTail(false)
+      setFollowing(false)
+      restoreRef.current = place
+      tryRestore()
+    },
+    [clearUserScrollSettle, jumpToTail, setAtTail, setFollowing, tryRestore]
+  )
 
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
     userScrollActiveRef.current = true
+    restoreRef.current = null
     setFollowing(false)
   }, [clearUserScrollSettle, setFollowing])
 
@@ -153,11 +224,12 @@ export function useMobileNativeChatTailFollow(args: {
       userScrollActiveRef.current = false
       setAtTail(finishedAtTail)
       setFollowing(finishedAtTail)
+      rememberPlace()
       if (finishedAtTail) {
         pinToTail()
       }
     },
-    [clearUserScrollSettle, pinToTail, setAtTail, setFollowing]
+    [clearUserScrollSettle, pinToTail, rememberPlace, setAtTail, setFollowing]
   )
 
   const endUserDrag = useCallback(
@@ -194,20 +266,25 @@ export function useMobileNativeChatTailFollow(args: {
 
   const isFollowing = useCallback(() => followingRef.current, [])
 
-  // Reset before paint on chat changes so a mounted view cannot expose the previous reader position.
+  useLayoutEffect(() => {
+    retryRestore.current = tryRestore
+  })
+
+  // Before paint on chat changes, so a mounted view never shows the previous chat's position.
   useLayoutEffect(() => {
     if (scopeKeyRef.current === scopeKey) {
+      tryRestore()
       return
     }
     scopeKeyRef.current = scopeKey
-    jumpToTail()
-  }, [scopeKey, jumpToTail])
+    openChat(scopeKey)
+  }, [scopeKey, openChat, tryRestore])
 
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
   return {
     listProps: { ref: attachList },
-    pageListProps: { ref: attachList, isFollowing, onEndDistance },
+    pageListProps: { ref: attachList, isFollowing, onEndDistance, onDrawn: tryRestore },
     showJumpToTail: !following && !atTail,
     pinToTail,
     pinToTailAfterContentResize,

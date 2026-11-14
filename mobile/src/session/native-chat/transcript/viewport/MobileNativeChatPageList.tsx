@@ -31,6 +31,7 @@ import {
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
 import { scrollWritesStopMomentum } from './mobile-native-chat-scroll-motion'
+import { mobileNativeChatPagePlaces } from './mobile-native-chat-page-restore'
 import {
   createMobileNativeChatGrowthHold,
   MobileNativeChatGrowthHoldContext
@@ -75,6 +76,7 @@ type Props = {
   ref: Ref<MobileNativeChatListHandle>
   isFollowing: () => boolean
   onEndDistance: (fromEnd: number, byReader: boolean) => void
+  onDrawn: () => void
   rows: readonly NativeChatMessage[]
   rowKeys: Pick<MobileNativeChatRowKeys, 'scope' | 'keyOf' | 'current' | 'placement'>
   renderItem: (row: Row) => ReactElement
@@ -98,6 +100,7 @@ export function MobileNativeChatPageList({
   roots,
   isFollowing,
   onEndDistance,
+  onDrawn,
   rows: liveRows,
   rowKeys,
   renderItem,
@@ -295,9 +298,10 @@ export function MobileNativeChatPageList({
         if (s) {
           write(s, offset - (s.scrollHeight - s.clientHeight))
         }
-      }
+      },
+      ...mobileNativeChatPagePlaces(scroller, () => latest.current, setDrawn, write, notePlace)
     }),
-    [scroller, write]
+    [notePlace, scroller, write]
   )
 
   const drawnHead = useRef<string | undefined>(undefined)
@@ -317,6 +321,7 @@ export function MobileNativeChatPageList({
     }
     keepPlace(s)
     drawAndFetch(s)
+    onDrawn()
   })
 
   // Content and viewport resizes (e.g. the composer growing) bypass commits; restore nested scroll boxes first.
