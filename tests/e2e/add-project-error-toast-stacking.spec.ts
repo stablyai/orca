@@ -127,11 +127,14 @@ for (const theme of ['dark', 'light'] as const) {
             if (!bounds) {
               throw new Error('Missing toast control target')
             }
-            await cdp.send('Input.dispatchTouchEvent', {
-              type: 'touchStart',
-              touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }]
-            })
-            await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+            // Match Playwright's tap: waiting for Chromium's start ack can turn it into a long press.
+            await Promise.all([
+              cdp.send('Input.dispatchTouchEvent', {
+                type: 'touchStart',
+                touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }]
+              }),
+              cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+            ])
           } finally {
             await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
             await cdp.detach()
