@@ -727,6 +727,7 @@ arbitrary plugin UI:
 
 `skills`, `mcpServers` and `hooks` will mean what they mean in agent-plugin formats such as
 Claude Code's. Orca does not reserve `agents`, because those formats use it for subagent files.
+Until those declarative keys ship, a `trusted-worker` plugin (for example in a subdirectory referenced via `source.path`) can subscribe to worker events such as `agent.prompt.before` and `agent.tool.before`.
 
 See [the manifest reference](plugin-manifest.md#planned-contribution-points) for details.
 
