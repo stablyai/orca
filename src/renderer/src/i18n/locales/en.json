@@ -20699,7 +20699,8 @@
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
-        "forkedFrom": "Forked from"
+        "forkedFrom": "Forked from",
+        "forkedFromUnknown": "Forked from another chat"
       },
       "composer": {
         "send": "Send",
@@ -21542,7 +21543,12 @@
         "commandDescription": "Fork this chat from its latest response",
         "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
         "commandNothing": "There’s no response to fork yet.",
-        "commandTakesNoText": "Send /fork on its own, then write in the new chat."
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat.",
+        "mark": "Fork ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Fork: {{name}}",
+        "sourceTooltip": "Fork of {{name}}",
+        "unknownSourceTooltip": "Fork of another chat"
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",

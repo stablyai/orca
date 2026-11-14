@@ -1,3 +1,4 @@
+import type { AgentSessionForkedFromMark } from '../agent-session/agent-session-fork-name'
 import type { AgentSessionProviderContextBoundary } from '../agent-session/agent-session-provider-context'
 // IPC-serializable conversation contract: plain JSON only, no classes/Maps/Dates. Sources prefer transcripts, then hooks,
 // then degraded scrollback; docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (KTD2).
@@ -57,7 +58,7 @@ export type NativeChatTextBlock = {
   /** On the line about a reply Orca's own stop cut off: why, and the turn it cut. */
   orcaStop?: AgentSessionOrcaStop & { turnItemId?: string }
   /** On the "Forked from" divider: the source chat it links to. */
-  forkedFrom?: { sessionId: string }
+  forkedFrom?: AgentSessionForkedFromMark
   /** On a usage-limit line: the turn the limit ended, which its Continue picks up. */
   usageLimitTurnItemId?: string
 }

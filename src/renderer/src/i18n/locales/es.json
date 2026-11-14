@@ -19709,7 +19709,8 @@
         "safetyReviewApproved": "{{agent}} aprobó esta acción. Ver detalles.",
         "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
         "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
-        "forkedFrom": "Rama creada desde"
+        "forkedFrom": "Rama creada desde",
+        "forkedFromUnknown": "Rama creada desde otro chat"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",
@@ -20022,7 +20023,12 @@
         "failed": "{{agent}} no pudo crear una rama de este chat",
         "hostUnsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
         "failedDetail": "Tu chat no ha cambiado. Inténtalo de nuevo.",
-        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine."
+        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine.",
+        "mark": "Rama ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Rama: {{name}}",
+        "sourceTooltip": "Rama de {{name}}",
+        "unknownSourceTooltip": "Rama de otro chat"
       },
       "cardKindHidden": {
         "description": "Puedes cambiar esto en cualquier momento en",

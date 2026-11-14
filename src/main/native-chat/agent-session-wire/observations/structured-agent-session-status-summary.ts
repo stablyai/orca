@@ -112,25 +112,44 @@ export function structuredSummaryHostProgram(
     : {}
 }
 
-/** The record's name, and the failure to replace it only while that is still the name. */
+type StructuredSummaryNaming = Pick<
+  AgentSessionStatusSummary,
+  'conversationName' | 'namingError' | 'conversationNameSource' | 'forkedFrom'
+>
+
+/** The record's name, its provenance, and the failure to replace it only while that is still the
+ *  name. `forkedFrom` is always present for a record, so clients read the frame as authoritative. */
 export function structuredSummaryConversationNaming(
   record: AgentSessionConversationView | null,
   failure: StructuredChatNamingFailure | undefined
-): Pick<AgentSessionStatusSummary, 'conversationName' | 'namingError'> {
-  const name = record?.conversationName
-  if (!name) {
+): StructuredSummaryNaming {
+  if (!record) {
     return {}
+  }
+  const name = record.conversationName
+  const provenance: StructuredSummaryNaming = {
+    forkedFrom: record.forkedFrom
+      ? {
+          sessionId: record.forkedFrom.sessionId,
+          ...(record.forkedFrom.plainName ? { plainName: true as const } : {})
+        }
+      : null,
+    ...(record.conversationNameSource === 'user' ? { conversationNameSource: 'user' as const } : {})
+  }
+  if (!name) {
+    return provenance
   }
   return failure?.forName === name
     ? {
         conversationName: name,
+        ...provenance,
         namingError: {
           message: failure.message,
           failedAt: failure.failedAt,
           ...(failure.messageCode ? { messageCode: failure.messageCode } : {})
         }
       }
-    : { conversationName: name }
+    : { conversationName: name, ...provenance }
 }
 
 export function renamedStructuredStatusSummary(
@@ -139,7 +158,14 @@ export function renamedStructuredStatusSummary(
   sessionId: string
 ): AgentSessionStatusSummary | null {
   const record = deps.getConversation(sessionId)
-  const { conversationName: _name, namingError: _error, sleptAt: _sleptAt, ...rest } = previous
+  const {
+    conversationName: _name,
+    namingError: _error,
+    conversationNameSource: _source,
+    forkedFrom: _forkedFrom,
+    sleptAt: _sleptAt,
+    ...rest
+  } = previous
   const summary = {
     ...rest,
     ...structuredSummaryConversationNaming(record, deps.namingFailure?.(sessionId)),

@@ -260,7 +260,13 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     threadGoal: AgentJournalThreadGoalStateSchema.optional(),
     failure: AgentSessionFailureFactSchema.optional(),
     orcaStop: z.object({ cause: z.string().min(1) }).optional(),
-    forkedFrom: z.object({ sessionId: z.string().min(1) }).optional()
+    forkedFrom: z
+      .object({
+        sessionId: z.string().min(1),
+        sourceForked: z.literal(true).optional(),
+        sourceMissing: z.literal(true).optional()
+      })
+      .optional()
   }),
   z.object({
     kind: z.literal('turn'),

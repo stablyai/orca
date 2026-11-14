@@ -4,6 +4,7 @@ import { agentSessionBackgroundTasksEqual } from '../../../../shared/agent-sessi
 import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import { structuredAgentSessionAgentStatus } from '../../../../shared/agent-session/view/structured-agent-session-agent-status'
 import { structuredStatusChildrenEqual } from './structured-agent-session-status-child-work'
+import { agentSessionForkNamingEqual } from '../../../../shared/agent-session/agent-session-fork-name'
 
 export function structuredStatusSummariesEqual(
   a: AgentSessionStatusSummary,
@@ -42,6 +43,8 @@ export function structuredStatusSummariesEqual(
     a.launchDirectory === b.launchDirectory &&
     a.hostProgram === b.hostProgram &&
     a.conversationName === b.conversationName &&
+    a.conversationNameSource === b.conversationNameSource &&
+    agentSessionForkNamingEqual(a.forkedFrom, b.forkedFrom) &&
     a.sleptAt === b.sleptAt &&
     a.namingError?.message === b.namingError?.message &&
     a.namingError?.failedAt === b.namingError?.failedAt &&

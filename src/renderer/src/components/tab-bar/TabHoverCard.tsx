@@ -15,7 +15,8 @@ export function TabHoverCard({
   title: string
   icon: ReactNode
   programName: string
-  description?: string
+  /** A function is read only while the card is open. */
+  description?: string | (() => string)
   /** Controls below the program row; the card then stays open under the pointer. */
   alert?: ReactNode | ((dismiss: () => void) => ReactNode)
   /** The program row says something the tab cannot, so the card opens even for a full title. */
@@ -87,7 +88,7 @@ export function TabHoverCard({
             <div className="break-words font-medium" data-tab-hover-card-title>
               {title}
             </div>
-            {description && <div className="break-all text-muted-foreground">{description}</div>}
+            <TabHoverCardDescription description={description} />
           </div>
           <div
             className="flex items-center gap-2 text-muted-foreground"
@@ -107,4 +108,14 @@ export function TabHoverCard({
 
 function stopTabStripEvent(event: SyntheticEvent): void {
   event.stopPropagation()
+}
+
+// Only mounted while the card is open, so a function description is read then.
+function TabHoverCardDescription({
+  description
+}: {
+  description: string | (() => string) | undefined
+}): React.JSX.Element | null {
+  const text = typeof description === 'function' ? description() : description
+  return text ? <div className="break-all text-muted-foreground">{text}</div> : null
 }

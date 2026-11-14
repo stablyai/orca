@@ -19071,7 +19071,8 @@
         "safetyReviewApproved": "{{agent}} がこの操作を承認しました。詳細を表示。",
         "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
         "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
-        "forkedFrom": "分岐元"
+        "forkedFrom": "分岐元",
+        "forkedFromUnknown": "別のチャットから分岐"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} バイト"
@@ -19515,7 +19516,12 @@
         "failed": "{{agent}} はこのチャットを分岐できませんでした",
         "hostUnsupported": "このホストでは古いバージョンの Orca が実行されています。ホストの Orca を更新して再試行してください。",
         "failedDetail": "チャットは変更されていません。もう一度お試しください。",
-        "commandWorking": "{{agent}} の応答中は分岐できません。応答が終わったら、もう一度 /fork を実行してください。"
+        "commandWorking": "{{agent}} の応答中は分岐できません。応答が終わったら、もう一度 /fork を実行してください。",
+        "mark": "分岐 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分岐: {{name}}",
+        "sourceTooltip": "{{name}} から分岐",
+        "unknownSourceTooltip": "別のチャットから分岐"
       },
       "cardKindHidden": {
         "description": "いつでも次の場所で変更できます：",

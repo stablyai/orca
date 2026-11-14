@@ -5,6 +5,7 @@ import { savedWorkspaceCatalog } from '../../persistence/profile-save-domains'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { structuredChatDisplayName } from '../../../shared/structured-chat-row-name'
+import { agentSessionRecordShownName } from '../agent-session/records/agent-session-record-shown-name'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 
@@ -89,10 +90,17 @@ export abstract class OrcaRuntimeWithSavedConversationTitlePublication extends O
       const names = new Map<string, string | null>()
       for (const [sessionId, alias] of aliases) {
         const record = nameStore?.getConversation(sessionId)
-        const name = record?.location.workspaceId === workspaceId ? record.conversationName : null
+        const name =
+          nameStore && record?.location.workspaceId === workspaceId
+            ? agentSessionRecordShownName(nameStore, record)
+            : null
         names.set(sessionId, structuredChatDisplayName(alias, name, '') || null)
       }
-      const next = retitleStructuredConversationTabs(snapshot, names)
+      const next = retitleStructuredConversationTabs(
+        snapshot,
+        names,
+        (sessionId) => !!nameStore?.getConversation(sessionId)?.forkedFrom
+      )
       if (next) {
         this.storeMobileSessionSnapshot(workspaceId, next)
         publications.push(workspaceId)

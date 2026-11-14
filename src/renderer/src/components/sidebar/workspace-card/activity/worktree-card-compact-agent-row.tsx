@@ -13,7 +13,9 @@ import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/age
 import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
 import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
-import { useAgentRowConversationName } from '@/components/dashboard/rows/use-agent-row-conversation-name'
+import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
+import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
+import { forkMarkedNameText } from '@/components/native-chat/fork/fork-marked-name-text'
 import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
@@ -140,8 +142,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
   const dotState = dotStateOverride ?? getAgentDotState(agent)
-  const conversationName = useAgentRowConversationName(agent)
+  const { name: conversationName, forked } = useAgentRowConversationNaming(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
+  const forkNamed = forked && conversationName !== null
   const isLineageChild = agent.lineage?.depth === 1
   // Hold assistant text per positive turn clock; commit in an effect so discarded renders cannot cache messages.
   const turn = agent.entry.stateStartedAt
@@ -160,7 +163,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
   const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
   const { leadingText, trailingText } = getCompactAgentLineOrder(agent, primary, secondary, t)
-  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
+  const shownText = (text: string): string =>
+    forkNamed && text === primary ? forkMarkedNameText(t, text) : text
+  const shownNode = (text: string): React.ReactNode =>
+    forkNamed && text === primary ? <ForkMarkedName name={text} /> : text
+  const rowTitle = `${shownText(leadingText)}${trailingText ? ` - ${shownText(trailingText)}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
@@ -245,11 +252,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             className="min-w-0 flex-1 truncate"
             title={sendTargetDisabledReason ? undefined : rowTitle}
           >
-            <span className={leadClassName}>{leadingText}</span>
+            <span className={leadClassName}>{shownNode(leadingText)}</span>
             {trailingText && (
               <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
                 {' '}
-                - {trailingText}
+                - {shownNode(trailingText)}
               </span>
             )}
           </span>

@@ -7,6 +7,7 @@ import {
   structuredAgentSessionTargetForHost
 } from '../session-ownership/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '../status/structured-agent-session-status-feed'
+import { structuredChatShownName } from './structured-chat-shown-name'
 
 type ChatTabNameSource = Pick<
   Tab,
@@ -23,8 +24,7 @@ export function resolveStructuredChatTabName(
   const owner = structuredAgentSessionOwnerForTab(state, tab)
   const target = structuredAgentSessionTargetForHost(owner)
   const name = target
-    ? getStructuredAgentSessionStatusFeed(target).getNamingSnapshot().get(tab.entityId)
-        ?.conversationName
+    ? structuredChatShownName(getStructuredAgentSessionStatusFeed(target), tab.entityId)
     : undefined
   return {
     owner,
@@ -59,4 +59,19 @@ export function readStructuredChatTabSavedName(
 /** The chat tab's shown label: its name, else the tab's default label. */
 export function readStructuredChatTabName(tab: ChatTabNameSource, state: AppState): string {
   return readStructuredChatTabSavedName(tab, state) ?? tab.label
+}
+
+/** Another chat's shown name and fork mark on this tab's host, read once (a fork tab's source,
+ *  when its card opens): name null while unnamed; undefined when the host has said nothing of it. */
+export function readStructuredChatSessionNamingOnTabHost(
+  tab: ChatTabNameSource,
+  sessionId: string,
+  state: AppState
+): { name: string | null; forked: boolean } | undefined {
+  const target = structuredAgentSessionTargetForHost(structuredAgentSessionOwnerForTab(state, tab))
+  const feed = target ? getStructuredAgentSessionStatusFeed(target) : null
+  const note = feed?.getNamingSnapshot().get(sessionId)
+  return feed && note
+    ? { name: structuredChatShownName(feed, sessionId), forked: !!note.forkedFrom }
+    : undefined
 }

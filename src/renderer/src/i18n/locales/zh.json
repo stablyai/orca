@@ -19337,7 +19337,8 @@
         "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
         "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
         "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
-        "forkedFrom": "分支来源"
+        "forkedFrom": "分支来源",
+        "forkedFromUnknown": "分支来源：另一个聊天"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} 字节"
@@ -19777,7 +19778,12 @@
         "failed": "{{agent}} 无法从此聊天创建分支",
         "hostUnsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。",
         "failedDetail": "聊天未发生更改。请重试。",
-        "commandWorking": "{{agent}} 回复期间无法创建分支。回复结束后，请再次运行 /fork。"
+        "commandWorking": "{{agent}} 回复期间无法创建分支。回复结束后，请再次运行 /fork。",
+        "mark": "分支 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分支：{{name}}",
+        "sourceTooltip": "{{name}} 的分支",
+        "unknownSourceTooltip": "另一个聊天的分支"
       },
       "cardKindHidden": {
         "description": "你可以随时在此处更改",

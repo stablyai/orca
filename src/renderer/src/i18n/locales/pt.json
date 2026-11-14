@@ -20661,7 +20661,8 @@
         "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
         "forkedFrom": "Ramificado de",
-        "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}."
+        "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
+        "forkedFromUnknown": "Ramificado de outro chat"
       },
       "composer": {
         "planMode": "Planejar",
@@ -21677,7 +21678,12 @@
         "unconfirmedDetail": "Ela pode ter sido aberta. Confira o histórico de sessões antes de tentar novamente.",
         "failed": "{{agent}} não conseguiu ramificar este chat",
         "failedDetail": "Seu chat não foi alterado. Tente novamente.",
-        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar."
+        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar.",
+        "mark": "Fork ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Fork: {{name}}",
+        "sourceTooltip": "Ramificação de {{name}}",
+        "unknownSourceTooltip": "Ramificação de outro chat"
       },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",

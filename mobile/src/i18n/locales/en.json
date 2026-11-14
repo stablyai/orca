@@ -3410,7 +3410,10 @@
       "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",
       "unconfirmed": "{{agent}} couldn't confirm the fork. It may have opened anyway; check Session History before forking again.",
       "failed": "{{agent}} couldn't fork this chat. {{detail}}",
-      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
+      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
+      "mark": "Fork ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Fork: {{name}}"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} is offline · as of {{time}}",
