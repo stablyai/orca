@@ -5,10 +5,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionProviderHandleRoot } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { AgentSessionResumeMarker } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import { agentSessionProviderHandleRoot } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import type { AgentSessionResumeMarker } from '../../../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../../../ipc/desktop-renderer-runtime-capabilities'
 import {

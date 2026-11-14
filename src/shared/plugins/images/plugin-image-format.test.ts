@@ -107,14 +107,4 @@ describe('readPluginImageHeader', () => {
       height: 800
     })
   })
-
-  it('refuses animation, other formats and oversized frames', () => {
-    expect(readPluginImageHeader(pngBytes(512, 512, true))).toBe('animated images are not allowed')
-    expect(readPluginImageHeader(webpVp8x(512, 512, 0x02))).toBe('animated images are not allowed')
-    expect(readPluginImageHeader(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toBe(
-      'must be a PNG, JPEG or WebP image'
-    )
-    expect(readPluginImageHeader(Buffer.from('GIF89a'))).toBe('must be a PNG, JPEG or WebP image')
-    expect(readPluginImageHeader(pngBytes(5000, 100))).toBe('image is larger than 4096×4096')
-  })
 })

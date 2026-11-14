@@ -28,7 +28,7 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock
 } from '../../../../../src/shared/native-chat/native-chat-types'
-import { buildNativeChatTaskListRows } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
+import { buildNativeChatTaskListRows } from '../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'

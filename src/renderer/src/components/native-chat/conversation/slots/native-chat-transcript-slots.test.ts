@@ -4,7 +4,7 @@ import { nativeChatAgentRowWords } from '../../messages/rows/native-chat-message
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 
-import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
 import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
@@ -183,6 +183,28 @@ describe('transcript slots', () => {
       }
     }
   )
+
+  it("hangs response controls only above the person's next message, never on the last row", () => {
+    const visualReply = text('visual', 'Here is the trend.\n\n::orca-visual{file="trend.html"}')
+    const hangs = (messages: NativeChatMessage[]) =>
+      build(messages).map((slot) => [slot.message.id, slot.actionsHang === true])
+
+    expect(hangs([text('u1', 'Hi', 'user'), text('reply', 'Hello')])).toEqual([
+      ['u1', false],
+      ['reply', false]
+    ])
+    expect(hangs([text('u1', 'Chart it', 'user'), visualReply])).toEqual([
+      ['u1', false],
+      ['visual', false]
+    ])
+    expect(
+      hangs([text('u1', 'Hi', 'user'), text('reply', 'Hello'), text('u2', 'Thanks', 'user')])
+    ).toEqual([
+      ['u1', false],
+      ['reply', true],
+      ['u2', false]
+    ])
+  })
 
   it('draws the completed plan outside collapsed work', () => {
     const plan: NativeChatMessage = {

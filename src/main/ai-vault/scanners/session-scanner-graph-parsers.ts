@@ -10,7 +10,7 @@ import {
 import {
   openTranscriptReadStream,
   wslGatedReadFile
-} from '../../native-chat/wsl-transcript-fs-access'
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { basename, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'

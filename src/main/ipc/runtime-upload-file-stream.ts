@@ -9,8 +9,8 @@ import { formatByteCeiling, REMOTE_IMPORT_MAX_FILE_BYTES } from './runtime-impor
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
-} from './runtime-environments/runtime-environment-manual-disconnect'
-import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+} from './runtime-environments/connectivity/runtime-environment-manual-disconnect'
+import { callRuntimeEnvironment } from './runtime-environments/requests/runtime-environment-transport-routing'
 
 // Base64 expands 384 KiB into the established 512 KiB wire chunk.
 export const RUNTIME_UPLOAD_SLICE_BYTES = 384 * 1024

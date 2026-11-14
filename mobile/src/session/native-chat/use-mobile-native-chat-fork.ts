@@ -12,7 +12,7 @@ import {
   decodeAgentSessionAgentsResult,
   type AgentSessionRegisteredAgent
 } from '../../../../src/shared/agent-session/agent-session-registered-agents'
-import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
@@ -32,7 +32,7 @@ import { isRootAgentJournalItem } from '../../../../src/shared/agent-session/jou
 import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal
-} from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+} from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 
 /** The fork a response offers: none, an empty held slot, drawn disabled, or pressable. */

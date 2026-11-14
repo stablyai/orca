@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { reviseAgentSessionProviderResumePoint } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
@@ -24,7 +24,7 @@ import {
   tick
 } from './claude-structured-session-test-support'
 import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
-import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const FENCE = 7
 const journals = createTrackedJournalOpener()

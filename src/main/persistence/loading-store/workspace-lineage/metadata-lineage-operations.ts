@@ -2,7 +2,7 @@ import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-a
 import type { DiffCommentBaseMutation } from '../../../../shared/diff-comment-mutation'
 
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { toWorkspaceLineageRow } from '../../../../shared/worktree/worktree-lineage-workspace-row'
+import { toWorkspaceLineageRow } from '../../../../shared/worktree/lineage/worktree-lineage-workspace-row'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

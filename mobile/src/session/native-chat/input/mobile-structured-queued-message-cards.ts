@@ -1,4 +1,4 @@
-import { stripSentImagePromptMarkers } from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { stripSentImagePromptMarkers } from '../../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import type { AgentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { mobileAgentSessionWriteNoticeText } from '../agent-session/agent-session-write-notice-copy'
 import type { AgentJournalSubmission } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'

@@ -17,7 +17,7 @@ import {
   readWorkspaceRecord,
   writeWorkspaceRecord,
   type WorkspaceRecordStore
-} from '../runtime/sidebar-inputs/sort-stamp-records'
+} from '../runtime/workspaces/metadata/workspace-activity-records'
 import { CONNECTOR_AGENTS } from './connector-agents'
 import type { ConversationKey } from './external-conversation-types'
 

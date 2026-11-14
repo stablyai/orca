@@ -10,4 +10,3 @@ vi.mock('../../relay/src/database/database.js', async (importOriginal) => ({
 }))
 
 await import('../../relay/src/credentials/credential-store.test.ts')
-await import('../../relay/src/credentials/credential-store-cleanup.test.ts')

@@ -15,7 +15,6 @@ import {
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
 import {
-  forgetBrowserExtensionDocuments,
   getBrowserExtensionDocumentId,
   startBrowserExtensionDocument
 } from '../tabs-and-windows/browser-extension-document-ids'
@@ -109,8 +108,7 @@ function findFrame(
         (frameId === undefined ||
           chromeFrameId(frame) === frameId ||
           (!frame.parent && frame.frameTreeNodeId === frameId)) &&
-        (documentId === undefined ||
-          getBrowserExtensionDocumentId(frame.frameTreeNodeId) === documentId)
+        (documentId === undefined || getBrowserExtensionDocumentId(frame) === documentId)
     ) ?? null
   )
 }
@@ -156,7 +154,7 @@ export function registerWebNavigationNamespace(): void {
         )
           ? (tabFrames(caller, tabId) ?? []).map((frame) => ({
               frameId: chromeFrameId(frame),
-              documentId: getBrowserExtensionDocumentId(frame.frameTreeNodeId)
+              documentId: getBrowserExtensionDocumentId(frame)
             }))
           : []
       )
@@ -173,9 +171,7 @@ function withoutHash(url: string): string {
 /** Translates one webContents' navigation events (main frame and subframes) into webNavigation. */
 export function observeBrowserExtensionWebNavigation(contents: Electron.WebContents): void {
   const tabId = contents.id
-  const committedUrlByFrame = new Map<number, string>()
-  const frameTreeNodeIds = new Set([contents.mainFrame.frameTreeNodeId])
-  contents.once('destroyed', () => forgetBrowserExtensionDocuments(frameTreeNodeIds))
+  const committedUrlByFrame = new WeakMap<Electron.WebFrameMain, string>()
   const lookup = (processId: number, routingId: number): Electron.WebFrameMain | null => {
     const frame = webFrameMain.fromId(processId, routingId)
     return frame && !frame.isDestroyed() ? frame : null
@@ -190,9 +186,8 @@ export function observeBrowserExtensionWebNavigation(contents: Electron.WebConte
     (_event, url, _code, _status, _isMain, processId, routingId) => {
       const frame = lookup(processId, routingId)
       if (frame) {
-        frameTreeNodeIds.add(frame.frameTreeNodeId)
-        startBrowserExtensionDocument(frame.frameTreeNodeId)
-        committedUrlByFrame.set(frame.frameTreeNodeId, url)
+        startBrowserExtensionDocument(frame)
+        committedUrlByFrame.set(frame, url)
         emitNavigation(contents, 'onCommitted', {
           ...frameDetails(tabId, frame, url),
           transitionType: 'link',
@@ -206,8 +201,8 @@ export function observeBrowserExtensionWebNavigation(contents: Electron.WebConte
     if (!frame) {
       return
     }
-    const previous = committedUrlByFrame.get(frame.frameTreeNodeId)
-    committedUrlByFrame.set(frame.frameTreeNodeId, url)
+    const previous = committedUrlByFrame.get(frame)
+    committedUrlByFrame.set(frame, url)
     const fragmentOnly = previous !== undefined && withoutHash(previous) === withoutHash(url)
     emitNavigation(
       contents,
@@ -228,7 +223,6 @@ export function observeBrowserExtensionWebNavigation(contents: Electron.WebConte
   // Why subframes only: frame-created also fires for the main frame, whose dom-ready is above.
   contents.on('frame-created', (_event, { frame }) => {
     if (frame?.parent) {
-      frameTreeNodeIds.add(frame.frameTreeNodeId)
       frame.on('dom-ready', () => emitDomContentLoaded(frame))
     }
   })

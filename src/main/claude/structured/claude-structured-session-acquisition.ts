@@ -13,7 +13,7 @@ import { claudeConfigDirEnvPatch } from './launch/claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from './launch/claude-structured-spawn-options'
-import { observeClaudeFrameModels } from './claude-structured-execution-observations'
+import { observeClaudeExecutionModel } from './claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from './launch/claude-structured-session-options'
 import {
   createClaudeSessionPublication,
@@ -106,7 +106,7 @@ export async function acquireClaudeSession({
       }
     }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
-    const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
+    const modelReport = observeClaudeExecutionModel(liveSession, init?.model)
     if (init) {
       initProof.resolve(init)
       if (liveSession) {
@@ -152,7 +152,6 @@ export async function acquireClaudeSession({
               acquisitionGeneration: liveSession.acquisitionGeneration,
               reportedOptions: {
                 ...modelReport,
-                reportedModel: liveSession.reportedOptions.reportedModel,
                 reportedPermissionMode: observedOptions.reportedPermissionMode
               }
             })

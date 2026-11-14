@@ -21,7 +21,7 @@ import {
   HOST_LIST_TARGET,
   homeWorktreeCountsKey,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { useNow } from '../hooks/use-now'
 import {
   loadMobileOnboardingSteps,

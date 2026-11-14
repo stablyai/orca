@@ -7,7 +7,7 @@ const { spawnMock, reclaimStaleLockMock, printReclaimResultMock } = vi.hoisted((
 }))
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
-vi.mock('../../main/orcad/orcad-stale-lock-reclaim.js', () => ({
+vi.mock('../../main/orcad/instance-lock/orcad-stale-lock-reclaim.js', () => ({
   reclaimStaleOrcadInstanceLock: reclaimStaleLockMock,
   printOrcadStaleLockReclaimResult: printReclaimResultMock
 }))

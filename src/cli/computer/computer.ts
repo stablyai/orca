@@ -1,5 +1,6 @@
 import type {
   ComputerActionResult,
+  ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
@@ -7,15 +8,18 @@ import type {
 } from '../../shared/computer-use-runtime-types'
 import type { CommandHandler } from '../dispatch/dispatch'
 import {
+  getOptionalNonNegativeIntegerFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { queryComputerTreeText } from './computer-tree-query'
+import { runComputerWait } from './computer-wait-command'
 import { RuntimeClientError } from '../runtime/types'
 import {
   formatComputerAction,
   formatGetAppState,
+  formatLaunchApp,
   formatListApps,
   formatListWindows
 } from './computer-format'
@@ -31,8 +35,10 @@ import {
   getComputerScrollActionFlags,
   getComputerSecondaryActionFlags,
   getComputerSetValueActionFlags,
-  getComputerTextActionFlags
+  getComputerTextActionFlags,
+  getComputerTypeTextActionFlags
 } from './computer-action-flags'
+import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer-use-type-text-target'
 
 export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer capabilities': async ({ client, json }) => {
@@ -45,6 +51,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   },
   'computer permissions': async ({ flags, client, json }) => {
     const id = getComputerPermissionSetupId(flags)
+    // Agents run this on errors; System Settings over the user's work is only worth it when something is missing.
     const result = await client.call<{
       platform: NodeJS.Platform
       helperAppPath: string | null
@@ -53,7 +60,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       launchQueued?: boolean
       permissions?: { id: string; status: string }[]
       nextStep?: string | null
-    }>('computer.permissions', id ? { id } : {})
+    }>('computer.permissions', id ? { id, skipGranted: true } : {})
     printResult(result, json, (value) => {
       if (value.platform !== 'darwin') {
         return 'Computer-use permission setup is only required on macOS.'
@@ -74,6 +81,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
         .join('\n')
     })
   },
+  'computer launch-app': async ({ flags, client, json }) => {
+    const result = await client.call<ComputerLaunchAppResult>('computer.launchApp', {
+      app: getRequiredStringFlag(flags, 'app'),
+      ...(flags.get('activate') === true ? { activate: true } : {})
+    })
+    printResult(result, json, formatLaunchApp)
+  },
   'computer list-windows': async ({ flags, client, json }) => {
     const result = await client.call<ComputerListWindowsResult>('computer.listWindows', {
       app: getRequiredStringFlag(flags, 'app')
@@ -84,17 +98,30 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerObserveFlags(flags)
     const query = getOptionalStringFlag(flags, 'query')
     const maxElements = getOptionalPositiveIntegerFlag(flags, 'max-elements')
+    const rootElementIndex = getOptionalNonNegativeIntegerFlag(flags, 'element-index')
     const target = await getComputerCommandTarget(flags, cwd, client)
     const result = await client.call<ComputerSnapshotResult>('computer.getAppState', {
       ...target,
-      ...observeFlags
+      ...observeFlags,
+      ...(rootElementIndex === undefined ? {} : { rootElementIndex })
     })
+    // Why: older runtimes drop the param and return the whole window, which would look like the subtree.
+    if (
+      rootElementIndex !== undefined &&
+      result.result.snapshot.rootElementIndex !== rootElementIndex
+    ) {
+      throw new RuntimeClientError(
+        'unsupported_capability',
+        'This Orca runtime cannot read one element subtree; update Orca, or run get-app-state without --element-index'
+      )
+    }
     if (query !== undefined || maxElements !== undefined) {
       const { snapshot } = result.result
       snapshot.treeText = queryComputerTreeText(snapshot.treeText, { query, maxElements })
     }
     printResult(result, json, formatGetAppState)
   },
+  'computer wait': runComputerWait,
   'computer click': async ({ flags, client, cwd, json }) => {
     assertComputerAppFlag(flags)
     const observeFlags = getComputerActionObserveFlags(flags)
@@ -154,8 +181,19 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer type-text': async ({ flags, client, cwd, json }) => {
     assertComputerAppFlag(flags)
     const observeFlags = getComputerActionObserveFlags(flags)
-    const actionParams = await getComputerTextActionFlags(flags)
+    const actionParams = await getComputerTypeTextActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+    if (actionParams.elementIndex !== undefined) {
+      // Why: older runtimes strip elementIndex, so ask first rather than type into the focused field.
+      const capabilities = await client.call<ComputerProviderCapabilities>(
+        'computer.capabilities',
+        {}
+      )
+      const unsupported = computerTypeTextTargetUnsupportedMessage(capabilities.result)
+      if (unsupported) {
+        throw new RuntimeClientError('unsupported_capability', unsupported)
+      }
+    }
     const result = await client.call<ComputerActionResult>('computer.typeText', {
       ...target,
       ...actionParams,
@@ -240,7 +278,7 @@ function getComputerPermissionSetupId(
 function formatComputerCapabilities(value: ComputerProviderCapabilities): string {
   return [
     `${value.provider} (${value.platform}, protocol ${value.protocolVersion})`,
-    `  Apps: list=${value.supports.apps.list} bundleIds=${value.supports.apps.bundleIds} pids=${value.supports.apps.pids}`,
+    `  Apps: list=${value.supports.apps.list} bundleIds=${value.supports.apps.bundleIds} pids=${value.supports.apps.pids} launch=${value.supports.apps.launch === true}`,
     `  Windows: list=${value.supports.windows.list} targetById=${value.supports.windows.targetById} targetByIndex=${value.supports.windows.targetByIndex}`,
     `  Observation: screenshot=${value.supports.observation.screenshot} elementFrames=${value.supports.observation.elementFrames} annotatedScreenshot=${value.supports.observation.annotatedScreenshot}`,
     `  Actions: ${Object.entries(value.supports.actions)

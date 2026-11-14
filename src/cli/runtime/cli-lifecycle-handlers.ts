@@ -1,3 +1,4 @@
+import { reenterPackagedElectron } from './packaged-cli-interpreter'
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { CommandHandler } from '../dispatch/dispatch'
@@ -98,7 +99,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       }
       // Why lazy: only this mode needs orcad's lock code, and every other command skips loading it.
       const { printOrcadStaleLockReclaimResult, reclaimStaleOrcadInstanceLock } =
-        await import('../../main/orcad/orcad-stale-lock-reclaim.js')
+        await import('../../main/orcad/instance-lock/orcad-stale-lock-reclaim.js')
       const result = await reclaimStaleOrcadInstanceLock(
         typeof dataRoot === 'string' ? resolve(dataRoot) : resolveLaunchUserDataPath(),
         // This CLI's own binary is no command to give a user; `orca serve` is.
@@ -138,6 +139,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     }
     const port = getOptionalServePort(flags)
     const pairingAddressValue = flags.get('pairing-address')
+    reenterPackagedElectron()
     const exitCode = await serveOrcaApp({
       json,
       port,

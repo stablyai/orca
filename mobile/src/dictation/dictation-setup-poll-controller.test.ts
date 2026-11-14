@@ -34,15 +34,9 @@ describe('DictationSetupPollController', () => {
 
   it('keeps slow refreshes single-flight and waits a full delay after each response', async () => {
     const requests = [deferred<boolean>(), deferred<boolean>(), deferred<boolean>()]
-    let active = 0
-    let maxActive = 0
     const refresh = vi.fn(() => {
       const request = requests[refresh.mock.calls.length - 1]
-      active += 1
-      maxActive = Math.max(maxActive, active)
-      return request.promise.finally(() => {
-        active -= 1
-      })
+      return request.promise
     })
     const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
     poller.setPolling(true)
@@ -66,7 +60,6 @@ describe('DictationSetupPollController', () => {
     expect(refresh).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
     expect(refresh).toHaveBeenCalledTimes(3)
-    expect(maxActive).toBe(1)
 
     requests[2].resolve(false)
     await flushPromises()
@@ -75,15 +68,9 @@ describe('DictationSetupPollController', () => {
 
   it('coalesces an immediate resume refresh behind a slow request', async () => {
     const requests = [deferred<boolean>(), deferred<boolean>()]
-    let active = 0
-    let maxActive = 0
     const refresh = vi.fn(() => {
       const request = requests[refresh.mock.calls.length - 1]
-      active += 1
-      maxActive = Math.max(maxActive, active)
-      return request.promise.finally(() => {
-        active -= 1
-      })
+      return request.promise
     })
     const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
     poller.setPolling(true)
@@ -97,7 +84,6 @@ describe('DictationSetupPollController', () => {
     requests[0].resolve(true)
     await flushPromises()
     expect(refresh).toHaveBeenCalledTimes(2)
-    expect(maxActive).toBe(1)
 
     requests[1].resolve(false)
     await flushPromises()

@@ -10,13 +10,13 @@ import { FilledBellIcon } from '@/components/sidebar/workspace-card/identity/wor
 import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
-} from '../../../../shared/sidebar-list/smart-attention'
+} from '../../../../shared/sidebar-list/sorting/smart-attention'
 import {
   isAgentStatusFresh,
   AGENT_STATUS_STALE_AFTER_MS
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
-import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'
 import {

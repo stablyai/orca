@@ -8,7 +8,7 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import {
   closeTestJournalHostDatabase,
@@ -22,7 +22,7 @@ import { createQueuedRigProvider } from '../../../native-chat/agent-session-wire
 import { createStructuredSessionObservationClock } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-observation-clock.test-fixture'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { mintAgentSessionOperationId } from '../../orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
 import { journalIdentityFor } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import { attachParamsForRecord } from '../../../native-chat/agent-session-wire/host/structured-agent-session-conversation-open'
@@ -38,7 +38,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from '../structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // `failing` fails every record write; `grants` lets that many more through, then fails.

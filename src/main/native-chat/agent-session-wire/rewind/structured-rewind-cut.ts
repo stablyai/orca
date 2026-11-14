@@ -1,12 +1,12 @@
 import { isInheritedAgentSessionItem } from '../../../../shared/agent-session/agent-session-fork'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   savedRewindKeys,
   isAgentSessionRewindTarget,
   type AgentSessionRewindRecord
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   agentJournalItemKey,

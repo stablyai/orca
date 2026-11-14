@@ -9,7 +9,7 @@ import type Database from '../../../sqlite/sync-database'
 import type { JournalOperationReceipt } from './journal-row-writer'
 import type { JournalCommittedRowsCapture } from '../journal-store-contracts'
 import { journalStoppedUsageLimitCut } from '../context-epochs/journal-stopped-usage-limit-cut'
-import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 
 // A full restore per check: development samples each chat so long streams stay responsive.
 const DEVELOPMENT_VERIFY_INTERVAL_MS = 60_000

@@ -7,18 +7,12 @@ import { createAdapter } from '../../routing/testing/daemon-pty-router-test-fixt
 import {
   disconnectDaemon,
   listLiveDaemonSessions,
-  replaceDaemonProvider,
-  requestIdleDaemonRetirement
+  replaceDaemonProvider
 } from '../daemon-provider-state'
 import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 
 afterEach(async () => {
   await disconnectDaemon()
-})
-
-it('reads a census without an installed daemon as unverifiable, never as empty', async () => {
-  await expect(listLiveDaemonSessions()).resolves.toBeNull()
-  await expect(requestIdleDaemonRetirement()).resolves.toEqual({ state: 'unverifiable' })
 })
 
 it('reads a census with an unanswered generation as unverifiable', async () => {

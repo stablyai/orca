@@ -1,5 +1,5 @@
 import { app, session } from 'electron'
-import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../window/activation/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
@@ -35,7 +35,7 @@ import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
-} from './dev-education-suppression'
+} from './profile-startup/dev-education-suppression'
 import {
   awaitBrowserSessionProxies,
   setBrowserNetworkProxySettingsResolver
@@ -51,20 +51,20 @@ import {
 } from '../browser/extensions/browser-extension-startup'
 import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
-import { logStartupMilestone } from './startup-diagnostics'
-import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
+import { logStartupMilestone } from './diagnostics/startup-diagnostics'
+import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
-import { syncMacMenuBarIcon } from './main-window-actions'
+import { syncMacMenuBarIcon } from './main-window/main-window-actions'
 import { updateGpuAccelerationAboutPanel } from './gpu-recovery/gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
   reconcileManagedWslCliRegistrations
 } from '../cli/wsl/wsl-cli-registration-reconciliation'
-import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
+import { createWslCliReconciliationStartupBarrier } from './wsl-startup/wsl-cli-reconciliation-startup-barrier'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { reportProfileStateWriteFailure } from './profile-state-write-failure'
-import { reportProfileStateSaveDelay } from './profile-state-save-delay'
+import { reportProfileStateWriteFailure } from './profile-startup/profile-state-write-failure'
+import { reportProfileStateSaveDelay } from './profile-startup/profile-state-save-delay'
 import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
@@ -88,7 +88,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   const canonicalUserDataPath = getCanonicalUserDataPath()
   preservePreviousHangDetection(canonicalUserDataPath)
-  installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
+  const hangWatchdog = installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
   // Install certificate decisions before any webview/headless window can issue TLS.
   app.on(
     'certificate-error',
@@ -174,6 +174,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   const store = profileState.store
   state.store = store
+  hangWatchdog?.setMenuBarIconSetting(store.getSettings().showMenuBarIcon !== false)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {
     preloadSsh2()
@@ -271,6 +272,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
     }
     if ('showMenuBarIcon' in updates) {
+      hangWatchdog?.setMenuBarIconSetting(settings.showMenuBarIcon !== false)
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }

@@ -2,7 +2,7 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session/jour
 import {
   refusedBeforeWrite,
   stoppedHistoryCandidate
-} from '../../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import { classifyDispatchRejection } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type {
   AgentJournalRenderItem,

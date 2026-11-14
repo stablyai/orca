@@ -54,7 +54,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.file-type-suggestion',
     ['plugin-file-type-suggestion'],
     [
-      'src\\/renderer\\/src\\/components\\/editor\\/PluginFileTypeSuggestion\\.tsx$',
+      'src\\/renderer\\/src\\/components\\/editor\\/plugin-editors\\/PluginFileTypeSuggestion\\.tsx$',
       `${UI}state\\/use-plugin-settings-writes`,
       'src\\/main\\/plugins\\/catalog\\/plugin-file-type-suggestion',
       'src\\/shared\\/plugins\\/contributions\\/plugin-(?:file-type|file-match|custom-editor-core-file-types)'
@@ -123,13 +123,13 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/main\\/plugins\\/panels\\/(?:frame-serving\\/|guest-isolation\\/|desktop-actions\\/)?plugin-frame-',
       'src\\/shared\\/plugins\\/frames\\/plugin-(?:frame-guest|panel-shell)',
       'src\\/preload\\/plugin-frame-guest',
-      'src\\/main\\/window\\/(?:main-window-webview-security|attach-main-window-services|host-frame-permission-policy)',
+      'src\\/main\\/window\\/(?:security/(?:main-window-webview-security|host-frame-permission-policy)|attach-main-window-services)',
       'src\\/main\\/ipc\\/(?:plugins|plugin-frame-entry-ipc)\\.ts$',
-      'src\\/main\\/startup\\/main-process-plugins',
+      'src\\/main\\/startup\\/plugin-startup\\/main-process-plugins',
       'config\\/build-plugins\\/main-build-entry-points',
       'src\\/main\\/browser\\/guest-lifecycle\\/input\\/browser-guest-shortcut-(?:forwarding|dispatch)',
       'src\\/renderer\\/src\\/components\\/(?:plugins\\/frames\\/|right-sidebar\\/plugin-panels\\/PluginPanel\\.tsx$)',
-      'src\\/renderer\\/src\\/components\\/editor\\/(?:PluginCustomEditorFrame\\.tsx$|plugin-custom-editor-host)'
+      'src\\/renderer\\/src\\/components\\/editor\\/plugin-editors\\/(?:PluginCustomEditorFrame\\.tsx$|plugin-custom-editor-host)'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),

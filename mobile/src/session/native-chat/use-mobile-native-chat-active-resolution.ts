@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
-import { encodeNativeChatTranscriptIdentity } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
+import { encodeNativeChatTranscriptIdentity } from '../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-retention'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import {
   useMobileSessionViewMode,

@@ -4,7 +4,7 @@ import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
 import { publishJournalOutcomeEpoch } from '../outcomes/journal-outcome-write'
 import { journalRowSchemaVersion } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from '../database/journal-host-database'
 import type { JournalLoad } from '../replay/journal-open'
 import { applyJournalRow, createJournalReducerState } from '../projection/journal-reducer'
@@ -74,7 +74,6 @@ export function publishNewEpoch(input: {
       publishJournalSessionEpoch(db, input.identity, input.epoch)
       return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
     },
-    false,
     (publication) => {
       // Adopt, then finish the nonthrowing queue bookkeeping, before the fallible publication.
       const state = publication.adopt()

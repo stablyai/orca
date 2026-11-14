@@ -4,7 +4,7 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import type {
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { structuredAgentSessionWorkingAtStop } from '../termination/structured-agent-session-working-at-teardown'
 

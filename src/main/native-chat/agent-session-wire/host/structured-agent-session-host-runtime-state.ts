@@ -1,6 +1,6 @@
 import { createRestartReconciler } from '../recovery/structured-agent-session-restart-reconcile'
 import { StructuredAgentSessionDeliveryOrder } from '../delivery/structured-agent-session-delivery-order'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   createDeferredStructuredAgentSessionEventSink,

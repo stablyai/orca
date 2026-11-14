@@ -6,8 +6,8 @@ import {
   type NativeChatAnswerOperation,
   type NativeChatAnswerSource,
   type AskAnswerSelection
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+} from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { AgentJournalFreeTextInput } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   askAcceptsEmptyAnswer,
@@ -16,7 +16,7 @@ import {
   askConfirmLabel,
   askTypedText,
   toggleAskOption
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-card-rules'
+} from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'
@@ -217,6 +217,8 @@ export function MobileNativeChatAsk({
   const otherSelected = (selections[index] ?? []).includes(OTHER)
   const freeTextInput = freeTextInputs?.[index]
   const currentAnswered = isAnswered(index)
+  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered())
+  const confirmSkips = confirmLabel === 'skip'
 
   return (
     <View style={styles.card}>
@@ -261,7 +263,11 @@ export function MobileNativeChatAsk({
         keyboardShouldPersistTaps="always"
       >
         <View style={styles.questionRow}>
-          <MobileNativeChatQuestionText title content={q.question} style={styles.questionText} />
+          <MobileNativeChatQuestionText
+            tone="medium"
+            content={q.question}
+            style={styles.questionText}
+          />
           <MobileNativeChatCardHeaderAction
             onCollapse={
               onCollapse &&
@@ -334,14 +340,14 @@ export function MobileNativeChatAsk({
         <Pressable
           style={({ pressed }) => [
             styles.next,
-            !currentAnswered && styles.nextSkip,
+            confirmSkips && styles.nextSkip,
             pressed && pressedStyle
           ]}
           onPress={confirm}
           disabled={submitting}
         >
-          <Text style={[styles.nextText, !currentAnswered && styles.nextSkipText]}>
-            {confirmLabels(t)[askConfirmLabel(currentAnswered, isLast)]}
+          <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
+            {confirmLabels(t)[confirmLabel]}
           </Text>
         </Pressable>
       </View>

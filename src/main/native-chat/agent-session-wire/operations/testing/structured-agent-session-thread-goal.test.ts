@@ -10,7 +10,7 @@ import { performThreadGoalChange } from '../structured-agent-session-thread-goal
 import type { AgentSessionTurnContext } from '../structured-agent-session-turns'
 import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',

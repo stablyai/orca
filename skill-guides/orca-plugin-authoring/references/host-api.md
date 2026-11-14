@@ -188,10 +188,10 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
 - `secrets:own` (since 1.4.245): Store and read secrets in the plugin's own encrypted file
 - `settings:own` (since 1.4.160): Read and change the plugin's own settings
 - `appearance:write` (since 1.4.249): Publish and select desktop application, editor and terminal colors
-- `workspace:create` (since 1.4.258): Create workspaces (new Git branches and worktrees) in your projects, local and SSH; a project's setup script runs as its settings say
-- `automation:read` (since 1.4.258): Read your automations: their names, prompts, agents, projects, workspaces and schedules
-- `automation:write` (since 1.4.258): Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)
-- `history:read` (since 1.4.258): Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself
+- `workspace:create` (since 1.4.259): Create workspaces (new Git branches and worktrees) in your projects, local and SSH; a project's setup script runs as its settings say
+- `automation:read` (since 1.4.259): Read your automations: their names, prompts, agents, projects, workspaces and schedules
+- `automation:write` (since 1.4.259): Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)
+- `history:read` (since 1.4.259): Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself
 
 ## Errors
 

@@ -29,12 +29,12 @@ import { makeTuiIdlePty } from '../terminal/wait/tui-idle-wait-test-harness'
 import '../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { AgentSessionRecordReader } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'

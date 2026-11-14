@@ -34,6 +34,8 @@ export type SessionOptionDescriptor = {
         type: 'select'
         currentValue?: string
         choices: SessionOptionSelectChoice[]
+        /** Presentation when no value is known; never an input selection. */
+        placeholder?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {
@@ -41,8 +43,6 @@ export type SessionOptionDescriptor = {
         currentValue: boolean
       }
   valueSource: SessionOptionValueSource
-  /** Model-pill display only; currentValue remains the accepted selection. */
-  reportedModel?: string
   /** Explicit lane is required: dispatched cannot distinguish PTY from structured transports. */
   transport: NativeChatLiveOptionTransport
   settable: boolean

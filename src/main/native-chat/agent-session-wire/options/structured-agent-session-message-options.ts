@@ -4,7 +4,7 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 
 const OPTION_ORDER = ['model', 'effort', 'serviceTier', 'personality', 'interactionMode'] as const
 
@@ -46,9 +46,12 @@ export function codexTurnOptionsDiffer(
     next: options
   })
   if (!applied) {
-    return options === undefined || Object.values(options).some((value) => value !== undefined)
+    return false
   }
   return OPTION_ORDER.some(
-    (key) => applied.next[key] !== undefined && applied.next[key] !== applied.active[key]
+    (key) =>
+      applied.active[key] !== undefined &&
+      applied.next[key] !== undefined &&
+      applied.next[key] !== applied.active[key]
   )
 }

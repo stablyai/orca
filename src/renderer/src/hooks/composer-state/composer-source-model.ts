@@ -6,7 +6,7 @@ import type { TaskSourceContext } from '../../../../shared/work-items/task-sourc
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/name-field/smart-workspace-name-field-model'
 export type ComposerSourceModel = {
   addComposerAttachments: (paths: string[]) => void
   applyLinkedGitLabWorkItem: (item: GitLabWorkItem) => void

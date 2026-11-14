@@ -4,8 +4,8 @@ import { CornerDownRight, ListEnd } from 'lucide-react-native'
 import type {
   NativeChatFollowUpBehavior,
   NativeChatSendFollowUp
-} from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import type { NativeChatSteerChordPreview } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
+} from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
+import type { NativeChatSteerChordPreview } from '../../../../../src/shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { ComposerSendButton } from '../../../components/composer-input/ComposerSendButton'
 import {
@@ -13,7 +13,7 @@ import {
   composerInputStyles as inputStyles
 } from '../../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useKeyboardPersistingTaps } from '../../../platform/keyboard-persisting-taps'
+import { useKeyboardPersistingTaps } from '../../../platform/keyboard/keyboard-persisting-taps'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'

@@ -219,32 +219,35 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'jumpToTabIndex', index: 2 })
   })
 
-  it('resolves workspace delete by default and honors custom terminal-active bindings', () => {
-    const input = {
-      code: 'Backspace',
-      key: 'Backspace',
-      meta: false,
-      control: true,
-      alt: false,
-      shift: true
-    }
+  it.each(['darwin', 'win32', 'linux'] as const)(
+    'leaves sidebar deletion bindings to the focused surface on %s',
+    (platform) => {
+      const input = {
+        code: 'Backspace',
+        key: 'Backspace',
+        meta: platform === 'darwin',
+        control: platform !== 'darwin',
+        alt: false,
+        shift: true
+      }
 
-    expect(resolveWindowShortcutAction(input, 'linux')).toEqual({ type: 'deleteCurrentWorkspace' })
-    const customInput = { ...input, code: 'KeyX', key: 'x', alt: true, shift: false }
-    expect(
-      resolveWindowShortcutAction(customInput, 'linux', {
-        'workspace.delete': ['Mod+Alt+X']
-      })
-    ).toEqual({ type: 'deleteCurrentWorkspace' })
-    expect(
-      resolveWindowShortcutAction(
-        customInput,
-        'linux',
-        { 'workspace.delete': ['Mod+Alt+X'] },
-        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
-      )
-    ).toEqual({ type: 'deleteCurrentWorkspace' })
-  })
+      expect(resolveWindowShortcutAction(input, platform)).toBeNull()
+      const customInput = { ...input, code: 'KeyX', key: 'x', alt: true, shift: false }
+      expect(
+        resolveWindowShortcutAction(customInput, platform, {
+          'workspace.delete': ['Mod+Alt+X']
+        })
+      ).toBeNull()
+      expect(
+        resolveWindowShortcutAction(
+          customInput,
+          platform,
+          { 'workspace.delete': ['Mod+Alt+X'] },
+          { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+        )
+      ).toBeNull()
+    }
+  )
 
   it('gates the held Ctrl+Tab switcher on the configurable binding', () => {
     const input = { code: 'Tab', key: 'Tab', meta: false, control: true, alt: false, shift: true }

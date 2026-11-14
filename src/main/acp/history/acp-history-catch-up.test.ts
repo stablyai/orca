@@ -22,7 +22,7 @@ import {
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
 import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
-import '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import '../timeline/acp-turn-messages'
 import '../../native-chat/agent-session-timeline/provider-timeline-history'
 import '../../native-chat/agent-session-wire/observations/structured-agent-session-current-work'

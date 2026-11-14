@@ -5,7 +5,7 @@ import {
   type AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { journalRenderItem } from '../projection/journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from '../projection/journal-item-fold'
 import type { JournalReducerState } from '../projection/journal-reducer'

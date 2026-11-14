@@ -204,8 +204,6 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   canSetOptionWhileIdle: Adapter['canSetOptionWhileIdle'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.canSetOptionWhileIdle?.(input) === true
-  noteOptionPick: Adapter['noteOptionPick'] = (input) =>
-    this.liveOwnerOrNull(input.sessionId)?.noteOptionPick?.(input)
   readAppliedInputOptions: Adapter['readAppliedInputOptions'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.readAppliedInputOptions?.(input) ?? null
 

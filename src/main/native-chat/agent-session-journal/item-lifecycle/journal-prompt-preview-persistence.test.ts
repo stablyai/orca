@@ -6,7 +6,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalQuestionItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openAgentSessionJournal } from '../journal-store-factory'
 import {
   closeTestJournalHostDatabases,

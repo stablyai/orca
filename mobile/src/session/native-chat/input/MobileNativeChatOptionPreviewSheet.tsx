@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import type { AskQuestion } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+import type { AskQuestion } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import { KeyedBottomDrawer } from '../../../components/bottom-drawer/keyed-bottom-drawer'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../../../components/SheetPrimaryButton'

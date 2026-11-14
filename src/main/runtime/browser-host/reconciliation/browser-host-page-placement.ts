@@ -42,8 +42,7 @@ export class BrowserHostPagePlacementRegistry {
   private nextPageGeneration = 1
   private readonly placementsByPageId = new Map<string, BrowserPagePlacementState>()
   private readonly reservationsByPageId = new Map<string, BrowserClientPagePlacementReservation>()
-  private readonly reservationSlotClaims = new Set<BrowserClientPagePlacementReservation>()
-  private reservedPlacementSlots = 0
+  private readonly slotOwners = new Map<string, number>()
   private readonly maxPagePlacements: number
 
   constructor(
@@ -56,6 +55,7 @@ export class BrowserHostPagePlacementRegistry {
   placeServerPage(browserPageId: string): RuntimeBrowserServerPlacement {
     this.assertPlacementAdmission(browserPageId)
     const placement = Object.freeze({ kind: 'server' as const })
+    this.claimSlot(browserPageId)
     this.placementsByPageId.set(browserPageId, { placement })
     return placement
   }
@@ -72,6 +72,7 @@ export class BrowserHostPagePlacementRegistry {
       browserHostGeneration: host.browserHostGeneration,
       pageHostGeneration: this.takePageGeneration()
     })
+    this.claimSlot(browserPageId)
     this.placementsByPageId.set(browserPageId, { placement })
     return placement
   }
@@ -87,13 +88,7 @@ export class BrowserHostPagePlacementRegistry {
     if (this.reservationsByPageId.has(browserPageId)) {
       throw new Error('browser_page_reconciliation_reservation_pending')
     }
-    const claimsPlacementSlot = !this.placementsByPageId.has(browserPageId)
-    if (
-      claimsPlacementSlot &&
-      this.placementsByPageId.size + this.reservedPlacementSlots >= this.maxPagePlacements
-    ) {
-      throw new Error('browser_page_placement_capacity')
-    }
+    this.assertSlotAvailable(browserPageId)
     if (pageHostGeneration < this.nextPageGeneration) {
       throw new Error('browser_page_generation_stale')
     }
@@ -108,17 +103,20 @@ export class BrowserHostPagePlacementRegistry {
       })
     })
     this.reservationsByPageId.set(browserPageId, reservation)
-    if (claimsPlacementSlot) {
-      this.claimReservationSlot(reservation)
-    }
+    this.claimSlot(browserPageId)
     return reservation
   }
 
   reserveNewClientPage(
     browserPageId: string,
-    host: BrowserHostPlacementIdentity
+    host: BrowserHostPlacementIdentity,
+    minimumGeneration = 1
   ): BrowserClientPagePlacementReservation {
-    return this.reserveClientPage(browserPageId, host, this.nextPageGeneration)
+    return this.reserveClientPage(
+      browserPageId,
+      host,
+      Math.max(this.nextPageGeneration, minimumGeneration)
+    )
   }
 
   commitClientPageReservation(
@@ -131,7 +129,6 @@ export class BrowserHostPagePlacementRegistry {
       throw new Error('browser_page_replacement_requires_retirement')
     }
     this.reservationsByPageId.delete(reservation.browserPageId)
-    this.releaseReservationSlot(reservation)
     this.placementsByPageId.set(reservation.browserPageId, {
       placement: reservation.placement
     })
@@ -151,7 +148,7 @@ export class BrowserHostPagePlacementRegistry {
       throw new Error('browser_page_placement_stale')
     }
     this.reservationsByPageId.delete(reservation.browserPageId)
-    this.releaseReservationSlot(reservation)
+    this.releaseSlot(reservation.browserPageId)
     this.placementsByPageId.set(reservation.browserPageId, { placement: reservation.placement })
     return reservation.placement
   }
@@ -161,7 +158,7 @@ export class BrowserHostPagePlacementRegistry {
       return false
     }
     this.reservationsByPageId.delete(reservation.browserPageId)
-    this.releaseReservationSlot(reservation)
+    this.releaseSlot(reservation.browserPageId)
     return true
   }
 
@@ -254,11 +251,9 @@ export class BrowserHostPagePlacementRegistry {
     state.retirementCompletionInProgress = true
     try {
       beforeComplete?.()
-      const reservation = this.reservationsByPageId.get(retirement.browserPageId)
-      if (reservation) {
-        this.claimReservationSlot(reservation)
-      }
-      return this.placementsByPageId.delete(retirement.browserPageId)
+      this.placementsByPageId.delete(retirement.browserPageId)
+      this.releaseSlot(retirement.browserPageId)
+      return true
     } finally {
       state.retirementCompletionInProgress = false
     }
@@ -272,9 +267,7 @@ export class BrowserHostPagePlacementRegistry {
     ) {
       throw new Error('browser_page_replacement_requires_retirement')
     }
-    if (this.placementsByPageId.size + this.reservedPlacementSlots >= this.maxPagePlacements) {
-      throw new Error('browser_page_placement_capacity')
-    }
+    this.assertSlotAvailable(browserPageId)
   }
 
   private takePageGeneration(): number {
@@ -286,16 +279,35 @@ export class BrowserHostPagePlacementRegistry {
     return value
   }
 
-  private claimReservationSlot(reservation: BrowserClientPagePlacementReservation): void {
-    if (!this.reservationSlotClaims.has(reservation)) {
-      this.reservationSlotClaims.add(reservation)
-      this.reservedPlacementSlots += 1
+  claimClientPageCleanup(browserPageId: string): () => void {
+    assertBrowserPageIdentity(browserPageId)
+    this.assertSlotAvailable(browserPageId)
+    this.claimSlot(browserPageId)
+    let owned = true
+    return () => {
+      if (owned) {
+        owned = false
+        this.releaseSlot(browserPageId)
+      }
     }
   }
 
-  private releaseReservationSlot(reservation: BrowserClientPagePlacementReservation): void {
-    if (this.reservationSlotClaims.delete(reservation)) {
-      this.reservedPlacementSlots -= 1
+  private assertSlotAvailable(browserPageId: string): void {
+    if (!this.slotOwners.has(browserPageId) && this.slotOwners.size >= this.maxPagePlacements) {
+      throw new Error('browser_page_placement_capacity')
+    }
+  }
+
+  private claimSlot(browserPageId: string): void {
+    this.slotOwners.set(browserPageId, (this.slotOwners.get(browserPageId) ?? 0) + 1)
+  }
+
+  private releaseSlot(browserPageId: string): void {
+    const owners = this.slotOwners.get(browserPageId)
+    if (owners === 1) {
+      this.slotOwners.delete(browserPageId)
+    } else if (owners) {
+      this.slotOwners.set(browserPageId, owners - 1)
     }
   }
 }

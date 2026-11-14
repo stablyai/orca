@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MainProcessRuntimeLaunchOptions } from './main-process-runtime-launch'
+import type { MainProcessRuntimeLaunchOptions } from './runtime-startup/main-process-runtime-launch'
 
 const phases = vi.hoisted(() => ({
   foundation: vi.fn<() => Promise<void>>(),
@@ -14,8 +14,10 @@ vi.mock('./main-process-ready-foundation', () => ({
 vi.mock('./main-process-ready-runtime', () => ({
   initializeReadyRuntimeServices: phases.runtimeServices
 }))
-vi.mock('./main-process-i18n-menu', () => ({ initializeMainProcessI18nAndMenu: phases.menu }))
-vi.mock('./main-process-runtime-launch', () => ({
+vi.mock('./main-window/main-process-i18n-menu', () => ({
+  initializeMainProcessI18nAndMenu: phases.menu
+}))
+vi.mock('./runtime-startup/main-process-runtime-launch', () => ({
   initializeMainProcessRuntimeLaunch: phases.launch
 }))
 

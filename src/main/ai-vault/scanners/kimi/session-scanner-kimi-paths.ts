@@ -9,8 +9,8 @@ import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-over
 import {
   openTranscriptReadStream,
   wslGatedStat
-} from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { asRecord } from '../../parsing/session-record-fields'
 import { extractString } from '../../../../shared/trimmed-string'
 import { KimiSessionIndexCache } from './session-scanner-kimi-index-cache'

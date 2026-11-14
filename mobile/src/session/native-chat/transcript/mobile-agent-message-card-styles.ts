@@ -37,6 +37,7 @@ export const styles = themedStyleSheet(() => ({
   queuedSenders: { flexWrap: 'nowrap', alignItems: 'center', maxWidth: '100%' },
   queuedSender: { minWidth: 0, flexShrink: 1 },
   queuedLead: { flexShrink: 0 },
+  queuedMeta: { color: colors.textSecondary },
   queuedComma: { flexShrink: 0, marginLeft: -spacing.xs },
   queuedOpenableName: { color: colors.textPrimary },
   name: {

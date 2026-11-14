@@ -1,28 +1,11 @@
-import { statSync } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
 import {
   decodeFromFirstUtf8Boundary,
   snapshotReadPaths,
   type TerminalScrollbackSnapshotStorage
 } from './terminal-scrollback-snapshots'
-
-/** Whether a non-empty snapshot exists for `ref`; a stat only, so it never reads bytes. */
-export function hasTerminalScrollbackSnapshotSync(
-  ref: string,
-  storage?: TerminalScrollbackSnapshotStorage
-): boolean {
-  for (const path of snapshotReadPaths(ref, storage)) {
-    try {
-      if (statSync(path).size > 0) {
-        return true
-      }
-    } catch {
-      // Try the legacy/global fallback when a profile-local snapshot is absent.
-    }
-  }
-  return false
-}
 
 /** Byte size of the snapshot `readTerminalScrollbackSnapshot` would read; `null` when absent. */
 export async function statTerminalScrollbackSnapshotSize(
@@ -55,17 +38,22 @@ async function readTrailingUtf8Async(path: string, maxBytes: number): Promise<st
   }
 }
 
-/** Async twin of `readTerminalScrollbackSnapshotSync` for request paths that must not block. */
+const snapshotReads = new Map<string, Promise<void>>()
+
+/** Read the bounded replay tail without blocking the request owner on disk I/O. */
 export async function readTerminalScrollbackSnapshot(
   ref: string,
   storage?: TerminalScrollbackSnapshotStorage
 ): Promise<string | null> {
-  for (const path of snapshotReadPaths(ref, storage)) {
-    try {
-      return await readTrailingUtf8Async(path, TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)
-    } catch {
-      // Try the legacy/global fallback when a profile-local snapshot is absent.
+  // Async requests share the old single-reader resource bound without blocking the event loop.
+  return runKeyedSerializedOperation(snapshotReads, 'snapshot-read', async () => {
+    for (const path of snapshotReadPaths(ref, storage)) {
+      try {
+        return await readTrailingUtf8Async(path, TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)
+      } catch {
+        // Try the legacy/global fallback when a profile-local snapshot is absent.
+      }
     }
-  }
-  return null
+    return null
+  })
 }

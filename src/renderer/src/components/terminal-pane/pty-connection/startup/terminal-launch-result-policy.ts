@@ -1,7 +1,5 @@
-import {
-  agentProviderSessionsEqual,
-  type TerminalLaunchResult
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TerminalLaunchResult } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { useAppStore } from '@/store/index'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { ReattachPayloadSession } from '../reattach/reattach-payload-session'

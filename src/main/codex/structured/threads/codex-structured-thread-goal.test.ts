@@ -4,7 +4,10 @@ import { CodexAppliedSettings } from '../catalog/codex-structured-applied-settin
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
-import { waitsForCodexTurnOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
+import {
+  codexTurnOptionsDiffer,
+  waitsForCodexTurnOptions
+} from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 
 const THREAD = 'thread-1'
 
@@ -89,31 +92,16 @@ describe('direct goal settings application', () => {
         threadId: 'thread-abc',
         threadSettings: { model, effort }
       })
-    const goal = (model = 'gpt-live', effort?: string) =>
+    const goal = (model = 'gpt-live', effort?: string, signal?: AbortSignal) =>
       adapter.changeThreadGoal({
         sessionId: 'session-1',
         fence: 7,
         change: { kind: 'status', status: 'active' },
         replacesGoal: false,
-        executionOptions: { model, ...(effort ? { effort } : {}) }
+        executionOptions: { model, ...(effort ? { effort } : {}) },
+        signal
       })
-    const state = acquiredSettingsTestSeam(adapter)
-    return { codex, adapter, apply, goal, settings: state.settings, state, acquisition }
-  }
-
-  it('keeps literal goal settings separate from exact applied turn proof and recovers on a successful turn', async () => {
-    const { codex, adapter, apply, goal, acquisition } = await fixture()
-    const choices = { model: 'unlisted-model-a', effort: 'high' }
-    const turnProof = { model: 'unlisted-model-a', effort: 'high', interactionMode: 'default' }
-    const dispatch = () =>
-      adapter.dispatch({
-        sessionId: 'session-1',
-        fence: 7,
-        clientMessageId: `message-${codex.connections[0].calls.length}`,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Continue' }] },
-        executionOptions: choices
-      })
-    const held = (options = choices) =>
+    const held = (options: Record<string, string>) =>
       waitsForCodexTurnOptions(
         { provider: 'codex', sessionId: 'session-1' },
         {
@@ -138,16 +126,37 @@ describe('direct goal settings application', () => {
         { fence: 7, generation: acquisition.acquisitionGeneration, phase: 'ready' },
         adapter
       )
-    const proof = () =>
-      adapter.readAppliedInputOptions({
+    return {
+      codex,
+      adapter,
+      apply,
+      goal,
+      held,
+      get settings() {
+        return acquiredSettingsTestSeam(adapter).settings
+      },
+      get state() {
+        return acquiredSettingsTestSeam(adapter)
+      },
+      acquisition
+    }
+  }
+
+  it('preserves goal choice eligibility through readback, refusal and successful-turn recovery', async () => {
+    const { codex, adapter, apply, goal, held: heldOptions } = await fixture()
+    const choices = { model: 'unlisted-model-a', effort: 'high' }
+    const dispatch = () =>
+      adapter.dispatch({
         sessionId: 'session-1',
         fence: 7,
-        acquisitionGeneration: acquisition.acquisitionGeneration,
-        next: choices
+        clientMessageId: `message-${codex.connections[0].calls.length}`,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Continue' }] },
+        executionOptions: choices
       })
+    const held = (options = choices) => heldOptions(options)
     try {
       expect(await dispatch()).toMatchObject({ state: 'admitted' })
-      expect(proof()?.active).toEqual(turnProof)
+      expect(held()).toBe(false)
       codex.routes['thread/settings/update'] = (params) => {
         apply(String(params?.model), String(params?.effort))
         return {}
@@ -161,15 +170,18 @@ describe('direct goal settings application', () => {
           params: { threadId: 'thread-abc', model: 'unlisted-model-b', effort: 'low' }
         }
       ])
-      const appliedGoal = { model: 'unlisted-model-b', effort: 'low', interactionMode: 'default' }
-      expect(proof()).toEqual({ active: appliedGoal, next: turnProof })
+      const goalChoices = { model: 'unlisted-model-b', effort: 'low' }
+      expect(held(goalChoices)).toBe(false)
+      expect(held()).toBe(true)
       apply('observation-only', 'medium')
-      expect(proof()).toEqual({ active: appliedGoal, next: turnProof })
+      expect(held(goalChoices)).toBe(false)
+      expect(held()).toBe(true)
       codex.routes['thread/settings/update'] = () => {
         throw new CodexAppServerRequestError('thread/settings/update', -32602, 'invalid model')
       }
       expect(await goal('refused-model', 'high')).toMatchObject({ ok: false })
-      expect(proof()).toEqual({ active: appliedGoal, next: turnProof })
+      expect(held(goalChoices)).toBe(false)
+      expect(held()).toBe(true)
       expect(
         codex.connections[0].calls.filter((call) => call.method === 'thread/goal/set')
       ).toHaveLength(1)
@@ -178,8 +190,8 @@ describe('direct goal settings application', () => {
         (call) => call.method === 'thread/settings/update'
       ).length
       expect(await goal('observation-only-c', 'medium')).toEqual({ ok: true })
-      expect(proof()).toEqual({ active: appliedGoal, next: turnProof })
-      expect(held(appliedGoal)).toBe(false)
+      expect(held()).toBe(true)
+      expect(held(goalChoices)).toBe(false)
       expect(held({ model: 'observation-only-c', effort: 'medium' })).toBe(true)
       expect(
         codex.connections[0].calls.filter((call) => call.method === 'thread/settings/update')
@@ -188,34 +200,149 @@ describe('direct goal settings application', () => {
         throw new Error('reply lost after settings enqueue')
       }
       expect(await goal('uncertain-model', 'low')).toMatchObject({ ok: false })
-      expect(proof()).toEqual({
-        active: { effort: 'low', interactionMode: 'default' },
-        next: turnProof
-      })
       expect(held()).toBe(true)
       expect(await dispatch()).toMatchObject({ state: 'admitted' })
-      expect(proof()).toEqual({ active: turnProof, next: turnProof })
+      expect(held()).toBe(false)
       codex.routes['thread/settings/update'] = () => {
         throw new CodexAppServerRequestError('thread/settings/update', -32601, 'method not found')
       }
       expect(await goal('unlisted-model-b', 'low')).toEqual({ ok: true })
-      expect(proof()).toEqual({ active: turnProof, next: turnProof })
+      expect(held()).toBe(false)
       const callsBeforeCached = codex.connections[0].calls.filter(
         (call) => call.method === 'thread/settings/update'
       ).length
       expect(await goal('unlisted-model-b', 'low')).toEqual({ ok: true })
-      expect(proof()).toEqual({ active: turnProof, next: turnProof })
       expect(held()).toBe(false)
-      expect(held(appliedGoal)).toBe(true)
+      expect(held(goalChoices)).toBe(true)
       expect(
         codex.connections[0].calls.filter((call) => call.method === 'thread/settings/update')
       ).toHaveLength(callsBeforeCached)
       expect(await dispatch()).toMatchObject({ state: 'admitted' })
-      expect(proof()).toEqual({ active: turnProof, next: turnProof })
+      expect(held()).toBe(false)
     } finally {
       await adapter.closeAll()
     }
   })
+
+  it.each([
+    ['success', false],
+    ['refusal', false],
+    ['success', true],
+    ['refusal', true]
+  ] as const)(
+    'preserves a newer start after late goal %s (replaced acquisition: %s)',
+    async (outcome, replaceAcquisition) => {
+      const { codex, adapter, goal, acquisition } = await fixture()
+      let generation = acquisition.acquisitionGeneration
+      const dispatch = (model: string) =>
+        adapter.dispatch({
+          sessionId: 'session-1',
+          fence: 7,
+          clientMessageId: model,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Continue' }] },
+          executionOptions: { model, effort: 'high' }
+        })
+      const answer = Promise.withResolvers<unknown>()
+      const authority = new AbortController()
+      try {
+        expect(await dispatch('model-a')).toMatchObject({ state: 'admitted' })
+        const request = vi.spyOn(codex.connections[0], 'request')
+        codex.routes['thread/settings/update'] = () => answer.promise
+        const pending = goal('model-b', 'high', authority.signal)
+        const rpc = request.mock.results.at(-1)?.value
+        expect(rpc).toBeInstanceOf(Promise)
+        authority.abort(new Error('stopped'))
+        expect(await pending).toMatchObject({ ok: false })
+        if (replaceAcquisition) {
+          await adapter.closeSession('session-1')
+          const { acquireReadyCodexForTest, identityFor } =
+            await import('../session-lifecycle/codex-structured-session-adapter-fixture')
+          const replacement = await acquireReadyCodexForTest(adapter, {
+            identity: identityFor('session-1'),
+            fence: 7,
+            spawnToken: 'replacement'
+          })
+          generation = replacement.acquisitionGeneration
+          expect(
+            adapter.readAppliedInputOptions({
+              sessionId: 'session-1',
+              fence: 7,
+              acquisitionGeneration: acquisition.acquisitionGeneration,
+              next: {}
+            })
+          ).toBeNull()
+        }
+        expect(await dispatch('model-c')).toMatchObject({ state: 'admitted' })
+        if (outcome === 'success') {
+          answer.resolve({})
+        } else {
+          answer.reject(
+            new CodexAppServerRequestError('thread/settings/update', -32602, 'invalid model')
+          )
+        }
+        await Promise.allSettled([rpc])
+        const differs = (model: string) =>
+          codexTurnOptionsDiffer(
+            { provider: 'codex', sessionId: 'session-1' },
+            { model, effort: 'high' },
+            { fence: 7, generation, phase: 'ready' },
+            adapter
+          )
+        expect(differs('model-c')).toBe(false)
+        expect(differs('model-a')).toBe(true)
+        expect(differs('model-b')).toBe(true)
+        expect(
+          codex.connections
+            .flatMap((connection) => connection.calls)
+            .some((call) => call.method.startsWith('thread/goal/'))
+        ).toBe(false)
+      } finally {
+        await adapter.closeAll()
+      }
+    }
+  )
+
+  it.each(['success', 'refusal'] as const)(
+    'settles an owned late %s after abort without resuming the goal',
+    async (outcome) => {
+      const { codex, adapter, goal, held } = await fixture()
+      const answer = Promise.withResolvers<unknown>()
+      const authority = new AbortController()
+      try {
+        await adapter.dispatch({
+          sessionId: 'session-1',
+          fence: 7,
+          clientMessageId: 'prior',
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Continue' }] },
+          executionOptions: { model: 'model-a', effort: 'high' }
+        })
+        const request = vi.spyOn(codex.connections[0], 'request')
+        codex.routes['thread/settings/update'] = () => answer.promise
+        const pending = goal('model-b', 'high', authority.signal)
+        const rpc = request.mock.results.at(-1)?.value
+        expect(rpc).toBeInstanceOf(Promise)
+        authority.abort(new Error('stopped'))
+        expect(await pending).toMatchObject({ ok: false })
+        if (outcome === 'success') {
+          answer.resolve({})
+        } else {
+          answer.reject(
+            new CodexAppServerRequestError('thread/settings/update', -32602, 'invalid model')
+          )
+        }
+        await Promise.allSettled([rpc])
+        expect(held({ model: 'model-b', effort: 'high' })).toBe(outcome !== 'success')
+        expect(held({ model: 'model-a', effort: 'high' })).toBe(outcome === 'success')
+        expect(
+          codex.connections
+            .flatMap((connection) => connection.calls)
+            .some((call) => call.method.startsWith('thread/goal/'))
+        ).toBe(false)
+      } finally {
+        await adapter.closeAll()
+      }
+    }
+  )
 
   it.each(['success', 'rejection', 'stale'] as const)(
     'rechecks current application after its RPC reply, preserving pre-reply evidence (%s)',
