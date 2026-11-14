@@ -1,0 +1,11 @@
+/* Empty (no height) until a pane banner portals in; then it starts below the pane's title row, which
+   floats over the top of the chat, as the banner does in the pane. */
+[data-chat-banner-slot]:not(:empty) {
+  padding-top: var(--orca-pane-title-height, 24px);
+}
+
+/* A pane-top banner is absolutely placed in its pane; in the chat column it takes its place in flow. */
+[data-chat-banner-slot] > .pane-top-banner {
+  position: relative;
+  top: auto;
+}
