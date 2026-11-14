@@ -8083,7 +8083,9 @@
           "pink": "Pink",
           "saveFailed": "Could not save group color",
           "label": "Group color",
-          "none": "No color"
+          "none": "No color",
+          "saving": "Saving group color…",
+          "inherit": "Use parent color"
         }
       },
       "shared": {

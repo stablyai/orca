@@ -29,13 +29,25 @@ export function ProjectGroupColorMenu({ group }: { group: ProjectGroup }): React
   ]
 
   const saveColor = async (value: string): Promise<void> => {
+    let feedback: string | number | undefined
+    const timer = setTimeout(() => {
+      feedback = toast.loading(
+        t('auto.components.sidebar.groupColor.saving', 'Saving group color…'),
+        { description: group.name }
+      )
+    }, 200)
     const saved = await updateProjectGroup(
       group.id,
       { color: value === 'none' ? null : value },
       {
         hostId: getRepoExecutionHostId(group)
       }
-    )
+    ).finally(() => {
+      clearTimeout(timer)
+      if (feedback !== undefined) {
+        toast.dismiss(feedback)
+      }
+    })
     if (!saved) {
       toast.error(t('auto.components.sidebar.groupColor.saveFailed', 'Could not save group color'))
     }
@@ -53,7 +65,9 @@ export function ProjectGroupColorMenu({ group }: { group: ProjectGroup }): React
           onValueChange={(value) => void saveColor(value)}
         >
           <DropdownMenuRadioItem value="none">
-            {t('auto.components.sidebar.groupColor.none', 'No color')}
+            {group.parentGroupId
+              ? t('auto.components.sidebar.groupColor.inherit', 'Use parent color')
+              : t('auto.components.sidebar.groupColor.none', 'No color')}
           </DropdownMenuRadioItem>
           {REPO_COLORS.map((value, index) => (
             <DropdownMenuRadioItem key={value} value={value}>

@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { useAppStore } from '@/store'
 import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+import { Toaster } from '@/components/ui/sonner'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -166,6 +167,7 @@ function SidebarPreview(): React.JSX.Element {
       <ConfirmationDialogProvider>
         <WorktreeList scrollOffsetRef={scrollOffsetRef} scrollAnchorRef={scrollAnchorRef} />
       </ConfirmationDialogProvider>
+      <Toaster />
     </div>
   )
 }
