@@ -99,3 +99,65 @@ describe('orchestration timeout flag validation', () => {
     ).rejects.toMatchObject({ code: 'peek_wait_unsupported' })
   })
 })
+
+describe('orchestration inbox scoped reads', () => {
+  const invokeInbox = (flags: Map<string, string | boolean>, json = true) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this handler test provides every context field it reads.
+    ORCHESTRATION_HANDLERS['orchestration inbox']({
+      flags,
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json
+    } as never)
+
+  it('rejects a Run-scoped inbox response from a runtime that only read terminal mail', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValue({
+      result: {
+        messages: [],
+        count: 0,
+        scope: 'messages addressed to terminal term_worker'
+      }
+    })
+    vi.mocked(printResult).mockClear()
+
+    await expect(
+      invokeInbox(new Map<string, string | boolean>([['run', 'run_1']]))
+    ).rejects.toMatchObject({
+      code: 'incompatible_runtime',
+      message:
+        'The running Orca runtime does not support Run-scoped inbox reads. Update or restart Orca and try again.'
+    })
+    expect(printResult).not.toHaveBeenCalled()
+  })
+
+  it('keeps the empty inbox scope and Run binding in the default view', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValue({
+      result: {
+        messages: [],
+        count: 0,
+        scope: 'messages addressed to Run run_1',
+        runBinding: 'run_1'
+      }
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const flags = new Map<string, string | boolean>([['run', 'run_1']])
+
+    await invokeInbox(flags)
+
+    const printed = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))
+    expect(printed.result).toMatchObject({
+      messages: [],
+      scope: 'messages addressed to Run run_1',
+      runBinding: 'run_1'
+    })
+
+    logSpy.mockClear()
+    await invokeInbox(flags, false)
+    expect(logSpy.mock.calls.at(-1)?.[0]).toBe(
+      'No messages addressed to Run run_1. Current Run binding: run_1.'
+    )
+    logSpy.mockRestore()
+  })
+})

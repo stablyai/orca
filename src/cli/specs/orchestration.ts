@@ -2,6 +2,7 @@ import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boun
 import type { CommandSpec } from '../discovery/command-spec'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
+import { ORCHESTRATION_INBOX_COMMAND_SPEC } from './orchestration-inbox-command-spec'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -136,16 +137,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'A reply to mail from an agent on another server goes back to that server by itself; no flag is needed.'
     ]
   },
-  {
-    path: ['orchestration', 'inbox'],
-    summary: 'Show messages across (or for) recipients',
-    usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full'],
-    identityFlagRoles: { terminal: 'target' },
-    notes: [
-      'Rows preview each body in 200 characters and keep only payload ids; --full prints them whole.'
-    ]
-  },
+  ORCHESTRATION_INBOX_COMMAND_SPEC,
   {
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
