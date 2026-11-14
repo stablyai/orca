@@ -542,9 +542,8 @@ it.each(['queued', 'the refresh action'] as const)(
     renderer.setState({
       prCache: { [cacheKey]: { data: makePR({ title: 'shown' }), fetchedAt: 500 } }
     })
-    mockApi.gh.refreshPRNow.mockImplementation(
-      (args: { candidate: typeof row; reason?: GitHubPRRefreshReason; userRefresh?: boolean }) =>
-        coordinator.refreshPRNow(args.candidate, args.reason, { userRefresh: args.userRefresh })
+    mockApi.gh.refreshPRNow.mockImplementation((args) =>
+      coordinator.refreshPRNow(args.candidate, args.reason, { userRefresh: args.userRefresh })
     )
     coordinator.reportVisiblePRRefreshCandidates([row], 1, 1)
     await vi.advanceTimersByTimeAsync(0)

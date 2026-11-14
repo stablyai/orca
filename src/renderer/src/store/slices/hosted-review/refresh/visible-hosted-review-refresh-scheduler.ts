@@ -34,19 +34,21 @@ type Entry = {
   deferredUntil: number | null
 }
 
+/** The target's interval under the Default cadence (its own interval when it gives none). */
+function defaultIntervalMs(target: VisibleHostedReviewRefreshTarget): number | null {
+  return target.foregroundIntervalMs === undefined ? target.intervalMs : target.foregroundIntervalMs
+}
+
 /** The timed retry a failed read earns under the entry's current cadence: none under "off" (a
  *  failed read waits for the next window return, selection or refresh), else the longer of the
- *  cadence interval and an exponential backoff. */
-function retryAtFor(entry: Entry): number | null {
+ *  cadence interval (or the given one) and an exponential backoff. */
+function retryAtFor(entry: Entry, intervalMs = entry.target.intervalMs): number | null {
   if (entry.failedAt === null || entry.failures === 0 || entry.target.cadence === 'off') {
     return null
   }
   return (
     entry.failedAt +
-    Math.max(
-      entry.target.intervalMs ?? 0,
-      Math.min(900_000, 60_000 * 2 ** Math.min(entry.failures - 1, 4))
-    )
+    Math.max(intervalMs ?? 0, Math.min(900_000, 60_000 * 2 ** Math.min(entry.failures - 1, 4)))
   )
 }
 
@@ -92,7 +94,9 @@ export function createVisibleHostedReviewRefreshScheduler() {
       return Math.max(cooldown, entry.deferredUntil)
     }
     if (entry.retryAt !== null) {
-      return Math.max(cooldown, entry.retryAt)
+      // Discovery (a return, a newly shown row) waits for a failure no longer than Default would.
+      const floor = entry.discovery ? retryAtFor(entry, defaultIntervalMs(entry.target)) : null
+      return Math.max(cooldown, Math.min(entry.retryAt, floor ?? entry.retryAt))
     }
     if (entry.discovery) {
       return cooldown
@@ -224,8 +228,11 @@ export function createVisibleHostedReviewRefreshScheduler() {
         if (!entry) {
           const previous = recent.get(target.key)
           recent.delete(target.key)
+          const changed = !!previous && discoveryIdentityChanged(previous.target, target)
+          // Another HEAD or link is another request, which the old one's failure does not hold.
           const preserveFailure =
             previous !== undefined &&
+            !changed &&
             (target.fetchedAt ?? -Infinity) <= (previous.target.fetchedAt ?? -Infinity)
           entry = {
             target,
@@ -233,10 +240,11 @@ export function createVisibleHostedReviewRefreshScheduler() {
             failures: preserveFailure ? previous.failures : 0,
             failedAt: preserveFailure ? previous.failedAt : null,
             retryAt: null,
+            // First shown: data older than Default's interval is read now, whatever the cadence.
             discovery:
-              (previous !== undefined && discoveryIdentityChanged(previous.target, target)) ||
+              changed ||
               target.fetchedAt === null ||
-              Date.now() - target.fetchedAt >= (target.intervalMs ?? 60_000),
+              Date.now() - target.fetchedAt >= (defaultIntervalMs(target) ?? 60_000),
             deferredUntil: null
           }
           // A kept failure retries by this target's cadence, not the one it failed under.
@@ -249,6 +257,9 @@ export function createVisibleHostedReviewRefreshScheduler() {
         if (discoveryIdentityChanged(entry.target, target)) {
           entry.discovery = true
           entry.deferredUntil = null
+          entry.failures = 0
+          entry.failedAt = null
+          entry.retryAt = null
         } else if (
           (target.fetchedAt ?? -Infinity) > (entry.target.fetchedAt ?? -Infinity) &&
           (!inFlight.has(target.key) ||
@@ -289,10 +300,7 @@ export function createVisibleHostedReviewRefreshScheduler() {
         const now = Date.now()
         for (const entry of entries.values()) {
           const { intervalMs, fetchedAt, refreshOnForeground } = entry.target
-          const defaultMs =
-            entry.target.foregroundIntervalMs === undefined
-              ? intervalMs
-              : entry.target.foregroundIntervalMs
+          const defaultMs = defaultIntervalMs(entry.target)
           const returnAgeMs = Math.max(60_000, defaultMs ?? 60_000)
           // A stretched or stopped cadence still reads on return, never sooner than Default would.
           const stretched = defaultMs !== null && (intervalMs === null || defaultMs < intervalMs)

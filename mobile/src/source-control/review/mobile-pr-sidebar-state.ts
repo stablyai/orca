@@ -201,11 +201,21 @@ export async function loadPrBranchReview(
     })
   }
   let linkedPR = link.linkedPR
-  // The host kept no answer for this read: what is shown, and the link it was read with, stay.
-  const unanswered = (outcome: GitHubPrForBranchRead) =>
-    outcome.ok && outcome.revalidationOnly && args.previous
-      ? { ...args.previous, retryAfterMs: outcome.retryAfterMs }
-      : null
+  // The host kept no answer for this read: what is shown stays while the current link and
+  // suppression would still show it, never a PR this read unlinked.
+  const unanswered = (outcome: GitHubPrForBranchRead, unlinked: number | null = null) => {
+    const shown = args.previous
+    if (!outcome.ok || !outcome.revalidationOnly || !shown) {
+      return null
+    }
+    const context = { linkedPR, suppressedGitHubPR: link.suppressedGitHubPR }
+    return shown.kind === 'found' &&
+      (shown.linkedPRNumber !== linkedPR ||
+        shown.pr.number === unlinked ||
+        isGitHubPRSuppressed(context, shown.pr.number))
+      ? null
+      : { ...shown, retryAfterMs: outcome.retryAfterMs }
+  }
   let prOutcome = await fetchPR(linkedPR, fallbackPR(linkedPR))
   const unchanged = unanswered(prOutcome)
   if (unchanged) {
@@ -222,7 +232,7 @@ export async function loadPrBranchReview(
       deps.clearWorktreeReviewLink(args.worktreeId, staleLink),
       fetchPR(null, null)
     ])
-    const relinked = unanswered(prOutcome)
+    const relinked = unanswered(prOutcome, link.linkedPR)
     if (relinked) {
       return relinked
     }

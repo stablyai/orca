@@ -1,6 +1,7 @@
 import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
 import type {
+  GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason,
   PRRefreshOutcome,
@@ -185,21 +186,32 @@ export function retimePRRefreshesForCadence(): void {
   retimeQueuedErrorRetries(queue, retry, (key, candidate) => visibility.candidate(key, candidate))
   drainer.hostedJobs.retime()
   drainer.watchJobs.retime()
+  // Every shown row of a request shares its one restored read, so each gets the result.
+  const restored = new Map<
+    string,
+    { windowId: number; lead: GitHubPRRefreshCandidate; aliases: Map<string, GitHubPRRefreshAlias> }
+  >()
   const timed = getPRAutoRefreshCadence() !== 'off'
   for (const [windowId, reported] of timed ? visibility.reported() : []) {
     const key = refreshKey(reported)
-    const candidate = visibility.candidate(key, reported)
-    if (validateCandidate(candidate)) {
+    // Work already queued for the row (its retry, a return or an action) keeps its own reason.
+    if (validateCandidate(reported) || queue.get(key)) {
       continue
     }
+    const alias = aliasFromCandidate(reported)
+    const request = restored.get(key)
+    if (request) {
+      request.aliases.set(alias.cacheKey, alias)
+    } else {
+      restored.set(key, { windowId, lead: reported, aliases: new Map([[alias.cacheKey, alias]]) })
+    }
+  }
+  for (const [key, { windowId, lead, aliases: shown }] of restored) {
+    const candidate = visibility.candidate(key, lead)
+    const aliases = [...shown.values()]
     const failed = failureRetries.get(key)
     const retryAt =
       failed !== undefined && retry.failureMatches(key, candidate) ? failed : undefined
-    // Work already queued for the row (its retry, a return or an action) keeps its own reason.
-    if (queue.get(key)) {
-      continue
-    }
-    const aliases = [aliasFromCandidate(candidate)]
     if (retryAt === undefined) {
       drainer.scheduler.restoreFollowUp(key, candidate, 40, aliases, windowId)
     } else {

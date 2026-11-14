@@ -265,10 +265,7 @@ export class PRRefreshQueue {
    *  its key meanwhile. A host job keeps its own entry. */
   requeueCaptured(entry: PRRefreshQueueEntry): void {
     const current = this.entries.get(entry.key)
-    const kept = current && !entry.hosted ? mergeCapturedRequest(current, entry) : entry
-    if (kept) {
-      this.set(entry.key, kept)
-    }
+    this.set(entry.key, current && !entry.hosted ? mergeCapturedRequest(current, entry) : entry)
   }
 
   setVisibleFollowUp(entry: PRRefreshQueueEntry): void {

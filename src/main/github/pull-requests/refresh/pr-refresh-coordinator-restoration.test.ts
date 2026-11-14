@@ -136,6 +136,34 @@ it('restores a failure the full exact cache could not keep as its own retry, whi
   expect(claims()).toBe(0)
 })
 
+it.each(['succeeded', 'failed'] as const)(
+  'a cadence turned back on reads once for every shown worktree of a PR whose last read %s',
+  async (last) => {
+    const { coordinator, switchTo } = await load()
+    if (last === 'failed') {
+      provider.resolve.mockImplementation(async () => failed())
+    }
+    const rows = ['a', 'b'].map((branch) =>
+      makeCandidate({
+        branch,
+        worktreeId: `wt-${branch}`,
+        cacheKey: `/repo::${branch}`,
+        linkedPRNumber: 12,
+        currentHeadOid: 'head-sha'
+      })
+    )
+    coordinator.reportVisiblePRRefreshCandidates(rows, 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.resolve).toHaveBeenCalledTimes(1)
+    await switchTo('off', 2_000)
+    provider.resolve.mockImplementation(async () => found('changed'))
+    await switchTo('default', 200_000)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.resolve).toHaveBeenCalledTimes(2)
+    expect([deliveredTo('a'), deliveredTo('b')]).toEqual(['changed', 'changed'])
+  }
+)
+
 // Off holds no timer, so its row reads again only once Default returns.
 async function expectNextAutomaticRead(
   cadence: 'default' | 'off',
@@ -486,6 +514,45 @@ it.each(['a routine report', 'another HEAD'] as const)(
     expect(deliveredTo('x')).toBe('changed')
   }
 )
+
+it('an action that waited for quota keeps its turn when another worktree of its PR is reported meanwhile', async () => {
+  const { coordinator } = await load()
+  const row = (branch: string) =>
+    makeCandidate({
+      branch,
+      worktreeId: `wt-${branch}`,
+      cacheKey: `/repo::${branch}`,
+      linkedPRNumber: 12,
+      currentHeadOid: 'head-sha'
+    })
+  const x = row('x')
+  coordinator.reportVisiblePRRefreshCandidates([x], 1, 1)
+  await vi.advanceTimersByTimeAsync(0)
+  const shownX = {
+    ...x,
+    cachedFetchedAt: 1_000,
+    cachedHeadOid: 'head-sha',
+    cachedHasPR: true,
+    cachedPRState: 'open' as const,
+    cachedChecksStatus: 'pending' as const
+  }
+  // At 2 s a push of X is read; while quota is checked, worktree Y on the same PR is first shown.
+  await vi.advanceTimersByTimeAsync(1_000)
+  const quota = Promise.withResolvers<number | null>()
+  provider.gate.mockReturnValueOnce(quota.promise)
+  coordinator.enqueuePRRefresh(shownX, 'post-push', 80, 1)
+  await vi.advanceTimersByTimeAsync(0)
+  coordinator.reportVisiblePRRefreshCandidates([shownX, row('y')], 2, 1)
+  await vi.advanceTimersByTimeAsync(1_000)
+  quota.resolve(22_000)
+  provider.resolve.mockImplementation(async () => found('pushed'))
+  await vi.advanceTimersByTimeAsync(21_999 - Date.now())
+  expect(provider.resolve).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(1)
+  // The push's own read goes, and Y, coalesced with it, gets that answer too.
+  expect(provider.resolve.mock.calls.map(([read]) => read.branchName)).toEqual(['x', 'x'])
+  expect([deliveredTo('x'), deliveredTo('y')]).toEqual(['pushed', 'pushed'])
+})
 
 it.each(['its read', 'its failure', 'an earlier head’s read'] as const)(
   'a queued watch planned from %s follows a cadence change from that same anchor',

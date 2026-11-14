@@ -3,6 +3,7 @@ import { directWire, directWireTracker } from '../../transport/rpc/direct-rpc-wi
 import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import { fetchPRForBranch } from './github-pr-rpc'
 import { loadPrBranchReview, type PrBranchReview } from './mobile-pr-sidebar-state'
+import type { WorktreeGitHubPRLink } from './mobile-pr-link'
 
 const pr = {
   number: 7,
@@ -81,7 +82,7 @@ describe('loadPrBranchReview with a revalidation receipt', () => {
   }
   const deps = (reply: Awaited<ReturnType<typeof fetchPRForBranch>>) => ({
     fetchForBranch: vi.fn(async () => ({ ok: true as const, result: null })),
-    fetchWorktreeGitHubPRLink: vi.fn(async () => ({
+    fetchWorktreeGitHubPRLink: vi.fn(async (): Promise<WorktreeGitHubPRLink> => ({
       linkedPR: 7,
       suppressedGitHubPR: null,
       pushTarget: null
@@ -100,6 +101,36 @@ describe('loadPrBranchReview with a revalidation receipt', () => {
     })
     expect(review).toEqual({ ...previous, retryAfterMs: 12_000 })
     expect(loader.clearWorktreeReviewLink).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['the link moved to another PR', 7, { linkedPR: 8, suppressedGitHubPR: null }],
+    ['the shown PR is now suppressed', null, { linkedPR: null, suppressedGitHubPR: 7 }],
+    ['this read unlinked the shown PR', null, { linkedPR: 7, suppressedGitHubPR: null }]
+  ] as const)('does not keep the shown PR on a receipt when %s', async (_case, shownLink, link) => {
+    const receipt = {
+      ok: true as const,
+      result: null,
+      revalidationOnly: true,
+      retryAfterMs: 12_000
+    }
+    const loader = deps(receipt)
+    loader.fetchWorktreeGitHubPRLink.mockResolvedValue({ ...link, pushTarget: null })
+    // The linked PR moved to another branch, so the read clears the link and reads by branch.
+    loader.fetchPRForBranch.mockResolvedValueOnce(
+      link.linkedPR === 7
+        ? { ok: true, result: { ...pr, headRefName: 'other', headSha: 'head-other' } }
+        : receipt
+    )
+    const review = await loadPrBranchReview(loader, {
+      worktreeId: 'repo-1::/repo',
+      branch: 'feature',
+      headSha: 'head-b',
+      intent: 'background',
+      previous: { ...previous, linkedPRNumber: shownLink }
+    })
+    expect(review).toMatchObject({ kind: 'none', retryAfterMs: 12_000 })
+    expect(review).not.toHaveProperty('pr')
   })
 
   it('shows a cached answer the host is still revalidating, then asks again soon', async () => {

@@ -209,6 +209,69 @@ describe('visible hosted review scheduler', () => {
       expect(noPR.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
     })
   })
+
+  describe('a read that failed under a stretched cadence', () => {
+    // Minimal: the failure's automatic retry is 600 s out; Default would retry it after 60 s.
+    const failing = () =>
+      target({
+        fetchedAt: null,
+        intervalMs: 600_000,
+        foregroundIntervalMs: 60_000,
+        cadence: 'minimal',
+        selected: true,
+        refresh: vi.fn(async () => false)
+      })
+
+    it('does not hold back the next HEAD', async () => {
+      const row = failing()
+      const scheduler = setup([row])
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(row.refresh).toHaveBeenCalledTimes(1)
+      scheduler.update([{ ...row, revision: 'new-head|' }])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(row.refresh).toHaveBeenCalledTimes(2)
+      expect(row.refresh).toHaveBeenLastCalledWith(true, expect.any(AbortSignal), 'discovery')
+    })
+
+    it('reads on a return once Default would, not before', async () => {
+      const row = failing()
+      const scheduler = setup([row])
+      await vi.advanceTimersByTimeAsync(0)
+      scheduler.setVisible(false)
+      await vi.advanceTimersByTimeAsync(30_000)
+      scheduler.setVisible(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(row.refresh).toHaveBeenCalledTimes(1)
+      scheduler.setVisible(false)
+      await vi.advanceTimersByTimeAsync(32_000)
+      scheduler.setVisible(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(row.refresh).toHaveBeenCalledTimes(2)
+      expect(row.refresh).toHaveBeenLastCalledWith(true, expect.any(AbortSignal), 'discovery')
+    })
+  })
+
+  it('reads a row newly shown in a visible window once Default would, else on its own interval', async () => {
+    const scheduler = setup([])
+    // Reduced reads every 300 s; Default every 60 s. One row's data is 120 s old, the other's 30 s.
+    const row = (key: string, ageMs: number) =>
+      target({
+        key,
+        fetchedAt: Date.now() - ageMs,
+        intervalMs: 300_000,
+        foregroundIntervalMs: 60_000,
+        cadence: 'reduced',
+        selected: true
+      })
+    const old = row('old', 120_000)
+    const young = row('young', 30_000)
+    scheduler.update([old, young])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(old.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
+    expect(young.refresh).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(270_000)
+    expect(young.refresh).toHaveBeenCalledWith(false, expect.any(AbortSignal), 'timer')
+  })
 })
 
 it('limits refocus discovery to opted-in open GitHub rows and the existing stopped interval', async () => {
