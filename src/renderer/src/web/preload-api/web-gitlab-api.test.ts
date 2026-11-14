@@ -29,7 +29,8 @@ describe('web GitLab API routing', () => {
     expect(callRuntimeResult).not.toHaveBeenCalled()
   })
 
-  it('refuses approval when the runtime status read fails', async () => {
+  // Why: upstream #38766 surfaces a failed capability check as the real error, not "update the server".
+  it('rejects approval with the real error when the runtime status read fails', async () => {
     getRemoteRuntimeStatus.mockRejectedValue(new Error('offline'))
     await expect(
       createGitLabApi().updateMR({
@@ -38,7 +39,7 @@ describe('web GitLab API routing', () => {
         iid: 7,
         updates: { approval: 'unapprove' }
       })
-    ).resolves.toEqual({ ok: false, error: GITLAB_MR_APPROVAL_UPDATE_REQUIRED_MESSAGE })
+    ).rejects.toThrow('offline')
     expect(callRuntimeResult).not.toHaveBeenCalled()
   })
 
