@@ -199,17 +199,22 @@ export async function publishProviderOwnership(
   }
   const file = await open(pending, 'wx', 0o600)
   try {
-    await file.writeFile(JSON.stringify(record))
-    await file.sync()
-  } finally {
-    await file.close()
-  }
-  await rename(pending, path)
-  const dir = await open(directory, 'r')
-  try {
-    await dir.sync()
-  } finally {
-    await dir.close()
+    try {
+      await file.writeFile(JSON.stringify(record))
+      await file.sync()
+    } finally {
+      await file.close()
+    }
+    await rename(pending, path)
+    const dir = await open(directory, 'r')
+    try {
+      await dir.sync()
+    } finally {
+      await dir.close()
+    }
+  } catch (error) {
+    await unlink(pending).catch(() => {})
+    throw error
   }
   return {
     identity,

@@ -19,7 +19,23 @@ export function drainDirectProviderOutput(
     }
   }
   const sources = [stdout, stderr].filter((stream): stream is Readable => stream !== null)
-  return drainOutput(sources, [outputStdout, outputStderr])
+  return drainOutput(sources, [outputStdout, outputStderr]).finally(() => {
+    for (const [source, output] of [
+      [stdout, outputStdout],
+      [stderr, outputStderr]
+    ] as const) {
+      if (source && !source.destroyed) {
+        source.unpipe(output)
+        source.pause()
+        const remaining = source.readableLength
+        if (remaining > 0) {
+          output.write(source.read(remaining))
+        }
+        source.destroy()
+      }
+      output.end()
+    }
+  })
 }
 
 async function drainOutput(sources: Readable[], outputs: PassThrough[]): Promise<void> {
