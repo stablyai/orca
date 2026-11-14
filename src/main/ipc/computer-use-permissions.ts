@@ -17,7 +17,9 @@ export function registerComputerUsePermissionHandlers(): void {
     ): Promise<ComputerUsePermissionSetupResult> => {
       const { openComputerUsePermissions } =
         await import('../computer/macos-permissions/macos-computer-use-permissions')
-      return openComputerUsePermissions(args?.id, mainI18n.resolvedLanguage ?? mainI18n.language)
+      return openComputerUsePermissions(args?.id, {
+        locale: mainI18n.resolvedLanguage ?? mainI18n.language
+      })
     }
   )
   ipcMain.handle(

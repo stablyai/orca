@@ -108,6 +108,7 @@ export function PrTabBottomAction({ tab, bottomInset }: { tab: MobilePrTab; bott
           error={notice.error}
           warning={notice.warning}
           undeliveredPrompt={notice.undeliveredPrompt}
+          opens={notice.opens}
           errorStyle={styles.errorText}
         />
         <ActionButton

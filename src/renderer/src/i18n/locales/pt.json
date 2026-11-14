@@ -16,7 +16,8 @@
   },
   "common": {
     "retry": "Tentar novamente",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "delete": "Excluir"
   },
   "quickOpen": {
     "moreMatchesAvailable": "Mais resultados podem estar disponíveis. Refine sua busca para reduzir os resultados.",
@@ -42,10 +43,6 @@
       "restore": "Restaurar",
       "discard": "Descartar",
       "discardAll": "Descartar tudo",
-      "deleteUntrackedTitle_one": "Excluir {{count}} arquivo não rastreado?",
-      "deleteUntrackedTitle_other": "Excluir {{count}} arquivos não rastreados?",
-      "deleteUntrackedTitle_many": "Excluir {{count}} arquivos não rastreados?",
-      "deleteCount": "Excluir {{count}}",
       "deleteUntrackedFilesDescription_one": "Isso excluirá permanentemente {{count}} arquivo não rastreado. Essa ação não pode ser desfeita.",
       "unstagedFilesIncludingUntrackedDescription_one": "Isso reverterá as alterações não preparadas em {{count}} arquivo e o excluirá permanentemente se ele não for rastreado. Essa ação não pode ser desfeita."
     },
@@ -1545,9 +1542,7 @@
         "importInvalid": "{{count}} linhas ilegíveis",
         "importUndecryptable": "{{count}} protegido pelo navegador; exporte um CSV dele",
         "imported": "{{count}} senhas importadas",
-        "deleteAllConfirmTitle": "Excluir todos os dados de senha?",
         "deleteAllConfirmDescription": "Cada senha salva no perfil {{profile}} é excluída permanentemente. Isso não pode ser desfeito.",
-        "deleteAll": "Excluir dados",
         "deletedAll": "Dados de senha excluídos",
         "form": {
           "invalidSite": "Insira um endereço de site, como exemplo.com.",
@@ -1582,7 +1577,6 @@
         "deleteAllDescription": "Todas as senhas salvas, notas e sites marcados para nunca salvar no perfil {{profile}}.",
         "empty": "O Orca oferece a opção de salvar um login após você entrar em um site. Você também pode importá-los de outro navegador ou de um arquivo CSV.",
         "moreActions": "Mais ações para {{account}}",
-        "deleteConfirmTitle": "Excluir a senha do {{site}} para {{username}}?",
         "deleteConfirmDescription": "O Orca não preencherá mais essa senha. Isso não pode ser desfeito.",
         "deleteConfirm": "Excluir",
         "profileDescription": "Logins salvos para o perfil {{profile}}. O Orca preenche um somente quando você o seleciona em um campo de login.",
@@ -2528,9 +2522,6 @@
         "unreadableSkillSource": "Uma pasta de skill não respondeu, então este status pode estar incompleto."
       },
       "useMacosTccPromptNotice": {
-        "title": "Está vendo avisos de “O Orca gostaria de acessar…”?",
-        "description": "Mensagens de permissão do macOS podem aparecer quando um agente ou ferramenta de terminal em execução no Orca tenta acessar arquivos protegidos. Conceda Acesso Total ao Disco em Configurações para reduzir esses avisos.",
-        "openSettings": "Abrir Configurações",
         "dismiss": "Não mostrar novamente"
       },
       "useMacTccAttributionSeveredNotice": {
@@ -6709,7 +6700,6 @@
           "c6b155911b": "Todos os comandos",
           "c36912efd5": "Execute-os no botão Comandos Rápidos na barra de abas, ou clique com o botão direito dentro de qualquer terminal.",
           "3d9dc558e8": "Este comando rápido será removido da sua lista salva.",
-          "3edf3deaf8": "Excluir \"{{value0}}\"?",
           "9fcfc29519": "Inserir",
           "9b3e338d62": "Enter",
           "4ccc63da87": "Agente",
@@ -8581,8 +8571,7 @@
           "60f8a673a7": "Voltar ao app",
           "6503182299": "Checklist de introdução",
           "82db1b7de4": "Checklist de introdução, {{value0}} de {{value1}} concluído(s). Mostrar guia de configuração.",
-          "df38d612b7": "Nenhum projeto adicionado ainda.",
-          "3e483e256b": "Nenhuma configuração de projeto correspondente."
+          "df38d612b7": "Nenhum projeto adicionado ainda."
         },
         "computer": {
           "use": {
@@ -10586,8 +10575,7 @@
                   "5ddd8cac7f": "Descartar todas as alterações staged?",
                   "d4df3a61df": "Descartar alterações em \"{{value0}}\"?",
                   "5c0bdbc4cb": "Restaurar \"{{value0}}\"?",
-                  "d97bf697c9": "Isso vai excluir este arquivo permanentemente. Isso não pode ser desfeito.",
-                  "96c772bee9": "Excluir \"{{value0}}\"?"
+                  "d97bf697c9": "Isso vai excluir este arquivo permanentemente. Isso não pode ser desfeito."
                 },
                 "dialog": {
                   "3bc61dc989": "Cancelar",
@@ -10945,7 +10933,6 @@
             "abf59262fb": "Revise e edite a entrada de comando completa antes de iniciar um agente.",
             "4ede779461": "Resolver Conflitos de Review Com IA",
             "3b203c62f8": "Isso vai remover o comentário do PR permanentemente.",
-            "ea9b649ce3": "Excluir comentário?",
             "5788d1059d": "Não foi possível atualizar a thread de review. Verifique o orçamento da API do GitHub.",
             "07871c0589": "Vincular outro PR",
             "7f4489f370": "Atualizar",
@@ -11284,7 +11271,6 @@
             "525259fa17": "Os detalhes da pilha estão temporariamente indisponíveis."
           },
           "useFileDeletion": {
-            "d979a4fbb5": "Excluir '{{value0}}' permanentemente?",
             "92276aceb7": "Excluir",
             "7fb9435c86": "Isso exclui permanentemente o diretório e seu conteúdo no host remoto. Isso não pode ser desfeito.",
             "23e98f192f": "Isso exclui permanentemente o arquivo no host remoto. Isso não pode ser desfeito.",
@@ -11491,7 +11477,6 @@
             "unstageCount": "Remover do stage ({{count}})"
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "Excluir esta sessão?",
             "description": "\"{{value0}}\" será excluída. Depois de excluída, ela também não poderá mais ser retomada pela própria linha de comando de {{value1}}.",
             "remoteDescription": "\"{{value0}}\" será excluída de {{value2}}. Depois de excluída, também não poderá mais ser retomada pela linha de comando do {{value1}}.",
             "confirm": "Excluir"
@@ -12382,11 +12367,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancelar",
-          "591f330288": "Excluir Grupo de Projeto",
           "2c14ce677a": "Excluindo...",
           "0e0e6764af": "Projetos contidos",
           "55f75628c0": "As pastas de projeto no disco não são excluídas.",
-          "fec7e9c8ae": "Excluir Grupo",
           "removeContainedProjects_one": "Remover {{count}} projeto contido no grupo",
           "removeContainedProjects_other": "Remover {{count}} projetos contidos no grupo",
           "removeContainedProjects_many": "Remover {{count}} projetos contidos no grupo",
@@ -12497,16 +12480,12 @@
           "otherClientsAria": "Ocultar espaços de trabalho criados por outros clientes Orca em servidores remotos compartilhados"
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "Revisar branches mantidas",
           "f21976c9a8": "Selecione as branches locais que você quer forçar a exclusão. As branches não selecionadas permanecem em seus repositórios.",
           "38c947f7c5": "Selecionar todas",
           "9602129d38": "{{value0}} de {{value1}} selecionada(s)",
           "ee39e872d5": "Pode estar não mesclada",
           "676db406fd": "Head indisponível",
-          "285e1e4882": "Cancelar",
-          "a0f9863597_one": "Forçar Exclusão de {{count}} Branch",
-          "a0f9863597_other": "Forçar Exclusão de {{count}} Branches",
-          "a0f9863597_many": "Forçar Exclusão de {{count}} Branches"
+          "285e1e4882": "Cancelar"
         },
         "local": {
           "base": {
@@ -12532,8 +12511,6 @@
           "5cc1a6701c": "Abrir Configurações",
           "2b56b35f53": "Você pode alterar isso nas Configurações.",
           "dd3a45bbbd": "Vamos pular esta confirmação na próxima vez.",
-          "fc23c4cbdf": "Excluir Espaço de Trabalho",
-          "86f0ae1257": "Excluir Espaços de Trabalho",
           "removeFolderProjectInstead": "Remova o projeto de pasta em vez de excluir este espaço de trabalho.",
           "gitBlocksMainWorktree": "O Git não permite remover a worktree principal.",
           "removeBatchFolder_one": "Remover <target>{{count}} espaço de trabalho</target> do Orca. As pastas dos projetos no disco não serão excluídas.",
@@ -12963,9 +12940,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "Cancelar",
           "cf95e3b5bb": "Fechar",
-          "deleteWorkspace": "Excluir Espaço de Trabalho",
           "deleting": "Excluindo...",
-          "forceDelete": "Forçar Exclusão",
           "forceDeleting": "Forçando exclusão..."
         },
         "WorktreeCardStatusSlot": {
@@ -13757,7 +13732,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Remover link",
           "cdfe166f6f": "Editar link",
-          "bfc813e909": "Abrir link",
           "7b0b945fdc": "Cole ou digite um link…",
           "copyLink": "Copiar link"
         },
@@ -14448,7 +14422,6 @@
           "loading": "Carregando conteúdo…",
           "deleteFailed": "O Orca não conseguiu excluir isto do Cloud.",
           "deleted": "Excluído do Cloud",
-          "confirmDelete": "Confirmar exclusão",
           "moreActions": "Mais ações para {{name}}",
           "deletePackage": "Excluir do Cloud"
         },
@@ -14587,10 +14560,8 @@
       },
       "automations": {
         "AutomationsPage": {
-          "c3a28c9793": "Selecione uma automação para ver as execuções.",
           "295698292f": "Executar novamente",
           "0e110a3469": "Execuções",
-          "bb1b2cd31e": "Visão geral",
           "25060635c6": "Adicionar novo",
           "d207ab4c25": "Começar de um modelo",
           "15e0bfb13b": "Excluir",
@@ -14598,9 +14569,7 @@
           "2faecab10b": "Executar Agora",
           "13118faadf": "Projeto desconhecido",
           "73f630b49d": "Cancelar",
-          "9adfab2596": "Excluir Automação Externa",
           "1e2e41392f": "Não perguntar novamente",
-          "080dcb5fbb": "Excluir Automação",
           "19a6e30eae": "Atualizar automações",
           "77c2778945": "Automações",
           "e1bf9b1512": "O espaço de trabalho não está disponível.",
@@ -14630,8 +14599,6 @@
           "8500baacb4": "origem externa",
           "36f71740a7": "Espaço de trabalho selecionado",
           "cd8397cc32": "Novo espaço de trabalho em cada execução",
-          "pendingAutomationMissing": "Automação não está mais disponível.",
-          "pendingAutomationRunMissing": "Histórico de execução não está mais disponível.",
           "paused": "Pausada",
           "missingWorkspace": "Espaço de trabalho faltando",
           "usageUnavailable": "Uso indisponível",
@@ -14640,7 +14607,6 @@
           "latestSavedOutput": "Última saída salva",
           "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
           "retryFullOutput": "Tentar novamente",
-          "backToList": "Todas as automações",
           "tableName": "Nome",
           "tableProject": "Projeto",
           "tableHost": "Host",
@@ -14650,7 +14616,6 @@
           "rowActions": "Ações da automação",
           "tableLastRun": "Última execução",
           "ownerChanged": "Esta automação mudou de host. Atualize e tente novamente.",
-          "runError": "Erro:",
           "deleteAutomationDescription": "Excluir <name/> e seu histórico de execuções. Os espaços de trabalho criados por execuções anteriores não serão excluídos.",
           "deleteExternalAutomationDescription": "Excluir <name/> de <provider/> em <host/>.",
           "runUsageSummaryTokens_one": "{{cost}} (est.) · {{tokens}} token",
@@ -14763,8 +14728,6 @@
           "18763ded26": "Programação",
           "dbef8dc110": "Esta automação SSH só é executada enquanto o Orca conseguir alcançar o host SSH. Se a reconexão precisar de credenciais interativas ou o host estiver indisponível, a execução é registrada como ignorada.",
           "1f6026358e": "Excluir automação",
-          "d79452fb30": "Retomar automação",
-          "91a4155e95": "Pausar automação",
           "2fb1605beb": "Executar Agora",
           "221916d93c": "Crie uma automação para começar a agendar trabalho de agente.",
           "b09b2384fd": "Pausada",
@@ -14935,13 +14898,11 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Ainda sem execuções.",
-          "9974a2b429": "Status",
           "13988187b3": "Tokens",
           "86a248187e": "Gasto",
           "149c0b49c7": "Espaço de Trabalho",
           "8faaa00726": "Execução",
-          "53fc5f07ab": "Histórico de execução",
-          "a00e38d1a3": "n/d",
+          "a00e38d1a3": "—",
           "historyUnavailable": "O histórico de execução não está disponível a partir deste host. Isso não significa que a automação falhou ou não tem execuções."
         },
         "AutomationSchedulePicker": {
@@ -15028,10 +14989,6 @@
           "copyFailed": "Falha ao copiar",
           "copyPrompt": "Copiar prompt"
         },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Contexto da execução",
-          "33741dd973": "Voltar para execuções"
-        },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, ordenado crescente",
           "sortedDescending": "{{value0}}, ordenado decrescente"
@@ -15046,8 +15003,7 @@
           "hostReselection": "Edite a automação e selecione novamente o host antes de executá-la."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Trilha de navegação de automações",
-          "runDetails": "Detalhes da execução"
+          "ariaLabel": "Trilha de navegação de automações"
         },
         "AutomationEditorPromptSection": {
           "a7c3e91b04": "Editar nome"
@@ -15139,14 +15095,13 @@
           "noWorkspaceLaunched": "Nenhum espaço de trabalho iniciado"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "Não iniciado",
-          "namedWorkspaceGone": "{{name}} (não está mais disponível)"
+          "notLaunched": "Não iniciado"
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "n/d"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "Host SSH",
@@ -17542,7 +17497,6 @@
             "1d411fb6a5": "Salvar um comando rápido para este repositório",
             "8f1e971966": "Adicionar comando rápido",
             "3220e2da27": "Este comando rápido será removido da sua lista salva.",
-            "e8e1a52edb": "Excluir \"{{value0}}\"?",
             "37e1bb90ce": "Executar: {{value0}}",
             "77ac113df0": "Iniciar {{value0}}: {{value1}}",
             "7b1c9d6ae1": "Executar",
@@ -17972,7 +17926,6 @@
             "7eee951968": "Escaneando espaços de trabalho",
             "191f0bc98e": "Fechar",
             "7ae2ad30f4": "Atualizar",
-            "b2c1331844": "Excluir Espaços de Trabalho Inativos",
             "7f451a3e2c": "Não foi possível ignorar a sugestão de limpeza",
             "662b8ec3f8": "Falha na varredura de limpeza de espaços de trabalho",
             "9cc26c019d": "Remover",
@@ -17982,7 +17935,6 @@
             "1d3503357d": "Você pode fechar isto e voltar enquanto a exclusão continua.",
             "4c2990886e": "{{value0}}/{{value1}} excluídos",
             "86ba852118": "{{value0}}, {{value1}} falharam",
-            "deleteButtonCount": "Excluir {{value0}}",
             "archivedStatus": "Arquivado",
             "74f6c16279": "Voltar"
           },
@@ -18044,7 +17996,6 @@
         "ArtifactsPage": {
           "signInAgain": "Entre no Orca novamente para carregar os artefatos.",
           "loadFailed": "Não foi possível carregar os artefatos.",
-          "deleteTitle": "Excluir artefato?",
           "deleteDescription": "\"{{name}}\" não estará mais disponível em seu link público.",
           "delete": "Excluir",
           "deleteFailed": "Não foi possível excluir o artefato.",
@@ -20463,7 +20414,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Abrir com (quando o foco não estiver em um campo editável)"
+            "openWith": "Abrir com (exceto ao digitar em um campo de texto do Orca)"
           }
         },
         "pluginInstallCount": {
@@ -21042,8 +20993,7 @@
         "stateIdleCount_many": "Parado: {{value0}}",
         "stateUnverifiableCount_one": "Status indisponível: {{value0}}",
         "stateUnverifiableCount_other": "Status indisponível: {{value0}}",
-        "stateUnverifiableCount_many": "Status indisponível: {{value0}}",
-        "showAgent": "Mostrar {{value0}} na conversa"
+        "stateUnverifiableCount_many": "Status indisponível: {{value0}}"
       },
       "jumpToLatest": "Ir para o mais recente",
       "toggle": {
@@ -22070,11 +22020,8 @@
           "candidateName": "{{value0}} em {{value1}}"
         },
         "stopAgents": {
-          "titleMany": "Parar estes agentes?",
           "descriptionOne": "A exclusão interromperá o trabalho atual do agente.",
-          "descriptionMany": "A exclusão interromperá o trabalho atual destes agentes.",
-          "confirm": "Parar agentes e excluir",
-          "confirmOne": "Parar agente e excluir"
+          "descriptionMany": "A exclusão interromperá o trabalho atual destes agentes."
         },
         "candidateRow": {
           "gitChip": {
@@ -22087,10 +22034,7 @@
         "confirm": {
           "deletingTitle_one": "Excluindo {{count}} espaço de trabalho",
           "deletingTitle_other": "Excluindo {{count}} espaços de trabalho",
-          "deleteTitle_one": "Excluir {{count}} espaço de trabalho?",
-          "deleteTitle_other": "Excluir {{count}} espaços de trabalho?",
-          "deletingTitle_many": "Excluindo {{count}} espaços de trabalho",
-          "deleteTitle_many": "Excluir {{count}} espaços de trabalho?"
+          "deletingTitle_many": "Excluindo {{count}} espaços de trabalho"
         }
       },
       "creation": {
@@ -22819,8 +22763,7 @@
     "trashFailed": {
       "titleRecycleBin": "Não foi possível mover '{{name}}' para a Lixeira. Excluir permanentemente?",
       "titleTrash": "Não foi possível mover '{{name}}' para a Lixeira. Excluir permanentemente?",
-      "description": "Isso não pode ser desfeito.",
-      "confirm": "Excluir permanentemente"
+      "description": "Isso não pode ser desfeito."
     }
   },
   "sparsePreset": {
@@ -22971,6 +22914,11 @@
         "reasonSharedSession": "Também aberta em outro painel",
         "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
         "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel."
+      },
+      "oauthUsage": {
+        "title": "Consulta de uso do Claude",
+        "description": "Usa seu login do Claude Code para consultar o uso, os créditos e as contas inativas. Desative para usar apenas as leituras em tempo real das sessões do terminal.",
+        "about": "Sobre a consulta de uso do Claude"
       }
     },
     "managedData": {
@@ -23033,7 +22981,6 @@
     "nestedRemoval": {
       "refreshFailed": "Não foi possível atualizar a lista de espaços de trabalho",
       "review": "Excluir com worktrees aninhadas…",
-      "title": "Excluir espaço de trabalho e worktrees aninhadas?",
       "description": "Isso exclui permanentemente \"{{name}}\", todas as worktrees aninhadas listadas abaixo e todos os arquivos nelas, incluindo alterações não commitadas. Seus terminais e agentes serão interrompidos.",
       "detached": "HEAD desanexado",
       "loading": "Verificando worktrees aninhadas…",
@@ -23041,7 +22988,6 @@
       "cancel": "Cancelar",
       "retry": "Revisar novamente",
       "deleting": "Excluindo…",
-      "confirm": "Excluir todas as worktrees listadas",
       "preservedBranches": "Algumas branches de worktrees aninhadas foram mantidas"
     },
     "setupTerminalTitle": "Configuração",

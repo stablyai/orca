@@ -4,8 +4,8 @@ import {
 } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import type {
   PinnedWorktreeDisplayPolicy,
   WorktreeRow

@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useTranslate } from '@/i18n/use-translate'
 import {
-  normalizeExternalBrowserUrl,
-  redactKagiSessionToken
+  redactKagiSessionToken,
+  resolveRemoteFailureExternalUrl
 } from '../../../../../shared/browser-url'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
@@ -171,6 +171,12 @@ export function RemoteBrowserPageContextMenu({
     el.style.top = `${Math.max(0, renderY) + offsetY}px`
   }, [contextMenu])
 
+  // The server's loopback address would open this machine's, not the page's.
+  const linkExternalUrl = contextMenu.linkUrl
+    ? resolveRemoteFailureExternalUrl(contextMenu.linkUrl)
+    : null
+  const pageExternalUrl = resolveRemoteFailureExternalUrl(contextMenu.pageUrl)
+
   return createPortal(
     <>
       <div className="fixed inset-0 z-50" onPointerDown={onDismiss} />
@@ -193,22 +199,21 @@ export function RemoteBrowserPageContextMenu({
                 'Open Link In Orca Browser'
               )}
             </button>
-            <button
-              role="menuitem"
-              className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
-              onClick={() => {
-                const targetUrl = normalizeExternalBrowserUrl(contextMenu.linkUrl!)
-                if (targetUrl) {
-                  void window.api.shell.openUrl(targetUrl)
-                }
-                onDismiss()
-              }}
-            >
-              {t(
-                'auto.components.browser.pane.BrowserPane.8ce4f6b12e',
-                'Open Link In Default Browser'
-              )}
-            </button>
+            {linkExternalUrl ? (
+              <button
+                role="menuitem"
+                className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                onClick={() => {
+                  void window.api.shell.openUrl(linkExternalUrl)
+                  onDismiss()
+                }}
+              >
+                {t(
+                  'auto.components.browser.pane.BrowserPane.8ce4f6b12e',
+                  'Open Link In Default Browser'
+                )}
+              </button>
+            ) : null}
             <button
               role="menuitem"
               className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
@@ -259,19 +264,21 @@ export function RemoteBrowserPageContextMenu({
           {t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
         </button>
         <div className="my-1 h-px bg-border/70" />
-        <button
-          role="menuitem"
-          className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
-          onClick={() => {
-            const targetUrl = normalizeExternalBrowserUrl(contextMenu.pageUrl)
-            if (targetUrl) {
-              void window.api.shell.openUrl(targetUrl)
-            }
-            onDismiss()
-          }}
-        >
-          {t('auto.components.browser.pane.BrowserPane.f7ab83f7ed', 'Open Page In Default Browser')}
-        </button>
+        {pageExternalUrl ? (
+          <button
+            role="menuitem"
+            className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+            onClick={() => {
+              void window.api.shell.openUrl(pageExternalUrl)
+              onDismiss()
+            }}
+          >
+            {t(
+              'auto.components.browser.pane.BrowserPane.f7ab83f7ed',
+              'Open Page In Default Browser'
+            )}
+          </button>
+        ) : null}
         <button
           role="menuitem"
           className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"

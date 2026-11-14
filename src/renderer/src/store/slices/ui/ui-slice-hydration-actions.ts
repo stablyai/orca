@@ -19,7 +19,7 @@ import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
-import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/card-properties'
+import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter

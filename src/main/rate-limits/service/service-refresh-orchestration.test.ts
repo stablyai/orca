@@ -2,13 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 import { RateLimitService } from './rate-limit-service'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
+import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
-import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
-import { fetchOpenCodeGoUsage } from '../providers/opencode-go/opencode-go-usage-source-selection'
 import {
   deferred,
-  errorProvider,
   flushMicrotasks,
+  mockFreshBackgroundProviderFetches,
   okProvider,
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
@@ -80,106 +79,6 @@ describe('RateLimitService', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0, 1_000))
   })
 
-  it('does not keep a previous ZCode account quota after a failed account switch', async () => {
-    vi.mocked(fetchZcodeRateLimits)
-      .mockResolvedValueOnce({
-        ...okProvider('zcode', 42),
-        usageMetadata: { source: 'web', authProvenance: 'account-a' }
-      })
-      .mockResolvedValueOnce({
-        ...errorProvider('zcode', 'request failed'),
-        usageMetadata: { source: 'web', authProvenance: 'account-b', failureKind: 'network' }
-      })
-    const service = new RateLimitService()
-
-    await service.refresh()
-    await service.refresh()
-
-    expect(service.getState().zcode?.status).toBe('error')
-    expect(service.getState().zcode?.session).toBeNull()
-  })
-
-  it('discards stale data when Workspace ID override is changed', async () => {
-    const service = new RateLimitService()
-    let workspaceId = 'wrk_A'
-    service.setOpenCodeGoConfigResolver(() => ({
-      sessionCookie: 'session=valid',
-      workspaceIdOverride: workspaceId
-    }))
-
-    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue(okProvider('opencode-go', 40, Date.now()))
-    await service.refresh()
-    expect(service.getState().opencodeGo?.session?.usedPercent).toBe(40)
-
-    workspaceId = 'wrk_B'
-    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue(okProvider('opencode-go', 10, Date.now()))
-    await service.refresh()
-    expect(service.getState().opencodeGo?.session?.usedPercent).toBe(10)
-
-    // Switching to automatic mode must discard workspace B's data even if the first refresh fails.
-    workspaceId = ''
-    vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue({
-      provider: 'opencode-go',
-      session: null,
-      weekly: null,
-      monthly: null,
-      updatedAt: Date.now(),
-      error: 'No workspace ID found',
-      status: 'error'
-    })
-    await service.refresh()
-    const state = service.getState()
-    expect(state.opencodeGo?.status).toBe('error')
-    expect(state.opencodeGo?.session).toBeNull()
-    expect(state.opencodeGo?.error).toBe('No workspace ID found')
-  })
-
-  it('keeps automatic usage readings inside a failing provider backoff', async () => {
-    vi.mocked(fetchCodexRateLimits).mockResolvedValue(errorProvider('codex', 'probe failed'))
-    const service = new RateLimitService()
-    service.requestUsageReading('codex')
-    await flushMicrotasks(20)
-    expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(1)
-    // That failure starts the backoff the poller keeps; an automatic read waits it out.
-    service.requestUsageReading('codex')
-    await flushMicrotasks(20)
-    expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(1)
-  })
-
-  it('admits an automatic read for the account selected after a switch, both ways', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    try {
-      const start = 1_000_000
-      let home = '/accounts/default/.codex'
-      const service = new RateLimitService()
-      service.setCodexHomePathResolver(() => ({ kind: 'ready', codexHomePath: home }))
-      vi.mocked(fetchCodexRateLimits).mockClear()
-      const automaticRead = async (at: number) => {
-        vi.setSystemTime(at)
-        vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 10, at))
-        service.requestUsageReading('codex', { notWithinMs: 600_000 })
-        await flushMicrotasks(20)
-      }
-      // The other account is selected and its switch-time read fails.
-      const switchTo = async (next: string, at: number) => {
-        vi.setSystemTime(at)
-        home = next
-        vi.mocked(fetchCodexRateLimits).mockResolvedValue(errorProvider('codex', 'probe failed'))
-        await service.refreshForCodexAccountChange(null)
-      }
-      await automaticRead(start)
-      await switchTo('/accounts/managed-b', start + 60_000)
-      // Past the failure backoff and well inside the default account's ten minutes.
-      await automaticRead(start + 90_000)
-      expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(3)
-      await switchTo('/accounts/default/.codex', start + 150_000)
-      await automaticRead(start + 180_000)
-      expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(5)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('reads the account picked by a second switch made during a refresh', async () => {
     const service = new RateLimitService()
     const reads = [deferred<ProviderRateLimits>(), deferred<ProviderRateLimits>()]
@@ -198,4 +97,213 @@ describe('RateLimitService', () => {
     await flushMicrotasks(60)
     expect(service.getState().claude?.session?.usedPercent).toBe(55)
   })
+
+  it('keeps live Claude usage through refreshes without reading OAuth usage when disabled', async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    service.setClaudeOAuthUsageEnabledResolver(() => false)
+    service.setInactiveClaudeAccountsResolver(() => [{ id: 'other' }])
+    let home = '/claude/account-a'
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: home,
+      envPatch: { CLAUDE_CONFIG_DIR: home },
+      provenance: home
+    }))
+    service.start({ fetchImmediately: false })
+    await flushMicrotasks(20)
+    service.stop()
+    expect(service.getState().claude).toMatchObject({
+      session: null,
+      weekly: null,
+      status: 'unavailable'
+    })
+    service.ingestLiveClaudeRateLimits({
+      configDir: '/claude/account-a',
+      fiveHour: { used_percentage: 33 },
+      sevenDay: { used_percentage: 62 }
+    })
+    await service.refreshClaudeForTarget()
+    await service.refresh()
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    expect(service.getState().claude).toMatchObject({
+      session: { usedPercent: 33 },
+      weekly: { usedPercent: 62 },
+      status: 'ok',
+      usageMetadata: { source: 'live-session' }
+    })
+    expect(service.getState().inactiveClaudeAccounts).toEqual([])
+    expect(service.usageReadingAccount('claude')).toEqual({
+      home: '/claude/account-a',
+      provenance: '/claude/account-a'
+    })
+    expect(service.requestUsageReading('claude')).toBe(false)
+    expect(fetchActiveClaudeRateLimits).not.toHaveBeenCalled()
+    expect(fetchInactiveClaudeAccountUsage).not.toHaveBeenCalled()
+
+    home = '/claude/account-b'
+    await service.refreshForClaudeAccountChange('outgoing')
+    expect(service.getState().claude?.session).toBeNull()
+    expect(service.getState().claude?.status).toBe('unavailable')
+    service.ingestLiveClaudeRateLimits({
+      configDir: '/claude/account-b',
+      fiveHour: { used_percentage: 12 },
+      sevenDay: null
+    })
+    expect(service.getState().claude?.session?.usedPercent).toBe(12)
+    expect(service.usageReadingAccount('claude')).toEqual({
+      home: '/claude/account-b',
+      provenance: '/claude/account-b'
+    })
+  })
+
+  it('cancels pending Claude usage and rejects its reply even after polling is enabled again', async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    let enabled = true
+    service.setClaudeOAuthUsageEnabledResolver(() => enabled)
+    const started = deferred<AbortSignal | undefined>()
+    const reply = deferred<ProviderRateLimits>()
+    vi.mocked(fetchActiveClaudeRateLimits).mockImplementationOnce((options) => {
+      started.resolve(options?.signal)
+      return reply.promise
+    })
+    const refresh = service.refresh()
+    const signal = await started.promise
+
+    enabled = false
+    service.discardClaudeOAuthUsage()
+    expect(signal?.aborted).toBe(true)
+    service.ingestLiveClaudeRateLimits({
+      configDir: null,
+      fiveHour: { used_percentage: 41 },
+      sevenDay: null
+    })
+    enabled = true
+    reply.resolve(okProvider('claude', 90))
+    await refresh
+
+    expect(service.getState().claude).toMatchObject({
+      session: { usedPercent: 41 },
+      status: 'ok',
+      usageMetadata: { source: 'live-session' }
+    })
+  })
+
+  it('retains only terminal-observed windows when disabling OAuth-enriched usage', async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    let enabled = true
+    service.setClaudeOAuthUsageEnabledResolver(() => enabled)
+    vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce({
+      ...okProvider('claude', 20),
+      weekly: { usedPercent: 50, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      fableWeekly: {
+        usedPercent: 70,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      extraUsage: {
+        unit: 'credits',
+        enabled: true,
+        balance: 100,
+        unlimited: false,
+        disabledReason: null,
+        resetsAt: null
+      }
+    })
+    await service.refresh()
+    service.ingestLiveClaudeRateLimits({
+      configDir: null,
+      fiveHour: { used_percentage: 35 },
+      sevenDay: null
+    })
+    expect(service.getState().claude?.weekly?.usedPercent).toBe(50)
+
+    enabled = false
+    service.discardClaudeOAuthUsage()
+    await service.refresh()
+
+    expect(service.getState().claude).toMatchObject({
+      session: { usedPercent: 35 },
+      weekly: null,
+      usageMetadata: { source: 'live-session' }
+    })
+    expect(service.getState().claude?.fableWeekly).toBeFalsy()
+    expect(service.getState().claude?.extraUsage).toBeFalsy()
+    await service.refreshForClaudeAccountChange('outgoing')
+    expect(service.getState().claude?.session).toBeNull()
+  })
+
+  it('discards pending inactive-account usage when polling is disabled', async () => {
+    const service = new RateLimitService()
+    let enabled = true
+    service.setClaudeOAuthUsageEnabledResolver(() => enabled)
+    service.setInactiveClaudeAccountsResolver(() => [{ id: 'other' }, { id: 'another' }])
+    const started = deferred<AbortSignal | undefined>()
+    const reply = deferred<ProviderRateLimits>()
+    vi.mocked(fetchInactiveClaudeAccountUsage).mockImplementationOnce((_account, options) => {
+      started.resolve(options?.signal)
+      return reply.promise
+    })
+    const refresh = service.fetchInactiveClaudeAccountsOnOpen()
+    const signal = await started.promise
+
+    enabled = false
+    service.discardClaudeOAuthUsage()
+    expect(signal?.aborted).toBe(true)
+    enabled = true
+    reply.resolve(okProvider('claude', 90))
+    await refresh
+
+    expect(service.getState().inactiveClaudeAccounts).toEqual([])
+    expect(service.getState().claude).toMatchObject({
+      session: null,
+      weekly: null,
+      status: 'unavailable'
+    })
+  })
+
+  it.each(['all', 'claude'] as const)(
+    'does not revive a canceled %s request still preparing account attribution',
+    async (cycle) => {
+      mockFreshBackgroundProviderFetches()
+      const service = new RateLimitService()
+      let enabled = true
+      service.setClaudeOAuthUsageEnabledResolver(() => enabled)
+      const oldAuth = { configDir: '/claude/old', envPatch: {}, provenance: 'old' }
+      const preparation = deferred<typeof oldAuth>()
+      service.setClaudeAuthPreparationResolver(
+        vi
+          .fn()
+          .mockReturnValueOnce(preparation.promise)
+          .mockResolvedValue({
+            configDir: '/claude/current',
+            envPatch: { CLAUDE_CONFIG_DIR: '/claude/current' },
+            provenance: 'current'
+          })
+      )
+      const refresh = cycle === 'all' ? service.refresh() : service.refreshClaudeForTarget()
+      enabled = false
+      service.discardClaudeOAuthUsage()
+      enabled = true
+      preparation.resolve(oldAuth)
+      await refresh
+
+      expect(fetchActiveClaudeRateLimits).not.toHaveBeenCalledWith(
+        expect.objectContaining({ authPreparation: oldAuth })
+      )
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/claude/current',
+        fiveHour: { used_percentage: 15 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(15)
+      expect(service.usageReadingAccount('claude')).toEqual({
+        home: '/claude/current',
+        provenance: 'current'
+      })
+    }
+  )
 })

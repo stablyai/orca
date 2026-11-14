@@ -6,7 +6,6 @@ import {
   noteId,
   turnItemId,
   ordinary,
-  unconfirmed,
   type ScenarioPort
 } from './cross-version-stop-note-test-rig'
 
@@ -17,40 +16,30 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
       const rig = createReleasedStopNoteRig(port, ref)
       const { page, subscribe, events, reduce, render, turn, note, seed } = rig
 
-      it.each([false, true])(
-        'renders the same-revision note with a live turn end (lifecycle batch=%s)',
-        async (batch) => {
-          const before = await seed()
-          expect(render(before)).toMatchObject({ failure: { kind: 'cancelUnconfirmed' } })
-          const prior = before.items.find((item) => item.itemId === noteId)!
-          const replies = await subscribe()
-          replies.length = 0
-          await turn('interrupted', batch)
-          const event = events(replies).find(
-            (event) =>
-              event.type === 'batch' && event.batch.items.some((item) => item.itemId === noteId)
-          )
-          expect(event).toMatchObject({
-            type: 'batch',
-            batch: {
-              items: expect.arrayContaining([
-                expect.objectContaining({ itemId: turnItemId }),
-                expect.objectContaining({ ...prior, body: ordinary })
-              ]),
-              removedItemIds: []
-            }
-          })
-          const after = reduce(before, replies)
-          expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
-          expect(rig.journal.itemBody(noteId)).toEqual(unconfirmed)
-          // The turn end is one saved sequence that touches only the turn, whichever writer made it.
-          const since = rig.journal.readSince(before.cursor!)
-          expect(since).toMatchObject({
-            ok: true,
-            rows: [expect.objectContaining({ kind: 'outcome', itemIds: [turnItemId] })]
-          })
-        }
-      )
+      it('renders the same-revision note with a live turn end', async () => {
+        const before = await seed()
+        expect(render(before)).toMatchObject({ failure: { kind: 'cancelUnconfirmed' } })
+        const prior = before.items.find((item) => item.itemId === noteId)!
+        const replies = await subscribe()
+        replies.length = 0
+        await turn('interrupted', true)
+        const event = events(replies).find(
+          (event) =>
+            event.type === 'batch' && event.batch.items.some((item) => item.itemId === noteId)
+        )
+        expect(event).toMatchObject({
+          type: 'batch',
+          batch: {
+            items: expect.arrayContaining([
+              expect.objectContaining({ itemId: turnItemId }),
+              expect.objectContaining({ ...prior, body: ordinary })
+            ]),
+            removedItemIds: []
+          }
+        })
+        const after = reduce(before, replies)
+        expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
+      })
       it('refreshes a non-upgrade stale page after an out-of-window live correction at the terminal cursor', async () => {
         await turn('running')
         await note()

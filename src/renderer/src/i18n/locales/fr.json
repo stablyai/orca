@@ -1894,9 +1894,6 @@
         "unreadableSkillSource": "Un dossier de skill n'a pas répondu ; cet état peut donc être incomplet."
       },
       "useMacosTccPromptNotice": {
-        "title": "Vous voyez des invites « Orca souhaite accéder à… » ?",
-        "description": "Des messages d'autorisation macOS peuvent apparaître quand un agent ou un outil de terminal exécuté dans Orca tente d'accéder à des fichiers protégés. Accordez l'Accès complet au disque dans les paramètres pour réduire ces invites.",
-        "openSettings": "Ouvrir les paramètres",
         "dismiss": "Ne plus afficher"
       },
       "useMacTccAttributionSeveredNotice": {
@@ -3577,7 +3574,6 @@
             "7eee951968": "Analyse des espaces de travail",
             "191f0bc98e": "Fermer",
             "7ae2ad30f4": "Actualiser",
-            "b2c1331844": "Supprimer les espaces de travail inactifs",
             "7f451a3e2c": "Impossible d'ignorer la suggestion de nettoyage",
             "662b8ec3f8": "Échec du scan de nettoyage des espaces de travail",
             "9cc26c019d": "Supprimer",
@@ -3587,7 +3583,6 @@
             "1d3503357d": "Vous pouvez fermer cette fenêtre et revenir pendant que la suppression continue.",
             "4c2990886e": "{{value0}}/{{value1}} supprimés",
             "86ba852118": "{{value0}}, {{value1}} en échec",
-            "deleteButtonCount": "Supprimer {{value0}}",
             "archivedStatus": "Archivé",
             "74f6c16279": "Retour"
           },
@@ -4180,7 +4175,6 @@
             "1d411fb6a5": "Enregistrer une commande rapide pour ce dépôt",
             "8f1e971966": "Ajouter une commande rapide",
             "3220e2da27": "Cette commande rapide sera retirée de votre liste enregistrée.",
-            "e8e1a52edb": "Supprimer « {{value0}} » ?",
             "37e1bb90ce": "Exécuter : {{value0}}",
             "77ac113df0": "Démarrer {{value0}} : {{value1}}",
             "7b1c9d6ae1": "Exécution",
@@ -5639,7 +5633,6 @@
           "loading": "Chargement du contenu…",
           "deleteFailed": "Orca n'a pas pu supprimer cet élément du Cloud.",
           "deleted": "Supprimé du Cloud",
-          "confirmDelete": "Confirmer la suppression",
           "moreActions": "Autres actions pour {{name}}",
           "deletePackage": "Supprimer du Cloud"
         },
@@ -5910,8 +5903,6 @@
           "5cc1a6701c": "Ouvrir les paramètres",
           "2b56b35f53": "Vous pouvez changer cela dans les paramètres.",
           "dd3a45bbbd": "Cette confirmation sera ignorée la prochaine fois.",
-          "fc23c4cbdf": "Supprimer l'espace de travail",
-          "86f0ae1257": "Supprimer les espaces de travail",
           "removeFolderProjectInstead": "Retirez le projet de dossier au lieu de supprimer cet espace de travail.",
           "gitBlocksMainWorktree": "Git ne permet pas de retirer le worktree principal.",
           "removeBatchFolder_one": "Retirer <target>{{count}} espace de travail</target> d'Orca. Les dossiers des projets sur le disque ne seront pas supprimés.",
@@ -6031,11 +6022,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Annuler",
-          "591f330288": "Supprimer le groupe de projets",
           "2c14ce677a": "Suppression...",
           "0e0e6764af": "Projets contenus",
           "55f75628c0": "Les dossiers de projets sur le disque ne sont pas supprimés.",
-          "fec7e9c8ae": "Supprimer le groupe",
           "removeContainedProjects_one": "Retirer {{count}} projet du groupe",
           "removeContainedProjects_other": "Retirer {{count}} projets du groupe",
           "removeContainedProjects_many": "Retirer {{count}} projets du groupe",
@@ -6762,9 +6751,7 @@
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "Annuler",
           "cf95e3b5bb": "Fermer",
-          "deleteWorkspace": "Supprimer l'espace de travail",
           "deleting": "Suppression...",
-          "forceDelete": "Forcer la suppression",
           "forceDeleting": "Suppression forcée..."
         },
         "HostRemoveDialog": {
@@ -7047,17 +7034,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "Examiner les branches conservées",
           "f21976c9a8": "Sélectionnez les branches locales à supprimer de force. Les branches non sélectionnées restent dans leurs dépôts.",
           "38c947f7c5": "Tout sélectionner",
           "9602129d38": "{{value0}} sur {{value1}} sélectionnées",
           "ee39e872d5": "Possiblement non fusionnée",
           "676db406fd": "Head indisponible",
-          "285e1e4882": "Annuler",
-          "a0f9863597_one": "Forcer la suppression de {{count}} branche",
-          "a0f9863597_other": "Forcer la suppression de {{count}} branches",
-          "a0f9863597_many": "Forcer la suppression de {{count}} branches",
-          "a0f9863597": "Forcer la suppression de {{count}} branches"
+          "285e1e4882": "Annuler"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "Remonter en haut"
@@ -8459,7 +8441,6 @@
           "c6b155911b": "Toutes les commandes",
           "c36912efd5": "Exécutez-les depuis le bouton Commandes rapides de la barre d'onglets, ou faites un clic droit dans n'importe quel terminal.",
           "3d9dc558e8": "Cette commande rapide sera retirée de votre liste enregistrée.",
-          "3edf3deaf8": "Supprimer « {{value0}} » ?",
           "9fcfc29519": "Insérer",
           "9b3e338d62": "Enter",
           "4ccc63da87": "Agent",
@@ -8913,8 +8894,7 @@
           "60f8a673a7": "Retour à l'application",
           "6503182299": "Checklist d'intégration",
           "82db1b7de4": "Checklist d'intégration, {{value0}} sur {{value1}} terminés. Afficher le guide de configuration.",
-          "df38d612b7": "Aucun projet ajouté pour le moment.",
-          "3e483e256b": "Aucun paramètre de projet correspondant."
+          "df38d612b7": "Aucun projet ajouté pour le moment."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Statut",
@@ -13419,7 +13399,6 @@
             "abf59262fb": "Vérifiez et modifiez l'entrée de commande complète avant de démarrer un agent.",
             "4ede779461": "Résoudre les conflits de revue avec l'IA",
             "3b203c62f8": "Le commentaire sera définitivement retiré de la PR.",
-            "ea9b649ce3": "Supprimer le commentaire ?",
             "5788d1059d": "Impossible de mettre à jour le fil de revue. Vérifiez le budget de l'API GitHub.",
             "07871c0589": "Lier une autre PR",
             "7f4489f370": "Actualiser",
@@ -14322,8 +14301,7 @@
                   "5ddd8cac7f": "Abandonner toutes les modifications indexées ?",
                   "d4df3a61df": "Abandonner les modifications de « {{value0}} » ?",
                   "5c0bdbc4cb": "Restaurer « {{value0}} » ?",
-                  "d97bf697c9": "Cela supprimera définitivement ce fichier. Cette action est irréversible.",
-                  "96c772bee9": "Supprimer « {{value0}} » ?"
+                  "d97bf697c9": "Cela supprimera définitivement ce fichier. Cette action est irréversible."
                 },
                 "dialog": {
                   "3bc61dc989": "Annuler",
@@ -14569,7 +14547,6 @@
             "unresolved": "Impossible de déterminer quel hôte possède cet espace de travail. Vérifiez la connexion et réessayez."
           },
           "useFileDeletion": {
-            "d979a4fbb5": "Supprimer définitivement « {{value0}} » ?",
             "92276aceb7": "Supprimer",
             "7fb9435c86": "Cette action supprime définitivement le répertoire et son contenu sur l'hôte distant. Elle est irréversible.",
             "23e98f192f": "Cette action supprime définitivement le fichier sur l'hôte distant. Elle est irréversible.",
@@ -14766,7 +14743,6 @@
             "resumeInNewCliTooltipChat": "Ce chat reste inchangé."
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "Supprimer cette session ?",
             "description": "« {{value0}} » sera supprimée. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
             "remoteDescription": "« {{value0}} » sera supprimée de {{value2}}. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
             "confirm": "Supprimer"
@@ -16473,7 +16449,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "Supprimer le lien",
           "cdfe166f6f": "Modifier le lien",
-          "bfc813e909": "Ouvrir le lien",
           "7b0b945fdc": "Collez ou saisissez un lien…",
           "copyLink": "Copier le lien"
         },
@@ -17560,8 +17535,6 @@
           "18763ded26": "Planification",
           "dbef8dc110": "Cette automatisation SSH ne s'exécute que si Orca peut joindre l'hôte SSH. Si la reconnexion exige des identifiants interactifs ou si l'hôte est indisponible, l'exécution est enregistrée comme ignorée.",
           "1f6026358e": "Supprimer l'automatisation",
-          "d79452fb30": "Reprendre l'automatisation",
-          "91a4155e95": "Mettre l'automatisation en pause",
           "2fb1605beb": "Exécuter maintenant",
           "221916d93c": "Créez une automatisation pour planifier le travail des agents.",
           "b09b2384fd": "En pause",
@@ -17648,18 +17621,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Aucune exécution pour l'instant.",
-          "9974a2b429": "Statut",
           "13988187b3": "Tokens",
           "86a248187e": "Dépense",
           "149c0b49c7": "Espace de travail",
           "8faaa00726": "Exécution",
-          "53fc5f07ab": "Historique des exécutions",
-          "a00e38d1a3": "n/d",
+          "a00e38d1a3": "—",
           "historyUnavailable": "L'historique des exécutions n'est pas disponible sur cet hôte. Cela ne signifie pas que l’automatisation a échoué ou qu’elle n’a pas été exécutée."
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Contexte d'exécution",
-          "33741dd973": "Retour aux exécutions"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "Minute",
@@ -17685,10 +17652,8 @@
           "5ad314118e": "Session"
         },
         "AutomationsPage": {
-          "c3a28c9793": "Sélectionnez une automatisation pour voir ses exécutions.",
           "295698292f": "Relancer",
           "0e110a3469": "Exécutions",
-          "bb1b2cd31e": "Vue d'ensemble",
           "25060635c6": "Ajouter",
           "d207ab4c25": "Partir d'un modèle",
           "15e0bfb13b": "Supprimer",
@@ -17696,9 +17661,7 @@
           "2faecab10b": "Exécuter maintenant",
           "13118faadf": "Projet inconnu",
           "73f630b49d": "Annuler",
-          "9adfab2596": "Supprimer l'automatisation externe",
           "1e2e41392f": "Ne plus demander",
-          "080dcb5fbb": "Supprimer l'automatisation",
           "19a6e30eae": "Actualiser les automatisations",
           "77c2778945": "Automatisations",
           "e1bf9b1512": "L'espace de travail n'est pas disponible.",
@@ -17725,8 +17688,6 @@
           "8500baacb4": "source externe",
           "36f71740a7": "Espace de travail sélectionné",
           "cd8397cc32": "Nouvel espace de travail à chaque exécution",
-          "pendingAutomationMissing": "Cette automatisation n'est plus disponible.",
-          "pendingAutomationRunMissing": "L'historique d'exécution n'est plus disponible.",
           "paused": "En pause",
           "missingWorkspace": "Espace de travail manquant",
           "usageUnavailable": "Utilisation indisponible",
@@ -17735,7 +17696,6 @@
           "latestSavedOutput": "Dernière sortie enregistrée",
           "fullOutputUnavailable": "Impossible de charger la sortie complète.",
           "retryFullOutput": "Réessayer",
-          "backToList": "Toutes les automatisations",
           "tableName": "Nom",
           "tableProject": "Projet",
           "tableStatus": "Statut",
@@ -17748,7 +17708,6 @@
           "moveOriginalUnverified": "Créé sur {host}, mais la suppression d'origine n'a pas pu être vérifiée. Vérifiez l'ancien hôte avant de réessayer.",
           "tableHost": "Hôte",
           "ownerChanged": "Cette automatisation a changé d'hôtes. Actualisez et réessayez.",
-          "runError": "Erreur :",
           "deleteAutomationDescription": "Supprimer <name/> et son historique d’exécution. Les espaces de travail créés par les exécutions précédentes ne seront pas supprimés.",
           "deleteExternalAutomationDescription": "Supprimer <name/> de <provider/> sur <host/>.",
           "runUsageSummaryTokens_one": "{{cost}} (est.) · {{tokens}} token",
@@ -18020,8 +17979,7 @@
           "historyUnavailable_many": "L’historique d’exécution est indisponible pour {{count}} automatisations. Les décomptes incluent uniquement l’historique disponible."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Fil d'Ariane des automatisations",
-          "runDetails": "Détails de l'exécution"
+          "ariaLabel": "Fil d'Ariane des automatisations"
         },
         "extraAgentArgs": {
           "advanced": "Avancé",
@@ -18083,14 +18041,13 @@
           "noWorkspaceLaunched": "Aucun espace de travail lancé"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "Non lancé",
-          "namedWorkspaceGone": "{{name}} (plus disponible)"
+          "notLaunched": "Non lancé"
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "n/d"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "Hôte SSH",
@@ -18641,7 +18598,6 @@
         "ArtifactsPage": {
           "signInAgain": "Reconnectez-vous à Orca pour charger les artifacts.",
           "loadFailed": "Impossible de charger les artifacts.",
-          "deleteTitle": "Supprimer l'artifact ?",
           "deleteDescription": "« {{name}} » ne sera plus disponible via son lien public.",
           "delete": "Supprimer",
           "deleteFailed": "Impossible de supprimer l'artifact.",
@@ -19095,7 +19051,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
+            "openWith": "Ouvrir avec (sauf pendant la saisie dans un champ de texte d’Orca)"
           }
         },
         "pluginInstallCount": {
@@ -19939,8 +19895,7 @@
         "stateMonitoringCount": "{{value0}} en surveillance",
         "stateUnverifiableCount": "{{value0}} au statut indisponible",
         "stateWaitingCount": "{{value0}} en attente",
-        "stateWorkingCount": "{{value0}} en cours",
-        "showAgent": "Afficher {{value0}} dans la conversation"
+        "stateWorkingCount": "{{value0}} en cours"
       },
       "railLabel": "Vos messages",
       "railImageMessage": "Image jointe",
@@ -20625,11 +20580,8 @@
           "candidateName": "{{value0}} sur {{value1}}"
         },
         "stopAgents": {
-          "titleMany": "Arrêter ces agents ?",
           "descriptionOne": "La suppression interrompra le travail en cours de l'agent.",
-          "descriptionMany": "La suppression interrompra le travail en cours de ces agents.",
-          "confirm": "Arrêter les agents et supprimer",
-          "confirmOne": "Arrêter l'agent et supprimer"
+          "descriptionMany": "La suppression interrompra le travail en cours de ces agents."
         },
         "candidateRow": {
           "gitChip": {
@@ -21639,10 +21591,6 @@
       "restore": "Restaurer",
       "discard": "Abandonner",
       "discardAll": "Tout abandonner",
-      "deleteUntrackedTitle_one": "Supprimer {{count}} fichier non suivi ?",
-      "deleteUntrackedTitle_other": "Supprimer {{count}} fichiers non suivis ?",
-      "deleteUntrackedTitle_many": "Supprimer {{count}} fichiers non suivis ?",
-      "deleteCount": "Supprimer {{count}}",
       "deleteUntrackedFilesDescription_one": "Cela supprimera définitivement {{count}} fichier non suivi. Cette action est irréversible.",
       "unstagedFilesIncludingUntrackedDescription_one": "Cela annulera les modifications non indexées apportées à {{count}} fichier et le supprimera définitivement s'il n'est pas suivi. Cette action est irréversible."
     },
@@ -22084,7 +22032,8 @@
   },
   "common": {
     "retry": "Réessayer",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "delete": "Supprimer"
   },
   "fileExplorer": {
     "root": {
@@ -22104,8 +22053,7 @@
     "trashFailed": {
       "titleRecycleBin": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
       "titleTrash": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
-      "description": "Cette action est irréversible.",
-      "confirm": "Supprimer définitivement"
+      "description": "Cette action est irréversible."
     }
   },
   "sparsePreset": {
@@ -22269,6 +22217,11 @@
         "reasonSharedSession": "Également ouverte dans un autre volet",
         "sharedOne": "1 session Claude reste sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
         "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet."
+      },
+      "oauthUsage": {
+        "title": "Suivi de l’utilisation de Claude",
+        "description": "Utilise votre connexion Claude Code pour consulter l’utilisation, les crédits et les comptes inactifs. Désactivez cette option pour utiliser uniquement les données en direct des sessions de terminal.",
+        "about": "À propos du suivi de l’utilisation de Claude"
       }
     },
     "hostSignIn": {
@@ -22535,7 +22488,6 @@
     "nestedRemoval": {
       "refreshFailed": "Impossible d'actualiser la liste des espaces de travail",
       "review": "Supprimer avec les worktrees imbriqués…",
-      "title": "Supprimer l'espace de travail et les worktrees imbriqués ?",
       "description": "Cela supprime définitivement « {{name}} », chaque worktree imbriqué listé ci-dessous et tous les fichiers qu'il contient, y compris les modifications non validées. Leurs terminaux et agents seront arrêtés.",
       "detached": "HEAD détaché",
       "loading": "Vérification des worktrees imbriqués…",
@@ -22543,7 +22495,6 @@
       "cancel": "Annuler",
       "retry": "Vérifier à nouveau",
       "deleting": "Suppression…",
-      "confirm": "Supprimer tous les worktrees listés",
       "preservedBranches": "Certaines branches de worktrees imbriqués ont été conservées"
     },
     "setupTerminalTitle": "Configuration",

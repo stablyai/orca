@@ -16,11 +16,13 @@ import {
 } from '../browser/client-hosting/browser-client-file-channel-protocol'
 import {
   BrowserClientHostAttachParams,
+  BrowserClientHostCommandResultChunkParams,
   BrowserClientHostCommandResultParams,
   BrowserNetworkTunnelAttachParams
 } from '../browser/client-hosting/browser-client-host-protocol'
 import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/browser-client-host-request-protocol'
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
+import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
   BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
@@ -72,47 +74,49 @@ import {
   SelectClaudeAccountParams,
   SelectCodexAccountForTargetParams,
   SelectDataAccountParams
-} from './accounts-params'
-import { AgentActivityClearParams, AgentActivitySetReadParams } from './agent-activity-params'
-import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
-import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
-import { AgentLaunchSettingsMutation } from './agent-launch-settings-params'
+} from './accounts/accounts-params'
+import { PrepareCodexForWslPaneParams } from './accounts/agent-hooks-params'
 import {
-  AttachmentReadParams,
-  AttachmentTextReadParams,
-  AttachmentUploadAppendParams,
-  AttachmentUploadIdParams,
-  AttachmentUploadStartParams
-} from './agent-session-attachment-params'
-import { CurrentRequestsParams } from './agent-session-current-requests-params'
-import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
-import { ReadVisualParams } from './agent-session-visual-params'
+  AntigravityAccountMutationParams,
+  AntigravityAccountTargetParams,
+  AntigravityChatSignInCompleteParams,
+  AntigravityChatSignInFlowParams
+} from './accounts/antigravity-accounts-params'
+import {
+  UsageCredentialApiKeyParams,
+  UsageCredentialSessionCookieParams
+} from './accounts/usage-credentials-params'
+import {
+  AgentActivityClearParams,
+  AgentActivitySetReadParams
+} from './agent-activity/agent-activity-params'
+import { AgentLaunch, AgentLaunchReplay } from './agent-launch/agent-launch-params'
+import { AgentLaunchSettingsMutation } from './agent-launch/agent-launch-settings-params'
 import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionHandoffParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
-} from './ai-vault-params'
+} from './ai-vault/ai-vault-params'
 import {
-  AntigravityAccountMutationParams,
-  AntigravityAccountTargetParams,
-  AntigravityChatSignInCompleteParams,
-  AntigravityChatSignInFlowParams
-} from './antigravity-accounts-params'
-import { ArtifactsDeleteParams, ListOptions, SourceRequest, WriteRequest } from './artifacts-params'
+  ArtifactsDeleteParams,
+  ListOptions,
+  SourceRequest,
+  WriteRequest
+} from './artifacts/artifacts-params'
 import {
   AutomationCreate,
   AutomationId,
   AutomationList,
   AutomationRuns,
   AutomationUpdate
-} from './automation-params'
-import { CertificateProceed } from './browser-core-params'
-import { ExtensionList, ExtensionReload } from './browser-extension-params'
-import { MouseClick } from './browser-extras-params'
-import { BrowserIdentitySet, ProfileCreate } from './browser-identity-params'
-import { Screenshot, Snapshot } from './browser-observation-params'
+} from './automations/automation-params'
+import { CertificateProceed } from './browser/browser-core-params'
+import { ExtensionList, ExtensionReload } from './browser/browser-extension-params'
+import { MouseClick } from './browser/browser-extras-params'
+import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
+import { Screenshot, Snapshot } from './browser/browser-observation-params'
 import {
   Check,
   ClipboardWrite,
@@ -164,25 +168,32 @@ import {
   Upload,
   Viewport,
   Wait
-} from './browser-params'
-import { ScreencastAck, ScreencastUnsubscribe } from './browser-screencast-params'
-import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-params'
-import { ClientEventsSubscribeParams, ClientEventsUnsubscribeParams } from './client-events-params'
+} from './browser/browser-params'
+import { ScreencastAck, ScreencastUnsubscribe } from './browser/browser-screencast-params'
+import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser/browser-tab-create-params'
+import {
+  ClientEventsSubscribeParams,
+  ClientEventsUnsubscribeParams
+} from './client-ui/client-events-params'
 import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,
   SettingsUpdate
-} from './client-settings-params'
-import { FeatureInteractionIdParam, UiUpdate } from './client-ui-params'
-import { ClientWorkspaceViewParams } from './client-workspace-view-params'
+} from './client-ui/client-settings-params'
+import { FeatureInteractionIdParam, UiUpdate } from './client-ui/client-ui-params'
+import { ClientWorkspaceViewParams } from './client-ui/client-workspace-view-params'
+import { SidebarSessionBeginParams } from './client-ui/sidebar-session-params'
 import {
   AbortImageUpload,
   AppendImageUploadChunk,
   CommitImageUpload,
   SaveImageAsTempFile,
   StartImageUpload
-} from './clipboard-params'
-import { ComputerCapabilitiesParams, ComputerPermissionsStatusParams } from './computer-params'
+} from './clipboard/clipboard-params'
+import {
+  ComputerCapabilitiesParams,
+  ComputerPermissionsStatusParams
+} from './computer/computer-params'
 import {
   Click,
   ComputerObserveTarget,
@@ -197,7 +208,7 @@ import {
   Scroll as ScrollOfComputerSchemasParams,
   SetValue,
   TypeText
-} from './computer-schemas-params'
+} from './computer/computer-schemas-params'
 import {
   ConnectorAnswer,
   ConnectorCancel,
@@ -206,7 +217,7 @@ import {
   ConnectorSend,
   ConnectorStart,
   ConnectorWatch
-} from './connector-params'
+} from './connectors/connector-params'
 import {
   AttachParams as AttachParamsOfEmulatorParams,
   AxParams,
@@ -226,8 +237,7 @@ import {
   ShutdownParams,
   TapParams,
   TypeParams
-} from './emulator-params'
-import { EnvironmentDoctorParams } from './environment-doctor-params'
+} from './emulator/emulator-params'
 import {
   FileCommitUpload,
   FileCopy,
@@ -240,7 +250,7 @@ import {
   FileWriteBase64,
   FileWriteBase64Chunk,
   FileWriteIfUnchanged
-} from './files-mutation-params'
+} from './filesystem/files-mutation-params'
 import {
   ChatImageRead,
   DocPreviewFileRead,
@@ -257,25 +267,313 @@ import {
   FileUnwatch,
   ResolveTerminalPath,
   ServerDirectoryBrowse
-} from './files-params'
+} from './filesystem/files-params'
 import {
   FileSaveAbort,
   FileSaveBegin,
   FileSaveChunk,
   FileSaveCommit
-} from './files-staged-save-params'
-import { FileOpen, FileWatch, WorktreeSelector } from './files-target-params'
+} from './filesystem/files-staged-save-params'
+import { FileOpen, FileWatch, WorktreeSelector } from './filesystem/files-target-params'
 import {
   TerminalArtifactFile,
   TerminalArtifactFileChunk,
   TerminalArtifactFileWrite
-} from './files-terminal-artifact-params'
+} from './filesystem/files-terminal-artifact-params'
+import { BindableAccounts, ValidateAccountBinding } from './github/github-account-binding-params'
+import { UploadGitHubAttachment } from './github/github-attachment-params'
+import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github/github-issue-params'
 import {
-  FolderWorkspaceCreate,
-  FolderWorkspaceDelete,
-  FolderWorkspacePathStatus,
-  FolderWorkspaceUpdate
-} from './folder-workspace-params'
+  ClearProjectItemField,
+  GithubProjectListAccessibleParams,
+  ProjectItemField,
+  ProjectRef,
+  ProjectViewTable,
+  ProjectViews,
+  ProjectWorkItemDetailsBySlug,
+  SlugAssignableUsers,
+  SlugIssueComment,
+  SlugIssueCommentDelete,
+  SlugIssueCommentEdit,
+  SlugIssueTypeUpdate,
+  SlugIssueUpdate,
+  SlugPullRequestUpdate
+} from './github/github-project-params'
+import {
+  PRCommentReaction,
+  PrForBranch,
+  PullRequest,
+  PullRequestCheckDetails,
+  PullRequestChecks,
+  PullRequestFileContents,
+  PullRequestFileViewed,
+  RerunPullRequestChecks,
+  ReviewThread
+} from './github/github-pull-request-params'
+import {
+  MarkPrDraft,
+  MarkPrReadyForReview,
+  MergePr,
+  PRReviewComment,
+  PRReviewCommentReply,
+  RemovePrReviewers,
+  RequestPrReviewers,
+  SetPrAutoMerge,
+  UpdatePr,
+  UpdatePrState,
+  UpdatePrTitle
+} from './github/github-pull-request-update-params'
+import {
+  RepoIssueCommandRead,
+  RepoSelector,
+  RepoShow,
+  RepoWithGitHubAccountExpectation,
+  SlugRepo
+} from './github/github-repo-target-params'
+import {
+  IssuesList,
+  RateLimit,
+  WorkItem,
+  WorkItemByOwnerRepo,
+  WorkItemDetails,
+  WorkItemsCount,
+  WorkItemsList
+} from './github/github-repo-work-item-params'
+import { EnvironmentDoctorParams } from './host-management/environment-doctor-params'
+import {
+  ManagedRuntimeAgentParams,
+  ManagedRuntimeCancelParams
+} from './host-management/managed-runtime-install-params'
+import {
+  ManagedServerRecover,
+  ManagedServerSelector,
+  ManagedServerUpdate
+} from './host-management/managed-server-params'
+import {
+  OrcadMigrationCatalogParams,
+  OrcadMigrationCatalogReferenceParams,
+  OrcadMigrationCommitCatalogParams
+} from './host-management/orcad-migration-params'
+import { RecipeVmWakeParams } from './host-management/recipe-vm-wake-params'
+import { ClientCapabilitiesUpdate } from './host-management/runtime-client-capabilities-params'
+import { StatusGetParams } from './host-management/status-params'
+import { JiraFavouriteFilterParams } from './jira/jira-favourite-filter-params'
+import {
+  AssignableUsers,
+  AttachmentImage,
+  CancelGenerateIssueSummary,
+  Connect,
+  CreateIssue as CreateIssueOfJiraParams,
+  GenerateIssueSummary,
+  IssueComment as IssueCommentOfJiraParams,
+  IssueKey,
+  IssueUpdate,
+  ListIssues,
+  ProjectIssueTypeFields,
+  ProjectIssueTypes,
+  ProjectStatusOrder,
+  SearchIssues,
+  SelectSite,
+  SiteSelection,
+  UserSearch
+} from './jira/jira-params'
+import { JiraQuickFilterStateParam } from './jira/jira-quick-filter-params'
+import { JiraSavedFilterMutationParam } from './jira/jira-saved-filter-params'
+import {
+  AgentIssueContext,
+  AgentSearchIssues,
+  LinearCommentDelete,
+  LinearCommentEdit,
+  LinearCurrentContext,
+  LinearIssueAddComment,
+  LinearIssueAttachLink,
+  LinearIssueCreate,
+  LinearIssueList,
+  LinearIssueRelationWrite,
+  LinearIssueSetState,
+  LinearIssueUpdateTask,
+  LinearProjectList,
+  LinearSaveIssue,
+  LinearTeamLookup,
+  LinearWorkspaceRead
+} from './linear/linear-agent-access-params'
+import {
+  ListIssues as ListIssuesOfLinearIssueListParams,
+  McpListIssues
+} from './linear/linear-issue-list-params'
+import {
+  Connect as ConnectOfLinearParams,
+  CreateIssue as CreateIssueOfLinearParams,
+  CustomViewContents,
+  CustomViewId,
+  IssueComment as IssueCommentOfLinearParams,
+  IssueId,
+  IssueUpdate as IssueUpdateOfLinearParams,
+  LinearIssueCommentsParams,
+  ListCustomViews,
+  ListProjects,
+  ProjectId,
+  ProjectIssues,
+  SearchIssues as SearchIssuesOfLinearParams,
+  SelectWorkspace,
+  TeamId,
+  WorkspaceSelection
+} from './linear/linear-params'
+import { CreateProject } from './linear/linear-project-create-params'
+import { LinkPreviewGetParams } from './link-preview/link-preview-params'
+import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
+import {
+  NotificationGetMissedSinceParams,
+  NotificationRegisterPushParams,
+  NotificationReportDesktopPresenceParams,
+  NotificationUnsubscribeParams,
+  NotificationsSubscribeParams
+} from './notifications/notifications-params'
+import { ApprovalAnswerParams } from './orchestration/orchestration-approval-answer-params'
+import {
+  FederationDispatchParams,
+  FederationFleetSnapshotParams,
+  FederationOutputReadParams,
+  FederationReadParams
+} from './orchestration/orchestration-federation-control-params'
+import {
+  FederationAckParams,
+  FederationImportParams,
+  FederationPullParams
+} from './orchestration/orchestration-federation-relay-params'
+import { FederationAttachStartParams } from './orchestration/orchestration-federation-start-params'
+import {
+  GateCreateParams,
+  GateListParams,
+  GateResolveParams,
+  RunParams,
+  RunStopParams
+} from './orchestration/orchestration-gates-params'
+import {
+  AskParams,
+  CheckParams,
+  DispatchParams,
+  DispatchShowParams,
+  InboxParams,
+  PartyLocationParams,
+  ReplyParams,
+  ResetParams,
+  SessionAddressParams,
+  TaskCreateParams,
+  TaskListParams
+} from './orchestration/orchestration-params'
+import {
+  PeerMailAckParams,
+  PeerMailDeliverParams,
+  PeerMailPullParams
+} from './orchestration/orchestration-peer-mail-params'
+import { RequestShowParams } from './orchestration/orchestration-runs-mutation-request-show-params'
+import {
+  RunCreateParams,
+  RunCurrentParams,
+  RunListParams,
+  RunShowParams,
+  RunUseParams
+} from './orchestration/orchestration-runs-params'
+import {
+  WorkerDispatchParams,
+  WorkerReadParams
+} from './orchestration/orchestration-worker-control-params'
+import {
+  OrchestrationWorkerKeepOpenParams,
+  OrchestrationWorkerSubjectParams
+} from './orchestration/orchestration-worker-release-params'
+import {
+  WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
+  WorkerListParams,
+  WorkerRetainParams
+} from './orchestration/orchestration-worker-release-schemas-params'
+import { WorkerStartParams } from './orchestration/orchestration-worker-start-params'
+import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration/orchestration-worker-stop-params'
+import {
+  PluginCatalogAddParams,
+  PluginCatalogRemoveParams,
+  PluginDevEmitParams,
+  PluginDevInspectParams,
+  PluginDevLoadParams,
+  PluginDevRequestParams,
+  PluginDevUnloadParams,
+  PluginGetLogsParams,
+  PluginInstallParams,
+  PluginInvokeCommandParams,
+  PluginOpenParams,
+  PluginReadPanelEntryParams,
+  PluginRestartParams,
+  PluginRpcConsentParams,
+  PluginSetEnabledParams,
+  PluginSetSystemEnabledParams,
+  PluginShotChromeParams,
+  PluginShotEditorParams,
+  PluginShotParams,
+  PluginShotReplayParams,
+  PluginUninstallParams,
+  PluginUpdateParams,
+  PluginsPanelActionParams
+} from './plugins/plugins-params'
+import {
+  PreflightAgentRefresh,
+  PreflightCheck,
+  PreflightDetectRemoteAgents,
+  PreflightDetectRemoteWindowsTerminalCapabilities,
+  PreflightProjectAgentDetection
+} from './preflight/preflight-params'
+import {
+  ProjectHostSetupClone,
+  ProjectHostSetupCreate,
+  ProjectHostSetupDelete,
+  ProjectHostSetupExistingFolder,
+  ProjectHostSetupUpdate,
+  ProjectUpdate
+} from './projects/project-runtime-params'
+import {
+  ProjectGroupCreate,
+  ProjectGroupHooksCheck,
+  ProjectGroupImportNested,
+  ProjectGroupMoveProject,
+  ProjectGroupScanNested,
+  ProjectGroupSelector,
+  ProjectGroupUpdate,
+  ProjectGroupUpdateMany,
+  RepoClone,
+  RepoCreate,
+  RepoHooksCheck,
+  RepoIssueCommandWrite,
+  RepoList,
+  RepoPath,
+  RepoReorder,
+  RepoSearchRefs,
+  RepoSetBaseRef,
+  RepoSetHidden,
+  RepoSparsePresetSave,
+  RepoUpdate
+} from './projects/repo-params'
+import { ReferenceFind, ReferenceList } from './references/reference-params'
+import { BrowserTarget, ExpectUrlBrowserTarget } from './rpc-param-primitives'
+import { SessionTabsUnsubscribeAllParams } from './session-tabs/session-tabs-params'
+import {
+  ActivateTab,
+  CloseLifecycleTab,
+  CloseTab,
+  CreateTerminalTab,
+  MovePaneToNewTab,
+  MoveTab,
+  SaveMarkdownTab,
+  SessionTabsUnsubscribe,
+  SetTabProps,
+  UpdatePaneLayout,
+  WorktreeTabSelector
+} from './session-tabs/session-tabs-schemas-params'
+import { SessionReadTerminalScrollbackParams } from './session-tabs/session-terminal-scrollback-params'
+import {
+  SkillsCancelInstallParams,
+  SkillsDiscoverParams,
+  SkillsGetInstallProgressParams
+} from './skills/skills-params'
 import {
   GitBranchCompare,
   GitBranchDiff,
@@ -307,66 +605,7 @@ import {
   GitSwitchBranch,
   GitTargetedRemote,
   WorktreeSelector as WorktreeSelectorOfGitParams
-} from './git-params'
-import { BindableAccounts, ValidateAccountBinding } from './github-account-binding-params'
-import { UploadGitHubAttachment } from './github-attachment-params'
-import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github-issue-params'
-import {
-  ClearProjectItemField,
-  GithubProjectListAccessibleParams,
-  ProjectItemField,
-  ProjectRef,
-  ProjectViewTable,
-  ProjectViews,
-  ProjectWorkItemDetailsBySlug,
-  SlugAssignableUsers,
-  SlugIssueComment,
-  SlugIssueCommentDelete,
-  SlugIssueCommentEdit,
-  SlugIssueTypeUpdate,
-  SlugIssueUpdate,
-  SlugPullRequestUpdate
-} from './github-project-params'
-import {
-  PRCommentReaction,
-  PrForBranch,
-  PullRequest,
-  PullRequestCheckDetails,
-  PullRequestChecks,
-  PullRequestFileContents,
-  PullRequestFileViewed,
-  RerunPullRequestChecks,
-  ReviewThread
-} from './github-pull-request-params'
-import {
-  MarkPrDraft,
-  MarkPrReadyForReview,
-  MergePr,
-  PRReviewComment,
-  PRReviewCommentReply,
-  RemovePrReviewers,
-  RequestPrReviewers,
-  SetPrAutoMerge,
-  UpdatePr,
-  UpdatePrState,
-  UpdatePrTitle
-} from './github-pull-request-update-params'
-import {
-  RepoIssueCommandRead,
-  RepoSelector,
-  RepoShow,
-  RepoWithGitHubAccountExpectation,
-  SlugRepo
-} from './github-repo-target-params'
-import {
-  IssuesList,
-  RateLimit,
-  WorkItem,
-  WorkItemByOwnerRepo,
-  WorkItemDetails,
-  WorkItemsCount,
-  WorkItemsList
-} from './github-repo-work-item-params'
+} from './source-control/git-params'
 import {
   AddIssueComment,
   AddMRComment,
@@ -388,242 +627,12 @@ import {
   WorkItemByPath,
   WorkItemDetails as WorkItemDetailsOfGitlabParams,
   WorkItemsList as WorkItemsListOfGitlabParams
-} from './gitlab-params'
+} from './source-control/gitlab-params'
 import {
   HostedReviewCreate,
   HostedReviewCreationEligibility,
   HostedReviewForBranch
-} from './hosted-review-params'
-import { JiraFavouriteFilterParams } from './jira-favourite-filter-params'
-import {
-  AssignableUsers,
-  AttachmentImage,
-  CancelGenerateIssueSummary,
-  Connect,
-  CreateIssue as CreateIssueOfJiraParams,
-  GenerateIssueSummary,
-  IssueComment as IssueCommentOfJiraParams,
-  IssueKey,
-  IssueUpdate,
-  ListIssues,
-  ProjectIssueTypeFields,
-  ProjectIssueTypes,
-  ProjectStatusOrder,
-  SearchIssues,
-  SelectSite,
-  SiteSelection,
-  UserSearch
-} from './jira-params'
-import { JiraQuickFilterStateParam } from './jira-quick-filter-params'
-import { JiraSavedFilterMutationParam } from './jira-saved-filter-params'
-import {
-  AgentIssueContext,
-  AgentSearchIssues,
-  LinearCommentDelete,
-  LinearCommentEdit,
-  LinearCurrentContext,
-  LinearIssueAddComment,
-  LinearIssueAttachLink,
-  LinearIssueCreate,
-  LinearIssueList,
-  LinearIssueRelationWrite,
-  LinearIssueSetState,
-  LinearIssueUpdateTask,
-  LinearProjectList,
-  LinearSaveIssue,
-  LinearTeamLookup,
-  LinearWorkspaceRead
-} from './linear-agent-access-params'
-import {
-  ListIssues as ListIssuesOfLinearIssueListParams,
-  McpListIssues
-} from './linear-issue-list-params'
-import {
-  Connect as ConnectOfLinearParams,
-  CreateIssue as CreateIssueOfLinearParams,
-  CustomViewContents,
-  CustomViewId,
-  IssueComment as IssueCommentOfLinearParams,
-  IssueId,
-  IssueUpdate as IssueUpdateOfLinearParams,
-  LinearIssueCommentsParams,
-  ListCustomViews,
-  ListProjects,
-  ProjectId,
-  ProjectIssues,
-  SearchIssues as SearchIssuesOfLinearParams,
-  SelectWorkspace,
-  TeamId,
-  WorkspaceSelection
-} from './linear-params'
-import { CreateProject } from './linear-project-create-params'
-import { LinkPreviewGetParams } from './link-preview-params'
-import {
-  ManagedRuntimeAgentParams,
-  ManagedRuntimeCancelParams
-} from './managed-runtime-install-params'
-import {
-  ManagedServerRecover,
-  ManagedServerSelector,
-  ManagedServerUpdate
-} from './managed-server-params'
-import { NativeChatSession, NativeChatUnsubscribe } from './native-chat-params'
-import {
-  NotificationGetMissedSinceParams,
-  NotificationRegisterPushParams,
-  NotificationReportDesktopPresenceParams,
-  NotificationUnsubscribeParams,
-  NotificationsSubscribeParams
-} from './notifications-params'
-import {
-  OrcadMigrationCatalogParams,
-  OrcadMigrationCatalogReferenceParams,
-  OrcadMigrationCommitCatalogParams
-} from './orcad-migration-params'
-import { ApprovalAnswerParams } from './orchestration-approval-answer-params'
-import {
-  FederationDispatchParams,
-  FederationFleetSnapshotParams,
-  FederationOutputReadParams,
-  FederationReadParams
-} from './orchestration-federation-control-params'
-import {
-  FederationAckParams,
-  FederationImportParams,
-  FederationPullParams
-} from './orchestration-federation-relay-params'
-import { FederationAttachStartParams } from './orchestration-federation-start-params'
-import {
-  GateCreateParams,
-  GateListParams,
-  GateResolveParams,
-  RunParams,
-  RunStopParams
-} from './orchestration-gates-params'
-import {
-  AskParams,
-  CheckParams,
-  DispatchParams,
-  DispatchShowParams,
-  InboxParams,
-  PartyLocationParams,
-  ReplyParams,
-  ResetParams,
-  SessionAddressParams,
-  TaskCreateParams,
-  TaskListParams
-} from './orchestration-params'
-import {
-  PeerMailAckParams,
-  PeerMailDeliverParams,
-  PeerMailPullParams
-} from './orchestration-peer-mail-params'
-import { RequestShowParams } from './orchestration-runs-mutation-request-show-params'
-import {
-  RunCreateParams,
-  RunCurrentParams,
-  RunListParams,
-  RunShowParams,
-  RunUseParams
-} from './orchestration-runs-params'
-import { WorkerDispatchParams, WorkerReadParams } from './orchestration-worker-control-params'
-import {
-  OrchestrationWorkerKeepOpenParams,
-  OrchestrationWorkerSubjectParams
-} from './orchestration-worker-release-params'
-import {
-  WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
-  WorkerListParams,
-  WorkerRetainParams
-} from './orchestration-worker-release-schemas-params'
-import { WorkerStartParams } from './orchestration-worker-start-params'
-import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
-import {
-  PluginCatalogAddParams,
-  PluginCatalogRemoveParams,
-  PluginDevEmitParams,
-  PluginDevInspectParams,
-  PluginDevLoadParams,
-  PluginDevRequestParams,
-  PluginDevUnloadParams,
-  PluginGetLogsParams,
-  PluginInstallParams,
-  PluginInvokeCommandParams,
-  PluginOpenParams,
-  PluginReadPanelEntryParams,
-  PluginRestartParams,
-  PluginRpcConsentParams,
-  PluginSetEnabledParams,
-  PluginSetSystemEnabledParams,
-  PluginShotChromeParams,
-  PluginShotEditorParams,
-  PluginShotParams,
-  PluginShotReplayParams,
-  PluginUninstallParams,
-  PluginUpdateParams,
-  PluginsPanelActionParams
-} from './plugins-params'
-import {
-  PreflightAgentDetection,
-  PreflightCheck,
-  PreflightDetectRemoteAgents,
-  PreflightDetectRemoteWindowsTerminalCapabilities,
-  PreflightProjectAgentDetection
-} from './preflight-params'
-import {
-  ProjectHostSetupClone,
-  ProjectHostSetupCreate,
-  ProjectHostSetupDelete,
-  ProjectHostSetupExistingFolder,
-  ProjectHostSetupUpdate,
-  ProjectUpdate
-} from './project-runtime-params'
-import { RecipeVmWakeParams } from './recipe-vm-wake-params'
-import { ReferenceFind, ReferenceList } from './reference-params'
-import {
-  ProjectGroupCreate,
-  ProjectGroupImportNested,
-  ProjectGroupMoveProject,
-  ProjectGroupScanNested,
-  ProjectGroupSelector,
-  ProjectGroupUpdate,
-  ProjectGroupUpdateMany,
-  RepoClone,
-  RepoCreate,
-  RepoHooksCheck,
-  RepoIssueCommandWrite,
-  RepoList,
-  RepoPath,
-  RepoReorder,
-  RepoSearchRefs,
-  RepoSetBaseRef,
-  RepoSetHidden,
-  RepoSparsePresetSave,
-  RepoUpdate
-} from './repo-params'
-import { BrowserTarget, ExpectUrlBrowserTarget } from './rpc-param-primitives'
-import { ClientCapabilitiesUpdate } from './runtime-client-capabilities-params'
-import { SessionTabsUnsubscribeAllParams } from './session-tabs-params'
-import {
-  ActivateTab,
-  CloseLifecycleTab,
-  CloseTab,
-  CreateTerminalTab,
-  MovePaneToNewTab,
-  MoveTab,
-  SaveMarkdownTab,
-  SessionTabsUnsubscribe,
-  SetTabProps,
-  UpdatePaneLayout,
-  WorktreeTabSelector
-} from './session-tabs-schemas-params'
-import { SessionReadTerminalScrollbackParams } from './session-terminal-scrollback-params'
-import { SidebarSessionBeginParams } from './sidebar-session-params'
-import {
-  SkillsCancelInstallParams,
-  SkillsDiscoverParams,
-  SkillsGetInstallProgressParams
-} from './skills-params'
+} from './source-control/hosted-review-params'
 import {
   DictationChunk,
   DictationHandle,
@@ -632,7 +641,7 @@ import {
   OpenAiSpeechKeySet,
   SpeechModelAction,
   SpeechSetupRead
-} from './speech-params'
+} from './speech/speech-params'
 import {
   RepoAddRemote,
   SshBrowseDir,
@@ -640,10 +649,18 @@ import {
   SshTarget,
   SshTargetAdd,
   SshTargetUpdate
-} from './ssh-params'
-import { StatusGetParams } from './status-params'
-import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
-import { ContinuationContextParams } from './structured-agent-session-identifiers'
+} from './ssh/ssh-params'
+import {
+  AttachmentReadParams,
+  AttachmentTextReadParams,
+  AttachmentUploadAppendParams,
+  AttachmentUploadIdParams,
+  AttachmentUploadStartParams
+} from './structured-agent-session/agent-session-attachment-params'
+import { CurrentRequestsParams } from './structured-agent-session/agent-session-current-requests-params'
+import { ReadVisualParams } from './structured-agent-session/agent-session-visual-params'
+import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
+import { ContinuationContextParams } from './structured-agent-session/structured-agent-session-identifiers'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
@@ -672,27 +689,29 @@ import {
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
   UnsubscribeParams
-} from './structured-agent-session-params'
-import { RespondToQuestionParams } from './structured-agent-session-question-params'
+} from './structured-agent-session/structured-agent-session-params'
+import { RespondToQuestionParams } from './structured-agent-session/structured-agent-session-question-params'
 import {
   QueuedMessageEditHoldParams,
   QueuedMessageMoveParams,
   QueuedMessageUpdateParams
-} from './structured-agent-session-queued-edit-params'
-import { RenameParams } from './structured-agent-session-rename-params'
-import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
-import { SubscribeParams } from './structured-agent-session-subscribe-params'
-import { TerminalInferCodexQuestionSkip } from './terminal-codex-question-params'
-import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
-import { TerminalLimitUpdateParams } from './terminal-limit-params'
-import { TerminalAdoptOrphans } from './terminal-orphan-params'
-import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
+} from './structured-agent-session/structured-agent-session-queued-edit-params'
+import { RenameParams } from './structured-agent-session/structured-agent-session-rename-params'
+import { SendRecordedParams } from './structured-agent-session/structured-agent-session-send-recorded-params'
+import { SubscribeParams } from './structured-agent-session/structured-agent-session-subscribe-params'
+import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
+import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
+import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
+import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-params'
+import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
+import { TerminalAdoptOrphans } from './terminal/terminal-orphan-params'
+import { TerminalQuickCommandsUpdate } from './terminal/terminal-quick-command-params'
 import {
   TerminalAckOutput,
   TerminalMultiplex,
   TerminalResizeForClient,
   TerminalSubscribe
-} from './terminal-stream-params'
+} from './terminal/terminal-stream-params'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
@@ -718,39 +737,46 @@ import {
   TerminalStopExact,
   TerminalViewClaudeAgent,
   TerminalWait
-} from './terminal-unary-params'
-import { TerminalGetAutoRestoreFitParams } from './terminal-viewport-methods-params'
+} from './terminal/terminal-unary-params'
+import { TerminalGetAutoRestoreFitParams } from './terminal/terminal-viewport-methods-params'
 import {
   TerminalSetAutoRestoreFit,
   TerminalSetDisplayMode,
   TerminalUnsubscribe,
   TerminalUpdateViewport
-} from './terminal-viewport-schemas-params'
-import { UpdaterCheckParams } from './updater-params'
+} from './terminal/terminal-viewport-schemas-params'
+import { UpdaterCheckParams } from './updater/updater-params'
 import {
-  UsageCredentialApiKeyParams,
-  UsageCredentialSessionCookieParams
-} from './usage-credentials-params'
-import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
-import { WorkspaceCleanupScanParams } from './workspace-cleanup-scan-params'
-import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
+  WorkspaceCleanupPreviewParams,
+  WorkspaceCleanupReportUnsavedEditorsParams,
+  WorkspaceCleanupRunNowParams
+} from './workspace-cleanup/workspace-cleanup-runner-params'
+import { WorkspaceCleanupScanParams } from './workspace-cleanup/workspace-cleanup-scan-params'
+import { LayoutReopenHeldPanesParams } from './workspace-layout/workspace-layout-held-panes-params'
 import {
   LayoutApplyParams,
   LayoutReportViewParams,
   LayoutSubscribeParams,
   LayoutUnsubscribeParams
-} from './workspace-layout-params'
+} from './workspace-layout/workspace-layout-params'
+import {
+  FolderWorkspaceCreate,
+  FolderWorkspaceDelete,
+  FolderWorkspacePathStatus,
+  FolderWorkspaceUpdate
+} from './workspaces/folder-workspace-params'
 import {
   WorkspacePortKillHostParams,
   WorkspacePortKillParams,
   WorkspacePortProbePageParams,
   WorkspacePortScanHostParams,
   WorkspacePortScanParams
-} from './workspace-ports-params'
-import { SetCollapsedParams } from './workspace-view-collapse-params'
-import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-params'
+} from './workspaces/workspace-ports-params'
+import { SetCollapsedParams } from './workspaces/workspace-view-collapse-params'
+import { WorktreeCreate, WorktreePrefetchCreateBase } from './workspaces/worktree-create-params'
 import {
   WorktreeActivate,
+  WorktreeArchive,
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
@@ -760,16 +786,17 @@ import {
   WorktreeResolveCallerParent,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
+  WorktreeRestore,
   WorktreeRunApprovedSetup,
   WorktreeSet,
   WorktreeShow,
   WorktreeSleepParams,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
-} from './worktree-params'
-import { WorktreeAdoptProvisionedRoot } from './worktree-provisioned-root-params'
-import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
-import { SidebarInputsReadParams } from '../sidebar-list/sidebar-inputs-feed-contract'
+} from './workspaces/worktree-params'
+import { WorktreeAdoptProvisionedRoot } from './workspaces/worktree-provisioned-root-params'
+import { RepoIconDataUrlsParams } from '../sidebar-list/catalog/repo-icon-data-urls-contract'
+import { SidebarInputsReadParams } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
 import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
 import { SkillDeleteRequestSchema } from '../skill-delete-contract'
 import {
@@ -921,11 +948,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.click': Element,
   'browser.clientHost.attach': BrowserClientHostAttachParams,
   'browser.clientHost.commandResult': BrowserClientHostCommandResultParams,
+  'browser.clientHost.commandResultChunk': BrowserClientHostCommandResultChunkParams,
   'browser.clientHost.fileChannel.abort': BrowserClientFileChannelAbortParams,
   'browser.clientHost.fileChannel.read': BrowserClientFileChannelReadParams,
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
   'browser.clientHost.pageMetadata': BrowserClientPageMetadataParams,
   'browser.clientHost.requestResult': BrowserClientHostRequestResultParams,
+  'browser.clientPage.initializationAction': BrowserPageInitializationActionParams,
   'browser.clipboardRead': BrowserTarget,
   'browser.clipboardWrite': ClipboardWrite,
   'browser.console': LimitParam,
@@ -1036,6 +1065,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.send': ConnectorSend,
   'connector.start': ConnectorStart,
   'connector.watch': ConnectorWatch,
+  'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'diagnostics.memory': null,
@@ -1450,9 +1480,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':
     PreflightDetectRemoteWindowsTerminalCapabilities,
-  'preflight.refreshAgents': PreflightAgentDetection,
+  'preflight.refreshAgents': PreflightAgentRefresh,
   'project.list': null,
   'project.update': ProjectUpdate,
+  'projectGroup.checkHooks': ProjectGroupHooksCheck,
   'projectGroup.create': ProjectGroupCreate,
   'projectGroup.delete': ProjectGroupSelector,
   'projectGroup.importNested': ProjectGroupImportNested,
@@ -1635,6 +1666,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'workspaceCleanup.preview': WorkspaceCleanupPreviewParams,
+  'workspaceCleanup.report': null,
+  'workspaceCleanup.reportUnsavedEditors': WorkspaceCleanupReportUnsavedEditorsParams,
+  'workspaceCleanup.runNow': WorkspaceCleanupRunNowParams,
   'workspaceCleanup.scan': WorkspaceCleanupScanParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
@@ -1643,6 +1678,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'workspacePorts.scanHost': WorkspacePortScanHostParams,
   'worktree.activate': WorktreeActivate,
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
+  'worktree.archive': WorktreeArchive,
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,
@@ -1656,6 +1692,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.resolveCallerParent': WorktreeResolveCallerParent,
   'worktree.resolveMrBase': WorktreeResolveMrBase,
   'worktree.resolvePrBase': WorktreeResolvePrBase,
+  'worktree.restore': WorktreeRestore,
   'worktree.rm': WorktreeRemove,
   'worktree.runApprovedSetup': WorktreeRunApprovedSetup,
   'worktree.set': WorktreeSet,

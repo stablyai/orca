@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { EnsureAgentSessionParams } from '../../../src/shared/rpc-contract/agent-session-params'
+import { EnsureAgentSessionParams } from '../../../src/shared/rpc-contract/terminal/agent-session-params'
 import { normalizeAgentStatusPayload } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 

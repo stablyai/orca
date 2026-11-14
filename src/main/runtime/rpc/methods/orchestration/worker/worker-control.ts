@@ -18,12 +18,13 @@ import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestrat
 import { readExactWorkerOutput } from './output/worker-output'
 import { exposeWorkerTerminalResource } from './release/worker-terminal-resource-presentation'
 import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import { failedWorkerStartHasOutput } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
 import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
 import {
   WorkerDispatchParams,
   WorkerReadParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-control-params'
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineOrchestrationMethod({
@@ -93,8 +94,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       const dispatch = db.getDispatchContextById(params.dispatch)
       const worker = db.getWorkerDispatch(params.dispatch)
       const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
-      // A start that never got a terminal has only its failure, on any host.
-      if (worker?.state === 'failed' && !terminalHandle) {
+      // A start that never ran in a terminal has only its failure, on any host.
+      if (worker?.state === 'failed' && !failedWorkerStartHasOutput(db, worker, dispatch)) {
         throw new OrchestrationError(
           'worker_never_started',
           `Worker Dispatch ${params.dispatch} never started: ${worker.last_error ?? 'its start failed'}`

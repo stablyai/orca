@@ -8,7 +8,7 @@ import {
 import { emptyWorkerListPage } from '../../../rpc/methods/orchestration/worker/worker-list-method'
 import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
-import { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import { isOrchestrationMutation } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'

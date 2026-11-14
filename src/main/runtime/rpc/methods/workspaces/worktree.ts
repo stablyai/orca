@@ -19,7 +19,7 @@ import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-cr
 import {
   WorktreeCreate,
   WorktreePrefetchCreateBase
-} from '../../../../../shared/rpc-contract/worktree-create-params'
+} from '../../../../../shared/rpc-contract/workspaces/worktree-create-params'
 import {
   WorktreeActivate,
   WorktreeForceDeleteBranch,
@@ -32,7 +32,7 @@ import {
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams,
   WorktreeResolveCallerParent
-} from '../../../../../shared/rpc-contract/worktree-params'
+} from '../../../../../shared/rpc-contract/workspaces/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
 import { waitsForWorktreeRemoval } from '../../workspace-client-views/worktree-removal-marker-projection'

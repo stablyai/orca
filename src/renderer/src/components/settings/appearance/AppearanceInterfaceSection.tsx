@@ -17,6 +17,7 @@ import { FontAutocomplete } from './fonts/FontAutocomplete'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
 import {
+  APPEARANCE_EDITOR_THEME_SETTING_ID,
   getCodeEditorThemeEntries,
   getLanguageEntries,
   getThemeEntries,
@@ -200,6 +201,8 @@ export function AppearanceInterfaceSection({
       {editorThemeSlots.map((slot) => (
         <SearchableSetting
           key={slot.base}
+          // The light row comes first, so it stands for both editor theme rows.
+          id={slot.base === 'light' ? APPEARANCE_EDITOR_THEME_SETTING_ID : undefined}
           title={slot.title}
           description={editorThemeEntry?.description}
           keywords={editorThemeEntry?.keywords ?? []}

@@ -1,6 +1,6 @@
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { createRuntimeFolderWorktree } from '../creation/runtime-folder-worktree-create'
 import type { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
 

@@ -1,4 +1,4 @@
-import type { ComposerModalData } from './new-workspace/composer-modal-data'
+import type { ComposerModalData } from './new-workspace/composer/composer-modal-data'
 import { toast } from 'sonner'
 import {
   formatWorkspaceCreateError,
@@ -8,7 +8,7 @@ import type {
   AgentPickerDraft,
   AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
-import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
+import { DirectWorkItemSetupDialog } from './new-workspace/setup/DirectWorkItemSetupDialog'
 import { agentChoicePending } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
@@ -25,7 +25,7 @@ import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog, {
   restoreAgentSettingsInvoker
 } from '@/components/agent/AgentSettingsDialog'
-import { useComposerHostedAddProject } from './new-workspace/use-composer-hosted-add-project'
+import { useComposerHostedAddProject } from './new-workspace/project-selection/use-composer-hosted-add-project'
 import { useComposerState } from '@/hooks/useComposerState'
 import {
   composerLaunchWorkspace,

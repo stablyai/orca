@@ -5,6 +5,7 @@ import type { AgentBrowserCleanupOptions } from './agent-browser-cleanup-options
 
 export abstract class AgentBrowserBridgeShutdown extends AgentBrowserBridgeLifecycle {
   async sweepOrphanedSessions(): Promise<string[]> {
+    await this.agentBrowserConfigReady
     return sweepOrphanedAgentBrowserSessions({
       binaryPath: this.agentBrowserBin,
       env: this.agentBrowserEnv,

@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from './pty-worktree-refresh'
 import type * as PtyControllerContract from './runtime-pty-controller-contract'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import {
   type ExecutionHostId,
   getConnectionExecutionHostId

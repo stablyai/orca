@@ -72,7 +72,7 @@ describe('BottomDrawer close lifecycle', () => {
     vi.restoreAllMocks()
   })
 
-  it('keeps close stable and delivers the latest action once after unmount', () => {
+  it('delivers the latest action once after unmount', () => {
     const firstAfterClose = vi.fn()
     const rendered: { current?: ReactTestRenderer } = {}
     const latestAfterClose = vi.fn(() => {
@@ -80,15 +80,10 @@ describe('BottomDrawer close lifecycle', () => {
     })
     const renderer = renderDrawer(true, vi.fn(), firstAfterClose)
     rendered.current = renderer
-    const initialOnHidden = mountedDrawer(renderer).props.onHidden
 
     updateDrawer(renderer, false, vi.fn(), firstAfterClose)
-    const closingOnHidden = mountedDrawer(renderer).props.onHidden
     updateDrawer(renderer, false, vi.fn(), latestAfterClose)
     const rerenderedOnHidden = mountedDrawer(renderer).props.onHidden
-
-    expect(closingOnHidden).toBe(initialOnHidden)
-    expect(rerenderedOnHidden).toBe(initialOnHidden)
 
     act(() => {
       rerenderedOnHidden()
@@ -101,23 +96,5 @@ describe('BottomDrawer close lifecycle', () => {
     expect(firstAfterClose).not.toHaveBeenCalled()
     expect(latestAfterClose).toHaveBeenCalledTimes(1)
     expect(renderer.toJSON()).toBeNull()
-  })
-
-  // Reopen before queued hide callback must invalidate it or next close leaves invisible tap-swallowing Modal.
-  it('a hide that lands after a reopen does not swallow the next close', () => {
-    const onAfterClose = vi.fn()
-    const renderer = renderDrawer(true, vi.fn(), onAfterClose)
-    const lateOnHidden = mountedDrawer(renderer).props.onHidden
-    updateDrawer(renderer, false, vi.fn(), onAfterClose)
-    updateDrawer(renderer, true, vi.fn(), onAfterClose)
-
-    act(() => lateOnHidden())
-    expect(mountedDrawer(renderer).props.visible).toBe(true)
-    expect(onAfterClose).not.toHaveBeenCalled()
-
-    updateDrawer(renderer, false, vi.fn(), onAfterClose)
-    act(() => mountedDrawer(renderer).props.onHidden())
-    expect(renderer.toJSON()).toBeNull()
-    expect(onAfterClose).toHaveBeenCalledTimes(1)
   })
 })

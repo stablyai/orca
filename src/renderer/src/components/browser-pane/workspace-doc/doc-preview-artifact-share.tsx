@@ -3,7 +3,7 @@ import {
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host'
-import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-preview-api'
+import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
 import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
