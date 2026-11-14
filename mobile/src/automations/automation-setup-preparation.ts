@@ -5,8 +5,8 @@ import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-ho
 import {
   newWorkspaceSetupHooksRead,
   newWorkspaceUiStateRead
-} from '../components/new-workspace-operations'
-import type { OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
+} from '../new-workspace/creation/runtime/new-workspace-operations'
+import type { OrcaHookTrustPrompt } from '../components/hook-trust/OrcaHookTrustDrawer'
 import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import {
   isSetupHookTrusted,

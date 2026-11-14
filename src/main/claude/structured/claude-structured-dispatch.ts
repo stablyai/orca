@@ -153,6 +153,7 @@ export async function dispatchClaudeTurn(
         )
       : randomUUID())
   const arm = () => {
+    session.historyCatchUp?.abort()
     ++session.dispatchSequence
     return waitForReplay(
       session,

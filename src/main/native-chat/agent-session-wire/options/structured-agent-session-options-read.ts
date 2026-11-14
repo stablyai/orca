@@ -129,10 +129,14 @@ export async function readStructuredAgentSessionOptions(
   const session = await context.conversation(sessionId)
   const agent = session.params.provider
   const capabilities = agents.capabilities(agent)
-  const floor = session.journal.context.floor()
-  const contextFloor = floor ? { contextFloor: floor } : {}
   const restingOptions = await atRest()
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
+  const [floor, goalSource, contextUsage] = await Promise.all([
+    session.journal.reads.contextFloor(),
+    session.journal.reads.threadGoalSource(),
+    capabilities?.contextUsage ? session.journal.reads.contextUsage() : undefined
+  ])
+  const contextFloor = floor ? { contextFloor: floor } : {}
   if (live && usesModelSpecificAcpEfforts(agent)) {
     options = {
       ...options,
@@ -278,11 +282,9 @@ export async function readStructuredAgentSessionOptions(
     acceptsImages: capabilities?.imagePrompts === true && options.acceptsImages !== false,
     ...structuredAgentSessionThreadGoalReport(
       capabilities?.threadGoal === true,
-      session.journal.threadGoal(),
+      goalSource.goal,
       contextFloor
     ),
-    ...(capabilities?.contextUsage
-      ? { contextUsage: { current: session.journal.contextUsage(), ...contextFloor } }
-      : {})
+    ...(contextUsage ? { contextUsage: { current: contextUsage, ...contextFloor } } : {})
   }
 }

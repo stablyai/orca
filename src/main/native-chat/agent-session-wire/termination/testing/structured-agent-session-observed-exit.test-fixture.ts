@@ -8,7 +8,7 @@ import { settleStructuredAgentSessionLeftovers } from '../structured-agent-sessi
 
 /** ownerFence defaults to all fences for a single-generation chat. */
 export function settleObservedExitForTest(
-  input: StructuredAgentSessionDeadGenerationInput & {
+  input: Omit<StructuredAgentSessionDeadGenerationInput, 'journal'> & {
     journal: AgentSessionJournal
     ownerFence?: number
   }

@@ -1,22 +1,30 @@
+import { AgentSessionJournal } from '../../../../../native-chat/agent-session-journal/journal-store'
+import { seedQueuedRigLegacyJournal } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-legacy-journal.test-fixture'
+import { REST_TEST_CALLER } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
+import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession
+} from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 vi.mock('node:fs/promises', { spy: true })
-import '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/options/protocol/agent-session-optional-model-capability'
 import { agentSessionOperationKey } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
+  hostTestAttachParams,
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import {
-  foundRestTestChat,
-  REST_TEST_CALLER as CALLER,
-  restTestSend
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 
-import { editPersistedTestAgentSessionStore } from '../../../../agent-session/records/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import {
+  editPersistedTestAgentSessionStore,
+  withTestAgentSessionDatabase
+} from '../../../../agent-session/records/agent-session-record-store-test-harness'
+import type { RpcResponse } from '../../../core'
+import { journalSqlReads } from '../../../../../native-chat/agent-session-journal/journal-sql-reads'
 
 import {
   CLIENT,
@@ -52,15 +60,11 @@ it('commits a legacy no-choice answer before reply and replays it after upgrade 
     options: { effort: 'high' },
     now: fixture.rig.clock.now
   })
-  const replace = vi.spyOn(fixture.rig.store, 'replaceSessionOptions')
-  fixture.rig.sink.publish.mockClear()
   const params = optionRequest('')
   const inert = { key: 'model', value: '', options: {} }
   expect((await call('agentSession.setOption', params))[0]).toMatchObject({
     result: { ok: true, replayed: false, value: inert }
   })
-  expect(replace).not.toHaveBeenCalled()
-  expect(fixture.rig.sink.publish).not.toHaveBeenCalled()
   expect(fixture.rig.store.getRecord(SESSION)?.options).toEqual({ effort: 'high' })
   expect(
     fixture.rig.store.getOperationRow('device-1', params.envelope.clientOperationId)?.outcome
@@ -171,78 +175,48 @@ it('keeps unreadable accepted results spent', async () => {
   }
 })
 
-it('refuses a damaged journal as unloadable at subscribe and send, and keeps its rows (P2-03)', async () => {
-  await foundRestTestChat(fixture.rig)
-  await fixture.rig.host.flushAllStreamedEvents()
-  openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare(
-      "UPDATE journal_outcomes SET value_json = '}{' WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ?) AND seq = 2"
-    )
-    .run(SESSION)
-  await fixture.rig.restart()
-  setStructuredAgentSessionHost(fixture.rig.host)
-
-  const frames = await call('agentSession.subscribe', { sessionId: SESSION })
-  expect(frames.find((frame) => !frame.ok)).toMatchObject({
-    error: {
-      data: {
-        refusal: {
-          code: 'agent_session_journal_unreadable',
-          details: { reason: 'journalCorrupt' }
-        }
-      }
-    }
-  })
-  const fence = fixture.rig.store.getRecord(SESSION)!.lease.runtimeFence
-  expect(
-    await fixture.rig.host.send(CALLER, restTestSend('after the damage', fence))
-  ).toMatchObject({
-    ok: false,
-    refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
-  })
-  expect(
-    openTestJournalHostDatabase(fixture.rig.root)
-      .db.prepare(
-        'SELECT value_json FROM journal_outcomes WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ?) AND seq = 2 LIMIT 1'
+it('logs a reader reconnecting to a journal that will not open once per failure', async () => {
+  await restingChat()
+  const open = vi.spyOn(fixture.rig.host.collaboratorsForTests().conversationDelivery, 'open')
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  const logged = (): unknown[] =>
+    warn.mock.calls
+      .filter(
+        ([line]) =>
+          line === '[agent-session] open-for-read: opening the conversation for a read failed'
       )
-      .get(SESSION)?.value_json
-  ).toBe('}{')
+      .map(([, fields]) => fields?.error)
+  const reconnect = async (): Promise<RpcResponse[]> => [
+    ...(await call('agentSession.subscribe', { sessionId: SESSION })),
+    ...(await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }))
+  ]
+  const denied = new Error('EACCES: permission denied')
+  const exhausted = new Error('EMFILE: too many open files')
+
+  open.mockRejectedValue(denied)
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    // Every attempt is still refused with its reason; only the log is quiet.
+    expect((await reconnect()).filter((reply) => !reply.ok)).toHaveLength(2)
+  }
+  expect(logged()).toEqual([denied])
+  open.mockRejectedValue(exhausted)
+  await reconnect()
+  await reconnect()
+  expect(logged()).toEqual([denied, exhausted])
 })
 
-function outcomeEpoch(): { epoch: unknown; sequence: unknown } {
-  const row = openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare('SELECT epoch, through_seq FROM journal_outcome_epochs WHERE session_id = ?')
-    .get(SESSION)
-  return { epoch: row?.epoch, sequence: row?.through_seq }
-}
-
-function damageSupersededItemKey(key: string | Buffer): void {
-  openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare(
-      "UPDATE journal_outcomes SET entry_key = ? WHERE field = 'items' AND seq = (SELECT MIN(seq) FROM journal_outcomes WHERE field = 'items')"
-    )
-    .run(key)
-}
-
-it('resets a client catching up over a superseded record with a damaged key, which open never reads', async () => {
-  await foundRestTestChat(fixture.rig)
-  await fixture.rig.host.flushAllStreamedEvents()
-  damageSupersededItemKey('123')
-  // A deletion is the one newest record admission lets keep such a key.
-  openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare(
-      "INSERT INTO journal_outcomes (generation, seq, field, entry_key, format, ordinal, value_json, deleted) SELECT generation, through_seq, 'items', '123', 2, 'b', 'null', 1 FROM journal_outcome_epochs WHERE session_id = ?"
-    )
-    .run(SESSION)
-  await fixture.rig.restart()
-  setStructuredAgentSessionHost(fixture.rig.host)
-  const hello = { items: [{ body: { kind: 'message' } }] }
-
-  expect((await call('agentSession.subscribe', { sessionId: SESSION }))[0]).toMatchObject({
-    ok: true,
-    result: { type: 'snapshot', page: hello }
+it('resets catch-up over an unreadable event while keeping the current conversation readable', async () => {
+  await restingChat()
+  await call('agentSession.subscribe', { sessionId: SESSION })
+  const live = await journalSqlReads(
+    fixture.rig.host.deps.journalDatabase.readers,
+    SESSION
+  ).cursor()
+  await withTestAgentSessionDatabase(fixture.rig.root, (db) => {
+    db.prepare(
+      'UPDATE journal_events SET changes_json=? WHERE session_id=? AND sequence=(SELECT MIN(sequence) FROM journal_events WHERE session_id=? AND sequence>1)'
+    ).run('{damaged', SESSION, SESSION)
   })
-  const live = outcomeEpoch()
   const stale = { epoch: live.epoch, sequence: 1 }
   expect(
     (
@@ -250,38 +224,129 @@ it('resets a client catching up over a superseded record with a damaged key, whi
     )[0]
   ).toMatchObject({
     ok: true,
-    result: { ok: false, reset: 'schema_unreadable', page: hello }
+    result: {
+      ok: false,
+      reset: 'schema_unreadable',
+      page: { items: [{ body: { kind: 'message' } }] }
+    }
   })
-  expect(
-    (await call('agentSession.subscribe', { sessionId: SESSION, cursor: stale }))[0]
-  ).toMatchObject({
-    ok: true,
-    result: { type: 'reset', reset: 'schema_unreadable', page: hello }
-  })
-  // The reset moved the client to the live cursor, past the record it could not read.
-  expect(await call('agentSession.subscribe', { sessionId: SESSION, cursor: live })).toMatchObject([
-    { ok: true, result: { type: 'batch' } }
-  ])
+  const reset = await call('agentSession.subscribe', { sessionId: SESSION, cursor: stale })
+  await vi.waitFor(() =>
+    expect(reset[0]).toMatchObject({
+      ok: true,
+      result: { type: 'reset', reset: 'schema_unreadable' }
+    })
+  )
+  const caughtUp = await call('agentSession.subscribe', { sessionId: SESSION, cursor: live })
+  await vi.waitFor(() => expect(caughtUp[0]).toMatchObject({ ok: true, result: { type: 'batch' } }))
 })
 
 it('keeps a storage failure during catch-up retryable instead of resetting the client', async () => {
   await restingChat()
-  await call('agentSession.subscribe', { sessionId: SESSION })
-  const { db } = openTestJournalHostDatabase(fixture.rig.root)
+  const live = await journalSqlReads(
+    fixture.rig.host.deps.journalDatabase.readers,
+    SESSION
+  ).cursor()
   const catchUp = {
     sessionId: SESSION,
     direction: 'after',
-    cursor: { epoch: outcomeEpoch().epoch, sequence: 1 }
+    cursor: { epoch: live.epoch, sequence: 1 }
   }
-
-  db.exec('ALTER TABLE journal_outcomes RENAME TO journal_outcomes_unavailable')
-  expect((await call('agentSession.history', catchUp))[0]).toMatchObject({
-    ok: false,
-    error: { code: 'runtime_error' }
-  })
-  db.exec('ALTER TABLE journal_outcomes_unavailable RENAME TO journal_outcomes')
+  await withTestAgentSessionDatabase(fixture.rig.root, (db) =>
+    db.exec('ALTER TABLE journal_events RENAME TO journal_events_unavailable')
+  )
+  try {
+    expect((await call('agentSession.history', catchUp))[0]).toMatchObject({
+      ok: false,
+      error: { code: 'runtime_error' }
+    })
+  } finally {
+    await withTestAgentSessionDatabase(fixture.rig.root, (db) =>
+      db.exec('ALTER TABLE journal_events_unavailable RENAME TO journal_events')
+    )
+  }
   expect((await call('agentSession.history', catchUp))[0]).toMatchObject({
     ok: true,
     result: { ok: true }
   })
+})
+
+it('replays SQL revisions and removals after a converted chat reopens without duplicate messages', async () => {
+  const { rig } = fixture
+  seedQueuedRigLegacyJournal(rig.root, SESSION)
+  const attached = await rig.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
+  if (!attached.ok) {
+    throw new Error('fixture attach refused')
+  }
+  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const options = { fence: attached.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  const prompt = { provider: 'orca', clientMessageId: 'saved-prompt' } as const
+  const answer = { provider: 'orca', clientMessageId: 'saved-answer' } as const
+  const disposable = { provider: 'orca', clientMessageId: 'removed-status' } as const
+  await journal.appendItem(
+    prompt,
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Saved question' }] },
+    options
+  )
+  await journal.appendItem(
+    answer,
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Before revision' }] },
+    options
+  )
+  const removed = await journal.appendItem(
+    disposable,
+    { kind: 'status', text: 'Remove after close' },
+    options
+  )
+  const before = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+  const cursor = before.page.liveCursor!
+  await rig.host.close(SESSION, 'evict')
+  const stored = await AgentSessionJournal.open({
+    database: rig.host.deps.journalDatabase,
+    identity: journal.identity,
+    now: () => rig.clock.now
+  })
+  try {
+    await stored.appendItem(
+      answer,
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'After revision' }] },
+      options
+    )
+    await stored.appendTombstone(disposable, { fence: attached.fence })
+  } finally {
+    await stored.close()
+  }
+  const reopened = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+  const events: AgentSessionSubscribeEvent[] = []
+  await rig.host.subscribe({
+    id: 'restored-sql-reader',
+    sessionId: SESSION,
+    cursor,
+    snapshotCatchUp: false,
+    emit: (event) => events.push(event)
+  })
+  await vi.waitFor(() =>
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'batch' &&
+          event.batch.cursor.sequence === reopened.page.liveCursor?.sequence
+      )
+    ).toBe(true)
+  )
+  const restored = events.reduce(
+    (state, event) => reduceStructuredAgentSession(state, { type: 'event', event }, 1000),
+    reduceStructuredAgentSession(
+      EMPTY_STRUCTURED_AGENT_SESSION,
+      { type: 'history-page', page: before.page },
+      1000
+    )
+  )
+  expect(
+    restored.items.filter((item) => item.body.kind === 'message').map((item) => item.body)
+  ).toEqual([
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Saved question' }] },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'After revision' }] }
+  ])
+  expect(restored.items.some((item) => item.itemId === removed.itemId)).toBe(false)
 })

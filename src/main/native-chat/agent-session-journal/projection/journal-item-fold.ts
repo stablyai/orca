@@ -45,24 +45,29 @@ export function upsertJournalItem(
     state.tombstones.delete(itemId)
     return
   }
-  // Pin creation position/time so provider echoes cannot move submitted bubbles below later messages.
+  state.items.set(itemId, journalItemRevisionValue(existing, next))
+  state.tombstones.delete(itemId)
+}
+
+/** Revisions preserve the current placement, including a handover or rejection's later move. */
+export function journalItemRevisionValue(
+  existing: AgentJournalRenderItem,
+  next: AgentJournalRenderItem
+): AgentJournalRenderItem {
   const submitted =
     existing.body.kind === 'message' &&
     existing.body.role === 'user' &&
-    parseAgentJournalItemKey(itemId)?.provider === 'orca'
+    parseAgentJournalItemKey(existing.itemId)?.provider === 'orca'
   const { sequenceIndex: _revisedAt, ...revised } = next
-  state.items.set(itemId, {
+  return {
     ...revised,
-    // Host bookkeeping without explicit producer must retain subagent linkage.
     ...(namesAgentJournalProducer(next) ? {} : agentJournalLinkageFields(existing)),
-    // Provider history may normalize text or omit local attachments from the original send.
     body: submitted ? existing.body : next.body,
     sequence: existing.sequence,
     ...(existing.sequenceIndex !== undefined ? { sequenceIndex: existing.sequenceIndex } : {}),
     observedAt: existing.observedAt,
     turnScope: existing.turnScope ?? next.turnScope
-  })
-  state.tombstones.delete(itemId)
+  }
 }
 
 export function removeJournalItem(

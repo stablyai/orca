@@ -76,8 +76,8 @@
 1 src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx
 1 src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.tsx
 1 src/renderer/src/components/sidebar/workspace-card/activity/prompt-cache-countdown-clock.ts
-1 src/renderer/src/components/status-bar/use-resource-memory-snapshot.ts
-1 src/renderer/src/components/status-bar/use-runtime-host-resources.ts
+1 src/renderer/src/components/status-bar/resources/use-resource-memory-snapshot.ts
+1 src/renderer/src/components/status-bar/host-connections/use-runtime-host-resources.ts
 1 src/renderer/src/components/tab-bar/tab-strip-drag-scroll.ts
 1 src/renderer/src/components/terminal-pane/pty-transport/delivery/terminal-delivery-watchdog.ts
 1 src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/RemoteRuntimeRecoveryCard.tsx

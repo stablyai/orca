@@ -197,7 +197,8 @@ export async function publishClaudeSessionAttempt({
   callbacks,
   sessions,
   exits,
-  recordPhase
+  recordPhase,
+  snapshotCurrent
 }: {
   sessionId: string
   session: ClaudeSession
@@ -206,8 +207,10 @@ export async function publishClaudeSessionAttempt({
   sessions: ReadonlyMap<string, ClaudeSession>
   exits: ReadonlyMap<string, ClaudeSessionExit>
   recordPhase: StructuredAgentSessionAcquireInput['recordPhase']
+  snapshotCurrent?: () => Promise<void>
 }): Promise<void> {
   await withAgentSessionCreatePhase('publish', recordPhase, async () => {
+    await snapshotCurrent?.()
     callbacks.publish(session)
     attempt.published = true
     attempt.delivery.flush()

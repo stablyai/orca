@@ -1,3 +1,4 @@
+import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
@@ -304,13 +305,12 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   ): Promise<void | Readonly<Record<string, string>>>
   /** Opt in only when setOption can update idle metadata without a provider turn. */
   canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
-  /** Applied inputs for this exact child; observations never decide message admission. */
-  readAppliedInputOptions?(input: {
+  /** Finite live compiler facts for this exact child, without a proposed card. */
+  captureMessageSteeringInputs?(input: {
     sessionId: string
     fence: number
     acquisitionGeneration: string | null
-    next: AgentSessionExecutionOptions | undefined
-  }): { active: AgentSessionExecutionOptions; next: AgentSessionExecutionOptions } | null
+  }): StructuredMessageSteeringInputs
   /** Synchronous capability projection; never acquires inventory or changes saved intent. */
   projectOptions?(
     sessionId: string,
@@ -347,10 +347,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     inheritance?: boolean
   }): Promise<void> | undefined
   stopProviderNaming?(): void
-  captureConversationTitleOwner?(record: AgentSessionRecord): {
-    isCurrent: (record: AgentSessionRecord) => boolean
-    generate: (firstPrompt: string, shouldExecute: () => boolean) => Promise<unknown>
-  } | null
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
   closeSession?(
     sessionId: string,

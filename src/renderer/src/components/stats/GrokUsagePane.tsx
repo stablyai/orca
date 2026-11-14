@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CalendarClock, ExternalLink, RefreshCw, Sparkles } from 'lucide-react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'

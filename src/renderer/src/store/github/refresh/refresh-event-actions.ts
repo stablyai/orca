@@ -69,6 +69,8 @@ export const createRefreshEventActions = (
           nextSequences[alias.cacheKey] ?? 0,
           prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)?.sequence ?? 0
         )
+        // Why: a request main ends without data closes at its own sequence, while it is still the
+        // one shown loading; an older request or a repeat never overwrites a newer state.
         const completesOwnedRequest =
           event.status === 'skipped' &&
           event.sequence === previousSequence &&

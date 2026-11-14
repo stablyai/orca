@@ -2,7 +2,7 @@ import { ChevronRight, Laptop, Monitor, Server, type LucideIcon } from 'lucide-r
 import { Pressable, Text, View } from 'react-native'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { statusDotColor } from '../components/StatusDot'
+import { statusDotColor } from '../components/feedback/StatusDot'
 import type { ConnectionVerdict } from '../transport/connection/connection-health'
 import { verdictDisplayLabel } from '../transport/connection/connection-health'
 import { mobileConnectionPathAccessibilityLabel } from '../transport/connection/mobile-connection-path-label'
@@ -12,7 +12,10 @@ import type { ConnectionState } from '../transport/connection/connection-state'
 import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
+import {
+  homeHostWorktreeSummary,
+  type HostWorktreeInfo
+} from '../worktree/catalog/home-worktree-info'
 import { homeListStyles as styles } from './home-list-styles'
 
 const MACHINE_GLYPHS: Record<'laptop' | 'desktop' | 'server', LucideIcon> = {

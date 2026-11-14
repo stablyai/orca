@@ -3,16 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
-import { endPRWatchState, readPRPendingHeads } from './pr-check-event-tables'
-import {
-  recordPRChatAction,
-  recordPRHeadObservation,
-  settlePRPendingObligations
-} from './pr-head-evaluation'
+  closeTestAgentSessionRecordStores,
+  openTestAgentSessionDatabase,
+  withTestAgentSessionDatabase
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { prWatchStorage, type PRWatchStorage } from './pr-watch-storage'
+import { recordPRChatAction } from './pr-head-evaluation'
 import { PRPendingActionResume } from './pr-pending-action-resume'
 import { capturePRPendingActions } from './pr-pending-actions'
 import './pr-watch-tables'
@@ -34,48 +30,66 @@ const green = (runId: number) => [
 ]
 
 let root: string
-let database: JournalHostDatabase
+let database: PRWatchStorage
 
-function read(headSha: string, rollup: unknown[], observedAt = 10): string[] {
-  return recordPRHeadObservation(database, {
-    prKey: PR_KEY,
-    headSha,
-    rollup,
-    isCurrentHead: true,
-    observedAt
-  }).chatIds
+async function seedOpenedChat(chatId: string): Promise<void> {
+  await withTestAgentSessionDatabase(root, (db) => {
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      recordPRChatAction(db, {
+        chatId,
+        anchor: { itemId: 'orca:anchor', revision: 1 },
+        forgeHost: 'github.com',
+        owner: 'acme',
+        repo: 'repo',
+        number: 3,
+        kind: 'opened',
+        headSha: null,
+        observedAt: 0
+      })
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  })
+}
+
+async function read(headSha: string, rollup: unknown[], observedAt = 10): Promise<string[]> {
+  return (
+    await database.write({
+      kind: 'head',
+      read: {
+        prKey: PR_KEY,
+        headSha,
+        rollup,
+        isCurrentHead: true,
+        observedAt
+      }
+    })
+  ).chatIds
 }
 
 describe('recordPRHeadObservation over saved state', () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'pr-head-evaluation-'))
-    database = openTestJournalHostDatabase(root)
-    recordPRChatAction(database, {
-      chatId: 'chat-1',
-      anchor: { itemId: 'orca:anchor', revision: 1 },
-      forgeHost: 'github.com',
-      owner: 'acme',
-      repo: 'repo',
-      number: 3,
-      kind: 'opened',
-      headSha: null,
-      observedAt: 0
-    })
+    database = prWatchStorage(await openTestAgentSessionDatabase(root))
+    await seedOpenedChat('chat-1')
   })
 
   afterEach(async () => {
-    await closeTestJournalHostDatabases()
+    await closeTestAgentSessionRecordStores()
     await rm(root, { recursive: true, force: true })
   })
 
-  it('never reports a result again after its watch ends and a restart reads it anew', () => {
-    expect(read(HEAD_A, green(31001))).toEqual(['chat-1'])
+  it('never reports a result again after its watch ends and a restart reads it anew', async () => {
+    expect(await read(HEAD_A, green(31001))).toEqual(['chat-1'])
     // The PR merged: the watch ended. A restart's first read sees the same final result.
-    database.transaction((db) => endPRWatchState(db, PR_KEY))
-    expect(read(HEAD_A, green(31001), 20)).toEqual([])
+    await database.write({ kind: 'end', prKey: PR_KEY })
+    expect(await read(HEAD_A, green(31001), 20)).toEqual([])
     // A force-push away and back to the same head is no new result either.
-    expect(read(HEAD_B, green(31002), 30)).toEqual(['chat-1'])
-    expect(read(HEAD_A, green(31001), 40)).toEqual([])
+    expect(await read(HEAD_B, green(31002), 30)).toEqual(['chat-1'])
+    expect(await read(HEAD_A, green(31001), 40)).toEqual([])
   })
 })
 
@@ -97,19 +111,23 @@ const MOVED_ON = prInfoFixture({
 })
 
 /** chat-1's captured `git push origin work:review`, resumed and awaiting its PR read. */
-function capturePushAndResume(readAfterPush = () => {}): PRPendingActionResume {
-  capturePRPendingActions(
-    database.db,
-    'chat-1',
-    [
-      shellCallRow(
-        'item',
-        'git push origin work:review',
-        'To github.com:acme/repo.git\n   1234567..89abcde  work -> review\n'
-      )
-    ],
-    0,
-    () => undefined
+async function capturePushAndResume(
+  readAfterPush = async () => {}
+): Promise<PRPendingActionResume> {
+  await withTestAgentSessionDatabase(root, (db) =>
+    capturePRPendingActions(
+      db,
+      'chat-1',
+      [
+        shellCallRow(
+          'item',
+          'git push origin work:review',
+          'To github.com:acme/repo.git\n   1234567..89abcde  work -> review\n'
+        )
+      ],
+      0,
+      () => undefined
+    )
   )
   return new PRPendingActionResume({
     database,
@@ -121,8 +139,7 @@ function capturePushAndResume(readAfterPush = () => {}): PRPendingActionResume {
     resolveCommitSha: async (_candidate, _pr, abbreviated) =>
       FULL_A.startsWith(abbreviated) ? FULL_A : null,
     isCommitInPRHead: async () => false,
-    settle: (row, indices, verified) =>
-      settlePRPendingObligations(database, row, indices, verified),
+    settle: (row, indices, verified) => database.write({ kind: 'settle', row, indices, verified }),
     logger: { warn: () => {} },
     now: () => 10
   })
@@ -131,56 +148,53 @@ function capturePushAndResume(readAfterPush = () => {}): PRPendingActionResume {
 describe('a superseded push head and startup', () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'pr-head-replay-'))
-    database = openTestJournalHostDatabase(root)
+    database = prWatchStorage(await openTestAgentSessionDatabase(root))
   })
 
   afterEach(async () => {
-    await closeTestJournalHostDatabases()
+    await closeTestAgentSessionRecordStores()
     await rm(root, { recursive: true, force: true })
   })
 
   it('saves a pusher before the read that verified it is evaluated', async () => {
-    recordPRChatAction(database, {
-      chatId: 'chat-0',
-      anchor: { itemId: 'orca:anchor', revision: 1 },
-      forgeHost: 'github.com',
-      owner: 'acme',
-      repo: 'repo',
-      number: 3,
-      kind: 'opened',
-      headSha: null,
-      observedAt: 0
-    })
+    await seedOpenedChat('chat-0')
     const readAfterPush = vi.fn()
-    const resume = capturePushAndResume(readAfterPush)
+    const resume = await capturePushAndResume(readAfterPush)
     resume.drain()
     await vi.waitFor(() => expect(readAfterPush).toHaveBeenCalled())
-    // The observer's order: verify, then evaluate the same read, with no await between them.
-    resume.verifyRead(prWatchCandidate(WORKSPACE, null), { ...MOVED_ON, headSha: FULL_A }, 40)
-    expect(read(FULL_A, green(31001), 40).sort()).toEqual(['chat-0', 'chat-1'])
+    // Verification is acknowledged before the same read is evaluated.
+    await resume.verifyRead(prWatchCandidate(WORKSPACE, null), { ...MOVED_ON, headSha: FULL_A }, 40)
+    expect((await read(FULL_A, green(31001), 40)).sort()).toEqual(['chat-0', 'chat-1'])
     resume.clear()
   })
 
   it('keys a superseded push by its full SHA, so a force-push back repeats nothing', async () => {
     const fullA = FULL_A
-    const resume = capturePushAndResume()
+    const resume = await capturePushAndResume()
     resume.drain()
     // Another push moved the PR to B before the first read.
-    await vi.waitFor(() => {
-      resume.verifyRead(prWatchCandidate(WORKSPACE, null), MOVED_ON, 40)
-      expect(readPRPendingHeads(database.db, PR_KEY).map((head) => head.headSha)).toEqual([fullA])
+    await vi.waitFor(async () => {
+      await resume.verifyRead(prWatchCandidate(WORKSPACE, null), MOVED_ON, 40)
+      expect(
+        (await database.read({ kind: 'heads', prKey: PR_KEY })).map((head) => head.headSha)
+      ).toEqual([fullA])
     })
     resume.clear()
     // The earlier head's own read reports it once; the PR later returning to A repeats nothing.
     expect(
-      recordPRHeadObservation(database, {
-        prKey: PR_KEY,
-        headSha: fullA,
-        rollup: green(31001),
-        isCurrentHead: false,
-        observedAt: 60
-      }).chatIds
+      (
+        await database.write({
+          kind: 'head',
+          read: {
+            prKey: PR_KEY,
+            headSha: fullA,
+            rollup: green(31001),
+            isCurrentHead: false,
+            observedAt: 60
+          }
+        })
+      ).chatIds
     ).toEqual(['chat-1'])
-    expect(read(fullA, green(31001), 70)).toEqual([])
+    expect(await read(fullA, green(31001), 70)).toEqual([])
   })
 })

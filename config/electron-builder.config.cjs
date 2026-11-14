@@ -367,6 +367,8 @@ module.exports = {
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/agent-identity-worker-entry.js',
     'out/main/session-search-worker-entry.js',
+    'out/main/journal-sql-worker-entry.js',
+    'out/main/journal-sql-reader-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',

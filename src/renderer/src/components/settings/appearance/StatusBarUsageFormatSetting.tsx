@@ -4,13 +4,13 @@ import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
 import type { StatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '../../../store'
+import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import {
   buildUsageFormatValues,
   renderUsageFormatTemplate
-} from '../../status-bar/usage-format-template'
+} from '../../status-bar/usage/usage-format-template'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 

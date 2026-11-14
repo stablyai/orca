@@ -9,11 +9,9 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../structured-agent-session-runtime'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../records/agent-session-record-store-test-harness'
 
 export async function claudePipedFixture() {
   const directory = await mkdtemp(join(tmpdir(), 'orca-claude-kill-evidence-'))
@@ -219,9 +217,11 @@ export async function claudePipedFixture() {
       expect(await send(text)).toMatchObject({ ok: true })
       await vi.waitFor(() => expect(prompts.length).toBe(before + 1))
       await vi.waitFor(async () => {
-        const journal = await host.journalSnapshot(SESSION)
-        expect(journal.submissions.at(-1)?.dispatchState).toBe('accepted')
-        expect(JSON.stringify(journal.items)).toContain('Healthy Claude reply')
+        const outline = await host.conversationOutline(SESSION)
+        expect(outline.entries.at(-1)).toMatchObject({
+          preview: text,
+          reply: 'Healthy Claude reply'
+        })
       })
     },
     drain: () => host.collaboratorsForTests().serialize(SESSION, async () => {}),

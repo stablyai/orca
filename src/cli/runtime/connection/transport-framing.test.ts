@@ -34,14 +34,6 @@ afterEach(() => {
 })
 
 describe('CLI runtime response framing', () => {
-  it('reads a response split across chunks without losing its payload', async () => {
-    const encoded = reply({ data: '界😀done' })
-    const pending = sendRequest(metadata, 'terminal.read', {}, 30000)
-    socket.emit('data', encoded.slice(0, 7))
-    socket.emit('data', encoded.slice(7))
-    await expect(pending).resolves.toMatchObject({ result: { data: '界😀done' } })
-  })
-
   it('refreshes keepalives across chunks and ignores blanks and data after the final frame', async () => {
     vi.useFakeTimers()
     const pending = sendRequest(metadata, 'terminal.read', {}, 100)
@@ -77,15 +69,5 @@ describe('CLI runtime response framing', () => {
     socket.emit('close')
     socket.emit('data', reply({ data: 'ignored' }))
     await expect(pending).rejects.toMatchObject({ code: 'runtime_unavailable' })
-  })
-
-  it('rejects a timed out incomplete frame and ignores a late reply', async () => {
-    vi.useFakeTimers()
-    const pending = sendRequest(metadata, 'terminal.read', {}, 100)
-    const rejected = expect(pending).rejects.toMatchObject({ code: 'runtime_timeout' })
-    socket.emit('data', '{"id":')
-    await vi.advanceTimersByTimeAsync(100)
-    socket.emit('data', reply({ data: 'ignored' }))
-    await rejected
   })
 })

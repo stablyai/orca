@@ -20,7 +20,7 @@ import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambigu
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import '../../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../../transport/connection/logical-client-cutover-error'
-import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from '../composer/mobile-native-chat-send'
+import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from '../composer/delivery/mobile-native-chat-send'
 
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
