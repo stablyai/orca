@@ -23769,6 +23769,22 @@
         "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
         "restartCount_one": "Restart {{count}} session"
       },
+      "apiEndpoint": {
+        "add": "Add API Endpoint",
+        "addTitle": "Add API endpoint",
+        "editTitle": "Edit API endpoint",
+        "description": "Claude Code sends this account’s requests to an Anthropic-compatible endpoint with your token.",
+        "name": "Name",
+        "baseUrl": "Base URL",
+        "token": "Token",
+        "tokenKeep": "Leave blank to keep it",
+        "model": "Model",
+        "smallFastModel": "Background model",
+        "sameAsModel": "Same as Model",
+        "save": "Save",
+        "saveFailed": "Could not save the endpoint.",
+        "edit": "Edit"
+      },
       "oauthUsage": {
         "title": "Claude usage polling",
         "description": "Uses your Claude Code sign-in to check usage, credits, and inactive accounts. Turn off to use live terminal readings only.",

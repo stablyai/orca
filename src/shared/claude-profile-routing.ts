@@ -12,3 +12,6 @@ export const CLAUDE_PROFILE_MISSING_MESSAGE =
 
 export const CLAUDE_PROFILE_SETUP_FAILED_MESSAGE =
   'The selected Claude account could not be set up. Try again or choose another account.'
+
+/** An endpoint account's own file in its profile folder; profile setup neither shares nor replaces it. */
+export const CLAUDE_API_ENDPOINT_FILE = 'orca-api-endpoint.json'

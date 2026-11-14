@@ -68,6 +68,20 @@ export type CodexManagedAccountRuntimeSelection = {
   wsl: Record<string, string | null>
 }
 
+export type ClaudeAccountAuthMethod = 'subscription-oauth' | 'api-endpoint' | 'unknown'
+
+/** An Anthropic-compatible endpoint, such as Sakana AI, that Claude Code reaches with a token. */
+export type ClaudeApiEndpointSummary = {
+  baseUrl: string
+  model: string
+  smallFastModel: string
+}
+
+export type ClaudeApiEndpointAccountRequest = ClaudeApiEndpointSummary & {
+  label: string
+  authToken: string
+}
+
 export type ClaudeManagedAccount = {
   id: string
   email: string
@@ -75,7 +89,9 @@ export type ClaudeManagedAccount = {
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   wslLinuxAuthPath?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  authMethod: ClaudeAccountAuthMethod
+  /** Set for `api-endpoint` accounts; the token lives in the account folder, not here. */
+  apiEndpoint?: ClaudeApiEndpointSummary
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number
@@ -88,7 +104,8 @@ export type ClaudeManagedAccountSummary = {
   email: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  authMethod: ClaudeAccountAuthMethod
+  apiEndpoint?: ClaudeApiEndpointSummary
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number

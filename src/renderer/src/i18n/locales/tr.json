@@ -21908,6 +21908,22 @@
         "sharedOne": "Aynı konuşma başka bir bölmede açık olduğu için 1 Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir.",
         "sharedOther": "Aynı konuşma başka bir bölmede açık olduğu için {{count}} Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir."
       },
+      "apiEndpoint": {
+        "add": "API uç noktası ekle",
+        "addTitle": "API uç noktası ekle",
+        "editTitle": "API uç noktasını düzenle",
+        "description": "Claude Code bu hesabın isteklerini, belirtecinizle Anthropic uyumlu bir uç noktaya gönderir.",
+        "name": "Ad",
+        "baseUrl": "Temel URL",
+        "token": "Belirteç",
+        "tokenKeep": "Korumak için boş bırakın",
+        "model": "Model",
+        "smallFastModel": "Arka plan modeli",
+        "sameAsModel": "Modelle aynı",
+        "save": "Kaydet",
+        "saveFailed": "Uç nokta kaydedilemedi.",
+        "edit": "Düzenle"
+      },
       "oauthUsage": {
         "title": "Claude kullanımını sorgula",
         "description": "Kullanımı, kredileri ve etkin olmayan hesapları kontrol etmek için Claude Code oturumunuzu kullanır. Yalnızca çalışan terminal oturumlarından gelen canlı verileri kullanmak için kapatın.",
