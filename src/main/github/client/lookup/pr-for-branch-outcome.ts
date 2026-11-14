@@ -90,14 +90,6 @@ export async function preparePRBranchRead(
   options: GitHubPRBranchLookupOptions = {}
 ): Promise<PreparedPRBranchRead> {
   options = snapshotPRLookupOptions(options)
-  const matchesRequest = exactRequestMatcher([
-    repoPath,
-    branch,
-    linkedPRNumber ?? null,
-    connectionId ?? null,
-    fallbackPRNumber ?? null,
-    options
-  ])
   const reprepare = () =>
     outsideGitHubRepoExecution(() =>
       preparePRBranchRead(repoPath, branch, linkedPRNumber, connectionId, fallbackPRNumber, options)
@@ -117,7 +109,7 @@ export async function preparePRBranchRead(
       ) {
         return {
           key: '',
-          matchesRequest,
+          matchesRequest: () => false,
           reprepare,
           cached: () => null,
           isCurrent: () => true,
@@ -139,6 +131,17 @@ export async function preparePRBranchRead(
       }
       const policyRevision = refreshPRPolicyContext()
       const scope = prLookupScope(repoPath, connectionId, options)
+      const matchesRequest = exactRequestMatcher(
+        [
+          repoPath,
+          branch,
+          linkedPRNumber ?? null,
+          connectionId ?? null,
+          fallbackPRNumber ?? null,
+          options
+        ],
+        scope.accountFromProject
+      )
       const { localGitOptions, ghOptions, executionScope } = scope
       const key = completeReadKey(
         repoPath,
@@ -152,11 +155,13 @@ export async function preparePRBranchRead(
       const coalescingKey = options.resetQuietBackoff || options.userRefresh ? 'fresh' : 'timed'
       const pendingAt = (intent: 'fresh' | 'timed') => pendingPRBranchRead(key, intent)
       const isCurrent = () =>
-        outsideGitHubRepoExecution(
-          () =>
-            lastOutcomeKey(repoPath, branchName, prLookupScope(repoPath, connectionId, options)) ===
-            ownerKey
-        )
+        outsideGitHubRepoExecution(() => {
+          const current = prLookupScope(repoPath, connectionId, options)
+          return (
+            current.accountFromProject === scope.accountFromProject &&
+            lastOutcomeKey(repoPath, branchName, current) === ownerKey
+          )
+        })
       const narrowed =
         options.checkPageLimit !== undefined ||
         options.exactRepository ||

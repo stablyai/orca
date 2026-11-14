@@ -63,13 +63,13 @@ export function PRAutoRefreshControl({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="muted-field-icon"
                   size="icon-xs"
                   aria-label={t(
                     'auto.components.settings.GitPane.prAutoRefreshAbout',
                     'About PR Updates'
                   )}
-                  className="size-5 text-muted-foreground"
+                  className="size-5"
                 >
                   <Info className="size-3.5" />
                 </Button>

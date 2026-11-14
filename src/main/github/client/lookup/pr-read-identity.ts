@@ -15,10 +15,12 @@ export function prLookupScope(
   options: GitHubPRBranchLookupOptions
 ) {
   const localGitOptions = hostedReviewLocalGitOptionArgs(options)[0] ?? {}
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const ghOptions = ghRepoExecOptions(context)
   return {
     localGitOptions,
     ghOptions,
+    accountFromProject: context.ghAccountFromProject === true,
     executionScope: githubPRStackExecutionScope(connectionId, localGitOptions),
     generation: scopeGeneration(
       hostedReviewRepoScope(repoPath, getRepoExecutionHostId({ connectionId }))
@@ -120,26 +122,28 @@ export function prBranchReadKeys(
 function scopeInputs(
   repoPath: string,
   connectionId: string | null,
-  options: GitHubPRBranchLookupOptions
+  options: GitHubPRBranchLookupOptions,
+  accountFromProject: boolean
 ): string {
   const local = hostedReviewLocalGitOptionArgs(options)[0] ?? {}
   return JSON.stringify([
     repoPath,
     connectionId ?? null,
     local.wslDistro ?? null,
-    local.ghAccount ?? null
+    accountFromProject ? null : (local.ghAccount ?? null)
   ])
 }
 
 /** Compares request inputs without discovering accounts; callers fence the prepared scope separately. */
 export function exactRequestMatcher(
-  request: Parameters<typeof prBranchReadKeys>
+  request: Parameters<typeof prBranchReadKeys>,
+  accountFromProject = false
 ): (other: Parameters<typeof prBranchReadKeys>) => boolean {
   const identity = ([repoPath, branch, linked, connectionId, fallback, options]: Parameters<
     typeof prBranchReadKeys
   >) =>
     JSON.stringify([
-      scopeInputs(repoPath, connectionId, options),
+      scopeInputs(repoPath, connectionId, options, accountFromProject),
       ...completeReadInputs(
         repoPath,
         branch.replace(/^refs\/heads\//, ''),
