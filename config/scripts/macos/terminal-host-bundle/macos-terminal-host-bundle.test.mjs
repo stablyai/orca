@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,30 +8,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 const require = createRequire(new URL('../../macos-terminal-host-bundle.test.mjs', import.meta.url))
 const {
   assembleMacTerminalHost,
+  assertMacTerminalHostUuid,
   daemonBareRequires,
-  findUnresolvedDaemonRequires,
-  parseBuildVersionMinos
+  findUnresolvedDaemonRequires
 } = require('./macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
-describe('terminal host binary checks', () => {
-  it('reads minos from the LC_BUILD_VERSION load command only', () => {
-    const otool = [
-      'Load command 8',
-      '      cmd LC_SEGMENT_64',
-      '    minos 99.0',
-      'Load command 9',
-      '      cmd LC_BUILD_VERSION',
-      '  cmdsize 32',
-      ' platform 1',
-      '    minos 13.5',
-      '      sdk 14.0',
-      'Load command 10',
-      '      cmd LC_SOURCE_VERSION'
-    ].join('\n')
-    expect(parseBuildVersionMinos(otool)).toBe('13.5')
-    expect(parseBuildVersionMinos('Load command 1\n      cmd LC_SEGMENT_64\n')).toBeNull()
-  })
-})
-
+const INFO = { CFBundleIdentifier: 'com.stablyai.orca' }
 describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
   let root
   let appPath
@@ -54,12 +36,28 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
     // Some packaged node-pty copies ship spawn-helper without its execute bit.
     writeFileSync(join(nodePty, 'build', 'Release', 'spawn-helper'), 'helper', { mode: 0o644 })
     writeFileSync(join(nodePty, 'src', 'unix.cc'), 'source')
-    writeFileSync(join(root, 'node'), 'pinned-node', { mode: 0o644 })
+    // A real Mach-O stands in for the pinned Node, whose UUID assembly rewrites.
+    copyFileSync('/usr/bin/true', join(root, 'node'))
     writeFileSync(join(root, 'icon.icns'), 'icon')
   })
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true })
+  })
+
+  it("gives the helper executable the main executable's UUID instead of stock Node's", () => {
+    const paths = assembleMacTerminalHost({
+      appPath,
+      nodeExecutable: join(root, 'node'),
+      iconPath: join(root, 'icon.icns'),
+      info: INFO
+    })
+    execFileSync(paths.executable)
+    const uuids = execFileSync('dwarfdump', ['--uuid', paths.executable], { encoding: 'utf8' })
+    // Orca.app's main executable carries these (macos-executable-uuid.test.mjs).
+    expect(uuids).toContain('016EE681-3DC3-81C7-A6DA-12DC23B89DD9 (x86_64)')
+    expect(uuids).toContain('E6430410-3B22-8BD6-9677-B18884034A30 (arm64e)')
+    assertMacTerminalHostUuid(appPath, INFO.CFBundleIdentifier)
   })
 
   it('copies every package the daemon requires, with its dependencies', () => {
@@ -86,7 +84,7 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
       appPath,
       nodeExecutable: join(root, 'node'),
       iconPath: join(root, 'icon.icns'),
-      info: {}
+      info: INFO
     })
     const helperModules = join(paths.daemon, 'node_modules')
     expect(daemonBareRequires(join(paths.daemon, 'out', 'main'))).toEqual([
@@ -107,7 +105,7 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
         appPath,
         nodeExecutable: join(root, 'node'),
         iconPath: join(root, 'icon.icns'),
-        info: {}
+        info: INFO
       })
     ).toThrow(/requires yaml, missing/)
   })
@@ -117,7 +115,7 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
       appPath,
       nodeExecutable: join(root, 'node'),
       iconPath: join(root, 'icon.icns'),
-      info: {}
+      info: INFO
     })
     writeFileSync(paths.entry, "require('jsonc-parser')")
     // The build tree's node_modules above dist/ is what hid this from the boot check.
@@ -159,7 +157,7 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
       appPath,
       nodeExecutable: join(root, 'node'),
       iconPath: join(root, 'icon.icns'),
-      info: {}
+      info: INFO
     })
     const helperModules = join(paths.daemon, 'node_modules')
     expect(existsSync(join(helperModules, 'b', 'node_modules', 'c', 'package.json'))).toBe(true)
@@ -179,7 +177,7 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
         appPath,
         nodeExecutable: join(root, 'node'),
         iconPath: join(root, 'icon.icns'),
-        info: {}
+        info: INFO
       })
     ).toThrow(/loads a module by a computed name/)
   })

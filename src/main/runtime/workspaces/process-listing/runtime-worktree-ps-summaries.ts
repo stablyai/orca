@@ -21,6 +21,8 @@ export function buildRuntimeWorktreePsSummaries(args: {
   store: RuntimeStore | null
   resolvedWorktrees: readonly ResolvedWorktree[]
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
+  /** Only this workspace's rows (every host's copy); PTY liveness still reads every worktree. */
+  worktreeId?: string
 }): Map<string, RuntimeWorktreePsSummary> {
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
   const metaByHost = new Map<ExecutionHostId, Record<string, WorktreeMeta>>()
@@ -42,8 +44,12 @@ export function buildRuntimeWorktreePsSummaries(args: {
   const ghCache = args.store?.getGitHubCache?.()
   const crossStoreLineage = args.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
   const workspaceLineage = args.store?.getAllWorkspaceLineage?.()
+  const resolvedWorktrees =
+    args.worktreeId === undefined
+      ? args.resolvedWorktrees
+      : args.resolvedWorktrees.filter((worktree) => worktree.id === args.worktreeId)
   for (const { worktree, repo } of withOwnerRepos(
-    args.resolvedWorktrees,
+    resolvedWorktrees,
     args.store?.getRepos() ?? []
   )) {
     const meta = readMeta(worktree)
@@ -144,6 +150,9 @@ export function buildRuntimeWorktreePsSummaries(args: {
       continue
     }
     const worktree = folderWorkspaceToWorktree(folderWorkspace)
+    if (args.worktreeId !== undefined && worktree.id !== args.worktreeId) {
+      continue
+    }
     setPsSummary(summaries, {
       workspaceKind: 'folder-workspace',
       worktreeId: worktree.id,

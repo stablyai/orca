@@ -23,7 +23,7 @@ export type ParsedExecutionHost =
   | { kind: 'ssh'; id: `ssh:${string}`; targetId: string }
   | { kind: 'runtime'; id: `runtime:${string}`; environmentId: string }
 
-function getCurrentLocalPlatform(): NodeJS.Platform | null {
+export function getCurrentLocalPlatform(): NodeJS.Platform | null {
   const globalNavigator = (globalThis as { navigator?: { userAgent?: string; platform?: string } })
     .navigator
   const userAgent = globalNavigator?.userAgent || globalNavigator?.platform || ''

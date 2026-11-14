@@ -217,6 +217,8 @@ export function MobileNativeChatAsk({
   const otherSelected = (selections[index] ?? []).includes(OTHER)
   const freeTextInput = freeTextInputs?.[index]
   const currentAnswered = isAnswered(index)
+  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered())
+  const confirmSkips = confirmLabel === 'skip'
 
   return (
     <View style={styles.card}>
@@ -338,14 +340,14 @@ export function MobileNativeChatAsk({
         <Pressable
           style={({ pressed }) => [
             styles.next,
-            !currentAnswered && styles.nextSkip,
+            confirmSkips && styles.nextSkip,
             pressed && pressedStyle
           ]}
           onPress={confirm}
           disabled={submitting}
         >
-          <Text style={[styles.nextText, !currentAnswered && styles.nextSkipText]}>
-            {confirmLabels(t)[askConfirmLabel(currentAnswered, isLast)]}
+          <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
+            {confirmLabels(t)[confirmLabel]}
           </Text>
         </Pressable>
       </View>

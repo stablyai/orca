@@ -54,6 +54,8 @@ export type ComputerSnapshotData = {
   treeText: string
   elementCount: number
   focusedElementId: number | null
+  // Elements rendered with the `(disabled)` trait; a label can hold the same text. Absent from older hosts.
+  disabledElementIndexes?: number[]
   // Present only when treeText is the subtree of this element, read with rootElementIndex.
   rootElementIndex?: number
   // Present only when treeText is a diff against the previous snapshot of the same window.

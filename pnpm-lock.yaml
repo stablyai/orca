@@ -653,6 +653,9 @@ importers:
       sonner:
         specifier: 2.0.7
         version: 2.0.7(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
+      std-env:
+        specifier: 4.3.0
+        version: 4.3.0
       sucrase:
         specifier: 3.35.1
         version: 3.35.1
