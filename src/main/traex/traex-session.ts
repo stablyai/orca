@@ -13,7 +13,7 @@ import type { TraexLaunch } from './traex-launch-resolution'
 import { TraexTimeline } from './traex-timeline'
 import { TraexPromptRegistry } from './traex-prompt-registry'
 import type { TraexModel } from './traex-model-catalog'
-import { traexRecord, traexText } from './traex-protocol'
+import { traexRecord, traexText, traexTimestampMs, traexNonnegativeNumber } from './traex-protocol'
 import type {
   AgentSessionModelOption,
   AgentSessionSlashCommand
@@ -215,11 +215,12 @@ export class TraexSession {
       )
   }
 
-  finishCompaction(failed = false): void {
+  finishCompaction(failed = false, turn?: Record<string, unknown>): void {
     this.timeline?.apply(
       {
         type: 'turn.end',
-        at: Date.now(),
+        at: traexTimestampMs(turn?.completedAt) ?? Date.now(),
+        durationMs: traexNonnegativeNumber(turn?.durationMs),
         state: 'completed',
         outcome: failed ? 'failure' : 'success',
         ...(this.activeTurn ? { providerTurnId: this.activeTurn } : {})

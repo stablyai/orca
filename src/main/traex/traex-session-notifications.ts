@@ -1,5 +1,11 @@
 import type { TraexSession } from './traex-session'
-import { traexItemSchema, traexRecord, traexText } from './traex-protocol'
+import {
+  traexItemSchema,
+  traexRecord,
+  traexText,
+  traexTimestampMs,
+  traexNonnegativeNumber
+} from './traex-protocol'
 import { TraexTimeline } from './traex-timeline'
 import { TraexPromptRegistry } from './traex-prompt-registry'
 import { isTraexTerminalActivity } from './traex-child-work'
@@ -71,16 +77,21 @@ export function observeTraexSessionNotification(
   if (session.compacting && (method === 'thread/compacted' || method === 'turn/completed')) {
     if (method === 'thread/compacted') {
       session.timeline?.notification(method, params, turnId)
+      return
     } else if (turnId) {
       session.timeline?.completeTurn(turn, turnId)
     }
-    session.finishCompaction(turn.status === 'failed')
+    session.finishCompaction(turn.status === 'failed', turn)
     return
   }
   if (method === 'turn/started' && turnId) {
     session.activeTurn = turnId
     if (!session.compacting) {
-      session.timeline?.apply({ type: 'turn.open', turn: turnId, at: Date.now() })
+      session.timeline?.apply({
+        type: 'turn.open',
+        turn: turnId,
+        at: traexTimestampMs(turn.startedAt) ?? Date.now()
+      })
     }
   } else if (method === 'turn/completed' && turnId) {
     session.timeline?.completeTurn(turn, turnId)
@@ -90,7 +101,8 @@ export function observeTraexSessionNotification(
       {
         type: 'turn.end',
         turn: turnId,
-        at: Date.now(),
+        at: traexTimestampMs(turn.completedAt) ?? Date.now(),
+        durationMs: traexNonnegativeNumber(turn.durationMs),
         state: turn.status === 'interrupted' ? 'interrupted' : 'completed',
         outcome:
           turn.status === 'failed' ? 'failure' : turn.status === 'completed' ? 'success' : undefined

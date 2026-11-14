@@ -284,6 +284,7 @@ it('projects plans, measured context, rich messages and native approval callback
       .poll(() => rows().some((row) => row.body.kind === 'approval' && row.itemId !== mode.itemId))
       .toBe(true)
     const mcp = rows().find((row) => row.body.kind === 'approval' && row.itemId !== mode.itemId)!
+    expect(mcp.body).toMatchObject({ detail: 'Audit MCP\n\n{"path":"/workspace/report.txt"}' })
     await adapter.answerPrompt({
       sessionId: identity.sessionId,
       fence: 1,

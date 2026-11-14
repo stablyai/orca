@@ -40,7 +40,10 @@ createInterface({ input: process.stdin })
             isDefault: true,
             hidden: false,
             defaultReasoningEffort: 'medium',
-            supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Medium' }]
+            supportedReasoningEfforts: [
+              { reasoningEffort: 'medium', description: 'Medium' },
+              { reasoningEffort: 'high', description: 'High' }
+            ]
           }
         ],
         nextCursor: null
@@ -92,6 +95,32 @@ createInterface({ input: process.stdin })
             availableDecisions: ['accept', 'decline', 'cancel']
           }
         })
+      } else if (text === 'file-approval') {
+        notify('item/started', {
+          turnId,
+          item: { id: 'file-edit', type: 'fileChange', status: 'inProgress', changes: [] }
+        })
+        notify('item/fileChange/patchUpdated', {
+          turnId,
+          itemId: 'file-edit',
+          changes: [
+            { path: '/workspace/a.ts', kind: { type: 'update' }, diff: '@@ -1 +1 @@\n-old\n+new' },
+            { path: '/workspace/b.ts', kind: { type: 'add' }, diff: '@@ -0,0 +1 @@\n+second' }
+          ]
+        })
+        send({
+          id: 'file-approval',
+          method: 'item/fileChange/requestApproval',
+          params: {
+            threadId,
+            turnId,
+            itemId: 'file-edit',
+            grantRoot: '/workspace',
+            reason: 'Write outside sandbox'
+          }
+        })
+      } else if (text === 'after-option-change') {
+        complete(`EFFORT:${params.effort}`)
       } else if (text === 'unknown-request') {
         send({ id: 'unknown', method: 'new/blocking/request', params: { threadId, turnId } })
       } else if (text === 'parity-audit') {
@@ -264,6 +293,12 @@ createInterface({ input: process.stdin })
       complete(
         `${request.result.answers.color.answers[0]}:${request.result.answers.name.answers[0]}`
       )
+    } else if (id === 'file-approval') {
+      notify('item/completed', {
+        turnId,
+        item: { id: 'file-edit', type: 'fileChange', status: 'declined', changes: [] }
+      })
+      complete('file denied')
     } else if (id === 'unknown') {
       complete(request.error?.code === -32000 ? 'unrecognized request rejected' : 'unsafe reply')
     } else if (method === 'mode/change/respond') {
@@ -284,7 +319,11 @@ createInterface({ input: process.stdin })
           mode: 'form',
           message: 'Approve the tool',
           requestedSchema: { type: 'object', properties: {} },
-          _meta: { codex_approval_kind: 'mcp_tool_call', persist: ['session'] }
+          _meta: {
+            codex_approval_kind: 'mcp_tool_call',
+            persist: ['session'],
+            tool_params: { path: '/workspace/report.txt' }
+          }
         }
       })
     } else if (id === 'mcp-audit') {
@@ -344,7 +383,9 @@ createInterface({ input: process.stdin })
       }
       notify('item/completed', { turnId, item: { type: 'contextCompaction', id: 'compaction' } })
       notify('thread/compacted', { turnId })
-      notify('turn/completed', { turn: { id: turnId, status: 'completed', items: [] } })
+      notify('turn/completed', {
+        turn: { id: turnId, status: 'completed', items: [], durationMs: 2500, completedAt: 103 }
+      })
     } else if (method === 'thread/turns/list') {
       reply(id, { data: [], nextCursor: null })
     }

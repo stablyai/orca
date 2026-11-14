@@ -1,5 +1,9 @@
+import type { StructuredAgentLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
-import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionLifecycleEvent
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type {
   TraexAppServerConnection,
   TraexConnectionHandlers
@@ -27,4 +31,21 @@ export type TraexPendingSend = {
   requestedAt: number
   turnId?: string
   unknown: boolean
+}
+
+export type TraexSessionAdapterDeps = Omit<TraexSessionDeps, 'onSettled'> & {
+  resolveLaunch: StructuredAgentLaunchResolver<TraexLaunch>
+  readProcessStartTime?: (pid: number) => Promise<number | null>
+  onSettled: (
+    sessionId: string,
+    clientMessageId: string,
+    identity: Parameters<TraexSessionDeps['onSettled']>[1]
+  ) => void
+  copyConversation?: StructuredAgentSessionAdapter['copyConversation']
+  readConversationHistory?: StructuredAgentSessionAdapter['readConversationHistory']
+  atRestCommands?: StructuredAgentSessionAdapter['atRestCommands']
+  generateText?: StructuredAgentSessionAdapter['generateText']
+  stopNaming?: () => void
+  closeNaming?: () => Promise<void>
+  renameAtRest?: StructuredAgentSessionAdapter['renameProviderSession']
 }

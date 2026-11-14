@@ -2,6 +2,36 @@ import type { AgentSessionOptionsResult } from '../../shared/agent-session/optio
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import type { TraexSession } from './traex-session'
 import { isAgentSessionInteractionMode } from '../../shared/agent-session/options/agent-session-interaction-mode'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { readAgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
+
+export function readTraexAppliedInputOptions(
+  session: TraexSession | undefined,
+  input: Parameters<NonNullable<StructuredAgentSessionAdapter['readAppliedInputOptions']>>[0]
+): ReturnType<NonNullable<StructuredAgentSessionAdapter['readAppliedInputOptions']>> {
+  if (
+    !session ||
+    session.ended ||
+    session.connection.closed ||
+    !session.activeTurn ||
+    session.input.fence !== input.fence ||
+    session.generation !== input.acquisitionGeneration
+  ) {
+    return null
+  }
+  const active = readAgentSessionExecutionOptions(session.ranOptions)
+  const requested = Object.fromEntries(
+    Object.entries(input.next ?? session.options).filter(([, value]) => value !== undefined)
+  )
+  const next = readAgentSessionExecutionOptions({ ...active, ...requested })
+  if (!active || !next) {
+    return null
+  }
+  const model = session.nativeModels.find(
+    (entry) => entry.id === next.model || entry.model === next.model
+  )
+  return { active, next: { ...next, ...(model ? { model: model.id } : {}) } }
+}
 
 export function readTraexSessionOptions(session: TraexSession): AgentSessionOptionsResult {
   const selected = session.nativeModels.find(

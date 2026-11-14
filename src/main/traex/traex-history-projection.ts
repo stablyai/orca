@@ -10,6 +10,7 @@ import {
 } from '../native-chat/agent-session-timeline/provider-timeline-history-overlay'
 import { traexItemEvents } from './traex-item-translation'
 import type { TraexTurn } from './traex-protocol'
+import { traexTimestampMs, traexNonnegativeNumber } from './traex-protocol'
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 export function projectTraexHistoryTurn(input: {
@@ -67,7 +68,8 @@ export function projectTraexHistoryTurn(input: {
       assembler.apply({
         type: 'turn.end',
         turn: turn.id,
-        at: (turn.completedAt ?? turn.startedAt ?? 0) * 1000,
+        at: traexTimestampMs(turn.completedAt ?? turn.startedAt) ?? 0,
+        durationMs: traexNonnegativeNumber(turn.durationMs),
         state: turn.status === 'interrupted' ? 'interrupted' : 'completed',
         outcome:
           turn.status === 'failed' ? 'failure' : turn.status === 'completed' ? 'success' : undefined

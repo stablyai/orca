@@ -8,15 +8,15 @@ import type { AgentSessionExecutionOptions } from '../../../../shared/agent-sess
 
 const OPTION_ORDER = ['model', 'effort', 'serviceTier', 'personality', 'interactionMode'] as const
 
-/** A different Codex control needs a new turn: steer has no choice parameters. */
-export function waitsForCodexTurnOptions(
+/** Codex and Trae steers carry no option changes; different controls need a new turn. */
+export function waitsForProviderTurnOptions(
   record: Pick<AgentSessionRecord, 'provider' | 'sessionId'> | null,
   journal: Pick<AgentSessionJournal, 'newestTurn' | 'itemBody'>,
   next: AgentJournalSubmission,
   child: StructuredAgentSessionProviderChild,
   adapter?: Pick<StructuredAgentSessionAdapter, 'readAppliedInputOptions'>
 ): boolean {
-  if (record?.provider !== 'codex') {
+  if (record?.provider !== 'codex' && record?.provider !== 'trae') {
     return false
   }
   const body = journal.itemBody(agentJournalSubmissionKey(next.clientMessageId))
@@ -27,16 +27,16 @@ export function waitsForCodexTurnOptions(
   if (turn?.state !== 'running') {
     return false
   }
-  return codexTurnOptionsDiffer(record, next.options, child, adapter)
+  return providerTurnOptionsDiffer(record, next.options, child, adapter)
 }
 
-export function codexTurnOptionsDiffer(
+export function providerTurnOptionsDiffer(
   record: Pick<AgentSessionRecord, 'provider' | 'sessionId'>,
   options: AgentSessionExecutionOptions | undefined,
   child: StructuredAgentSessionProviderChild,
   adapter?: Pick<StructuredAgentSessionAdapter, 'readAppliedInputOptions'>
 ): boolean {
-  if (record.provider !== 'codex') {
+  if (record.provider !== 'codex' && record.provider !== 'trae') {
     return false
   }
   const applied = adapter?.readAppliedInputOptions?.({

@@ -14,6 +14,7 @@ import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { AgentSessionPromptUnavailableError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { providerTurnOptionsDiffer } from '../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 
 let directory: string | undefined
 let adapter: TraexSessionAdapter | undefined
@@ -148,10 +149,52 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
       .join('\n')
   await expect.poll(answerText).toBe('Blue:Orca')
   await expect.poll(() => journal!.newestTurn()?.state).toBe('completed')
+  expect((await send('file-approval')).state).toBe('accepted')
+  await expect
+    .poll(() =>
+      rows().some(
+        (row) => row.body.kind === 'approval' && row.body.decisionReason === 'Write outside sandbox'
+      )
+    )
+    .toBe(true)
+  const fileApproval = rows().find(
+    (row) => row.body.kind === 'approval' && row.body.decisionReason === 'Write outside sandbox'
+  )!
+  expect(fileApproval.body).toMatchObject({
+    description: 'Write access: /workspace',
+    detail:
+      'update /workspace/a.ts\nadd /workspace/b.ts\n\n/workspace/a.ts\n@@ -1 +1 @@\n-old\n+new\n\n/workspace/b.ts\n@@ -0,0 +1 @@\n+second'
+  })
+  await adapter.answerPrompt({
+    sessionId: identity.sessionId,
+    fence: 1,
+    itemId: fileApproval.itemId,
+    kind: 'approval',
+    response: { kind: 'option', optionId: 'decline' },
+    commit
+  })
+  await expect.poll(() => journal!.newestTurn()?.state).toBe('completed')
   expect((await send('unknown-request')).state).toBe('accepted')
-  await expect.poll(answerText).toBe('Blue:Orca\nunrecognized request rejected')
+  await expect.poll(answerText).toBe('Blue:Orca\nfile denied\nunrecognized request rejected')
   await expect.poll(() => journal!.newestTurn()?.state).toBe('completed')
   expect((await send('wait-for-interrupt')).state).toBe('accepted')
+  await adapter.setOption({ sessionId: identity.sessionId, fence: 1, key: 'effort', value: 'high' })
+  expect(
+    adapter.readAppliedInputOptions({
+      sessionId: identity.sessionId,
+      fence: 1,
+      acquisitionGeneration: acquired.acquisitionGeneration,
+      next: undefined
+    })
+  ).toMatchObject({ active: { effort: 'medium' }, next: { effort: 'high' } })
+  expect(
+    providerTurnOptionsDiffer(
+      { provider: 'trae', sessionId: identity.sessionId },
+      undefined,
+      { fence: 1, generation: acquired.acquisitionGeneration, phase: 'ready' },
+      adapter
+    )
+  ).toBe(true)
   expect((await adapter.cancelTurn({ sessionId: identity.sessionId, fence: 1 })).cancelled).toBe(
     true
   )
@@ -179,6 +222,7 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
   expect(
     rows().some((row) => row.body.kind === 'status' && row.body.presentation === 'compaction')
   ).toBe(true)
+  expect(journal.newestTurn()?.durationMs).toBe(2500)
   const failedIdentity = { ...commandIdentity, recordId: 'failed-compact-command' }
   const failedRunning = agentJournalTurnBody({ turnId: 'failed-compact-command', state: 'running' })
   await journal.appendItem(failedIdentity, failedRunning, {

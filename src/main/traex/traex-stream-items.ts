@@ -1,7 +1,8 @@
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { createAgentSessionDeltaCoalescer } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import { traexContentText, traexItemSchema, traexText } from './traex-protocol'
-import { traexItemBody, traexItemEvents } from './traex-item-translation'
+import { traexItemBody, traexItemEvents, traexItemOutlivesTurn } from './traex-item-translation'
+import { providerFileChangeApprovalDetail } from '../native-chat/agent-session-timeline/provider-file-change-approval-detail'
 
 export class TraexStreamItems {
   private readonly textItems = new Set<string>()
@@ -21,6 +22,10 @@ export class TraexStreamItems {
     }
   ) {
     this.toolOutput = createAgentSessionDeltaCoalescer({
+      isProtected: (key) => {
+        const item = this.tools.get(key)?.item
+        return item ? traexItemOutlivesTurn(item) : false
+      },
       emit: (key, text) => {
         const tool = this.tools.get(key)
         if (tool) {
@@ -35,13 +40,22 @@ export class TraexStreamItems {
               type: 'item.update',
               item: key,
               body,
-              join: { thread: deps.threadId, turn: tool.turn }
+              join: traexItemOutlivesTurn(tool.item)
+                ? { thread: deps.threadId, scope: { kind: 'thread' } }
+                : { thread: deps.threadId, turn: tool.turn }
             })
           }
         }
         return !deps.failed()
       }
     })
+  }
+
+  detailFor(turn: string, itemId: string): string | null {
+    const item = this.tools.get(this.deps.itemKey(turn, itemId))?.item
+    return item?.type === 'fileChange'
+      ? providerFileChangeApprovalDetail(item.changes)
+      : (traexText(item?.command) ?? null)
   }
 
   notification(method: string, params: Record<string, unknown>, turn: string): boolean {
@@ -73,11 +87,12 @@ export class TraexStreamItems {
     if (
       method === 'item/agentMessage/delta' ||
       method === 'item/reasoning/summaryTextDelta' ||
-      method === 'item/reasoning/textDelta'
+      method === 'item/reasoning/textDelta' ||
+      method === 'item/reasoning/summaryPartAdded'
     ) {
       const nativeId = traexText(params.itemId)
       const id = nativeId ? this.deps.itemKey(turn, nativeId) : undefined
-      const text = traexText(params.delta)
+      const text = method === 'item/reasoning/summaryPartAdded' ? '\n' : traexText(params.delta)
       if (id && text !== undefined) {
         this.textItems.add(id)
         this.deps.apply({
@@ -140,12 +155,13 @@ export class TraexStreamItems {
       ) {
         return true
       }
-      const item = parsed.data
+      let item = parsed.data
       const key = this.deps.itemKey(
         turn,
         item.type === 'contextCompaction' ? 'contextCompaction' : item.id
       )
       const completed = method === 'item/completed'
+      item = { ...this.tools.get(key)?.item, ...item }
       if (!completed && ['agentMessage', 'reasoning'].includes(item.type)) {
         return true
       }
@@ -185,7 +201,11 @@ export class TraexStreamItems {
           )
         }
       }
-      if (completed) {
+      if (
+        completed &&
+        (item.type !== 'commandExecution' ||
+          !['inProgress', 'backgrounded'].includes(traexText(item.status) ?? ''))
+      ) {
         this.tools.delete(key)
         this.toolOutput.forget(key)
       } else if (!['agentMessage', 'reasoning'].includes(item.type)) {

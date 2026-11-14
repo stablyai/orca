@@ -11,6 +11,8 @@ import {
   traexQuestionBody,
   traexPromptReply
 } from './traex-prompt-content'
+import { providerFileChangeApprovalDetail } from '../native-chat/agent-session-timeline/provider-file-change-approval-detail'
+import { boundJournalPromptText } from '../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 
 type OpenPrompt = {
   request: TraexServerRequest
@@ -117,7 +119,14 @@ export class TraexPromptRegistry {
         kind: 'approval',
         title: 'Run MCP tool',
         description: traexText(params.message),
-        detail: traexText(params.serverName) ?? null,
+        detail: boundJournalPromptText(
+          [
+            traexText(params.serverName),
+            meta.tool_params === undefined ? null : JSON.stringify(meta.tool_params)
+          ]
+            .filter(Boolean)
+            .join('\n\n')
+        ),
         options: [
           { id: 'accept', label: 'Allow once' },
           ...(session ? [{ id: 'acceptForSession', label: 'Allow for this session' }] : []),
@@ -138,8 +147,19 @@ export class TraexPromptRegistry {
           request.method === 'item/fileChange/requestApproval'
             ? 'Apply file changes'
             : 'Run command',
-        description: traexText(params.reason),
-        detail: traexText(params.command) ?? null,
+        description:
+          request.method === 'item/fileChange/requestApproval' &&
+          typeof params.grantRoot === 'string'
+            ? boundJournalPromptText(`Write access: ${params.grantRoot}`)
+            : traexText(params.reason),
+        ...(request.method === 'item/fileChange/requestApproval' &&
+        typeof params.reason === 'string'
+          ? { decisionReason: boundJournalPromptText(params.reason) }
+          : {}),
+        detail:
+          providerFileChangeApprovalDetail(params.changes) ??
+          (typeof params.command === 'string' ? boundJournalPromptText(params.command) : null) ??
+          this.timeline.approvalDetail(turn, params.itemId),
         options: offered.flatMap((id) =>
           typeof id === 'string' && TRAEX_APPROVAL_LABELS[id]
             ? [{ id, label: TRAEX_APPROVAL_LABELS[id]! }]

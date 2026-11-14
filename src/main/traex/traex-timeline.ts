@@ -84,6 +84,10 @@ export class TraexTimeline {
     this.assembler.beginCommand(command)
   }
 
+  approvalDetail(turn: string | null, itemId: unknown): string | null {
+    return turn && typeof itemId === 'string' ? this.streams.detailFor(turn, itemId) : null
+  }
+
   observeGoal(method: string, value: unknown): void {
     this.goals.observe(method, value)
   }

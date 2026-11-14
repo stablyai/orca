@@ -1,6 +1,5 @@
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import type { StructuredAgentLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { providerSpawnedProcessIdentity } from '../provider-process/provider-spawned-process-identity'
@@ -17,32 +16,17 @@ import {
   AgentSessionStartEndings
 } from '../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
-import type { TraexLaunch } from './traex-launch-resolution'
 import type { TraexAppServerConnection } from './traex-app-server-connection'
-import { TraexSession, type TraexSessionDeps } from './traex-session'
+import { TraexSession } from './traex-session'
+import type { TraexSessionAdapterDeps } from './traex-session-contract'
+export type { TraexSessionAdapterDeps } from './traex-session-contract'
 import { dispatchTraexMessage } from './traex-message-dispatch'
 import { TraexRequestError } from './traex-protocol'
 import { prepareTraexRewind, recoverTraexRewind, rewindTraexSession } from './traex-rewind'
 import { changeTraexThreadGoal } from './traex-thread-goal'
 import { cancelTraexTurn } from './traex-turn-cancel'
 import { stopTraexBackgroundTasks } from './traex-background-task-stops'
-
-export type TraexSessionAdapterDeps = Omit<TraexSessionDeps, 'onSettled'> & {
-  resolveLaunch: StructuredAgentLaunchResolver<TraexLaunch>
-  readProcessStartTime?: (pid: number) => Promise<number | null>
-  onSettled: (
-    sessionId: string,
-    clientMessageId: string,
-    identity: Parameters<TraexSessionDeps['onSettled']>[1]
-  ) => void
-  copyConversation?: StructuredAgentSessionAdapter['copyConversation']
-  readConversationHistory?: StructuredAgentSessionAdapter['readConversationHistory']
-  atRestCommands?: StructuredAgentSessionAdapter['atRestCommands']
-  generateText?: StructuredAgentSessionAdapter['generateText']
-  stopNaming?: () => void
-  closeNaming?: () => Promise<void>
-  renameAtRest?: StructuredAgentSessionAdapter['renameProviderSession']
-}
+import { readTraexAppliedInputOptions } from './traex-session-options'
 
 export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, TraexSession>()
@@ -167,6 +151,9 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
     this.session(input.sessionId, input.fence).setOption(input.key, input.value, input.signal)
   readOptions: NonNullable<StructuredAgentSessionAdapter['readOptions']> = async (input) =>
     this.session(input.sessionId, input.fence).readOptions()
+  readAppliedInputOptions: NonNullable<StructuredAgentSessionAdapter['readAppliedInputOptions']> = (
+    input
+  ) => readTraexAppliedInputOptions(this.sessions.get(input.sessionId), input)
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (id) =>
     this.sessions.get(id)?.commands
   changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) =>

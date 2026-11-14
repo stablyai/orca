@@ -19,6 +19,13 @@ import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types
 import { traexContentText, traexRecord, traexText, type TraexItem } from './traex-protocol'
 import { traexTimelineItemKey } from './traex-timeline-item-key'
 
+export function traexItemOutlivesTurn(item: TraexItem): boolean {
+  return (
+    item.type === 'commandExecution' &&
+    (item.source === 'unifiedExecStartup' || item.status === 'backgrounded')
+  )
+}
+
 export function traexItemBody(
   item: TraexItem,
   completed: boolean
@@ -165,14 +172,15 @@ export function traexItemBody(
                   url: search.url,
                   pattern: search.pattern
                 },
-      state: !completed
-        ? 'running'
-        : ['failed', 'declined', 'interrupted'].includes(traexText(item.status) ?? '') ||
-            item.error != null ||
-            item.success === false ||
-            (typeof item.exitCode === 'number' && item.exitCode !== 0)
-          ? 'failed'
-          : 'completed',
+      state:
+        !completed || item.status === 'inProgress' || item.status === 'backgrounded'
+          ? 'running'
+          : ['failed', 'declined', 'interrupted'].includes(traexText(item.status) ?? '') ||
+              item.error != null ||
+              item.success === false ||
+              (typeof item.exitCode === 'number' && item.exitCode !== 0)
+            ? 'failed'
+            : 'completed',
       ...toolExecutionMetadata(item),
       ...(server && tool ? { mcpIdentity: { server, tool } } : {}),
       ...(results.length ? { webSearchResults: results } : {}),
@@ -223,8 +231,22 @@ export function traexItemEvents(
     return []
   }
   const body = traexItemBody(item, completed)
-  const join = { thread: threadId, turn: turnId }
+  const join = traexItemOutlivesTurn(item)
+    ? { thread: threadId, scope: { kind: 'thread' as const } }
+    : { thread: threadId, turn: turnId }
   return body
-    ? [{ type: completed ? 'item.close' : 'item.open', item: itemKey, body, join }]
+    ? [
+        {
+          type: completed
+            ? item.type === 'commandExecution' &&
+              ['inProgress', 'backgrounded'].includes(traexText(item.status) ?? '')
+              ? 'item.update'
+              : 'item.close'
+            : 'item.open',
+          item: itemKey,
+          body,
+          join
+        }
+      ]
     : [{ type: 'provider.frame', frameKind: `item:${item.type}`, payload: item, join }]
 }

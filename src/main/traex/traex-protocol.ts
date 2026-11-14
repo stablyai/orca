@@ -33,6 +33,15 @@ export function traexText(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+export function traexNonnegativeNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+export function traexTimestampMs(value: unknown): number | undefined {
+  const seconds = traexNonnegativeNumber(value)
+  return seconds === undefined ? undefined : traexNonnegativeNumber(seconds * 1000)
+}
+
 export function traexContentText(value: unknown): string {
   if (typeof value === 'string') {
     return value
