@@ -1,4 +1,4 @@
-import type { KeybindingOverrides, TerminalShortcutPolicy } from './types'
+import type { KeybindingOverrides, SearchShortcutChoice, TerminalShortcutPolicy } from './types'
 
 export type KeybindingGlobalSettings = {
   /** Orca-first keeps app shortcuts from TUIs; terminal-first is opt-in to let shell/TUI bindings win. */
@@ -11,4 +11,6 @@ export type KeybindingGlobalSettings = {
   searchKeybindingSeed?: 'pending' | 'done' | 'legacy'
   /** The later Windows/Linux rollout must not reuse the Mac cohort. */
   nonMacSearchKeybindingSeed?: 'pending' | 'done' | 'legacy'
+  /** Legacy search-cohort profiles only; written by KeybindingService, never through generic settings writes. */
+  searchShortcutOptIn?: SearchShortcutChoice
 }

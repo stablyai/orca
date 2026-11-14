@@ -1,5 +1,10 @@
 import { ipcRenderer } from 'electron'
-import type { KeybindingActionId, KeybindingFileSnapshot } from '../../../shared/keybindings/types'
+import type {
+  KeybindingActionId,
+  KeybindingFileSnapshot,
+  SearchShortcutChoice,
+  SearchShortcutChoiceResult
+} from '../../../shared/keybindings/types'
 import type { PreloadApi } from '../../api-types'
 
 export const keybindingsApi = {
@@ -12,6 +17,8 @@ export const keybindingsApi = {
   reload: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:reload'),
   openFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:openFile'),
   revealFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:revealFile'),
+  setSearchShortcutChoice: (choice: SearchShortcutChoice): Promise<SearchShortcutChoiceResult> =>
+    ipcRenderer.invoke('keybindings:setSearchShortcutChoice', choice),
   onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: KeybindingFileSnapshot): void =>
       callback(snapshot)

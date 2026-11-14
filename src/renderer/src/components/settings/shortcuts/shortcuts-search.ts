@@ -35,6 +35,25 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
   })
 )
 
+export const getSearchShortcutOptInSearchEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate('searchShortcutOptIn.searchTitle', 'Search shortcut'),
+    description: translate(
+      'searchShortcutOptIn.searchDescription',
+      'Open Search with Cmd+K or Ctrl+K instead of clearing the terminal.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.ca6a0c2df7', 'shortcut'),
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.0ecba9aa5f', 'keyboard'),
+      ...translateSearchKeyword('searchShortcutOptIn.keywordSearch', 'search'),
+      ...translateSearchKeyword('searchShortcutOptIn.keywordClear', 'clear'),
+      ...translateSearchKeyword('searchShortcutOptIn.keywordPalette', 'palette'),
+      'cmd+k',
+      'ctrl+k'
+    ]
+  })
+)
+
 const getShortcutDefinitionSearchEntries = createLocalizedCatalog(() =>
   KEYBINDING_DEFINITIONS.map(localizeKeybindingDefinition).map((item) => ({
     actionId: item.id,
@@ -65,6 +84,7 @@ export function getShortcutsPaneSearchEntries(options?: {
           (includeMobileEmulator || actionId !== 'tab.newSimulator')
       )
       .map(({ searchEntry }) => searchEntry),
-    getTerminalShortcutPolicySearchEntry()
+    getTerminalShortcutPolicySearchEntry(),
+    getSearchShortcutOptInSearchEntry()
   ]
 }

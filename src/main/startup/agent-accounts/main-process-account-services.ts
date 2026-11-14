@@ -1,5 +1,9 @@
 import { app } from 'electron'
 import { KeybindingService } from '../../keybindings/keybinding-service'
+import {
+  parseSearchShortcutChoice,
+  toSearchShortcutPluginOwners
+} from '../../../shared/keybindings/search-shortcut-opt-in'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'
 import { createCodexSessionMigrationScheduler } from '../../codex/history/backfill/codex-session-migration-scheduler'
 import { startCodexSessionBackfillInBackground } from '../../codex/history/backfill/codex-session-backfill'
@@ -76,7 +80,14 @@ export function initializeMainProcessAccountServices(): void {
     legacySearchDefaults:
       (process.platform === 'darwin'
         ? store.getSettings().searchKeybindingSeed
-        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy'
+        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy',
+    readSearchShortcutChoice: () =>
+      parseSearchShortcutChoice(store.getSettings().searchShortcutOptIn),
+    persistSearchShortcutChoice: async (choice) => {
+      await store.updateSettingsAndFlush({ searchShortcutOptIn: choice })
+    },
+    getSearchShortcutPluginOwners: () =>
+      toSearchShortcutPluginOwners(state.pluginService?.contentPacks.commands.list() ?? [])
   })
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))
 }

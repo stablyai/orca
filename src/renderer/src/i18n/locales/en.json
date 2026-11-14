@@ -25750,5 +25750,28 @@
       "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
+  },
+  "searchShortcutOptIn": {
+    "acceptedTitle": "Search uses {{key}}",
+    "title": "Use {{key}} for Search",
+    "failed": "Couldn't switch. Your shortcuts are unchanged.",
+    "undo": "Undo",
+    "use": "Use {{key}}",
+    "acceptedDetail": "{{key}} no longer clears terminals. {{legacyKey}} still opens Search.",
+    "customSearch": "Search uses a custom shortcut. Change it in the Switch worktree row below.",
+    "conflict": "{{key}} is assigned to {{actions}}. Change that shortcut first.",
+    "fileError": "Fix the keybindings file error above before switching.",
+    "detailMac": "Open Search with {{key}}, like new profiles. {{key}} in terminals will stop clearing. {{legacyKey}} keeps working. Only this profile changes; your custom shortcuts are kept.",
+    "detailOther": "Open Search with {{key}}, like new profiles. In terminals {{key}} will open Search instead of clearing, and the shell no longer gets {{key}} (delete to end of line) unless Shortcuts in terminal is Terminal first. {{legacyKey}} keeps working. Only this profile changes.",
+    "searchTitle": "Search shortcut",
+    "searchDescription": "Open Search with Cmd+K or Ctrl+K instead of clearing the terminal.",
+    "keywordSearch": "search",
+    "keywordClear": "clear",
+    "keywordPalette": "palette",
+    "acceptedToast": "{{key}} now opens Search",
+    "groupLabel": "Search shortcut",
+    "footerQuestion": "Use {{key}} for Search?",
+    "footerDetail": "{{key}} in terminals will stop clearing. {{legacyKey}} keeps working.",
+    "notNow": "Not now"
   }
 }
