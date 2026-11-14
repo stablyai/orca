@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath, toLinuxPath } from '../../wsl-paths'
 
 export function normalizeAiVaultResumeFilePath(
   filePath: string | undefined,
@@ -7,5 +7,6 @@ export function normalizeAiVaultResumeFilePath(
   if (!filePath || platform !== 'linux') {
     return filePath
   }
-  return parseWslUncPath(filePath)?.linuxPath ?? filePath
+  // UNC targets the distro tail; a Windows drive path reaches a symlinked store through drvfs (#42369).
+  return parseWslUncPath(filePath)?.linuxPath ?? toLinuxPath(filePath)
 }

@@ -117,37 +117,43 @@ describe('scanAiVaultSessions scope inclusion', () => {
     expect(ids(withScope)).toContain('old-in-scope-subdir')
   })
 
-  it('does not assign a native transcript to a WSL distro from cwd alone', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
-    tempRoots.push(root)
-    const claudeRoot = join(root, 'claude-projects')
+  // #42369: the temp store is a Windows drive path, where a native Linux cwd can only be recorded
+  // by an agent in a local WSL distro. POSIX stores (Linux hosts) still need distro proof; that
+  // rule is covered by ai-vault-scope-cwd-match.test.ts, which can name a POSIX filePath directly.
+  it.runIf(process.platform === 'win32')(
+    'admits a Windows-store transcript with a native Linux cwd to a WSL distro workspace',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
+      tempRoots.push(root)
+      const claudeRoot = join(root, 'claude-projects')
 
-    await writeClaudeSession({
-      claudeRoot,
-      dirName: '-home-ada-repo',
-      sessionId: 'old-wsl-in-scope',
-      cwd: '/home/ada/repo',
-      iso: '2026-01-01T00:00:00.000Z'
-    })
-    for (let index = 0; index < 4; index++) {
       await writeClaudeSession({
         claudeRoot,
-        dirName: `-other-wsl-${index}`,
-        sessionId: `recent-wsl-${index}`,
-        cwd: `/other/wsl/${index}`,
-        iso: `2026-06-2${index}T00:00:00.000Z`
+        dirName: '-home-ada-repo',
+        sessionId: 'old-wsl-in-scope',
+        cwd: '/home/ada/repo',
+        iso: '2026-01-01T00:00:00.000Z'
       })
+      for (let index = 0; index < 4; index++) {
+        await writeClaudeSession({
+          claudeRoot,
+          dirName: `-other-wsl-${index}`,
+          sessionId: `recent-wsl-${index}`,
+          cwd: `/other/wsl/${index}`,
+          iso: `2026-06-2${index}T00:00:00.000Z`
+        })
+      }
+
+      const result = await scanAiVaultSessions(
+        scopedScanOptions(claudeRoot, {
+          limit: 2,
+          scopePaths: ['\\\\wsl.localhost\\Ubuntu\\home\\ada\\repo']
+        })
+      )
+
+      expect(result.sessions.map((session) => session.sessionId)).toContain('old-wsl-in-scope')
     }
-
-    const result = await scanAiVaultSessions(
-      scopedScanOptions(claudeRoot, {
-        limit: 2,
-        scopePaths: ['\\\\wsl.localhost\\Ubuntu\\home\\ada\\repo']
-      })
-    )
-
-    expect(result.sessions.map((session) => session.sessionId)).not.toContain('old-wsl-in-scope')
-  })
+  )
 
   it.each([
     { layout: 'a drive root', scopePath: 'C:\\', dirName: 'C--repo', cwd: 'C:\\repo' },
