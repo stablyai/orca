@@ -1,7 +1,10 @@
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { ExecutionHostId } from '../../../../../../../shared/execution-host'
-import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
+import type {
+  ChatForkPath,
+  ChatForkSurface
+} from '../../../../../../../shared/native-chat/chat-fork-path'
 
 /** Which menu item opened the Fork window; it only picks the window's starting choices. */
 export type NativeChatForkWindowPreset = 'tab' | 'worktree' | 'subagent'
@@ -14,9 +17,7 @@ export type NativeChatForkWorkspaceChoice =
 
 export type NativeChatForkRunAs = 'open' | 'subagent'
 
-/** How a fork travels: the exact history on its host, the exact history copied to another host,
- *  or a recap of the history handed to another agent. */
-export type NativeChatForkRoute = 'same' | 'other-host' | 'recap'
+export type NativeChatForkRoute = ChatForkPath
 
 export type NativeChatForkHostInput = {
   id: ExecutionHostId
@@ -30,19 +31,7 @@ export type NativeChatForkHostChoice = {
   label: string
   disabled: boolean
   /** Why a host can't take this fork. */
-  blocked?: 'offline' | 'needs-update'
-}
-
-export function nativeChatForkRoute(input: {
-  sourceHostId: ExecutionHostId
-  hostId: ExecutionHostId
-  sourceAgent: TuiAgent
-  agent: TuiAgent
-}): NativeChatForkRoute {
-  if (input.agent !== input.sourceAgent) {
-    return 'recap'
-  }
-  return input.hostId === input.sourceHostId ? 'same' : 'other-host'
+  blocked?: 'offline'
 }
 
 /** Two launch modes of one CLI share its usage limit, so neither can answer for the other. */
@@ -67,35 +56,48 @@ export function defaultNativeChatForkAgent(input: {
   return others[0] ?? input.sourceAgent
 }
 
-/** The source host first, then the hosts this fork can reach. Copying the exact history needs the
- *  source to export it and the target to import it; a recap only needs a connected host. */
+/** The source host first, then every other host. A connected host can always take a recap, so
+ *  only an offline one is blocked; one that can't import an exact copy gets a recap instead. */
 export function nativeChatForkHostChoices(input: {
   sourceHostId: ExecutionHostId
   hosts: readonly NativeChatForkHostInput[]
-  copiesHistory: boolean
-  sourceCanExport: boolean
-  importCapability: string
 }): NativeChatForkHostChoice[] {
   const source = input.hosts.find((host) => host.id === input.sourceHostId)
-  const label = source?.label ?? input.sourceHostId
-  const first: NativeChatForkHostChoice = source?.capabilities
-    ? { id: input.sourceHostId, label, disabled: false }
-    : { id: input.sourceHostId, label, disabled: true, blocked: 'offline' }
-  if (input.copiesHistory && !input.sourceCanExport) {
-    return [first]
+  const choice = (host: NativeChatForkHostInput | undefined, id: ExecutionHostId) => ({
+    id,
+    label: host?.label ?? id,
+    ...(host?.capabilities ? { disabled: false } : { disabled: true, blocked: 'offline' as const })
+  })
+  return [
+    choice(source, input.sourceHostId),
+    ...input.hosts
+      .filter((host) => host.id !== input.sourceHostId)
+      .map((host) => choice(host, host.id))
+  ]
+}
+
+/** The kinds the fork can open as: the chat's own kind with the same agent on its host, else a chat
+ *  where the target opens the agent as one and a terminal where its CLI was found; unknown is allowed,
+ *  and the launch itself says when the agent isn't there. */
+export function nativeChatForkSurfaces(input: {
+  sourceSurface: ChatForkSurface
+  sameHost: boolean
+  sameAgent: boolean
+  agent: TuiAgent
+  chatAgents: readonly TuiAgent[] | null
+  cliAgents: readonly TuiAgent[] | null
+}): Record<ChatForkSurface, boolean> {
+  const own = input.sameHost && input.sameAgent
+  return {
+    chat:
+      (own && input.sourceSurface === 'chat') ||
+      input.chatAgents === null ||
+      input.chatAgents.includes(input.agent),
+    terminal:
+      (own && input.sourceSurface === 'terminal') ||
+      input.cliAgents === null ||
+      input.cliAgents.includes(input.agent)
   }
-  const others = input.hosts
-    .filter((host) => host.id !== input.sourceHostId)
-    .map((host): NativeChatForkHostChoice => {
-      if (host.capabilities === null) {
-        return { id: host.id, label: host.label, disabled: true, blocked: 'offline' }
-      }
-      if (input.copiesHistory && !host.capabilities.includes(input.importCapability)) {
-        return { id: host.id, label: host.label, disabled: true, blocked: 'needs-update' }
-      }
-      return { id: host.id, label: host.label, disabled: false }
-    })
-  return [first, ...others]
 }
 
 /** The starting workspace and run mode for the menu item that opened the window. */
@@ -128,26 +130,10 @@ export function nativeChatForkWorkspaceKinds(input: {
   if (!input.sameHost) {
     return ['existing']
   }
-  const anotherWorkspace = input.route === 'recap' || input.destinationOffered
+  const anotherWorkspace = input.route !== 'same' || input.destinationOffered
   return [
     'this',
     ...(input.newWorktreeOffered ? (['new-worktree'] as const) : []),
     ...(anotherWorkspace ? (['existing'] as const) : [])
   ]
-}
-
-/** The messages a recap describes: everything up to the fork point, its whole turn included. */
-export function nativeChatForkRecapMessages(
-  messages: readonly NativeChatMessage[],
-  throughItemId: string
-): readonly NativeChatMessage[] | null {
-  const index = messages.findIndex((message) => message.id === throughItemId)
-  if (index === -1) {
-    return null
-  }
-  let end = index + 1
-  while (end < messages.length && messages[end]?.role !== 'user') {
-    end += 1
-  }
-  return messages.slice(0, end)
 }

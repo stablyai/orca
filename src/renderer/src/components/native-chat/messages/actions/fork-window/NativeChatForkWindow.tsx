@@ -20,6 +20,7 @@ import { runNativeChatForkWindow } from './native-chat-fork-window-run'
 import { useNativeChatForkWindowState } from './use-native-chat-fork-window-state'
 import { NativeChatForkWindowTargetFields } from './NativeChatForkWindowTargetFields'
 import { NativeChatForkWindowWorktreeFields } from './NativeChatForkWindowWorktreeFields'
+import { NativeChatForkWindowOpenAsFields } from './NativeChatForkWindowOpenAsFields'
 
 type WindowProps = {
   dialog: NativeChatWorktreeForkDialog | null
@@ -94,7 +95,7 @@ function ForkWindow({
           '{{agent}} starts with a recap of this chat, up to this point, as its first message. The recap is written here, without asking any model. This chat stays as it is.',
           { agent: agentLabel }
         )
-      : state.route === 'other-host'
+      : state.route === 'relay'
         ? t(
             'components.native-chat.fork.window.hostDescription',
             '{{host}} opens an exact copy of this chat, up to this point, in the workspace you choose. This chat stays as it is.',
@@ -146,6 +147,25 @@ function ForkWindow({
               )}
             </p>
           ) : null}
+          {state.sameAgentRecap ? (
+            <p className="text-xs text-muted-foreground">
+              {state.sameAgentRecap === 'agent'
+                ? t(
+                    'components.native-chat.fork.window.recapNoCopy',
+                    'Only a Claude chat’s exact history can be copied, so the fork gets a recap.'
+                  )
+                : state.sameAgentRecap === 'source-host'
+                  ? t(
+                      'components.native-chat.fork.window.recapSourceHost',
+                      'This chat’s host can’t export an exact copy (update Orca there), so the fork gets a recap.'
+                    )
+                  : t(
+                      'components.native-chat.fork.window.recapTargetHost',
+                      '{{host}} can’t take an exact copy (update Orca there), so the fork gets a recap.',
+                      { host: state.host.label }
+                    )}
+            </p>
+          ) : null}
           <NativeChatForkWindowTargetFields
             id={id}
             busy={busy}
@@ -159,12 +179,22 @@ function ForkWindow({
             agents={state.agents}
             agent={state.agent}
             detectingAgents={state.detecting}
-            otherHostsNeedAnotherAgent={state.otherHostsNeedAnotherAgent}
             onAgentChange={state.setAgent}
             runAs={state.runAs}
             runAsShown={source.subagentOffered}
             subagentAllowed={state.subagentAllowed}
             onRunAsChange={state.setRunAs}
+          />
+          <NativeChatForkWindowOpenAsFields
+            id={id}
+            busy={busy}
+            agent={state.agent}
+            surfaces={state.surfaces}
+            openAs={state.openAs}
+            onOpenAsChange={state.setOpenAs}
+            route={state.route}
+            recapScope={state.recapScope}
+            onRecapScopeChange={state.setRecapScope}
           />
           {state.workspace.kind === 'new-worktree' ? (
             <NativeChatForkWindowWorktreeFields

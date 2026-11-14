@@ -16,10 +16,16 @@ import {
   type NativeChatWorktreeForkBase
 } from '../native-chat-worktree-fork'
 import {
+  chatForkPath,
+  chatForkSurfaceChoice,
+  type ChatForkSurface
+} from '../../../../../../../shared/native-chat/chat-fork-path'
+import type { ChatForkRecapScope } from '../../../../../../../shared/agent-session/context/chat-fork-recap'
+import {
   defaultNativeChatForkAgent,
   nativeChatForkHostChoices,
-  nativeChatForkRoute,
   nativeChatForkSubagentAllowed,
+  nativeChatForkSurfaces,
   nativeChatForkWindowStart,
   nativeChatForkWorkspaceKinds,
   type NativeChatForkRunAs,
@@ -49,6 +55,8 @@ export function useNativeChatForkWindowState(
   const [name, setName] = useState(plan?.name ?? '')
   const [base, setBase] = useState<NativeChatWorktreeForkBase>('main')
   const [task, setTask] = useState('')
+  const [surfacePick, setSurfacePick] = useState<ChatForkSurface | undefined>(undefined)
+  const [recapScope, setRecapScope] = useState<ChatForkRecapScope>('history')
   const preferred = useAppStore((state) => state.settings?.defaultTuiAgent)
   const exportState = useStructuredAgentSessionHostCapabilityState(
     source.target,
@@ -64,7 +72,7 @@ export function useNativeChatForkWindowState(
           pickedWorktrees[0]
         )?.id ?? null)
       : null
-  const { agents, detecting } = useNativeChatForkAgents(
+  const { agents, chatAgents, cliAgents, detecting } = useNativeChatForkAgents(
     pickedExisting ?? (hostPick === sourceHostId ? source.worktreeId : null),
     source.agent
   )
@@ -77,13 +85,7 @@ export function useNativeChatForkWindowState(
           available: agents,
           preferred: isTuiAgent(preferred) ? preferred : null
         })
-  const hostChoices = nativeChatForkHostChoices({
-    sourceHostId,
-    hosts,
-    copiesHistory: agent === source.agent,
-    sourceCanExport: source.agent === 'claude' && exportState === 'supported',
-    importCapability: AI_VAULT_CHAT_FORK_IMPORT_CAPABILITY
-  })
+  const hostChoices = nativeChatForkHostChoices({ sourceHostId, hosts })
   const host =
     hostChoices.find((choice) => choice.id === hostPick && !choice.disabled) ??
     hostChoices.find((choice) => !choice.disabled) ??
@@ -97,17 +99,32 @@ export function useNativeChatForkWindowState(
       )
     }
   }, [host.id, hostPick, sourceHostId, start.workspace])
-  // An exact copy this host can't export stays here; picking another agent opens the other hosts.
-  const otherHostsNeedAnotherAgent =
-    hostChoices.length === 1 &&
-    agents.length > 1 &&
-    hosts.some((choice) => choice.id !== sourceHostId)
   const sameHost = host.id === sourceHostId
-  const route = nativeChatForkRoute({
-    sourceHostId,
-    hostId: host.id,
-    sourceAgent: source.agent,
-    agent
+  const sourceSurface: ChatForkSurface = source.kind === 'terminal' ? 'terminal' : 'chat'
+  const surfaces = nativeChatForkSurfaces({
+    sourceSurface,
+    sameHost,
+    sameAgent: agent === source.agent,
+    agent,
+    chatAgents,
+    cliAgents
+  })
+  const openAs = chatForkSurfaceChoice({ sourceSurface, picked: surfacePick, available: surfaces })
+  // Only Claude's history moves between hosts and kinds; the target must import it.
+  const relays =
+    source.agent === 'claude' &&
+    source.sessionId !== '' &&
+    exportState === 'supported' &&
+    hosts.some(
+      (entry) =>
+        entry.id === host.id && entry.capabilities?.includes(AI_VAULT_CHAT_FORK_IMPORT_CAPABILITY)
+    )
+  const route = chatForkPath({
+    sameAgent: agent === source.agent,
+    sameHost,
+    sameSurface: openAs === sourceSurface,
+    cutsHere: source.cutsHere,
+    relays
   })
   const workspaceKinds = nativeChatForkWorkspaceKinds({
     sameHost,
@@ -130,6 +147,7 @@ export function useNativeChatForkWindowState(
   // At a usage limit the default agent is only known once detection answers; Enter waits for it.
   const ready =
     !host.disabled &&
+    openAs !== null &&
     !(detecting && source.usageLimited) &&
     (workspace.kind !== 'existing' || existingId !== null) &&
     (workspace.kind !== 'new-worktree' || slug.length > 0) &&
@@ -141,6 +159,9 @@ export function useNativeChatForkWindowState(
     hostId: host.id,
     hostLabel: host.label,
     agent,
+    route,
+    openAs: openAs ?? sourceSurface,
+    recapScope,
     workspace,
     runAs,
     // The person's name is the title; the default keeps its "Fork N of" wording.
@@ -172,8 +193,21 @@ export function useNativeChatForkWindowState(
     agents,
     agent,
     detecting,
-    otherHostsNeedAnotherAgent,
     setAgent: setAgentPick,
+    surfaces,
+    openAs,
+    setOpenAs: setSurfacePick,
+    recapScope,
+    setRecapScope,
+    /** Why the same agent gets a recap: no exact copy reaches this kind or host. */
+    sameAgentRecap:
+      route !== 'recap' || agent !== source.agent
+        ? null
+        : source.agent !== 'claude' || source.sessionId === ''
+          ? ('agent' as const)
+          : exportState !== 'supported'
+            ? ('source-host' as const)
+            : ('target-host' as const),
     runAs,
     subagentAllowed,
     setRunAs: setRunAsPick,

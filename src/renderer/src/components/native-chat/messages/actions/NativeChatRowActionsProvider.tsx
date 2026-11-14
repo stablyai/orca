@@ -91,6 +91,7 @@ export function NativeChatRowActionsProvider({
                     kind: 'structured',
                     agent,
                     sessionId: pane.sessionId,
+                    cutsHere: true,
                     worktreeId,
                     target,
                     label: chatTabLabel(pane.tabId, worktreeId) ?? agent,

@@ -7,10 +7,12 @@ import {
   runNativeChatWorktreeFork,
   type NativeChatWorktreeForkBase
 } from '../native-chat-worktree-fork'
-import {
-  nativeChatForkRoute,
-  type NativeChatForkRunAs,
-  type NativeChatForkWorkspaceChoice
+import type { ChatForkSurface } from '../../../../../../../shared/native-chat/chat-fork-path'
+import type { ChatForkRecapScope } from '../../../../../../../shared/agent-session/context/chat-fork-recap'
+import type {
+  NativeChatForkRoute,
+  NativeChatForkRunAs,
+  NativeChatForkWorkspaceChoice
 } from './native-chat-fork-window-choices'
 import type { NativeChatForkWindowSource } from './native-chat-fork-window-source'
 import { runNativeChatHostFork } from './native-chat-host-fork'
@@ -24,6 +26,9 @@ export type NativeChatForkWindowSelection = {
   hostId: ExecutionHostId
   hostLabel: string
   agent: TuiAgent
+  route: NativeChatForkRoute
+  openAs: ChatForkSurface
+  recapScope: ChatForkRecapScope
   workspace: NativeChatForkWorkspaceChoice
   runAs: NativeChatForkRunAs
   newWorktree: { name: string; displayName: string; base: NativeChatWorktreeForkBase }
@@ -67,62 +72,70 @@ async function runSameHostFork(
   return true
 }
 
+/** The workspace a relayed copy or a recap opens in; a new worktree is created for it here. */
+async function forkTargetWorktree(
+  source: NativeChatForkWindowSource,
+  selection: NativeChatForkWindowSelection
+): Promise<string | null> {
+  const { workspace } = selection
+  if (workspace.kind === 'this') {
+    return source.worktreeId
+  }
+  if (workspace.kind === 'existing') {
+    return workspace.worktreeId
+  }
+  return createNativeChatForkWorktree({
+    sourceWorktreeId: source.worktreeId,
+    base: selection.newWorktree.base,
+    agent: selection.agent,
+    name: selection.newWorktree.name,
+    displayName: selection.newWorktree.displayName
+  })
+}
+
 /** Runs the confirmed fork; false keeps the window open, because nothing was created. */
 export async function runNativeChatForkWindow(
   source: NativeChatForkWindowSource,
   selection: NativeChatForkWindowSelection,
   signal?: AbortSignal
 ): Promise<boolean> {
-  const route = nativeChatForkRoute({
-    sourceHostId: selection.sourceHostId,
-    hostId: selection.hostId,
-    sourceAgent: source.agent,
-    agent: selection.agent
-  })
+  const { route, workspace } = selection
   if (route === 'same') {
     return runSameHostFork(source, selection)
   }
-  const { workspace } = selection
-  if (route === 'other-host') {
-    return workspace.kind === 'existing'
-      ? runNativeChatHostFork({
+  // Built before any worktree exists, so a chat with nothing to recap leaves none behind.
+  const recap =
+    route === 'recap'
+      ? nativeChatForkRecapPrompt(source, selection.throughItemId, selection.recapScope)
+      : null
+  if (route === 'recap' && recap === null) {
+    return false
+  }
+  const worktreeId = await forkTargetWorktree(source, selection)
+  if (worktreeId === null) {
+    return false
+  }
+  const launched =
+    recap === null
+      ? await runNativeChatHostFork({
           source,
           throughItemId: selection.throughItemId,
           targetHostId: selection.hostId,
           hostLabel: selection.hostLabel,
-          targetWorktreeId: workspace.worktreeId,
+          targetWorktreeId: worktreeId,
+          openAs: selection.openAs,
           ...(selection.draft ? { draft: selection.draft } : {}),
           ...(signal ? { signal } : {})
         })
-      : false
-  }
-  // Built before any worktree exists, so a chat with nothing to recap leaves none behind.
-  const recap = nativeChatForkRecapPrompt(source, selection.throughItemId)
-  if (recap === null) {
-    return false
-  }
-  const worktreeId =
-    workspace.kind === 'this'
-      ? source.worktreeId
-      : workspace.kind === 'existing'
-        ? workspace.worktreeId
-        : await createNativeChatForkWorktree({
-            sourceWorktreeId: source.worktreeId,
-            base: selection.newWorktree.base,
-            agent: selection.agent,
-            name: selection.newWorktree.name,
-            displayName: selection.newWorktree.displayName
-          })
-  if (worktreeId === null) {
-    return false
-  }
-  const launched = await runNativeChatRecapFork({
-    recap,
-    agent: selection.agent,
-    worktreeId,
-    ...(selection.draft ? { draft: selection.draft } : {}),
-    ...(signal ? { signal } : {})
-  })
-  // A worktree created for the recap exists now; retrying would create a second one.
+      : await runNativeChatRecapFork({
+          recap,
+          agent: selection.agent,
+          hostId: selection.hostId,
+          openAs: selection.openAs,
+          worktreeId,
+          ...(selection.draft ? { draft: selection.draft } : {}),
+          ...(signal ? { signal } : {})
+        })
+  // A worktree created for the fork exists now; retrying would create a second one.
   return launched || workspace.kind === 'new-worktree'
 }

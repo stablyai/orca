@@ -3,6 +3,7 @@ import {
   terminalForkTurnEnd
 } from '../../../../../../shared/native-chat/terminal-fork-point'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../../../../shared/agent-session/structured-agent-session-host-capability'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
@@ -49,11 +50,12 @@ async function runWhilePending<T>(
   }
 }
 
-/** Fork for a terminal Claude chat: the host cuts a copy of its conversation at a reply and Claude
- *  resumes it in a new tab or a new worktree. Absent for other agents, without a transcript, or on a
- *  host that can't cut (`cutHost`); drawn disabled while that is unknown. */
+/** Fork for a terminal chat. A Claude chat's host cuts a copy at a reply and Claude resumes it
+ *  (`request`, when the host can cut); every terminal chat can fork as a recap through the Fork
+ *  window. Absent without a workspace; a Claude chat's Fork is drawn disabled while its cut is unknown. */
 export function useNativeChatTerminalFork(input: {
   agent: string
+  worktreeId: string | null
   source: NativeChatTerminalForkSource | null
   messages: readonly NativeChatMessage[]
   cutHost: StructuredAgentSessionHostCapabilityState
@@ -99,8 +101,9 @@ export function useNativeChatTerminalFork(input: {
   )
   const { openWorktreeFork, openWorktreeForkLatest, worktreeForkDialog } =
     useNativeChatWorktreeForkDialog(inFlight, latestForkItemId)
-  const worktreeOffered = useNativeChatWorktreeForkOffered(input.source?.worktreeId ?? '')
-  const cutKnown = input.cutHost === 'supported'
+  const worktreeOffered = useNativeChatWorktreeForkOffered(input.worktreeId ?? '')
+  // Only a Claude chat with a transcript waits to learn whether its host cuts; a recap needs no cut.
+  const cutKnown = input.agent !== 'claude' || input.source === null || input.cutHost !== 'unknown'
   const rowAction = useMemo<NativeChatForkSurface['rowAction']>(
     () => ({
       support: cutKnown ? { kind: 'known', fork: 'checkpoint' } : { kind: 'unknown' },
@@ -114,8 +117,7 @@ export function useNativeChatTerminalFork(input: {
     }),
     [cutKnown, forkPointBefore, openWorktreeFork, pendingItemId, request, worktreeOffered]
   )
-  const enabled =
-    input.agent === 'claude' && input.source !== null && input.cutHost !== 'unsupported'
+  const enabled = isTuiAgent(input.agent) && input.worktreeId !== null
   return useMemo(
     () =>
       enabled

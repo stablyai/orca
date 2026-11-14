@@ -5,11 +5,13 @@ import type { NativeChatForkRowAction } from '../use-native-chat-fork'
 
 /** The chat a Fork window copies, and which of the window's choices its host can carry out. */
 export type NativeChatForkWindowSource = {
-  /** A chat session, or a terminal Claude chat read from its transcript. */
+  /** A chat session, or a terminal chat read from its CLI's transcript. */
   kind: 'structured' | 'terminal'
   agent: TuiAgent
-  /** The chat session's id, or the terminal chat's Claude session uuid. */
+  /** The chat session's id, or a terminal Claude chat's session uuid; empty when there is none. */
   sessionId: string
+  /** Its host cuts an exact copy that opens as the same kind (`request`). */
+  cutsHere: boolean
   worktreeId: string
   target: RuntimeClientTarget
   /** The chat's tab title, as a subagent's report and a recap name it. */

@@ -9,6 +9,7 @@ import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-c
 import { AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { NativeChatSubagentTranscripts } from '../../subagents/NativeChatSubagentTranscripts'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 
 /** Gives a terminal chat's rows the same Fork as a chat session, through the CLI's own resume. */
 export function NativeChatTerminalForkProvider({
@@ -34,6 +35,7 @@ export function NativeChatTerminalForkProvider({
   )
   const fork = useNativeChatTerminalFork({
     agent,
+    worktreeId,
     source:
       sessionId && transcriptPath && worktreeId ? { sessionId, transcriptPath, worktreeId } : null,
     messages,
@@ -44,13 +46,18 @@ export function NativeChatTerminalForkProvider({
     <NativeChatForkContext.Provider value={fork}>
       <NativeChatForkSlotContext.Provider value={fork !== undefined}>
         {children}
-        {fork?.worktreeForkDialog && worktreeId && sessionId ? (
+        {fork?.worktreeForkDialog && worktreeId && isTuiAgent(agent) ? (
           <NativeChatForkWindowHost
             dialog={fork.worktreeForkDialog}
             source={{
               kind: 'terminal',
-              agent: 'claude',
-              sessionId,
+              agent,
+              // Only a Claude chat's history can be copied exactly.
+              sessionId: agent === 'claude' && sessionId ? sessionId : '',
+              cutsHere:
+                agent === 'claude' &&
+                Boolean(sessionId && transcriptPath) &&
+                cutHost === 'supported',
               worktreeId,
               target: target ?? { kind: 'local' },
               label: agent,

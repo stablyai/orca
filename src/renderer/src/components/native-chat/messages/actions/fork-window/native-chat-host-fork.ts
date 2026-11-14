@@ -18,6 +18,7 @@ import type { ExecutionHostId } from '../../../../../../../shared/execution-host
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
 import { resumeClaudeCopyInNewTerminalTab } from '../native-chat-terminal-fork-launch'
 import type { NativeChatForkWindowSource } from './native-chat-fork-window-source'
+import type { ChatForkSurface } from '../../../../../../../shared/native-chat/chat-fork-path'
 
 // Export and commit run the SDK copy on the host, which may take up to two minutes there.
 const HOST_FORK_CALL_TIMEOUT_MS = 180_000
@@ -28,6 +29,8 @@ type HostForkInput = {
   targetHostId: ExecutionHostId
   hostLabel: string
   targetWorktreeId: string
+  /** The copy resumes in a terminal (Claude's CLI) or as a chat, whatever kind the source was. */
+  openAs: ChatForkSurface
   draft?: string
   signal?: AbortSignal
 }
@@ -79,12 +82,12 @@ function relayFailureText(error: unknown): string | undefined {
   }
 }
 
-/** Opens the placed copy on its new host: a chat resumes the copy, a terminal resumes it in Claude. */
+/** Opens the placed copy where it landed: as a chat resuming it, or in a terminal resuming it in Claude. */
 async function launchPlacedCopy(
   input: HostForkInput,
   placed: AiVaultCommitChatForkImportResult
 ): Promise<void> {
-  if (input.source.kind === 'terminal') {
+  if (input.openAs === 'terminal') {
     await resumeClaudeCopyInNewTerminalTab({
       worktreeId: input.targetWorktreeId,
       sessionId: placed.sessionId,
@@ -106,8 +109,8 @@ async function launchPlacedCopy(
   await launch.launchResult
 }
 
-/** Copies the chat's exact history through the fork point to a workspace on another host, through
- *  this client, then opens it there. False when nothing was placed, so the window stays to retry. */
+/** Copies the chat's exact history through the fork point to a workspace on any host (this one too,
+ *  to open it as the other kind), through this client, then opens it there. False when nothing was placed, so the window stays to retry. */
 export async function runNativeChatHostFork(input: HostForkInput): Promise<boolean> {
   const targetTarget = ipcOrRuntimeTargetForHostId(input.targetHostId)
   const worktree = useAppStore
