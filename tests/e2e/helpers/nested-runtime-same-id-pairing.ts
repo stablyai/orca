@@ -1,6 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 
-import { updateEnvironmentFromPairingCode } from '../../../src/shared/remote-runtime/host-store/runtime-environment-store'
+import { updateEnvironmentFromPairingCode } from '../../../src/shared/remote-runtime/host-store/runtime-environment-store-operations'
 
 export type SameIdPairingReplacement = {
   environmentId: string
@@ -20,7 +20,7 @@ export async function replaceRuntimePairingInPlace(args: {
   await args.page.evaluate(async (selector) => {
     await window.api.runtimeEnvironments.disconnect({ selector })
   }, args.environmentId)
-  const updated = await updateEnvironmentFromPairingCode(args.userDataDir, args.environmentId, {
+  const updated = updateEnvironmentFromPairingCode(args.userDataDir, args.environmentId, {
     pairingCode: args.pairingUrl
   })
   const hydrated = await args.page.evaluate(async (selector) => {
