@@ -11,6 +11,7 @@ import {
 import {
   ALL_SURFACES,
   FRAMES_ONLY,
+  pluginHostMethodOffered,
   pluginHostMethodSinceFor,
   spec,
   WORKER_ONLY,
@@ -297,6 +298,10 @@ export type PluginHostParams<M extends PluginHostMethodName> = z.input<PluginHos
 export type PluginHostResult<M extends PluginHostMethodName> = z.output<PluginHostApi[M]['result']>
 
 export const PLUGIN_HOST_METHOD_NAMES = Object.keys(PLUGIN_HOST_API).filter(isPluginHostMethodName)
+/** The frozen methods: what the minor, method lists, typings and reference count. */
+export const PLUGIN_STABLE_HOST_METHOD_NAMES = PLUGIN_HOST_METHOD_NAMES.filter((name) =>
+  pluginHostMethodOffered(PLUGIN_HOST_API[name], false)
+)
 
 export function isPluginHostMethodName(name: string): name is PluginHostMethodName {
   return Object.hasOwn(PLUGIN_HOST_API, name)
@@ -306,14 +311,17 @@ export function getPluginHostMethodSpec(name: string): PluginHostMethodSpec | nu
   return isPluginHostMethodName(name) ? PLUGIN_HOST_API[name] : null
 }
 
-/** The minor this host implements: the newest `since` in the table. */
+/** The minor this host implements: the newest `since` among frozen methods. */
 export const PLUGIN_HOST_API_MINOR = Math.max(
-  ...PLUGIN_HOST_METHOD_NAMES.map((name) => PLUGIN_HOST_API[name].since)
+  ...PLUGIN_STABLE_HOST_METHOD_NAMES.map((name) => PLUGIN_HOST_API[name].since)
 )
 
-/** Methods a surface may call, for `hello` and `host.has`. */
-export function pluginHostMethodsFor(surface: PluginSurface): PluginHostMethodName[] {
-  return PLUGIN_HOST_METHOD_NAMES.filter((name) => PLUGIN_HOST_API[name].surfaces.includes(surface))
+/** Methods a surface may call, for `hello` and `host.has`; proposed ones only when allowed. */
+export function pluginHostMethodsFor(surface: PluginSurface, allowProposed = false) {
+  return PLUGIN_HOST_METHOD_NAMES.filter((name) => {
+    const entry = PLUGIN_HOST_API[name]
+    return entry.surfaces.includes(surface) && pluginHostMethodOffered(entry, allowProposed)
+  })
 }
 
 /** A frame's methods: user-gesture methods only where Orca can verify the gesture (a guest). */

@@ -9,7 +9,7 @@ import {
   worktreeHostMatchOptions,
   worktreeMatchesHost
 } from '../listing/worktree-host-ownership'
-import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 
 /** Folds a fresh create result into the worktree, lineage and base-status maps. */
 export function applyCreatedWorktree(

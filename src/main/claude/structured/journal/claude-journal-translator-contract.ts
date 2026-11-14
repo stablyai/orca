@@ -61,6 +61,8 @@ export type ClaudeJournalTranslator = {
   readonly pendingStreamedBlocks: number
   /** Advances on conversation activity; history catch-up refuses to finish past it. */
   readonly contextActivity: number
+  markContextActivity: () => void
+  subscribeContextActivity: (listener: () => void) => () => void
   /** Every final snapshot and turn settlement this acquisition tried was admitted. */
   readonly finalOutputAdmitted: boolean
   subscribeContextUsageRequests: (listener: ClaudeContextReportListener) => () => void

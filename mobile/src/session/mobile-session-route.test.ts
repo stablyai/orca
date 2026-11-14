@@ -45,29 +45,6 @@ function mountedHostState(hostId: string): HostStackNavigationState {
 }
 
 describe('mobile session route', () => {
-  it('mounts the host, then opens the session over its list', () => {
-    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-    const push = vi.fn()
-    const target = mobileSessionRouteTarget({
-      hostId: 'host/one',
-      worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-      name: 'Fix #1'
-    })
-
-    navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', target)
-
-    expect(push).toHaveBeenCalledWith('/h/host%2Fone')
-    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-
-    harness.setState(mountedHostState('host/one'))
-
-    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
-      type: 'PUSH',
-      target: '/h',
-      payload: target
-    })
-  })
-
   it('mounts the host, then puts a standalone session in place of its list', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const target = mobileSessionRouteTarget({

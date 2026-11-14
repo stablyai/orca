@@ -1,9 +1,19 @@
 import { Loader2 } from 'lucide-react'
-import { useMemo, type RefObject } from 'react'
+import { useCallback, useMemo, useState, type RefObject } from 'react'
+import { parseMarkdownDocLinkHref } from '../../markdown/documents/markdown-doc-links'
 import {
   extractFrontMatter,
   markdownFrontMatterInner
 } from '../../markdown/source-scanning/markdown-frontmatter'
+import {
+  RichMarkdownLinkBubble,
+  type LinkBubbleState
+} from '../../rich-markdown/links/RichMarkdownLinkBubble'
+import { copyRichMarkdownLink } from '../../rich-markdown/links/rich-markdown-link-clipboard'
+import {
+  measureHoveredLinkBubblePosition,
+  useMarkdownLinkHoverBubble
+} from '../../rich-markdown/links/use-markdown-link-hover-bubble'
 import { VirtualMarkdownPreviewBody } from '../viewport/VirtualMarkdownPreviewBody'
 import type { VirtualMarkdownPreviewNavigation } from '../viewport/use-markdown-preview-navigation'
 import type { useMarkdownPreviewDocument } from '../document-worker/use-markdown-preview-document'
@@ -57,6 +67,47 @@ export function MarkdownPreviewSurface({
     renderedContent
   } = foundation
 
+  const [bodyElement, setBodyElement] = useState<HTMLDivElement | null>(null)
+  const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
+  const setBodyContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      bodyRef.current = node
+      setBodyElement(node)
+    },
+    [bodyRef]
+  )
+  const { cancelHoverBubble, onBubblePointerEnter, onBubblePointerLeave } =
+    useMarkdownLinkHoverBubble({
+      containerElement: bodyElement,
+      isOpen: linkBubble !== null,
+      findLinkElement: (target) => {
+        const element =
+          target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+        const anchor = element?.closest<HTMLAnchorElement>('a[href]')
+        if (!anchor || !bodyElement?.contains(anchor)) {
+          return null
+        }
+        const href = anchor.getAttribute('href') ?? ''
+        if (!href || parseMarkdownDocLinkHref(href) !== null) {
+          return null
+        }
+        return anchor
+      },
+      resolveLinkBubble: (linkElement, point) => {
+        const href = linkElement.getAttribute('href') ?? ''
+        if (!href) {
+          return null
+        }
+        return {
+          kind: 'html-superscript',
+          href,
+          copyEnabled: true,
+          ...measureHoveredLinkBubblePosition(linkElement, point)
+        }
+      },
+      setLinkBubble
+    })
+
   const displayedContent =
     documentState.status === 'ready' ? documentState.content : renderedContent
   const frontMatter = useMemo(() => extractFrontMatter(displayedContent), [displayedContent])
@@ -107,7 +158,7 @@ export function MarkdownPreviewSurface({
         ) : null}
         {/* Why: OS page translation can replace react-owned text nodes and crash reconciliation. */}
         <div
-          ref={bodyRef}
+          ref={setBodyContainerRef}
           className="markdown-body"
           translate="no"
           data-markdown-preview-incomplete={largePreview || undefined}
@@ -179,6 +230,25 @@ export function MarkdownPreviewSurface({
           )}
         </div>
       </div>
+      {linkBubble ? (
+        <RichMarkdownLinkBubble
+          anchorElement={foundation.rootRef.current ?? bodyElement}
+          linkBubble={linkBubble}
+          isEditing={false}
+          onDismiss={() => {
+            cancelHoverBubble()
+            setLinkBubble(null)
+          }}
+          onSave={() => {}}
+          onRemove={() => {}}
+          onEditStart={() => {}}
+          onEditCancel={() => {}}
+          onCopy={() => void copyRichMarkdownLink(linkBubble.href)}
+          onPointerEnter={onBubblePointerEnter}
+          onPointerLeave={onBubblePointerLeave}
+          portalToDocument
+        />
+      ) : null}
     </div>
   )
 }

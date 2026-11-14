@@ -6,11 +6,11 @@ import {
   isAgentSessionProviderHandleChain,
   type AgentSessionProviderHandle,
   type AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   agentSessionProviderHandleBelongsTo,
   agentSessionProviderHandleRoot
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 
 export function recordAgentSessionProviderHandle(args: {

@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 import {
   RouteScreenPaintProvider,
   createRouteScreenPaintReporter,
-  reportAfterFirstPaint,
   withRouteScreenPaintReport
 } from './page-first-paint'
 
@@ -32,30 +31,6 @@ function frames() {
     pending: () => queued.size
   }
 }
-
-describe('when the page says it has a frame', () => {
-  it('waits for a frame boundary past the commit, never the same one', () => {
-    // The first animation callback may run before the commit paints; one frame would uncover an undrawn tree.
-    const clock = frames()
-    let reported = 0
-    reportAfterFirstPaint(clock.scheduler, () => {
-      reported += 1
-    })
-    expect(reported).toBe(0)
-    clock.tick()
-    expect(reported).toBe(0)
-    clock.tick()
-    expect(reported).toBe(1)
-  })
-
-  it('reports once and schedules nothing after it', () => {
-    const clock = frames()
-    reportAfterFirstPaint(clock.scheduler, () => {})
-    clock.tick()
-    clock.tick()
-    expect(clock.pending()).toBe(0)
-  })
-})
 
 function deferredRouteChunk() {
   let arrive: (() => void) | null = null

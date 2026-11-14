@@ -21,7 +21,7 @@ import {
 import { getPiAgentStatusExtensionSource } from '../../pi/managed-extensions/agent-status/agent-status-extension-source'
 import { codexHookService } from '../../codex/hooks/installation/hook-service'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import type { PluginSources } from '../../../wsl-guest/plugin-sources'
+import type { PluginSources } from '../../../wsl-guest/plugins/installation/plugin-sources'
 import {
   resolveWslHookRelayBundle,
   runWslInstallProcess,

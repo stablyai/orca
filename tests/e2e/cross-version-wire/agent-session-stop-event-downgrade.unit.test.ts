@@ -11,8 +11,10 @@ import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import Database from '../../../src/main/sqlite/sync-database'
+import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
+import { readTestJournalItems } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import { journalDatabasePath } from '../../../src/main/native-chat/agent-session-journal/database/journal-host-database'
 import {
   closeTestJournalHostDatabase,
@@ -20,29 +22,21 @@ import {
   insertTestJournalRowJson,
   liveTestJournalRows,
   openTestJournalHostDatabase,
-  SAVED_BY_NEWER_ORCA
+  SAVED_BY_NEWER_ORCA,
+  seedLegacyTestJournal
 } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-schema'
-import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/replay/journal-read-row'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   releaseModuleExport
 } from './release-checkout'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
-import {
-  applyJournalRow,
-  createJournalReducerState,
-  renderJournalState
-} from '../../../src/main/native-chat/agent-session-journal/projection/journal-reducer'
 
-// Old readers would truncate at unknown row kinds; encode Stop/Resume/reopen evidence in tombstones they understand.
-const BASELINE_REF = 'v1.4.218'
 const JOURNAL = 'src/main/native-chat/agent-session-journal'
 // Pin a main build sharing this database/schema for writable downgrade; move to the first release that ships it.
 const WRITABLE_BASELINE_REF = '3727100cc9dbcea6201f8a3e506676a3c4b53b18'
+
+const EPOCH = 'epoch-saved-before-conversion'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-downgrade',
@@ -62,186 +56,12 @@ const OLDER_IDENTITY: OlderJournalIdentity = {
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
 
-// Old builds fold input rows; an outcome row here means the probe opened a converted chat by mistake.
-function inputRows(rows: readonly JournalReadRow[]): JournalRow[] {
-  return rows.map((row) => {
-    if (row.kind === 'outcome') {
-      throw new Error('expected input rows')
-    }
-    return row
-  })
-}
-test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
-  '%s replays current raw rows with the unconfirmed failure intact',
-  async (ref) => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-stop-note-raw-skew-'))
-    const journals = createTrackedJournalOpener({ legacyInputs: true })
-    try {
-      const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-      const turn = { provider: 'orca', clientMessageId: 'turn-raw-skew' } as const
-      const note = { provider: 'orca', clientMessageId: 'stop:turn-raw-skew' } as const
-      const unconfirmed = {
-        kind: 'status' as const,
-        ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
-          surface: 'row'
-        })
-      }
-      await journal.appendItem(
-        turn,
-        {
-          kind: 'status',
-          text: 'Interrupted',
-          turnLifecycle: { turnId: 'turn-raw-skew', state: 'interrupted' }
-        },
-        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-      )
-      await journal.appendItem(note, unconfirmed, {
-        fence: 1,
-        turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(turn) }
-      })
-      const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
-      if (!since.ok) {
-        throw new Error(since.reset)
-      }
-      const rawJson = JSON.stringify(since.rows)
-      const checkout = await materializeReleaseCheckout(ref)
-      const reducer = await importReleaseCheckoutModule(checkout, `${JOURNAL}/journal-reducer.ts`)
-      const create = releaseModuleExport<(sessionId: string, epoch: string) => OldReplay['state']>(
-        reducer,
-        'createJournalReducerState'
-      )
-      const fold = releaseModuleExport<(state: OldReplay['state'], row: JournalRow) => void>(
-        reducer,
-        'applyJournalRow'
-      )
-      const old = create(IDENTITY.sessionId, journal.epoch)
-      inputRows(since.rows).forEach((row) => fold(old, row))
-      expect(old.items.get(agentJournalItemKey(note))).toMatchObject({ body: unconfirmed })
-      const current = createJournalReducerState(IDENTITY.sessionId, journal.epoch)
-      inputRows(since.rows).forEach((row) => applyJournalRow(current, row))
-      expect(current.items.get(agentJournalItemKey(note))?.body).toEqual(unconfirmed)
-      expect(
-        renderJournalState(current).items.find((item) => item.itemId === agentJournalItemKey(note))
-          ?.body
-      ).toEqual({ kind: 'status', text: 'Cancellation requested.' })
-      expect(JSON.stringify(since.rows)).toBe(rawJson)
-      expect(journal.itemBody(agentJournalItemKey(note))).toEqual(unconfirmed)
-    } finally {
-      await journals.closeAll()
-      rmSync(directory, { recursive: true, force: true })
-    }
-  },
-  120_000
-)
-
 function item(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
 }
 
-type OldReplay = {
-  state: { items: Map<string, unknown> }
-  readOnly: boolean
-  corrupt: boolean
-  malformedRows: number
-  truncateFrom?: number
-}
-
-// Both downgrade probes load real old builds, including cold extraction and transforms.
-test("an older build keeps every row around a Stop's event, a Resume and a reopen mark, and folds the rows after them", async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'orca-stop-event-downgrade-'))
-  const journals = createTrackedJournalOpener({ legacyInputs: true })
-  try {
-    // This build: history, a person's Stop, a Resume, then more history.
-    const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-    const append = (ordinal: number, text: string) =>
-      journal.appendItem(
-        item(ordinal),
-        { kind: 'status', text },
-        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-      )
-    await append(0, 'before the Stop')
-    const beforeMarks = journal.cursor()
-    await journal.appendStopEvent({ reason: 'user-stop', turnId: 'turn-1', caller: 'client-1' }, 1)
-    await journal.appendStopEvent({ reason: 'user-close', turnId: 'turn-1' }, 1)
-    await journal.appendQueueResume(1)
-    await journal.appendQueueReopen(1)
-    const afterMarks = journal.cursor()
-    await append(1, 'after the Stop')
-    // As stored: a read raises each row's `v` to the newest this build reads, which the older
-    // build does not.
-    const rows: JournalRow[] = storedRows(directory).map((json) => JSON.parse(json))
-
-    // The older build, after a downgrade, replays the same rows from its own database.
-    const checkout = await materializeReleaseCheckout(BASELINE_REF)
-    const [database, table, open, reducer, batch] = await Promise.all(
-      [
-        `${JOURNAL}/journal-database.ts`,
-        `${JOURNAL}/journal-row-table.ts`,
-        `${JOURNAL}/journal-open.ts`,
-        `${JOURNAL}/journal-reducer.ts`,
-        'src/main/native-chat/agent-session-wire/agent-session-journal-batch.ts'
-      ].map((path) => importReleaseCheckoutModule(checkout, path))
-    )
-    const openJournalDatabase = releaseModuleExport<
-      (path: string) => { db: { close: () => void } }
-    >(database, 'openJournalDatabase')
-    const upsertJournalSessionRow = releaseModuleExport<
-      (...args: [unknown, string, string, number]) => void
-    >(table, 'upsertJournalSessionRow')
-    const insertJournalRow = releaseModuleExport<(...args: [unknown, string, JournalRow]) => void>(
-      table,
-      'insertJournalRow'
-    )
-    const replayJournal = releaseModuleExport<
-      (...args: [unknown, boolean, string]) => OldReplay | null
-    >(open, 'replayJournal')
-    const renderJournalState = releaseModuleExport<(state: unknown) => unknown>(
-      reducer,
-      'renderJournalState'
-    )
-    const projectJournalBatch = releaseModuleExport<
-      (input: { rows: readonly JournalRow[]; snapshot: unknown; afterSequence: number }) => {
-        ok: boolean
-        batch?: { items: unknown[]; removedItemIds: string[] }
-      }
-    >(batch, 'projectJournalBatch')
-
-    const { db } = openJournalDatabase(join(directory, 'older-build-journal.sqlite'))
-    try {
-      upsertJournalSessionRow(db, IDENTITY.sessionId, journal.epoch, 1)
-      for (const row of rows) {
-        insertJournalRow(db, IDENTITY.sessionId, row)
-      }
-      const replayed = replayJournal(db, false, IDENTITY.sessionId)
-      expect(replayed).toMatchObject({ readOnly: false, corrupt: false, malformedRows: 0 })
-      expect(replayed?.truncateFrom).toBeUndefined()
-      expect([...(replayed?.state.items.keys() ?? [])]).toHaveLength(2)
-
-      // An older client is sent only ids no item uses, removed.
-      const projected = projectJournalBatch({
-        rows: rows.filter(
-          (row) => row.seq > beforeMarks.sequence && row.seq <= afterMarks.sequence
-        ),
-        snapshot: renderJournalState(replayed?.state),
-        afterSequence: beforeMarks.sequence
-      })
-      expect(projected.ok).toBe(true)
-      expect(projected.batch?.items).toEqual([])
-      expect(projected.batch?.removedItemIds).toHaveLength(3)
-      const liveIds = new Set(journal.snapshot().items.map((entry) => entry.itemId))
-      expect(projected.batch?.removedItemIds.some((id) => liveIds.has(id))).toBe(false)
-    } finally {
-      db.close()
-    }
-  } finally {
-    await journals.closeAll()
-    rmSync(directory, { recursive: true, force: true })
-  }
-}, 120_000)
-
 type OlderJournal = {
   isReadOnly: boolean
-  cursor: () => { epoch: string; sequence: number }
   snapshot: () => { items: { itemId: string }[] }
   appendItem: (...args: [AgentJournalItemIdentity, unknown, unknown]) => Promise<unknown>
 }
@@ -263,21 +83,58 @@ function storedRows(directory: string): string[] {
   }
 }
 
-test("an older build opens this build's journal writable and appends to it; the pause survives the round trip", async () => {
+const SCOPE = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+
+/** A chat an older build saved, before this build first converts it; returns the row writer. */
+function savedBeforeConversion(directory: string) {
+  const database = openTestJournalHostDatabase(directory)
+  seedLegacyTestJournal(database, { identity: IDENTITY, mintEpoch: () => EPOCH, now: () => 1_000 })
+  return (seq: number, fields: Record<string, unknown>): string => {
+    const row = JSON.stringify({
+      // A version the older build reads, so it meets the kind rather than a newer version.
+      v: AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
+      epoch: EPOCH,
+      seq,
+      fence: 1,
+      ts: 1_000 + seq,
+      ...fields
+    })
+    insertTestJournalRowJson(database.db, IDENTITY.sessionId, seq, row)
+    return row
+  }
+}
+
+const statusRow = (ordinal: number, text: string) => ({
+  kind: 'item',
+  itemId: agentJournalItemKey(item(ordinal)),
+  revision: 1,
+  turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+  body: { kind: 'status', text }
+})
+
+// Conversion is one-way: a downgraded build sees the chat as converted, and its later writes
+// are not carried forward, so the upgraded chat is this build's own.
+test("an older build opens and appends to the chat as converted; upgraded again, the chat and its Stop pause are this build's", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-stop-event-writable-downgrade-'))
-  const journals = createTrackedJournalOpener({ legacyInputs: true })
-  const itemIds = (journal: Pick<OlderJournal, 'snapshot'>) =>
-    journal.snapshot().items.map((entry) => entry.itemId)
+  const journals = createTrackedJournalOpener()
+  const savedIds = async (journal: AgentSessionJournal) =>
+    (await readTestJournalItems(journal)).map((entry) => entry.itemId)
+  const pauses = async (journal: AgentSessionJournal) =>
+    (await journal.queuedMessages.pauses()).map((pause) => pause.reason)
   try {
+    savedBeforeConversion(directory)(2, statusRow(0, 'before the upgrade'))
+    await closeTestJournalHostDatabase(directory)
+    const converted = storedRows(directory)
+
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-    const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    await journal.appendItem(item(0), { kind: 'status', text: 'before the Stop' }, scope)
+    await journal.appendItem(item(1), { kind: 'status', text: 'before the Stop' }, SCOPE)
     await journal.appendStopEvent({ reason: 'user-stop', turnId: 'turn-1', caller: 'client-1' }, 1)
-    await journal.appendItem(item(1), { kind: 'status', text: 'after the Stop' }, scope)
-    const wrote = { cursor: journal.cursor(), items: itemIds(journal) }
-    expect(journal.queuedMessages.pauses().map((pause) => pause.reason)).toEqual(['stopped'])
+    await journal.appendItem(item(2), { kind: 'status', text: 'after the Stop' }, SCOPE)
+    const wrote = { cursor: journal.cursor(), items: await savedIds(journal) }
+    expect(wrote.items).toEqual([0, 1, 2].map((ordinal) => agentJournalItemKey(item(ordinal))))
+    expect(await pauses(journal)).toEqual(['stopped'])
     await journals.closeAll()
-    const rowsBefore = storedRows(directory)
+    expect(storedRows(directory)).toEqual(converted)
 
     const checkout = await materializeReleaseCheckout(WRITABLE_BASELINE_REF)
     const support = await importReleaseCheckoutModule(
@@ -288,21 +145,21 @@ test("an older build opens this build's journal writable and appends to it; the 
     try {
       const downgraded = await older.open({ identity: OLDER_IDENTITY, stateDirectory: directory })
       expect(downgraded.isReadOnly).toBe(false)
-      expect(downgraded.cursor()).toEqual(wrote.cursor)
-      expect(itemIds(downgraded)).toEqual(wrote.items)
-      await downgraded.appendItem(item(2), { kind: 'status', text: 'the older build' }, scope)
+      expect(downgraded.snapshot().items.map((entry) => entry.itemId)).toEqual([
+        agentJournalItemKey(item(0))
+      ])
+      await downgraded.appendItem(item(3), { kind: 'status', text: 'the older build' }, SCOPE)
     } finally {
       await older.closeAll()
     }
     const rowsAfter = storedRows(directory)
-    expect(rowsAfter.slice(0, rowsBefore.length)).toEqual(rowsBefore)
-    expect(rowsAfter).toHaveLength(rowsBefore.length + 1)
+    expect(rowsAfter.slice(0, converted.length)).toEqual(converted)
+    expect(rowsAfter).toHaveLength(converted.length + 1)
 
-    // Upgraded again: the older build's row folds, and the person's Stop still pauses the queue.
     const upgraded = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-    expect(upgraded.cursor().sequence).toBe(wrote.cursor.sequence + 1)
-    expect(itemIds(upgraded)).toEqual([...wrote.items, 'codex:thread-1:turn-1:2'])
-    expect(upgraded.queuedMessages.pauses().map((pause) => pause.reason)).toEqual(['stopped'])
+    expect(upgraded.cursor()).toEqual(wrote.cursor)
+    expect(await savedIds(upgraded)).toEqual(wrote.items)
+    expect(await pauses(upgraded)).toEqual(['stopped'])
   } finally {
     await journals.closeAll()
     rmSync(directory, { recursive: true, force: true })
@@ -313,30 +170,13 @@ test("an older build opens this build's journal writable and appends to it; the 
 // Move the pinned baseline once a released reader preserves them.
 test("this build keeps a newer build's row kind and refuses the load; a build before it deletes it", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-newer-kind-downgrade-'))
-  const journals = createTrackedJournalOpener({ legacyInputs: true })
+  const journals = createTrackedJournalOpener()
   const newerKinds = () => storedRows(directory).filter((row) => row.includes('"future-mark"'))
   try {
-    const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-    await journal.appendItem(item(0), { kind: 'status', text: 'before' }, scope)
-    const at = journal.cursor().sequence + 1
-    const newer = JSON.stringify({
-      // A version the older build reads, so it meets the kind rather than a newer version.
-      v: AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
-      kind: 'future-mark',
-      epoch: journal.epoch,
-      seq: at,
-      fence: 1,
-      ts: 2_000,
-      payload: { said: 'by a newer build' }
-    })
-    await journals.closeAll()
-    insertTestJournalRowJson(
-      openTestJournalHostDatabase(directory).db,
-      IDENTITY.sessionId,
-      at,
-      newer
-    )
+    // A saved chat with an item, then a newer row, before this build first converts it.
+    const save = savedBeforeConversion(directory)
+    save(2, statusRow(0, 'before'))
+    const newer = save(3, { kind: 'future-mark', payload: { said: 'by a newer build' } })
     await closeTestJournalHostDatabase(directory)
     const rowsBefore = storedRows(directory)
 

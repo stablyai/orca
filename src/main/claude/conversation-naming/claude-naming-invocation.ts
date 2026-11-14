@@ -1,10 +1,10 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { requireLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { applyClaudeEnvPatch } from '../../claude-accounts/runtime-auth/environment'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
 import type { StructuredAgentLaunchSources } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
-import { resolveStructuredAgentCommand } from '../../native-chat/structured-agent-command-resolution'
+import { resolveStructuredAgentCommand } from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   claudeChildEnv,
   resolveClaudeChildEnvSources,

@@ -6,6 +6,7 @@ import {
   type PluginHostMethodName
 } from '../../workers/plugin-host-api'
 import { PLUGIN_HOST_API_MAJOR } from '../../workers/plugin-host-api-major'
+import { missingPluginParamCapability } from '../../capabilities/plugin-capability-gate'
 
 import { hostError } from './testing-host-error'
 import { resolvePluginEditorTypography } from '../../workers/plugin-host-api-editor-typography'
@@ -60,9 +61,16 @@ const DEFAULT_RESULTS: Record<string, unknown> = {
   'files.saveAs': { status: 'saved' },
   'agents.list': { agents: [] },
   'project.list': { projects: [], truncated: false },
+  // Echoes the request, as a host that changed the copy does.
+  'project.setHidden': (params: { hostId?: string; hidden: boolean }) => ({
+    hostId: params.hostId ?? 'local',
+    hidden: params.hidden
+  }),
   'terminal.list': { terminals: [], truncated: false },
   'terminal.focus': { focused: true },
   'terminal.close': { closed: true },
+  'automation.list': { automations: [], truncated: false },
+  'agent.listSessions': { sessions: [], truncated: false },
   // Orca's default size: the editor follows a 14 px terminal font, unzoomed (the family is platform-specific).
   'editor.readTypography': resolvePluginEditorTypography({ terminalFontSize: 14 }, 0)
 }
@@ -113,7 +121,8 @@ export function createMockHost(
   const data = createMockPluginData(options)
   const surfaceMethods: Record<Surface, readonly PluginHostMethodName[]> = {
     panel: pluginFrameMethodsFor('panel', true),
-    worker: pluginHostMethodsFor('worker')
+    // The plugin under test is a development plugin, which may call proposed methods.
+    worker: pluginHostMethodsFor('worker', true)
   }
   const calls: MockHostCall[] = []
   const refusals: MockHostRefusal[] = []
@@ -144,6 +153,13 @@ export function createMockHost(
     const parsedParams = spec.params.safeParse(params)
     if (!parsedParams.success) {
       return refuse('invalid_params', parsedParams.error.issues[0]?.message ?? 'invalid params')
+    }
+    const missing = missingPluginParamCapability(spec, parsedParams.data, [...capabilities])
+    if (missing) {
+      return refuse(
+        'capability_denied',
+        `${method} with ${missing.param} needs the ${missing.capability} capability`
+      )
     }
     return parsedParams.data
   }

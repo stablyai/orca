@@ -17,7 +17,10 @@ import {
 } from '../cli/wsl/wsl-cli-status'
 import { runSerializedWslCliRegistrationOperation } from '../cli/wsl/wsl-cli-registration-operation'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
-import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../startup/shell-environment/hydrate-shell-path'
 import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
 import {
   blockedWslDistroForExec,

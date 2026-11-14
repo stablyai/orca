@@ -10,7 +10,11 @@ import {
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
   type pluginWorkspaceContextSchema
 } from '../../../../shared/plugins/workers/plugin-host-api'
-import { PLUGIN_AGENT_LIST_LIMIT } from '../../../../shared/plugins/workers/plugin-host-api-panel-methods'
+import {
+  PLUGIN_AGENT_LIST_LIMIT,
+  PLUGIN_AGENT_TASK_TITLE_MAX,
+  pluginAgentSessionIdSchema
+} from '../../../../shared/plugins/workers/plugin-host-api-panel-methods'
 import {
   PLUGIN_HOST_ID_MAX_LENGTH,
   pluginWorkspaceId
@@ -36,11 +40,23 @@ export type PluginAgentStatusRow = {
   agentType?: string
   stateStartedAt: number
   providerSessionOnly?: boolean
+  /** The SSH connection the pane runs on; null or absent on this machine. */
+  connectionId?: string | null
+  /** The agent's own session, which a resume names. */
+  providerSession?: { id: string; transcriptPath?: string }
 }
 
 export type PluginWorkspaceContext = z.output<typeof pluginWorkspaceContextSchema>
 
 type Context = { worktreeId: string; identityKey?: string; branch: string; displayName: string }
+
+/** The session id a plugin may see: what `agent.resume` accepts, else none. */
+export function pluginAgentSessionId(
+  session: { id: string } | null | undefined
+): string | undefined {
+  const id = session?.id
+  return id && pluginAgentSessionIdSchema.safeParse(id).success ? id : undefined
+}
 
 /** A pane's own name wins over the title its program sets. */
 export function pluginTerminalTitle(terminal: {
@@ -121,20 +137,27 @@ export function terminalForPane(
 export function projectPluginWorkspaceAgents(
   worktreeId: string,
   terminals: readonly PluginWorkspaceTerminal[],
-  rows: readonly PluginAgentStatusRow[]
+  rows: readonly PluginAgentStatusRow[],
+  readTaskTitles: () => ReadonlyMap<string, string> = () => new Map()
 ) {
-  return rows
+  const listed = rows
     .filter((row) => row.worktreeId === worktreeId && row.providerSessionOnly !== true)
     .toSorted((a, b) => b.stateStartedAt - a.stateStartedAt)
     .slice(0, PLUGIN_AGENT_LIST_LIMIT)
-    .map((row) => {
-      const terminal = terminalForPane(terminals, row)
-      return {
-        terminalId: terminal?.id ?? null,
-        title: terminal?.title ?? null,
-        agent: row.agentType?.slice(0, 128) ?? null,
-        state: row.state,
-        stateStartedAt: row.stateStartedAt
-      }
-    })
+  const taskTitles = listed.length > 0 ? readTaskTitles() : new Map<string, string>()
+  return listed.map((row) => {
+    const terminal = terminalForPane(terminals, row)
+    const taskTitle = taskTitles.get(row.paneKey)
+    return {
+      terminalId: terminal?.id ?? null,
+      title: terminal?.title ?? null,
+      agent: row.agentType?.slice(0, 128) ?? null,
+      state: row.state,
+      stateStartedAt: row.stateStartedAt,
+      sessionId: pluginAgentSessionId(row.providerSession) ?? null,
+      // Only that it is a dispatched task, and its title: never the dispatch's own records.
+      task:
+        taskTitle === undefined ? null : { title: taskTitle.slice(0, PLUGIN_AGENT_TASK_TITLE_MAX) }
+    }
+  })
 }

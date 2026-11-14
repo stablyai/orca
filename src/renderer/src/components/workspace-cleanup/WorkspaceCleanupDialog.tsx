@@ -15,37 +15,37 @@ import {
   getWorkspaceCleanupCandidateIdentity,
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { WorkspaceCleanupBrowseToolbar } from './workspace-cleanup-browse-toolbar'
-import { WorkspaceCleanupConfirmRemove } from './workspace-cleanup-confirm-remove'
-import { WorkspaceCleanupConfirmStopAgents } from './workspace-cleanup-confirm-stop-agents'
-import { WorkspaceCleanupDialogHeader } from './workspace-cleanup-dialog-header'
+import { WorkspaceCleanupBrowseToolbar } from './browse/workspace-cleanup-browse-toolbar'
+import { WorkspaceCleanupConfirmRemove } from './removal/workspace-cleanup-confirm-remove'
+import { WorkspaceCleanupConfirmStopAgents } from './removal/agent-consent/workspace-cleanup-confirm-stop-agents'
+import { WorkspaceCleanupDialogHeader } from './dialog/workspace-cleanup-dialog-header'
 import {
   getWorkspaceCleanupDeletionPhaseByIdentity,
   selectWorkspaceCleanupDeletionPhases
-} from './workspace-cleanup-deletion-phases'
+} from './removal/workspace-cleanup-deletion-phases'
 import {
   WorkspaceCleanupInitialScanBanner,
   WorkspaceCleanupNotice,
   WorkspaceCleanupSkeletonRows
-} from './workspace-cleanup-dialog-notices'
-import { WorkspaceCleanupRowList } from './workspace-cleanup-row-list'
-import { formatWorkspaceCleanupScanNotice } from './workspace-cleanup-scan-notice'
-import { applyWorkspaceCleanupGitEvidence } from './workspace-cleanup-git-evidence'
-import { useWorkspaceCleanupBrowseState } from './use-workspace-cleanup-browse-state'
+} from './dialog/workspace-cleanup-dialog-notices'
+import { WorkspaceCleanupRowList } from './candidate-list/workspace-cleanup-row-list'
+import { formatWorkspaceCleanupScanNotice } from './scanning/workspace-cleanup-scan-notice'
+import { applyWorkspaceCleanupGitEvidence } from './candidate-evidence/workspace-cleanup-git-evidence'
+import { useWorkspaceCleanupBrowseState } from './browse/use-workspace-cleanup-browse-state'
 import {
   useWorkspaceCleanupDialogLifecycle,
   type WorkspaceCleanupDialogLifecycle
-} from './use-workspace-cleanup-dialog-lifecycle'
-import { useWorkspaceCleanupFacetRows } from './use-workspace-cleanup-facet-rows'
-import { useWorkspaceCleanupGitEvidence } from './use-workspace-cleanup-git-evidence'
-import { useWorkspaceCleanupIgnore } from './use-workspace-cleanup-ignore'
-import { useWorkspaceCleanupRowOrder } from './use-workspace-cleanup-row-order'
-import { openWorkspaceCleanupForgetLocally } from './workspace-cleanup-forget-locally-button'
+} from './dialog/use-workspace-cleanup-dialog-lifecycle'
+import { useWorkspaceCleanupFacetRows } from './browse/use-workspace-cleanup-facet-rows'
+import { useWorkspaceCleanupGitEvidence } from './candidate-evidence/use-workspace-cleanup-git-evidence'
+import { useWorkspaceCleanupIgnore } from './browse/use-workspace-cleanup-ignore'
+import { useWorkspaceCleanupRowOrder } from './candidate-list/use-workspace-cleanup-row-order'
+import { openWorkspaceCleanupForgetLocally } from './removal/workspace-cleanup-forget-locally-button'
 import {
   formatVanishedSelectionNotice,
   formatWithheldSelectionNotice,
   toggleSetMember
-} from './workspace-cleanup-selection-model'
+} from './browse/workspace-cleanup-selection-model'
 
 export default function WorkspaceCleanupDialog(): React.JSX.Element | null {
   const lifecycle = useWorkspaceCleanupDialogLifecycle()

@@ -1,10 +1,12 @@
-import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../body-image-urls'
-import { assertPositiveInt, projectGhExecOptions, runGraphql, validateSlugArgs } from './internals'
-import type { PRComment } from '../../../shared/github/comment-types'
-import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
-import type { GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
-import type { ProjectWorkItemDetailsBySlugResult } from '../../../shared/github/project-result-types'
-import type { ProjectWorkItemDetailsBySlugArgs } from '../../../shared/github/project-request-types'
+import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../attachments/body-image-urls'
+import { assertPositiveInt, validateSlugArgs } from './project-argument-validation'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql } from './project-graphql'
+import type { PRComment } from '../../../shared/github/comments/comment-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../shared/github/work-items/work-item-types'
+import type { ProjectWorkItemDetailsBySlugResult } from '../../../shared/github/projects/project-result-types'
+import type { ProjectWorkItemDetailsBySlugArgs } from '../../../shared/github/projects/project-request-types'
 
 type RawUser = { login?: string; name?: string | null; avatarUrl?: string | null }
 type RawLabel = { name?: string; color?: string }

@@ -38,7 +38,6 @@ export type WindowShortcutAction =
   | { type: 'openQuickOpen' }
   | { type: 'toggleQuickCommandsMenu' }
   | { type: 'openNewWorkspace' }
-  | { type: 'deleteCurrentWorkspace' }
   | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
   | { type: 'toggleAgentDashboard' }
@@ -217,10 +216,6 @@ export function resolveWindowShortcutAction(
     return { type: 'openNewWorkspace' }
   }
 
-  if (keybindingMatchesAction('workspace.delete', input, platform, keybindings, options)) {
-    return { type: 'deleteCurrentWorkspace' }
-  }
-
   if (keybindingMatchesAction('workspace.openBoard', input, platform, keybindings, options)) {
     return { type: 'openWorkspaceBoard' }
   }
@@ -298,8 +293,6 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'tab.openQuickCommandsMenu'
     case 'openNewWorkspace':
       return 'workspace.create'
-    case 'deleteCurrentWorkspace':
-      return 'workspace.delete'
     case 'openWorkspaceBoard':
       return 'workspace.openBoard'
     case 'openTasks':

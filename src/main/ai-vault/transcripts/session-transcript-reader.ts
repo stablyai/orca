@@ -3,11 +3,14 @@ import {
   waitForAiVaultScan
 } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { createHash } from 'node:crypto'
-import { readTranscriptSlice } from '../../native-chat/wsl-transcript-fs-access'
+import { readTranscriptSlice } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseAgentSessionFile } from '../parsing/session-scanner-agent-parser'
-import { consumeCompleteJsonlLines } from '../parsing/session-scanner-jsonl-reader'
-import { isZstdTranscriptPath } from '../../native-chat/transcript-zstd-decompression'
+import {
+  consumeCompleteJsonlLines,
+  noteTranscriptSourceFailure
+} from '../parsing/session-scanner-jsonl-reader'
+import { isZstdTranscriptPath } from '../../native-chat/transcript-streaming/transcript-zstd-decompression'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
 import {
   invalidateSessionParseCacheEntry,
@@ -241,9 +244,14 @@ async function endsWithNewlineAt(
   offset: number,
   signal?: AbortSignal
 ): Promise<boolean> {
-  const slice = await waitForAiVaultScan(
-    readTranscriptSlice(path, offset - 1, 1, 'scan', signal),
-    signal
-  )
-  return slice.length === 1 && slice[0] === NEWLINE_BYTE
+  try {
+    const slice = await waitForAiVaultScan(
+      readTranscriptSlice(path, offset - 1, 1, 'scan', signal),
+      signal
+    )
+    return slice.length === 1 && slice[0] === NEWLINE_BYTE
+  } catch (error) {
+    noteTranscriptSourceFailure(error)
+    throw error
+  }
 }

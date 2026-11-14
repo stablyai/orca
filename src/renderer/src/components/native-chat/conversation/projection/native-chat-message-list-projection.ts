@@ -7,18 +7,18 @@ import {
 import {
   hostStatesTurnScopes,
   type NativeChatTurnJournal
-} from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import {
   compareNativeChatDisplayMessages as compareMessages,
   nativeChatDisplaySortRank,
   orderNativeChatDisplayMessages as orderMessages
-} from '../../../../../../shared/native-chat/transcript/native-chat-message-order'
-import { buildNativeChatFoldUnits } from '../../../../../../shared/native-chat/transcript/native-chat-fold-units'
+} from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
+import { buildNativeChatFoldUnits } from '../../../../../../shared/native-chat/transcript/folding/native-chat-fold-units'
 import {
   nativeChatToolFoldKind,
   type NativeChatToolFoldKind
 } from '../../../../../../shared/native-chat/tools/native-chat-tool-fold'
-import { foldSubagentItems } from '../../../../../../shared/native-chat/transcript/native-chat-subagent-items'
+import { foldSubagentItems } from '../../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import { stripNoiseMessages } from '../../../../../../shared/native-chat/native-chat-noise'
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { reuseUnits } from './native-chat-message-list-reuse'

@@ -10,13 +10,24 @@ import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../work
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
+import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'
+import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
+import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 
 export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): void {
-  const { store } = context
+  const { store, runtime } = context
 
   ipcMain.handle(
     'hooks:check',
-    async (_event, args: { repoId: string; hostId?: ExecutionHostId; background?: boolean }) => {
+    async (
+      _event,
+      args: {
+        repoId: string
+        hostId?: ExecutionHostId
+        background?: boolean
+        createSource?: SetupHooksCreateSource
+      }
+    ) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo) {
         const repoIdExists = store.getRepos().some((candidate) => candidate.id === args.repoId)
@@ -55,6 +66,23 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
             blocked.state === 'stopped'
               ? ('wsl-distro-stopped' as const)
               : ('wsl-distro-unverifiable' as const)
+        }
+      }
+
+      if (args.createSource && !args.background) {
+        const created = await readCreateSourceSetupHooks({
+          repo,
+          source: args.createSource,
+          runtime,
+          gitOptions: getWorktreeCreatePrefetchGitOptions(store, repo)
+        })
+        if (created) {
+          return {
+            status: 'ok',
+            hasHooks: created.hooks !== null,
+            hooks: created.hooks,
+            mayNeedUpdate: false
+          }
         }
       }
 

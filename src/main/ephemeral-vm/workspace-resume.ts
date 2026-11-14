@@ -29,12 +29,12 @@ import {
   getRemoteRuntimeSharedControlDiagnostics,
   getRuntimeEnvironmentStatusOwner,
   reconnectRemoteRuntimeSharedControlConnection
-} from '../ipc/runtime-environments/runtime-environment-request-connections'
+} from '../ipc/runtime-environments/connections/runtime-environment-request-connections'
 import {
   clearRuntimeEnvironmentContactLoss,
   isRuntimeEnvironmentContactLost
-} from '../ipc/runtime-environments/runtime-environment-contact-loss'
-import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/runtime-environment-manual-disconnect'
+} from '../ipc/runtime-environments/status/runtime-environment-contact-loss'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import { getRegisteredSshState } from '../ssh/targets/ssh-target-registry'
 import { isRecipeVmLostContact } from './recipe-vm-lost-contact'
 

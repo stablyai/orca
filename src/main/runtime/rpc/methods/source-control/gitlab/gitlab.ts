@@ -22,7 +22,7 @@ import {
   WorkItemByPath,
   WorkItemDetails,
   WorkItemsList
-} from '../../../../../../shared/rpc-contract/gitlab-params'
+} from '../../../../../../shared/rpc-contract/source-control/gitlab-params'
 
 export const GITLAB_METHODS = [
   defineMethod({

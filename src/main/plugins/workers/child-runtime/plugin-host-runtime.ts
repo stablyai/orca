@@ -148,7 +148,8 @@ export function createPluginWorkerRuntime(
       hostCall: (method, params, callOptions) => hostCall(method, params, callOptions?.signal),
       postToPanels: (post) => send(pluginEvent(WORKER_EVENTS.panelPost, post)),
       log: (message) => send(pluginWorkerLog('info', message)),
-      grantedCapabilities: input.grantedCapabilities
+      grantedCapabilities: input.grantedCapabilities,
+      allowProposed: input.allowProposed === true
     })
     await activate(orca)
     send(pluginEvent(WORKER_EVENTS.ready, { commands: [...commandHandlers.keys()] }))

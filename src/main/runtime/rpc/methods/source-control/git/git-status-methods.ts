@@ -4,7 +4,7 @@ import {
   GitStatusParams,
   GitSubmoduleStatus,
   WorktreeSelector
-} from '../../../../../../shared/rpc-contract/git-params'
+} from '../../../../../../shared/rpc-contract/source-control/git-params'
 import { defineMethod } from '../../../core'
 
 function projectConflictOperation(

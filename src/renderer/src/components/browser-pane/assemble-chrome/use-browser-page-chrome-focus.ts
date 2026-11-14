@@ -8,20 +8,17 @@ import {
   type RefObject
 } from 'react'
 import { useAppStore } from '@/store'
-import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
-import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import {
   consumeBrowserFocusRequest,
   queueBrowserFocusRequest,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   type BrowserFocusRequestDetail
 } from '../host-guest/browser-focus'
-import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import type { BrowserAddressBarSelection } from './browser-address-bar-edit-session'
 import type { BrowserPageGuestFocus } from './browser-page-guest-focus'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useBrowserHistoryShortcut } from '../history/use-browser-history-shortcut'
+import { useBrowserAddressBarShortcut } from './use-browser-address-bar-shortcut'
 import { useWebviewDragPassthroughActive } from '../host-guest/use-webview-drag-passthrough-active'
 
 /** Frames an address-bar grab keeps retrying before it lets the guest have focus back. */
@@ -57,7 +54,6 @@ export function useBrowserPageChromeFocus({
 } {
   useBrowserHistoryShortcut({ browserTabId, workspaceId, isActive, chromeShortcutScope })
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
-  const keybindings = useAppStore((s) => s.keybindings)
   const keepAddressBarFocusRef = useRef(false)
   const addressBarFocusGrabRef = useRef<(() => void) | null>(null)
   // Why a layout effect: it lands before the previous render's passive cleanups read it.
@@ -162,46 +158,26 @@ export function useBrowserPageChromeFocus({
     })
   }, [browserTabId, focusAddressBarNow, isActive])
 
-  // Guest-focused chords arrive through IPC; capture handles chrome-focused chords before workspace/editor listeners.
-  useEffect(() => {
-    if (chromeShortcutScope === 'inactive') {
-      return
-    }
-    const shortcutPlatform = getShortcutPlatform()
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (
-        !keybindingMatchesAction('browser.focusAddressBar', event, shortcutPlatform, keybindings)
-      ) {
-        return
-      }
-      if (!browserChromeShortcutOwnsEvent(chromeShortcutScope, event, workspaceId)) {
-        return
-      }
-      event.preventDefault()
-      // All panes listen on window capture; stopPropagation alone leaves sibling listeners active.
-      event.stopImmediatePropagation()
-      focusAddressBarNow()
-    }
-    addAppKeyListener('keydown', handleKeyDown)
-    return () => removeAppKeyListener('keydown', handleKeyDown)
-  }, [chromeShortcutScope, focusAddressBarNow, keybindings, workspaceId])
+  useBrowserAddressBarShortcut({ workspaceId, chromeShortcutScope, focusAddressBarNow })
 
   /** Wait for guest attachment; cancellation requeues unfinished active requests unless explicitly disabled. */
   const startGuestFocusRetry = useCallback(
     ({
       firstAttempt,
-      stillWanted = () => true
+      stillWanted = () => true,
+      focusAtRequest = document.activeElement
     }: {
       firstAttempt: 'now' | 'next-frame'
       /** Checked before every attempt; false drops the focus for good. */
       stillWanted?: () => boolean
+      /** Focus the request began from; moving off it before the first attempt yields to the user. */
+      focusAtRequest?: Element | null
     }) => {
       let cancelled = false
       let settled = false
       let frameId = 0
       let attempts = 0
       let waitedFrames = 0
-      const focusAtRequest = document.activeElement
       const runFocus = (): void => {
         if (cancelled) {
           return
@@ -234,13 +210,15 @@ export function useBrowserPageChromeFocus({
       } else {
         frameId = window.requestAnimationFrame(runFocus)
       }
-      return ({ requeue = true }: { requeue?: boolean } = {}): void => {
+      // Returns whether the retry got to act: tried focus, or settled without it.
+      return ({ requeue = true }: { requeue?: boolean } = {}): boolean => {
         cancelled = true
         window.cancelAnimationFrame(frameId)
         // Requeue active StrictMode/dependency retries, but drop departed panes so revisiting cannot steal focus.
         if (requeue && !settled && waitedFrames < GUEST_ATTACH_WAIT_FRAMES && isActiveRef.current) {
           queueBrowserFocusRequest({ pageId: browserTabId, target: 'webview' })
         }
+        return settled || attempts > 0
       }
     },
     [browserTabId, focusGuestNow, guestFocus]
@@ -260,7 +238,8 @@ export function useBrowserPageChromeFocus({
     // Cancel the bar grab as well as its latch or remaining frames will steal page focus back.
     cancelAddressBarFocusGrab()
     // Why a frame first: focus can be queued before the pane mounts and is claimed here.
-    return startGuestFocusRetry({ firstAttempt: 'next-frame' })
+    const cancelGuestFocus = startGuestFocusRetry({ firstAttempt: 'next-frame' })
+    return () => void cancelGuestFocus()
   }, [
     browserTabId,
     cancelAddressBarFocusGrab,
@@ -314,12 +293,19 @@ export function useBrowserPageChromeFocus({
   )
   const dragPassthroughActive = useWebviewDragPassthroughActive(isActive)
   const focusedForActivationRef = useRef(false)
+  // Why: a restarted activation keeps the focus it began from, so a user choice made before the restart still wins.
+  const activationFocusAtRequestRef = useRef<{ element: Element | null } | null>(null)
   // Why: switching to a page hands it the keyboard, as for terminals (#20533); declared after the
   // address-bar effects so a new blank tab's grab has already raised the latch.
   useEffect(() => {
     if (!isActive) {
       focusedForActivationRef.current = false
+      activationFocusAtRequestRef.current = null
       return
+    }
+    // Why before the drag guard: a page activated mid-drag still yields to focus the user picks during it.
+    if (activationFocusAtRequestRef.current === null) {
+      activationFocusAtRequestRef.current = { element: document.activeElement }
     }
     // Why defer, not consume: focusing a guest mid-drag reads as an aborted drag.
     if (focusedForActivationRef.current || dragPassthroughActive) {
@@ -329,10 +315,15 @@ export function useBrowserPageChromeFocus({
     // Why the focused split only: never pull the keyboard across splits.
     const cancelGuestFocus = startGuestFocusRetry({
       firstAttempt: 'now',
+      focusAtRequest: activationFocusAtRequestRef.current.element,
       stillWanted: () => !inputLocked && isSplitFocused() && !keepAddressBarFocusRef.current
     })
-    // Why no requeue: an activation is not a queued request, so leaving the tab drops it.
-    return () => cancelGuestFocus({ requeue: false })
+    return () => {
+      // Why: no requeue, since leaving the tab drops an activation; but a re-run that cancels it while waiting for the guest to attach (StrictMode remount as Settings closes) must retry.
+      if (!cancelGuestFocus({ requeue: false })) {
+        focusedForActivationRef.current = false
+      }
+    }
   }, [dragPassthroughActive, inputLocked, isActive, startGuestFocusRetry])
 
   return { focusAddressBarNow, focusGuestNow, startAddressBarFocusGrab, keepAddressBarFocusRef }

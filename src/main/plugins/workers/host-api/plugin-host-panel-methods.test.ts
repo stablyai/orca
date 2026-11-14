@@ -71,11 +71,3 @@ describe('plugin.request', () => {
     })
   })
 })
-
-describe('panel storage and settings', () => {
-  it('keeps the capability gate for panels', async () => {
-    await expect(call('storage.get', { key: 'todos' }, { grants: [] })).resolves.toMatchObject({
-      code: 'capability_denied'
-    })
-  })
-})

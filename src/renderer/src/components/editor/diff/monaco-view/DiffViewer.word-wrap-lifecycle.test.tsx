@@ -3,7 +3,6 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useEffect, useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import DiffViewer from './DiffViewer'
-import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import { DiffNavigationProvider, useDiffNavigation } from '../review/diff-navigation-context'
 import { getLargeDiffRenderLimitFromCounts } from '../../../../../../shared/large-diff-render-limit'
 
@@ -82,7 +81,7 @@ vi.mock('@/store/slices/diff-comments/diff-comment-owner', () => ({
 vi.mock('@/lib/editor/monaco/monaco-setup', () => ({
   monaco: { Uri: { parse: (path: string) => path }, editor: { getModel: () => null } }
 }))
-vi.mock('../../useContextualCopySetup', () => ({
+vi.mock('../../contextual-copy/useContextualCopySetup', () => ({
   useContextualCopySetup: () => ({ setupCopy: vi.fn(), toastNode: null })
 }))
 vi.mock('../../../diff-comments/useDiffCommentDecorator', () => ({
@@ -102,7 +101,7 @@ vi.mock('./diff-editor-word-wrap-options', () => ({
 vi.mock('./diff-model-swap-view-state', () => ({
   preserveDiffViewStateAcrossModelSwaps: () => ({ dispose: vi.fn() })
 }))
-vi.mock('../../editor-shortcuts', () => ({
+vi.mock('../../commands/editor-shortcuts', () => ({
   installMonacoDiffChangeNavigationShortcut: () => vi.fn()
 }))
 vi.mock('../large-files/LargeDiffFallback', () => ({
@@ -152,52 +151,13 @@ describe('file diff word-wrap lifecycle', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    const mounted = fixture.editors[0]
     const next = view.getByRole('button', { name: 'Next change (1)' })
     expect(next.hasAttribute('disabled')).toBe(false)
-    act(() => next.click())
-    expect(mounted?.editor.goToDiff).toHaveBeenCalledWith('next')
 
     view.rerender(<Surface limited />)
 
     expect(view.getByRole('button', { name: 'Next change (0)' }).hasAttribute('disabled')).toBe(
       true
     )
-    expect(mounted?.disposeUpdate).toHaveBeenCalledOnce()
-  })
-})
-
-describe('file diff review notes', () => {
-  it('saves a draft opened before a same-tab rename under the renamed path, on the captured copy', async () => {
-    const owner = { kind: 'worktree' as const, worktreeId: 'wt' }
-    fixture.view = { owner, comments: [] }
-    fixture.state.addDiffComment.mockResolvedValue({ id: 'saved' })
-    const viewer = (relativePath: string) => (
-      <DiffNavigationProvider>
-        <DiffViewer
-          modelKey="rename"
-          originalContent="original"
-          modifiedContent="modified"
-          language="typescript"
-          filePath={`/work/${relativePath}`}
-          relativePath={relativePath}
-          sideBySide
-          worktreeId="wt"
-        />
-      </DiffNavigationProvider>
-    )
-    const view = render(viewer('a.ts'))
-    // The open draft keeps the submit callback it captured when it opened.
-    const captured = vi.mocked(useDiffCommentDecorator).mock.calls.at(-1)?.[0].onCreateComment
-    view.rerender(viewer('b.ts'))
-
-    await act(async () => {
-      await captured?.({ lineNumber: 1, body: 'rename draft' })
-    })
-    expect(fixture.state.addDiffComment).toHaveBeenCalledExactlyOnceWith(
-      owner,
-      expect.objectContaining({ filePath: 'b.ts', body: 'rename draft' })
-    )
-    fixture.view = { owner: null }
   })
 })

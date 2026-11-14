@@ -1,4 +1,5 @@
 import type { runProcess as runNativeProcess } from '@orca/process-host'
+import { MAX_NATIVE_HANG_REPORT_BYTES } from './native-hang-report'
 import {
   emptyHangStacks,
   hangLabel,
@@ -117,8 +118,13 @@ export function reduceNativeHangSample(
 export function captureNativeHang(options: {
   pid: number
   publish: (capture: NativeHangCapture) => void
-}): { stop: () => void; done: Promise<void> } {
+  completeReport?: (report: string) => void
+}): { stop: () => void; started: Promise<void>; done: Promise<void> } {
   const abort = new AbortController()
+  let acquired: () => void = () => {}
+  const started = new Promise<void>((resolve) => {
+    acquired = resolve
+  })
   const baseline: NativeHangCapture = {
     ...emptyHangStacks(),
     state: 'collecting',
@@ -141,6 +147,7 @@ export function captureNativeHang(options: {
       runProcess = (await import('@orca/process-host')).runProcess
     } catch {
       publish({ ...baseline, state: 'failed', completedAt: Date.now(), cleanup: 'unverified' })
+      acquired()
       return
     }
     let terminated = false
@@ -149,11 +156,11 @@ export function captureNativeHang(options: {
       release = resolve
     })
     try {
-      const result = await runProcess({
+      const pending = runProcess({
         program: '/usr/bin/sample',
         args: [String(options.pid), '1', '10', '-file', '/dev/stdout'],
-        timeoutMs: 2500,
-        maxOutputBytes: 128 * 1024,
+        timeoutMs: 10_000,
+        maxOutputBytes: MAX_NATIVE_HANG_REPORT_BYTES,
         killOnOutputLimit: true,
         signal: abort.signal,
         onChildTerminated: () => {
@@ -161,6 +168,8 @@ export function captureNativeHang(options: {
           release()
         }
       })
+      acquired()
+      const result = await pending
       publish({
         ...baseline,
         ...reduceNativeHangSample(result.stdout),
@@ -171,6 +180,14 @@ export function captureNativeHang(options: {
         cleanup: terminated ? 'terminated' : 'unverified',
         ...(result.code !== null ? { exitCode: result.code } : {})
       })
+      if (
+        result.code === 0 &&
+        !result.timedOut &&
+        !result.outputTruncated &&
+        !abort.signal.aborted
+      ) {
+        options.completeReport?.(result.stdout)
+      }
     } catch {
       publish({
         ...baseline,
@@ -178,11 +195,13 @@ export function captureNativeHang(options: {
         completedAt: Date.now(),
         cleanup: terminated ? 'terminated' : 'unverified'
       })
+    } finally {
+      acquired()
     }
     if (!terminated) {
       await termination
       publish({ ...latest, cleanup: 'terminated' })
     }
   })()
-  return { stop: () => abort.abort(), done }
+  return { stop: () => abort.abort(), started, done }
 }

@@ -54,7 +54,17 @@ export function acpSessionUpdate(
                   : { stream: update.sessionUpdate },
               channel,
               text: update.content.text,
-              ...join
+              join: {
+                ...join.join,
+                ...(update.messageId
+                  ? {
+                      scopeItems: [
+                        acpNamedTextKey(update.messageId, 'assistant'),
+                        acpNamedTextKey(update.messageId, 'reasoning')
+                      ]
+                    }
+                  : {})
+              }
             }
           ]
         : [{ type: 'provider.frame', frameKind: update.sessionUpdate, payload: update, ...join }]

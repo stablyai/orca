@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { launchAgentWithPrompt, promptedLaunchNotice } from './pr-ai-triage-launch'
+import type { LaunchedAgentOpens } from '../../session/agent-launch/launched-agent-opener'
 import {
   resolveMobileAgentLaunchAvailability,
   type MobileAgentLaunchAvailability
@@ -24,6 +25,8 @@ export type PrAiTriageLaunchNotice = {
   warning: string | null
   /** The agent started without its prompt; kept so the user can paste it in themselves. */
   undeliveredPrompt: string | null
+  /** The pane the launched agent runs in, for the notice's link to it. */
+  opens: LaunchedAgentOpens | null
 }
 
 type StoredLaunchNotice = PrAiTriageLaunchNotice | { kind: 'waitingForDesktop' | 'launchFailed' }
@@ -32,7 +35,8 @@ const NO_LAUNCH_NOTICE: PrAiTriageLaunchNotice = {
   success: null,
   error: null,
   warning: null,
-  undeliveredPrompt: null
+  undeliveredPrompt: null,
+  opens: null
 }
 
 type Input = {
@@ -103,7 +107,8 @@ export function useMobilePrAiTriage(input: Input) {
           success: notice.success,
           error: notice.error,
           warning: notice.warning,
-          undeliveredPrompt: notice.undeliveredPrompt
+          undeliveredPrompt: notice.undeliveredPrompt,
+          opens: notice.opens
         })
         return notice.succeeded
       } catch (err) {

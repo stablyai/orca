@@ -1,4 +1,4 @@
-import { getLinuxDisplayServer } from '../preload-runtime-support'
+import { getLinuxDisplayServer } from '../renderer/renderer-runtime'
 import { parseWindowMaterialArgument } from '../../shared/window-material'
 import type { PreloadApi } from '../api-types'
 

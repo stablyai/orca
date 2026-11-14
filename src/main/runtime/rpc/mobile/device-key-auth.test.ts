@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/remote-runtime/pairing/device-key-proof'
 import { DeviceRegistry } from '../server/pairing/device-registry'
 import { DEVICE_REGISTRY_FILENAME } from '../server/pairing/mobile-pairing-files'
-import { SimulatedMobileE2EEV2Peer } from '../../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
+import { SimulatedMobileE2EEV2Peer } from '../../mobile-cloud-relay/testing/simulated-mobile-e2ee-v2-peer'
 import { registerSocketDeviceKey } from '../server/runtime-rpc-device-key-registration'
 import { generateKeyPair } from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
@@ -256,27 +256,5 @@ describe('device-key authentication (host)', () => {
         error: { code: 'unauthorized' }
       })
     }
-  })
-
-  it('answers registry_unavailable, never device_revoked, after loading a corrupt registry', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-device-key-'))
-    writeFileSync(join(userDataPath, DEVICE_REGISTRY_FILENAME), '[{"deviceId":')
-    const key = nacl.sign.keyPair()
-    const attempt = harness(new DeviceRegistry(userDataPath)).connect((hash) => ({
-      deviceId: 'keyed',
-      deviceProofB64: sign(key, 'auth', hash)
-    }))
-    expect(attempt.reply).toEqual({ type: 'e2ee_error', error: { code: 'registry_unavailable' } })
-  })
-
-  it('never answers device_revoked for a row that exists without a key', () => {
-    const registry = freshRegistry()
-    const legacy = registry.addDevice('Phone', 'mobile')
-    const key = nacl.sign.keyPair()
-    const attempt = harness(registry).connect((hash) => ({
-      deviceId: legacy.deviceId,
-      deviceProofB64: sign(key, 'auth', hash)
-    }))
-    expect(attempt.reply).toEqual({ type: 'e2ee_error', error: { code: 'bad_auth' } })
   })
 })

@@ -1,9 +1,9 @@
 import { prepareStructuredAgentSessionFork } from './structured-agent-session-fork'
 import { resolveCommittedStructuredAgentSessionAdoptionIntent } from '../../../runtime/agent-session/structured-agent-session-create-adoption'
-import { agentConversationCopyRefusal } from '../../agent-conversation-copy-error'
+import { agentConversationCopyRefusal } from '../../conversation-adoption/agent-conversation-copy-error'
 import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 

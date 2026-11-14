@@ -17,6 +17,8 @@ import { PLUGIN_APPEARANCE_SINCE } from '../workers/plugin-host-api-appearance'
 import { PLUGIN_FONTS_SINCE } from '../contributions/plugin-font-contribution'
 import { PLUGIN_EDITOR_TYPOGRAPHY_SINCE } from '../workers/plugin-host-api-editor-typography'
 import { PLUGIN_HOST_API_1_7_SINCE } from '../workers/plugin-host-api-workspace-methods'
+import { PLUGIN_HOST_API_1_8_SINCE } from '../workers/plugin-host-api-1-8'
+import { PLUGIN_HOST_API_1_9_SINCE } from '../workers/plugin-host-api-1-9'
 
 /** The newest "since" this build's schemas cite: everything up to it is readable here. */
 export const PLUGIN_SCHEMA_NEWEST_SINCE = [
@@ -36,7 +38,9 @@ export const PLUGIN_SCHEMA_NEWEST_SINCE = [
   PLUGIN_FONTS_SINCE,
   PLUGIN_THEME_VIDEO_BACKGROUND_SINCE,
   PLUGIN_EDITOR_TYPOGRAPHY_SINCE,
-  PLUGIN_HOST_API_1_7_SINCE
+  PLUGIN_HOST_API_1_7_SINCE,
+  PLUGIN_HOST_API_1_8_SINCE,
+  PLUGIN_HOST_API_1_9_SINCE
 ].reduce((newest, version) => (satisfiesOrcaEngineRange(version, `>=${newest}`) ? version : newest))
 
 /**

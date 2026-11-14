@@ -10,7 +10,7 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../../shared/
 import { buildParentPrChecksRows } from '@/components/right-sidebar/hosted-review/folder-checks/parent-pr-checks-rows'
 import type { ParentPrChecksRow } from '@/components/right-sidebar/hosted-review/folder-checks/parent-pr-checks-row-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 
 type FolderWorkspaceCardPrDisplayArgs = {
   folderWorkspaceId: string

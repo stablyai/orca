@@ -70,7 +70,7 @@ function applyStopAcknowledged(
   }
 }
 
-/** A live child's current operation, and nothing else about it. */
+/** A live child's current operation and the model it runs on, and nothing else about it. */
 function applyOperation(ctx: ReconcileContext, edge: AgentChildWorkOperationEvidence): void {
   const resolution = resolveAgentChildWorkHandle(
     ctx,
@@ -93,7 +93,8 @@ function applyOperation(ctx: ReconcileContext, edge: AgentChildWorkOperationEvid
       residency: record.residency,
       state: record.state,
       stoppable: record.stoppable,
-      operation: edge.operation
+      operation: edge.operation,
+      ...(edge.model !== undefined ? { model: edge.model } : {})
     },
     edge.observedAt,
     false

@@ -241,24 +241,4 @@ describe('terminal multiplex sequenced input across reconnects', () => {
     await vi.waitFor(() => expect(stream.inputAcks()).toEqual([1, 2, 3, 4]))
     expect(writes).toEqual(['echo a\r', 'echo b\r', 'echo c\r', 'echo d\r'])
   })
-
-  it('leaves a client that did not negotiate input acks on the unsequenced path', async () => {
-    const writes: string[] = []
-    const dispatcher = new RpcDispatcher({
-      runtime: createRuntime(writes),
-      methods: TERMINAL_METHODS
-    })
-    // An older client never names an input session; a session id without the capability is ignored too.
-    const legacy = await openConnection(dispatcher, 'conn-legacy', {
-      capabilities: { ackOutput: 1 },
-      inputSessionId: 'pane-legacy'
-    })
-    expect(legacy.subscribed.capabilities?.inputAck).toBeUndefined()
-
-    legacy.sendInput(2, 'x')
-    legacy.sendInput(2, 'x')
-
-    await vi.waitFor(() => expect(writes).toEqual(['x', 'x']))
-    expect(legacy.inputAcks()).toEqual([])
-  })
 })

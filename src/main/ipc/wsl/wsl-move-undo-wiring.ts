@@ -18,7 +18,7 @@ import { wslMoveRewriteScope } from '../../persistence/moving-wsl-projects/deskt
 import { wslMoveReleasedSessionFocusPatch } from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-session-rewrite'
 import { applyWslMoveSessionFocus } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-main-rewrite-stores'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { callRuntimeEnvironment } from '../runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 import {
   stopWslMoveHostAutomations,

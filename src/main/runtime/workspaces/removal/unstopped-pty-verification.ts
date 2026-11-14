@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 type UnstoppedPtyRuntime = Pick<OrcaRuntimeService, 'getPtyLivenessVerdict'>
@@ -6,7 +6,7 @@ import {
   UNSTOPPED_PTY_DETAIL_SEPARATOR,
   STILL_LIVE_DETAIL_PREFIX,
   UNSTOPPED_PTY_REMOVAL_PREFIX
-} from '../../../../shared/worktree/removal'
+} from '../../../../shared/worktree/removal/removal'
 import {
   NO_OBSERVING_PROVIDER_REASON,
   type PtyLivenessVerdict as UnstoppedPtyVerdict
