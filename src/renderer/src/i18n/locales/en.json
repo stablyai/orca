@@ -21548,7 +21548,7 @@
         "comparePlans": "Compare plans",
         "plans": {
           "entByoc": "Run sandboxes in your own cloud account",
-          "entSso": "SSO, SCIM provisioning and audit logs",
+          "entSso": "SSO and SCIM provisioning",
           "entTerms": "Custom limits, invoicing and terms",
           "contactSales": "Contact sales",
           "eyebrow": "Orca Cloud",

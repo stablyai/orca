@@ -61,11 +61,14 @@ export const sampleCatalog: OrcaPlanCatalog = {
       kind: 'contact_sales',
       id: 'enterprise',
       name: 'Enterprise',
-      version: 1,
+      version: 2,
       supportUrl: null,
+      // Billing's current Enterprise version (catalog.json v2).
       features: [
         { id: 'byoc', params: {}, text: 'Run sandboxes in your own cloud' },
         { id: 'sso_scim', params: {}, text: 'SSO and SCIM' },
+        { id: 'mfa_enforcement', params: {}, text: 'Require multi-factor authentication' },
+        { id: 'audit_log', params: {}, text: 'Team audit log' },
         { id: 'egress_controls', params: {}, text: 'Network egress controls' },
         { id: 'custom_limits', params: {}, text: 'Custom limits and pricing' }
       ],

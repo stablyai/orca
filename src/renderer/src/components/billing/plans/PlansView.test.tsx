@@ -45,6 +45,11 @@ describe("plans dialog from billing's catalog", () => {
     expect(screen.getByText('Run sandboxes in your own cloud account')).toBeTruthy()
     // The catalog lists egress_controls on Enterprise, but no team can set an egress policy yet.
     expect(screen.queryByText(/egress/i)).toBeNull()
+    // The audit log is its own catalog line; the SSO line doesn't repeat it.
+    expect(screen.getByText('SSO and SCIM provisioning')).toBeTruthy()
+    expect(screen.getAllByText(/audit log/i).map((node) => node.textContent)).toEqual([
+      'Team audit log'
+    ])
     fireEvent.click(screen.getByRole('button', { name: /Continue to checkout/ }))
     expect(props.onCheckout).toHaveBeenCalledWith({ planId: 'team', interval: 'month', seats: 4 })
     fireEvent.click(screen.getByRole('button', { name: /Contact sales/ }))

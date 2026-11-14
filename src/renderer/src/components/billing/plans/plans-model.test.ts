@@ -39,6 +39,8 @@ describe('plans model', () => {
     expect(model?.enterprise?.features.map((feature) => feature.id)).toEqual([
       'byoc',
       'sso_scim',
+      'mfa_enforcement',
+      'audit_log',
       'egress_controls',
       'custom_limits'
     ])

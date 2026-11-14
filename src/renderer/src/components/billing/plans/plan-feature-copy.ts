@@ -85,7 +85,7 @@ export function planFeatureLine(
     case 'byoc':
       return t('auto.components.billing.plans.entByoc', 'Run sandboxes in your own cloud account')
     case 'sso_scim':
-      return t('auto.components.billing.plans.entSso', 'SSO, SCIM provisioning and audit logs')
+      return t('auto.components.billing.plans.entSso', 'SSO and SCIM provisioning')
     case 'egress_controls':
       // Not offered yet: the sandbox egress policy is one operator-wide setting, open by default, and
       // no team can choose its own. The catalog keeps the feature; the desktop doesn't advertise it.

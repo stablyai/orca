@@ -190,6 +190,33 @@ describe('audit log', () => {
     expect(region.contains(screen.getByText('Audit log', { selector: 'h3' }))).toBe(false)
   })
 
+  it('fades rows at an edge only while there is more past it', () => {
+    render(
+      <EnterpriseSettingsView
+        audit={fixtureAuditProps({ log: { ...EMPTY, events: FIXTURE_EVENTS, hasMore: true } })}
+      />
+    )
+    const region = screen.getByRole('region', { name: 'Audit log entries' })
+    const scrollTo = (top: number): void => {
+      Object.defineProperty(region, 'scrollHeight', { configurable: true, value: 1000 })
+      Object.defineProperty(region, 'clientHeight', { configurable: true, value: 384 })
+      Object.defineProperty(region, 'scrollTop', { configurable: true, value: top })
+      fireEvent.scroll(region)
+    }
+    scrollTo(0)
+    expect(region.className).not.toContain('mask-t-')
+    expect(region.className).toContain('mask-b-')
+    scrollTo(200)
+    expect(region.className).toContain('mask-t-')
+    expect(region.className).toContain('mask-b-')
+    scrollTo(616)
+    expect(region.className).toContain('mask-t-')
+    expect(region.className).not.toContain('mask-b-')
+    // The rule above the rows is on the unmasked frame, so the fade never hides it.
+    expect(region.className).not.toContain('border-t')
+    expect(region.parentElement?.className).toContain('border-t')
+  })
+
   it('offers both filters and the export, and exports once per click', () => {
     const onExport = vi.fn()
     const { rerender } = render(<EnterpriseSettingsView audit={fixtureAuditProps({ onExport })} />)
