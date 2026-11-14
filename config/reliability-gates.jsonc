@@ -5365,7 +5365,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/main/ipc/runtime-environments/browser-hosting/runtime-environment-browser-client-host-handler.test.ts",
         "SKIP_BUILD=1 ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE=/Applications/Orca.app/Contents/MacOS/Orca pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser/network/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/browser/network/execution-routes/browser-network-execution-route.test.ts src/main/browser/network/execution-routes/wsl-browser-network-execution-route.test.ts src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.test.ts src/main/runtime/browser/network/runtime-browser-network-execution-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/cdp/screencast/browser-screencast-stream.test.ts src/main/runtime/browser/screencast/orca-runtime-browser-screencast-fanout.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/cdp/screencast/browser-screencast-stream.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
         "Manual iOS 26.5 simulator: pair current mobile code to packaged Orca 1.4.184; create Browser; navigate to https://example.com; require one visible Example Domain tab on the server-hosted surface",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
@@ -5384,7 +5384,6 @@
         "src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.test.ts",
         "src/main/runtime/browser/network/runtime-browser-network-execution-host.test.ts",
         "src/main/browser/cdp/screencast/browser-screencast-stream.test.ts",
-        "src/main/runtime/browser/screencast/orca-runtime-browser-screencast-fanout.test.ts",
         "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
       ],
       "assertionRefs": [
@@ -6169,7 +6168,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal/surface/orca-runtime-terminal-close-continuity.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/construction/orca-runtime.test.ts",
-        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server/testing/authority/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/persistence/restoring-sessions/persistence-pane-identity-migration.test.ts src/main/persistence/loading-store/terminal-bindings/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-status/agent-pane-authority.test.ts src/renderer/src/store/terminals/layout/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/terminals/retirement/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server/testing/authority/server-pane-authority.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/persistence/restoring-sessions/persistence-pane-identity-migration.test.ts src/main/persistence/loading-store/terminal-bindings/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-status/agent-pane-authority.test.ts src/renderer/src/store/terminals/layout/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/terminals/retirement/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/process-retirement/pty-descendant-termination.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/providers/local-pty/local-pty-provider-shutdown.test.ts src/main/runtime/workspaces/removal/worktree-teardown.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-tab-close-restart-persistence.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
@@ -6181,7 +6180,6 @@
         "src/main/runtime/terminal/surface/orca-runtime-terminal-close-continuity.test.ts",
         "src/main/runtime/construction/orca-runtime.test.ts",
         "src/main/agent-hooks/server/testing/authority/server-pane-authority.test.ts",
-        "src/main/ipc/agent-hooks.test.ts",
         "src/main/ipc/agent-pane-authority-ownership.test.ts",
         "src/main/persistence/restoring-sessions/persistence-pane-identity-migration.test.ts",
         "src/main/persistence/loading-store/terminal-bindings/persistence-pty-binding-reconciliation.test.ts",
