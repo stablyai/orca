@@ -46,4 +46,30 @@ describe('managed data account enrollment', () => {
     })
     expect(existsSync(directory)).toBe(false)
   })
+
+  it('redirects APPDATA/LOCALAPPDATA to the staged home for Devin on Windows', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const call = vi.spyOn(client, 'call')
+      call
+        .mockResolvedValueOnce({
+          id: 'test',
+          ok: true,
+          result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
+          _meta: { runtimeId: 'test' }
+        })
+        .mockRejectedValueOnce(new Error('capture failed'))
+      const devinContext = { ...context, flags: new Map() }
+      const login = vi.fn(async (command: string, args: string[], env: Record<string, string>) => {
+        expect(command).toBe('devin')
+        expect(args).toEqual(['auth', 'login', '--force-manual-token-flow'])
+        expect(env.APPDATA).toBe(env.XDG_DATA_HOME)
+        expect(env.LOCALAPPDATA).toBe(env.XDG_DATA_HOME)
+      })
+      await expect(addDataAccount(devinContext, 'devin', login)).rejects.toThrow('capture failed')
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
 })
