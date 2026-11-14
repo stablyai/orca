@@ -6,7 +6,7 @@ import { cn } from '@/lib/class-names'
 import {
   getNativeChatMessageDay,
   getNativeChatMessageTimeFormatter
-} from '../../../../../../shared/native-chat/transcript/native-chat-message-time'
+} from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-time'
 
 export function NativeChatMessageTimestamp({
   timestamp,

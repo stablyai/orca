@@ -1,4 +1,4 @@
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import { getSleepingRecordTabId } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import '../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
 import { parkedTerminalTabCoverage } from '../terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'

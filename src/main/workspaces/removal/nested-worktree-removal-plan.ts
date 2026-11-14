@@ -1,8 +1,8 @@
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/nested-removal'
+import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/removal/nested-removal'
 import { composeWorktreeId } from '../../../shared/worktree/id'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
-import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal'
+import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal/removal'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import {
   containsPath,

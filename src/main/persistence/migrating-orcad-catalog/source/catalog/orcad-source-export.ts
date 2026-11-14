@@ -9,7 +9,7 @@ import type {
   OrcadMigrationManifest,
   OrcadMigrationManifestSource
 } from '../../../../../shared/orcad-migration/orcad-migration-manifest'
-import { assertOrcadMigrationManifestDigest } from '../../../../orcad/orcad-migration-manifest-digest'
+import { assertOrcadMigrationManifestDigest } from '../../../../orcad/migration/orcad-migration-manifest-digest'
 import type { StoreRuntimeState } from '../../../loading-store/store-runtime-state'
 import {
   collectOrcadMigrationUntransferredDependencyCensus,

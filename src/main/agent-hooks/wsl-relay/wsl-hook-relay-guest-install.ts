@@ -10,7 +10,7 @@ import { installWslGuestHooks } from './wsl-hook-fs-adapter'
 import { REINSTALL_MIN_INTERVAL_MS, type WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import type { SshChannelMultiplexer } from '../../ssh/protocol/ssh-channel-multiplexer'
 import { openCodePluginSettingsKey } from '../installation/opencode-plugin-settings'
-import type { PluginSources } from '../../../wsl-guest/plugin-sources'
+import type { PluginSources } from '../../../wsl-guest/plugins/installation/plugin-sources'
 
 type GuestInstallDeps = {
   installHooks: typeof installRemoteManagedAgentHooks

@@ -30,7 +30,12 @@ function setup(capabilities: PluginCapabilityKind[] = ['workspace:read']) {
   return { bridge, unfocus: () => (active = null) }
 }
 
-const context = { branch: 'main', displayName: 'w', terminals: [{ id: 'term_a', title: 'zsh' }] }
+// The raw id (`repo::/w`) embeds a path, so panels never get it.
+const context = {
+  branch: 'main',
+  displayName: 'w',
+  terminals: [{ id: 'term_a', title: 'zsh' }]
+}
 
 describe('workspace.changed replay on subscribe', () => {
   it('gives a panel the current context as soon as it subscribes', async () => {

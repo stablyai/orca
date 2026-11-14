@@ -4,7 +4,7 @@ import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/j
 import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
 import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from '../../markdown/NativeChatPacedMarkdown'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../selection-quotes/native-chat-quote-selection'
@@ -54,7 +54,6 @@ export function NativeChatAssistantMessageRow({
     endsResponse,
     latestResponse = true,
     actionsHang = false,
-    inSubagentSection = false,
     runtimeContext,
     fork
   } = props
@@ -76,7 +75,6 @@ export function NativeChatAssistantMessageRow({
     message.role === 'assistant' &&
     message.source === 'transcript' &&
     !message.agentStart &&
-    !inSubagentSection &&
     isRootAgentJournalItem(message)
 
   return (
@@ -157,8 +155,7 @@ function toolRunProps(
     revealedDiff: run ? run.revealedDiff : props.revealedDiff,
     onRevealDiff: props.onScrollMessageToTop,
     subagentGroups: content.subagentGroups,
-    subagentRoster: props.subagentRoster,
-    subagentDisclosure: props.subagentDisclosure,
+    onOpenSubagent: props.onOpenSubagent,
     backgroundTasks: content.backgroundTasks,
     followsProse: content.markdown.length > 0 || content.hasImages,
     expandSignal: props.expandSignal,

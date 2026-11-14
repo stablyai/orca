@@ -8,7 +8,8 @@ import {
 import { scriptDeclaresPosixShell } from '../../shared/workspace-setup/setup-script-shebang'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
-import { gitExecFileSync } from '../git/command-runner/git-exec-file-sync'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
+import { withRepositoryGitCause } from '../git/repository-git-cause'
 import { isLocalGitRuntimeRouterInstalled } from '../git/command-runner/host-routing/local-git-runtime-route'
 import { readWorktreeGitPath } from '../git/worktrees/catalog/worktree-git-path'
 import { resolveWslWorktreeGitPath } from '../git/worktrees/catalog/wsl-worktree-git-path'
@@ -30,23 +31,31 @@ import { ignoreFolderSetupRunners, newFolderSetupRunnerPath } from './folder-set
 import { isFolderRepo } from '../../shared/repo-kind'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from './setup-runner-script-text'
 
-import type { Repo } from '../../shared/repo-types'
-import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
+import type { WorkspaceHookOwner } from '../../shared/workspace-hook-owner'
+import type { WorktreeSetupLaunch } from '../../shared/worktree/creation/launch-types'
 import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 
 type SetupRunnerShellSettings = Record<string, unknown> | undefined
 
-function getGitPath(cwd: string, relativePath: string): string {
-  return gitExecFileSync(['rev-parse', '--git-path', relativePath], {
+async function getGitPath(cwd: string, relativePath: string): Promise<string> {
+  const { stdout } = await withRepositoryGitCause(
     cwd,
-    // Host Git on purpose: a read-only path lookup, kept off a synchronous wsl.exe.
-    hostGit: true
-  }).trim()
+    {},
+    { family: 'setup', reason: 'setup-runner', cache: 'uncached' },
+    () =>
+      gitExecFileAsync(['rev-parse', '--git-path', relativePath], {
+        cwd,
+        // Preserve the native fallback even for a Windows-drive WSL-runtime project.
+        hostGit: true,
+        timeout: 15_000
+      })
+  )
+  return stdout.trim()
 }
 
 export async function createSetupRunnerScript(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   worktreePath: string,
   script: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
@@ -70,7 +79,7 @@ export async function createSetupRunnerScript(
 }
 
 async function createWorktreeRunnerScript(args: {
-  repo: Repo
+  repo: WorkspaceHookOwner
   worktreePath: string
   script: string
   runnerBaseName: 'setup-runner'
@@ -101,7 +110,7 @@ async function createWorktreeRunnerScript(args: {
   // Report the typing shell, not the runner format: cmd /c typed through Git Bash triggers MSYS path rewriting.
   const launchShell: SetupRunnerShell | undefined = nativeWindowsWorktree
     ? (setupShell ?? { family: 'cmd' })
-    : process.platform === 'win32' && runtimeTarget?.wslDistro
+    : process.platform === 'win32' && wslWorktree
       ? { family: 'posix', executable: 'wsl.exe' }
       : undefined
   const runnerExtension = runnerShell.family === 'cmd' ? 'cmd' : 'sh'
@@ -176,7 +185,7 @@ async function resolveGitRunnerScriptPath(
     : isLocalGitRuntimeRouterInstalled()
       ? readWorktreeGitPath(worktreePath, gitRelPath, knownWslAutomountRoots())
       : null
-  let runnerScriptPath = fromLink ?? getGitPath(worktreePath, gitRelPath)
+  let runnerScriptPath = fromLink ?? (await getGitPath(worktreePath, gitRelPath))
 
   // Convert WSL Git's Linux path to a path Windows filesystem calls can reach.
   if (wslWorktree && !fromLink) {

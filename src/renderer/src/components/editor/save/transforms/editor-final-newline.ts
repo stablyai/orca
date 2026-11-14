@@ -3,11 +3,11 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 import { editorTabModelUri } from '../queue/editor-save-disk-precondition'
 import { hasPendingEditorBufferChange } from '../flush/editor-pending-flush'
-import { normalizeToModelEol } from '../../monaco-content-sync'
+import { normalizeToModelEol } from '../../model-lifetime/buffer-text/monaco-content-sync'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync
-} from '../../monaco-programmatic-sync'
+} from '../../model-lifetime/buffer-text/monaco-programmatic-sync'
 
 export function needsFinalNewline(text: string): boolean {
   return text !== '' && !text.endsWith('\n') && !text.endsWith('\r')

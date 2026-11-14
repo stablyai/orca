@@ -8,7 +8,7 @@ import { connectionManager } from './ssh-ipc-context'
 import {
   clearLaunchSessionNote,
   publishHostServerStatus
-} from '../runtime-environments/runtime-environment-managed-tunnel'
+} from '../runtime-environments/managed-orcad/runtime-environment-managed-tunnel'
 
 // Restores run on every runtime call; cache only within the same environment and SSH session.
 const checked = new WeakMap<

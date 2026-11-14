@@ -35,9 +35,15 @@ vi.mock('../git/command-runner/hosted-cli/gh-exec-file', async (importOriginal) 
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
-vi.mock('../github/client', () => ({
-  createGitHubPullRequest: vi.fn(),
-  getRepoSlug: getRepoSlugMock,
+vi.mock('../github/client/create/create-github-pull-request', () => ({
+  createGitHubPullRequest: vi.fn()
+}))
+
+vi.mock('../github/client/fetch/repo-slug-upstream', () => ({
+  getRepoSlug: getRepoSlugMock
+}))
+
+vi.mock('../github/client/lookup/get-pr-for-branch', () => ({
   getPRForBranch: vi.fn()
 }))
 

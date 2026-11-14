@@ -186,7 +186,10 @@ export function attachBrowserExtensionApiHostToSession(
 
 export function forgetBrowserExtensionContexts(sess: Electron.Session): void {
   forgetHostSession(sess)
-  sess.protocol.unhandle(BROWSER_EXTENSION_API_SCHEME)
+  // Why: profile delete forgets this host twice, and Electron throws if the scheme is already gone.
+  if (sess.protocol.isProtocolHandled(BROWSER_EXTENSION_API_SCHEME)) {
+    sess.protocol.unhandle(BROWSER_EXTENSION_API_SCHEME)
+  }
 }
 
 export function getBrowserExtensionProfileIdForSession(sess: Electron.Session): string | null {

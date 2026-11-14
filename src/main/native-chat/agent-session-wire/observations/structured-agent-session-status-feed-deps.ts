@@ -1,9 +1,11 @@
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usage-limit-chain'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type {
   StructuredChatNamingFailure,
   StructuredAgentSessionEndedChild,
@@ -16,13 +18,16 @@ import type { StructuredAgentSessionStatusSink } from './structured-agent-sessio
 import { structuredSummaryConversationNaming } from './structured-agent-session-status-summary'
 
 export type StatusFeedSession = {
-  journal: AgentSessionJournal
+  journal: AgentSessionJournal | SqlAgentSessionJournal
   params: {
     location: AgentSessionConversationView['location']
     provider: AgentSessionConversationView['provider']
   }
-  child?: Pick<StructuredAgentSessionProviderChild, 'phase' | 'generation' | 'fence'> | null
-  lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
+  child?: Pick<
+    StructuredAgentSessionProviderChild,
+    'phase' | 'generation' | 'fence' | 'heldSends'
+  > | null
+  lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone' | 'cause'>
   operationalRevision?: number
   restartResume?: AgentSessionStatusSummary['restartResume']
 }
@@ -36,7 +41,10 @@ export type StructuredAgentSessionStatusFeedDeps = {
   rowRetired?: (sessionId: string) => boolean
   /** Absent means no replaced runtime. */
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
-  readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue']
+  readUsageLimitContinue?: (
+    id: string,
+    cut: HostUsageLimitCut | null
+  ) => AgentSessionStatusSummary['usageLimitContinue']
   now: () => number
   /** Observer/sink failure must not block subscriber events. */
   logger: StructuredAgentSessionLogger
@@ -53,6 +61,7 @@ export type StructuredAgentSessionStatusFeedDeps = {
     sessionId: string,
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
+  drainChildWork?: (sessionId?: string) => Promise<void>
   namingActiveSessionIds?: () => string[]
   namingFailure?: (sessionId: string) => StructuredChatNamingFailure | undefined
   onAgentStarted?: (sessionId: string) => void

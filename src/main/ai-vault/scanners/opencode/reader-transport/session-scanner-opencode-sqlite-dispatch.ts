@@ -1,9 +1,9 @@
-import { readOpenCode2ForkCoverage } from '../../../../native-chat/transcript-opencode2-fork-coverage'
+import { readOpenCode2ForkCoverage } from '../../../../native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage'
 import { readOpenCodeDatabase } from '../sqlite/session-scanner-opencode-sqlite-open'
 import {
   readOpenCodeTranscriptPage,
   readOpenCodeTranscriptSignal
-} from '../../../../native-chat/transcript-opencode-sqlite-query'
+} from '../../../../native-chat/transcript-history/opencode/transcript-opencode-sqlite-query'
 import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { captureOpenCodeSqliteSession } from '../sqlite/session-scanner-opencode-sqlite-capture'
 import { listOpenCodeSqliteSessions } from '../sqlite/session-scanner-opencode-sqlite-list'
@@ -18,7 +18,7 @@ import type {
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
 
-import { withFullFirstUserPromptCapture } from '../../../session-scanner-first-user-prompt-capture'
+import { withFullFirstUserPromptCapture } from '../../../prompts/session-scanner-first-user-prompt-capture'
 
 export async function handleOpenCodeSqliteRequest(
   request: OpenCodeSqliteWorkerRequest

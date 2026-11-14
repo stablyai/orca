@@ -60,11 +60,11 @@ vi.mock('../../cdp/commands/cdp-bridge', async () => {
 
 import { AgentBrowserBridge } from '../agent-browser-bridge'
 import {
-  createSucceedWith,
   mockBrowserManager,
   mockWebContents,
   overrideBridgeWebContentsLookup,
-  resetAgentBrowserBridgeMocks
+  resetAgentBrowserBridgeMocks,
+  succeedRecordingAgentBrowserSpawns
 } from '../testing/agent-browser-bridge-test-harness'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
@@ -108,30 +108,25 @@ describe('AgentBrowserBridge', () => {
     )
   })
 
-  it('reports a reload that lands on a network error page as a failure', async () => {
-    const wc = mockWebContents(100)
-    const listeners = new Map<string, () => void>()
-    wc.on.mockImplementation((event: string, listener: () => void) =>
-      listeners.set(event, listener)
+  it('deletes the named cookie through the guest debugger instead of clearing the profile', async () => {
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, { cleared: true })
+    const wc = mockWebContents(100, 'https://www.example.com/app')
+    wc.debugger.sendCommand.mockImplementation(async (method) =>
+      method === 'Network.getAllCookies'
+        ? { cookies: [{ name: 'sid', domain: '.example.com', path: '/' }] }
+        : {}
     )
-    Object.assign(wc, {
-      reload: vi.fn(() => queueMicrotask(() => listeners.get('did-fail-load')?.()))
-    })
     webContentsFromIdMock.mockReturnValue(wc)
-    createSucceedWith(execFileMock, stdinWrites)({})
-    bridge = new AgentBrowserBridge(
-      mockBrowserManager(undefined, undefined, {
-        getBrowserPageLoadError: vi.fn(() => ({
-          code: -106,
-          description: 'ERR_INTERNET_DISCONNECTED',
-          validatedUrl: 'https://example.com'
-        }))
-      })
-    )
-    bridge.setActiveTab(100)
 
-    await expect(bridge.reload(undefined, 'tab-1')).rejects.toThrow(
-      'ERR_INTERNET_DISCONNECTED (-106)'
+    await expect(bridge.cookieDelete('sid')).resolves.toEqual({ deleted: true })
+
+    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Network.deleteCookies', {
+      name: 'sid',
+      domain: '.example.com',
+      path: '/'
+    })
+    expect(spawns.map(({ command }) => command)).not.toContainEqual(
+      expect.arrayContaining(['cookies', 'clear'])
     )
   })
 })

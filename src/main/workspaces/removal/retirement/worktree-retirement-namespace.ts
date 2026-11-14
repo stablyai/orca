@@ -2,7 +2,7 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared
 import {
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
-} from '../../../../shared/worktree/retired-name-registry'
+} from '../../../../shared/worktree/naming/retired-name-registry'
 import type { Repo } from '../../../../shared/repo-types'
 import { worktreePathComparisonKey } from '../../catalog/worktree-path-comparison-key'
 import { sshEndpointKey, type SshIdentityFields } from '../../../ssh/targets/ssh-target-identity'

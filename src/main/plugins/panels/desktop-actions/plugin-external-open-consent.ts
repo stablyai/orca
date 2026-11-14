@@ -1,6 +1,12 @@
-import { dialog, type BrowserWindow } from 'electron'
+// @protected-copy: a plugin language pack must not reword what the person is asked to allow.
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../../../persistence/loading-store/store'
 import { translateMain } from '../../../i18n/main-i18n'
+import {
+  canConfirmInWindow,
+  confirmPluginAction,
+  type PluginActionConfirmation
+} from '../../consent/plugin-action-confirmation'
 
 type GrantStore = Pick<Store, 'getSettings' | 'updateSettings'>
 
@@ -17,7 +23,7 @@ function rememberHost(store: GrantStore, pluginId: string, host: string): void {
   store.updateSettings({ pluginExternalHostGrants: grants })
 }
 
-export type PluginExternalOpenConsent = 'allowed' | 'cancelled' | 'unavailable'
+export type PluginExternalOpenConsent = PluginActionConfirmation
 
 export function truncatedUrl(url: string): string {
   return url.length > URL_DETAIL_MAX_LENGTH ? `${url.slice(0, URL_DETAIL_MAX_LENGTH - 1)}…` : url
@@ -45,8 +51,7 @@ export async function confirmPluginExternalOpen(input: {
     input.admit?.()
     return 'allowed'
   }
-  // A sheet on a hidden or minimized window would wait, unseen, forever.
-  if (input.window.isDestroyed() || !input.window.isVisible() || input.window.isMinimized()) {
+  if (!canConfirmInWindow(input.window)) {
     input.log?.(
       `shell.openExternal(${host}): not opened; Orca's window is hidden, so nobody can confirm it`
     )
@@ -54,15 +59,9 @@ export async function confirmPluginExternalOpen(input: {
   }
   input.admit?.()
   input.log?.(`shell.openExternal(${host}): waiting for the person to confirm`)
-  const { response, checkboxChecked } = await dialog.showMessageBox(input.window, {
-    type: 'question',
-    buttons: [
-      translateMain('plugins.frameOpenExternal.open', 'Open'),
-      translateMain('plugins.frameOpenExternal.cancel', 'Cancel')
-    ],
-    defaultId: 1,
-    cancelId: 1,
-    noLink: true,
+  const { answer, remember } = await confirmPluginAction(input.window, {
+    confirmLabel: translateMain('plugins.frameOpenExternal.open', 'Open'),
+    cancelLabel: translateMain('plugins.frameOpenExternal.cancel', 'Cancel'),
     message: translateMain(
       'plugins.frameOpenExternal.message',
       '{{plugin}} wants to open {{host}}',
@@ -78,10 +77,10 @@ export async function confirmPluginExternalOpen(input: {
       { host }
     )
   })
-  if (response !== 0) {
-    return 'cancelled'
+  if (answer !== 'allowed') {
+    return answer
   }
-  if (checkboxChecked) {
+  if (remember) {
     rememberHost(input.store, input.pluginId, host)
   }
   return 'allowed'

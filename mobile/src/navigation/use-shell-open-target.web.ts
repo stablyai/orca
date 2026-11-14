@@ -10,6 +10,7 @@ import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-init-rou
 import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
 import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { createRefusalReporter, handOffRoute, servedHere } from './route-handoff.web'
+import { isStandaloneSessionHref } from './host-stack-navigation'
 
 type StackState = ReturnType<typeof Navigator.useContext>['state']
 type StackRoute = { name: string; params?: object }
@@ -74,7 +75,9 @@ function planOpenSplice(
     return null
   }
   delete params[BRIDGE_OPEN_ROUTE_PARAM]
-  return { target, state: { ...state, index: 1, routes: [{ ...only, params }, opened] } }
+  // A standalone session takes the list's place, leaving no in-page Back to the list.
+  const routes = isStandaloneSessionHref(target) ? [opened] : [{ ...only, params }, opened]
+  return { target, state: { ...state, index: routes.length - 1, routes } }
 }
 
 function decodedPathnameOf(href: string): string {
@@ -122,7 +125,11 @@ export function useShellOpenTarget(): boolean {
         }
         return
       }
-      router.push(target)
+      if (isStandaloneSessionHref(target)) {
+        router.replace(target)
+      } else {
+        router.push(target)
+      }
     }
     const open = (target: string): void => {
       if (!isThisHost(client, target)) {

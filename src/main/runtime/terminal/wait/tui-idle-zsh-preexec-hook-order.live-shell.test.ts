@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { getShellLaunchConfig } from '../../../providers/local-pty/local-pty-shell-ready'
 import { selectShellStartupFeatures } from '../../../pty/shell-startup/shell-startup-features'
 import { hasZsh, ZSH_PATH } from '../../../pty/shell-startup/zsh-startup-hook-pty-harness'
@@ -102,9 +103,14 @@ async function captureLaunch(hookCase: HookCase): Promise<Capture> {
   const root = mkdtempSync(join(tmpdir(), 'orca-preexec-order-'))
   const home = join(root, 'home')
   const bin = join(root, 'bin')
+  const fixturePath = `${bin}:/usr/bin:/bin`
   mkdirSync(home)
   mkdirSync(bin)
-  writeFileSync(join(home, '.zshrc'), hookCase.zshrc)
+  // Login profiles can reorder PATH, so restore the stand-in before the startup command runs.
+  writeFileSync(
+    join(home, '.zshrc'),
+    `export PATH=${quotePosixShell(fixturePath)}\n${hookCase.zshrc}`
+  )
   const standIn = join(bin, 'claude')
   writeFileSync(standIn, standInClaude(hookCase.agentSetsRestTitle))
   chmodSync(standIn, 0o755)
@@ -129,12 +135,12 @@ async function captureLaunch(hookCase: HookCase): Promise<Capture> {
     rows: 30,
     cwd: home,
     env: {
-      PATH: `${bin}:/usr/bin:/bin`,
+      ...launchEnv,
+      PATH: fixturePath,
       HOME: home,
       TERM: 'xterm-256color',
       LANG: 'en_US.UTF-8',
-      ORCA_TEST_HOOK_ORDER: hookOrderPath,
-      ...launchEnv
+      ORCA_TEST_HOOK_ORDER: hookOrderPath
     }
   })
   const chunks: Chunk[] = []

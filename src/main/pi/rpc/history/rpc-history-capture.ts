@@ -1,4 +1,4 @@
-import type { AgentSessionProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { readPiEntries } from './rpc-history-catch-up'
@@ -85,7 +85,10 @@ export class PiHistoryCapture {
       return
     }
     // Read before Pi's leaf: a row landing after this is not claimed.
-    const through = history.cursor()
+    const through = await history.reads.cursor()
+    if (moved() || sink?.journalHistory?.() !== history) {
+      return
+    }
     const answer = await readPiEntries(deps.connection, anchor.entry)
     const branch =
       anchor.entry === null ? piBranchInTree(answer, null) : piBranchSince(answer, anchor.entry)

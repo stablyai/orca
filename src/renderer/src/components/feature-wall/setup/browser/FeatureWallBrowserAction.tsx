@@ -1,0 +1,265 @@
+import { useBundledSkillInstallAction } from '@/hooks/skills/installation/use-bundled-skill-install-action'
+import { bundledSkillSetupActionLabel } from '../../../skills/setup/bundled-skill-setup-copy'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
+import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
+import { FeatureSetupInlineTerminal } from '../../../onboarding/FeatureSetupInlineTerminal'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from '../../../../lib/skills/runtime/skill-runtime-command'
+import { useCallback, useState } from 'react'
+import { ArrowUpRight, Download, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { useAppStore } from '@/store/index'
+import {
+  bundledSkillInstallNeedsAttention,
+  useBundledSkillInstall
+} from '@/hooks/skills/installation/use-bundled-skill-install'
+import { BundledSkillInstallStatus } from '../../../skills/setup/BundledSkillInstallStatus'
+import {
+  onboardingFeatureSetupRunTelemetry,
+  runOnboardingFeatureSetup
+} from '../../../onboarding/onboarding-feature-setup'
+import type { OnboardingFeatureSetupSelection } from '../../../onboarding/onboarding-feature-setup'
+import {
+  promptForSetupGuideProject,
+  useSetupTargetWorktree
+} from '../FeatureWallSetupWorkflowActions'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import type { OnboardingFeatureSetupRuntimeContext } from '../../../onboarding/onboarding-feature-setup-runtime'
+
+export function BrowserAction(props: { done: boolean }): React.JSX.Element {
+  const t = useTranslate()
+  const targetWorktree = useSetupTargetWorktree()
+  const browserCreationEnabled = useAppStore(
+    (state) =>
+      getClientCreationActionPolicy(state, targetWorktree?.id ?? null)['managed-browser'].state ===
+      'enabled'
+  )
+  const openModal = useAppStore((s) => s.openModal)
+  const closeModal = useAppStore((s) => s.closeModal)
+  const openNewBrowserTabInActiveWorkspace = useAppStore(
+    (s) => s.openNewBrowserTabInActiveWorkspace
+  )
+
+  const handleTryIt = useCallback(() => {
+    if (!targetWorktree) {
+      promptForSetupGuideProject(openModal)
+      return
+    }
+    closeModal()
+    activateAndRevealWorktree(targetWorktree.id, { providesInitialSurface: true })
+    const state = useAppStore.getState()
+    // Open beside the current work in its active group.
+    const groupId =
+      state.activeGroupIdByWorktree[targetWorktree.id] ??
+      state.groupsByWorktree[targetWorktree.id]?.[0]?.id
+    if (groupId) {
+      void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error))
+      })
+    } else {
+      toast.warning(
+        translate(
+          'auto.components.feature.wall.FeatureWallBrowserAction.5022c43a88',
+          'Browser could not open'
+        ),
+        {
+          description: translate(
+            'auto.components.feature.wall.FeatureWallBrowserAction.c9eb68b474',
+            'No workspace group is available for this worktree yet.'
+          )
+        }
+      )
+    }
+  }, [closeModal, openModal, openNewBrowserTabInActiveWorkspace, targetWorktree])
+
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      {props.done || !browserCreationEnabled ? null : (
+        <Button type="button" size="sm" className="w-fit gap-2" onClick={handleTryIt}>
+          <ArrowUpRight className="size-3.5" />
+          {t('auto.components.feature.wall.FeatureWallBrowserAction.c9728107c5', 'Try it out')}
+        </Button>
+      )}
+      <BrowserSkillInstallButton />
+    </div>
+  )
+}
+
+// Browser grab-to-agent needs only the CLI and browser skill.
+const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
+  browserUse: true,
+  computerUse: false,
+  orchestration: false,
+  linearTickets: false
+}
+
+function BrowserSkillInstallButton(): React.JSX.Element {
+  const runtime = useOnboardingSkillRuntime()
+  return <BrowserSkillInstallForRuntime key={runtime.setupKey} activeRuntime={runtime} />
+}
+
+function BrowserSkillInstallForRuntime({
+  activeRuntime
+}: {
+  activeRuntime: ReturnType<typeof useOnboardingSkillRuntime>
+}): React.JSX.Element {
+  const t = useTranslate()
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const [busy, setBusy] = useState(false)
+  const [wslSetup, setWslSetup] = useState<{
+    command: string
+    runtime: OnboardingFeatureSetupRuntimeContext
+  } | null>(null)
+  const legacyWsl = activeRuntime.agentRuntime?.runtime === 'wsl'
+  const skillInstall = useBundledSkillInstall({ target: activeRuntime.bundledSkillTarget })
+  const installSkills = skillInstall.install
+  const installAction = useBundledSkillInstallAction([ORCA_CLI_SKILL_NAME], {
+    enabled: !legacyWsl,
+    target: activeRuntime.bundledSkillTarget,
+    refreshKey: skillInstall.state.kind
+  })
+
+  const handleInstall = useCallback(async () => {
+    if (busy) {
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await runOnboardingFeatureSetup(BROWSER_ONLY_FEATURE_SETUP)
+      recordFeatureInteraction('agent-browser-setup')
+      // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+      if (legacyWsl) {
+        const command = buildAgentFeatureSkillInstallCommand(result.skillNames)
+        await window.api.ui.writeClipboardText(
+          buildSkillCommandForRuntime(command, activeRuntime.agentRuntime)
+        )
+        setWslSetup({ command, runtime: activeRuntime })
+        return
+      }
+      const installState = await installSkills(
+        result.skillNames,
+        installAction.kind === 'replace' ? installAction.paths : undefined
+      )
+      const telemetry =
+        installState &&
+        onboardingFeatureSetupRunTelemetry(BROWSER_ONLY_FEATURE_SETUP, result, installState)
+      if (telemetry) {
+        track('onboarding_feature_setup_run', telemetry)
+      }
+      if (installState?.kind !== 'done' || !installState.summary.ok) {
+        return
+      }
+      const firstWarning = result.warnings[0]
+      if (firstWarning) {
+        toast.warning(
+          translate(
+            'auto.components.feature.wall.FeatureWallBrowserAction.25dd101f15',
+            'Browser setup needs attention'
+          ),
+          { description: firstWarning.message }
+        )
+      } else {
+        toast.success(
+          translate(
+            'auto.components.feature.wall.FeatureWallBrowserAction.e02b11e6b0',
+            'Browser setup ready'
+          )
+        )
+      }
+    } catch (error) {
+      console.error('Browser setup failed', error)
+      toast.error(
+        translate(
+          'auto.components.feature.wall.FeatureWallBrowserAction.78e65f19d9',
+          'Browser setup failed'
+        ),
+        {
+          description:
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.feature.wall.FeatureWallBrowserAction.b7345c18db',
+                  'An unexpected error occurred.'
+                )
+        }
+      )
+    } finally {
+      setBusy(false)
+    }
+  }, [activeRuntime, busy, installAction, installSkills, legacyWsl, recordFeatureInteraction])
+
+  // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+  if (wslSetup) {
+    return (
+      <FeatureSetupInlineTerminal
+        command={wslSetup.command}
+        runtimeContext={wslSetup.runtime}
+        selection={BROWSER_ONLY_FEATURE_SETUP}
+      />
+    )
+  }
+  if (
+    skillInstall.state.kind === 'unsupported' ||
+    (!legacyWsl && installAction.kind === 'unsupported') ||
+    bundledSkillInstallNeedsAttention(skillInstall.state) ||
+    (!legacyWsl && installAction.kind === 'attention')
+  ) {
+    return (
+      <BundledSkillInstallStatus
+        install={skillInstall}
+        unsupported={installAction.kind === 'unsupported' ? installAction.reason : undefined}
+        attention={
+          installAction.kind === 'attention'
+            ? { retry: () => void handleInstall(), message: installAction.attentionMessage }
+            : undefined
+        }
+        className="w-full"
+      />
+    )
+  }
+
+  if (!legacyWsl && installAction.kind === 'none') {
+    if (skillInstall.state.kind === 'done') {
+      return <BundledSkillInstallStatus install={skillInstall} />
+    }
+    return (
+      <p className="text-xs text-muted-foreground">
+        {t('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
+      </p>
+    )
+  }
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="w-fit gap-2"
+        disabled={
+          (!legacyWsl && installAction.kind === 'loading') ||
+          busy ||
+          (legacyWsl ? Boolean(activeRuntime.installDisabledReason) : !skillInstall.ready)
+        }
+        onClick={() => void handleInstall()}
+      >
+        {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+        {busy
+          ? t('auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b', 'Installing…')
+          : installAction.kind === 'replace'
+            ? t(
+                'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
+                "Replace with Orca's copy"
+              )
+            : installAction.kind === 'run' && installAction.changes
+              ? bundledSkillSetupActionLabel(installAction.changes, t)
+              : t('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
+      </Button>
+      <BundledSkillInstallStatus install={skillInstall} />
+    </>
+  )
+}

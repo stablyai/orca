@@ -3,8 +3,8 @@ import type { RemoteDispatchAttachmentRow } from '../db/orchestration-records'
 import { defineOrchestrationMethod } from '../../rpc/methods/orchestration/access/orchestration-method-access'
 import { isUserKeptWorkerTerminalOwner } from '../db/worker-terminal/worker-terminal-user-keep'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { readExactWorkerOutput } from '../../rpc/methods/orchestration/worker/worker-output'
-import { exposeWorkerRetainReceipt } from '../../rpc/methods/orchestration/worker/worker-terminal-resource-presentation'
+import { readExactWorkerOutput } from '../../rpc/methods/orchestration/worker/output/worker-output'
+import { exposeWorkerRetainReceipt } from '../../rpc/methods/orchestration/worker/release/worker-terminal-resource-presentation'
 import { withStoppedHelpers } from '../../rpc/methods/orchestration/worker/worker-stop'
 import { stopRemoteAttachment } from './federated-worker-stop-host'
 import {
@@ -19,7 +19,7 @@ import {
   FederationFleetSnapshotParams,
   FederationOutputReadParams,
   FederationReadParams
-} from '../../../../shared/rpc-contract/orchestration-federation-control-params'
+} from '../../../../shared/rpc-contract/orchestration/orchestration-federation-control-params'
 
 export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   defineOrchestrationMethod({

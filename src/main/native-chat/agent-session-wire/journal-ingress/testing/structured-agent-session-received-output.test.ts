@@ -1,16 +1,16 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
+import { openTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { createClaudeJournalTranslator } from '../../../../claude/structured/journal/claude-structured-journal-translation'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
-import {
-  closeTestJournalHostDatabase,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger.test-fixture'
+import { StructuredAgentSessionSnapshotRoutes } from '../../host/structured-agent-session-snapshot-routes'
 
 it('saves every tool result past 1,024 in one received Claude message, through reopen', async () => {
   const count = 1025
@@ -24,7 +24,7 @@ it('saves every tool result past 1,024 in one received Claude message, through r
   }
   let journal = await openAgentSessionJournal({
     identity,
-    database: openTestJournalHostDatabase(root)
+    database: await openTestAgentSessionDatabase(root)
   })
   const onFailed = vi.fn()
   const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
@@ -33,6 +33,8 @@ it('saves every tool result past 1,024 in one received Claude message, through r
     onFailed,
     readingControl
   })
+  const routes = new StructuredAgentSessionSnapshotRoutes(testEventSinkLogging().logger)
+  await deferred.followSnapshots(routes.observe(identity.sessionId, journal))
   deferred.bind({ journal, fence: 1, publish: () => {} })
   const translator = createClaudeJournalTranslator({ sink: deferred.sink })
   try {
@@ -62,9 +64,11 @@ it('saves every tool result past 1,024 in one received Claude message, through r
     await closeTestJournalHostDatabase(root)
     journal = await openAgentSessionJournal({
       identity,
-      database: openTestJournalHostDatabase(root)
+      database: await openTestAgentSessionDatabase(root)
     })
-    const tools = journal.snapshot().items.filter((item) => item.body.kind === 'tool-call')
+    const tools = (await readTestJournalItems(journal)).filter(
+      (item) => item.body.kind === 'tool-call'
+    )
     expect(tools).toHaveLength(count)
     expect(new Set(tools.map((item) => item.itemId)).size).toBe(count)
     tools.forEach((item, index) =>

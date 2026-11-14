@@ -5,7 +5,7 @@ import { runtimeTargetForRepoOwner } from '../ownership/repo-runtime-owner'
 import {
   githubRepoIdentityKey,
   repoUpstreamIdentityKey
-} from '../../../../../shared/github/repository-identity-key'
+} from '../../../../../shared/github/repositories/repository-identity-key'
 
 /** Lowercased `owner/repo` → Repo[]. */
 export type SlugIndex = Map<string, Repo[]>
@@ -16,7 +16,25 @@ export type RepoSlugMatches = { origin: Repo[]; upstream: Repo[] }
 /** Cache by runtime scope/repo ID, briefly retaining null failures to avoid per-cell retries while recovering after external GHES login. */
 export const slugByRepoId = new Map<string, string | null>()
 const slugFailureExpiresAtByRepoId = new Map<string, number>()
+const slugCacheListeners = new Set<(cacheKey: string | null) => void>()
+let slugCacheVersion = 0
 export const REPO_SLUG_FAILURE_TTL_MS = 60_000
+
+export function subscribeRepoSlugCache(listener: (cacheKey: string | null) => void): () => void {
+  slugCacheListeners.add(listener)
+  return () => slugCacheListeners.delete(listener)
+}
+
+export function getRepoSlugCacheVersion(): number {
+  return slugCacheVersion
+}
+
+function notifyRepoSlugCacheChanged(cacheKey: string | null): void {
+  slugCacheVersion += 1
+  for (const listener of slugCacheListeners) {
+    listener(cacheKey)
+  }
+}
 
 export function readRepoSlugCache(
   cacheKey: string,
@@ -36,22 +54,34 @@ export function readRepoSlugCache(
 }
 
 export function rememberRepoSlug(cacheKey: string, value: string | null, now = Date.now()): void {
+  const previous = slugByRepoId.get(cacheKey) ?? null
   slugByRepoId.set(cacheKey, value)
   if (value === null) {
     slugFailureExpiresAtByRepoId.set(cacheKey, now + REPO_SLUG_FAILURE_TTL_MS)
   } else {
     slugFailureExpiresAtByRepoId.delete(cacheKey)
   }
+  if (previous !== value) {
+    notifyRepoSlugCacheChanged(cacheKey)
+  }
 }
 
 export function deleteRepoSlugCacheKey(cacheKey: string): void {
+  const previous = slugByRepoId.get(cacheKey)
   slugByRepoId.delete(cacheKey)
   slugFailureExpiresAtByRepoId.delete(cacheKey)
+  if (previous !== undefined) {
+    notifyRepoSlugCacheChanged(cacheKey)
+  }
 }
 
 export function clearRepoSlugCacheValues(): void {
+  const hadValues = slugByRepoId.size > 0
   slugByRepoId.clear()
   slugFailureExpiresAtByRepoId.clear()
+  if (hadValues) {
+    notifyRepoSlugCacheChanged(null)
+  }
 }
 
 export function nextRepoSlugFailureRetryDelay(

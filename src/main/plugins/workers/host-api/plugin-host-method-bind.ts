@@ -1,10 +1,13 @@
 import type { z } from 'zod'
 import type { PluginHostMethodSpec } from '../../../../shared/plugins/workers/plugin-host-api'
 import type { PluginHostCallScope } from './plugin-host-call-scope'
+import type { PluginSurface } from '../../../../shared/plugins/frames/plugin-protocol'
 import type { PluginHostServices } from './plugin-host-method-bindings'
 
 export type PluginHostMethodContext = {
   pluginId: string
+  /** Who called: frames (panel, editor) see less than a full-access worker. */
+  surface: PluginSurface
   services: PluginHostServices
   scope: PluginHostCallScope
 }

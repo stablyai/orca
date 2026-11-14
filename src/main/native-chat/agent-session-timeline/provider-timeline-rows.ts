@@ -3,8 +3,6 @@
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type {
   ProviderTimelineIdentityScheme,
   ProviderTimelineItemFamily,
@@ -18,10 +16,6 @@ export type ProviderTimelineTurnRef = ProviderTimelineRowId & {
   turnId: string
 }
 
-export type ProviderTimelineTurnRowState = 'absent' | 'running' | 'settled'
-
-type Journal = StructuredAgentSessionTransitionJournal
-
 /** Reserve the widest possible request-incarnation suffix. */
 const REQUEST_INCARNATION_BOUND = 1_000_000_000
 
@@ -31,14 +25,6 @@ export function providerKey(value: string): ProviderTimelineKey {
 
 export function turnOf(scope: AgentJournalTurnScope): string | null {
   return scope.kind === 'turn' ? scope.turnItemId : null
-}
-
-export function providerTimelineTurnRowState(
-  journal: Journal,
-  turnItemId: string
-): ProviderTimelineTurnRowState {
-  const row = readAgentJournalTurn(journal.itemBody(turnItemId) ?? undefined)
-  return !row ? 'absent' : row.state === 'running' ? 'running' : 'settled'
 }
 
 export class ProviderTimelineRows {
@@ -76,24 +62,6 @@ export class ProviderTimelineRows {
 
   widestRequest(key: string): ProviderTimelineRowId {
     return this.request(key, REQUEST_INCARNATION_BOUND)
-  }
-
-  /** Never reuse a persisted request incarnation. */
-  nextRequest(key: string, journal: Journal): ProviderTimelineRowId {
-    return this.request(key, this.heldIncarnations(key, journal) + 1)
-  }
-
-  heldRequest(key: string, journal: Journal): ProviderTimelineRowId | null {
-    const held = this.heldIncarnations(key, journal)
-    return held === 0 ? null : this.request(key, held)
-  }
-
-  private heldIncarnations(key: string, journal: Journal): number {
-    let held = 0
-    while (journal.itemBody(this.request(key, held + 1).itemId) !== null) {
-      held += 1
-    }
-    return held
   }
 
   private request(key: string, incarnation: number): ProviderTimelineRowId {

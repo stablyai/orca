@@ -16,9 +16,7 @@ import { serializeRemoteRuntimePayload } from '../../../../../../shared/remote-r
 import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import { readAgentSessionHistory } from '../agent-session-history-page'
-import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-
-// Window on session-owned rows; include subagent rows without letting bursts crowd out conversation.
+import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -61,8 +59,10 @@ function textsOf(page: AgentSessionHistoryPage): string[] {
   )
 }
 
-function read(request: Omit<AgentSessionHistoryRequest, 'sessionId'>): AgentSessionHistoryPage {
-  const result = readAgentSessionHistory(journal, { sessionId: 'session-1', ...request })
+async function read(
+  request: Omit<AgentSessionHistoryRequest, 'sessionId'>
+): Promise<AgentSessionHistoryPage> {
+  const result = await readAgentSessionHistory(journal, { sessionId: 'session-1', ...request })
   if (!result.ok) {
     throw new Error(`expected a page, got reset ${result.reset}`)
   }
@@ -88,18 +88,20 @@ afterEach(async () => {
 })
 
 describe('a history page over a session with a subagent', () => {
-  it("counts the session's own rows and carries the subagent's rows between them", async () => {
+  it('pages through a large subagent burst without losing or repeating conversation rows', async () => {
     await append(named('own-', 1, 5))
     await append(named('child-', 1, 300), child)
     await append(['own-6'])
 
-    const tail = read({ direction: 'tail', limit: 3 })
-    expect(textsOf(tail)).toEqual(['own-4', 'own-5', ...named('child-', 1, 300), 'own-6'])
-    expect(tail.hasOlder).toBe(true)
-
-    const older = read({ direction: 'before', cursor: tail.window.nextCursor, limit: 3 })
-    expect(textsOf(older)).toEqual(['own-1', 'own-2', 'own-3'])
-    expect(older.hasOlder).toBe(false)
-    expect(older.hasNewer).toBe(true)
+    let page = await read({ direction: 'tail', limit: 3 })
+    expect(textsOf(page)).toEqual([...named('child-', 296, 5), 'own-6'])
+    expect(page.hasOlder).toBe(true)
+    let texts = textsOf(page)
+    while (page.hasOlder) {
+      page = await read({ direction: 'before', cursor: page.window.nextCursor, limit: 3 })
+      texts = [...textsOf(page), ...texts]
+      expect(page.hasNewer).toBe(true)
+    }
+    expect(texts).toEqual([...named('own-', 1, 5), ...named('child-', 1, 300), 'own-6'])
   })
 })

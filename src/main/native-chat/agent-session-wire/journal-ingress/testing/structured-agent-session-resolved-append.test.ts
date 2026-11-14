@@ -1,38 +1,30 @@
+import { openTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody
+  type AgentJournalTurnItem
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
 
 import type { StructuredAgentSessionEventTarget } from '../structured-agent-session-event-sink'
-import type { StructuredAgentSessionRevisionResolver } from '../structured-agent-session-journal-views'
-import { estimateStructuredAgentSessionItemBytes } from '../structured-agent-session-event-sink-estimate'
-import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger.test-fixture'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
-const ROW: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'row' }
-
-const text = (value: string): AgentJournalItemBody => ({
-  kind: 'message',
-  role: 'assistant',
-  blocks: [{ type: 'text', text: value }]
-})
-
-function textOf(body: AgentJournalItemBody | undefined): string {
-  const block = body?.kind === 'message' ? body.blocks[0] : undefined
-  return block?.type === 'text' ? block.text : ''
+const ROW: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'turn-row' }
+const RUNNING: AgentJournalTurnItem = {
+  kind: 'turn',
+  turnId: 'turn-1',
+  state: 'running',
+  userItemId: 'orca:submission:cmd-1',
+  startedAt: 1
 }
 
 let root = ''
@@ -41,7 +33,7 @@ let journal: AgentSessionJournal
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-resolved-append-'))
   journal = await openAgentSessionJournal({
-    database: openTestJournalHostDatabase(root),
+    database: await openTestAgentSessionDatabase(root),
     identity: {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
@@ -62,37 +54,35 @@ function journalTarget(): StructuredAgentSessionEventTarget {
   return { journal, fence: 1, publish: vi.fn() }
 }
 
-const rowText = (): string => textOf(journal.itemBody(agentJournalItemKey(ROW)) ?? undefined)
-
-const appendSuffix =
-  (suffix: string): StructuredAgentSessionRevisionResolver =>
-  (journal) => {
-    let current: AgentJournalItemBody | undefined
-    journal.visitItems((itemId, _sequence, body) => {
-      if (itemId === agentJournalItemKey(ROW)) {
-        current = body
-      }
-    })
-    return { identity: ROW, body: text(`${textOf(current)}${suffix}`) }
-  }
+const row = async () => await journal.reads.itemBody(agentJournalItemKey(ROW))
 
 describe('resolved revisions', () => {
-  it('reads the row as the journal holds it when each queued revision runs', async () => {
+  it('resolves each queued revision against the row as the journal holds it when it runs', async () => {
+    await journal.appendItem(ROW, RUNNING, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-    const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('abc'))
-    for (const suffix of ['a', 'b', 'c']) {
-      expect(
-        deferred.sink.tryReviseResolvedItem?.(bytes, appendSuffix(suffix), {
-          turnScope: AGENT_JOURNAL_THREAD_SCOPE
-        })
-      ).toEqual({
-        accepted: true
-      })
-    }
-    expect(deferred.state().queuedOperations).toBe(3)
-    // Bind within a queued read; early resolution would miss the preceding revisions.
+    const options = { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    const window = { tokens: 200_000, capturedAt: 2 }
+    expect(
+      deferred.sink.tryReviseResolvedItem?.(
+        8_192,
+        { kind: 'turn-row', target: { identity: ROW }, write: { contextUsage: { window } } },
+        options
+      )
+    ).toEqual({ accepted: true })
+    expect(
+      deferred.sink.tryReviseResolvedItem?.(
+        8_192,
+        { kind: 'turn-claim', identity: ROW, providerTurnId: 'provider-turn-1' },
+        options
+      )
+    ).toEqual({ accepted: true })
+    // Bind within a queued read; resolving at admission would lose the earlier revision.
     await journal.readInOrder(() => deferred.bind(journalTarget()))
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    expect(rowText()).toBe('abc')
+    expect(await row()).toEqual({
+      ...RUNNING,
+      contextUsage: { window },
+      providerTurnId: 'provider-turn-1'
+    })
   })
 })

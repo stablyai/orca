@@ -156,26 +156,15 @@ export function useWorktreeCardLifecycleEffects({
       return
     }
     const controller = new AbortController()
-    const linearIssueId = worktree.linkedLinearIssue
-    const refreshLinearIssueIfVisible = (): void => {
-      if (!isWindowVisible()) {
-        return
-      }
-      void consumeLinearIssueRead(
-        fetchLinearIssue(linearIssueId, linearWorkspaceId, { sourceContext: linearSourceContext }),
-        () => !controller.signal.aborted,
-        undefined,
-        controller.signal
-      ).catch(() => {})
-    }
-    refreshLinearIssueIfVisible()
-    window.addEventListener('focus', refreshLinearIssueIfVisible)
-    document.addEventListener('visibilitychange', refreshLinearIssueIfVisible)
-    return () => {
-      controller.abort()
-      window.removeEventListener('focus', refreshLinearIssueIfVisible)
-      document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
-    }
+    void consumeLinearIssueRead(
+      fetchLinearIssue(worktree.linkedLinearIssue, linearWorkspaceId, {
+        sourceContext: linearSourceContext
+      }),
+      () => !controller.signal.aborted,
+      undefined,
+      controller.signal
+    ).catch(() => {})
+    return () => controller.abort()
   }, [
     worktree.linkedLinearIssue,
     fetchLinearIssue,

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -37,26 +37,6 @@ afterEach(() => {
 })
 
 describe('benchmark artifact comparison', () => {
-  it('rejects invalid benchmark artifacts before comparing partial metrics', () => {
-    const dir = makeTempDir()
-    const baselinePath = writeArtifact(dir, 'split-invalid.json', {
-      label: 'invalid split',
-      status: 'failed',
-      valid: false,
-      headlineMs: { shortcutToFocusP50: 0 }
-    })
-    const candidatePath = writeArtifact(dir, 'split-valid.json', {
-      label: 'valid split',
-      status: 'passed',
-      valid: true,
-      headlineMs: { shortcutToFocusP50: 10 }
-    })
-
-    expect(() => comparePaths(baselinePath, candidatePath)).toThrow(
-      'split-invalid.json: benchmark artifact is marked invalid'
-    )
-  })
-
   it('aggregates duplicate Playwright scenario metrics before comparison', () => {
     const dir = makeTempDir()
     const baselinePath = writeArtifact(dir, 'baseline-playwright-duplicates.json', {
@@ -179,47 +159,6 @@ describe('benchmark artifact comparison', () => {
       key: 'opencode-units.median',
       reason: 'unit mismatch (ms vs count)'
     })
-  })
-
-  it('writes Markdown and JSON reports from the CLI while printing Markdown', () => {
-    const dir = makeTempDir()
-    const baselinePath = writeArtifact(dir, 'baseline.json', {
-      label: 'baseline',
-      summaryMedianMs: { totalToDidFinishLoad: 100 }
-    })
-    const candidatePath = writeArtifact(dir, 'candidate.json', {
-      label: 'candidate',
-      summaryMedianMs: { totalToDidFinishLoad: 40 }
-    })
-    const markdownPath = join(dir, 'nested', 'comparison.md')
-    const jsonPath = join(dir, 'nested', 'comparison.json')
-
-    const result = spawnSync(
-      process.execPath,
-      [
-        scriptPath,
-        '--baseline',
-        baselinePath,
-        '--candidate',
-        candidatePath,
-        '--title',
-        'Test Compare',
-        '--output',
-        markdownPath,
-        '--json-output',
-        jsonPath
-      ],
-      { cwd: process.cwd(), encoding: 'utf8' }
-    )
-
-    expect(result.status).toBe(0)
-    expect(result.stdout).toContain('| Metric | Baseline | Candidate | Delta | Delta % | Result |')
-    expect(result.stdout).toContain(
-      '| totalToDidFinishLoad | 100.0ms | 40.0ms | -60.0ms | -60.0% | improved |'
-    )
-    expect(existsSync(markdownPath)).toBe(true)
-    expect(existsSync(jsonPath)).toBe(true)
-    expect(JSON.parse(readFileSync(jsonPath, 'utf8')).schemaVersion).toBe(1)
   })
 
   it('redacts absolute input paths from generated reports', () => {

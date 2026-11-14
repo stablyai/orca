@@ -15,7 +15,7 @@ import {
   serveLinearHttp
 } from '../../src/main/linear/requests/linear-sdk-http.test-fixture'
 import { LinearAgentAccessError } from '../../src/main/linear/issues/context/linear-access-errors'
-import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
+import { RuntimeRpcFailureError } from '../../src/cli/runtime/connection/types'
 import { main } from '../../src/cli/index'
 
 const boundary = vi.hoisted(() => ({
@@ -34,10 +34,20 @@ const boundary = vi.hoisted(() => ({
     email: 'proof@example.invalid'
   }
 }))
-vi.mock('../../src/cli/runtime-client', async () => {
+vi.mock('../../src/cli/runtime/client', async () => {
   const { createRuntimeClientModuleMock } = await import('../../src/cli/index-test-harness.js')
   return createRuntimeClientModuleMock(boundary)
 })
+
+vi.mock('../../src/cli/runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: boundary.serveOrcaAppMock
+}))
+
+vi.mock('../../src/cli/runtime/profile/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: boundary.getDefaultUserDataPathMock
+}))
 vi.mock('../../src/main/linear/accounts/linear-token-store', () => ({
   loadToken: () => 'local-proof-token',
   saveWorkspaceToken: boundary.save,

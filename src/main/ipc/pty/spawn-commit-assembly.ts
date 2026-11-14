@@ -8,9 +8,10 @@ import type { Store, PtyBindingSourceExpectation } from '../../persistence/loadi
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { PtyRegistrationClaim } from '../../runtime/terminal/records/runtime-terminal-state-records'
 import { markNativeWindowsConptyPty } from '../../runtime/terminal/output/terminal-model-query-authority'
-import type { IPtyProvider, PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import type { CodexPaneHomeRoute } from '../../codex/configuration/homes/codex-pane-account-registry-types'
-import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
+import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { CodexHomePtySpawnedLifecycleArgs } from './host-env/types'
 import {

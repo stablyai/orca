@@ -1,0 +1,23 @@
+import type WebSocket from 'ws'
+import type { E2EEKeypair } from '../../rpc/server/pairing/e2ee-keypair'
+import type { MobileSocketWiring } from '../../rpc/mobile/mobile-socket-wiring'
+import type { RelayIdentity } from '../session-lifecycle/relay-session-broker-contract'
+import type { MobileRelayStatus as RelayBrokerStatus } from '../../../../shared/remote-runtime/relay/mobile-relay-status'
+import type { RelayRegion } from '../region-selection/relay-region-probe'
+
+export type RelayOriginPoolOptions = {
+  directorUrl: string
+  relayHostId: string
+  identity: RelayIdentity
+  keypair: E2EEKeypair
+  appVersion: string
+  mobileSocketWiring: MobileSocketWiring
+  isCurrent: () => boolean
+  onStatus: (status: RelayBrokerStatus) => void
+  resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
+  fetch?: typeof globalThis.fetch
+  createControlSocket?: (url: string, relayJwt: string) => WebSocket
+  createDataSocket?: (url: string) => WebSocket
+  random?: () => number
+  now?: () => number
+}

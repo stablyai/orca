@@ -8,7 +8,7 @@ import { findGithubIssueWorkspaceAttachment } from '@/lib/work-items/github/gith
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitHubItemDialogProps } from '../load-item-details/github-item-dialog-types'
 import { GitHubItemDialogIssueBody } from './github-item-dialog-issue-body'
 import { GitHubItemDialogIssueHeader } from './github-item-dialog-issue-header'

@@ -6,6 +6,8 @@ import type {
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import { claudeStateFile, readClaudeFolderLogin } from '../sign-in/claude-account-folder'
+import { readClaudeOAuthCredentials } from '../../rate-limits/providers/claude/claude-oauth-credentials'
+import { resolveLoginShellEnvironment } from '../../startup/shell-environment/login-shell-environment'
 import { savedWslClaudeAccountHome } from '../profiles/wsl/claude-profile-wsl-paths'
 import type { ClaudeRuntimeAuthService } from '../runtime-auth-service'
 import {
@@ -193,8 +195,13 @@ export class ClaudeAccountSelection {
       ) {
         throw new Error('That Claude account belongs to a different runtime.')
       }
-      // CLI and paired clients bypass the renderer's sign-in check.
-      if (this.summarize(account).needsSignIn) {
+      // CLI and paired clients bypass the renderer's sign-in check. An identity file alone can't
+      // start Claude, and chats follow the selection on their next start.
+      const summary = this.summarize(account)
+      if (
+        summary.needsSignIn ||
+        (summary.home && !summary.runsOnSystemDefault && (await accountHoldsNoLogin(summary.home)))
+      ) {
         throw new Error(CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE)
       }
       effectiveTarget = accountTarget
@@ -270,4 +277,17 @@ export class ClaudeAccountSelection {
       })
     }
   }
+}
+
+/** The read usage already makes for this account; an unreadable store is no answer. */
+async function accountHoldsNoLogin(home: string): Promise<boolean> {
+  // Claude then keeps every login elsewhere, so an empty account folder proves nothing.
+  if ((await resolveLoginShellEnvironment()).CLAUDE_SECURESTORAGE_CONFIG_DIR !== undefined) {
+    return false
+  }
+  const login = await readClaudeOAuthCredentials({
+    credentialsFileConfigDir: home,
+    keychainConfigDir: home
+  })
+  return !login.token && !login.hasRefreshableCredentials && !login.unavailable
 }

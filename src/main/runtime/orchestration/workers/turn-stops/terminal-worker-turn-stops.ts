@@ -24,13 +24,10 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   getHandle: (paneKey: string) => string | null
   getProcessIncarnation: (handle: string) => string | null
   readScreen: (handle: string) => Promise<RuntimeTerminalRead>
-  /** The pane's open approval Orca can answer; taking it marks it reported. */
-  /** `reporting` is read after the wait; the approval is marked reported only when it holds. */
-  takeOpenApproval: (
-    paneKey: string,
-    dispatchId: string,
-    reporting: () => boolean
-  ) => Promise<WorkerApprovalPayload | null>
+  /** The pane's open approval Orca can answer. */
+  takeOpenApproval: (paneKey: string, dispatchId: string) => Promise<WorkerApprovalPayload | null>
+  /** Called only once the approval's escalation went out. */
+  markApprovalReported: (approvalId: string) => void
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
@@ -80,19 +77,14 @@ export class TerminalWorkerTurnStops {
     // One report per approval; the screen shows Claude's own reason for asking.
     const approval =
       reason === 'needs-input' && before?.target.kind === 'local'
-        ? await this.deps.takeOpenApproval(
-            stop.paneKey,
-            before.target.dispatch.id,
-            // Read at the end of the dialog wait; a resume after it is caught by the re-read below.
-            () => this.stillStopped(stop) !== null
-          )
+        ? await this.deps.takeOpenApproval(stop.paneKey, before.target.dispatch.id)
         : null
     // Both reads awaited: the worker may have resumed, reported, or been handed a new Dispatch since.
     const resolved = this.stillStopped(stop)
     if (!resolved) {
       return
     }
-    reportWorkerTurnStop(
+    const sent = reportWorkerTurnStop(
       resolved.db,
       resolved.target,
       {
@@ -105,6 +97,9 @@ export class TerminalWorkerTurnStops {
       },
       this.deps
     )
+    if (approval && sent) {
+      this.deps.markApprovalReported(approval.approvalId)
+    }
   }
 
   private stillStopped(stop: PreparedStop) {

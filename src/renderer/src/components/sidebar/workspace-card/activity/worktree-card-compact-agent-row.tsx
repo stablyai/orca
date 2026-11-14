@@ -1,20 +1,20 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
+import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { cn } from '@/lib/class-names'
 import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
-import { useClaudeAgentRowView } from '@/components/dashboard/use-claude-agent-row-view'
+import { useClaudeAgentRowView } from '@/components/dashboard/rows/use-claude-agent-row-view'
 import './worktree-card-agent-summary'
 import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-status/presentation/agent-row-dot-state'
 import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
 import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
-import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
-import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
+import { useAgentRowConversationName } from '@/components/dashboard/rows/use-agent-row-conversation-name'
+import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
@@ -159,13 +159,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
   const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
-  const { leadingText, trailingText } = getCompactAgentLineOrder(
-    agent,
-    dotState,
-    primary,
-    secondary,
-    t
-  )
+  const { leadingText, trailingText } = getCompactAgentLineOrder(agent, primary, secondary, t)
   const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
@@ -240,6 +234,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             title={sendTargetDisabledReason ? null : undefined}
             tooltipSide="right"
             progress={presentation.progress}
+            unread={isUnvisited}
           />
           {!hideIcon && (
             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>

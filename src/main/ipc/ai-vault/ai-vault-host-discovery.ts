@@ -1,5 +1,5 @@
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { aiVaultScanIssueResult } from '../../ai-vault/session-list-results'
+import { aiVaultScanIssueResult } from '../../ai-vault/listing/session-list-results'
 
 export type AiVaultHostDiscoveryResult<T> = {
   hostInfos: readonly T[]

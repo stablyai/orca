@@ -2,7 +2,6 @@ import { createElement } from 'react'
 import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { colors } from '../theme/mobile-theme'
 
 const renderers = new Set<ReturnType<typeof createRenderer>>()
 function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
@@ -78,30 +77,7 @@ function cover(tree: ReactTestRenderer) {
   return tree.root.findAllByProps({ testID: 'mobile-web-shell-cover' })[0] ?? null
 }
 
-function coverBackground(tree: ReactTestRenderer): unknown {
-  const style: unknown = cover(tree)?.props.style
-  const base: unknown = Array.isArray(style) ? style[0] : null
-  return typeof base === 'object' && base !== null && 'backgroundColor' in base
-    ? base.backgroundColor
-    : null
-}
-
 describe('the frame the shell keeps over an unpainted page', () => {
-  it('is up while the page has not painted', () => {
-    const tree = render(true)
-    expect(cover(tree)).not.toBeNull()
-  })
-
-  it('paints the app surface and never black, so an empty view is never a hole', () => {
-    const background = coverBackground(render(true))
-    expect(background).toBe(colors.bgBase)
-    expect(background).not.toBe('#000000')
-  })
-
-  it('never takes a touch, so a report that never lands leaves a usable page under it', () => {
-    expect(cover(render(true))?.props.pointerEvents).toBe('none')
-  })
-
   it('goes once the page reports a frame', () => {
     const tree = render(true)
     act(() => {

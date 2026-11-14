@@ -207,8 +207,6 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
     }))
     const resolved = await resolveWorktreeCreateAgentStartup(
       {
-        repoSelector: 'repo-1',
-        name: 'Review',
         startupAgent: 'codex',
         startupAccountEnv: { CODEX_HOME: '/home/u/.codex-b' }
       },
