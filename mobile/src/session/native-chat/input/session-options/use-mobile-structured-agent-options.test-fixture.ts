@@ -41,18 +41,6 @@ const OPTIONS: AgentSessionOptionsResult = {
   current: { model: 'gpt-live', effort: 'medium' }
 }
 
-const FAST_OPTIONS: AgentSessionOptionsResult = {
-  ...OPTIONS,
-  models: OPTIONS.models.map((model) => ({ ...model, supportsFastMode: true })),
-  fastModeSupport: { supported: true },
-  current: { ...OPTIONS.current, fastMode: false, confirmed: ['fastMode'] }
-}
-
-const FAST_OPTIONS_ON: AgentSessionOptionsResult = {
-  ...FAST_OPTIONS,
-  current: { ...FAST_OPTIONS.current, fastMode: true }
-}
-
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((accept) => {
@@ -235,8 +223,6 @@ const BASE = { agent: 'codex', sessionId: 'session-1', fence: 1 } as const
 export {
   settle,
   OPTIONS,
-  FAST_OPTIONS,
-  FAST_OPTIONS_ON,
   deferred,
   rpcSuccess,
   optionsClient,
