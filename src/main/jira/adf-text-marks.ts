@@ -139,7 +139,10 @@ function normalizedStyles(nodes: PhrasingContent[]): PhrasingContent[] {
   const result: PhrasingContent[] = []
   for (const node of normalized) {
     const previous = result.at(-1)
-    if (node.type === 'text' && previous?.type === 'text') {
+    if (
+      (node.type === 'text' && previous?.type === 'text') ||
+      (node.type === 'inlineCode' && previous?.type === 'inlineCode')
+    ) {
       previous.value += node.value
     } else {
       result.push(node)

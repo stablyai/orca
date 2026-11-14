@@ -393,26 +393,29 @@ it('keeps literal entity spellings and code bytes in direct read-back', async ()
   const doc = {
     type: 'doc',
     content: [
-      { type: 'paragraph', content: [{ type: 'text', text: '&#x3067;' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: '&#x3067; &#X41;' }] },
       {
         type: 'paragraph',
-        content: [{ type: 'text', text: '&#x3067;', marks: [{ type: 'code' }] }]
+        content: [{ type: 'text', text: '&#x3067; &#X41;', marks: [{ type: 'code' }] }]
       },
-      { type: 'codeBlock', content: [{ type: 'text', text: '&#x3067;' }] },
+      { type: 'codeBlock', content: [{ type: 'text', text: '&#x3067; &#X41;' }] },
       {
         type: 'paragraph',
         content: [
           {
             type: 'text',
             text: 'link',
-            marks: [{ type: 'link', attrs: { href: 'https://example.com/?q=&#x3067;' } }]
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/?q=&#x3067;&r=&#X41;' } }]
           }
         ]
       }
     ]
   }
+  expect(adfToMarkdownText(await markdownToAdf('\\&#X41;'))).toBe('\\&#X41;')
   const markdown = adfToMarkdownText(doc)
-  expect(markdown).toContain('\\&#x3067;\n\n`&#x3067;`\n\n```\n&#x3067;\n```')
+  expect(markdown).toContain(
+    '\\&#x3067; \\&#X41;\n\n`&#x3067; &#X41;`\n\n```\n&#x3067; &#X41;\n```'
+  )
   expect(
     adfToMarkdownText({
       type: 'doc',
@@ -438,7 +441,7 @@ it('keeps literal entity spellings and code bytes in direct read-back', async ()
           {
             type: 'text',
             text: 'link',
-            marks: [{ type: 'link', attrs: { href: 'https://example.com/?q=&#x3067;' } }]
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/?q=&#x3067;&r=&#X41;' } }]
           }
         ]
       }
@@ -452,9 +455,9 @@ it('keeps literal entity spellings and code bytes in direct read-back', async ()
           { type: 'mediaSingle', content: [{ type: 'media', attrs: { id: 'entity-media' } }] }
         ]
       },
-      { resolveMedia: () => '![img](https://example.com/?q=&#x3067;)' }
+      { resolveMedia: () => '![img](https://example.com/?q=&#x3067;&r=&#X41;)' }
     )
-  ).toBe('![img](https://example.com/?q=&#x3067;)')
+  ).toBe('![img](https://example.com/?q=&#x3067;&r=&#X41;)')
 })
 
 it('escapes literal blocks without damaging pasted links or adjacent CJK marks', async () => {
@@ -715,4 +718,90 @@ it('keeps GFM strike boundaries distinct from CJK attention boundaries', async (
   })
   expect(adfToMarkdownText(doc)).toBe('~~a!~~&#20013;')
   expect(await markdownToAdf(adfToMarkdownText(doc))).toEqual(doc)
+})
+
+it('joins adjacent code bytes only within the same link boundary before choosing fences', async () => {
+  const content = [
+    { type: 'text', text: 'a', marks: [{ type: 'code' }] },
+    { type: 'text', text: 'b', marks: [{ type: 'code' }] },
+    { type: 'hardBreak' },
+    { type: 'text', text: 'a`', marks: [{ type: 'code' }] },
+    { type: 'text', text: '`b', marks: [{ type: 'code' }] },
+    { type: 'hardBreak' },
+    {
+      type: 'text',
+      text: 'a',
+      marks: [{ type: 'code' }, { type: 'link', attrs: { href: 'https://a.test' } }]
+    },
+    {
+      type: 'text',
+      text: 'b',
+      marks: [{ type: 'code' }, { type: 'link', attrs: { href: 'https://a.test' } }]
+    },
+    {
+      type: 'text',
+      text: 'c',
+      marks: [{ type: 'code' }, { type: 'link', attrs: { href: 'https://b.test' } }]
+    },
+    { type: 'text', text: 'd', marks: [{ type: 'code' }] }
+  ]
+  const markdown = adfToMarkdownText({ type: 'doc', content: [{ type: 'paragraph', content }] })
+  expect(markdown).toBe('`ab`\n```a``b```\n[`ab`](https://a.test)[`c`](https://b.test)`d`')
+  expect(await markdownToAdf(markdown)).toEqual({
+    type: 'doc',
+    version: 1,
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'ab', marks: [{ type: 'code' }] },
+          { type: 'hardBreak' },
+          { type: 'text', text: 'a``b', marks: [{ type: 'code' }] },
+          { type: 'hardBreak' },
+          {
+            type: 'text',
+            text: 'ab',
+            marks: [{ type: 'link', attrs: { href: 'https://a.test' } }, { type: 'code' }]
+          },
+          {
+            type: 'text',
+            text: 'c',
+            marks: [{ type: 'link', attrs: { href: 'https://b.test' } }, { type: 'code' }]
+          },
+          { type: 'text', text: 'd', marks: [{ type: 'code' }] }
+        ]
+      }
+    ]
+  })
+})
+
+it('keeps ambiguous URL authorities active through real Markdown read-back', async () => {
+  for (const { text, markdown, href } of [
+    { text: 'http://[::1]/', markdown: '<http://[::1]/>', href: 'http://[::1]/' },
+    { text: ' http://[::1]/ ', markdown: ' <http://[::1]/> ', href: 'http://[::1]/' },
+    { text: 'http://foo_bar.com/', markdown: '<http://foo_bar.com/>', href: 'http://foo_bar.com/' },
+    {
+      text: 'www.foo_bar.com/',
+      markdown: '[www.foo_bar.com/](http://www.foo_bar.com/)',
+      href: 'http://www.foo_bar.com/'
+    },
+    { text: 'http://-foo.com/', markdown: '<http://-foo.com/>', href: 'http://-foo.com/' }
+  ]) {
+    const actual = adfToMarkdownText({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+    })
+    expect(actual).toBe(markdown)
+    const result = await markdownToAdf(actual)
+    expect(result).toMatchObject({
+      content: [
+        {
+          type: 'paragraph',
+          content: expect.arrayContaining([
+            { type: 'text', text: text.trim(), marks: [{ type: 'link', attrs: { href } }] }
+          ])
+        }
+      ]
+    })
+  }
 })

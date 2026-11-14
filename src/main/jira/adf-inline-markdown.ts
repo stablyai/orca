@@ -11,7 +11,7 @@ function escapeLiteral(value: string, inLink: boolean): string {
         : `\\${char}`
     )
     .replace(/]/g, inLink ? '\\]' : ']')
-    .replace(/&(?=(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[\da-fA-F]+);)/g, '\\&')
+    .replace(/&(?=(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#[xX][\da-fA-F]+);)/g, '\\&')
 }
 
 function escapeBlockMarkers(value: string, lineStart: boolean): string {
@@ -27,7 +27,7 @@ function escapeBlockMarkers(value: string, lineStart: boolean): string {
 }
 
 function escapeDestinationEntities(value: string): string {
-  return value.replace(/&(?=(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[\da-fA-F]+);)/g, '&amp;')
+  return value.replace(/&(?=(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#[xX][\da-fA-F]+);)/g, '&amp;')
 }
 
 function inlineCode(value: string): string {
@@ -111,6 +111,11 @@ function inlineTokens(
   }
 }
 
+function supportsBareAutolink(value: string): boolean {
+  const authority = /^(?:https?:\/\/|www\.)([^/?#]*)/i.exec(value)?.[1]
+  return authority === undefined || /^[\p{L}\p{N}][\p{L}\p{N}.-]*(?::[0-9]+)?$/u.test(authority)
+}
+
 function supportsUriAutolink(value: string): boolean {
   for (const char of value) {
     if (char.charCodeAt(0) <= 0x20 || char === '<' || char === '>') {
@@ -147,7 +152,7 @@ export function renderInlineMarkdown(
       value = heading ? value.replace(/#/g, '\\#') : escapeBlockMarkers(value, lineStart)
     }
     let explicit = token.explicitLink
-    if (token.url && !(boundary && rightBoundary[index])) {
+    if (token.url && !(boundary && rightBoundary[index] && supportsBareAutolink(value))) {
       if (/^https?:\/\//i.test(value) && supportsUriAutolink(value)) {
         value = `<${value}>`
       } else {
