@@ -85,7 +85,10 @@ const JS_SOURCE_MAP_ARTIFACT_RE = /\.(?:c|m)?js\.map$/
 
 const NODE_BUILTINS = new Set([
   ...builtinModules,
-  ...builtinModules.map((moduleName) => `node:${moduleName}`)
+  ...builtinModules.map((moduleName) => `node:${moduleName}`),
+  // builtinModules omits prefix-only modules, so the browser-cookie imports of
+  // node:sqlite would otherwise read as a package the packager failed to copy.
+  'node:sqlite'
 ])
 
 function packageNameFromSpecifier(specifier) {
