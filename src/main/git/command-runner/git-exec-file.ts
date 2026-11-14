@@ -1,4 +1,5 @@
 import { withGitSpan } from '../../observability/instrumentation'
+import { createAbortError } from './process-capture/abort-error'
 import {
   resolveGitFetchHeadCommand,
   runWithGitFetchHeadLock
