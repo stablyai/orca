@@ -22632,6 +22632,16 @@
       "runsOn": "Runs on WSL: {{distro}} (Linux)"
     },
     "editor": {
+      "imageActions": {
+        "saveAs": "Save image as…",
+        "saved": "Image saved",
+        "copyPath": "Copy image path",
+        "copyLink": "Copy image link",
+        "pathCopied": "Image path copied",
+        "linkCopied": "Image link copied",
+        "failed": "Image action failed",
+        "label": "Image actions"
+      },
       "formatOnSave": {
         "failed": "Could not format {{file}}. Saving without formatting: {{reason}}"
       }

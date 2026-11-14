@@ -56,6 +56,7 @@ async function readRuntimeFileContentAsStored({
   terminalArtifactGrantId,
   expectedEnvironmentPairingRevision,
   pageOversizedBinary,
+  preferMediaUrl,
   wakeWslDistro
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   assertExternalSshReadOwnership(target, connectionId, expectedExternalSshTargetId)
@@ -67,7 +68,9 @@ async function readRuntimeFileContentAsStored({
       ...localAccess(connectionId, access),
       ...(wakeWslDistro && !connectionId ? { wakeWslDistro } : {}),
       // A viewer reads images and PDFs by URL; baseline checks keep base64.
-      ...(pageOversizedBinary && !connectionId ? { rangePreview: true } : {})
+      ...(pageOversizedBinary && preferMediaUrl !== false && !connectionId
+        ? { rangePreview: true }
+        : {})
     })
   }
   // Why: decided synchronously so ordinary reads pin their pairing without an extra await.
@@ -79,7 +82,8 @@ async function readRuntimeFileContentAsStored({
       relativePath,
       grantId: terminalArtifactGrantId,
       expectedEnvironmentPairingRevision,
-      pageOversizedBinary: pageOversizedBinary === true
+      pageOversizedBinary: pageOversizedBinary === true,
+      preferMediaUrl
     })
   }
   const address = workspaceOrScratchFileAddress(worktreeId, relativePath, filePath)
@@ -89,7 +93,7 @@ async function readRuntimeFileContentAsStored({
 
   return readRemoteFileContent(
     { target, worktree: address.worktreeSelector, relativePath: address.relativePath },
-    { pageOversizedBinary: pageOversizedBinary === true }
+    { pageOversizedBinary: pageOversizedBinary === true, preferMediaUrl }
   )
 }
 

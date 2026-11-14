@@ -2,6 +2,7 @@ import React from 'react'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import { ImageActions } from '@/components/editor/ImageActions'
 
 type ExpandableMarkdownImageProps = {
   src: string | undefined
@@ -54,7 +55,7 @@ export function ExpandableMarkdownImage({
   const label = alt?.trim() || t('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
 
   return (
-    <>
+    <ImageActions src={src} title={label} imageSource={dialogProps?.imageSource}>
       <button
         ref={triggerRef}
         style={triggerStyle}
@@ -97,6 +98,6 @@ export function ExpandableMarkdownImage({
         title={label}
         showTitle
       />
-    </>
+    </ImageActions>
   )
 }

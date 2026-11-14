@@ -8,6 +8,7 @@ import { useNativeChatHandOff } from '@/components/native-chat/pane/actions/use-
 import { cn } from '@/lib/class-names'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from '@/components/native-chat/appearance/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
+import { ImageActionsScope } from '@/components/editor/ImageActions'
 import { useRef, useState } from 'react'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from '@/components/native-chat/session/structured/use-structured-chat-live-session'
@@ -252,11 +253,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     hostNotice
   })
   const root = (
-    <div
+    <ImageActionsScope
+      enabled={props.isVisible}
       ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={controller.isWorking ? 'true' : 'false'}
-      tabIndex={-1}
       onPointerDownCapture={(event) => {
         paneCommands.onPointerDownCapture(event)
         rootInput.onPointerDownCapture(event)
@@ -406,7 +407,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       {paneCommands.menu}
       {handOff.dialog}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
-    </div>
+    </ImageActionsScope>
   )
   return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
 }

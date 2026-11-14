@@ -54,6 +54,7 @@ export type FileContent = {
   isStale?: boolean
   /** How the loader reached the file, so a binary custom editor can page its bytes from the same host. */
   byteSource?: RuntimeFileReadArgs
+  imageReadSource?: RuntimeFileReadArgs
 }
 
 export type DiffContent = GitDiffResult & {
