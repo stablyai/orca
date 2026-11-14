@@ -17,11 +17,12 @@ const { validatePluginFile, pluginManifestWarnings } = loadPluginSchemaModule(
 const { parsePluginManifest } = loadPluginSchemaModule('manifest/plugin-manifest.ts')
 // Why the CLI's main entry: `orca plugin validate` and `release-entry` run these same checks, and
 // the printed contentHash must be what Orca computes at install.
-const {
-  pluginCatalogReleaseForHead,
-  validateDeclaredPluginArtifacts,
-  validatePluginInstallContent
-} = loadPluginSchemaModule('../../main/plugins/plugin-authoring-checks.ts')
+const { pluginCatalogReleaseForHead } = loadPluginSchemaModule(
+  '../../main/plugins/catalog/plugin-catalog-release-entry.ts'
+)
+const { validateDeclaredPluginArtifacts, validatePluginInstallContent } = loadPluginSchemaModule(
+  '../../main/plugins/artifacts/plugin-artifact-validation.ts'
+)
 // Why shared: `orca plugin validate` runs these same strict artifact checks.
 const { strictPluginArtifactErrors, strictPluginArtifactWarnings } = loadPluginSchemaModule(
   'authoring/plugin-strict-artifact-checks.ts'

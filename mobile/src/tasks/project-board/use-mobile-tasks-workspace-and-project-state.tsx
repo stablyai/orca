@@ -10,7 +10,7 @@ import type {
   GitHubProjectSummary,
   GitHubProjectViewSummary
 } from './github-project-reference'
-import type { GitHubProjectIdentity as GitHubProjectRef } from '../../../../src/shared/github/project-identity'
+import type { GitHubProjectIdentity as GitHubProjectRef } from '../../../../src/shared/github/projects/project-identity'
 import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../src/shared/worktree/create-types'
 import type { WorkspaceAgentChoice } from '../../new-workspace/creation/workspace-agent-selection'

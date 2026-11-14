@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { SmartGitHubSubmitIntent } from '@/lib/work-items/github/smart-github-submit'
-import { isDefaultGitHubHost } from '../../../../shared/github/repository-identity-key'
+import { isDefaultGitHubHost } from '../../../../shared/github/repositories/repository-identity-key'
 
 export function getUnresolvedSmartGitHubSubmitMessage(
   intent: SmartGitHubSubmitIntent,

@@ -3,7 +3,7 @@ import type {
   GitHubPRRefreshSkippedReason,
   PRRefreshErrorType,
   PRRefreshOutcome
-} from '../../../../../shared/github/pull-request-refresh-types'
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import '../cache/cache-policy'
 
 export type PRRefreshState = {

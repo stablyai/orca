@@ -1,4 +1,5 @@
 /** Resolve the entrypoint within interpreter argv separately from recognizing which agent it names. */
+import { NODE_INTERPRETER_OPTIONS_WITH_VALUE } from '../../node-interpreter-options'
 
 const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 
@@ -16,13 +17,6 @@ const STATIC_INTERPRETER_PROCESS_NAMES = new Set([
 
 export const PYTHON_PROCESS_RE = /^python(?:\d+(?:\.\d+)*)?$/
 
-const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
-  '-r',
-  '--require',
-  '--import',
-  '--loader',
-  '--experimental-loader'
-])
 const INTERPRETER_OPTIONS_WITH_INLINE_SOURCE = new Set(['-e', '--eval', '-p', '--print', '--check'])
 
 export function isInterpreterProcessName(normalized: string): boolean {
@@ -102,7 +96,7 @@ export function findInterpreterEntrypointToken(
       if (INTERPRETER_OPTIONS_WITH_INLINE_SOURCE.has(name)) {
         return null
       }
-      if (INTERPRETER_OPTIONS_WITH_VALUE.has(name) && name === token) {
+      if (NODE_INTERPRETER_OPTIONS_WITH_VALUE.has(name) && name === token) {
         index += 1
       }
       continue

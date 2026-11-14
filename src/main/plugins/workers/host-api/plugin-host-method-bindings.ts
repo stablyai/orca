@@ -28,6 +28,8 @@ import { PLUGIN_WORKSPACE_ACTION_HANDLERS } from './plugin-host-workspace-method
 import { PLUGIN_TERMINAL_ACTION_HANDLERS } from './plugin-host-terminal-method-bindings'
 import { PLUGIN_WORKSPACE_CREATE_HANDLERS } from './plugin-host-workspace-create-bindings'
 import { PLUGIN_AUTOMATION_HANDLERS } from './plugin-host-automation-bindings'
+import { PLUGIN_AGENT_HISTORY_HANDLERS } from './plugin-host-agent-history-bindings'
+import { PLUGIN_PROJECT_VISIBILITY_HANDLERS } from './plugin-host-project-visibility-binding'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
 import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
@@ -73,6 +75,9 @@ export type PluginHostServices = {
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<PluginWorkspaceTerminal[]>
   listAgentStatuses(): readonly PluginAgentStatusRow[]
+  /** The title of the orchestration task each pane runs, by pane key (`tabId:leafId`); absent
+   *  where no runtime dispatches tasks. */
+  listAgentTaskTitles?(): ReadonlyMap<string, string>
   sendTerminalText(
     terminalId: string,
     action: { text: string; enter: boolean }
@@ -170,7 +175,9 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
       agents: projectPluginWorkspaceAgents(
         context.worktreeId,
         terminals,
-        services.listAgentStatuses()
+        services.listAgentStatuses(),
+        // Only read when the workspace has agents: it reads the orchestration database.
+        () => services.listAgentTaskTitles?.() ?? new Map()
       )
     }
   }),
@@ -252,9 +259,11 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   ...PLUGIN_PANEL_BRIDGE_HANDLERS,
   ...PLUGIN_STATUS_BAR_HANDLERS,
   ...PLUGIN_WORKSPACE_ACTION_HANDLERS,
+  ...PLUGIN_PROJECT_VISIBILITY_HANDLERS,
   ...PLUGIN_TERMINAL_ACTION_HANDLERS,
   ...PLUGIN_WORKSPACE_CREATE_HANDLERS,
-  ...PLUGIN_AUTOMATION_HANDLERS
+  ...PLUGIN_AUTOMATION_HANDLERS,
+  ...PLUGIN_AGENT_HISTORY_HANDLERS
 }
 
 function requireDesktop(services: PluginHostServices): PluginDesktopFrameServices {

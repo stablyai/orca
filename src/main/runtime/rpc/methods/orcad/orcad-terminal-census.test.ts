@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const collect = vi.hoisted(() => vi.fn())
-vi.mock('../../../../orcad/orcad-terminal-census', () => ({ collectOrcadTerminalCensus: collect }))
+vi.mock('../../../../orcad/diagnostics/orcad-terminal-census', () => ({
+  collectOrcadTerminalCensus: collect
+}))
 
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad-terminal-census'
 import { TerminalUpdateAdmission } from '../../../terminal/stop/terminal-update-admission'

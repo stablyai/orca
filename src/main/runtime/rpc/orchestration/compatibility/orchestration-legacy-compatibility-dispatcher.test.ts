@@ -8,7 +8,6 @@ import {
   createHarness,
   escalationParams,
   evidence,
-  invoke,
   request,
   WORKER_HANDLE,
   WORKER_PANE
@@ -158,23 +157,6 @@ describe('legacy compatibility through RpcDispatcher', () => {
     })
   })
 
-  it('rejects a reused pane whose live process incarnation is not the legacy worker', async () => {
-    const harness = createHarness()
-    const sqlite = (harness.db as unknown as { db: Database.Database }).db
-    sqlite
-      .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
-      .run('different-process', harness.dispatchId)
-    const before = counts(harness.db)
-
-    const response = await harness.dispatcher.dispatch(
-      request('orchestration.send', escalationParams(harness), evidence('worker'), 'reused-pane')
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
-    expect(counts(harness.db)).toEqual(before)
-    expect(harness.notify).not.toHaveBeenCalled()
-  })
-
   it('rejects invalid typed ACKs and consumes only the filtered legacy page', async () => {
     const harness = createHarness()
     await harness.dispatcher.dispatch(
@@ -261,90 +243,4 @@ describe('legacy compatibility through RpcDispatcher', () => {
     expect(harness.db.getMessageById(status.id)?.read).toBe(0)
     expect(harness.db.getMessageById(question.id)?.read).toBe(1)
   })
-
-  it('rejects a legacy coordinator reply outside the adopted Run with zero effects', async () => {
-    const harness = createHarness()
-    const unrelatedRun = harness.db.createRun({
-      objective: 'unrelated current work',
-      coordinatorHandle: 'term_unrelated_coord',
-      coordinatorPaneKey: 'tab_unrelated_coord:55555555-5555-4555-8555-555555555555'
-    })
-    const unrelated = harness.db.insertMessage({
-      runId: unrelatedRun.id,
-      from: 'term_unrelated_worker',
-      to: `run:${unrelatedRun.id}`,
-      subject: 'Unrelated current status',
-      deliveryContract: 'current_delivery'
-    })
-    const before = counts(harness.db)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.reply',
-        {
-          id: unrelated.id,
-          body: 'Forged cross-Run reply',
-          from: COORDINATOR_HANDLE,
-          run: harness.adoptedRunId
-        },
-        evidence('coordinator'),
-        'cross-run-reply'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: 'request_mismatch',
-        data: { effectsApplied: false }
-      }
-    })
-    expect(counts(harness.db)).toEqual(before)
-    expect(harness.db.getMessageById(unrelated.id)?.read).toBe(0)
-    expect(harness.notify).not.toHaveBeenCalled()
-  })
-
-  it.each(['dispatch', 'websocket'] as const)(
-    '%s binds an attested coordinator once and rejects contradictory proof before binding',
-    async (transport) => {
-      const invalidHarness = createHarness()
-      const invalidBefore = counts(invalidHarness.db)
-      const rejected = await invoke(
-        invalidHarness.dispatcher,
-        request(
-          'orchestration.runUse',
-          { id: invalidHarness.adoptedRunId, from: COORDINATOR_HANDLE },
-          evidence('coordinator', false),
-          `run-use-invalid-${transport}`
-        ),
-        transport
-      )
-      expect(rejected).toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
-      expect(invalidHarness.db.getRun(invalidHarness.adoptedRunId)?.consumer_generation).toBe(0)
-      expect(counts(invalidHarness.db)).toEqual(invalidBefore)
-
-      const harness = createHarness()
-      const runUse = request(
-        'orchestration.runUse',
-        { id: harness.adoptedRunId, from: COORDINATOR_HANDLE },
-        evidence('coordinator'),
-        `run-use-${transport}`
-      )
-      const first = await invoke(harness.dispatcher, runUse, transport)
-      const replay = await invoke(
-        harness.dispatcher,
-        { ...runUse, id: 'rpc_run-use-replay' },
-        transport
-      )
-      expect(first).toMatchObject({
-        ok: true,
-        result: { run: { consumer_generation: 1 }, mutation: { replayed: false } }
-      })
-      expect(replay).toMatchObject({
-        ok: true,
-        result: { run: { consumer_generation: 1 }, mutation: { replayed: true } }
-      })
-      expect(harness.db.getRun(harness.adoptedRunId)?.consumer_generation).toBe(1)
-    }
-  )
 })

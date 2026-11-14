@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
-import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/repositories/links'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getGitHubWorkItemRowHostId } from '@/store/github/work-items/work-item-routing'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 
 // Reuse the empty result to avoid allocating on every store write while the picker is closed.
 const NO_DUPLICATE_CANDIDATES: readonly GitHubWorkItem[] = []

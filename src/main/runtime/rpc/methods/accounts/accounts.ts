@@ -22,7 +22,7 @@ import {
   HostAccountSignInWaitParams,
   HostAccountSignInFlowParams,
   HostAccountSignInCodeParams
-} from '../../../../../shared/rpc-contract/accounts-params'
+} from '../../../../../shared/rpc-contract/accounts/accounts-params'
 import { HostAccountLaunchEnvParams } from '../../../../../shared/agent-launch/startup/host-account-launch-env'
 import { withTimeout } from '../../../../../shared/promise-timeout-fallback'
 

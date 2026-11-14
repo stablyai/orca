@@ -1,3 +1,4 @@
+import { browserInitializationReceiptStale } from './browser-initialization-presentation'
 import { buildWebSessionExistingTabIndex } from './placement/web-session-existing-tab-index'
 import { resolveWebSessionVisibleTabId } from './navigation/web-session-focus-intent'
 import { chooseTargetGroupId, buildHostGroupIdByTabId } from './tab-group-layout-tree'
@@ -57,23 +58,28 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
   const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
-  const readyBrowserTabs = reconcilesNonAgentTabs ? snapshot.tabs.filter(isReadyBrowserTab) : []
+  const reconcilesBrowserTabs =
+    reconcilesNonAgentTabs && !browserInitializationReceiptStale(snapshot)
+  const readyBrowserTabs = reconcilesBrowserTabs ? snapshot.tabs.filter(isReadyBrowserTab) : []
   const nextRemoteBrowserPageIds = new Set(readyBrowserTabs.map((tab) => tab.browserPageId))
-  const mirroredBrowserTabs = buildMirroredBrowserTabs(
-    snapshot,
-    environmentId,
-    state,
-    hostGroupIdByTabId,
-    targetGroupId,
-    mirroredTerminalTabEntries.length,
-    now
-  )
+  const mirroredBrowserTabs = reconcilesBrowserTabs
+    ? buildMirroredBrowserTabs(
+        snapshot,
+        environmentId,
+        state,
+        hostGroupIdByTabId,
+        targetGroupId,
+        mirroredTerminalTabEntries.length,
+        now,
+        base.options?.reconcileBrowserPage
+      )
+    : []
   const mirroredBrowserWorkspaceIds = new Set(
     mirroredBrowserTabs.map((entry) => entry.workspace.id)
   )
   const currentBrowserTabs = state.browserTabsByWorktree[worktreeId] ?? []
   const removedBrowserWorkspaceIds = new Set(
-    (reconcilesNonAgentTabs ? currentBrowserTabs : [])
+    (reconcilesBrowserTabs ? currentBrowserTabs : [])
       .filter((tab) => {
         if (mirroredBrowserWorkspaceIds.has(tab.id)) {
           return true

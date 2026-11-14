@@ -1,5 +1,5 @@
 import { defineMethod, type RpcContext } from '../../core'
-import { saveClipboardImageBufferAsTempFile } from '../../../../window/clipboard-image-temp-file'
+import { saveClipboardImageBufferAsTempFile } from '../../../../window/clipboard/clipboard-image-temp-file'
 import { randomUUID } from 'node:crypto'
 import { recordMobileClipboardImagePath } from '../../clipboard/mobile-clipboard-image-provenance'
 import {
@@ -8,7 +8,7 @@ import {
   CommitImageUpload,
   SaveImageAsTempFile,
   StartImageUpload
-} from '../../../../../shared/rpc-contract/clipboard-params'
+} from '../../../../../shared/rpc-contract/clipboard/clipboard-params'
 import { decodeClipboardImageUpload } from './clipboard-image-upload-decoding'
 export const CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT = 8
 const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000

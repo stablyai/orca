@@ -1,7 +1,7 @@
 /* eslint-disable no-control-regex -- ANSI SGR sequences are raw PTY input. */
 /** Share chunk carry and dedupe across main’s local/SSH fact scan and renderer remote-runtime/kill-switch byte scans. */
 
-import { type RepoSlug, parseGitHubIssueOrPRLink } from '../../github/links'
+import { type RepoSlug, parseGitHubIssueOrPRLink } from '../../github/repositories/links'
 
 const GITHUB_PR_PATH_MARKER = '/pull/'
 const TERMINAL_SGR_PATTERN = /\x1b\[[0-?]*[ -/]*m/g

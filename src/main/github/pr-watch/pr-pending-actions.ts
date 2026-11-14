@@ -1,3 +1,4 @@
+import type { JournalWriterCommit } from '../../native-chat/agent-session-journal/journal-writer-changes'
 // A finished call's PR obligations, saved in the transaction that commits the call, so a crash
 // between the call and its verification loses nothing and nothing older is ever replayed.
 
@@ -55,10 +56,12 @@ function liveItemWrites(rows: readonly JournalRow[]): ItemWrite[] {
 }
 
 /** A committed batch that finished a call, so it may have captured work to resume. */
-export function finishesPRActionCall(rows: readonly JournalRow[]): boolean {
-  return liveItemWrites(rows).some(
-    ({ body }) =>
-      body.kind === 'tool-call' && (body.state === 'completed' || body.state === 'failed')
+export function finishesPRActionCall(commit: JournalWriterCommit | undefined): boolean {
+  return (
+    commit?.publication?.items.some(
+      ({ body }) =>
+        body.kind === 'tool-call' && (body.state === 'completed' || body.state === 'failed')
+    ) === true
   )
 }
 
@@ -95,34 +98,47 @@ export function capturePRPendingActions(
     if (rows.some((row) => row.kind === 'epoch')) {
       return
     }
-    const insert = db.prepare(
-      `INSERT OR IGNORE INTO pr_pending_actions (chat_id, anchor_item_id, anchor_revision,
-        evidence_json, finished_at, resolve_deadline_at, verify_deadline_at, next_attempt_at,
-        attempts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
-    )
     for (const row of liveItemWrites(rows)) {
-      const before = previous(row.itemId)
-      if (
-        before?.kind === 'tool-call' &&
-        (before.state === 'completed' || before.state === 'failed')
-      ) {
-        continue
-      }
-      const obligations = obligationsOf(sessionId, row, committedAt)
-      if (obligations.length === 0 || hasPRChatActionFrom(db, sessionId, row.itemId)) {
-        continue
-      }
-      insert.run(
-        sessionId,
-        row.itemId,
-        row.revision,
-        JSON.stringify(obligations),
-        committedAt,
-        committedAt + PR_ACTION_RESOLVE_WINDOW_MS,
-        committedAt + PR_ACTION_VERIFY_WINDOW_MS,
-        committedAt
-      )
+      capturePRPendingAction(db, sessionId, row, committedAt, previous(row.itemId))
     }
+  } catch (error) {
+    console.warn('[pr-watch] capturing a pull request action failed', error)
+  }
+}
+
+/** Row-local capture runs in the live item's savepoint, never during history installation. */
+export function capturePRPendingAction(
+  db: Database.Database,
+  sessionId: string,
+  item: ItemWrite,
+  committedAt: number,
+  previous: AgentJournalItemBody | undefined
+): void {
+  if (
+    item.body.kind !== 'tool-call' ||
+    (item.body.state !== 'completed' && item.body.state !== 'failed') ||
+    (previous?.kind === 'tool-call' &&
+      (previous.state === 'completed' || previous.state === 'failed'))
+  ) {
+    return
+  }
+  try {
+    const obligations = obligationsOf(sessionId, item, committedAt)
+    if (obligations.length === 0 || hasPRChatActionFrom(db, sessionId, item.itemId)) {
+      return
+    }
+    db.prepare(`INSERT OR IGNORE INTO pr_pending_actions (chat_id, anchor_item_id,
+      anchor_revision, evidence_json, finished_at, resolve_deadline_at, verify_deadline_at,
+      next_attempt_at, attempts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`).run(
+      sessionId,
+      item.itemId,
+      item.revision,
+      JSON.stringify(obligations),
+      committedAt,
+      committedAt + PR_ACTION_RESOLVE_WINDOW_MS,
+      committedAt + PR_ACTION_VERIFY_WINDOW_MS,
+      committedAt
+    )
   } catch (error) {
     console.warn('[pr-watch] capturing a pull request action failed', error)
   }

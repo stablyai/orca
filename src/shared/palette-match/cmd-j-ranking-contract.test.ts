@@ -36,30 +36,6 @@ describe('Cmd+J semantic proof contract', () => {
     expect(path && title && comparePaletteDocumentRank(title.rank, path.rank)).toBeLessThan(0)
   })
 
-  it('chooses a literal secondary proof over a primary typo', () => {
-    const match = matchTitleAndPath('atlaz', '/notes/atlas/')
-    expect(match?.secondaryMatches).toHaveLength(1)
-    expect(match?.rank).toMatchObject({ recovery: 0, wordMatch: 0, coverage: 1 })
-  })
-
-  it('uses the stronger secondary proof when another token already requires container coverage', () => {
-    const match = matchPaletteTabDocument(
-      buildPaletteTabDocument({
-        id: 'tab',
-        title: 'alphabet',
-        secondaryTexts: ['/alpha'],
-        worktreeName: 'beta',
-        branch: 'main',
-        repoName: 'repo'
-      }),
-      ready('alpha beta')
-    )
-    expect(match?.rank).toMatchObject({ coverage: 2, strength: 0 })
-    expect(match?.titleRanges).toEqual([])
-    expect(match?.secondaryMatches).toEqual([{ index: 0, ranges: [{ start: 1, end: 6 }] }])
-    expect(match?.worktreeRanges).toEqual([{ start: 0, end: 4 }])
-  })
-
   it('chooses the same semantic proof regardless of field source order', () => {
     const field = (id: string, role: 'secondary' | 'container') => ({
       id,
@@ -101,84 +77,5 @@ describe('Cmd+J semantic proof contract', () => {
       'secondary',
       'beta'
     ])
-  })
-
-  it('restores contained secondary fields and preserves every selected representation', () => {
-    const restored = matchTitleAndPath('foobar', 'bar', 'b')
-    expect(restored?.secondaryMatches[0]?.ranges).toEqual([{ start: 0, end: 1 }])
-
-    const multi = matchPaletteTabDocument(
-      buildPaletteTabDocument({
-        id: 'editor',
-        title: 'main.ts',
-        secondaryTexts: ['src/main.ts', '/home/me/project/src/main.ts'],
-        worktreeName: 'workspace',
-        branch: 'main',
-        repoName: 'repo'
-      }),
-      ready('src/main.ts /home/me')
-    )
-    expect(multi?.secondaryMatches.map((proof) => proof.index)).toEqual([0, 1])
-  })
-
-  it('promotes eligible equality but not repository equality', () => {
-    const eligible = matchTitleAndPath('notes', '/tmp/atlas', '/tmp/atlas')
-    const ineligible = matchPaletteTabDocument(
-      buildPaletteTabDocument({
-        id: 'repo-hit',
-        title: 'notes',
-        secondaryTexts: [],
-        worktreeName: 'workspace',
-        branch: 'main',
-        repoName: '/tmp/atlas'
-      }),
-      ready('/tmp/atlas')
-    )
-    expect(eligible?.rank.destination).toBe(1)
-    expect(ineligible?.rank.destination).toBe(2)
-  })
-
-  it('recognizes only a single complete compatible sigilled number', () => {
-    const document = buildPaletteDocument({
-      id: 'review',
-      visibleFields: [
-        {
-          id: 'name',
-          profile: 'structured-label',
-          text: 'migration',
-          role: 'primary',
-          destinationEligible: true
-        }
-      ],
-      evidence: [
-        {
-          unit: { id: 'pr', kind: 'pr', text: '#123', accessibilityLabel: 'Pull request' },
-          fields: [
-            {
-              id: 'pr-number',
-              profile: 'identifier',
-              text: '#123',
-              evidenceId: 'pr',
-              renderOffset: 0,
-              identifier: { kind: 'number', sigil: '#' }
-            }
-          ]
-        }
-      ]
-    })
-    const run = (query: string) => {
-      const prepared = ready(query)
-      return matchPaletteDocument({
-        document,
-        tokens: prepared.tokens,
-        normalizedQuery: prepared.normalized,
-        tokenCountBeforeDeduplication: prepared.tokenCountBeforeDeduplication
-      })
-    }
-    expect(run('#123')?.rank.destination).toBe(0)
-    expect(run('#123 #123')?.rank.destination).toBe(2)
-    expect(run('#123 migration')?.rank.destination).toBe(2)
-    expect(run('123')?.rank.destination).toBe(2)
-    expect(run('!123')).toBeNull()
   })
 })

@@ -1,5 +1,5 @@
 import type { PluginWorkerFactory } from './workers/worker-supervision/plugin-worker-startup'
-import type { KeybindingOverrides } from '../../shared/keybindings'
+import type { KeybindingOverrides } from '../../shared/keybindings/types'
 import type { PluginKillListEntry } from '../../shared/plugins/catalog/plugin-kill-list'
 import type { PluginDesktopFrameServices } from './workers/host-api/plugin-host-method-bindings'
 import type { PluginStatusBarState } from './status-bar/plugin-status-bar-state'

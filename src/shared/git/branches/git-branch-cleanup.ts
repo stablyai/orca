@@ -178,33 +178,63 @@ async function computeStablePatchId(
   )
 }
 
+function sortedFileSet(lines: string[]): string {
+  return lines
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort()
+    .join('\n')
+}
+
+/** Patch IDs hash file names, so only commits touching exactly the branch's files can match; null past the scan limit. */
+async function listSquashCandidateCommits(
+  runGit: GitBranchCleanupExec,
+  targetOid: string,
+  mergeBase: string,
+  branchChangedFiles: string
+): Promise<string[] | null> {
+  const listing = await readOptionalGitStdout(runGit, [
+    'log',
+    '--no-show-signature',
+    '--format=%x00%H %P',
+    '--name-only',
+    '--no-renames',
+    '--ancestry-path',
+    `--max-count=${SQUASH_PATCH_SCAN_LIMIT + 1}`,
+    `${mergeBase}..${targetOid}`
+  ])
+  const entries = listing?.split('\0').filter((entry) => entry.trim()) ?? []
+  if (entries.length === 0 || entries.length > SQUASH_PATCH_SCAN_LIMIT) {
+    return null
+  }
+  const branchFiles = sortedFileSet(branchChangedFiles.split(/\r?\n/))
+  return entries.flatMap((entry) => {
+    const [header = '', ...files] = entry.split(/\r?\n/)
+    const [commitOid, ...parents] = header.trim().split(' ')
+    // `log` lists no files for merges, so they stay candidates.
+    return commitOid && (parents.length > 1 || sortedFileSet(files) === branchFiles)
+      ? [commitOid]
+      : []
+  })
+}
+
 async function branchNetPatchMatchesTargetSquashCommit(
   runGit: GitBranchCleanupExec,
   targetOid: string,
   branchRef: string,
   mergeBase: string,
+  branchChangedFiles: string,
   capabilities: GitCapabilityCache
 ): Promise<boolean> {
+  const commits = await listSquashCandidateCommits(runGit, targetOid, mergeBase, branchChangedFiles)
+  if (!commits?.length) {
+    return false
+  }
   const branchPatchId = await computeStablePatchId(
     runGit,
     await readOptionalGitRawStdout(runGit, ['diff', mergeBase, branchRef])
   )
   if (!branchPatchId) {
-    return false
-  }
-
-  const commits = (
-    await readOptionalGitStdout(runGit, [
-      'rev-list',
-      '--ancestry-path',
-      `--max-count=${SQUASH_PATCH_SCAN_LIMIT + 1}`,
-      `${mergeBase}..${targetOid}`
-    ])
-  )
-    ?.split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-  if (!commits?.length || commits.length > SQUASH_PATCH_SCAN_LIMIT) {
     return false
   }
 
@@ -246,6 +276,7 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
     const branchChanges = await readOptionalGitRawStdout(runGit, [
       'diff',
       '--name-only',
+      '--no-renames',
       mergeBase,
       branchRef
     ])
@@ -267,6 +298,7 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
           targetOid,
           branchRef,
           mergeBase,
+          branchChanges ?? '',
           capabilities
         )
       ) {

@@ -1,6 +1,6 @@
 import type { OptionalProjectItemField } from './project-view-cache'
-import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
+import type { GitHubProjectViewError } from '../../../shared/github/projects/project-result-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
 
 export type GhGraphqlError = {
   type?: string

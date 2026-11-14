@@ -10,6 +10,7 @@ import { configureBrowserExtensionProfileDataDirectory } from '../extensions/pro
 import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
+import { listenForBrowserSystemDialogs } from '../guest-lifecycle/prompts/browser-system-dialogs'
 
 let initialized = false
 
@@ -22,6 +23,7 @@ export function initializeBrowserSessionsForApp(
     return
   }
   listenForBrowserPasskeyRequests()
+  listenForBrowserSystemDialogs()
 
   if (activeProfile) {
     browserSessionRegistry.configureForOrcaProfile(activeProfile)

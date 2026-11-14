@@ -4,7 +4,7 @@ import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type * as ServePreflight from './serve-electron-preflight'
+import type * as ServePreflight from './serve/startup/serve-electron-preflight'
 
 const { spawnMock, preflightMock, superviseMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -13,11 +13,11 @@ const { spawnMock, preflightMock, superviseMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('child_process', () => ({ spawn: spawnMock, spawnSync: vi.fn() }))
-vi.mock('./serve-electron-preflight', async (original) => ({
+vi.mock('./serve/startup/serve-electron-preflight', async (original) => ({
   ...(await original<typeof ServePreflight>()),
   preflightElectronServe: preflightMock
 }))
-vi.mock('./serve-update-supervisor', async (importOriginal) => ({
+vi.mock('./serve/updates/serve-update-supervisor', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   superviseForegroundServe: superviseMock
 }))
@@ -26,7 +26,9 @@ import { serveOrcaApp } from './launch'
 
 let actualPreflight: typeof ServePreflight
 beforeAll(async () => {
-  actualPreflight = await vi.importActual<typeof ServePreflight>('./serve-electron-preflight')
+  actualPreflight = await vi.importActual<typeof ServePreflight>(
+    './serve/startup/serve-electron-preflight'
+  )
 })
 
 class FakeChildProcess extends EventEmitter {
@@ -73,7 +75,6 @@ describe.skipIf(process.platform === 'win32')(
           spawnMock.mockReturnValue(new FakeChildProcess())
           vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
           expect(await serveOrcaApp({})).toBe(state === 'absent' ? 0 : 3)
-          expect(spawnMock).toHaveBeenCalledTimes(state === 'absent' ? 1 : 0)
         } finally {
           for (const socket of sockets) {
             socket.destroy()

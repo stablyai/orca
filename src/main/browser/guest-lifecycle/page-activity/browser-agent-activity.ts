@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
-import { isResourceWindowVisible } from '../../../window/resource-view-admission'
+import { isResourceWindowVisible } from '../../../window/visibility/resource-view-admission'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
 import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
 import {
@@ -171,6 +171,10 @@ export class BrowserAgentActivity {
 
   isActive(browserPageId: string): boolean {
     return this.pages.has(browserPageId)
+  }
+
+  activePageIds(): IterableIterator<string> {
+    return this.pages.keys()
   }
 
   end(browserPageId: string): void {

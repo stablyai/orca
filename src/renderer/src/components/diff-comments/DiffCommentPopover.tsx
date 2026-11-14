@@ -9,7 +9,7 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { useTranslate } from '@/i18n/use-translate'
-import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
+import { installOpenDraftAddReviewNoteGuard } from '../editor/commands/editor-shortcuts'
 import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 
 // Why: a DOM sibling overlay rather than a Monaco content widget, so it can own a React auto-resizing textarea.

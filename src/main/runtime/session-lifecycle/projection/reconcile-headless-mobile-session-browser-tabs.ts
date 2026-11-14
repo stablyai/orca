@@ -21,7 +21,7 @@ import { sshRemotePtyLeaseAllowsReattach } from '../../../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { SSH_PANE_RECOVERY_GRACE_MS } from '../../terminal/recovery/ssh-pane-recovery-window'
-import { findTerminalTabIdForLeaf } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import { findTerminalTabIdForLeaf } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import { isServeMintedPtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession {

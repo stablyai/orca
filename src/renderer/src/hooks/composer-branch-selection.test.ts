@@ -9,6 +9,21 @@ import {
 } from './composer-branch-selection'
 
 describe('resolveComposerBranchSelection', () => {
+  it('completes a remote-qualified typed prefix while retaining the canonical base', () => {
+    expect(
+      resolveComposerBranchSelection({
+        refName: 'refs/remotes/origin/feature/topic',
+        localBranchName: 'feature/topic',
+        currentName: 'origin/fea',
+        lastAutoName: ''
+      })
+    ).toMatchObject({
+      baseBranch: 'refs/remotes/origin/feature/topic',
+      branchNameOverride: 'feature/topic',
+      name: 'feature/topic'
+    })
+  })
+
   it('keeps selected remote ref as base while using the local branch name for create', () => {
     expect(
       resolveComposerBranchSelection({

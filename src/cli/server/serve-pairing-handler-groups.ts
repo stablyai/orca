@@ -1,4 +1,4 @@
-import type { HandlerGroup } from '../handler-group-manifest'
+import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 // Split from handler-group-manifest.ts to keep it under the max-lines limit.
 export const SERVE_PAIRING_HANDLER_GROUPS: readonly HandlerGroup[] = [

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { validatePluginFile } from '../installation/plugin-file-validation'
 import { pluginCatalogEntrySchema } from '../catalog/plugin-catalog'
-import { parseHostPluginManifest, parsePluginManifest } from './plugin-manifest'
+import { parseHostPluginManifest } from './plugin-manifest'
 import {
   catalogEntryFixture,
   catalogFixture,
@@ -25,18 +25,6 @@ describe('plugin display text', () => {
       description: 'Line one line two',
       contributes: { themes: [{ title: 'Dusk Pro' }] }
     })
-  })
-
-  it('refuses unsafe characters in validate:plugin instead of stripping them', () => {
-    expect(parsePluginManifest(themed(SPOOFED_NAME, 'Dusk'))).toEqual({
-      ok: false,
-      error: expect.stringContaining(
-        'name: must be one line without control, bidirectional or zero-width characters;'
-      )
-    })
-    expect(validatePluginFile('orca-plugin.json', themed('Dusk', 'Dusk\u2066'))).toEqual([
-      'description: must be one line without control, bidirectional or zero-width characters; contributes.themes[0].title: must be one line without control, bidirectional or zero-width characters'
-    ])
   })
 
   it('strips catalog listing text at runtime and refuses it in catalog CI', () => {

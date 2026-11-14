@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../shared/github/cache/github-cache-key'
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { buildWorktreeChecksReviewIndex } from './worktree-checks-review-index'
 

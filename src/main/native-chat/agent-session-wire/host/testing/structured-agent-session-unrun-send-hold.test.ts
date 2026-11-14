@@ -6,18 +6,18 @@ import { createQueuedMessageTestRig } from './structured-agent-session-queued-me
 
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 
 const words = (kind: 'hostRestarted' | 'chatClosed' | 'cancelled') =>
   agentSessionFailureWords(agentSessionFailureFact(kind), { surface: 'rejection' })
 const KEPT = { state: 'waiting' }
 
-function derivedPauses(): string[] {
+async function derivedPauses(): Promise<string[]> {
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   if (!journal) {
     throw new Error('expected the conversation open')
   }
-  return structuredQueuePauses(journal).map((pause) => pause.reason)
+  return (await structuredQueuePauses(journal)).map((pause) => pause.reason)
 }
 
 let rig: QueuedMessageTestRig
@@ -58,9 +58,12 @@ describe('a message held behind a start that never answered, then the chat ends'
     })
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
     const [card] =
-      rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.queuedMessages.list() ?? []
+      (await rig.host
+        .collaboratorsForTests()
+        .sessions.get(SESSION)
+        ?.journal.queuedMessages.list()) ?? []
     expect(card).toMatchObject({ holdReason: null })
-    expect(derivedPauses()).toEqual(['restarted'])
+    expect(await derivedPauses()).toEqual(['restarted'])
     expect(await rig.restartOffers()).toEqual([])
   })
 
@@ -77,7 +80,7 @@ describe('a message held behind a start that never answered, then the chat ends'
         keptAsQueuedMessageId: id
       })
       expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
-      expect(derivedPauses()).toEqual(['restarted'])
+      expect(await derivedPauses()).toEqual(['restarted'])
     }
   )
 

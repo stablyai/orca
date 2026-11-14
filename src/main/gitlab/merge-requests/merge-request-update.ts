@@ -11,7 +11,7 @@ import { stripGitLabDraftTitlePrefix } from './merge-request-draft-title'
 import { withProjectRef } from './merge-request-project-resolution'
 import { tryMarkMRReady } from './merge-request-ready'
 import { codeHostFailure, classifiedFailure } from '../../../shared/code-host-failure-copy'
-import { invalidateReviewLookupsAfterPRMutation } from '../../github/pr-mutation-review-invalidation'
+import { invalidateReviewLookupsAfterPRMutation } from '../../github/pull-requests/refresh/pr-mutation-review-invalidation'
 
 export async function updateMR(
   repoPath: string,

@@ -3,8 +3,8 @@ import type {
   AgentJournalAgentStartItem
 } from '../../../../shared/agent-session/journal/agent-journal-creation-facts'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readJournalSessionEpoch } from '../../agent-session-journal/durable-rows/journal-row-table'
+import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
+import { estimateStructuredAgentSessionItemBytes } from '../journal-ingress/structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -30,12 +30,24 @@ export function structuredAgentStartJournal(
   conversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession>
 ) {
   /** Record only in this transcript; opening at rest neither follows clears nor starts its agent. */
-  const captureAgentStartDestination = (sessionId: string): AgentStartDestination | null => {
+  const captureAgentStartDestination = (
+    sessionId: string
+  ): Promise<AgentStartDestination | null> | null => {
     const record = deps().store.getConversation(sessionId)
-    const epoch = readJournalSessionEpoch(deps().journalDatabase.db, sessionId)
-    return record && epoch
-      ? { sessionId, epoch, contextId: record.providerContextBoundary?.operationId ?? null }
-      : null
+    if (!record) {
+      return null
+    }
+    const contextId = record.providerContextBoundary?.operationId ?? null
+    return deps()
+      .journalDatabase.sessionEpoch(sessionId)
+      .then((epoch) => {
+        const current = deps().store.getConversation(sessionId)
+        return epoch &&
+          current &&
+          (current.providerContextBoundary?.operationId ?? null) === contextId
+          ? { sessionId, epoch, contextId }
+          : null
+      })
   }
 
   const appendAgentStart = async (
@@ -45,8 +57,11 @@ export function structuredAgentStartJournal(
   ): Promise<void> => {
     const { sessionId } = destination
     const stillSameContext = () => {
-      const current = captureAgentStartDestination(sessionId)
-      return current?.epoch === destination.epoch && current?.contextId === destination.contextId
+      const current = deps().store.getConversation(sessionId)
+      return (
+        current !== null &&
+        (current.providerContextBoundary?.operationId ?? null) === destination.contextId
+      )
     }
     if (!stillSameContext()) {
       return
@@ -56,19 +71,26 @@ export function structuredAgentStartJournal(
       provider: 'orca' as const,
       clientMessageId: agentStartClientMessageId(body)
     }
-    await journal.appendResolvedItem(
-      () => {
-        if (!stillSameContext() || journal.hasRecordedItem(agentJournalItemKey(identity))) {
-          return null
+    const result = await journal.appendSteps(
+      [
+        {
+          kind: 'creation-fact',
+          epoch: destination.epoch,
+          identity,
+          body,
+          reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body),
+          options: {
+            fence: deps().store.getConversation(sessionId)?.currentFence ?? 0,
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+            observedAt
+          }
         }
-        return { identity, body }
-      },
-      {
-        fence: deps().store.getConversation(sessionId)?.currentFence ?? 0,
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE,
-        observedAt
-      }
+      ],
+      stillSameContext
     )
+    if (result.failure) {
+      throw restoreJournalSqlFailure(result.failure)
+    }
   }
 
   return { captureAgentStartDestination, appendAgentStart }

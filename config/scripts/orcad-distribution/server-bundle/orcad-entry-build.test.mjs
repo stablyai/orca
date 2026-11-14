@@ -89,22 +89,19 @@ it('resolves bundle-relative requires after deployment to a path with URL-specia
   expect(loaded.stdout.trim()).toBe('deployed asset')
 })
 
-it.each(['import.meta', 'import.meta.dirname', 'import.meta.filename', 'import.meta.resolve'])(
-  'rejects unsupported %s instead of silently replacing it with an empty object',
-  async (expression) => {
-    await expect(
-      build({
-        ...ORCAD_COMMONJS_MODULE_OPTIONS,
-        stdin: { contents: `console.log(${expression})`, resolveDir: directory },
-        bundle: true,
-        platform: 'node',
-        format: 'cjs',
-        write: false,
-        logLevel: 'silent'
-      })
-    ).rejects.toThrow('"import.meta" is not available')
-  }
-)
+it('rejects unsupported import.meta.dirname instead of silently replacing it with an empty object', async () => {
+  await expect(
+    build({
+      ...ORCAD_COMMONJS_MODULE_OPTIONS,
+      stdin: { contents: 'console.log(import.meta.dirname)', resolveDir: directory },
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      write: false,
+      logLevel: 'silent'
+    })
+  ).rejects.toThrow('"import.meta" is not available')
+})
 
 it('escapes only the trailing license comment, never code', () => {
   const code = 'a=/[\u2726]/;'

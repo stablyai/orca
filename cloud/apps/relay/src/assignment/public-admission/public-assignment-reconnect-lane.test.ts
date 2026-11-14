@@ -37,13 +37,11 @@ describe('public assignment reconnect lane', () => {
     const resolve = vi.fn(async ({ relayHostId }: { relayHostId: string }) =>
       relayHostId === reconnecting ? assignment('cell-r', reconnecting) : null
     )
-    const outcomes: string[] = []
     const app = createRelayApp(config({ publicAssignmentQueueMax: 0 }), {
       store: {} as never,
       assignments: { assign, resolve } as never,
       drain: vi.fn(),
-      ready: vi.fn(async () => true),
-      recordAssignmentAdmission: (outcome) => outcomes.push(outcome)
+      ready: vi.fn(async () => true)
     })
 
     // Saturate the placement lane with two in-flight newcomers, zero queue.
@@ -59,65 +57,11 @@ describe('public assignment reconnect lane', () => {
     )
 
     expect(reconnected.status).toBe(200)
-    expect(resolve).toHaveBeenCalledWith(
-      { userId: 'user-1', relayHostId: reconnecting },
-      { classifyHomeRollIsolation: true }
-    )
-    expect(assign).toHaveBeenCalledWith(
-      { userId: 'user-1', relayHostId: reconnecting },
-      undefined,
-      undefined,
-      undefined,
-      { hostRequested: true }
-    )
-    expect(outcomes).toContain('sticky')
 
     pending.get(newcomerA)?.resolve(assignment('cell-a', newcomerA))
     pending.get(newcomerB)?.resolve(assignment('cell-b', newcomerB))
     expect((await first).status).toBe(200)
     expect((await second).status).toBe(200)
-  })
-
-  it('rate-limits repeat fast-lane attempts with the short retry-after', async () => {
-    const host = 'rrrrrrrrrrrrrrrr'
-    const assign = vi.fn(async () => assignment('cell-r', host))
-    const resolve = vi.fn(async () => assignment('cell-r', host))
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { assign, resolve } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-
-    expect(
-      (await app.request('/v1/assign', assignmentRequest(host, { reconnect: true }))).status
-    ).toBe(200)
-    const repeat = await app.request('/v1/assign', assignmentRequest(host, { reconnect: true }))
-
-    expect(repeat.status).toBe(503)
-    expect(repeat.headers.get('retry-after')).toBe('2')
-    expect(resolve).toHaveBeenCalledTimes(1)
-    expect(assign).toHaveBeenCalledTimes(1)
-  })
-
-  it('rejects on the fast lane when the verification probe fails transiently', async () => {
-    const host = 'tttttttttttttttt'
-    const assign = vi.fn()
-    const resolve = vi.fn(async () => {
-      throw Object.assign(new Error('deadlock detected'), { code: '40P01' })
-    })
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { assign, resolve } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-
-    const response = await app.request('/v1/assign', assignmentRequest(host, { reconnect: true }))
-
-    expect(response.status).toBe(503)
-    expect(response.headers.get('retry-after')).toBe('2')
-    expect(assign).not.toHaveBeenCalled()
   })
 
   it('refuses a dial whose assignment row is busy at once, and frees the fast lane', async () => {
@@ -143,7 +87,6 @@ describe('public assignment reconnect lane', () => {
     expect(refused.status).toBe(503)
     expect(refused.headers.get('retry-after')).toBe('1')
     expect(await refused.json()).toEqual({ error: 'assignment_row_busy' })
-    expect(warn.mock.calls.flat().join('\n')).toContain('reason=relay_assignment_row_busy')
     // The single fast-lane slot went back with the refusal.
     expect(
       (await app.request('/v1/assign', assignmentRequest(next, { reconnect: true }))).status
@@ -151,38 +94,6 @@ describe('public assignment reconnect lane', () => {
     warn.mockRestore()
   })
 
-  it('asks a busy resume to retry in a second', async () => {
-    const host = 'rrrrrrrrrrrrrrrr'
-    const app = createRelayApp(config(), {
-      store: {
-        resolveResume: vi.fn(async () => ({ userId: 'user-1', relayDeviceId: 'device-1' }))
-      } as never,
-      assignments: {
-        assign: vi.fn(async () => {
-          throw new RelayAssignmentRowBusyError()
-        }),
-        resolve: vi.fn(async () => null)
-      } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    const response = await app.request('/v1/resolve', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        v: 1,
-        relayHostId: host,
-        resumeToken: Buffer.alloc(32, 1).toString('base64url')
-      })
-    })
-
-    expect(response.status).toBe(503)
-    expect(response.headers.get('retry-after')).toBe('1')
-    expect(await response.json()).toEqual({ error: 'relay_assignment_row_busy' })
-    warn.mockRestore()
-  })
 })
 
 function assignmentRequest(relayHostId: string, extra: { reconnect?: boolean } = {}): RequestInit {

@@ -356,8 +356,7 @@
       "pausedState": "已暂停",
       "queuedState": "已排队",
       "resume": "继续",
-      "resumeSending": "继续发送排队的消息",
-      "title": "排队的消息"
+      "resumeSending": "继续发送排队的消息"
     },
     "offlineQueue": {
       "failed": "无法发送 — 点按“发送”重试",
@@ -1590,7 +1589,6 @@
       "deleteConfirmMessage": "要删除“{{name}}”（{{branch}}）吗？",
       "deleteDestroysEnvironment": "这也会销毁 Orca 为其创建的环境“{{environment}}”，包括其中未提交的更改和正在运行的终端。",
       "deleteKeepsEnvironment": "Orca 为其创建的环境“{{environment}}”会继续运行：其配方没有销毁步骤。",
-      "deleteWorktree": "删除工作树",
       "pin": "固定",
       "primaryWorktreeDeleteHint": "主工作树不能删除。请改为移除项目",
       "removeHost": "移除主机",
@@ -1762,7 +1760,6 @@
       "daysAgo_one": "{{count}} 天前",
       "daysAgo_other": "{{count}} 天前",
       "deleteConfirmMessage": "这将永久删除 GitHub 上的这条评论",
-      "deleteConfirmTitle": "删除评论？",
       "editPlaceholder": "编辑评论…",
       "hoursAgo_one": "{{count}} 小时前",
       "hoursAgo_other": "{{count}} 小时前",
@@ -2323,20 +2320,16 @@
       "loadFailed": "无法加载 PR"
     },
     "queuedCardText": {
-      "showLess": "收起",
       "showLessHint": "收起消息的部分内容",
-      "showMore": "显示更多",
       "showMoreHint": "显示完整消息"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "删除队列中的这条消息",
       "images_one": "{{count}} 张图片",
       "images_other": "{{count}} 张图片",
       "moreActions": "更多操作",
       "send": "发送",
       "sendAgainHint": "再次发送此消息",
       "sendHint": "发送此消息",
-      "showLessHint": "收起消息的部分内容",
       "steer": "立即发送",
       "steerHint": "提交且不中断模型"
     },
@@ -2393,7 +2386,6 @@
       "addTitle": "添加快捷命令",
       "chooseAgentTitle": "选择智能体",
       "deleteConfirmMessage": "该快捷命令将从您保存的列表中删除",
-      "deleteConfirmTitle": "删除“{{label}}”？",
       "editTitle": "编辑快捷命令",
       "editorDescription": "保存终端命令或智能体提示词，便于快速调用",
       "title": "快捷命令",
@@ -4120,7 +4112,6 @@
       "outcome": "结果",
       "allOutcomes": "所有结果",
       "couldNotStart": "无法启动",
-      "deleteAutomationTitle": "删除自动化？",
       "deleteRetained": "删除“{{name}}”及其保留的运行？",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "无法验证原始代理窗格。请重新连接后重试。",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "原始代理窗格已无法打开。已保存的输出仍保留在此处。",

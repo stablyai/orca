@@ -1,6 +1,6 @@
 import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
 import { isTransientGitProbeError, readRemoteUrl } from './remote-url-probe'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 const REPO_REF_CACHE_MAX_ENTRIES = 512
 

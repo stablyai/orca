@@ -5,7 +5,7 @@ import {
   getReviewStateTone,
   OPEN_REVIEW_STATE_TONE
 } from '@/components/github/review-state-presentation'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { useTranslate } from '@/i18n/use-translate'
 
 /** Surfaces may treat closed issues as destructive or neutral; PR state tones stay fixed. */

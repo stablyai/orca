@@ -7,15 +7,15 @@ import {
   pluginShaImageUrl,
   type PluginHostImages
 } from '../../../shared/plugins/images/plugin-image-url'
-import { readContainedPluginArtifactBytes } from '../plugin-artifact-validation'
-import { declaredPluginImages } from '../plugin-image-artifact-validation'
-import type { PluginImageCache } from '../plugin-image-cache'
-import { pluginManifestHostImages } from '../plugin-manifest-images'
-import { readPluginVmRecipeIdentities } from '../plugin-vm-recipe-identities'
+import { readContainedPluginArtifactBytes } from '../artifacts/plugin-contained-artifact'
+import { declaredPluginImages } from '../media/plugin-image-artifact-validation'
+import type { PluginImageCache } from '../media/plugin-image-cache'
+import { pluginManifestHostImages } from '../media/plugin-manifest-images'
+import { readPluginVmRecipeIdentities } from '../contributions/plugin-vm-recipe-identities'
 import type { PluginVmRecipeIdentities } from '../../../shared/plugins/approval/plugin-update-access-growth'
 import { pluginCatalogReleaseCompatibilityError } from '../../../shared/plugins/manifest/plugin-manifest-compatibility'
 import { isQualifiedPluginKey } from '../../../shared/plugins/manifest/plugin-manifest'
-import { getUserPluginsDir } from '../plugin-discovery'
+import { getUserPluginsDir } from '../discovery/plugin-discovery'
 import { readPluginRollbackVersion } from '../installation/plugin-rollback-candidate'
 import { checkoutPluginGitSource } from '../installation/plugin-git-repository'
 import {

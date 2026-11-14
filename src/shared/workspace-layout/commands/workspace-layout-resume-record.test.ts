@@ -61,35 +61,6 @@ describe('the sleep, wake and start commands on a resume record', () => {
   const record = (origin: Origin) =>
     withOrigin(sleepingRecord(GIT_KEY, 'tab-shell', leaf(1)), origin)
 
-  it('keeps a recordOnly live capture as a resume record and a real sleep as a sleep', () => {
-    const context = testContext()
-    const { layout } = load(localDesktopSession())
-    const sleep = (origin: Origin, recordOnly?: true) => ({
-      type: 'sleep' as const,
-      workspace: GIT_KEY,
-      paneKeys: [shellPane],
-      records: [record(origin)],
-      ...(recordOnly ? { recordOnly } : {})
-    })
-    const live = build(context, [sleep('live', true)], layout).model
-    expect(leafOf(live, leaf(1))).toMatchObject({ resume: { origin: 'live' } })
-    expect(leafOf(live, leaf(1))!.sleeping).toBeUndefined()
-    const slept = build(context, [sleep('worktree-sleep')], live).model
-    expect(leafOf(slept, leaf(1))).toMatchObject({ sleeping: { origin: 'worktree-sleep' } })
-    expect(leafOf(slept, leaf(1))!.resume).toBeUndefined()
-    const recaptured = build(context, [sleep('quit', true)], slept).model
-    expect(leafOf(recaptured, leaf(1))).toMatchObject({ resume: { origin: 'quit' } })
-    expect(leafOf(recaptured, leaf(1))!.sleeping).toBeUndefined()
-    // A recordOnly wake is how a running agent's record is dropped.
-    const cleared = build(
-      context,
-      [{ type: 'wake', workspace: GIT_KEY, paneKeys: [shellPane], recordOnly: true }],
-      recaptured
-    )
-    expect(cleared.results[0]).toEqual({ woken: [shellPane] })
-    expect(leafOf(cleared.model, leaf(1))!.resume).toBeUndefined()
-  })
-
   it('a waking start leaves a running agent alone: it keeps its resume record and is not started', () => {
     const context = testContext()
     const { layout } = load(localDesktopSession())

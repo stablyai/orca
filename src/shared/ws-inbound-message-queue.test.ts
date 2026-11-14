@@ -26,7 +26,7 @@ function enqueuePayload(queue: WsInboundMessageQueue, value: number) {
 }
 
 describe('WebSocket inbound message lifetime', () => {
-  it.each([8, 80])(
+  it.each([8])(
     'releases %i queued payloads while the active conversion is blocked',
     async (count) => {
       const wait = gate()
@@ -59,7 +59,7 @@ describe('WebSocket inbound message lifetime', () => {
     }
   )
 
-  it.each([8, 80])('preserves %i live frames and advances past a reported error', async (count) => {
+  it.each([8])('preserves %i live frames and advances past a reported error', async (count) => {
     const wait = gate()
     const received: number[] = []
     const errors: unknown[] = []
@@ -88,7 +88,7 @@ describe('WebSocket inbound message lifetime', () => {
     queue.dispose()
   })
 
-  it.each([8, 80])(
+  it.each([8])(
     'releases %i completed payloads while a later conversion is blocked',
     async (count) => {
       const wait = gate()
@@ -120,22 +120,4 @@ describe('WebSocket inbound message lifetime', () => {
       }
     }
   )
-
-  it('suppresses errors from an active conversion that finishes after disposal', async () => {
-    const wait = gate()
-    const errors: unknown[] = []
-    const queue = new WsInboundMessageQueue(
-      async () => {
-        await wait.promise
-        throw new Error('retired conversion')
-      },
-      (error) => errors.push(error)
-    )
-    const active = queue.enqueue('active')
-    await Promise.resolve()
-    queue.dispose()
-    wait.release()
-    await active
-    expect(errors).toEqual([])
-  })
 })

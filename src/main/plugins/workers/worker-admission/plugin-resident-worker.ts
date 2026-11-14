@@ -1,6 +1,9 @@
 import type { PluginManifest } from '../../../../shared/plugins/manifest/plugin-manifest'
-import { isInvalidDiscoveredPlugin, type ValidDiscoveredPlugin } from '../../plugin-discovery'
-import type { PluginEventDeliveryContext } from '../../plugin-event-delivery'
+import {
+  isInvalidDiscoveredPlugin,
+  type ValidDiscoveredPlugin
+} from '../../discovery/plugin-discovery'
+import type { PluginEventDeliveryContext } from '../../events/plugin-event-delivery'
 import type { PluginService } from '../../plugin-service'
 
 /** A plugin whose worker runs for as long as the plugin is enabled: hooks must answer at once,
