@@ -124,6 +124,25 @@ export abstract class AgentBrowserBridgeState {
     }
   }
 
+  getRegisteredPageWebContentsId(browserPageId: string, worktreeId?: string): number | undefined {
+    const tabs = this.browserManager.getWebContentsIdByTabId()
+    const webContentsId = tabs.get(browserPageId)
+    if (webContentsId !== undefined) {
+      return !worktreeId || this.browserManager.getWorktreeIdForTab(browserPageId) === worktreeId
+        ? webContentsId
+        : undefined
+    }
+    const popup = this.browserManager
+      .getPopupPages()
+      .find((page) => page.browserPageId === browserPageId)
+    return popup &&
+      tabs.has(popup.openerBrowserPageId) &&
+      (!worktreeId ||
+        this.browserManager.getWorktreeIdForTab(popup.openerBrowserPageId) === worktreeId)
+      ? popup.webContentsId
+      : undefined
+  }
+
   protected registeredTabsWithoutPopups(worktreeId?: string): Map<string, number> {
     const tabs = new Map<string, number>()
     for (const [tabId, wcId] of this.browserManager.getWebContentsIdByTabId()) {

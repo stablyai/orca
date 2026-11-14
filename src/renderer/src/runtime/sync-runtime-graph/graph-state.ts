@@ -47,7 +47,7 @@ export const graphState = {
     string,
     {
       inputs: MobileSessionWorktreeInputs
-      content: unknown
+      content: MobileSessionContent
       snapshot: RuntimeMobileSessionTabsSnapshot
     }
   >(),

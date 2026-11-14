@@ -122,6 +122,7 @@ export function rig() {
   })
   const bridge = {
     getRegisteredTabs: () => registered,
+    getRegisteredPageWebContentsId: (page: string) => registered.get(page),
     setActiveTab: () => {},
     getActivePageId: () => null,
     goto: async () => {

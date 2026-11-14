@@ -40,7 +40,8 @@ describe('OrcaRuntimeService', () => {
 
       runtime.setAgentBrowserBridge({
         snapshot: snapshotMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]]))
+        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
+        getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 1 : undefined)
       } as never)
 
       const result = await runtime.browserSnapshot({ page: 'page-1' })
@@ -64,7 +65,8 @@ describe('OrcaRuntimeService', () => {
 
       runtime.setAgentBrowserBridge({
         snapshot: snapshotMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]]))
+        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
+        getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 1 : undefined)
       } as never)
 
       await runtime.browserSnapshot({
@@ -86,7 +88,8 @@ describe('OrcaRuntimeService', () => {
 
       runtime.setAgentBrowserBridge({
         snapshot: snapshotMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]]))
+        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
+        getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 1 : undefined)
       } as never)
 
       await expect(
@@ -121,7 +124,8 @@ describe('OrcaRuntimeService', () => {
       const runtime = createRuntime()
 
       runtime.setAgentBrowserBridge({
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]]))
+        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
+        getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 1 : undefined)
       } as never)
 
       await expect(
@@ -149,7 +153,9 @@ describe('OrcaRuntimeService', () => {
       )
 
       runtime.setAgentBrowserBridge({
-        getRegisteredTabs: getRegisteredTabsMock
+        getRegisteredTabs: getRegisteredTabsMock,
+        getRegisteredPageWebContentsId: (page: string, worktreeId?: string) =>
+          getRegisteredTabsMock(worktreeId).get(page)
       } as never)
 
       await expect(

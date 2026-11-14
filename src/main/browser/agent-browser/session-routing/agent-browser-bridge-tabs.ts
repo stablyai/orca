@@ -218,8 +218,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
         : this.resolveActiveTab(worktreeId)
     }
 
-    const tabs = this.getRegisteredTabs(worktreeId)
-    const webContentsId = tabs.get(browserPageId)
+    const webContentsId = this.getRegisteredPageWebContentsId(browserPageId, worktreeId)
     if (webContentsId == null) {
       const scope = worktreeId ? ' in this worktree' : ''
       throw new BrowserError(
@@ -241,15 +240,24 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
 
   protected resolveActiveTab(worktreeId?: string): ResolvedBrowserCommandTarget {
     this.applyHeldPersonSelections(worktreeId)
-    const tabs = this.getRegisteredTabs(worktreeId)
+    const preferredWcId =
+      (worktreeId ? this.activeWebContentsPerWorktree.get(worktreeId) : undefined) ??
+      this.activeWebContentsId
 
+    if (preferredWcId != null) {
+      const browserPageId = this.resolveTabIdSafe(preferredWcId)
+      if (
+        browserPageId &&
+        this.getRegisteredPageWebContentsId(browserPageId, worktreeId) === preferredWcId &&
+        this.getWebContents(preferredWcId)
+      ) {
+        return { browserPageId, webContentsId: preferredWcId }
+      }
+    }
+    const tabs = this.getRegisteredTabs(worktreeId)
     if (tabs.size === 0) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
-
-    const preferredWcId =
-      (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId)) ?? this.activeWebContentsId
-
     if (preferredWcId != null) {
       for (const [tabId, wcId] of tabs) {
         if (wcId === preferredWcId && this.getWebContents(wcId)) {

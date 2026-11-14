@@ -6,6 +6,7 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtim
 export type BrowserTabBarEntry = {
   browserPageId: string
   worktreeId: string
+  active?: boolean
   title: string
   url: string
   loadError: BrowserTabInfo['loadError']
@@ -47,6 +48,7 @@ export function readBrowserTabBar(
       listed.add(tab.browserPageId)
       result.push({
         browserPageId: tab.browserPageId,
+        active: tab.id === snapshot.activeTabId,
         worktreeId: snapshot.worktree,
         title: saved?.title ?? tab.title,
         url: saved?.url ?? tab.url,
@@ -117,8 +119,12 @@ export function mergeBrowserTabListing(input: {
     .map((tab) => ({ ...tab, loaded: true }))
   const clients = input.clientTabs.map((tab) => ({ ...tab, loaded: true }))
   const tabs = [...fromBar, ...unlisted, ...clients]
-  // Why live order: with nothing active, a pageless command acts on the first live page.
-  const fallbackId = (serverTabs[0] ?? input.clientTabs[0] ?? tabs[0])?.browserPageId
+  const fallbackId = (
+    serverTabs[0] ??
+    input.clientTabs[0] ??
+    input.tabBar.find((entry) => entry.active) ??
+    tabs[0]
+  )?.browserPageId
   const noneActive = !tabs.some((tab) => tab.active)
   return tabs.map((tab, index) => ({
     ...tab,

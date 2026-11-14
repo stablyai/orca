@@ -55,7 +55,7 @@ export class RuntimeBrowserCommandTargets {
       const bridge = this.host.getAgentBrowserBridge()
       if (
         params.page &&
-        (bridge?.getRegisteredTabs(worktreeId).has(params.page) ||
+        (bridge?.getRegisteredPageWebContentsId(params.page, worktreeId) !== undefined ||
           this.host
             .readBrowserTabBar?.(worktreeId)
             .some((entry) => entry.browserPageId === params.page))
@@ -76,10 +76,11 @@ export class RuntimeBrowserCommandTargets {
         }
         return await execute(params, admitAnswer)
       }
-      const browserPageId =
-        params.page ??
-        bridge?.getActivePageId(worktreeId) ??
-        this.host.readBrowserTabBar?.(worktreeId)[0]?.browserPageId
+      let browserPageId = params.page ?? bridge?.getActivePageId(worktreeId)
+      if (!browserPageId && bridge) {
+        await this.resolveBrowserWorktreeId(params.worktree)
+        browserPageId = bridge.getActivePageId(worktreeId) ?? undefined
+      }
       if (!browserPageId) {
         return await execute(params)
       }
@@ -88,7 +89,7 @@ export class RuntimeBrowserCommandTargets {
       const target = this.resolveBrowserPageWebContents(worktreeId, browserPageId)
       retainBrowserMemoryPageForAgent(browserPageId)
       await waitForBrowserPageReady(browserPageId, target.webContents, mode === 'recover')
-      return await execute({ ...params, page: browserPageId })
+      return await execute(params)
     } finally {
       release?.()
     }
@@ -127,7 +128,7 @@ export class RuntimeBrowserCommandTargets {
     worktreeId: string | undefined,
     browserPageId: string
   ): boolean {
-    const webContentsId = bridge.getRegisteredTabs(worktreeId).get(browserPageId)
+    const webContentsId = bridge.getRegisteredPageWebContentsId(browserPageId, worktreeId)
     if (webContentsId == null) {
       return false
     }
@@ -202,7 +203,7 @@ export class RuntimeBrowserCommandTargets {
     if (!resolvedPageId) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
-    const webContentsId = bridge.getRegisteredTabs(worktreeId).get(resolvedPageId)
+    const webContentsId = bridge.getRegisteredPageWebContentsId(resolvedPageId, worktreeId)
     if (webContentsId == null) {
       const scope = worktreeId ? ' in this worktree' : ''
       throw new BrowserError(
@@ -243,13 +244,30 @@ export class RuntimeBrowserCommandTargets {
     if (bridge && this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
       return
     }
-    if (!(await this.host.serveBrowserTabs?.start(worktreeId, browserPageId))) {
-      await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
-      await waitForTabRegistration(browserPageId)
+    const notFound = (): BrowserError =>
+      new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${browserPageId} was not found${worktreeId ? ' in this worktree' : ''}`
+      )
+    if (
+      browserPopupPageWebContentsId(browserPageId) !== null ||
+      this.host
+        .readBrowserTabBar?.(worktreeId)
+        .some((page) => page.browserPageId === browserPageId) === false
+    ) {
+      throw notFound()
     }
-    // Why opt-in: a switched-to tab should read like one open all along, but streaming panes must not wait.
-    if (options.waitForFirstLoad) {
-      await waitForTabFirstLoad(browserPageId)
+    try {
+      if (!(await this.host.serveBrowserTabs?.start(worktreeId, browserPageId))) {
+        await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
+        await waitForTabRegistration(browserPageId)
+      }
+      // Why opt-in: a switched-to tab should read like one open all along, but streaming panes must not wait.
+      if (options.waitForFirstLoad) {
+        await waitForTabFirstLoad(browserPageId)
+      }
+    } catch {
+      throw notFound()
     }
   }
 

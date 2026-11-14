@@ -114,6 +114,16 @@ export function createModalAdmissionFixture(
     expect(reserveBrowserPageDiscard(page, first.guest)).toBe(true)
     await acknowledgeBrowserPageRemoval(page, first.guest, 99)
     tabs.delete(page)
+    if (!catalog.some((entry) => entry.browserPageId === page)) {
+      catalog.push({
+        browserPageId: page,
+        worktreeId: 'workspace',
+        title: 'Modal',
+        url: 'https://localhost/app',
+        loadError: null,
+        certificateFailure: null
+      })
+    }
   }
   return {
     commands,

@@ -55,6 +55,7 @@ it('does not execute an admitted page command before restored load, and propagat
   const host = {
     getAgentBrowserBridge: () => ({
       getRegisteredTabs: () => tabs,
+      getRegisteredPageWebContentsId: (page: string) => tabs.get(page),
       getActivePageId: () => 'gate-page'
     }),
     getAuthoritativeWindow: () => ({ webContents: { send: () => tabs.set('gate-page', 10) } }),
@@ -170,6 +171,7 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
     const snapshot = vi.fn(async () => ({ snapshot: 'Recovered page' }))
     const bridge = {
       getRegisteredTabs: () => new Map([[pageId, 21]]),
+      getRegisteredPageWebContentsId: (page: string) => (page === pageId ? 21 : undefined),
       getActivePageId: () => pageId,
       snapshot,
       reload: (...args: Parameters<AgentBrowserBridgeUtilityCommands['reload']>) =>

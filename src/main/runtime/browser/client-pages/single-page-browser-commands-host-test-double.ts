@@ -28,6 +28,7 @@ export function createSinglePageBrowserCommandsHost(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: page commands read only these bridge members.
   const bridge = {
     getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
+    getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 100 : undefined),
     getActivePageId: vi.fn(() => 'page-1'),
     tabList: vi.fn(() => ({
       tabs: [

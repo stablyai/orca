@@ -80,6 +80,7 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
     ? overrides.getAgentBrowserBridge()
     : ({
         getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
+        getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 100 : undefined),
         getActivePageId: vi.fn(() => 'page-1'),
         tabList: vi.fn(() => ({
           tabs: [
@@ -166,6 +167,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     webContents.send = send
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['page-new', 101]])),
+      getRegisteredPageWebContentsId: (page: string) => (page === 'page-new' ? 101 : undefined),
       getActivePageId: vi.fn(() => 'page-new'),
       setActiveTab: vi.fn(),
       tabList: vi.fn(() => ({ tabs: [] }))
@@ -217,6 +219,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     })
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['agent-page', 102]])),
+      getRegisteredPageWebContentsId: (page: string) => (page === 'agent-page' ? 102 : undefined),
       setActiveTab: vi.fn()
     }
     const offscreen = { createTab: vi.fn(async () => ({ browserPageId: 'agent-page' })) }

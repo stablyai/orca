@@ -75,6 +75,7 @@ function fixture(runtime = createRuntime()) {
   const titles = new Map<string, string>()
   const bridge = {
     getRegisteredTabs: () => live,
+    getRegisteredPageWebContentsId: (page: string) => live.get(page),
     tabList: () => ({
       tabs: [...live.keys()].map((id, index) => ({
         browserPageId: id,
@@ -106,6 +107,28 @@ afterEach(() => {
 })
 
 describe('accepted saved browser page inventory', () => {
+  it('lists the selected cold browser tab when an earlier bar row is also cold', async () => {
+    const { live, sync, list } = fixture()
+    live.clear()
+    const first = { ...workspace, id: 'browser-first', activePageId: 'X', pageIds: ['X'] }
+    sync(
+      publication([page('C')], workspace, {
+        browserTabsByWorktree: { [TEST_WORKTREE_ID]: [first, workspace] },
+        browserPagesByWorkspace: {
+          [first.id]: [page('X', { workspaceId: first.id })],
+          [workspace.id]: [page('C')]
+        }
+      })
+    )
+    const listed = await list()
+    expect(
+      listed.tabs.map(({ browserPageId, active, loaded }) => ({ browserPageId, active, loaded }))
+    ).toEqual([
+      { browserPageId: 'X', active: false, loaded: false },
+      { browserPageId: 'C', active: true, loaded: false }
+    ])
+  })
+
   it('lists reclaimed siblings and lazily switches only the requested saved identity', async () => {
     const { runtime, live, bridge, sync, list } = fixture()
     sync()
@@ -158,12 +181,10 @@ describe('accepted saved browser page inventory', () => {
     expect(activated).toEqual([{ browserPageId: 'A' }])
     expect([...live.keys()]).toEqual(['C', 'A'])
     expect(bridge.tabSwitch).toHaveBeenCalledWith(undefined, undefined, 'A')
-    vi.useFakeTimers()
-    const rejected = expect(runtime.browserTabSwitch({ page: 'arbitrary' })).rejects.toThrow(
-      'Tab registration timed out'
+    await expect(runtime.browserTabSwitch({ page: 'arbitrary' })).rejects.toThrow(
+      'Browser page arbitrary was not found'
     )
-    await vi.advanceTimersByTimeAsync(8_000)
-    await rejected
+    expect(activated).toEqual([{ browserPageId: 'A' }])
     expect([...live.keys()]).toEqual(['C', 'A'])
     expect((await list()).tabs.map((tab) => tab.browserPageId)).toEqual(['C', 'A', 'B'])
     expect(bridge.tabSwitch).not.toHaveBeenCalledWith(undefined, undefined, 'arbitrary')

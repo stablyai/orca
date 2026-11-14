@@ -2,6 +2,10 @@ import type { BrowserPageInventoryEntry } from '../../../../shared/browser/runti
 import { getBrowserPageRuntimeEnvironmentId } from '../../../../shared/browser/browser-page-runtime-owner'
 import { isDocPreviewUrl } from '../../../../shared/document-preview/doc-preview-scheme'
 import type { MobileSessionWorktreeInputs } from './types'
+import type {
+  RuntimeMobileSessionTabsPublication,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-session-contracts'
 
 export function buildBrowserPageInventory(
   inputs: Pick<
@@ -60,4 +64,23 @@ export function buildBrowserPageInventory(
     }
   }
   return inventory
+}
+
+/** Main reuses the inventory it accepted at the base version; the cached and published snapshots stay complete. */
+export function withAcknowledgedBrowserPageInventory(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  published: RuntimeMobileSessionTabsSnapshot | undefined
+): RuntimeMobileSessionTabsPublication {
+  if (
+    !published ||
+    snapshot.browserPageInventory === undefined ||
+    published.browserPageInventory !== snapshot.browserPageInventory ||
+    published.publicationEpoch !== snapshot.publicationEpoch ||
+    published.worktreeInstanceId !== snapshot.worktreeInstanceId ||
+    published.snapshotVersion >= snapshot.snapshotVersion
+  ) {
+    return snapshot
+  }
+  const { browserPageInventory: _unchanged, ...rest } = snapshot
+  return { ...rest, browserPageInventoryBaseVersion: published.snapshotVersion }
 }

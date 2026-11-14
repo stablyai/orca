@@ -70,6 +70,8 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
       ? overrides.getAgentBrowserBridge!()
       : ({
           getRegisteredTabs: vi.fn(() => new Map([['page-live', 100]])),
+          getRegisteredPageWebContentsId: (page: string) =>
+            page === 'page-live' ? 100 : undefined,
           getActivePageId: vi.fn(() => 'page-live'),
           getActiveWebContentsId: vi.fn(() => 100),
           tabList: vi.fn(() => ({ tabs: [] }))

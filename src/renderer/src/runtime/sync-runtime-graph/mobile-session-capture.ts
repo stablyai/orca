@@ -132,6 +132,22 @@ export function mountedSurfaceCapturesEqual(
   return true
 }
 
+/** The complete input set of buildBrowserPageInventory; terminal-only changes keep the built array. */
+export function canReuseBrowserPageInventory(
+  previous: MobileSessionWorktreeInputs,
+  next: MobileSessionWorktreeInputs
+): boolean {
+  return (
+    previous.browserWorkspaces === next.browserWorkspaces &&
+    previous.browserRuntimeEnvironmentId === next.browserRuntimeEnvironmentId &&
+    narrowedEntriesEqual(previous.pagesByBrowserWorkspaceId, next.pagesByBrowserWorkspaceId) &&
+    narrowedEntriesEqual(
+      previous.certificateFailureByBrowserPageId,
+      next.certificateFailureByBrowserPageId
+    )
+  )
+}
+
 export function canReuseMobileSessionSnapshot(
   previous: MobileSessionWorktreeInputs,
   next: MobileSessionWorktreeInputs

@@ -54,9 +54,13 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
     for (const snapshot of graph.mobileSessionTabs ?? []) {
+      const baseVersion = snapshot.browserPageInventoryBaseVersion
       if (
-        snapshot.browserPageInventory !== undefined &&
-        !browserPageInventorySchema.safeParse(snapshot.browserPageInventory).success
+        baseVersion !== undefined
+          ? // A base names a reused inventory, so a frame cannot also carry one.
+            !Number.isSafeInteger(baseVersion) || snapshot.browserPageInventory !== undefined
+          : snapshot.browserPageInventory !== undefined &&
+            !browserPageInventorySchema.safeParse(snapshot.browserPageInventory).success
       ) {
         throw new Error('invalid_browser_page_inventory')
       }

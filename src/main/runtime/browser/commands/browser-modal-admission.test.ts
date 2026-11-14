@@ -193,6 +193,7 @@ it('answers implicit wake-selected X without claiming the first saved Y', async 
   const f = fixture()
   await f.cold('saved-y')
   await f.cold('actual-x')
+  f.catalog.length = 0
   f.catalog.push({
     browserPageId: 'saved-y',
     worktreeId: 'workspace',
