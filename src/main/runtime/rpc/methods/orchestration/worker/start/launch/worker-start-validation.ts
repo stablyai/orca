@@ -2,7 +2,7 @@ import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
-import type { FederationAttachStartInput } from '../../../../../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
+import type { FederationWorkerLaunchInput } from '../../../../../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createWorkerLaunchReceipt,
@@ -53,6 +53,8 @@ export function prepareLocalWorkerStart(args: {
   createsWorktree: boolean
   runtime: OrcaRuntimeService
   openCodeModelLaunchSupported?: boolean
+  structuredFastModeSupported?: boolean
+  structuredFastServiceTier?: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const { params, createsWorktree, runtime } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
@@ -74,17 +76,21 @@ export function prepareLocalWorkerStart(args: {
   return resolveWorkerStartAgent({
     runtime,
     openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
+    structuredFastModeSupported: args.structuredFastModeSupported,
+    structuredFastServiceTier: args.structuredFastServiceTier,
     createsWorktree,
     terminal: params.terminal,
     agent: params.agent,
     model: params.model,
     effort: params.effort,
+    fastMode: params.fastMode,
+    role: params.role,
     missingAgentMessage: 'A configured --agent is required when worker-start creates a terminal.'
   })
 }
 
 export function prepareFederationAttachmentWorkerStart(args: {
-  params: FederationAttachStartInput
+  params: FederationWorkerLaunchInput
   createsWorktree: boolean
   runtime: OrcaRuntimeService
   openCodeModelLaunchSupported?: boolean
@@ -123,6 +129,8 @@ export function prepareFederationAttachmentWorkerStart(args: {
     agent: params.agent,
     model: params.model,
     effort: params.effort,
+    fastMode: params.fastMode,
+    role: params.role,
     missingAgentMessage:
       'A configured --agent is required when federated worker-start creates a terminal.'
   })
@@ -131,11 +139,15 @@ export function prepareFederationAttachmentWorkerStart(args: {
 function resolveWorkerStartAgent(args: {
   runtime: OrcaRuntimeService
   openCodeModelLaunchSupported?: boolean
+  structuredFastModeSupported?: boolean
+  structuredFastServiceTier?: string
   createsWorktree: boolean
   terminal?: string
   agent?: string
   model?: string
   effort?: string
+  fastMode?: boolean
+  role?: string
   missingAgentMessage: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const agent = args.agent
@@ -153,9 +165,13 @@ function resolveWorkerStartAgent(args: {
       launch: resolveWorkerLaunchPreferences({
         agent,
         openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
+        structuredFastModeSupported: args.structuredFastModeSupported,
+        structuredFastServiceTier: args.structuredFastServiceTier,
         createsWorktree: args.createsWorktree,
         model: args.model,
-        effort: args.effort
+        effort: args.effort,
+        fastMode: args.fastMode,
+        role: args.role
       })
     }
   }

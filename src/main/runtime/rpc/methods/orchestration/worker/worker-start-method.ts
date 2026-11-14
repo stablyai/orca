@@ -19,6 +19,9 @@ import {
 } from './start/admission/worker-start-authority'
 import { parseTaskDeps } from './start/admission/task-deps-argument'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
+import { resolveWorkerRoleParams } from '../../../../../../shared/orchestration-worker-roles'
+import { FederationWorkerLaunchParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
+import { prepareFederationWorkerLaunchOnHost } from './start/launch/worker-opencode-model-preflight'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -55,6 +58,26 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
     permission: 'workspace',
     params: WorkerStartParams,
     handler: async (params, ctx) => startWorker(params, ctx)
+  }),
+  defineOrchestrationMethod({
+    name: 'orchestration.workerLaunchPreflight',
+    access: { kind: 'reads', targets: { terminal: 'worker' } },
+    permission: 'workspace',
+    params: FederationWorkerLaunchParams,
+    handler: async (params, { runtime }) => {
+      if (params.worktree === 'current' || params.worktree === 'new-child') {
+        throw new OrchestrationError(
+          'invalid_argument',
+          'Remote launch preflight requires an exact worktree selector or new-top-level.'
+        )
+      }
+      const { launch } = await prepareFederationWorkerLaunchOnHost({
+        params,
+        createsWorktree: params.worktree === 'new-top-level',
+        runtime
+      })
+      return { launch: { ...launch.receipt, effective: null } }
+    }
   })
 ]
 
@@ -116,6 +139,20 @@ export async function prepareWorkerStart(
   }: Omit<WorkerStartContext, 'orchestrationMutation'>,
   followUp?: WorkerFollowUp
 ) {
+  if (params.role) {
+    try {
+      params = resolveWorkerRoleParams(
+        params,
+        runtime.requireStore().getSettings().orchestrationWorkerRoles
+      )
+    } catch (error) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        error instanceof Error ? error.message : 'Invalid worker role profile.',
+        { effectsApplied: false }
+      )
+    }
+  }
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',
