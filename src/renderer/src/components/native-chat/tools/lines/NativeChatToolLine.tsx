@@ -28,6 +28,7 @@ import {
 import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpandable'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatToolOutput } from './NativeChatToolOutput'
+import { NativeChatToolInvocation } from '../../NativeChatToolInvocation'
 
 const TARGET_CLASS =
   'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
@@ -46,6 +47,7 @@ function ToolLineDetail({
   commandLanguage: string | null
   results: NativeChatWebSearchResult[]
 }): React.JSX.Element {
+  const t = useTranslate()
   const diff = isToolCallBlock(block)
     ? diffFromToolCall(block.name, block.input)
     : isToolResultBlock(block)
@@ -53,6 +55,7 @@ function ToolLineDetail({
       : null
   return (
     <div className="ml-6 space-y-1.5 py-1">
+      {isToolCallBlock(block) ? <NativeChatToolInvocation call={block} /> : null}
       {results.length > 0 ? <NativeChatSearchResults results={results} /> : null}
       {diff ? <NativeChatDiffView lines={diff} /> : null}
       {!diff && fullCommand ? (
@@ -67,7 +70,16 @@ function ToolLineDetail({
           )}
         </pre>
       ) : null}
-      {body ? <NativeChatToolOutput body={body} /> : null}
+      {body ? (
+        <div className="space-y-1">
+          {isToolCallBlock(block) ? (
+            <p className="text-xs text-chat-foreground-faint">
+              {t('components.native-chat.tool.output', 'Output')}
+            </p>
+          ) : null}
+          <NativeChatToolOutput body={body} />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -106,7 +118,6 @@ export function NativeChatToolLine({
     ...sharedLabel,
     verb: sharedLabel.verb === null ? null : nativeChatToolRowVerb(sharedLabel.verb, t)
   }
-  // A call opens to its output; its arguments are the row's own words, bar a shortened command.
   const fullCommand = label?.commandDetail ?? null
   const commandAlone = label?.command === true && label.verb !== null && label.target.length > 0
 

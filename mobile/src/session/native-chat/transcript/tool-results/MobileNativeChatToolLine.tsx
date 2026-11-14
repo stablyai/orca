@@ -29,6 +29,7 @@ import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolOutput } from '../message-content/MobileNativeChatFullContent'
 import { useMobileNativeChatOpenedDetail } from '../../visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
+import { MobileNativeChatToolInvocation } from './MobileNativeChatToolInvocation'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -149,8 +150,17 @@ function ToolLineDetail({
   )
   const type = toolType(fontScale).code
   const onLayout = useMobileNativeChatOpenedDetail()
+  const t = useMobileTranslation()
   return (
     <View style={styles.detail} onLayout={onLayout}>
+      {call ? (
+        <MobileNativeChatToolInvocation
+          call={call}
+          fontScale={fontScale}
+          rootIdentity={`${memberId ?? call.callId ?? 'detail'}:input`}
+          positionKey={`${disclosureKey ?? call.callId ?? 'detail'}:input`}
+        />
+      ) : null}
       {results.length > 0 ? <SearchResults results={results} fontScale={fontScale} /> : null}
       {diff ? <DiffView lines={diff} fontScale={fontScale} /> : null}
       {!diff && fullCommand ? (
@@ -167,12 +177,19 @@ function ToolLineDetail({
         </MobileNativeChatOwnedScrollView>
       ) : null}
       {body ? (
-        <MobileNativeChatToolOutput
-          body={body}
-          type={type}
-          rootIdentity={`${memberId ?? body.callId ?? 'detail'}:output`}
-          positionKey={`${disclosureKey ?? body.callId ?? 'detail'}:output`}
-        />
+        <View>
+          {call ? (
+            <Text style={[styles.lineWord, toolType(fontScale).meta]}>
+              {t('chat.nativeChatToolLine.output', 'Output')}
+            </Text>
+          ) : null}
+          <MobileNativeChatToolOutput
+            body={body}
+            type={type}
+            rootIdentity={`${memberId ?? body.callId ?? 'detail'}:output`}
+            positionKey={`${disclosureKey ?? body.callId ?? 'detail'}:output`}
+          />
+        </View>
       ) : null}
     </View>
   )
