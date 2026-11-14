@@ -133,6 +133,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
         frameKey={panelFrameKey}
         sessionToken={entry.sessionToken}
         onUnresponsive={markUnresponsive}
+        page={panel.placement === 'page'}
       />
     ) : (
       <PluginPanelMessage>

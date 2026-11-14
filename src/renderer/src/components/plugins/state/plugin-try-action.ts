@@ -113,7 +113,9 @@ export function pluginTryAction(
   if (contributes.panels.length > 0) {
     return () => {
       const panel = livePlugins(pluginKey)[0]?.panels[0]
-      if (panel) {
+      if (panel?.placement === 'page') {
+        openPluginPanelFromSettings(panel)
+      } else if (panel) {
         fromSettingsToWorkspace(() => openPluginPanelFromSettings(panel))
       }
     }

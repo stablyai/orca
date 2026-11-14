@@ -61,7 +61,7 @@ export function useRightSidebarActivityItems({
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
-    () => (pluginSystemEnabled ? pluginPanels : []),
+    () => (pluginSystemEnabled ? pluginPanels.filter((panel) => panel.placement !== 'page') : []),
     [pluginPanels, pluginSystemEnabled]
   )
   const installedPlugins = usePluginPanelsStore((s) => s.plugins)

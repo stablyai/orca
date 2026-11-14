@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
 import { SidebarTaskNavButton } from './SidebarTaskNavButton'
+import { SidebarNavPageButton } from './sidebar-nav-page-button'
+import { SidebarPluginPageNavButtons } from './SidebarPluginPageNavButtons'
 import { HideSidebarMenu } from './sidebar-nav-controls'
 import { useTranslate } from '@/i18n/use-translate'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
@@ -122,28 +124,12 @@ const SidebarNav = React.memo(function SidebarNav() {
       {showArtifactsButton ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <button
-              type="button"
+            <SidebarNavPageButton
+              icon={Files}
+              label={t('auto.components.sidebar.SidebarNav.artifacts', 'Artifacts')}
+              active={artifactsActive}
               onClick={openArtifactsPage}
-              aria-current={artifactsActive ? 'page' : undefined}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-                artifactsActive
-                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-                  : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
-              )}
-            >
-              <Files
-                className={cn(
-                  'size-4 shrink-0',
-                  !artifactsActive && 'text-worktree-sidebar-foreground/30'
-                )}
-                strokeWidth={artifactsActive ? 2.25 : 1.75}
-              />
-              <span className="flex-1">
-                {t('auto.components.sidebar.SidebarNav.artifacts', 'Artifacts')}
-              </span>
-            </button>
+            />
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideArtifactsButton} />
         </ContextMenu>
@@ -151,28 +137,12 @@ const SidebarNav = React.memo(function SidebarNav() {
       {showSkillsButton ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <button
-              type="button"
+            <SidebarNavPageButton
+              icon={BookOpen}
+              label={t('auto.components.sidebar.SidebarNav.skills', 'Skills')}
+              active={skillsActive}
               onClick={openSkillsPage}
-              aria-current={skillsActive ? 'page' : undefined}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-                skillsActive
-                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-                  : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
-              )}
-            >
-              <BookOpen
-                className={cn(
-                  'size-4 shrink-0',
-                  !skillsActive && 'text-worktree-sidebar-foreground/30'
-                )}
-                strokeWidth={skillsActive ? 2.25 : 1.75}
-              />
-              <span className="flex-1">
-                {t('auto.components.sidebar.SidebarNav.skills', 'Skills')}
-              </span>
-            </button>
+            />
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideSkillsButton} />
         </ContextMenu>
@@ -180,28 +150,12 @@ const SidebarNav = React.memo(function SidebarNav() {
       {showAutomationsButton ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <button
-              type="button"
+            <SidebarNavPageButton
+              icon={CalendarClock}
+              label={t('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')}
+              active={automationsActive}
               onClick={openAutomationsPage}
-              aria-current={automationsActive ? 'page' : undefined}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-                automationsActive
-                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-                  : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
-              )}
-            >
-              <CalendarClock
-                className={cn(
-                  'size-4 shrink-0',
-                  !automationsActive && 'text-worktree-sidebar-foreground/30'
-                )}
-                strokeWidth={automationsActive ? 2.25 : 1.75}
-              />
-              <span className="flex-1">
-                {t('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')}
-              </span>
-            </button>
+            />
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideAutomationsButton} />
         </ContextMenu>
@@ -281,6 +235,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideMobileButton} />
         </ContextMenu>
       ) : null}
+      <SidebarPluginPageNavButtons />
     </div>
   )
 })

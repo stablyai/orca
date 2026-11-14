@@ -90,27 +90,30 @@ async function openPanel(
   const tabKey = pluginPanelTabKey(pluginKey, panelId)
   const known = usePluginPanelsStore
     .getState()
-    .plugins.some(
-      (plugin) =>
-        plugin.pluginKey === pluginKey && plugin.panels.some((panel) => panel.tabKey === tabKey)
-    )
+    .plugins.find((plugin) => plugin.pluginKey === pluginKey)
+    ?.panels.find((panel) => panel.tabKey === tabKey)
   if (!known) {
     return fail(requestId, 'panel_unavailable', `This window does not list ${tabKey} yet.`)
   }
   if (capture?.ifShown) {
     // Never open or switch: the person may have moved on to another tab.
-    const away = pluginPanelNotShownReason(useAppStore.getState(), tabKey)
+    const away = pluginPanelNotShownReason(useAppStore.getState(), tabKey, known.placement)
     return away
       ? fail(requestId, PLUGIN_VIEW_NOT_SHOWN_CODE, away)
       : capturePanel(requestId, tabKey, capture)
   }
-  const blocked = showWorkspace(requestId, capture === undefined)
-  if (blocked) {
-    return blocked
+  if (known.placement === 'page') {
+    // A page needs no workspace; it replaces whatever page is showing, Settings included.
+    useAppStore.getState().openPluginPage(tabKey)
+  } else {
+    const blocked = showWorkspace(requestId, capture === undefined)
+    if (blocked) {
+      return blocked
+    }
+    const state = useAppStore.getState()
+    state.setRightSidebarTab(tabKey)
+    state.setRightSidebarOpen(true)
   }
-  const state = useAppStore.getState()
-  state.setRightSidebarTab(tabKey)
-  state.setRightSidebarOpen(true)
   if (!capture) {
     return { requestId, ok: true }
   }
