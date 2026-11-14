@@ -5,6 +5,11 @@ import {
 import { hookRootAnswerDeadline } from '../../../shared/agent-hook-listener/presence/hook-root-attempts'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 import { ClaudeAgentViewBridge } from '../../claude/agent-view/agent-view-bridge'
+import { ClaudeTerminalMailBridge } from '../../claude/terminal-mail/claude-terminal-mail-bridge'
+import {
+  CLAUDE_AGENT_VIEW_PATH,
+  CLAUDE_TERMINAL_MAIL_PATH
+} from '../../../shared/claude-agent-view'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -13,8 +18,22 @@ import { ClaudePermissionHookHolds } from './claude-permission-hook-hold'
 
 export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServerRuntimeEnv {
   readonly claudeAgentViews = new ClaudeAgentViewBridge()
+  readonly claudeTerminalMail = new ClaudeTerminalMailBridge()
   protected readonly claudePermissionHooks = new ClaudePermissionHookHolds()
   private statusHookInitialization: Promise<void> | null = null
+
+  /** The reply to a request from Orca's Claude plugin, or null when `pathname` is not one of its. */
+  protected receiveClaudePlugin(pathname: string, body: unknown): object | null {
+    if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+      return this.claudeAgentViews.receive(body)
+    }
+    return pathname === CLAUDE_TERMINAL_MAIL_PATH ? this.claudeTerminalMail.receive(body) : null
+  }
+
+  protected clearClaudePlugins(): void {
+    this.claudeAgentViews.clear()
+    this.claudeTerminalMail.clear()
+  }
 
   /** Answers a hook post: a worker's PermissionRequest waits for its coordinator's or person's answer;
    *  plugins see only calls status accepted, so a fenced or reused pane's old agent is skipped. */
@@ -37,7 +56,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     }
     this.statusHookGeneration += 1
     if (!enabled) {
-      this.claudeAgentViews.clear()
+      this.clearClaudePlugins()
       this.flushStatusPersistSync()
       this.stopOpenCodeBinderLoop()
       for (const timer of this.assistantMessageRetryTimers.values()) {

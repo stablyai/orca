@@ -21,6 +21,7 @@ type PointerSubmitDependencies = {
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
+  readLastDrivingInputAt?: (ptyId: string) => number | null
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
@@ -75,7 +76,15 @@ export function submitOrchestrationMailboxPointer(
       const sameMailbox =
         terminal && deps.mailboxOwner.resolve(terminal, input.mailboxHandle) === input.mailboxHandle
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
+      const typedSincePointer =
+        input.flight.pointerWriteStartedAt !== undefined &&
+        (deps.readLastDrivingInputAt?.(input.ptyId) ?? -Infinity) >=
+          input.flight.pointerWriteStartedAt
       if (!terminal || !sameMailbox) {
+        clearAndRedrive = true
+      } else if (typedSincePointer) {
+        // The person typed into the line holding the pointer: Enter would send their words with
+        // it. Release the mail; the redrive is held while their draft stands.
         clearAndRedrive = true
       } else if (
         (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||

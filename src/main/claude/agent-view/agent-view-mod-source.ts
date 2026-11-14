@@ -1,4 +1,7 @@
-import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
+import {
+  CLAUDE_AGENT_VIEW_PATH,
+  CLAUDE_TERMINAL_MAIL_PATH
+} from '../../../shared/claude-agent-view'
 import { parseAgentHookEndpointFile } from '../../../shared/agent-hook-listener/transport/agent-hook-endpoint-file'
 
 export const CLAUDE_AGENT_VIEW_MOD_SOURCE = String.raw`
@@ -10,8 +13,11 @@ let paneKey
 let endedSessionId
 let observedView
 let viewRevision = 0
+let mailIdentity
+let mailPoll
+let mailTimerStarted = false
 
-  async function post($, action, data = {}, session = identity) {
+  async function post($, action, data = {}, session = identity, path = ${JSON.stringify(CLAUDE_AGENT_VIEW_PATH)}) {
     if (!session) return {}
     let port = await $.env.get('ORCA_AGENT_HOOK_PORT')
     let token = await $.env.get('ORCA_AGENT_HOOK_TOKEN')
@@ -24,7 +30,7 @@ let viewRevision = 0
       } catch {}
     }
     if (!token || !/^[0-9]+$/.test(String(port)) || Number(port) < 1 || Number(port) > 65535) return {}
-    const response = await $.http.fetch('http://127.0.0.1:' + port + ${JSON.stringify(CLAUDE_AGENT_VIEW_PATH)}, {
+    const response = await $.http.fetch('http://127.0.0.1:' + port + path, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-orca-agent-hook-token': token },
       body: JSON.stringify({ ...session, action, ...data })
@@ -57,6 +63,40 @@ let viewRevision = 0
     }
   }
 
+  // Orchestration mail arrives as a turn of its own: nothing is typed into the terminal.
+  function pollMail($) {
+    if (mailPoll || !paneKey) return mailPoll
+    mailPoll = pollMailOnce($).finally(() => { mailPoll = undefined })
+    return mailPoll
+  }
+
+  async function pollMailOnce($) {
+    try {
+      const sessionId = await $.session.id()
+      if (sessionId === endedSessionId) return
+      if (!mailIdentity || mailIdentity.sessionId !== sessionId) {
+        mailIdentity = { paneKey, sessionId, instanceId: String(await $.clock.now()) + '-' + String(Math.random()) }
+      }
+      const session = mailIdentity
+      const reply = await post($, 'poll', {}, session, ${JSON.stringify(CLAUDE_TERMINAL_MAIL_PATH)})
+      for (const item of Array.isArray(reply.submissions) ? reply.submissions : []) {
+        let submitted = false
+        // A /clear or resume during an await starts another session; its mail is not this one's.
+        let current = false
+        try {
+          current = mailIdentity === session && (await $.session.id()) === session.sessionId
+        } catch {}
+        try {
+          if (current) {
+            const result = await $.prompt.submit({ text: String(item.text) })
+            submitted = !result || !result.drop
+          }
+        } catch {}
+        await post($, 'ack', { id: String(item.id), submitted }, session, ${JSON.stringify(CLAUDE_TERMINAL_MAIL_PATH)})
+      }
+    } catch {}
+  }
+
 export function register(on) {
   on('ui.render', { component: 'AbovePrompt' }, async ($, event, next) => {
     if (!paneKey) return next(event)
@@ -79,6 +119,10 @@ export function register(on) {
     const targetPane = await $.env.get('ORCA_PANE_KEY')
     if (!event.isInteractive || event.surface !== 'terminal' || !targetPane) return result
     paneKey = targetPane
+    if (!mailTimerStarted) {
+      mailTimerStarted = true
+      $.clock.every(1000, () => pollMail($))
+    }
     configDir = await $.env.get('CLAUDE_CONFIG_DIR') || await $.env.get('ORCA_CLAUDE_CONFIG_DIR')
     if (!configDir) return result
     endedSessionId = undefined
@@ -109,6 +153,12 @@ export function register(on) {
     const session = identity
     const result = await next(event)
     void post($, 'end', {}, session).catch(() => {})
+    // After the poll in flight has acked what it took: an end first would leave those unverifiable.
+    const mailSession = mailIdentity
+    mailIdentity = undefined
+    void Promise.resolve(mailPoll)
+      .then(() => post($, 'end', {}, mailSession, ${JSON.stringify(CLAUDE_TERMINAL_MAIL_PATH)}))
+      .catch(() => {})
     endedSessionId = event.sessionId
     identity = undefined
     if (event.reason !== 'clear' && event.reason !== 'resume') paneKey = undefined
