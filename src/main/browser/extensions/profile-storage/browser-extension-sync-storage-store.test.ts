@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
@@ -96,6 +96,8 @@ describe('BrowserExtensionProfileDocumentStore', () => {
     io.heldMkdir = new Promise((resolve) => (release = resolve))
     store.write('default', EXTENSION, { token: 'old' })
     const saving = store.flush()
+    // The save waits on its own I/O instead of writing on the caller's turn.
+    expect(existsSync(join(root, 'sync-storage', 'default', `${EXTENSION}.json`))).toBe(false)
 
     const forgotten = store.forgetProfileExtension('default', EXTENSION)
     expect(store.read('default', EXTENSION)).toEqual({})
