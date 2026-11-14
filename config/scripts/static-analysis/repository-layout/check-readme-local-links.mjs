@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url'
 const TRANSLATED_README_DIR = path.join('docs', 'readme')
 const EXTERNAL_TARGET = /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i
 const HTML_ATTRIBUTE = /\b(src|srcset|href)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi
-const MARKDOWN_LINK = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+const MARKDOWN_LINK = /!?\[[^\]]*\]\((<[^<>\r\n]*>|[^)\s]+)(?:\s+"[^"]*")?\)/g
 
 function readmeFiles(root) {
   const translated = readdirSync(path.join(root, TRANSLATED_README_DIR))
