@@ -40,6 +40,7 @@ import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-sessio
 import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
 const SUITE_TIMEOUT_MS = 180_000
+const RESUMING_CLIENT_REF = 'v1.4.220'
 
 describeReleasedStopNoteProjection({
   build: () => current,
@@ -61,6 +62,11 @@ async function releaseHostRoot(root: string): Promise<void> {
 
 describe('cross-version structured agent sessions', () => {
   describe('a cursor across a host restart', () => {
+    /** An older released client reading the resumed stream; its checkout is shared with the stop-note rig. */
+    let baseline: AgentSessionWireBuild
+    beforeAll(async () => {
+      baseline = await loadAgentSessionWireBuild(RESUMING_CLIENT_REF)
+    }, SUITE_TIMEOUT_MS)
     let root: string
     let store: AgentSessionRecordStore
     let runtime: unknown
@@ -252,8 +258,12 @@ describe('cross-version structured agent sessions', () => {
         return reply.result
       })
       // A roster-only publication may precede catch-up while its initial capture is superseded.
-      if (events[0]?.type === 'batch' && events[0].batch.cursor.sequence === held.sequence) {
-        expect(events.shift()).toEqual({
+      const early =
+        events[0]?.type === 'batch' && events[0].batch.cursor.sequence === held.sequence
+          ? events.shift()
+          : undefined
+      if (early) {
+        expect(early).toEqual({
           type: 'batch',
           sessionId: SESSION,
           batch: { cursor: held, items: [], removedItemIds: [], submissions: [] },
@@ -278,6 +288,32 @@ describe('cross-version structured agent sessions', () => {
         removedItemIds: [],
         submissions: []
       })
+      const released = await baseline.clientProjection()
+      const fold = (frames: readonly AgentSessionSubscribeEvent[]) =>
+        frames.reduce(
+          (state, event) => released.reduceStructuredAgentSession(state, { type: 'event', event }),
+          { ...released.EMPTY_STRUCTURED_AGENT_SESSION, epoch: held.epoch, cursor: held }
+        )
+      const transcript = ({ epoch, cursor, items, submissions }: ReturnType<typeof fold>) => ({
+        epoch,
+        cursor,
+        items,
+        submissions
+      })
+      // Whether or not this run raced, fold a row-free frame at the held cursor ahead of the rows.
+      const restatement = batches[1]
+      const heldFrame =
+        early ??
+        (restatement && {
+          ...restatement,
+          batch: { cursor: held, items: [], removedItemIds: [], submissions: [] }
+        })
+      expect(heldFrame).toBeDefined()
+      const resumed = fold([...(heldFrame ? [heldFrame] : []), ...events])
+      // The released reducer keeps the same transcript whether or not that frame came first.
+      expect(transcript(resumed)).toEqual(transcript(fold(events)))
+      expect(JSON.stringify(resumed.items)).toContain('after restart')
+      expect(resumed.cursor).toEqual(batch?.cursor)
     })
 
     // Every released client still sends the fence it last saw; this host names a write by its
