@@ -30,9 +30,8 @@ export function structuredChatForkSourceSavedName(
   if (source.conversationName?.trim()) {
     return source.conversationName.trim()
   }
-  // A fork shares its source's agent, so either summary names the default label.
-  const agent =
-    feed.getSnapshot().get(sourceId)?.agent ?? feed.getSnapshot().get(note!.sessionId)?.agent
+  // Read only the source's own summary, so the source subscription is the one that wakes this.
+  const agent = feed.getSnapshot().get(sourceId)?.agent
   return agent ? agentSessionForkSourceSavedName(source, agent) : undefined
 }
 
