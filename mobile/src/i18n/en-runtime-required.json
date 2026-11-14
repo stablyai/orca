@@ -70,6 +70,12 @@
     }
   },
   "chat": {
+    "mcp": {
+      "status": {
+        "connectedTools_one": "Connected · {{count}} tool",
+        "connectedTools_other": "Connected · {{count}} tools"
+      }
+    },
     "notice": {
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
@@ -77,8 +83,7 @@
       "moreCount_one": "{{count}} more",
       "moreCount_other": "{{count}} more",
       "queuedCount_one": "{{count}} queued message",
-      "queuedCount_other": "{{count}} queued messages",
-      "foldNeedsAttention": "{{more}}, a message needs attention"
+      "queuedCount_other": "{{count}} queued messages"
     },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
