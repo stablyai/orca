@@ -45,10 +45,8 @@ vi.mock('../api-runtime/browser-extension-api-host', () => ({
     mocks.emitted.push({ session: target.session, event })
 }))
 vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
-vi.mock('../../sessions/profiles/browser-session-registry', () => ({
-  browserSessionRegistry: {
-    profileIdForSession: (session: Electron.Session) => mocks.profileIds.get(session)
-  }
+vi.mock('../../sessions/profiles/browser-session-profile-identity', () => ({
+  getBrowserSessionProfileIdentity: (session: Electron.Session) => mocks.profileIds.get(session)
 }))
 vi.mock('../../guest-lifecycle/browser-main-window-readiness', () => ({
   watchBrowserMainWindowReadiness: () => {}
