@@ -3,8 +3,9 @@
 Act only on proof. `worker-list --run <run_id> --include-remote` gives
 each worker's liveness and `next`; follow it.
 
-Retry a failed or stopped attempt on the same Task; `--spec` would create a new
-one. Placement is not inherited:
+When a retry is authorized, use the same Task for a failed or stopped attempt;
+`--spec` would create a new one. User-cancelled work requires renewed user authority
+before any retry or recreation. Placement is not inherited:
 
 ```text
 ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <placement> --agent <agent>
@@ -40,8 +41,10 @@ start, request `ORCA orchestration worker-stop --dispatch <dispatch_id>`.
 Prior exit is not required: guarded stop can attempt cancellation of an exact
 owned live agent or one with exact identity but unverifiable liveness. Respect
 identity, custody, and Keep open refusals; never close or reuse an unknown or
-user-owned process. Claim cancellation only on a confirmed stopped result. On
-`stop_unknown`, inspect `worker-show` and the receipt, then report the unresolved
+user-owned process. Claim physical cancellation only with execution-host proof
+that the agent and its owned helpers exited; a stopped result alone can represent
+assignment accounting without process action. On `stop_unknown`, inspect
+`worker-show` and the receipt, then report the unresolved
 blocker; do not blindly repeat stop, retry, or start fresh.
 
 For explicit intentional abandonment, use
@@ -81,3 +84,49 @@ Use that terminal's workspace; omit `--agent`, `--model`, `--effort`, and
 new-worktree creation. Follow [Placement and remote execution](placement-and-remote.md)
 for execution-host selection and Dispatch-addressed follow-ups. After starting
 independent work, end your turn; Orca wakes you. Follow a receipt's `next` action.
+
+## Cancel and discard one isolated lane
+
+Generic cleanup protects Orca membership; the user's explicit cancellation **and
+draft-discard request** can authorize targeted removal after these proofs:
+
+1. Resolve the exact owning Run, Task, Dispatch, execution host, workspace identity,
+   canonical path on that host, and branch. Use the saved host route and exact
+   selectors, not names or local lookalike paths. Confirm this is the lane's
+   exclusively created isolated checkout; preserve current, shared, reused,
+   pre-existing, user-taken-over, and Keep open resources.
+2. Request the guarded `worker-stop --dispatch <dispatch_id>` described above.
+   Inspect its receipt and `worker-show` for actual process/session closure on the
+   execution host, including every owned helper and successor session. Check
+   `helpers` and `helperStopError`; starting, kept-open, or unconfirmed helpers block
+   discard. Task status, `stopped`/abandoned accounting, `alreadySettled`, silence,
+   missing rows, or exit code zero alone do not prove physical exit. A context-only
+   stop can leave its unsupervised process running. Preserve resources and report
+   any refusal, `stop_unknown`, unproven exit, or ownership uncertainty; abandonment
+   cannot substitute for exit proof.
+3. Verify exclusive use of both checkout and branch across owners and Runs, using
+   host-specific workspace/process evidence and Git worktree branch use. Inspect
+   `worker-list --include-remote --json` scope: omission of `--run` can still select
+   the caller's bound Run. Check `scope.source`, follow `page.nextCursor` with
+   `--cursor` while `page.hasMore`, and inspect other possible owning Runs/hosts.
+   Partial host errors, warnings, or an unverified owner block discard; one Run's
+   rows or visible worktree lists cannot prove exclusivity. Preserve peer workers,
+   worktrees, and branches; never use Run-wide reset or bulk terminal closure.
+4. After stopping or intentionally abandoning the assignment, record the user's
+   cancellation with the supported Task accounting (there is no `cancelled` status):
+
+   ```text
+   ORCA orchestration task-update --id <task_id> --run <owning_run_id> --status failed --result cancelled
+   ```
+
+   This records intent, not exit proof. Recovery must not use `--retry-of`, promote
+   it to `ready`, create a replacement Task/Run, or restart/recreate the lane without
+   renewed user authorization; the runtime can reopen it on retry.
+
+5. Immediately before removal, refresh membership, stop proof, and exclusive use;
+   preserve the lane if any new owner appears. These checks are point-in-time, not
+   atomic with deletion. Only after all proofs, consult the selected CLI's
+   `worktree rm --help` and current branch-retention policy, then remove exactly the
+   authorized lane's draft, isolated worktree, and exclusive branch. Verify their
+   absence on the owning host and that peers remain intact. Do not infer branch
+   deletion from `--force` or claim these instructions enforce runtime safety.
