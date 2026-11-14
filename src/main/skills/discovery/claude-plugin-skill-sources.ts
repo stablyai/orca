@@ -179,7 +179,8 @@ export function resolveClaudePluginSkillSources(args: {
         path: skillsPath,
         sourceKind: 'plugin',
         providers: ['claude'],
-        owner: 'claude'
+        owner: 'claude',
+        plugin: safePluginLabel(pluginId, pathApi)
       })
     }
   }
