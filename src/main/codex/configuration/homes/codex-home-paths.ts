@@ -11,14 +11,17 @@ import {
   unlinkSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import {
   clearCopiedResourceMarker,
   markCopiedResource,
+  readCopiedResourceSourcePath,
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
 import { syncSystemCodexRulesIntoManagedHome } from './codex-managed-home-rules'
+import { matchesManagedCodexHomePath } from './codex-managed-home-path-matcher'
 import { observe, observeResolvedPathEntry } from '../codex-path-observation'
+import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
@@ -34,8 +37,7 @@ const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'profile-v2',
   'themes',
   'prompts',
-  CODEX_BUNDLED_MARKETPLACES_ENTRY,
-  CODEX_GLOBAL_INSTRUCTIONS_ENTRY
+  CODEX_BUNDLED_MARKETPLACES_ENTRY
 ] as const
 
 export function getSystemCodexHomePath(): string {
@@ -85,13 +87,38 @@ export function getOrcaUserDataPath(): string {
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
 }
 
+/** Keep other resources on the system home while global instructions follow the user's override. */
 export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
   const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
     linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
+  const instructionsHome = getCodexGlobalInstructionsHomePath(systemHomePath, targetHome)
+  linkSystemCodexResource(instructionsHome, targetHome, CODEX_GLOBAL_INSTRUCTIONS_ENTRY, {
+    // Copies retain source ownership when CODEX_HOME changes between launches.
+    preferCopy: instructionsHome !== systemHomePath,
+    previousSourcePath:
+      readCopiedResourceSourcePath(targetHome, CODEX_GLOBAL_INSTRUCTIONS_ENTRY) ??
+      join(systemHomePath, CODEX_GLOBAL_INSTRUCTIONS_ENTRY)
+  })
   syncSystemCodexRulesIntoManagedHome(systemHomePath, targetHome)
+}
+
+/** WSL may omit ORCA_CODEX_HOME, so inherited account homes also need an on-disk ownership check. */
+function getCodexGlobalInstructionsHomePath(systemHomePath: string, targetHome: string): string {
+  const configuredHome = resolve(resolveAbsoluteDirOverride(process.env.CODEX_HOME, systemHomePath))
+  if (
+    matchesManagedCodexHomePath(
+      configuredHome,
+      targetHome,
+      join(getOrcaUserDataPath(), 'codex-accounts')
+    )
+  ) {
+    return systemHomePath
+  }
+  const ownershipMarker = observe(() => lstatSync(join(configuredHome, '.orca-managed-home')))
+  return ownershipMarker.kind === 'absent' ? configuredHome : systemHomePath
 }
 
 export function syncCodexGlobalInstructionsIntoManagedHome({
@@ -108,11 +135,15 @@ export function syncCodexGlobalInstructionsIntoManagedHome({
   })
 }
 
+/** Refresh or remove only links and copies whose ownership Orca can establish. */
 function linkSystemCodexResource(
   systemHomePath: string,
   managedHomePath: string,
   entryName: string,
-  { preferCopy = false }: { preferCopy?: boolean } = {}
+  {
+    preferCopy = false,
+    previousSourcePath
+  }: { preferCopy?: boolean; previousSourcePath?: string } = {}
 ): void {
   const sourcePath = join(systemHomePath, entryName)
   const targetPath = join(managedHomePath, entryName)
@@ -120,6 +151,9 @@ function linkSystemCodexResource(
   const sourceObservation = observeResolvedPathEntry(sourcePath)
   if (sourceObservation.kind === 'indeterminate') {
     return
+  }
+  if (previousSourcePath && previousSourcePath !== sourcePath) {
+    removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, previousSourcePath)
   }
   if (sourceObservation.kind === 'absent') {
     removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
@@ -131,16 +165,21 @@ function linkSystemCodexResource(
     return
   }
 
-  if (targetAlreadyPointsToSource(targetPath, sourcePath)) {
+  // Unreadable targets must not enter the copier's removal path.
+  let targetObservation = observe(() => lstatSync(targetPath))
+  if (targetObservation.kind === 'indeterminate') {
+    return
+  }
+  if (
+    targetObservation.kind === 'present' &&
+    targetObservation.value.isSymbolicLink() &&
+    targetLinkPointsToSource(targetPath, sourcePath)
+  ) {
     clearCopiedResourceMarker(managedHomePath, entryName)
     if (!preferCopy || !removeSymlinkEntry(targetPath)) {
       return
     }
-  }
-  // Unreadable targets must not enter the copier's removal path.
-  const targetObservation = observe(() => lstatSync(targetPath))
-  if (targetObservation.kind === 'indeterminate') {
-    return
+    targetObservation = { kind: 'absent' }
   }
   const shouldRefreshFallbackCopy =
     targetObservation.kind === 'present' &&
@@ -237,15 +276,9 @@ function copiedFileContentsMatch(
   }
 }
 
-function targetAlreadyPointsToSource(targetPath: string, sourcePath: string): boolean {
-  try {
-    return (
-      lstatSync(targetPath).isSymbolicLink() &&
-      linkTargetsMatch(readlinkSync(targetPath), sourcePath)
-    )
-  } catch {
-    return false
-  }
+function targetLinkPointsToSource(targetPath: string, sourcePath: string): boolean {
+  const targetLink = observe(() => readlinkSync(targetPath))
+  return targetLink.kind === 'present' && linkTargetsMatch(targetLink.value, sourcePath)
 }
 
 function linkTargetsMatch(actualTarget: string, expectedTarget: string): boolean {
