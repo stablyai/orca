@@ -75,13 +75,15 @@ export function splitProfileStateDomainValue(
 
 /** Inverse of split: rebuild the document text from depth-first ordered parts. */
 export function assembleProfileStateDomainPayload(
-  parts: readonly ProfileStateDocumentPart[]
+  parts: readonly ProfileStateDocumentPart[],
+  validatedPaths?: readonly (readonly string[])[]
 ): string {
   let out = ''
   let open: string[] = []
   let first = true
-  for (const part of parts) {
-    const path = parsePartKey(part.key)
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index]!
+    const path = validatedPaths?.[index] ?? parsePartKey(part.key)
     let common = 0
     while (common < open.length && common < path.length - 1 && open[common] === path[common]) {
       common++
@@ -107,7 +109,9 @@ export function assembleProfileStateDomainPayload(
   if (parts.length === 0) {
     return '{}'
   }
-  return parts.length === 1 && parsePartKey(parts[0]!.key).length === 0 ? out : `{${out}}`
+  return parts.length === 1 && (validatedPaths?.[0] ?? parsePartKey(parts[0]!.key)).length === 0
+    ? out
+    : `{${out}}`
 }
 
 function parsePartKey(key: string): string[] {

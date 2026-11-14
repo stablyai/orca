@@ -10,11 +10,11 @@ import {
 } from './profile-state-document-parts'
 import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 
-type PathNode = { leaf?: string; children: Map<string, PathNode> }
+type PathNode = { leaf?: string; children?: Map<string, PathNode> }
 
 /** Validate depth-first native object order without parsing any retained payload. */
 function canonicalPaths(keys: readonly string[], depth: number): string[][] | undefined {
-  const root: PathNode = { children: new Map() }
+  const root: PathNode = {}
   const paths: string[][] = []
   for (const key of keys) {
     const path: unknown = JSON.parse(key)
@@ -31,14 +31,15 @@ function canonicalPaths(keys: readonly string[], depth: number): string[][] | un
       if (node.leaf !== undefined) {
         return undefined
       }
-      let child = node.children.get(part)
+      let child = node.children?.get(part)
       if (!child) {
-        child = { children: new Map() }
+        child = {}
+        node.children ??= new Map()
         node.children.set(part, child)
       }
       node = child
     }
-    if (node.leaf !== undefined || node.children.size) {
+    if (node.leaf !== undefined || node.children?.size) {
       return undefined
     }
     node.leaf = key
@@ -48,11 +49,12 @@ function canonicalPaths(keys: readonly string[], depth: number): string[][] | un
   const visit = (node: PathNode): void => {
     if (node.leaf !== undefined) {
       ordered.push(node.leaf)
+      return
     }
     for (const key of Object.keys(
-      Object.fromEntries([...node.children.keys()].map((key) => [key, null]))
+      Object.fromEntries([...(node.children?.keys() ?? [])].map((key) => [key, null]))
     )) {
-      visit(node.children.get(key)!)
+      visit(node.children!.get(key)!)
     }
   }
   visit(root)
@@ -123,7 +125,7 @@ export function prepareProfileStateFieldParts(
       parts[indices[offset]!] = part
     })
   }
-  const payload = assembleProfileStateDomainPayload(parts)
+  const payload = assembleProfileStateDomainPayload(parts, paths)
   return {
     domain: patch.domain,
     domainVersion: PROFILE_STATE_DOCUMENT_VERSION,
