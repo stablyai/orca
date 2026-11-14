@@ -4,7 +4,7 @@ import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-themes/terminal-color-overrides'
 import type { TerminalLayoutSnapshot, TerminalTab } from './workspace-layout/terminal-tab-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
-import type { StructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from './agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
@@ -28,6 +28,8 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number
   launchAgent?: TuiAgent
+  /** Whether the host's launch owner attests that the Orca launch it admitted still runs here; older hosts omit it. */
+  launchAttested?: boolean
   startupCwd?: string
   parentLayout?: TerminalLayoutSnapshot
   color?: string | null
@@ -95,6 +97,8 @@ export type RuntimeMobileSessionBrowserTab = {
   executionHostKey?: string
   placement?: RuntimeBrowserPlacement
   url: string
+  /** Current runtime initialization disposition; never saved or echoed by a renderer. */
+  initializationState?: 'pending' | 'stopped'
   loading: boolean
   canGoBack: boolean
   canGoForward: boolean

@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import type { JournalHistoryItems } from '../../../native-chat/agent-session-journal/journal-history-items'
 import {
   codexNonMessageIdentity,
   isCodexMessageItemType,
@@ -12,10 +12,7 @@ import {
 } from '../../structured/items/codex-thread-item-identity'
 import type { CodexHistoryObservedTurn, HistoryAnchor } from './codex-history-source-facts'
 
-export function codexHistoryAddresses(input: {
-  threadId: string
-  journal: StructuredAgentSessionTransitionJournal
-}) {
+export function codexHistoryAddresses(input: { threadId: string; journal: JournalHistoryItems }) {
   const row = (key: string) => input.journal.item(input.journal.canonicalItemId(key))
   const sameTurn = (
     saved: AgentJournalRenderItem,

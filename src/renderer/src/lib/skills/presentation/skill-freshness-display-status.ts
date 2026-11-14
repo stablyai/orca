@@ -38,7 +38,7 @@ export function getSkillFreshnessDisplayStatus(
 /** Whether the Update skills dialog has anything to show or do for this skill. */
 export function skillPlanHasDetails(plan: BundledSkillPlan | null, skillName: string): boolean {
   const state = planState(plan, skillName)
-  return state !== null && state !== 'current'
+  return hasSkillCopyNeedingAttention(plan, skillName) || (state !== null && state !== 'current')
 }
 
 /** A copy the update leaves for the user, or an interrupted update to repair. */
@@ -46,5 +46,13 @@ export function hasSkillCopyNeedingAttention(
   plan: BundledSkillPlan | null,
   skillName: string
 ): boolean {
-  return getSkillFreshnessDisplayStatus(plan, skillName) === 'needs-attention'
+  const entry = plan?.skills.find((skill) => skill.name === skillName)
+  return (
+    getSkillFreshnessDisplayStatus(plan, skillName) === 'needs-attention' ||
+    Boolean(
+      entry?.ops.some(
+        (op) => op.kind === 'leave' && (op.reason === 'edited' || op.reason === 'other')
+      )
+    )
+  )
 }

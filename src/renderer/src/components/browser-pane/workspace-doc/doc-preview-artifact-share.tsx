@@ -3,12 +3,15 @@ import {
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host'
-import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-preview-api'
+import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
-import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
+import { isShareableHtmlPath } from '@/components/editor/panel/editor-artifact-upload'
 import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
-import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
+import {
+  fileArtifactSourceKey,
+  type FileArtifactOwner
+} from '@/lib/files/artifacts/file-artifact-source-key'
 import { basename } from '@/lib/path'
 import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -91,7 +94,7 @@ async function readDocPreviewGrantFile(
 }
 
 /** Reads the document from the host its grant was minted for, never the one selected now. */
-export async function readDocPreviewArtifactRequest(
+async function readDocPreviewArtifactRequest(
   location: DocPreviewGrantLocation,
   filePath: string,
   sourceKey: string

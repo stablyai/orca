@@ -1,10 +1,10 @@
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import type { TabSplitDirection } from '../../store/slices/tabs/tabs-slice-contract'
 import { mirrorWebRuntimeTabMove } from './web-runtime-tab-move-mirror'
 import {
   isDesktopCreatedTabInFrameDrawnServerWorkspace,
   serverTabCount
-} from '@/lib/frame-drawn-desktop-created-tabs'
+} from '@/store/workspace-layout/frames/frame-drawn-desktop-created-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   dropTabThroughLayoutOwner,

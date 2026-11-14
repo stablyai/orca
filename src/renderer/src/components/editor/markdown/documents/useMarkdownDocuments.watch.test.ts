@@ -32,7 +32,7 @@ vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
   listRuntimeMarkdownDocuments: runtime.list,
   statRuntimePath: runtime.stat
 }))
-vi.mock('@/lib/file-owner-runtime-target', () => {
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
     _state: unknown,
     _worktreeId: string | null | undefined,

@@ -1,6 +1,6 @@
 import type React from 'react'
 import { createContext, useContext } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../store/index'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -18,8 +18,6 @@ type SettingsSectionProps = {
   children?: React.ReactNode
   className?: string
   bodyClassName?: string
-  /** Pane is built from SettingsGroup cards, so the body drops its own card. Fixed per pane, never query-dependent. */
-  grouped?: boolean
   badge?: string
   badgeAccessory?: React.ReactNode
   forceVisible?: boolean
@@ -42,7 +40,6 @@ export function SettingsSection({
   children,
   className,
   bodyClassName,
-  grouped = false,
   badge,
   badgeAccessory,
   forceVisible = false,
@@ -79,9 +76,7 @@ export function SettingsSection({
           >
             {title}
             {badge ? (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
-                {badge}
-              </span>
+              <span className="text-2xs font-normal text-muted-foreground">{badge}</span>
             ) : null}
             {badgeAccessory}
           </h2>
@@ -89,16 +84,8 @@ export function SettingsSection({
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
-      <div
-        className={cn(
-          grouped
-            ? 'flex flex-col gap-8'
-            : 'rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs',
-          bodyClassName
-        )}
-      >
-        {children}
-      </div>
+      {/* Panes are built from SettingsGroup cards; the body draws no card of its own. */}
+      <div className={cn('flex flex-col gap-8', bodyClassName)}>{children}</div>
     </section>
   )
 }

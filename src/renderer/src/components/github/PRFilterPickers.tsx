@@ -7,7 +7,7 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

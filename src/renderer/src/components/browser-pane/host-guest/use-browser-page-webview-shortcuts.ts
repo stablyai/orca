@@ -1,3 +1,4 @@
+import { issueBrowserGuestNavigation } from './browser-guest-metadata-cache'
 import { useEffect, type MutableRefObject } from 'react'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
@@ -10,7 +11,7 @@ import {
   publishBrowserPageSiteDisplay,
   type BrowserPageZoomCommand
 } from './browser-page-zoom'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 /** Handle chrome chords in the renderer and guest chords through main’s IPC; focused guests own a separate WebContents. */
 export function useBrowserPageWebviewShortcuts({
@@ -56,9 +57,9 @@ export function useBrowserPageWebviewShortcuts({
       // Why: stop other window capture listeners (workspace, embedded editors) from also acting.
       e.stopImmediatePropagation()
       if (direction === 'back') {
-        webviewRef.current?.goBack()
+        issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack())
       } else {
-        webviewRef.current?.goForward()
+        issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward())
       }
     }
     addAppKeyListener('keydown', handleKeyDown)
@@ -74,9 +75,9 @@ export function useBrowserPageWebviewShortcuts({
         return
       }
       if (direction === 'back') {
-        webviewRef.current?.goBack()
+        issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack())
       } else {
-        webviewRef.current?.goForward()
+        issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward())
       }
     })
   }, [browserTabId, isActive, webviewRef])

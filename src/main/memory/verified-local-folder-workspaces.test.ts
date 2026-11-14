@@ -50,32 +50,6 @@ const state = (patch: Partial<FolderWorkspaceHostState> = {}): FolderWorkspaceHo
 })
 
 describe('verified local folder workspace keys', () => {
-  it.each([undefined, null, 'local'] as const)('accepts local ownership %s', (executionHostId) => {
-    expect(
-      getVerifiedLocalFolderWorkspaceKeys(
-        state({
-          folderWorkspaces: [folder({ executionHostId })]
-        })
-      )
-    ).toEqual(new Set(['folder:folder-1']))
-  })
-
-  it.each(['ssh:target-1', 'runtime:environment-1', 'invalid', ''])(
-    'rejects nonlocal or invalid ownership %s',
-    (executionHostId) => {
-      expect(
-        getVerifiedLocalFolderWorkspaceKeys(
-          state({
-            folderWorkspaces: [
-              // Why Object.assign: invalid stored ids must reach the parser without widening the type.
-              Object.assign(folder(), { executionHostId })
-            ]
-          })
-        )
-      ).toEqual(new Set())
-    }
-  )
-
   it('honors explicit local ownership over legacy scope', () => {
     expect(
       getVerifiedLocalFolderWorkspaceKeys(

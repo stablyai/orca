@@ -1,3 +1,5 @@
+import type * as UseMobileTasksWorkspaceCreateActionsModule from '../../../tasks/workspace-creation/use-mobile-tasks-workspace-create-actions'
+import type * as UseNewWorkspaceCreateSubmitModule from '../../../components/use-new-workspace-create-submit'
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -14,10 +16,8 @@ export function workspaceSettingsMounts(
     decision?: string
   }): MountAdapter {
     return (context) => {
-      const useCreate = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-workspace-create-actions')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx'
+      const useCreate = modules.load<typeof UseMobileTasksWorkspaceCreateActionsModule>(
+        'mobile/src/tasks/workspace-creation/use-mobile-tasks-workspace-create-actions.tsx'
       ).useMobileTasksWorkspaceCreateActions
       const model = observableModel(context, {
         client: context.client,
@@ -76,9 +76,9 @@ export function workspaceSettingsMounts(
 
   return {
     'settings.workspace-submit': (context) => {
-      const useSubmit = modules.load<
-        typeof import('../../../components/use-new-workspace-create-submit')
-      >('mobile/src/components/use-new-workspace-create-submit.ts').useNewWorkspaceCreateSubmit
+      const useSubmit = modules.load<typeof UseNewWorkspaceCreateSubmitModule>(
+        'mobile/src/components/use-new-workspace-create-submit.ts'
+      ).useNewWorkspaceCreateSubmit
       const model = observableModel(context, {
         client: context.client,
         repos: [],
@@ -102,7 +102,9 @@ export function workspaceSettingsMounts(
         getAgentLaunchSupport: async () => false,
         transitionDrawer: (view: unknown) => context.effect('drawer', view),
         onCreated: (id: unknown, name: unknown) => context.effect('created', { id, name }),
-        onClose: () => context.effect('close', null)
+        onClose: () => context.effect('close', null),
+        // Not opened from a folder.
+        folderLaunch: undefined
       })
       let state: ReturnType<typeof useSubmit>
       const hook = hookMount(() => {

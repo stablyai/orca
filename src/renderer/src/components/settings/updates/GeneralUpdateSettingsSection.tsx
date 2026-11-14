@@ -8,8 +8,11 @@ import { Button } from '../../ui/button'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { updaterMessageText } from '@/lib/updater-message-copy'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
+import {
+  getUpdateCheckClickOptions,
+  getUpdateCheckHint
+} from '@/app-shell/updates/update-check-click-options'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
@@ -19,7 +22,9 @@ import { isDelayedUpdatePending } from '../../../../../shared/update-delay'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
-export function GeneralUpdateSettingsSection(): React.JSX.Element {
+export function GeneralUpdateSettingsSection({
+  children
+}: { children?: React.ReactNode } = {}): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -65,31 +70,31 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   return (
     <SettingsGroup
       key="updates"
-      title={t('auto.components.settings.GeneralUpdateSettingsSection.f2b1ccc12a', 'Updates')}
+      title={t('settings.general.about.title', 'About')}
       onHeaderClick={(event) => {
         if (event.altKey) {
           setChannelSwitcherRevealed((revealed) => !revealed)
         }
       }}
-      description={t(
-        'auto.components.settings.GeneralUpdateSettingsSection.d91ebfb87e',
-        'Current version: {{value0}}',
-        { value0: appVersion ?? '...' }
-      )}
     >
       <SearchableSetting
         title={t(
-          'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
-          'Check for Updates'
+          'auto.components.settings.GeneralUpdateSettingsSection.6d27bd46e3',
+          'Check for updates'
         )}
         description={t(
           'auto.components.settings.GeneralUpdateSettingsSection.ceb579abaf',
           'Check for app updates and install a newer Orca version.'
         )}
-        keywords={['update', 'version', 'release notes', 'download']}
+        keywords={['about', 'update', 'version', 'release notes', 'download']}
         className="space-y-3 py-3"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm">
+            {t('settings.general.about.version', 'Orca {{version}}', {
+              version: appVersion ?? '…'
+            })}
+          </span>
           <Button
             variant="outline"
             size="sm"
@@ -105,8 +110,8 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
               <RefreshCw className="size-3.5" />
             )}
             {t(
-              'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
-              'Check for Updates'
+              'auto.components.settings.GeneralUpdateSettingsSection.6d27bd46e3',
+              'Check for updates'
             )}
           </Button>
 
@@ -131,8 +136,8 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             >
               <Download className="size-3.5" />
               {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.42717918f4',
-                'Download Update ('
+                'auto.components.settings.GeneralUpdateSettingsSection.857ca887da',
+                'Download update ('
               )}
               {updateStatus.version})
             </Button>
@@ -141,7 +146,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             updateStatus.retryable !== false ? (
             <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
               <RefreshCw className="size-3.5" />
-              {t('auto.components.UpdateCard.2c2d3e03ca', 'Try Again')}
+              {t('auto.components.UpdateCard.b3b02a9d84', 'Try again')}
             </Button>
           ) : updateStatus.state === 'downloaded' ? (
             <Button
@@ -153,8 +158,8 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             >
               <Download className="size-3.5" />
               {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.f44299636f',
-                'Restart to Update ('
+                'auto.components.settings.GeneralUpdateSettingsSection.c0a8f827c7',
+                'Restart to update ('
               )}
               {updateStatus.version})
             </Button>
@@ -286,6 +291,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
       <UpdateDelaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
+      {children}
     </SettingsGroup>
   )
 }

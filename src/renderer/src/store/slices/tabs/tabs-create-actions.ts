@@ -13,7 +13,7 @@ import {
   canReplacePreviewContentType,
   dedupeTabOrder,
   insertTabIdIntoOrder
-} from '../../../../../shared/workspace-layout/tab-order'
+} from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { emptySplitGroup, insertSplitGroup, splitGroupEntries } from './tabs-group-actions'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -162,10 +162,16 @@ export function createTabsCreateActions(
           layoutByWorktree: replaceRecordEntries(current.layoutByWorktree, [
             [
               worktreeId,
-              (split ? split.layout : current.layoutByWorktree[worktreeId]) ?? {
-                type: 'leaf',
-                groupId: group.id
-              }
+              split
+                ? split.layout
+                : // A created group is the workspace's only group, so any layout left over (its
+                  // groups closed under another owner, e.g. a remote host's mirrored tabs) points
+                  // at groups that no longer exist. Keeping it hides the new tab: an empty strip
+                  // and a 0-size pane until a workspace switch rebuilds the layout.
+                  ((groupCreated ? undefined : current.layoutByWorktree[worktreeId]) ?? {
+                    type: 'leaf',
+                    groupId: group.id
+                  })
             ]
           ])
         }

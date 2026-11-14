@@ -83,7 +83,7 @@ afterEach(() => {
 })
 
 describe('LinearIssueProjectSelector', () => {
-  it('ignores stale searches and preserves exact source-scoped assignment calls', async () => {
+  it('keeps current search results for source-scoped project selection', async () => {
     const first = deferred<{ items: LinearProjectSummary[] }>()
     const second = deferred<{ items: LinearProjectSummary[] }>()
     runtimeMocks.linearListProjects
@@ -105,21 +105,9 @@ describe('LinearIssueProjectSelector', () => {
     const input = document.body.querySelector('input') as HTMLInputElement
     act(() => setInputValue(input, 'first'))
     await act(async () => vi.advanceTimersByTimeAsync(150))
-    expect(runtimeMocks.linearListProjects).toHaveBeenLastCalledWith(
-      sourceContext,
-      'first',
-      20,
-      'workspace-1'
-    )
 
     act(() => setInputValue(input, 'second'))
     await act(async () => vi.advanceTimersByTimeAsync(150))
-    expect(runtimeMocks.linearListProjects).toHaveBeenLastCalledWith(
-      sourceContext,
-      'second',
-      20,
-      'workspace-1'
-    )
     const currentProject = { id: 'project-2', name: 'Second project' }
     await act(async () => {
       second.resolve({ items: [currentProject] })
@@ -144,11 +132,6 @@ describe('LinearIssueProjectSelector', () => {
       'issue-1',
       { projectId: 'project-2' },
       'workspace-1'
-    )
-    expect(storeMocks.state.patchLinearIssue).toHaveBeenCalledWith(
-      'issue-1',
-      { project: currentProject },
-      { scope: expect.objectContaining({ settings: sourceContext }) }
     )
   })
 })

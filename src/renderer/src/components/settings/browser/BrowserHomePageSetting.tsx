@@ -22,7 +22,7 @@ export function BrowserHomePageSetting({
   const t = useTranslate()
   return (
     <SearchableSetting
-      title={t('auto.components.settings.BrowserHomePageSetting.70224e37b1', 'Default Home Page')}
+      title={t('auto.components.settings.BrowserHomePageSetting.9b9df9fe19', 'Default home page')}
       description={t(
         'auto.components.settings.BrowserHomePageSetting.6a37540f4b',
         'URL opened when creating a new browser tab. Leave empty to open a blank tab.'
@@ -32,7 +32,7 @@ export function BrowserHomePageSetting({
     >
       <div className="min-w-0 shrink space-y-0.5">
         <Label>
-          {t('auto.components.settings.BrowserHomePageSetting.70224e37b1', 'Default Home Page')}
+          {t('auto.components.settings.BrowserHomePageSetting.9b9df9fe19', 'Default home page')}
         </Label>
         <p className="text-xs text-muted-foreground">
           {t(

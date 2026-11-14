@@ -1,5 +1,5 @@
 import type * as MobileRelayCredentialHashModule from '../../transport/relay/mobile-relay-credential-hash'
-import type { MobileRelayCredentialBundle } from '../../transport/hosts/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { MobileRelayPairingJournal } from '../../pairing/mobile-relay-pairing-journal'
 import type { MountContext } from './recording-scenario'
 import type { operationModuleLoader } from './operation-module-loader'

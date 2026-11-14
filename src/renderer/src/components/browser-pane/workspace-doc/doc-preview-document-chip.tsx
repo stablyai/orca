@@ -1,7 +1,7 @@
 import { Check, FileCode2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
+import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { useTranslate } from '@/i18n/use-translate'
 import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity'
 

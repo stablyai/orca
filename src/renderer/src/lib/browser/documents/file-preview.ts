@@ -1,12 +1,9 @@
 import { browserPageDocLocationsEqual } from '../../../../../shared/browser-page-doc-location'
-import { openPlannedFileBrowserLink, type FileBrowserLinkTarget } from './file-preview-link-open'
-import type {
-  BrowserLinkOpenContext,
-  BrowserOpenOutcome
-} from '../navigation/browser-link-destination'
+import { openPlannedFileBrowserLink } from './file-preview-link-open'
+import type { FileBrowserLinkTarget } from './file-preview-link-open'
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
-import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { webClientDocPreviewRefusal } from '@/lib/browser/documents/doc-preview-web-client'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -16,13 +13,11 @@ import { activateBrowserWorkspaceTab } from '@/lib/browser/workspace/browser-wor
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
 import {
-  REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
-  TWIN_FILE_BROWSER_UNSUPPORTED_MESSAGE
-} from '@/lib/workspace-file-browser-open-target'
+  remoteFileBrowserUnsupportedMessage,
+  twinFileBrowserUnsupportedMessage
+} from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
-import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
-import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
+import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
@@ -30,6 +25,12 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { findWorkspaceShowingDoc } from './workspace-doc-tab-lookup'
+import type {
+  BrowserLinkOpenContext,
+  BrowserOpenOutcome
+} from '../navigation/browser-link-destination'
+import type { AppState } from '@/store/types'
+import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 
 export type PreviewableLanguage = 'html'
 
@@ -68,7 +69,7 @@ export function getWorkspaceFilePreviewPlan(
   if (isTwinWorkspace(state, worktreeId)) {
     return {
       status: 'unsupported',
-      message: TWIN_FILE_BROWSER_UNSUPPORTED_MESSAGE,
+      message: twinFileBrowserUnsupportedMessage(),
       reason: 'no-channel'
     }
   }
@@ -77,7 +78,7 @@ export function getWorkspaceFilePreviewPlan(
     // Unresolved ownership cannot choose a channel; local fallback would read a remote path on this machine.
     return {
       status: 'unsupported',
-      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
+      message: remoteFileBrowserUnsupportedMessage(),
       reason: 'no-channel'
     }
   }

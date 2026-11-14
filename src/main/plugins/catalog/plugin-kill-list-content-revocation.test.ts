@@ -3,14 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { fingerprintPluginConsent } from '../../../shared/plugins/approval/plugin-consent-fingerprint'
-import { devFolderConsentIdentity } from '../plugin-discovery'
+import { devFolderConsentIdentity } from '../discovery/plugin-discovery'
 import {
   pluginManifestSchema,
   type PluginManifest
 } from '../../../shared/plugins/manifest/plugin-manifest'
-import { getApprovedPluginVmRecipes } from '../plugin-approved-vm-recipes'
+import { getApprovedPluginVmRecipes } from '../contributions/plugin-approved-vm-recipes'
 import { PluginService } from '../plugin-service'
-import { hashPluginTree } from '../plugin-content-hash'
+import { hashPluginTree } from '../artifacts/plugin-content-hash'
 
 // VM recipe create strings execute through a shell; revocation must remove declarative content too.
 

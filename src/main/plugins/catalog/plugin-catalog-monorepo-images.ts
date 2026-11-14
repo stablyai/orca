@@ -3,7 +3,7 @@ import {
   type PluginMarketplaceEntry
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { catalogImagesFromManifest } from '../../../shared/plugins/images/plugin-manifest-catalog-images'
-import { sha256Hex } from '../plugin-image-cache'
+import { sha256Hex } from '../media/plugin-image-cache'
 import type { CatalogBlobReader } from './plugin-catalog-image-extraction'
 
 const MANIFEST_MAX_BYTES = 256 * 1024

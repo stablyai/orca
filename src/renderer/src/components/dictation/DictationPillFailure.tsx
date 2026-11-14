@@ -5,18 +5,20 @@ import { CircleAlert, X } from 'lucide-react'
 import { dispatchDictationControl } from './dictation-control-events'
 import { openVoiceSettings, type DictationFailureKind } from './dictation-toasts'
 
+const cancelDictation = (): void => dispatchDictationControl('cancel')
+
 /** The pill's ✕: cancels a dictation, or discards a failed one's recording. */
-export function DictationPillCloseButton({ label }: { label: string }) {
+export function DictationPillCloseButton({
+  label,
+  onClick = cancelDictation
+}: {
+  label: string
+  onClick?: () => void
+}) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={label}
-          onClick={() => dispatchDictationControl('cancel')}
-        >
+        <Button type="button" variant="ghost" size="icon-xs" aria-label={label} onClick={onClick}>
           <X className="size-3.5" />
         </Button>
       </TooltipTrigger>

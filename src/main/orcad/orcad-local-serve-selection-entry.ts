@@ -5,8 +5,8 @@ import {
   formatServeRuntimeSelection,
   ORCAD_LOCAL_SERVE_SELECTION_FLAGS as FLAGS
 } from '../../shared/orcad-local-serve-selection'
-import { selectServeRuntime } from './orcad-local-serve-selection'
-import { pruneDesktopOrcadArtifactCache } from './orcad-artifact-cache-retention'
+import { selectServeRuntime } from './serve-startup/orcad-local-serve-selection'
+import { pruneDesktopOrcadArtifactCache } from './artifact-slots/orcad-artifact-cache-retention'
 import { findAppImageNodeRuntime } from '../node-runtime/appimage-bundled-node-runtime'
 
 function flagValue(argv: readonly string[], flag: string): string | null {

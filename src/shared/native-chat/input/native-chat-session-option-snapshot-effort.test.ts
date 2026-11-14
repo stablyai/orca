@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-session-option-catalog-claude-codex'
-import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
-import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-option-snapshot'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
+import { createNativeChatSessionOptionRecord } from './session-options/native-chat-session-option-state'
+import { buildNativeChatSessionOptionSnapshot } from './session-options/native-chat-session-option-snapshot'
 
 function snapshot(choices: string[], current: string, supported = true) {
   const record = createNativeChatSessionOptionRecord('codex')

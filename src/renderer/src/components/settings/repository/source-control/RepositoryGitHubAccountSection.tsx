@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import type { GhAccountBinding } from '../../../../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../../../../shared/github/accounts/account-binding'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { GhAccountBindingInventory } from '../../../../../../shared/github/auth-types'
+import type { GhAccountBindingInventory } from '../../../../../../shared/github/accounts/auth-types'
 import { Button } from '../../../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
@@ -171,7 +171,10 @@ export function RepositoryGitHubAccountSection({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.RepositoryGitHubAccountSection.title', 'GitHub Account')}
+      title={t(
+        'auto.components.settings.RepositoryGitHubAccountSection.b3249d1abc',
+        'GitHub account'
+      )}
       description={t(
         'auto.components.settings.RepositoryGitHubAccountSection.description',
         'Use a specific gh login for this project’s GitHub issue and pull request calls.'
@@ -197,7 +200,10 @@ export function RepositoryGitHubAccountSection({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <div className="text-sm font-semibold">
-            {t('auto.components.settings.RepositoryGitHubAccountSection.title', 'GitHub Account')}
+            {t(
+              'auto.components.settings.RepositoryGitHubAccountSection.b3249d1abc',
+              'GitHub account'
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
             {t(

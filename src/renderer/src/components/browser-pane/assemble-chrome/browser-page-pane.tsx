@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import '@/lib/workspace/ownership/connection-context'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
@@ -233,7 +233,7 @@ export function BrowserPagePane({
   useBrowserPageWebviewUrlSync({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
-    browserTabLoading: browserTab.loading,
+    workspaceId,
     isActive,
     isPaintable,
     slotViewport,
@@ -242,9 +242,6 @@ export function BrowserPagePane({
     lastKnownWebviewUrlRef,
     keepAddressBarFocusRef,
     addressBarInputRef,
-    browserTabUrlRef,
-    addressBarValueRef,
-    onUpdatePageStateRef,
     focusWebviewNow
   })
   const reload = useBrowserPageReloadActions({

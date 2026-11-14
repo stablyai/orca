@@ -1,4 +1,4 @@
-import type { IncrementalAgentFixture } from '../../session-scanner-incremental-fixtures'
+import type { IncrementalAgentFixture } from '../../scanner-fixtures/session-scanner-incremental-fixtures'
 
 export function antigravityFixture(): IncrementalAgentFixture {
   const record = (source: string, type: string, content: string, createdAt: string) =>

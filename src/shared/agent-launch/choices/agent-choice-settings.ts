@@ -2,7 +2,7 @@ import { findOptionOccurrence } from '../../command-option-occurrence'
 import {
   agentRequiredValueOptions,
   removeAgentArgOption
-} from '../../agent-session/options/agent-session-option-agent-args'
+} from '../../agent-session/options/launch/agent-session-option-agent-args'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 
 export function readAgentChoiceSettings(

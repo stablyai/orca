@@ -2,9 +2,12 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+export const QUICK_COMMANDS_SETTINGS_TARGET_ID = 'quick-commands-list'
+
 export const getQuickCommandsPaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.quick.commands.search.4c8945952b', 'Quick Commands'),
+    targetSectionId: QUICK_COMMANDS_SETTINGS_TARGET_ID,
+    title: translate('auto.components.settings.quick.commands.search.915776ccfa', 'Quick commands'),
     description: translate(
       'auto.components.settings.quick.commands.search.d691c4e8d8',
       'Saved terminal commands that can be launched from any terminal, scoped globally or to a specific project.'

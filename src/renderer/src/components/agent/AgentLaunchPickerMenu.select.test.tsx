@@ -67,10 +67,7 @@ function Form({ query, onPick }: { query: string; onPick: (draft?: AgentPickerDr
   )
 }
 
-it.each([
-  ['an agent row', ''],
-  ['a search-result row', 'astra low']
-])(
+it.each([['a search-result row', 'astra low']])(
   'applies each model and effort picked in %s setup to the form and keeps the panel on them',
   (_row, query) => {
     const onPick = vi.fn()

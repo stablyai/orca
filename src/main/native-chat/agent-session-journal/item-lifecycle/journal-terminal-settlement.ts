@@ -10,7 +10,7 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
 import {
   isRunningAgentJournalTurn,
   readAgentJournalTurn
-} from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { cancelledJournalPromptBody } from './journal-prompt-body-bounds'
 import { endedJournalReasoning } from './journal-reasoning-row'
 

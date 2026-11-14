@@ -1,5 +1,5 @@
 import type { RemoteServerUpdaterSnapshot } from '../../../../../shared/remote-server-update'
-import { updaterMessageText } from '@/lib/updater-message-copy'
+import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
 
 type PollingTransport = {
   getUpdaterStatus: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>

@@ -7,8 +7,9 @@ import {
   statusRetainsResumableIdentity,
   type ResumeRecordStatus,
   type ResumeRecordTab
-} from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import {
+  isPaneSleepRecord,
   normalizeAgentProviderSession,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
@@ -22,11 +23,38 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 /** The part of a pane's previous status the next one may inherit its provider session from. */
 export type PreviousHookStatus = Pick<ResumeRecordStatus, 'agentType' | 'state' | 'providerSession'>
 
-/** A pane's agent launch recipe, when its terminal was launched as `agent`. */
+/** Main's word on a pane's launch as `agent`: its note, null for none, undefined when main can't tell. */
 export type PaneLaunchConfigOf = (
   paneKey: string,
   agent: ResumeRecordStatus['agentType']
-) => SleepingAgentLaunchConfig | undefined
+) => SleepingAgentLaunchConfig | null | undefined
+
+/** Main's word on the launch, else the pane's earlier record of this session when main can't tell. */
+function statusLaunchConfig(
+  statement: SleepingAgentLaunchConfig | null | undefined,
+  existing: SleepingAgentSessionRecord | undefined,
+  status: ResumeRecordStatus,
+  keepsEarlier = true
+): SleepingAgentLaunchConfig | undefined {
+  return statement === undefined && keepsEarlier
+    ? recordLaunchConfigForStatus(existing, status)
+    : (statement ?? undefined)
+}
+
+/** A sleep's snapshot of this session waits for its wake; a status from no Orca launch neither
+ *  replaces it nor inherits its recipe. */
+function keepsSleepSnapshot(
+  statement: SleepingAgentLaunchConfig | null | undefined,
+  existing: SleepingAgentSessionRecord | undefined,
+  status: ResumeRecordStatus
+): boolean {
+  return (
+    statement === null &&
+    existing !== undefined &&
+    isPaneSleepRecord(existing) &&
+    recordLaunchConfigForStatus(existing, status) !== undefined
+  )
+}
 
 /** A hook row as the window's status entry reads it; null for rows that are not a pane's status. */
 export function resumeStatusFromHookRow(
@@ -80,17 +108,22 @@ export function hookStatusResumeCommand(args: {
   }
   const existing = session.sleepingAgentSessionsByPaneKey?.[status.paneKey]
   const retainsResumableIdentity = statusRetainsResumableIdentity(status, status.providerSession)
+  const statement = args.launchConfigOf(status.paneKey, status.agentType)
+  if (keepsSleepSnapshot(statement, existing, status)) {
+    return null
+  }
   const live = liveResumeRecord({
     entry: status,
     retainsResumableIdentity,
     worktreeIdOf: () => worktreeId,
     tabOf: () => tab,
     capturedAt: status.updatedAt,
-    launchConfig:
-      args.launchConfigOf(status.paneKey, status.agentType) ??
-      (status.state !== 'done' || retainsResumableIdentity
-        ? recordLaunchConfigForStatus(existing, status)
-        : undefined)
+    launchConfig: statusLaunchConfig(
+      statement,
+      existing,
+      status,
+      status.state !== 'done' || retainsResumableIdentity
+    )
   })
   const change = liveResumeRecordChange(existing, live)
   if (!change) {
@@ -112,6 +145,10 @@ export function quitResumeRecords(args: {
 }): SleepingAgentSessionRecord[] {
   return args.statuses.flatMap((status) => {
     const existing = args.session.sleepingAgentSessionsByPaneKey?.[status.paneKey]
+    const statement = args.launchConfigOf(status.paneKey, status.agentType)
+    if (keepsSleepSnapshot(statement, existing, status)) {
+      return []
+    }
     const tabFor = tabOf(args.session, status.paneKey)
     const record = capturedResumeRecord({
       entry: status,
@@ -120,9 +157,7 @@ export function quitResumeRecords(args: {
       capturedAt: args.capturedAt,
       worktreeIdOf: () => status.worktreeId ?? args.worktreeIdOf(status.paneKey),
       tabOf: tabFor,
-      launchConfigOf: () =>
-        args.launchConfigOf(status.paneKey, status.agentType) ??
-        recordLaunchConfigForStatus(existing, status)
+      launchConfigOf: () => statusLaunchConfig(statement, existing, status)
     })
     // Only a pane this partition holds keeps a record here.
     return record && tabFor(record.worktreeId) ? [record] : []

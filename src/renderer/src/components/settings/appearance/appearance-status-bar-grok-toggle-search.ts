@@ -11,7 +11,7 @@ export function getGrokStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'grok',
-    title: translate('auto.components.settings.appearance.search.f8e2a1c4b6', 'Grok Usage'),
+    title: translate('auto.components.settings.appearance.search.ca64c95969', 'Grok usage'),
     description: translate(
       'auto.components.settings.appearance.search.e7d1b0f3a5',
       'Show Grok weekly credit usage from Grok CLI OAuth.'

@@ -88,6 +88,19 @@ describe('a replayed folder launch', () => {
     expect(result).toMatchObject({ worktreeId: 'folder:fw-new', outcome: { kind: 'terminal' } })
   })
 
+  it('does not duplicate a terminal when the requested startup fails', async () => {
+    const runtime = folderRuntime({ settings: {} })
+    const original = runtime.createFolderWorkspace.getMockImplementation()!
+    runtime.createFolderWorkspace.mockImplementationOnce(async (input) => ({
+      ...(await original(input)),
+      startupTerminal: undefined
+    }))
+    await expect(replay(runtime)).rejects.toThrow()
+    expect(runtime.createFolderWorkspace).toHaveBeenCalledOnce()
+    expect(runtime.createTerminal).not.toHaveBeenCalled()
+    expect(createStructuredSession).not.toHaveBeenCalled()
+  })
+
   it('records a create refused before anything was stored as failed, and replays that', async () => {
     const first = folderRuntime({ settings: {} })
     first.createFolderWorkspace.mockRejectedValueOnce(

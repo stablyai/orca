@@ -14,7 +14,10 @@ import {
   getRemoteBrowserKeyboardShortcut,
   getRemoteBrowserKeypressKey
 } from './remote-browser-keyboard'
-import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
+import {
+  isRemoteBrowserInputOpenedDialogError,
+  isRemoteBrowserPageMissingError
+} from './remote-browser-stream-errors'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import {
@@ -176,6 +179,9 @@ export function useRemoteBrowserPageKeyboard({
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
             closeMissingRemotePage(pageId)
+            return
+          }
+          if (isRemoteBrowserInputOpenedDialogError(error)) {
             return
           }
           setPaneNotice({

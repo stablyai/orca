@@ -7,7 +7,7 @@ import type {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useGuestEscape } from '../host-guest/use-guest-escape'
 
 export type GrabModeState = 'idle' | 'armed' | 'awaiting' | 'confirming' | 'error'

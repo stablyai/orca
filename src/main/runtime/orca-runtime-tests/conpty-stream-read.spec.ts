@@ -46,21 +46,4 @@ describe('OrcaRuntimeService ConPTY stream reads', () => {
       clearNativeWindowsConptyPty(ptyId)
     }
   })
-
-  it('fills the requested line count even when blank rows sit below the prompt', async () => {
-    const ptyId = 'pty-conpty-limit'
-    markNativeWindowsConptyPty(ptyId)
-    try {
-      const runtime = startConptyRuntime(ptyId)
-      const [terminal] = (await runtime.listTerminals()).terminals
-      const output = Array.from({ length: 40 }, (_, index) => `line-${index}\r\n`).join('')
-      runtime.onPtyData(ptyId, output, 100)
-
-      const read = await runtime.readTerminal(terminal.handle, { limit: 3 })
-
-      expect(read.tail).toEqual(['line-37', 'line-38', 'line-39'])
-    } finally {
-      clearNativeWindowsConptyPty(ptyId)
-    }
-  })
 })

@@ -4,10 +4,91 @@
   "family": "tasks.task-list-linear",
   "namedDeltas": [],
   "values": {
-    "1a5f65e0078d": {
+    "029bb83f402f": {
+      "name": "error",
+      "ordinal": 21,
+      "value": ""
+    },
+    "0a23a5e47479": {
       "name": "loading",
-      "ordinal": 15,
+      "ordinal": 16,
       "value": false
+    },
+    "0bb204f7f9f1": {
+      "name": "refreshing",
+      "ordinal": 28,
+      "value": false
+    },
+    "0e04c147819c": {
+      "name": "linear.listIssues#2",
+      "ordinal": 23,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.listIssues"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filter": "all",
+            "limit": 50,
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "19d7ea49485f": {
+      "name": "linear.searchIssues#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "1d85d05c4c17": {
+      "name": "linear.searchIssues#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.searchIssues"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "query": "bug",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "29cadc65bcbb": {
+      "name": "error",
+      "ordinal": 15,
+      "value": ""
+    },
+    "38bcf1ed5ff9": {
+      "name": "taskListSettled",
+      "ordinal": 29,
+      "value": true
     },
     "39f99cf479f0": {
       "name": "error",
@@ -18,6 +99,41 @@
       "name": "error",
       "ordinal": 10,
       "value": ""
+    },
+    "3e58b6085f7d": {
+      "name": "items",
+      "ordinal": 14,
+      "value": [
+        {
+          "key": "linear:linear-workspace:issue-2",
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-2",
+            "identifier": "ENG-2",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A found issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          },
+          "status": "Todo",
+          "subtitle": "ENG-2 · Engineering",
+          "title": "A found issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ]
     },
     "3edde845aed1": {
       "error": "",
@@ -60,15 +176,10 @@
       "ordinal": 8,
       "value": false
     },
-    "427b7993fe85": {
-      "name": "error",
-      "ordinal": 20,
-      "value": ""
-    },
-    "531ad700826e": {
-      "name": "refreshing",
-      "ordinal": 27,
-      "value": false
+    "52e364aee6ba": {
+      "name": "loading",
+      "ordinal": 11,
+      "value": true
     },
     "5ac1816a09df": {
       "name": "loading",
@@ -80,19 +191,24 @@
       "ordinal": 2,
       "value": true
     },
-    "687501e36688": {
+    "657f394da6f5": {
       "name": "taskListSettled",
-      "ordinal": 28,
+      "ordinal": 22,
       "value": true
     },
-    "7b6df16c2cf0": {
-      "name": "linear.listIssues#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
+    "6b7ab35b43f3": {
+      "name": "linear.listIssues#2",
+      "ordinal": 24,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
     },
-    "8074cf69af1b": {
+    "6dd330aacfa2": {
+      "name": "error",
+      "ordinal": 26,
+      "value": ""
+    },
+    "6ee1eb7bc043": {
       "name": "items",
-      "ordinal": 19,
+      "ordinal": 20,
       "value": [
         {
           "key": "linear:linear-workspace:issue-1",
@@ -125,9 +241,191 @@
         }
       ]
     },
-    "82788025d560": {
+    "7b6df16c2cf0": {
+      "name": "linear.listIssues#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "837199f7c720": {
+      "name": "linear.searchIssues#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.searchIssues"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "query": "bug",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "description": "",
+              "id": "issue-2",
+              "identifier": "ENG-2",
+              "labels": [],
+              "priority": 0,
+              "state": {
+                "color": "#000",
+                "name": "Todo",
+                "type": "unstarted"
+              },
+              "team": {
+                "id": "team-1",
+                "key": "ENG",
+                "name": "Engineering"
+              },
+              "title": "A found issue",
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "url": "",
+              "workspaceId": "linear-workspace"
+            }
+          ]
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "94caa29bceef": {
+      "name": "error",
+      "ordinal": 19,
+      "value": ""
+    },
+    "94f44b229d7d": {
+      "error": "",
+      "items": [
+        {
+          "key": "linear:linear-workspace:issue-1",
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A Linear issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          },
+          "status": "Todo",
+          "subtitle": "ENG-1 · Engineering",
+          "title": "A Linear issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ],
+      "loading": false,
+      "refreshing": false
+    },
+    "99f1aeb70deb": {
+      "error": "",
+      "items": [
+        {
+          "key": "linear:linear-workspace:issue-1",
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A Linear issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          },
+          "status": "Todo",
+          "subtitle": "ENG-1 · Engineering",
+          "title": "A Linear issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ],
+      "loading": true,
+      "refreshing": false
+    },
+    "b25e7c116f7e": {
+      "name": "items",
+      "ordinal": 5,
+      "value": [
+        {
+          "key": "linear:linear-workspace:issue-1",
+          "provider": "linear",
+          "source": {
+            "description": "",
+            "id": "issue-1",
+            "identifier": "ENG-1",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A Linear issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          },
+          "status": "Todo",
+          "subtitle": "ENG-1 · Engineering",
+          "title": "A Linear issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "ba411b67de4b": {
+      "name": "taskListSettled",
+      "ordinal": 9,
+      "value": true
+    },
+    "c68fccc93876": {
       "name": "linear.listIssues#2",
-      "ordinal": 22,
+      "ordinal": 23,
       "args": [
         {
           "name": "method",
@@ -182,146 +480,6 @@
           }
         }
       }
-    },
-    "915569974be9": {
-      "name": "loading",
-      "ordinal": 26,
-      "value": false
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "94f44b229d7d": {
-      "error": "",
-      "items": [
-        {
-          "key": "linear:linear-workspace:issue-1",
-          "provider": "linear",
-          "source": {
-            "description": "",
-            "id": "issue-1",
-            "identifier": "ENG-1",
-            "labels": [],
-            "priority": 0,
-            "state": {
-              "color": "#000",
-              "name": "Todo",
-              "type": "unstarted"
-            },
-            "team": {
-              "id": "team-1",
-              "key": "ENG",
-              "name": "Engineering"
-            },
-            "title": "A Linear issue",
-            "updatedAt": "2020-01-01T00:00:00.000Z",
-            "url": "",
-            "workspaceId": "linear-workspace"
-          },
-          "status": "Todo",
-          "subtitle": "ENG-1 · Engineering",
-          "title": "A Linear issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z"
-        }
-      ],
-      "loading": false,
-      "refreshing": false
-    },
-    "a27078adc061": {
-      "name": "items",
-      "ordinal": 13,
-      "value": [
-        {
-          "key": "linear:linear-workspace:issue-2",
-          "provider": "linear",
-          "source": {
-            "description": "",
-            "id": "issue-2",
-            "identifier": "ENG-2",
-            "labels": [],
-            "priority": 0,
-            "state": {
-              "color": "#000",
-              "name": "Todo",
-              "type": "unstarted"
-            },
-            "team": {
-              "id": "team-1",
-              "key": "ENG",
-              "name": "Engineering"
-            },
-            "title": "A found issue",
-            "updatedAt": "2020-01-01T00:00:00.000Z",
-            "url": "",
-            "workspaceId": "linear-workspace"
-          },
-          "status": "Todo",
-          "subtitle": "ENG-2 · Engineering",
-          "title": "A found issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z"
-        }
-      ]
-    },
-    "ab9026005b36": {
-      "name": "refreshing",
-      "ordinal": 16,
-      "value": false
-    },
-    "b25e7c116f7e": {
-      "name": "items",
-      "ordinal": 5,
-      "value": [
-        {
-          "key": "linear:linear-workspace:issue-1",
-          "provider": "linear",
-          "source": {
-            "description": "",
-            "id": "issue-1",
-            "identifier": "ENG-1",
-            "labels": [],
-            "priority": 0,
-            "state": {
-              "color": "#000",
-              "name": "Todo",
-              "type": "unstarted"
-            },
-            "team": {
-              "id": "team-1",
-              "key": "ENG",
-              "name": "Engineering"
-            },
-            "title": "A Linear issue",
-            "updatedAt": "2020-01-01T00:00:00.000Z",
-            "url": "",
-            "workspaceId": "linear-workspace"
-          },
-          "status": "Todo",
-          "subtitle": "ENG-1 · Engineering",
-          "title": "A Linear issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z"
-        }
-      ]
-    },
-    "b84d178fd4fa": {
-      "name": "taskListSettled",
-      "ordinal": 21,
-      "value": true
-    },
-    "ba411b67de4b": {
-      "name": "taskListSettled",
-      "ordinal": 9,
-      "value": true
-    },
-    "bf0de0571310": {
-      "name": "taskListSettled",
-      "ordinal": 17,
-      "value": true
-    },
-    "c40da88e1087": {
-      "name": "error",
-      "ordinal": 25,
-      "value": ""
     },
     "c6d55e6b8844": {
       "name": "linear.listIssues#1",
@@ -381,14 +539,32 @@
         }
       }
     },
-    "caf8f91bd626": {
-      "name": "error",
+    "cbe48ad190bf": {
+      "name": "taskListSettled",
       "ordinal": 18,
+      "value": true
+    },
+    "e8ba61988aec": {
+      "name": "refreshing",
+      "ordinal": 17,
+      "value": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f1dcb0c02c92": {
+      "name": "error",
+      "ordinal": 6,
       "value": ""
     },
-    "d2396a6354db": {
+    "f7948247f5de": {
       "name": "items",
-      "ordinal": 24,
+      "ordinal": 25,
       "value": [
         {
           "key": "linear:linear-workspace:issue-1",
@@ -421,145 +597,10 @@
         }
       ]
     },
-    "dd5be60ee9f9": {
-      "name": "linear.searchIssues#1",
-      "ordinal": 11,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.searchIssues"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 50,
-            "query": "bug",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": [
-            {
-              "description": "",
-              "id": "issue-2",
-              "identifier": "ENG-2",
-              "labels": [],
-              "priority": 0,
-              "state": {
-                "color": "#000",
-                "name": "Todo",
-                "type": "unstarted"
-              },
-              "team": {
-                "id": "team-1",
-                "key": "ENG",
-                "name": "Engineering"
-              },
-              "title": "A found issue",
-              "updatedAt": "2020-01-01T00:00:00.000Z",
-              "url": "",
-              "workspaceId": "linear-workspace"
-            }
-          ]
-        }
-      }
-    },
-    "e3642939f5f6": {
-      "name": "linear.searchIssues#1",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "ee67e864ea01": {
-      "name": "linear.listIssues#2",
-      "ordinal": 23,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
-    },
-    "ef8932b03a8c": {
-      "name": "error",
-      "ordinal": 14,
-      "value": ""
-    },
-    "f1dcb0c02c92": {
-      "name": "error",
-      "ordinal": 6,
-      "value": ""
-    },
-    "f310b6adb00d": {
-      "name": "linear.searchIssues#1",
-      "ordinal": 11,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.searchIssues"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 50,
-            "query": "bug",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "fdc3528e1a4e": {
-      "name": "linear.listIssues#2",
-      "ordinal": 22,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.listIssues"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filter": "all",
-            "limit": 50,
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
+    "fe892b7f7693": {
+      "name": "loading",
+      "ordinal": 27,
+      "value": false
     }
   },
   "recording": {
@@ -589,15 +630,15 @@
       {
         "id": "second-filter-pending",
         "observation": {
-          "sender": ["c6d55e6b8844", "f310b6adb00d"],
-          "payloads": ["7b6df16c2cf0", "e3642939f5f6"],
+          "sender": ["c6d55e6b8844", "1d85d05c4c17"],
+          "payloads": ["7b6df16c2cf0", "19d7ea49485f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
             "set-query-1": "eb79a9b3682a",
             "load-2": "9270aeb7d9c6"
           },
-          "state": "94f44b229d7d",
+          "state": "99f1aeb70deb",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -606,15 +647,16 @@
             "5ac1816a09df",
             "411aee2eccd9",
             "ba411b67de4b",
-            "3aefb3006914"
+            "3aefb3006914",
+            "52e364aee6ba"
           ]
         }
       },
       {
         "id": "second-filter-settled",
         "observation": {
-          "sender": ["c6d55e6b8844", "dd5be60ee9f9"],
-          "payloads": ["7b6df16c2cf0", "e3642939f5f6"],
+          "sender": ["c6d55e6b8844", "837199f7c720"],
+          "payloads": ["7b6df16c2cf0", "19d7ea49485f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -631,19 +673,20 @@
             "411aee2eccd9",
             "ba411b67de4b",
             "3aefb3006914",
-            "a27078adc061",
-            "ef8932b03a8c",
-            "1a5f65e0078d",
-            "ab9026005b36",
-            "bf0de0571310"
+            "52e364aee6ba",
+            "3e58b6085f7d",
+            "29cadc65bcbb",
+            "0a23a5e47479",
+            "e8ba61988aec",
+            "cbe48ad190bf"
           ]
         }
       },
       {
         "id": "first-filter-back-pending",
         "observation": {
-          "sender": ["c6d55e6b8844", "dd5be60ee9f9", "fdc3528e1a4e"],
-          "payloads": ["7b6df16c2cf0", "e3642939f5f6", "ee67e864ea01"],
+          "sender": ["c6d55e6b8844", "837199f7c720", "0e04c147819c"],
+          "payloads": ["7b6df16c2cf0", "19d7ea49485f", "6b7ab35b43f3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -662,23 +705,24 @@
             "411aee2eccd9",
             "ba411b67de4b",
             "3aefb3006914",
-            "a27078adc061",
-            "ef8932b03a8c",
-            "1a5f65e0078d",
-            "ab9026005b36",
-            "bf0de0571310",
-            "caf8f91bd626",
-            "8074cf69af1b",
-            "427b7993fe85",
-            "b84d178fd4fa"
+            "52e364aee6ba",
+            "3e58b6085f7d",
+            "29cadc65bcbb",
+            "0a23a5e47479",
+            "e8ba61988aec",
+            "cbe48ad190bf",
+            "94caa29bceef",
+            "6ee1eb7bc043",
+            "029bb83f402f",
+            "657f394da6f5"
           ]
         }
       },
       {
         "id": "first-filter-back-settled",
         "observation": {
-          "sender": ["c6d55e6b8844", "dd5be60ee9f9", "82788025d560"],
-          "payloads": ["7b6df16c2cf0", "e3642939f5f6", "ee67e864ea01"],
+          "sender": ["c6d55e6b8844", "837199f7c720", "c68fccc93876"],
+          "payloads": ["7b6df16c2cf0", "19d7ea49485f", "6b7ab35b43f3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load-0": "eb79a9b3682a",
@@ -697,20 +741,21 @@
             "411aee2eccd9",
             "ba411b67de4b",
             "3aefb3006914",
-            "a27078adc061",
-            "ef8932b03a8c",
-            "1a5f65e0078d",
-            "ab9026005b36",
-            "bf0de0571310",
-            "caf8f91bd626",
-            "8074cf69af1b",
-            "427b7993fe85",
-            "b84d178fd4fa",
-            "d2396a6354db",
-            "c40da88e1087",
-            "915569974be9",
-            "531ad700826e",
-            "687501e36688"
+            "52e364aee6ba",
+            "3e58b6085f7d",
+            "29cadc65bcbb",
+            "0a23a5e47479",
+            "e8ba61988aec",
+            "cbe48ad190bf",
+            "94caa29bceef",
+            "6ee1eb7bc043",
+            "029bb83f402f",
+            "657f394da6f5",
+            "f7948247f5de",
+            "6dd330aacfa2",
+            "fe892b7f7693",
+            "0bb204f7f9f1",
+            "38bcf1ed5ff9"
           ]
         }
       }

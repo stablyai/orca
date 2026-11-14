@@ -1,4 +1,4 @@
-import { searchTerminalQuickCommands } from '@/lib/terminal-quick-command-search'
+import { searchTerminalQuickCommands } from '@/lib/terminal/quick-commands/terminal-quick-command-search'
 import type { HostedTerminalQuickCommand } from '@/hooks/use-terminal-quick-command-hosts'
 
 export function searchHostedTerminalQuickCommands(

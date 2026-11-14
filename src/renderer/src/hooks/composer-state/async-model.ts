@@ -1,9 +1,9 @@
 import type * as React from 'react'
 import type { RefObject } from 'react'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
-import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
-import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
+import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace/creation/workspace-create-error-format'
 import type { IssueCommandReadResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { SmartSourceSelection } from './source-selection-decisions'
 

@@ -1,4 +1,4 @@
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 
 const PTY_CONNECT_DIAG_LIMIT = 200
 

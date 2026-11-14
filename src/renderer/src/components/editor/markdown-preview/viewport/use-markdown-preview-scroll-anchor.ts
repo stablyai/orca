@@ -5,7 +5,10 @@ import {
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import type { MarkdownPreviewBlock } from '../document-worker/markdown-preview-document-types'
 
 const anchors = new Map<string, VirtualizedScrollAnchor>()

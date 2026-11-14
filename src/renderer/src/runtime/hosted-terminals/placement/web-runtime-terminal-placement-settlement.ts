@@ -1,4 +1,4 @@
-import { insertUnifiedTabAfterAnchor } from '../../../lib/unified-tab-anchor-insertion'
+import { insertUnifiedTabAfterAnchor } from '../../../lib/workspace/tabs/unified-tab-anchor-insertion'
 import { useAppStore } from '../../../store/index'
 import {
   forgetWebSessionTerminalPlacement,

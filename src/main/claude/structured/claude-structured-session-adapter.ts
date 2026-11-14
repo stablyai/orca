@@ -1,6 +1,6 @@
 import { dispatchClaudeCommand } from './claude-structured-command-dispatch'
 import { isKillDeliveredExitReceipt } from './claude-kill-delivered-exit-receipt'
-import { claudeAcquireFailure } from '../claude-startup-failure'
+import { claudeAcquireFailure } from '../sdk-transport/claude-startup-failure'
 import { claudeStartPublication, openClaudeStart } from './claude-structured-start-ending'
 import { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import type {
@@ -8,7 +8,7 @@ import type {
   StructuredAgentSessionAdapter
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { stopCurrentClaudeBackgroundTasks } from './claude-structured-control-actions'
-import { claudeHeldSends, claudeHoldsDispatch } from '../claude-command-lifecycle'
+import { claudeHeldSends, claudeHoldsDispatch } from './turns/claude-command-lifecycle'
 import {
   releaseClaudeAcquisition,
   type ClaudeReleaseRequest
@@ -26,15 +26,16 @@ import {
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 import { closeAllClaudeSessions } from './claude-structured-session-close'
-import { claudeStoppedRequestEndWait } from '../claude-request-end-wait'
+import { claudeStoppedRequestEndWait } from './turns/claude-request-end-wait'
 import {
   finishClaudeCloseAfterExit,
   drainClaudeObservedExits,
+  liveClaudeSession,
   observeClaudeSessionExit,
   settleClaudeUnexpectedExit,
   type ClaudeExitLifecycle
 } from './claude-structured-session-exit-lifecycle'
-import { drainClaudeChildWork } from '../claude-child-work-evidence'
+import { drainClaudeChildWork } from '../child-work/claude-child-work-evidence'
 import {
   deliverClaudeConnectionEvent,
   emitClaudeStructuredSessionEvent
@@ -46,14 +47,12 @@ import {
   settleClaudePromptFreeingChild
 } from './journal/claude-structured-prompt-ownership'
 import { claudePromptCancelRoute } from './journal/claude-structured-prompt-replies'
-import { claudeForkForRewind } from '../claude-rewind-fork'
-import { copyClaudeConversation } from '../claude-conversation-copy'
-import { ClaudeConversationNaming } from '../claude-conversation-naming'
-import { captureClaudeConversationTitleOwner } from './claude-conversation-title-owner'
+import { claudeForkForRewind } from '../transcripts/claude-rewind-fork'
+import { copyClaudeConversation } from '../transcripts/claude-conversation-copy'
+import { ClaudeConversationNaming } from '../conversation-naming/claude-conversation-naming'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, ClaudeSession>()
-  captureConversationTitleOwner = captureClaudeConversationTitleOwner(this.sessions)
   private readonly acquisitions = new ClaudeAcquisitionRegistry()
   private readonly exits = new Map<string, ClaudeSessionExit>()
   private readonly settledExitErrors = new Map<string, Error>()
@@ -296,15 +295,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   private session(sessionId: string): ClaudeSession {
-    const session = this.sessions.get(sessionId)
-    if (!session) {
-      // A child that just exited is named by its own diagnostic, not by its absence.
-      throw (
-        this.exits.get(sessionId)?.error ??
-        this.settledExitErrors.get(sessionId) ??
-        new Error(`no live claude stream-json session for ${sessionId}`)
-      )
-    }
-    return session
+    return liveClaudeSession(this.exitLifecycle, sessionId)
   }
 }

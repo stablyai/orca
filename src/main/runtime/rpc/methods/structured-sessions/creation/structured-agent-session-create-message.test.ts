@@ -1,3 +1,5 @@
+import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-create-capabilities'
@@ -6,16 +8,16 @@ import {
   createRestTestRig,
   restTestSend,
   type RestTestRig
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW as NOW,
   hostTestMessage,
   hostTestOperationId
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { call, runtimeCalls } from '../protocol/structured-agent-session-rpc.test-fixture'
-import { stopCreatedChat } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
+import { stopCreatedChat } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
 import '../../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AgentSessionPreSpawnError } from '../../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 
@@ -82,7 +84,7 @@ it('refuses a new founding operation before dispatching the same opening again',
     }
   })
   expect(
-    (await rig.host.journalSnapshot(SESSION)).submissions.map((row) => row.clientMessageId)
+    (await readTestHostJournal(rig.host, SESSION)).submissions.map((row) => row.clientMessageId)
   ).toEqual([input.firstMessage?.clientMessageId])
   expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
 })
@@ -205,7 +207,7 @@ it.each(['firstMessage', 'options'] as const)(
       ok: true,
       result: { ok: false, refusal: { code: 'agent_session_operation_conflict' } }
     })
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([])
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toEqual([])
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   }
 )
@@ -244,7 +246,7 @@ it.each(['options', 'firstMessage'] as const)(
     if (!first) {
       throw new Error('fixture first message missing')
     }
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
       { clientMessageId: first.clientMessageId }
     ])
     const changed = structuredAgentSessionCreateParams({

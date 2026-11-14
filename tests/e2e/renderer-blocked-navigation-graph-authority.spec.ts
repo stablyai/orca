@@ -1,5 +1,5 @@
 import { test, expect } from './helpers/orca-app'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeStatus } from '../../src/shared/runtime-types'
 import { waitForSessionReady } from './helpers/store'
 

@@ -1,0 +1,92 @@
+import { readdir, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { isChromeExtensionId } from '../../../../shared/browser/extensions/browser-extension-url'
+
+/** Files a forget removes; queued with the writes so an older write can never land after it. */
+export type SweepScope =
+  | { kind: 'extension'; extensionId: string }
+  | { kind: 'profileExtension'; profileId: string; extensionId: string }
+  | { kind: 'profileExcept'; profileId: string; extensionIds: ReadonlySet<string> }
+  | { kind: 'profile'; profileId: string }
+
+export type Sweep = { scope: SweepScope; done: Promise<void>; settle: (error?: unknown) => void }
+
+export function documentProfileDirectory(storageDirectory: string, profileId: string): string {
+  return join(storageDirectory, encodeURIComponent(profileId))
+}
+
+export function documentFileName(extensionId: string): string {
+  return `${encodeURIComponent(extensionId)}.json`
+}
+
+export function sweepCovers(sweep: SweepScope, profileId: string, extensionId: string): boolean {
+  switch (sweep.kind) {
+    case 'extension':
+      return sweep.extensionId === extensionId
+    case 'profileExtension':
+      return sweep.profileId === profileId && sweep.extensionId === extensionId
+    case 'profileExcept':
+      return sweep.profileId === profileId && !sweep.extensionIds.has(extensionId)
+    case 'profile':
+      return sweep.profileId === profileId
+  }
+}
+
+/** A missing directory has nothing to delete; any other read error fails the sweep. */
+async function ifPresent<T>(read: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await read()
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+}
+
+// Node retries busy files only in recursive mode, which also removes a plain file.
+const REMOVE_OPTIONS = { force: true, recursive: true, maxRetries: 3 }
+
+/** Settles every removal before reporting a failure, so none outlives its sweep. */
+async function removeAll(paths: string[]): Promise<void> {
+  const results = await Promise.allSettled(paths.map((path) => rm(path, REMOVE_OPTIONS)))
+  const failed = results.find((result) => result.status === 'rejected')
+  if (failed) {
+    throw failed.reason
+  }
+}
+
+export async function deleteSweptDocuments(
+  sweep: SweepScope,
+  storageDirectory: string
+): Promise<void> {
+  if (sweep.kind === 'profile') {
+    await rm(documentProfileDirectory(storageDirectory, sweep.profileId), REMOVE_OPTIONS)
+    return
+  }
+  if (sweep.kind === 'profileExtension') {
+    const directory = documentProfileDirectory(storageDirectory, sweep.profileId)
+    await rm(join(directory, documentFileName(sweep.extensionId)), REMOVE_OPTIONS)
+    return
+  }
+  if (sweep.kind === 'extension') {
+    const entries = await ifPresent(() => readdir(storageDirectory, { withFileTypes: true }))
+    // Skip stray files like .DS_Store: a path through one fails with ENOTDIR on every retry.
+    await removeAll(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(storageDirectory, entry.name, documentFileName(sweep.extensionId)))
+    )
+    return
+  }
+  const directory = documentProfileDirectory(storageDirectory, sweep.profileId)
+  const files = await ifPresent(() => readdir(directory))
+  await removeAll(
+    files
+      .filter((file) => {
+        const extensionId = file.replace(/\.json$/, '')
+        return isChromeExtensionId(extensionId) && !sweep.extensionIds.has(extensionId)
+      })
+      .map((file) => join(directory, file))
+  )
+}

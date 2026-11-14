@@ -1,5 +1,5 @@
 import { useCallback, useRef, type ComponentProps, type Ref } from 'react'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useGitHubTextareaImages } from './use-github-textarea-images'
 import type { GitHubImageIntake } from './use-github-image-uploads'
 

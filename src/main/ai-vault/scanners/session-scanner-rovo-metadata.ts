@@ -1,4 +1,4 @@
-import { firstString } from '../session-scanner-values'
+import { firstString } from '../parsing/session-record-fields'
 
 /** Scope discovery reads cwd from metadata without opening the context file. */
 export function rovoSessionCwd(metadata: Record<string, unknown>): string | null {

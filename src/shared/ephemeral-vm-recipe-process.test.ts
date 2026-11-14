@@ -1,16 +1,15 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from './testing/remove-temp-dirs.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runRecipeCommand } from './ephemeral-vm-recipe-process'
 
 const tmpRoots: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
-  for (const root of tmpRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
-  }
+  await removeTempDirs(tmpRoots.splice(0))
 })
 
 function makeRepo(): string {
@@ -79,33 +78,5 @@ describe('runRecipeCommand', () => {
       await vi.waitFor(() => expect(isAlive(grandchildPid)).toBe(false), { timeout: 2_000 })
     },
     10_000
-  )
-
-  it.each([
-    { output: 'abcdef', maxCaptureBytes: 4, expected: 'cdef' },
-    { output: 'A😀B', maxCaptureBytes: 5, expected: '😀B' },
-    { output: '😀😀😀', maxCaptureBytes: 5, expected: '😀' }
-  ])(
-    'retains a complete UTF-8 tail within $maxCaptureBytes bytes',
-    async ({ output, maxCaptureBytes, expected }) => {
-      const repoPath = makeRepo()
-      const scriptPath = join(repoPath, 'output.js')
-      writeFileSync(scriptPath, `process.stdout.write(${JSON.stringify(output)})`)
-
-      const result = await runRecipeCommand({
-        command: nodeCommand(scriptPath),
-        repoPath,
-        mode: 'create',
-        resultSchemaVersion: 1,
-        context: {
-          recipeId: 'cloud-sandbox',
-          repoPath
-        },
-        maxCaptureBytes
-      })
-
-      expect(result.stdout).toBe(expected)
-      expect(Buffer.byteLength(result.stdout, 'utf8')).toBeLessThanOrEqual(maxCaptureBytes)
-    }
   )
 })

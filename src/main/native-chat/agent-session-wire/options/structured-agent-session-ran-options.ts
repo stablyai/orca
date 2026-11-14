@@ -1,14 +1,13 @@
 // Fill unsaved choices from execution evidence, never startup/config reports or host defaults.
 
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
 } from '../host/structured-agent-session-host-types'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { recordAgentSessionRanOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 type RanOptionsContext = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'agents' | 'modelCatalog'>
@@ -28,7 +27,6 @@ const childRuns = new WeakMap<
   StructuredAgentSessionProviderChild,
   {
     reported?: RanOptions
-    reportedModel?: string
     owed?: StructuredAgentSessionHandedOptions
     permission?: string | null
   }
@@ -37,12 +35,6 @@ const childRuns = new WeakMap<
 function currentChild(context: RanOptionsContext, sessionId: string, fence: number) {
   const child = context.sessions.get(sessionId)?.child
   return child?.fence === fence ? child : null
-}
-
-export function structuredAgentSessionRuntimeModel(
-  child: StructuredAgentSessionProviderChild
-): string | undefined {
-  return child.phase === 'ready' ? childRuns.get(child)?.reportedModel : undefined
 }
 
 /** The current child's startup report or applied evidence; never saved intent or send authority. */
@@ -59,9 +51,6 @@ export function noteStructuredAgentSessionRuntimeOptions(
   initial = false
 ): void {
   const previous = childRuns.get(child)
-  if (!initial || previous?.reportedModel === undefined) {
-    childRuns.set(child, { ...previous, reportedModel: reported.reportedModel ?? reported.model })
-  }
   if (
     reported.reportedPermissionMode !== undefined &&
     (!initial || previous?.permission === undefined)
@@ -176,13 +165,16 @@ export async function recordStructuredAgentSessionRanOptions(
     return
   }
   await store
-    .reviseSessionOptions(recordAgentSessionRanOptions, {
-      sessionId,
-      fence: child.fence,
-      model,
-      options: ran,
-      models: undefined,
-      now: context.now()
+    .updateRecord(sessionId, {
+      kind: 'ran-options',
+      args: {
+        sessionId,
+        fence: child.fence,
+        model,
+        options: ran,
+        models: undefined,
+        now: context.now()
+      }
     })
     .catch((error: unknown) =>
       logger.warn('recording the options a turn ran failed', {

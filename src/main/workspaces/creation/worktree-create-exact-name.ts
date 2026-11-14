@@ -1,6 +1,6 @@
 import { GitCommandTimeoutError } from '../../../shared/git/commands/git-command-timeout'
 import { WorktreeCreateExactNameTakenError } from '../../../shared/new-workspace/worktree-create-collision'
-import type { StrictBranchConflictKind } from '../../git/repo-branch-conflict'
+import type { StrictBranchConflictKind } from '../../git/refs/resolution/repo-branch-conflict'
 
 /** Exact mode has one candidate; anything that would move a create to the next suffix refuses instead. */
 export function exactNameTakenError(name: string): WorktreeCreateExactNameTakenError {

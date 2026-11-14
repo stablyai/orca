@@ -3,7 +3,7 @@
   "extends": ["../.oxlintrc.json"],
   "ignorePatterns": [
     "src/components/mobile-markdown-mdast-nodes.d.ts",
-    "src/terminal/terminal-webview-engine.generated.ts",
+    "src/terminal/document/terminal-webview-engine.generated.ts",
     "src/components/pr-sidebar/mermaid-page-engine.generated.ts",
     "src/components/katex-page-style.generated.ts"
   ],
@@ -21,9 +21,16 @@
   },
   "overrides": [
     {
-      "files": ["src/terminal/TerminalWebView.tsx"],
+      "files": ["src/terminal/webview/TerminalWebView.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 379, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": [
+          "error",
+          {
+            "max": 379,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
       }
     }
   ]

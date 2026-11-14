@@ -9,7 +9,7 @@ import {
   nativeChatSessionChoiceLabel,
   nativeChatSessionChoiceShortLabel,
   nativeChatSessionOptionLabel
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 
 export function EffortSlider({

@@ -1,5 +1,5 @@
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
-import { isExpectedAgentProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
+import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
@@ -88,7 +88,8 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       })
   }
   const deliverStartupDraftIfAgentOwnsPty = async (): Promise<void> => {
-    if (!session.startupDraftAgentConfig || startupDraftPasteSettled) {
+    const agent = session.startupDraftAgent
+    if (!agent || startupDraftPasteSettled) {
       return
     }
     const ptyId = getStartupDraftPtyId()
@@ -98,10 +99,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     try {
       const process = await inspectRuntimeTerminalProcess(ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (
-        getStartupDraftPtyId() === ptyId &&
-        isExpectedAgentProcess(foreground, session.startupDraftAgentConfig.expectedProcess)
-      ) {
+      if (getStartupDraftPtyId() === ptyId && isAgentForegroundProcess(foreground, agent)) {
         sendStartupDraftPaste()
       }
     } catch {

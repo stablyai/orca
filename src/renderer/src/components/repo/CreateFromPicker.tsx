@@ -15,7 +15,12 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import {
+  branchRefLabel,
+  branchRefLabels,
+  probedDefaultBranchRef
+} from '../../../../shared/git/refs/branch-ref-label'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -24,14 +29,40 @@ import {
   searchRuntimeRepoBaseRefs
 } from '@/runtime/source-control/references/runtime-repo-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/source-control/references/runtime-repo-search-bounds'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 
 const DEFAULT_VALUE = '__project_default__'
 
-function displayBranchName(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
+function createBranchOptions(
+  effectiveDefault: string | null,
+  searchResults: readonly string[],
+  worktrees: readonly Worktree[]
+) {
+  const options = new Set<string>()
+  if (effectiveDefault) {
+    options.add(effectiveDefault)
+  }
+  for (const worktree of worktrees) {
+    const branch = worktree.branch.trim().replace(/^refs\/heads\//, '')
+    if (branch) {
+      options.add(searchResults.includes(branch) ? branch : `refs/heads/${branch}`)
+    }
+  }
+  for (const branch of searchResults) {
+    options.add(branch)
+  }
+  const merged = Array.from(options)
+  const labels = branchRefLabels(merged)
+  merged.sort((left, right) => (labels.get(left) ?? left).localeCompare(labels.get(right) ?? right))
+  return { options: merged, labels }
+}
+
+function cancelFocusFrame(frame: { current: number | null }): void {
+  if (frame.current !== null) {
+    cancelAnimationFrame(frame.current)
+    frame.current = null
+  }
 }
 
 export function CreateFromPicker({
@@ -66,93 +97,77 @@ export function CreateFromPicker({
   const [searchResults, setSearchResults] = React.useState<string[]>([])
   const [isSearching, setIsSearching] = React.useState(false)
   const listId = React.useId()
-  const effectiveDefault = repo?.worktreeBaseRef ?? defaultBaseRef
+  const effectiveDefault =
+    repo?.worktreeBaseRef ?? probedDefaultBranchRef(defaultBaseRef, searchResults)
   const selectedValue = value || DEFAULT_VALUE
   const projectDefaultLabel = t(
     'auto.components.automations.CreateFromPicker.ef6d762538',
     'Project default'
   )
   const selectedLabel =
-    value || (effectiveDefault ? `${effectiveDefault} (default)` : projectDefaultLabel)
-  const compactLabel = value || effectiveDefault || projectDefaultLabel
-  const branchOptions = React.useMemo(() => {
-    const options = new Set<string>()
-    if (effectiveDefault) {
-      options.add(effectiveDefault)
-    }
-    for (const worktree of worktrees) {
-      const branch = displayBranchName(worktree.branch).trim()
-      if (branch) {
-        options.add(branch)
-      }
-    }
-    for (const branch of searchResults) {
-      options.add(branch)
-    }
-    return Array.from(options).sort((left, right) => left.localeCompare(right))
-  }, [effectiveDefault, searchResults, worktrees])
-
-  const renderBranchContextMenu = React.useCallback(
-    (branch: string, row: React.ReactNode): React.ReactNode => {
-      if (!onSetDefault || !branch) {
-        return row
-      }
-      const isDefault = branch === effectiveDefault
-      return (
-        <ContextMenu key={branch}>
-          <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
-          <ContextMenuContent className="z-[70]">
-            <ContextMenuItem
-              disabled={isDefault}
-              onSelect={() => {
-                void onSetDefault(branch)
-              }}
-            >
-              <Star className="size-3.5" />
-              {isDefault
-                ? translate('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
-                : translate('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-      )
-    },
-    [effectiveDefault, onSetDefault]
+    (value ? branchRefLabel(value) : null) ||
+    (effectiveDefault ? `${branchRefLabel(effectiveDefault)} (default)` : projectDefaultLabel)
+  const compactLabel = value
+    ? branchRefLabel(value)
+    : effectiveDefault
+      ? branchRefLabel(effectiveDefault)
+      : projectDefaultLabel
+  const { options: branchOptions, labels } = React.useMemo(
+    () => createBranchOptions(effectiveDefault, searchResults, worktrees),
+    [effectiveDefault, searchResults, worktrees]
   )
 
-  const cancelFocusFrame = React.useCallback((): void => {
-    if (focusFrameRef.current !== null) {
-      cancelAnimationFrame(focusFrameRef.current)
-      focusFrameRef.current = null
+  function renderBranchContextMenu(branch: string, row: React.ReactNode): React.ReactNode {
+    if (!onSetDefault || !branch) {
+      return row
     }
-  }, [])
+    const isDefault = effectiveDefault === branch
+    return (
+      <ContextMenu key={branch}>
+        <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+        <ContextMenuContent className="z-[70]">
+          <ContextMenuItem
+            disabled={isDefault}
+            onSelect={() => {
+              void onSetDefault(branch)
+            }}
+          >
+            <Star className="size-3.5" />
+            {isDefault
+              ? t('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
+              : t('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+    )
+  }
 
   const setInputNode = React.useCallback(
     (node: HTMLInputElement | null): void => {
       if (node === null) {
-        cancelFocusFrame()
+        cancelFocusFrame(focusFrameRef)
       }
       inputRef.current = node
     },
-    [cancelFocusFrame]
+    [focusFrameRef, inputRef]
   )
 
   const focusSearchInput = React.useCallback(() => {
-    cancelFocusFrame()
+    cancelFocusFrame(focusFrameRef)
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       inputRef.current?.focus()
     })
-  }, [cancelFocusFrame])
+  }, [focusFrameRef, inputRef])
 
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
       if (!nextOpen) {
-        cancelFocusFrame()
+        cancelFocusFrame(focusFrameRef)
       }
     },
-    [cancelFocusFrame]
+    [focusFrameRef, setOpen]
   )
 
   React.useEffect(() => {
@@ -331,7 +346,7 @@ export function CreateFromPicker({
                           ? t(
                               'auto.components.automations.CreateFromPicker.e53d306056',
                               '{{value0}} (default)',
-                              { value0: effectiveDefault }
+                              { value0: branchRefLabel(effectiveDefault) }
                             )
                           : t(
                               'auto.components.automations.CreateFromPicker.ef6d762538',
@@ -342,7 +357,7 @@ export function CreateFromPicker({
                   </CommandItem>
                 )}
                 {branchOptions
-                  .filter((branch) => branch !== effectiveDefault)
+                  .filter((branch) => !(effectiveDefault === branch))
                   .map((branch) =>
                     renderBranchContextMenu(
                       branch,
@@ -358,7 +373,7 @@ export function CreateFromPicker({
                           className={cn('size-4', value === branch ? 'opacity-100' : 'opacity-0')}
                         />
                         <FilePathCursorTooltip path={branch}>
-                          <span className="min-w-0 truncate">{branch}</span>
+                          <span className="min-w-0 truncate">{labels.get(branch)}</span>
                         </FilePathCursorTooltip>
                       </CommandItem>
                     )

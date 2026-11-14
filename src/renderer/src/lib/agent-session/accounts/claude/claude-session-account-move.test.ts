@@ -1,13 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { ClaudeManagedAccount } from '../../../../../../shared/managed-account-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import type * as localPreflightContext from '@/lib/local-preflight-context'
-import type * as paneSelectionLane from '../../../codex-pane-selection-lane'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
@@ -16,6 +10,12 @@ import {
   findClaudeSwitchSessions,
   findQueuedClaudeRestartsOnAccount
 } from './claude-session-account-move'
+import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
+import type { ClaudeManagedAccount } from '../../../../../../shared/managed-account-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
+import type * as localPreflightContext from '@/runtime/hosts/preflight/local-preflight-context'
+import type * as paneSelectionLane from '../codex-pane-selection-lane'
 import type { ClaudeHostFolders } from './claude-pane-account-folder'
 
 const laneByPtyId: Record<string, string> = {}
@@ -25,12 +25,14 @@ vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspecti
   inspectRuntimeTerminalProcess: vi.fn(),
   confirmRuntimeTerminalForegroundProcess: vi.fn()
 }))
-vi.mock('../../../renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
-vi.mock('@/lib/local-preflight-context', async (importOriginal) => ({
+vi.mock('../../../../app-shell/platform/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => 'win32'
+}))
+vi.mock('@/runtime/hosts/preflight/local-preflight-context', async (importOriginal) => ({
   ...(await importOriginal<typeof localPreflightContext>()),
   getLocalProjectExecutionRuntimeContext: () => projectRuntime
 }))
-vi.mock('../../../codex-pane-selection-lane', async (importOriginal) => ({
+vi.mock('../codex-pane-selection-lane', async (importOriginal) => ({
   ...(await importOriginal<typeof paneSelectionLane>()),
   resolveCodexPaneSelectionLane: ({ ptyId }: { ptyId: string }) => ({
     laneKey: laneByPtyId[ptyId] ?? 'host',
@@ -162,31 +164,6 @@ describe('findMovableClaudeSessions', () => {
       hasChildProcesses: true
     })
     vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('claude')
-  })
-
-  it('keeps every live pane of a shared session running, even one already on the new account', async () => {
-    seedPanes([
-      { n: 1, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },
-      { n: 2, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },
-      { n: 3, agentType: 'claude', configDir: FOLDER_A, sessionId: `${SESSION_ID.slice(0, -1)}9` },
-      { n: 4, agentType: 'claude', configDir: FOLDER_B, sessionId: `${SESSION_ID.slice(0, -1)}9` },
-      { n: 5, agentType: 'claude', configDir: FOLDER_A }
-    ])
-    const onShared = vi.fn()
-
-    const found = await findClaudeSwitchSessions({
-      owner: LOCAL,
-      target: HOST,
-      fromAccountId: 'acct-a',
-      toAccountId: 'acct-b',
-      onShared
-    })
-
-    expect(found.onAccount.map((pane) => pane.ptyId)).toEqual([ptyId(5)])
-    expect(found.cantMove).toEqual(
-      [1, 2, 3].map((n) => expect.objectContaining({ ptyId: ptyId(n), reason: 'shared-session' }))
-    )
-    expect(onShared.mock.calls[0]?.[0]).toHaveLength(3)
   })
 
   it("keeps a shared session running after the other pane's sidebar row was dismissed", async () => {

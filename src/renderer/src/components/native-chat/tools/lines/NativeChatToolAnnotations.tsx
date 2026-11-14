@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { NativeChatToolCallBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { useNativeChatLinkClick } from '../../links/actions/native-chat-link-click-context'
 import {

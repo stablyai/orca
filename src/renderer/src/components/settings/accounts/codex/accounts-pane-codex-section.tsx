@@ -8,7 +8,7 @@ import { Label } from '../../../ui/label'
 import { OpenAIIcon } from '../../../status-bar/icons'
 import { CodexLoginLinkNotice } from './CodexLoginLinkNotice'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { getAccountsCodexSearchEntries } from '../accounts-search'
+import { ACCOUNTS_SECTION_IDS, getAccountsCodexSearchEntries } from '../accounts-search'
 import { getCodexSystemDefaultSubtitle } from '../scope/accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
@@ -47,7 +47,7 @@ export function renderCodexAccountsSection(
     wslCapabilitiesLoading
   } = model
   return (
-    <div key="codex-accounts" id="accounts-codex" className="scroll-mt-6">
+    <div key="codex-accounts" id={ACCOUNTS_SECTION_IDS.codex} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">
@@ -79,7 +79,7 @@ export function renderCodexAccountsSection(
         }
       >
         <SearchableSetting
-          title={t('auto.components.settings.AccountsPane.3180536c7a', 'Codex Accounts')}
+          title={t('auto.components.settings.AccountsPane.bd16d363ed', 'Codex accounts')}
           description={t(
             'auto.components.settings.AccountsPane.d0d53b7eb0',
             'Manage which Codex account Orca uses for live rate limit fetching.'
@@ -189,7 +189,7 @@ export function renderCodexAccountsSection(
                 ) : (
                   <Plus className="size-3" />
                 )}
-                {t('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+                {t('auto.components.settings.AccountsPane.7e9977b560', 'Add account')}
               </Button>
               {/* Follow the running addition; hide Cancel only when its server prompt already offers it. */}
               {codexAction === 'adding' && !accountAdditionShownInPrompt('codex', accountOwner) ? (

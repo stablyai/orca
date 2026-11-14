@@ -10,11 +10,14 @@ import type {
   PluginHostParams,
   PluginHostResult
 } from '../../../shared/plugins/workers/plugin-host-api'
-import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../plugin-discovery'
-import { getPluginsDataDir, isInvalidDiscoveredPlugin } from '../plugin-discovery'
+import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import { getPluginsDataDir, isInvalidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginService } from '../plugin-service'
-import { pluginDataDir } from '../plugin-storage-store'
-import { PluginHostCallError, type PluginHostCallScope } from '../workers/plugin-host-call-scope'
+import { pluginDataDir } from '../storage/plugin-storage-store'
+import {
+  PluginHostCallError,
+  type PluginHostCallScope
+} from '../workers/host-api/plugin-host-call-scope'
 import {
   preparePluginAppearanceColors,
   type PreparedPluginAppearance

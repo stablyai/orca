@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { Info, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { WorktreeSourceVisibilityControl } from './WorktreeSourceVisibilityControl'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -22,8 +22,8 @@ import {
   normalizeWorktreeVisibilitySourcePreferences,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatch
-} from '../../../../../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../../../shared/worktree/configured-worktree-base-path'
+} from '../../../../../../shared/worktree/visibility/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../../../shared/worktree/paths/configured-worktree-base-path'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
@@ -32,8 +32,7 @@ import { getRuntimePathBasename } from '../../../../../../shared/cross-platform-
 import {
   getWorktreeVisibilityOverrideNotice,
   getWorktreeVisibilitySourceNote,
-  getWorktreeVisibilitySourceProvenance,
-  worktreeVisibilityValueLabel
+  getWorktreeVisibilitySourceProvenance
 } from './worktree-visibility-source-provenance'
 import {
   WorktreeVisibilitySourceAddForm,
@@ -52,6 +51,7 @@ type Props = {
   customSources?: readonly CustomWorktreeVisibilitySource[]
   removableSourceIds?: ReadonlySet<string>
   showCounts?: boolean
+  switches?: boolean
   disabled: boolean
   sourceDefaultsDisabled?: boolean
   onAdd: (rootPath: string) => Promise<WorktreeVisibilitySourceAddResult>
@@ -62,7 +62,6 @@ type Props = {
 
 const EMPTY_VISIBILITY_DEFAULTS: WorktreeVisibilityDefaults = {}
 const EMPTY_WORKTREES: readonly DetectedWorktree[] = []
-const VISIBILITY_SEGMENTS: readonly ExternalWorktreeVisibility[] = ['show', 'hide']
 
 export function getWorktreeVisibilitySourceLabel(
   source: WorktreeVisibilitySourceRow,
@@ -148,6 +147,7 @@ export default function WorktreeVisibilitySourceList({
   customSources: providedCustomSources,
   removableSourceIds,
   showCounts = true,
+  switches = false,
   disabled,
   sourceDefaultsDisabled = false,
   onAdd,
@@ -240,11 +240,14 @@ export default function WorktreeVisibilitySourceList({
             <div
               key={key}
               data-source-row={key}
+              data-settings-row={switches ? '' : undefined}
               className={`grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-2 px-2.5 py-2 ${index > 0 ? 'border-t border-border' : ''}`}
             >
               <span className="min-w-0">
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate text-[13px] font-medium">{label}</span>
+                  <span data-source-title="" className="truncate text-[13px] font-medium">
+                    {label}
+                  </span>
                   {showCounts ? (
                     <span className="shrink-0 text-[11px] text-muted-foreground">
                       {t(
@@ -255,7 +258,10 @@ export default function WorktreeVisibilitySourceList({
                     </span>
                   ) : null}
                 </span>
-                <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                <span
+                  data-source-path=""
+                  className="block truncate font-mono text-[11px] text-muted-foreground"
+                >
                   {getSourcePath(source, t)}
                 </span>
                 {note ? (
@@ -311,36 +317,13 @@ export default function WorktreeVisibilitySourceList({
                     )}
                   </Button>
                 ) : null}
-                <ToggleGroup
-                  type="single"
-                  variant="outline"
-                  size="sm"
-                  value={visibility}
+                <WorktreeSourceVisibilityControl
+                  visibility={visibility}
                   disabled={sourceDisabled}
-                  aria-label={t(
-                    'auto.components.sidebar.WorktreeVisibilitySourceList.visibility',
-                    'Visibility for {{value0}}',
-                    { value0: accessibleLabel }
-                  )}
-                  className="h-7"
-                  onValueChange={(next) => {
-                    // Radix clears reselected segments; ignore that non-change.
-                    if (next === 'show' || next === 'hide') {
-                      void onToggle(source, next === 'show')
-                    }
-                  }}
-                >
-                  {VISIBILITY_SEGMENTS.map((segment) => (
-                    <ToggleGroupItem
-                      key={segment}
-                      value={segment}
-                      data-visibility={segment}
-                      className="h-7 min-w-11 px-2 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-                    >
-                      {worktreeVisibilityValueLabel(segment, t)}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                  label={accessibleLabel}
+                  switches={switches}
+                  onToggle={(enabled) => void onToggle(source, enabled)}
+                />
               </span>
               {overrideNotice ? (
                 <span
@@ -357,6 +340,7 @@ export default function WorktreeVisibilitySourceList({
         <WorktreeVisibilitySourceAddForm
           disabled={disabled || sourceDefaultsDisabled}
           onAdd={onAdd}
+          compact={switches}
         />
       </div>
     </section>

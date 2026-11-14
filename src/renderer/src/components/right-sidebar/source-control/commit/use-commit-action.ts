@@ -1,4 +1,5 @@
-import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
+import '@/lib/source-control/graph/git-graph-tab'
+import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/source-control/graph/git-graph-refresh-event'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'

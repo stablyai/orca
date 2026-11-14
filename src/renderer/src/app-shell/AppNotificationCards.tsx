@@ -1,10 +1,9 @@
 import { Suspense, type JSX } from 'react'
 import type { TopLevelView } from '../../../shared/ui-chrome-types'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { CodexSharedSettingsNoticeCard } from '../components/CodexSharedSettingsNoticeCard'
 import { NotificationCardStack } from '../components/NotificationCardStack'
 import { StarNagCard } from '../components/StarNagCard'
-import { SpeechModelUpdateCard } from '../components/dictation/SpeechModelUpdateCard'
 import { OverlayBoundary } from './app-root-surface-boundaries'
 
 const ChatUiHereCornerCard = lazy(() =>
@@ -59,9 +58,6 @@ export function AppNotificationCards({
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.codex-shared-settings-notice" resetKey={activeView}>
         <CodexSharedSettingsNoticeCard />
-      </OverlayBoundary>
-      <OverlayBoundary boundaryId="overlay.speech-model-update" resetKey={activeView}>
-        <SpeechModelUpdateCard />
       </OverlayBoundary>
     </NotificationCardStack>
   )

@@ -1,7 +1,10 @@
 import type * as Monaco from 'monaco-editor'
 import type { IToken } from 'shiki/textmate'
 import type { BundledLanguageInfo } from 'shiki/types'
-import { MARKDOWN_THEMABLE_SCOPES, MARKDOWN_TOKEN_PREFIX } from '../plugin-monaco-token-rules'
+import {
+  MARKDOWN_THEMABLE_SCOPES,
+  MARKDOWN_TOKEN_PREFIX
+} from '../editor/appearance/plugin-monaco-token-rules'
 import { COLD_GRAMMAR_LINE_ATTEMPTS } from '../syntax-highlighting/textmate-core'
 import { loadBuiltInMarkdownRules, matchesPrefix } from './markdown-monaco-theme-rules'
 import { createTokensProvider, loadEditorCore } from './textmate-token-provider'
@@ -46,24 +49,27 @@ function fenceLanguagesByLabel(
   return byLabel
 }
 
-/** VS Code's markdown grammar with Dark+/Light+ colors; fence grammars load on first sight. */
+/** VS Code's markdown grammar with Dark+/Light+ colors; YAML loads up front for frontmatter, fence grammars on first sight. */
 export async function createMarkdownTokensProvider(
   monaco: MonacoModule
 ): Promise<Monaco.languages.TokensProvider> {
   const [
     editorCore,
     { default: markdownGrammars },
+    { default: yamlGrammars },
     { bundledLanguagesInfo },
     { rules: darkRules },
     { rules: lightRules }
   ] = await Promise.all([
     loadEditorCore(),
     import('shiki/langs/markdown.mjs'),
+    import('shiki/langs/yaml.mjs'),
     import('shiki/langs'),
     loadBuiltInMarkdownRules('dark'),
     loadBuiltInMarkdownRules('light')
   ])
-  await editorCore.core.loadLanguage(...markdownGrammars)
+  // Why: frontmatter embeds YAML at the document start, with no fence label to trigger a lazy load.
+  await editorCore.core.loadLanguage(...markdownGrammars, ...yamlGrammars)
 
   // Why: Orca's editors all use the built-in theme names; redefining them keeps every setTheme caller unchanged.
   monaco.editor.defineTheme('vs-dark', {

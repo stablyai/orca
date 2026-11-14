@@ -5,8 +5,8 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
-    'auto.components.settings.appearance.search.leftSidebarAppearance.title',
-    'Left Sidebar Appearance'
+    'auto.components.settings.appearance.search.leftSidebarAppearance.0a5d3677f0',
+    'Left sidebar appearance'
   ),
   description: translate(
     'auto.components.settings.appearance.search.leftSidebarAppearance.tintDescription',
@@ -31,8 +31,8 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): Settings
 
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
-    'auto.components.settings.appearance.search.workspaceCardLayout.title',
-    'Workspace Card Layout'
+    'auto.components.settings.appearance.search.workspaceCardLayout.fc7c945fd9',
+    'Workspace card layout'
   ),
   description: translate(
     'auto.components.settings.appearance.search.workspaceCardLayout.description',
@@ -121,7 +121,7 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
 
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
+    title: translate('auto.components.settings.appearance.search.9bc701a4d1', 'Show tasks button'),
     description: translate(
       'auto.components.settings.appearance.search.9a248333c7',
       'Show the Tasks button at the top of the left sidebar.'
@@ -138,8 +138,8 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   {
     title: translate(
-      'auto.components.settings.appearance.search.caa27e1a8e',
-      'Show Automations Button'
+      'auto.components.settings.appearance.search.7f5d534f81',
+      'Show automations button'
     ),
     description: translate(
       'auto.components.settings.appearance.search.ae13a0d340',
@@ -166,8 +166,8 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   {
     title: translate(
-      'auto.components.settings.appearance.search.1de96ec8a6',
-      'Show Orca Mobile Button'
+      'auto.components.settings.appearance.search.1b404ee6ad',
+      'Show Orca Mobile button'
     ),
     description: translate(
       'auto.components.settings.appearance.search.682293cadf',

@@ -1,5 +1,5 @@
 import type { ConnectionState } from '../connection/connection-state'
-import type { HostProfile } from './host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 
 export const HOME_AUTO_CONNECT_LIMIT = 3
 

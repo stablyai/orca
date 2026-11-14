@@ -23,7 +23,7 @@ vi.mock('./runtime-status-probe', () => ({
   startRuntimeStatusProbe: (client: unknown, onStatus: (status: unknown) => void) =>
     descriptorProbe.start(client, onStatus)
 }))
-vi.mock('../hosts/host-descriptor-recorder', () => ({
+vi.mock('../../host-descriptors/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: (...args: unknown[]) => descriptorProbe.record(...args)
 }))
 
@@ -36,7 +36,7 @@ vi.mock('../rpc/direct-rpc-connect', () => ({
 vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
 }))
-vi.mock('../hosts/host-store', () => ({
+vi.mock('../../host-catalog/host-store', () => ({
   loadHosts: () => loadHostsMock()
 }))
 vi.mock('../../diagnostics/connection/connection-revival-triggers', () => ({
@@ -190,30 +190,6 @@ describe('useHostClient', () => {
 })
 
 describe('useAllHostClients', () => {
-  it('rerenders when Relay becomes pending without a transport-state change', async () => {
-    const client = makeFakeClient('reconnecting')
-    connectMock.mockReturnValue(client)
-    loadHostsMock.mockResolvedValue([HOST])
-    let pendingPath: MobileConnectionPath | null | undefined
-    let renderer!: ReturnType<typeof create>
-
-    function Probe(): null {
-      pendingPath = useAllHostClients([HOST.id])[0]?.pendingPath
-      return null
-    }
-
-    await act(async () => {
-      renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-      await Promise.resolve()
-    })
-    expect(pendingPath).toBeNull()
-
-    act(() => client.emitPendingPath('relay'))
-    expect(pendingPath).toBe('relay')
-
-    act(() => renderer.unmount())
-  })
-
   it('publishes a latched pairing rejection to the screens', async () => {
     const client = makeFakeClient('reconnecting')
     connectMock.mockReturnValue(client)

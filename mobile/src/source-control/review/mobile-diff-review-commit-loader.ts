@@ -1,5 +1,5 @@
 import { translate } from '../../i18n/mobile-i18n'
-import { gitCommitCompareRead } from '../mobile-git-read-operations'
+import { gitCommitCompareRead } from '../git/mobile-git-read-operations'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'

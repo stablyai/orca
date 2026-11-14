@@ -3,7 +3,7 @@ import { isInterruptedStatusMessage, type NativeChatMessage } from './native-cha
 import type {
   NativeChatSettledTurn,
   NativeChatSettledTurns
-} from './transcript/native-chat-turn-status'
+} from './transcript/turns/native-chat-turn-status'
 import { isNoiseMessage } from './native-chat-noise'
 import { shouldShowNativeChatWorking } from './native-chat-working-suppression'
 

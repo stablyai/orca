@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 let deleteModifierPressed = false
 let listenersInstalled = false

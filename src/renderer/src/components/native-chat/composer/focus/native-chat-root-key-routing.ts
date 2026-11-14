@@ -1,4 +1,4 @@
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { findNativeChatPasteField } from '@/components/native-chat/paste/native-chat-paste-request'
 import type { NativeChatComposerHandle } from '../native-chat-composer-types'
 import {

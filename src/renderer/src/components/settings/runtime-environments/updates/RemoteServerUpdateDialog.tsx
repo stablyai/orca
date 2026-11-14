@@ -149,8 +149,8 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
         <DialogHeader>
           <DialogTitle>
             {t(
-              'auto.components.settings.RemoteServerUpdateDialog.title',
-              'Update Remote Orca Servers'
+              'auto.components.settings.RemoteServerUpdateDialog.dca6780b3a',
+              'Update remote Orca servers'
             )}
           </DialogTitle>
           <DialogDescription>

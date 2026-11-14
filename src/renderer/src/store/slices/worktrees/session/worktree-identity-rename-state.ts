@@ -10,8 +10,9 @@ import { getWorktreeIdFromVisitKey } from '@/lib/workspace/activation/worktree-v
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
-} from '../../../terminals/recently-closed-terminal-tabs'
-import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
+} from '../../../terminals/tabs/recently-closed-terminal-tabs'
+import '../../tabs/worktree-layout-lifecycle'
+import { renameWorktreeLayoutKeys } from '../../tabs/rename-worktree-layout'
 import { replaceRecordEntries } from '../../../keyed-record-transitions'
 import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 

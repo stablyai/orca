@@ -3,7 +3,8 @@ import {
   buildAgentRowLineageTree,
   resolveAgentRowParentPaneKey,
   type AgentLineageSourceRow
-} from '../dashboard/agent-row-lineage-model'
+} from '../dashboard/rows/agent-row-lineage-model'
+import { isRunningActivityState } from './activity-event-state'
 import type { ActivityLiveAgentState } from './activity-thread-types'
 
 type ChildAgentLineageEntry = Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
@@ -11,7 +12,7 @@ type ChildAgentLineageEntry = Pick<AgentStatusEntry, 'terminalHandle' | 'orchest
 /** Accept full threads or synthetic structural rows without casts; classifier tests pin compatibility. */
 export type ChildAgentClassifiableThread = {
   paneKey: string
-  /** Non-null while the pane's own turn is live (working, monitoring or waiting on the user). */
+  /** Running while the pane's own turn is live (working, monitoring or waiting on the user); unverifiable is not. */
   currentAgentState?: ActivityLiveAgentState | null
   currentAgentEntry?: ChildAgentLineageEntry | null
   latestEvent?: { entry: ChildAgentLineageEntry } | null
@@ -89,7 +90,9 @@ export function classifyChildAgents(threads: readonly ChildAgentClassifiableThre
   })
 
   const livePaneKeys = new Set(
-    threads.filter((thread) => thread.currentAgentState).map((thread) => thread.paneKey)
+    threads
+      .filter((thread) => isRunningActivityState(thread.currentAgentState))
+      .map((thread) => thread.paneKey)
   )
   const tree = buildAgentRowLineageTree(rows)
   const parentPaneKeyByChild = new Map<string, string>()

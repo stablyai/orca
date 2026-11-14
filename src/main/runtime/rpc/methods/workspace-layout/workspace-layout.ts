@@ -1,5 +1,8 @@
-import { withoutGitGraph } from '../../../../../shared/workspace-layout/workspace-layout-client-visibility'
-import { readsGitGraph, createGitGraphFrameProjection } from '../../git-graph-layout-projection'
+import { withoutGitGraph } from '../../../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
+import {
+  readsGitGraph,
+  createGitGraphFrameProjection
+} from '../../workspace-client-views/git-graph-layout-projection'
 // Paired desktops use layout read/stream/apply only when the server offers layout.intents.v1; mobile is excluded.
 
 import {
@@ -7,9 +10,9 @@ import {
   LayoutReportViewParams,
   LayoutSubscribeParams,
   LayoutUnsubscribeParams
-} from '../../../../../shared/rpc-contract/workspace-layout-params'
-import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout-held-panes-params'
-import type { WorkspaceLayoutStreamFrame } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-params'
+import { LayoutReopenHeldPanesParams } from '../../../../../shared/rpc-contract/workspace-layout/workspace-layout-held-panes-params'
+import type { WorkspaceLayoutStreamFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { getAppEnvironment } from '../../../../../shared/app-environment'
 import { listEnvironments } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store'
