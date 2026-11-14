@@ -38,6 +38,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
     setTasksLoading,
     setTasksRefreshing,
     setTasksFiltering,
+    setGithubListRevalidating,
     setTasksError,
     setFailedCount,
     setGithubUnavailable,
@@ -77,6 +78,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
     setRetryingSourceKeys(new Set())
     setTasksRefreshing(false)
     setTasksFiltering(false)
+    setGithubListRevalidating(false)
     return
   }
 
@@ -279,6 +281,19 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
 
   // Why: snapshot retrying keys at dispatch so an earlier settling effect doesn't wipe a newer retry's pending source.
   const dispatchedRetrySourceKeys = retryingSourceKeys
+  // Why: clear only the dispatch-time snapshot keys so an overlapping retry's newer source isn't wiped.
+  const releaseDispatchedRetryKeys = () =>
+    setRetryingSourceKeys((prev) => {
+      if (dispatchedRetrySourceKeys.size === 0) {
+        return prev
+      }
+      const next = new Set(prev)
+      for (const key of dispatchedRetrySourceKeys) {
+        next.delete(key)
+      }
+      return next
+    })
+  setGithubListRevalidating(true)
   void fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
     ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding),
     ...wake,
@@ -289,17 +304,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
       : {})
   })
     .then((result) => {
-      // Why: clear only the dispatch-time snapshot keys so an overlapping retry's newer source isn't wiped.
-      setRetryingSourceKeys((prev) => {
-        if (dispatchedRetrySourceKeys.size === 0) {
-          return prev
-        }
-        const next = new Set(prev)
-        for (const key of dispatchedRetrySourceKeys) {
-          next.delete(key)
-        }
-        return next
-      })
+      releaseDispatchedRetryKeys()
       if (cancelled) {
         return
       }
@@ -307,6 +312,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
         setTasksLoading(false)
         setTasksRefreshing(false)
         setTasksFiltering(false)
+        setGithubListRevalidating(false)
         return
       }
       const {
@@ -375,20 +381,11 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
       }
       setTasksRefreshing(false)
       setTasksFiltering(false)
+      setGithubListRevalidating(false)
     })
     .catch((err) => {
       // Why: fetchWorkItemsAcrossRepos swallows per-repo failures, so a reject here is IPC/programmer error — surface it.
-      // Why: clear only the dispatch-time snapshot keys so an overlapping retry's newer source isn't wiped.
-      setRetryingSourceKeys((prev) => {
-        if (dispatchedRetrySourceKeys.size === 0) {
-          return prev
-        }
-        const next = new Set(prev)
-        for (const key of dispatchedRetrySourceKeys) {
-          next.delete(key)
-        }
-        return next
-      })
+      releaseDispatchedRetryKeys()
       if (cancelled) {
         return
       }
@@ -407,6 +404,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
       }
       setTasksRefreshing(false)
       setTasksFiltering(false)
+      setGithubListRevalidating(false)
     })
 
   // Why: fire-and-forget count query alongside the items fetch; the search API is cached 120s server-side so it adds little cost.

@@ -30,7 +30,7 @@ type Deferred = { resolve: (result: FetchResult) => void }
 
 // A filter click sets tasksFiltering, bumps the refresh nonce and changes the query; this is the landing run that follows.
 function landAfterFilterChange(cache: Record<string, GitHubWorkItem[] | null>) {
-  const state = { filtering: true, loading: false, refreshing: false }
+  const state = { filtering: true, loading: false, refreshing: false, revalidating: false }
   const selectedRepos = Object.keys(cache).map(repo)
   const fetches: Deferred[] = []
   const pending = () => new Promise<never>(() => {})
@@ -61,6 +61,9 @@ function landAfterFilterChange(cache: Record<string, GitHubWorkItem[] | null>) {
     },
     setTasksFiltering: (next: boolean) => {
       state.filtering = next
+    },
+    setGithubListRevalidating: (next: boolean) => {
+      state.revalidating = next
     },
     setTasksError: vi.fn(),
     setFailedCount: vi.fn(),
@@ -113,9 +116,19 @@ describe('runTaskPageGitHubLandingRefresh after a filter change', () => {
     const cached = landAfterFilterChange({ a: [pr('a', 7)], b: [pr('b', 9)] })
     const partial = landAfterFilterChange({ a: [pr('a', 7)], b: null })
 
-    expect(cached.state).toEqual({ filtering: false, loading: false, refreshing: true })
+    expect(cached.state).toEqual({
+      filtering: false,
+      loading: false,
+      refreshing: true,
+      revalidating: true
+    })
     expect(cached.rows()).toEqual([9, 7])
-    expect(partial.state).toEqual({ filtering: true, loading: true, refreshing: true })
+    expect(partial.state).toEqual({
+      filtering: true,
+      loading: true,
+      refreshing: true,
+      revalidating: true
+    })
   })
 
   it('keeps cached rows on screen while the forced refetch runs, then replaces them in place', async () => {
@@ -130,10 +143,17 @@ describe('runTaskPageGitHubLandingRefresh after a filter change', () => {
     )
     expect(rows()).toEqual([7, 5])
     expect(state.filtering).toBe(false)
+    // Paging stays held until the refetch lands, since landing replaces every page.
+    expect(state.revalidating).toBe(true)
 
     await answer([pr('a', 8), pr('a', 7)])
 
     expect(rows()).toEqual([8, 7])
-    expect(state).toEqual({ filtering: false, loading: false, refreshing: false })
+    expect(state).toEqual({
+      filtering: false,
+      loading: false,
+      refreshing: false,
+      revalidating: false
+    })
   })
 })
