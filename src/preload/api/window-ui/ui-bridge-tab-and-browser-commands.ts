@@ -10,7 +10,7 @@ import type { BrowserPageZoomCommand } from '../../../shared/browser-page-zoom'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../shared/worktree/launch-types'
+} from '../../../shared/worktree/creation/launch-types'
 import { browserFindSubscriptions } from '../../renderer/renderer-runtime'
 import type { PreloadApi } from '../../api-types'
 

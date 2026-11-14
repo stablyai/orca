@@ -5,7 +5,11 @@ import { Button } from '../../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
 import { i18n, translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { renderYamlScriptPreview } from './repository-hook-settings-draft'
+import {
+  renderYamlScriptPreview,
+  GROUP_SETUP_HOOKS_TEMPLATE,
+  type HookYamlPresentation
+} from './repository-hook-settings-draft'
 
 const EXAMPLE_TEMPLATE = `scripts:
   setup: |
@@ -50,16 +54,26 @@ function getYamlStateCopy(
   }
 }
 
-function getParseErrorFixes(t: Translate = translate): string[] {
+function getParseErrorFixes(t: Translate, support: HookYamlPresentation): string[] {
   return [
     t(
       'auto.components.settings.RepositoryHooksSection.07ba35bc68',
       'Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.'
     ),
-    t(
-      'auto.components.settings.RepositoryHooksSection.787ca433ef',
-      'Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.'
-    ),
+    !support.issueCommand
+      ? support.archive
+        ? t(
+            'settings.groupHooks.supportedArchiveKeys',
+            'Define only the supported keys: `scripts`, `setup`, and `archive`.'
+          )
+        : t(
+            'settings.groupHooks.supportedKeys',
+            'Define only the supported keys: `scripts` and `setup`.'
+          )
+      : t(
+          'auto.components.settings.RepositoryHooksSection.787ca433ef',
+          'Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.'
+        ),
     t(
       'auto.components.settings.RepositoryHooksSection.ecc73d9125',
       'Compare your file against the working template below and copy that shape if needed.'
@@ -68,9 +82,11 @@ function getParseErrorFixes(t: Translate = translate): string[] {
 }
 
 function ExampleTemplateCard({
+  template,
   copiedTemplate,
   onCopyTemplate
 }: {
+  template: string
   copiedTemplate: boolean
   onCopyTemplate: () => void
 }): React.JSX.Element {
@@ -97,7 +113,7 @@ function ExampleTemplateCard({
             : t('auto.components.settings.RepositoryHooksSection.da37d6f10e', 'Copy')}
         </Button>
         <pre className="overflow-x-auto whitespace-pre-wrap break-words p-3 pr-16 font-mono text-[11px] leading-5 text-muted-foreground">
-          {EXAMPLE_TEMPLATE}
+          {template}
         </pre>
       </div>
     </div>
@@ -108,11 +124,13 @@ const YAML_CODE_COMPONENTS = { yaml: <code className="rounded bg-muted px-1 py-0
 
 // Healthy states are a plain disclosure row; only problems get a tinted card.
 function YamlScriptsDisclosure({
+  presentation,
   yamlState,
   yamlHooks,
   copiedTemplate,
   onCopyTemplate
 }: {
+  presentation: HookYamlPresentation
   yamlState: 'loaded' | 'missing'
   yamlHooks: OrcaHooks | null
   copiedTemplate: boolean
@@ -168,7 +186,7 @@ function YamlScriptsDisclosure({
       </div>
       <CollapsibleContent>
         <pre className="mt-2 ml-5.5 overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-border/50 bg-muted/30 p-3 font-mono text-[11.5px] leading-5 text-foreground">
-          {loaded ? renderYamlScriptPreview(yamlHooks) : EXAMPLE_TEMPLATE}
+          {loaded ? renderYamlScriptPreview(yamlHooks, presentation) : presentation.template}
         </pre>
       </CollapsibleContent>
     </Collapsible>
@@ -176,20 +194,30 @@ function YamlScriptsDisclosure({
 }
 
 export function RepositoryHooksYamlStatus({
+  setupOnly = false,
+  yamlPresentation,
   yamlState,
   yamlHooks,
   copiedTemplate,
   onCopyTemplate
 }: {
+  setupOnly?: boolean
+  yamlPresentation?: HookYamlPresentation
   yamlState: string
   yamlHooks: OrcaHooks | null
   copiedTemplate: boolean
   onCopyTemplate: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const presentation = yamlPresentation ?? {
+    template: setupOnly ? GROUP_SETUP_HOOKS_TEMPLATE : EXAMPLE_TEMPLATE,
+    archive: !setupOnly,
+    issueCommand: !setupOnly
+  }
   if (yamlState === 'loaded' || yamlState === 'missing') {
     return (
       <YamlScriptsDisclosure
+        presentation={presentation}
         yamlState={yamlState}
         yamlHooks={yamlHooks}
         copiedTemplate={copiedTemplate}
@@ -198,7 +226,7 @@ export function RepositoryHooksYamlStatus({
     )
   }
   const copy = getYamlStateCopy(yamlState, t)
-  const parseErrorFixes = getParseErrorFixes(t)
+  const parseErrorFixes = getParseErrorFixes(t, presentation)
   return (
     <div className={`space-y-3 rounded-xl border p-3 ${YAML_WARNING_CARD_STYLES.card}`}>
       <div className="space-y-1">
@@ -213,10 +241,20 @@ export function RepositoryHooksYamlStatus({
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" />
             <div className="space-y-2 text-xs text-muted-foreground">
               <p>
-                {t(
-                  'auto.components.settings.RepositoryHooksSection.af49e2a19e',
-                  'The file is present, but Orca could not find valid `scripts` or `issueCommand` definitions.'
-                )}
+                {!presentation.issueCommand
+                  ? presentation.archive
+                    ? t(
+                        'settings.groupHooks.invalidArchive',
+                        'The file is present, but Orca could not find a valid setup or archive script.'
+                      )
+                    : t(
+                        'settings.groupHooks.invalidSetup',
+                        'The file is present, but Orca could not find a valid setup script.'
+                      )
+                  : t(
+                      'auto.components.settings.RepositoryHooksSection.af49e2a19e',
+                      'The file is present, but Orca could not find valid `scripts` or `issueCommand` definitions.'
+                    )}
               </p>
               <ol className="space-y-1.5 pl-4 text-[11.5px]">
                 {parseErrorFixes.map((fix) => (
@@ -227,10 +265,18 @@ export function RepositoryHooksYamlStatus({
               </ol>
             </div>
           </div>
-          <ExampleTemplateCard copiedTemplate={copiedTemplate} onCopyTemplate={onCopyTemplate} />
+          <ExampleTemplateCard
+            template={presentation.template}
+            copiedTemplate={copiedTemplate}
+            onCopyTemplate={onCopyTemplate}
+          />
         </div>
       ) : (
-        <ExampleTemplateCard copiedTemplate={copiedTemplate} onCopyTemplate={onCopyTemplate} />
+        <ExampleTemplateCard
+          template={presentation.template}
+          copiedTemplate={copiedTemplate}
+          onCopyTemplate={onCopyTemplate}
+        />
       )}
     </div>
   )

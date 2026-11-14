@@ -2,7 +2,12 @@ import { WorktreeRemovalReservations } from './worktree-removal-reservations'
 import { lstat } from 'node:fs/promises'
 import { getErrorCode } from '../../git/worktrees/worktree-operation-options'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
-import { writeWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
+import {
+  writeWorktreeRemovalRecords,
+  worktreeRemovalRecordsFile,
+  type WorktreeRemovalRecord
+} from './worktree-removal-records'
+import { withSidecarSnapshotQueue } from '../../filesystem/sidecar-snapshot-file'
 
 export const pendingWorktreeRemovals = new WorktreeRemovalReservations()
 export const recordedWorktreeRemovals = new WeakSet<WorktreeRemovalRecord>()
@@ -14,6 +19,14 @@ let recordsDirectory: string | null = null
 
 export function setWorktreeRemovalRecordsDirectory(directory: string | null): void {
   recordsDirectory = directory
+}
+
+export function closeWorktreeRemovalRecords(): Promise<void> {
+  const directory = recordsDirectory
+  recordsDirectory = null
+  return directory
+    ? withSidecarSnapshotQueue(worktreeRemovalRecordsFile(directory), async () => {})
+    : Promise.resolve()
 }
 
 export function persistWorktreeRemovalRecords(): Promise<void> {

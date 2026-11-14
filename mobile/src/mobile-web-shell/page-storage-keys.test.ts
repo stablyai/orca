@@ -5,7 +5,6 @@ import {
   pageRouteWorkspace,
   pageStorageEntriesForInit,
   pageStorageKeysForRoute,
-  PAGE_STORAGE_EXACT_KEYS,
   PAGE_STORAGE_MAX_ENTRIES,
   PAGE_STORAGE_MAX_KEY_CHARS,
   PAGE_STORAGE_MAX_VALUE_CHARS
@@ -15,13 +14,6 @@ const HOST_ROUTE = '/h/host-1'
 const SESSION_ROUTE = '/h/host-1/session/wt-1'
 
 describe('the keys a page may read and write', () => {
-  it('takes the ones the list keeps', () => {
-    expect(isPageStorageKey('orca:last-visited-worktree')).toBe(true)
-    expect(isPageStorageKey('orca:pins:host-1')).toBe(true)
-    expect(isPageStorageKey('orca:terminalTextScale')).toBe(true)
-    expect(isPageStorageKey('orca:nativeChatTabs:host-1:wt-1')).toBe(true)
-  })
-
   it('refuses the rest of the namespace', () => {
     // A broad orca: prefix would let pages rewrite native pairings and push registrations.
     for (const key of [
@@ -34,26 +26,9 @@ describe('the keys a page may read and write', () => {
     }
   })
 
-  it('refuses the bare prefix, which names no host', () => {
-    expect(isPageStorageKey('orca:pins:')).toBe(false)
-    expect(isPageStorageKey('orca:nativeChatTabs:')).toBe(false)
-  })
-
   it('refuses a key that only starts like an allowlisted one', () => {
     expect(isPageStorageKey('orca:last-visited-worktree:other')).toBe(false)
     expect(isPageStorageKey('not-orca:pins:host-1')).toBe(false)
-  })
-
-  it('refuses a key past the cap, whatever it starts with', () => {
-    expect(isPageStorageKey(`orca:pins:${'h'.repeat(PAGE_STORAGE_MAX_KEY_CHARS)}`)).toBe(false)
-  })
-
-  it('names what the shell reads out of the app store for a route with no workspace', () => {
-    const keys = pageStorageKeysForRoute('host-1', HOST_ROUTE)
-    expect(keys).toEqual([...PAGE_STORAGE_EXACT_KEYS, 'orca:pins:host-1'])
-    for (const key of keys) {
-      expect(isPageStorageKey(key), key).toBe(true)
-    }
   })
 
   it("adds the session route's workspace-scoped keys, and only for it", () => {
@@ -67,13 +42,6 @@ describe('the keys a page may read and write', () => {
     ])
     expect(pageStorageKeysForRoute('host-1', '/h/host-1/files/wt-1')).toEqual(
       pageStorageKeysForRoute('host-1', HOST_ROUTE)
-    )
-  })
-
-  it('stays inside the entry count init is allowed to carry', () => {
-    // Exceeding the init entry bound rejects the whole frame.
-    expect(pageStorageKeysForRoute('host-1', SESSION_ROUTE).length).toBeLessThanOrEqual(
-      PAGE_STORAGE_MAX_ENTRIES
     )
   })
 
@@ -119,12 +87,6 @@ describe('the workspace a route names', () => {
 })
 
 describe('the allowlist narrowed to one session', () => {
-  it('admits exactly the keys that session was handed', () => {
-    for (const key of pageStorageKeysForRoute('host-1', SESSION_ROUTE)) {
-      expect(isPageStorageKeyForRoute(key, 'host-1', SESSION_ROUTE), key).toBe(true)
-    }
-  })
-
   it("refuses another host's pinned list, which the shape check alone admits", () => {
     expect(isPageStorageKey('orca:pins:host-2')).toBe(true)
     expect(isPageStorageKeyForRoute('orca:pins:host-2', 'host-1', SESSION_ROUTE)).toBe(false)

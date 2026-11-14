@@ -137,10 +137,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
-    // Weekly-only plans still need outgoing switcher snapshots.
+    // Weekly-only and monthly-only plans still need outgoing switcher snapshots.
     if (
       outgoingAccountId &&
-      (this.state.codex?.session || this.state.codex?.weekly) &&
+      this.state.codex &&
+      hasUsageWindows(this.state.codex) &&
       this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     ) {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)

@@ -16,7 +16,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       44,
       'Chats stay local on the desktop (owner decision C), so their launch records stay as written.'
     ),
-  'src/renderer/src/components/editor/file-view-preference-storage.ts': {
+  'src/renderer/src/components/editor/view-mode/file-view-preference-storage.ts': {
     disposition: 'rewrite-desktop',
     item: 72,
     note: 'CSV column widths and PDF scale, keyed by worktree id, runtime and file path.'

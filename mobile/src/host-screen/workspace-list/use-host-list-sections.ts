@@ -1,18 +1,25 @@
 import { useMemo } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
-import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/sidebar-feed-rows'
-import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/repo-icon-data-urls-contract'
+import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
+import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/catalog/repo-icon-data-urls-contract'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { buildProjectSectionCatalog } from '../../worktree/project-section-catalog'
+import { buildProjectSectionCatalog } from '../../worktree/project-sections/project-section-catalog'
 import { useWorkspaceSections } from '../../worktree/use-workspace-sections'
-import { buildFilterRepos, type WorkspaceSectionRepo } from '../../worktree/workspace-filter-repos'
-import type { Section, SectionRepo, Worktree } from '../../worktree/workspace-list-types'
-import type { WorktreeHostContextOf } from '../../worktree/worktree-host-context-labels'
-import type { MobileLineageStores } from '../../worktree/mobile-workspace-lineage'
-import { useLastVisitedWorktreeOnHost } from '../../worktree/use-last-visited-worktree-on-host'
-import { rowFiltersForView } from '../../worktree/workspace-view-settings'
-import { buildSidebarFeedCatalog } from '../../../../src/shared/sidebar-list/sidebar-feed-catalog'
+import {
+  buildFilterRepos,
+  type WorkspaceSectionRepo
+} from '../../worktree/repositories/workspace-filter-repos'
+import type {
+  Section,
+  SectionRepo,
+  Worktree
+} from '../../worktree/workspace-list/workspace-list-types'
+import type { WorktreeHostContextOf } from '../../worktree/row-presentation/worktree-host-context-labels'
+import type { MobileLineageStores } from '../../worktree/agent-lineage/mobile-workspace-lineage'
+import { useLastVisitedWorktreeOnHost } from '../../worktree/navigation/use-last-visited-worktree-on-host'
+import { rowFiltersForView } from '../../worktree/workspace-list/workspace-view-settings'
+import { buildSidebarFeedCatalog } from '../../../../src/shared/sidebar-list/catalog/sidebar-feed-catalog'
 import { buildHostFeedView } from '../sidebar-feed/host-sidebar-feed-inputs'
 import {
   buildHostFeedSections,

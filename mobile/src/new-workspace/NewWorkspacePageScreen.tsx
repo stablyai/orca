@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
+import { NewWorktreeModalController } from './creation/modal/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { useHostLabelById } from './use-host-label-by-id'
 import { useHostWorktreeRows } from './use-host-worktree-rows'

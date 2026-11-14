@@ -2,7 +2,7 @@ import type { CaptureStructuredAgentSessionPresentation } from '../../session/st
 import type { AgentSessionConversationCommand } from '../../../../../../shared/agent-session/agent-session-conversation-command'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import type { StructuredAgentSessionSendRequest } from '../../session/structured/delivery/structured-agent-session-send-slot'
-import type { NativeChatSendFollowUp } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { StructuredAgentSessionCommandOutcome } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import type {
   SessionOptionsSurface,

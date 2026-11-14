@@ -11,7 +11,7 @@ import {
   agentRowTimeAt,
   agentStateLabel,
   type AgentDotState
-} from '../../worktree/agent-row-display'
+} from '../../worktree/agent-lineage/agent-row-display'
 import type { MobileSessionTab } from './mobile-session-tabs'
 
 export type MobileSessionTabGroup = 'needs-you' | 'working' | 'other'

@@ -2,11 +2,11 @@
   "$comment": "Every .web.* sibling the Route A web build resolves ahead of its native file. One entry per documented React Native Web gap; config/scripts/mobile-web-app-web-overrides.test.mjs fails on an unlisted one, a listed file that is gone, or one with no native sibling.",
   "overrides": [
     {
-      "file": "src/session/native-chat/composer/MobileNativeChatComposerAllocation.web.tsx",
+      "file": "src/session/native-chat/composer/field/MobileNativeChatComposerAllocation.web.tsx",
       "reason": "The shipping host page measures the active editor's real chrome and menu reservation against the lower chat allocation, preserving native field sizing outside that DOM layout. Geometry consumers stay isolated from menu and queue rows."
     },
     {
-      "file": "src/session/native-chat/composer/MobileNativeChatComposerMenuLayer.web.tsx",
+      "file": "src/session/native-chat/composer/menus/MobileNativeChatComposerMenuLayer.web.tsx",
       "reason": "The phone session renders in the host-served page. Suggestions must escape the queued editor’s scrolling clip while staying inside the chat’s stacking and visibility ancestry. DOM geometry and ancestor scroll/resize events anchor that portal; the native fallback retains its existing inline rendering."
     },
     {
@@ -138,7 +138,7 @@
       "reason": "Not an RN Web API gap but a transport one that exists only in the page. A terminal's first frame is its scrollback snapshot, which the desktop trims to 512 KiB of raw terminal text while the bridge measures the serialized event against BRIDGE_MAX_MESSAGE_BYTES. An ANSI snapshot is mostly ESC bytes and JSON spends six on each, so a colour-dense 80-column screen comes back at 669,268 bytes against a 655,360-byte cap and the stream ends with overflow before a live byte is painted. This file derives the budget the page sends in terminal.subscribe from the cap less the event envelope; the native sibling sends nothing, because a socket frame has no ceiling above it and a budget there would shrink a phone's scrollback for a limit that does not exist."
     },
     {
-      "file": "src/session/native-chat/composer/MobileNativeChatComposerField.web.tsx",
+      "file": "src/session/native-chat/composer/field/MobileNativeChatComposerField.web.tsx",
       "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll. It also measures the shown text to grow the textarea, whose default two rows do not grow with content, and caps it to the space above the keyboard."
     },
     {
@@ -238,7 +238,7 @@
       "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX with the first formula the page draws and adds its stylesheet."
     },
     {
-      "file": "src/session/native-chat/MobileNativeChatLowerRegion.web.tsx",
+      "file": "src/session/native-chat/lower-region/MobileNativeChatLowerRegion.web.tsx",
       "reason": "The shipping web session owns DOM scroll anchoring and reveals focused lower controls inside the keyboard-safe viewport. Native rendering keeps its existing scroll behavior."
     },
     {

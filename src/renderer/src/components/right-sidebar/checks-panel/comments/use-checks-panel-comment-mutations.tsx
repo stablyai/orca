@@ -13,10 +13,10 @@ import {
   canPostPRReviewThreadReply,
   resolvePRReviewReplyThreadId
 } from './pr-comments-ai-launch-ack'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
 import type { ChecksPanelCommentResolutionState } from './use-checks-panel-comment-resolution'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
+import type { ChecksPanelComposerState } from '../review-actions/use-checks-panel-composer-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
 import { isMutablePRConversationComment } from '../../../../../../shared/github/comments/pr-comment-mutability'
 import type {

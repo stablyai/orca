@@ -147,14 +147,14 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/NewWorkspaceSetupScriptField.tsx",
+    "filePath": "mobile/src/new-workspace/creation/forms/NewWorkspaceSetupScriptField.tsx",
     "kind": "jsx-expression",
     "text": "ORCA.YAML",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/pr-sidebar/MermaidDiagram.tsx",
+    "filePath": "mobile/src/components/mermaid/MermaidDiagram.tsx",
     "kind": "jsx-text",
     "text": "mermaid",
     "dynamic": false,
@@ -210,21 +210,21 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/source-control/review/github-pr-entity-reply-schema.ts",
+    "filePath": "mobile/src/source-control/review/github-operations/github-pr-entity-reply-schema.ts",
     "kind": "object-property:message",
     "text": "review has no login",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/source-control/review/github-pr-read-reply-schema.ts",
+    "filePath": "mobile/src/source-control/review/github-operations/github-pr-read-reply-schema.ts",
     "kind": "object-property:message",
     "text": "found outcome has no readable pr",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/source-control/review/github-pr-read-reply-schema.ts",
+    "filePath": "mobile/src/source-control/review/github-operations/github-pr-read-reply-schema.ts",
     "kind": "object-property:message",
     "text": "pull request has no number or state",
     "dynamic": false,
@@ -238,28 +238,28 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "filePath": "mobile/src/session/native-chat/composer/dictation/MobileNativeChatComposerMic.tsx",
     "kind": "jsx-attribute:accessibilityLabel",
     "text": "Dictate",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "filePath": "mobile/src/session/native-chat/composer/dictation/MobileNativeChatComposerMic.tsx",
     "kind": "jsx-attribute:accessibilityLabel",
     "text": "Starting dictation",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "filePath": "mobile/src/session/native-chat/composer/dictation/MobileNativeChatComposerMic.tsx",
     "kind": "jsx-attribute:accessibilityLabel",
     "text": "Stop dictation",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/session/native-chat/composer/MobileNativeChatComposerMic.tsx",
+    "filePath": "mobile/src/session/native-chat/composer/dictation/MobileNativeChatComposerMic.tsx",
     "kind": "jsx-attribute:accessibilityLabel",
     "text": "Transcribing dictation",
     "dynamic": false,
@@ -273,7 +273,7 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/source-control/review/use-mobile-pr-actions.ts",
+    "filePath": "mobile/src/source-control/review/pull-request/actions/use-mobile-pr-actions.ts",
     "kind": "object-property:error",
     "text": "Not connected",
     "dynamic": false,

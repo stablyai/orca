@@ -33,8 +33,8 @@ const STORE_REWRITES: Record<StoreId, (keys: WslDriveUncRendererKeys) => Promise
   'file-view-preferences': async (keys) => {
     const [{ copyFileViewPreferences }, { PDF_SCALE_PREFERENCES_STORAGE_KEY }, csv] =
       await Promise.all([
-        import('../../../components/editor/file-view-preference-storage'),
-        import('../../../components/editor/pdf-scale-preference-storage'),
+        import('../../../components/editor/view-mode/file-view-preference-storage'),
+        import('../../../components/editor/pdf/pdf-scale-preference-storage'),
         import('../../../components/editor/csv/grid/columns/csv-column-width-preferences')
       ])
     copyFileViewPreferences(PDF_SCALE_PREFERENCES_STORAGE_KEY, (key) =>

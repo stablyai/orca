@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { Readable } from 'node:stream'
 import { isAiVaultScanCancelledError } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../transcripts/session-transcript-record-budget'
@@ -11,16 +12,18 @@ type ChunkSource = {
 
 const source = vi.hoisted((): ChunkSource => ({ chunks: [], closed: false, opens: 0 }))
 vi.mock('../../native-chat/transcript-filesystem/wsl-transcript-fs-access', () => ({
-  openTranscriptReadStream: async function* () {
+  openTranscriptReadStream: () => {
     source.opens += 1
     source.closed = false
-    try {
-      for (const chunk of source.chunks) {
-        yield chunk
-      }
-    } finally {
-      source.closed = true
-    }
+    return Readable.from(
+      (function* () {
+        try {
+          yield* source.chunks
+        } finally {
+          source.closed = true
+        }
+      })()
+    )
   }
 }))
 

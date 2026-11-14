@@ -33,6 +33,7 @@ export type BrowserClientPageOpeningHost = Pick<
   | 'getRuntimeBrowserPageRegistry'
   | 'markHeadlessBrowserSessionTabActive'
   | 'notifyHeadlessBrowserSessionTabsChanged'
+  | 'retireRuntimeOwnedBrowserSessionTab'
 >
 
 type ResolvedWorkspace = Awaited<ReturnType<RuntimeBrowserCommandHost['resolveBrowserWorkspace']>>
@@ -46,7 +47,11 @@ export type BrowserClientPageCreateParams = {
   placement: { kind: 'client'; browserHostClientId: string }
 }
 
-export type BrowserClientPageCaller = { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
+export type BrowserClientPageCaller = {
+  pairedDeviceId?: string
+  clientKind?: 'mobile' | 'runtime'
+  signal?: AbortSignal
+}
 
 export const DEFAULT_BROWSER_PROFILE_ID = 'default'
 
@@ -84,33 +89,46 @@ export async function createBrowserClientPage(
   const browserPageId = params.page ?? randomUUID()
   const executionHost = await host.resolveBrowserNetworkExecutionHost(worktree)
   const authority = host.getBrowserHostLeaseRegistry()
+  const pages = host.getRuntimeBrowserPageRegistry()
+  if (pages.getPage(browserPageId)) {
+    throw new Error('browser_page_replacement_requires_retirement')
+  }
   const created = await createRuntimeBrowserClientPage(authority, {
     browserPageId,
     browserHostClientId: params.placement.browserHostClientId,
     pairedDeviceId: caller.pairedDeviceId,
     browserProfileId,
     executionHost,
-    workspaceId: worktree.id
-  })
-  const pages = host.getRuntimeBrowserPageRegistry()
-  pages.publishClientPage({
-    browserPageId,
     workspaceId: worktree.id,
-    browserProfileId,
-    executionHostKey: browserNetworkExecutionHostKey(executionHost),
-    placement: created.placement,
-    pairedDeviceId: caller.pairedDeviceId,
-    url: 'about:blank',
-    loading: url !== 'about:blank',
-    active: focus.startsActive
-  })
-  publishCreatedBrowserSessionTab(host, {
-    placementKind: 'client',
-    browserPageId,
-    worktreeId: worktree.id,
-    focus,
-    clientNavigationId: caller.pairedDeviceId,
-    targetGroupId: params.targetGroupId
+    signal: caller.signal,
+    committed: (placement) => {
+      try {
+        pages.publishClientPage({
+          browserPageId,
+          workspaceId: worktree.id,
+          browserProfileId,
+          executionHostKey: browserNetworkExecutionHostKey(executionHost),
+          placement: placement,
+          pairedDeviceId: caller.pairedDeviceId,
+          url: 'about:blank',
+          loading: url !== 'about:blank',
+          active: focus.startsActive
+        })
+        publishCreatedBrowserSessionTab(host, {
+          placementKind: 'client',
+          browserPageId,
+          worktreeId: worktree.id,
+          focus,
+          clientNavigationId: caller.pairedDeviceId,
+          targetGroupId: params.targetGroupId
+        })
+      } catch (error) {
+        if (pages.retirePage(browserPageId, placement)) {
+          host.retireRuntimeOwnedBrowserSessionTab?.(worktree.id, browserPageId)
+        }
+        throw error
+      }
+    }
   })
   if (url !== 'about:blank') {
     try {
@@ -130,13 +148,16 @@ export async function createBrowserClientPage(
 
 export function openBrowserUrlOnClient(
   host: BrowserClientPageOpeningHost,
-  params: { url: string; worktree: string }
+  params: { url: string; worktree: string },
+  signal?: AbortSignal
 ): Promise<{ browserPageId: string }> {
   assertClientOpenableUrl(params.url)
   return createBrowserPageOnPairedHost(
     host,
     { url: params.url, worktree: params.worktree, activate: true, navigation: 'caller' },
-    DEFAULT_BROWSER_PROFILE_ID
+    DEFAULT_BROWSER_PROFILE_ID,
+    undefined,
+    signal
   )
 }
 
@@ -152,7 +173,8 @@ export async function createBrowserPageOnPairedHost(
   params: Omit<BrowserClientPageCreateParams, 'placement'> & { worktree?: string },
   browserProfileId: string,
   /** The server's own browser, used when no paired desktop takes the page. */
-  fallback?: () => Promise<{ browserPageId: string }>
+  fallback?: () => Promise<{ browserPageId: string }>,
+  signal?: AbortSignal
 ): Promise<{ browserPageId: string }> {
   const { worktree: selector, ...rest } = params
   const worktree = selector ? await host.resolveBrowserWorkspace(selector) : undefined
@@ -172,7 +194,7 @@ export async function createBrowserPageOnPairedHost(
     {
       worktree,
       browserProfileId,
-      caller: { pairedDeviceId: lease.pairedDeviceId, clientKind: 'runtime' }
+      caller: { pairedDeviceId: lease.pairedDeviceId, clientKind: 'runtime', signal }
     }
   )
 }

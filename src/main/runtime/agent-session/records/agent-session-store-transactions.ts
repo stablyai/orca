@@ -1,17 +1,18 @@
-import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
-import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
-import { journalOpenRefusalError } from '../../../native-chat/agent-session-journal/replay/journal-open-failure'
-import { AgentSessionJournalError } from '../../../native-chat/agent-session-journal/writing/journal-write-guards'
+import { AgentSessionProviderAliasIndex } from './agent-session-provider-alias-index'
 import {
-  requireWritableAgentSessionRecord,
-  type AgentSessionStoreState
-} from './agent-session-store-state'
-import {
-  insertAgentSessionOperationRowsIfAbsent,
-  writeAgentSessionStoreRows
-} from './agent-session-record-rows'
-import { readCommandReceipt } from '../../../native-chat/agent-session-journal/writing/command-receipt-table'
+  applyAgentSessionStoreCommand,
+  type AgentSessionStoreCommand,
+  type AgentSessionStoreCommandResult
+} from './agent-session-store-command'
+import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
+import type { JournalWriterEffectResult } from '../../../native-chat/agent-session-journal/journal-writer-effects'
+import type {
+  JournalOperationReceipt,
+  JournalReceiptStage,
+  JournalStagedReceipt
+} from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
+import { assertJournalChatReadable } from '../../../native-chat/agent-session-journal/replay/journal-open-failure'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { CommandReceiptScope } from '../../../native-chat/agent-session-journal/writing/command-receipt-schema'
 import {
   agentSessionRuntimeIncarnation,
@@ -26,91 +27,47 @@ import {
   type AgentSessionReplacedRuntime
 } from '../agent-session-replaced-runtime'
 import {
-  agentSessionStoreDraftRowWrites,
-  draftAgentSessionStoreState,
+  agentSessionStoreRowChanges,
   type AgentSessionStoreRowWrites
-} from './agent-session-store-draft'
-import { changesAgentSenderIdentity } from './agent-session-sender-identity-revision'
-import { AgentSessionProviderAliasIndex } from './agent-session-provider-alias-index'
-
-// Commit validated draft rows atomically before publication; failures discard the draft.
-// The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
-
-// Identity-based diffs miss in-place edits; freeze rows in dev/tests to catch them.
-const FREEZE_ROWS = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
-
-function deepFreeze(value: unknown): void {
-  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) {
-    return
-  }
-  Object.freeze(value)
-  for (const child of Object.values(value)) {
-    deepFreeze(child)
-  }
-}
-
-function freezeRows(
-  state: AgentSessionStoreState,
-  writes: AgentSessionStoreRowWrites | null
-): void {
-  if (!FREEZE_ROWS) {
-    return
-  }
-  const records = writes ? writes.records.upsert.map(([key]) => key) : state.records.keys()
-  for (const sessionId of records) {
-    deepFreeze(state.records.get(sessionId))
-  }
-  const operations = writes ? writes.operations.upsert.map(([key]) => key) : state.operations.keys()
-  for (const key of operations) {
-    deepFreeze(state.operations.get(key))
-  }
-  if (!writes || writes.retiredClaimKeys) {
-    state.retiredClaimKeys.forEach(deepFreeze)
-  }
-}
-
-function readOnlyStoreRefusal(): Error {
-  return journalOpenRefusalError(
-    new AgentSessionJournalError(
-      'journal_read_only',
-      'the chat records were saved by a newer Orca; this host reads them and never writes'
-    )
-  )
-}
-
-type StagedStoreTransaction<T> = {
-  result: T
-  draft: AgentSessionStoreState
-  writes: AgentSessionStoreRowWrites | null
-  /** Publish only after row commit. */
-  adopt: () => void
-}
+} from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
+import type { AgentSessionStoreMutation } from './agent-session-store-mutation'
+import type {
+  AgentSessionRecordCommand,
+  AgentSessionRecordCommandResult
+} from './agent-session-record-command'
+import {
+  adoptAgentSessionStoreCachePatch,
+  copyAgentSessionStoreCache,
+  prepareAgentSessionStoreCachePatch,
+  agentSessionStoreCacheChanges,
+  notifyAgentSessionStoreCacheChanges
+} from './agent-session-store-cache'
 
 export class AgentSessionStoreTransactions {
   private queue: Promise<unknown> = Promise.resolve()
   // Reads/reopens do not admit work; a count survives handle eviction without replaying history.
   private readonly admittedSends = new Map<string, number>()
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
+  readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
+  readonly firstRecordListeners = new Set<() => void>()
   private published: AgentSessionStoreState
   /** Moves only when a commit changes what chat sender identity reads. */
   senderIdentityRevision = 0
-  /** Replaced only when a record joins or leaves, or a /clear links one conversation to the next:
-   *  lookups derived from every record's lineage stay valid across admission and lease writes. */
+  /** Lineage survives admission and lease writes; membership and committed clear invalidate it. */
   private lineage: object = {}
-  /** Built on first use; kept by each committed record write, dropped if the unreadable set moves. */
   private providerAliases: AgentSessionProviderAliasIndex | null = null
-  /** Receipts co-written in one transaction build on each other's drafts, so adoption keeps both. */
-  private staged: { transaction: number; draft: AgentSessionStoreState } | null = null
-  /** Loaded takeover evidence; immutable for this runtime. */
+  private readonly receiptCommits = new WeakMap<
+    JournalReceiptStage,
+    { remaining: number; results: (readonly JournalWriterEffectResult[])[]; failed: boolean }
+  >()
   readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
   constructor(
-    private readonly journalDatabase: JournalHostDatabase,
+    private readonly journalDatabase: JournalSqlDatabase,
     loaded: AgentSessionStoreState,
     hostId: string,
     readonly legacySessionTabIds: readonly string[]
   ) {
-    freezeRows(loaded, null)
     this.published = {
       ...loaded,
       runtimeEnds: readAgentSessionRuntimeEnds(journalDatabase.stateDirectory)
@@ -135,7 +92,6 @@ export class AgentSessionStoreTransactions {
     return this.lineage
   }
 
-  /** The chat whose provider handle chain names `nativeId`, from the commit-kept alias index. */
   providerAliasOwner(nativeId: string): string | null {
     this.providerAliases ??= new AgentSessionProviderAliasIndex(this.published)
     return this.providerAliases.owner(nativeId)
@@ -148,165 +104,214 @@ export class AgentSessionStoreTransactions {
   admittedSendCount = (sessionId: string): number => this.admittedSends.get(sessionId) ?? 0
 
   readCommandReceipt(scope: CommandReceiptScope, operationId: string) {
-    return readCommandReceipt(this.journalDatabase.db, scope, operationId)
+    return this.journalDatabase.readCommandReceipt(scope, operationId)
   }
 
-  /** Mutate only the draft. Newer databases refuse writes; inMemoryWhenReadOnly permits startup-derived verdicts. */
-  transact<T>(
-    apply: (draft: AgentSessionStoreState) => T,
-    options: { inMemoryWhenReadOnly?: boolean } = {}
-  ): Promise<T> {
-    const run = this.queue.then(() => this.commit(apply, options.inMemoryWhenReadOnly === true))
-    this.queue = run.catch(() => {})
-    return run
+  record<C extends AgentSessionRecordCommand>(
+    sessionId: string,
+    command: C,
+    check?: () => void
+  ): Promise<AgentSessionRecordCommandResult<C>> {
+    return this.executeMutation({ kind: 'record', sessionId, command }, check)
   }
 
-  /** Co-write in the caller's journal transaction; write/committed must run synchronously to prevent interleaving. */
-  receipt(
-    apply: (draft: AgentSessionStoreState) => void,
-    options: { insertOperationsIfAbsent?: true; submissionSessionId?: string } = {}
-  ): JournalOperationReceipt {
-    let staged: StagedStoreTransaction<void> | null = null
-    let admitted: string | undefined
-    return {
-      write: (db, row) => {
-        if (this.journalDatabase.readOnly) {
-          throw readOnlyStoreRefusal()
-        }
-        admitted = row?.kind === 'submission' ? options.submissionSessionId : undefined
-        const transaction = this.journalDatabase.transactionNumber
-        const base = this.staged?.transaction === transaction ? this.staged.draft : this.published
-        // The ledger and wake share one draft as well as one commit.
-        staged = this.stage((draft) => {
-          apply(draft)
-          const record = admitted ? requireWritableAgentSessionRecord(draft, admitted) : undefined
-          if (record?.sleptAt !== undefined) {
-            const { sleptAt: _sleptAt, ...awake } = record
-            draft.records.set(record.sessionId, {
-              ...awake,
-              updatedAt: row?.ts ?? record.updatedAt
-            })
-          }
-        }, base)
-        this.staged = { transaction, draft: staged.draft }
-        const writes = staged.writes
-        if (writes) {
-          // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
-          if (options.insertOperationsIfAbsent) {
-            insertAgentSessionOperationRowsIfAbsent(db, writes.operations.upsert)
-          }
-          writeAgentSessionStoreRows(
-            db,
-            options.insertOperationsIfAbsent
-              ? { ...writes, operations: { ...writes.operations, upsert: [] } }
-              : writes
-          )
-        }
-      },
-      committed: () => {
-        staged?.adopt()
-        if (this.staged?.draft === staged?.draft) {
-          this.staged = null
-        }
-        if (admitted) {
-          this.admittedSends.set(admitted, this.admittedSendCount(admitted) + 1)
-          for (const listener of this.acceptedSendListeners) {
-            listener(admitted)
+  command<C extends AgentSessionStoreCommand>(
+    command: C,
+    check?: () => void
+  ): Promise<AgentSessionStoreCommandResult<C>> {
+    return this.executeMutation({ kind: 'command', command }, check)
+  }
+
+  private executeMutation<T>(input: AgentSessionStoreMutation, check?: () => void): Promise<T> {
+    const run = this.queue.then(async () => {
+      check?.()
+      if (this.readOnly && input.kind === 'command' && input.command.kind === 'restart') {
+        const next = copyAgentSessionStoreCache(this.published)
+        const result = applyAgentSessionStoreCommand(next, input.command)
+        attributeAgentSessionRuntime(this.published, next)
+        if (result instanceof Map) {
+          for (const id of result.keys()) {
+            result.set(id, next.records.get(id))
           }
         }
-        staged = null
-        admitted = undefined
+        this.publish(next, this.published, agentSessionStoreRowChanges(this.published, next))
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: executeMutation preserves the command/result correlation enforced by its typed public entry points.
+        return result as T
       }
-    }
-  }
-
-  /** Commit a receipt separately when its command made no journal write. */
-  commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
-    const run = this.queue.then(() => {
-      this.journalDatabase.transaction((db) => receipt.write(db))
-      receipt.committed()
+      assertJournalChatReadable(this.readOnly)
+      const [result] = await this.journalDatabase.effects([
+        {
+          kind: 'store',
+          mutation: {
+            input,
+            runtime: {
+              incarnation: agentSessionRuntimeIncarnation(),
+              ends: this.published.runtimeEnds
+            }
+          }
+        }
+      ])
+      const [store] = this.publishResults([result])
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store effect returns the result of this exact typed mutation.
+      return store.value as T
     })
     this.queue = run.catch(() => {})
     return run
   }
 
-  private commit<T>(apply: (draft: AgentSessionStoreState) => T, inMemoryWhenReadOnly: boolean): T {
-    const readOnly = this.journalDatabase.readOnly
-    if (readOnly && !inMemoryWhenReadOnly) {
-      throw readOnlyStoreRefusal()
-    }
-    const staged = this.stage(apply)
-    const writes = staged.writes
-    if (writes && !readOnly) {
-      this.journalDatabase.transaction((db) => writeAgentSessionStoreRows(db, writes))
-    }
-    staged.adopt()
-    return staged.result
-  }
-
-  private stage<T>(
-    apply: (draft: AgentSessionStoreState) => T,
-    published = this.published
-  ): StagedStoreTransaction<T> {
-    const draft = draftAgentSessionStoreState(published)
-    const result = apply(draft)
-    attributeAgentSessionRuntime(published, draft)
-    const writes = agentSessionStoreDraftRowWrites(published, draft)
+  mutationReceipt(
+    mutation: AgentSessionStoreMutation | (() => AgentSessionStoreMutation),
+    submissionSessionId?: string
+  ): JournalOperationReceipt & Required<Pick<JournalOperationReceipt, 'stage'>> {
     return {
-      result,
-      draft,
-      writes,
-      adopt: () => {
-        if (writes) {
-          freezeRows(draft, writes)
-          if (changesAgentSenderIdentity(published, draft, writes)) {
-            this.senderIdentityRevision++
+      stage: async (context): Promise<JournalStagedReceipt> => {
+        assertJournalChatReadable(this.readOnly)
+        const input = typeof mutation === 'function' ? mutation() : mutation
+        const admitted = context.row === 'submission' ? submissionSessionId : undefined
+        const effective =
+          input.kind === 'operation' && !admitted ? { ...input, wakeSessionId: undefined } : input
+        let group = this.receiptCommits.get(context)
+        if (!group) {
+          group = { remaining: 0, results: [], failed: false }
+          this.receiptCommits.set(context, group)
+        }
+        const index = group.results.length
+        group.results.push([])
+        group.remaining++
+        let adopted = false
+        let settled = false
+        const adopt: NonNullable<JournalStagedReceipt['adopt']> = (results) => {
+          if (adopted) {
+            return
           }
-          this.published = draft
-          if (published.unreadableRecords !== draft.unreadableRecords) {
-            this.providerAliases = null
+          adopted = true
+          group.remaining--
+          if (results === undefined) {
+            group.failed = true
+          } else if (results.length !== 1) {
+            group.failed = true
+            const error = new Error('the writer returned missing store results')
+            this.journalDatabase.fault(error)
+            throw error
           } else {
-            this.providerAliases?.applyCommitted(draft, writes.records)
+            group.results[index] = results
           }
-          const lineageChanged =
-            writes.records.remove.length > 0 ||
-            writes.records.upsert.some(([id]) => {
-              const before = published.records.get(id)
-              return before?.conversationCommand !== draft.records.get(id)?.conversationCommand
-            })
-          if (lineageChanged) {
-            this.lineage = {}
-          }
-          const topologyChanged =
-            writes.sessionTabs !== null ||
-            writes.records.remove.length > 0 ||
-            writes.records.upsert.some(([id]) => {
-              const before = published.records.get(id)
-              const after = draft.records.get(id)
-              return (
-                !before ||
-                !after ||
-                before.lease.claimStatus !== after.lease.claimStatus ||
-                before.provider !== after.provider ||
-                before.location !== after.location ||
-                before.conversationCommand !== after.conversationCommand
-              )
-            })
-          const renamed = writes.records.upsert
-            .filter(
-              ([id]) =>
-                published.records.get(id)?.conversationName !==
-                draft.records.get(id)?.conversationName
-            )
-            .map(([id]) => id)
-          if (topologyChanged) {
-            sessionCrewChanges.notify(new Set(['records']))
-          } else if (renamed.length) {
-            sessionCrewChanges.notify(
-              Object.assign(new Set(['names'] as const), { recordIds: renamed })
-            )
+          if (group.remaining === 0 && !group.failed) {
+            try {
+              this.publishResults(group.results.flat())
+            } catch (error) {
+              group.failed = true
+              throw error
+            }
           }
         }
+        return {
+          effects: [
+            {
+              kind: 'store',
+              mutation: {
+                input: effective,
+                at: context.savedAt,
+                runtime: {
+                  incarnation: agentSessionRuntimeIncarnation(),
+                  ends: this.published.runtimeEnds
+                }
+              }
+            }
+          ],
+          adopt,
+          settle: (results) => {
+            if (settled) {
+              return
+            }
+            settled = true
+            adopt(results)
+            if (results !== undefined && !group.failed && admitted) {
+              this.admittedSends.set(admitted, this.admittedSendCount(admitted) + 1)
+              this.acceptedSendListeners.forEach((listener) => listener(admitted))
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private publishResults(results: readonly JournalWriterEffectResult[]) {
+    try {
+      const stores = results.map((result) => {
+        if (
+          !result ||
+          typeof result !== 'object' ||
+          !('kind' in result) ||
+          result.kind !== 'store'
+        ) {
+          throw new Error('the writer returned a different store result')
+        }
+        return result
+      })
+      const patch = prepareAgentSessionStoreCachePatch(
+        this.published,
+        stores.map((result) => result.writes)
+      )
+      this.publish(patch.next, patch.before, patch.writes, () => {
+        adoptAgentSessionStoreCachePatch(this.published, patch.next, patch.writes!)
+      })
+      return stores
+    } catch (error) {
+      this.journalDatabase.fault(error instanceof Error ? error : new Error(String(error)))
+      throw error
+    }
+  }
+
+  /** Commit a receipt separately when its command made no journal write; it settles exactly once. */
+  async commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
+    if (!receipt.stage) {
+      throw new Error('a record store receipt requires worker staging')
+    }
+    const staged = await receipt.stage({ savedAt: Date.now() })
+    let results: JournalWriterEffectResult[] | undefined
+    try {
+      results = staged.effects.length > 0 ? await this.journalDatabase.effects(staged.effects) : []
+    } finally {
+      staged.settle(results)
+    }
+  }
+
+  private publish(
+    draft: AgentSessionStoreState,
+    published: AgentSessionStoreState,
+    writes: AgentSessionStoreRowWrites | null,
+    adopt?: () => void
+  ): void {
+    if (writes) {
+      const heldBefore =
+        this.published.records.size > 0 || this.published.unreadableRecords.size > 0
+      const changes = agentSessionStoreCacheChanges(published, draft, writes)
+      if (changes.senderIdentity) {
+        this.senderIdentityRevision++
+      }
+      if (changes.lineage) {
+        this.lineage = {}
+      }
+      if (adopt) {
+        adopt()
+      } else {
+        this.published = draft
+      }
+      if (published.unreadableRecords !== draft.unreadableRecords) {
+        this.providerAliases = null
+      } else {
+        this.providerAliases?.applyCommitted(this.published, writes.records)
+      }
+      notifyAgentSessionStoreCacheChanges(published, draft, writes)
+      for (const id of changes.deaths) {
+        this.deathEvidenceListeners.forEach((listener) => listener(id))
+      }
+      if (
+        !heldBefore &&
+        (this.published.records.size > 0 || this.published.unreadableRecords.size > 0)
+      ) {
+        this.firstRecordListeners.forEach((listener) => listener())
       }
     }
   }

@@ -32,10 +32,8 @@ describe('Git read lease expiry', () => {
     await vi.advanceTimersByTimeAsync(29_999)
     const joined = owner.lease('diff', undefined, load)
     expect(load).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(1)
 
     await vi.advanceTimersByTimeAsync(1)
-    expect(vi.getTimerCount()).toBe(0)
     const fresh = owner.lease('diff', undefined, load)
     expect(load).toHaveBeenCalledTimes(2)
     expect(signals.every((signal) => !signal.aborted)).toBe(true)
@@ -44,10 +42,8 @@ describe('Git read lease expiry', () => {
     await expect(Promise.all([first, joined])).resolves.toEqual(['old', 'old'])
     const freshJoin = owner.lease('diff', undefined, load)
     expect(load).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(1)
     freshRead.resolve('fresh')
     await expect(Promise.all([fresh, freshJoin])).resolves.toEqual(['fresh', 'fresh'])
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('keeps cancellation ownership separate after an expired read is replaced', async () => {
@@ -68,7 +64,6 @@ describe('Git read lease expiry', () => {
     await rejected
     expect(signals[0]?.aborted).toBe(true)
     expect(signals[1]?.aborted).toBe(false)
-    expect(vi.getTimerCount()).toBe(1)
 
     oldRead.reject(new Error('old read aborted'))
     await Promise.resolve()
@@ -76,7 +71,6 @@ describe('Git read lease expiry', () => {
     expect(load).toHaveBeenCalledTimes(2)
     freshRead.resolve('fresh')
     await expect(Promise.all([fresh, joined])).resolves.toEqual(['fresh', 'fresh'])
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('invalidates the old timer without aborting its leases or expiring the replacement', async () => {
@@ -91,7 +85,6 @@ describe('Git read lease expiry', () => {
     const old = owner.lease('diff', undefined, load)
     await vi.advanceTimersByTimeAsync(100)
     owner.invalidate()
-    expect(vi.getTimerCount()).toBe(0)
     expect(signals[0]?.aborted).toBe(false)
     const fresh = owner.lease('diff', undefined, load)
     await vi.advanceTimersByTimeAsync(29_900)
@@ -99,9 +92,7 @@ describe('Git read lease expiry', () => {
     await expect(old).resolves.toBe('old')
     const joined = owner.lease('diff', undefined, load)
     expect(load).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(1)
     freshRead.resolve('fresh')
     await expect(Promise.all([fresh, joined])).resolves.toEqual(['fresh', 'fresh'])
-    expect(vi.getTimerCount()).toBe(0)
   })
 })

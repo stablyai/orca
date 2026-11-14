@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { expect, type MockInstance } from 'vitest'
 import type { createOrchestrationRpcHarness } from './rpc-test-harness'
 import type { QueuedMessageTestRig } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
@@ -22,7 +23,7 @@ export async function verifyWorkerStartCardScenario(input: {
   append: MockInstance<QueuedMessageTestRig['host']['appendAgentStart']>
 }): Promise<void> {
   const { current, scenario, before, task, federated, db, append } = input
-  const snapshot = await current.host.journalSnapshot(COORD)
+  const snapshot = await readTestHostJournal(current.host, COORD)
   const cards = snapshot.items.filter((item) => item.body.kind === 'agent-start')
   if (scenario !== 'success' && scenario !== 'federated') {
     expect(cards).toHaveLength(0)
@@ -57,7 +58,7 @@ export async function verifyWorkerStartCardScenario(input: {
     current.host.appendAgentStart(destination, card.body, card.observedAt + 20)
   ])
   expect(
-    (await current.host.journalSnapshot(COORD)).items.filter(
+    (await readTestHostJournal(current.host, COORD)).items.filter(
       (item) => item.body.kind === 'agent-start'
     )
   ).toEqual(cards)
@@ -73,7 +74,9 @@ export async function verifyWorkerStartCardScenario(input: {
   // Full task survives removal of the orchestration rows it came from.
   db.resetAll()
   expect(
-    (await current.host.journalSnapshot(COORD)).items.find((item) => item.itemId === card.itemId)
+    (await readTestHostJournal(current.host, COORD)).items.find(
+      (item) => item.itemId === card.itemId
+    )
   ).toEqual(card)
   if (scenario === 'success') {
     const context = await current.host.continuationContext({
@@ -92,7 +95,7 @@ export async function verifyWorkerStartCardScenario(input: {
     await current.quitRestartHostProcess()
     await closeTestJournalHostDatabase(current.root)
     current.crashRestartHostProcess()
-    const reopened = await current.host.journalSnapshot(COORD)
+    const reopened = await readTestHostJournal(current.host, COORD)
     expect(reopened.items.map(({ itemId }) => itemId)).toEqual(
       snapshot.items.map(({ itemId }) => itemId)
     )
@@ -161,6 +164,8 @@ export async function verifyWorkerStartCardScenario(input: {
   }
   await current.host.appendAgentStart(destination, card.body, card.observedAt + 30)
   expect(
-    (await current.host.journalSnapshot(COORD)).items.some((item) => item.itemId === card.itemId)
+    (await readTestHostJournal(current.host, COORD)).items.some(
+      (item) => item.itemId === card.itemId
+    )
   ).toBe(false)
 }

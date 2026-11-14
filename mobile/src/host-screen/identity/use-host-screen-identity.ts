@@ -9,7 +9,7 @@ import type { HostProfile } from '../../host-catalog/host-profile'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { HostScreenState } from '../use-host-screen-state'
 import { storedHostDescriptor } from './host-stored-identity'
-import { INITIAL_MOBILE_VIEW } from '../../worktree/workspace-view-settings'
+import { INITIAL_MOBILE_VIEW } from '../../worktree/workspace-list/workspace-view-settings'
 import { cachedHostView } from '../view-settings/host-view-memory'
 import { cachedHostWorktrees } from '../catalog/host-list-queries'
 

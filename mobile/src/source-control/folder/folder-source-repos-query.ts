@@ -9,8 +9,8 @@ import {
 import { defineHostQuery } from '../../query/host-query'
 import type { HostQueryTarget } from '../../query/host-query-key'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { hostProjectGroupsRead } from '../../worktree/project-sections-operations'
-import { listHostRepos, listServerRepos } from '../../worktree/server-repos'
+import { hostProjectGroupsRead } from '../../worktree/project-sections/project-sections-operations'
+import { listHostRepos, listServerRepos } from '../../worktree/repositories/server-repos'
 
 export type FolderSourceCatalog = { repos: Repo[]; groups: ProjectGroup[] }
 

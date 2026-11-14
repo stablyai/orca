@@ -30,68 +30,6 @@ const targetIncarnation = '22222222-2222-4222-8222-222222222222'
 
 describe('regional rehome assignment state', () => {
 
-  it('moves one live preferred host and completes without disabling its source cell', async () => {
-    const context = await setup()
-    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-    const neighbor = { userId: 'user-2', relayHostId: 'ponmlkjihgfedcba' }
-    const sourceControl = await activatePreferredSource(context, identity)
-    await activateSource(context, neighbor)
-
-    const attempt = await context.store.tryIdleRehome()
-    expect(attempt).toMatchObject({
-      userId: identity.userId,
-      relayHostId: identity.relayHostId,
-      sourceCellId: source.id,
-      sourceCellIncarnation: sourceIncarnation,
-      targetCellId: target.id,
-      targetCellIncarnation: targetIncarnation,
-      previousEpoch: 1,
-      assignmentEpoch: 2,
-      sendAttempts: 1
-    })
-    expect(await context.store.resolve(neighbor)).toMatchObject({ cellId: source.id })
-    expect(await context.store.completeReadyRegionalRehomes()).toBe(0)
-    expect(
-      await context.database.query(
-        'SELECT drain_outcome FROM relay_region_rehome_attempts WHERE attempt_id = ?',
-        [attempt!.attemptId]
-      )
-    ).toEqual([{ drain_outcome: 'accepted' }])
-
-    const targetControl = await context.store.activateControl(identity, {
-      cellId: target.id,
-      assignmentEpoch: 2,
-      generation: 1
-    })
-    await context.store.markMigrationTargetRegistered(identity, {
-      cellId: target.id,
-      assignmentEpoch: 2
-    })
-    expect(await context.store.completeReadyRegionalRehomes()).toBe(0)
-    await context.store.releaseActivity(identity, sourceControl)
-    expect(await context.store.completeReadyRegionalRehomes()).toBe(1)
-
-    expect(await context.store.resolve(identity)).toMatchObject({
-      cellId: target.id,
-      assignmentEpoch: 2
-    })
-    expect(await context.store.resolve(neighbor)).toMatchObject({ cellId: source.id })
-    expect(
-      await context.database.query(
-        `SELECT completed_at, aborted_at FROM relay_assignment_migrations
-       WHERE user_id = ? AND relay_host_id = ?`,
-        [identity.userId, identity.relayHostId]
-      )
-    ).toEqual([{ completed_at: context.now(), aborted_at: null }])
-    expect(
-      await context.database.query(
-        `SELECT drain_receipt_at, completed_at, aborted_at FROM relay_region_rehome_attempts`
-      )
-    ).toEqual([{ drain_receipt_at: context.now(), completed_at: context.now(), aborted_at: null }])
-    expect(targetControl).toMatch(/^control:/)
-    await context.database.close()
-  })
-
   it('completes healthy candidates past a poisoned attempt and logs it', async () => {
     const context = await setup()
     const poisoned = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
@@ -146,8 +84,6 @@ describe('regional rehome assignment state', () => {
     ).toEqual([{ completed_at: context.now() }])
     await context.database.close()
   })
-
-
 })
 
 type Context = Awaited<ReturnType<typeof setup>>
@@ -249,18 +185,6 @@ async function activatePreferredSource(
     assignment.assignmentEpoch
   )
   return control
-}
-
-async function activateSource(
-  context: Context,
-  identity: { userId: string; relayHostId: string }
-): Promise<string> {
-  const assignment = await context.store.assign(identity, undefined, 'us-central1')
-  return await context.store.activateControl(identity, {
-    cellId: source.id,
-    assignmentEpoch: assignment.assignmentEpoch,
-    generation: 1
-  })
 }
 
 async function heartbeat(

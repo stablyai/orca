@@ -1,63 +1,44 @@
-import { agentSessionRecordPredecessorIds } from './agent-session-record-lineage'
 import { clearSuccessor } from './agent-session-sender-identity-revision'
-import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
+import type * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
+import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
-import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
   agentSessionOperationKey,
   type AgentSessionOperationDecision,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
-  admitAgentSessionGlobalOperationInto,
-  admitAgentSessionMutationOperation,
   evaluateAgentSessionMutationOperation,
-  admitAgentSessionOperationInto,
-  claimAgentSessionOperationInto,
-  admitAndClaimAgentSessionOperationInto,
-  type ClaimAfterAdmission,
-  settleAgentSessionOperationInto,
+  type claimAgentSessionOperationInto,
+  type admitAndClaimAgentSessionOperationInto,
+  type settleAgentSessionOperationInto,
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
 } from '../ownership/agent-session-operation-admission'
-import {
-  isAgentSessionClaimKeyVerifiable,
-  retireAgentSessionClaimKey
-} from '../ownership/agent-session-claim-key-retention'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { isAgentSessionClaimKeyVerifiable } from '../ownership/agent-session-claim-key-retention'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
-import {
-  commitAgentSessionProcessIdentity,
-  evictAgentSessionOwner,
-  type AgentSessionProcessIdentityCommit
-} from '../ownership/agent-session-lease-transitions'
-import {
-  settleFailedAgentSessionAcquisition,
-  settleFailedAgentSessionPostAcquisitionAttachment,
-  type AgentSessionFailedAcquisitionSettlement,
-  type AgentSessionFailedPostAcquisitionAttachmentSettlement
+import { readAgentSessionWorkspaceAttention } from './agent-session-workspace-attention'
+import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
+import type { AgentSessionProcessIdentityCommit } from '../ownership/agent-session-lease-transitions'
+import type {
+  AgentSessionFailedAcquisitionSettlement,
+  AgentSessionFailedPostAcquisitionAttachmentSettlement
 } from '../agent-session-acquisition-failure-settlement'
+import type { AgentSessionLeaseRenewal } from '../ownership/agent-session-lease-renewal'
 import {
-  renewAgentSessionLeases,
-  type AgentSessionLeaseRenewal
-} from '../ownership/agent-session-lease-renewal'
-import {
-  applyAgentSessionRestartProbes,
   collectAgentSessionRestartProbes,
   type AgentSessionRestartProbeArgs
 } from '../ownership/agent-session-restart-reconciliation'
-import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
-import {
-  commitAgentSessionReservation,
-  type AgentSessionReserveRequest,
-  type AgentSessionReserveResult
+import type { AgentSessionRecordCommand } from './agent-session-record-command'
+import type {
+  AgentSessionReserveRequest,
+  AgentSessionReserveResult
 } from '../ownership/agent-session-reservation-admission'
 import {
   getAgentSessionConversation,
@@ -68,19 +49,14 @@ import {
   type AgentSessionStoreState
 } from './agent-session-store-state'
 import { AgentSessionRecordTabs } from '../agent-session-tab-table'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
-import { readStoredWorkspaceAttention } from '../../../native-chat/agent-session-journal/replay/journal-stored-cursor'
+import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
-import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
-import {
-  compareAndSetAgentSessionRecordName,
-  type AgentSessionUserNameWrite,
-  type CompareAndSetConversationName,
-  setAgentSessionRecordConversationName,
-  setAgentSessionRecordUserNameThrough
+import type {
+  AgentSessionUserNameWrite,
+  CompareAndSetConversationName
 } from './agent-session-record-conversation-name'
 
 /** Single-writer records/operation ledger in the host chat-journal database. */
@@ -90,27 +66,29 @@ export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
 
 export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
+  private clearedFrom: { lineage: object; predecessors: Map<string, string[]> } | undefined
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
     readonly hostId: string,
-    private readonly journalDatabase: JournalHostDatabase
+    private readonly journalDatabase: JournalSqlDatabase
   ) {
     super(transactions)
-    this.founding = createAgentSessionFoundingStore(transactions, this.firstRecordListeners)
+    this.founding = createAgentSessionFoundingStore(transactions)
     this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
   }
 
-  /** Structural readability does not depend on which agents this host can launch. */
+  /** Structural readability does not depend on which agents this host can launch.
+   *  `records` must come from this database's own load. */
   static open(args: {
-    journalDatabase: JournalHostDatabase
+    journalDatabase: JournalSqlDatabase
+    records: AgentSessionStoreState
     hostId: string
     legacySessionTabIds: readonly string[]
   }): AgentSessionRecordStore {
-    const rows = loadAgentSessionStoreRows(args.journalDatabase.db)
     const transactions = new AgentSessionStoreTransactions(
       args.journalDatabase,
-      rows,
+      args.records,
       args.hostId,
       args.legacySessionTabIds
     )
@@ -135,14 +113,27 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
   workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
-    readStoredWorkspaceAttention(this.journalDatabase, this.listConversations(), location)
+    readAgentSessionWorkspaceAttention(this.journalDatabase, this.listConversations(), location)
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
-  /** Sessions a committed /clear continued into this one, read through the clear-successor index;
-   *  each candidate is checked on its conversation, so unreadable leases still count. */
-  listClearedFrom = (sessionId: string): string[] =>
-    agentSessionRecordPredecessorIds(this.journalDatabase.db, sessionId).filter(
-      (id) => clearSuccessor(this.getConversation(id)) === sessionId
-    )
+  /** Sessions a committed /clear continued into this one, derived from every held conversation
+   *  (unreadable leases still count) and rebuilt only when lineage changes. */
+  listClearedFrom = (sessionId: string): string[] => {
+    const lineage = this.transactions.lineageRevision()
+    if (this.clearedFrom?.lineage !== lineage) {
+      const predecessors = new Map<string, string[]>()
+      for (const conversation of this.listConversations()) {
+        const successor = clearSuccessor(conversation)
+        if (successor !== null) {
+          predecessors.set(successor, [
+            ...(predecessors.get(successor) ?? []),
+            conversation.sessionId
+          ])
+        }
+      }
+      this.clearedFrom = { lineage, predecessors }
+    }
+    return [...(this.clearedFrom.predecessors.get(sessionId) ?? [])]
+  }
   lineageRevision = (): object => this.transactions.lineageRevision()
   providerAliasOwner = (nativeId: string) => this.transactions.providerAliasOwner(nativeId)
   selectWritableRecord = (sessionId: string) =>
@@ -166,36 +157,28 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
   }
 
-  /** Names are metadata, not ownership: write unfenced; null clears. */
-  setConversationName = (sessionId: string, name: string | null): Promise<AgentSessionRecord> =>
-    this.mutate(sessionId, (record) =>
-      setAgentSessionRecordConversationName(record, name, Date.now())
-    )
+  updateRecord = <C extends AgentSessionRecordCommand>(
+    sessionId: string,
+    command: C,
+    check?: () => void
+  ) => this.commitRecordCommand(sessionId, command, check)
 
-  /** The user's name for the conversation; see `AgentSessionUserNameWrite`. */
+  setConversationName = (sessionId: string, name: string | null) =>
+    this.updateRecord(sessionId, { kind: 'name', name, now: Date.now() })
+
   setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
-    setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
+    this.updateRecord(sessionId, { kind: 'user-name', name, write, now: Date.now() })
 
   compareAndSetConversationName: CompareAndSetConversationName = (
     id,
     name,
     expected,
-    context,
-    applicable
+    contextId = null
   ) =>
-    compareAndSetAgentSessionRecordName(
-      (apply) => this.mutate(id, apply),
-      name,
-      expected,
-      context,
-      applicable
-    )
+    this.updateRecord(id, { kind: 'name-if-current', name, expected, contextId, now: Date.now() })
 
-  /** Launch history is metadata and does not contend with the writer lease. */
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>
-    this.mutate(sessionId, (record) =>
-      pinAgentSessionRecordLaunchDirectory(record, launchDirectory, Date.now())
-    )
+    this.updateRecord(sessionId, { kind: 'launch-directory', launchDirectory, now: Date.now() })
 
   /** Unreadable records still count as present and can never grant writers. */
   isSessionUnreadable = (sessionId: string): boolean => this.state.unreadableRecords.has(sessionId)
@@ -212,40 +195,48 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     request: AgentSessionReserveRequest,
     check?: () => void
   ): Promise<AgentSessionReserveResult> =>
-    this.transact((draft) => {
-      check?.()
-      return commitAgentSessionReservation(
-        draft,
-        request,
-        AGENT_SESSION_LEASE_TTL_MS,
-        this.transactions.legacySessionTabIds
-      )
-    })
+    this.commitStoreCommand(
+      {
+        kind: 'reserve',
+        request: {
+          ...request,
+          spawnToken:
+            typeof request.spawnToken === 'function' ? request.spawnToken() : request.spawnToken
+        },
+        leaseTtlMs: AGENT_SESSION_LEASE_TTL_MS,
+        legacyTabIds: this.transactions.legacySessionTabIds
+      },
+      check
+    )
 
   readonly founding: ReturnType<typeof createAgentSessionFoundingStore>
 
   commitProcessIdentity = (args: AgentSessionProcessIdentityCommit): Promise<AgentSessionRecord> =>
-    this.mutate(args.sessionId, (record) => commitAgentSessionProcessIdentity({ ...args, record }))
+    this.updateRecord(args.sessionId, { kind: 'process', args })
 
-  proveOwner = createAgentSessionOwnerProof(
-    (id, transition) => this.mutate(id, transition),
-    AGENT_SESSION_LEASE_TTL_MS
-  )
+  proveOwner = (args: Parameters<ReturnType<typeof createAgentSessionOwnerProof>>[0]) =>
+    this.updateRecord(args.sessionId, {
+      kind: 'prove',
+      args,
+      leaseTtlMs: AGENT_SESSION_LEASE_TTL_MS
+    })
 
   settleFailedAcquisition = (args: AgentSessionFailedAcquisitionSettlement) =>
-    this.transact((draft) => settleFailedAgentSessionAcquisition(draft, args))
+    this.commitStoreCommand({ kind: 'failed-acquisition', args, attached: false })
 
   settleFailedPostAcquisitionAttachment = (
     args: AgentSessionFailedPostAcquisitionAttachmentSettlement
-  ) => this.transact((draft) => settleFailedAgentSessionPostAcquisitionAttachment(draft, args))
+  ) => this.commitStoreCommand({ kind: 'failed-acquisition', args, attached: true })
 
   renewLease = (args: AgentSessionLeaseRenewal): Promise<AgentSessionRecord> =>
     this.renewLeases([args]).then(([renewed]) => renewed)
 
   async renewLeases(renewals: readonly AgentSessionLeaseRenewal[]): Promise<AgentSessionRecord[]> {
-    return this.transact((draft) =>
-      renewAgentSessionLeases(draft, renewals, AGENT_SESSION_LEASE_TTL_MS)
-    )
+    return this.commitStoreCommand({
+      kind: 'renew',
+      renewals,
+      leaseTtlMs: AGENT_SESSION_LEASE_TTL_MS
+    })
   }
 
   async evictProvenDeadOwner(args: {
@@ -254,38 +245,29 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     probe: AgentSessionOwnerProbe
     now: number
   }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
+    return this.updateRecord(args.sessionId, { kind: 'evict', args })
   }
 
   cancelUsageLimitContinue = (id: string, cut: usageLimitContinue.UsageLimitContinueIdentity) =>
-    this.mutate(id, (record) =>
-      usageLimitContinue.cancelAgentSessionUsageLimitContinue(record, cut)
-    )
-
-  transitionHandoff = (
-    sessionId: string,
-    transition: (record: AgentSessionRecord) => AgentSessionRecord
-  ): Promise<AgentSessionRecord> => this.mutate(sessionId, transition)
+    this.updateRecord(id, { kind: 'cancel-continue', cut })
 
   /** Reconcile loaded leases before writer admission. Newer databases keep verdicts in memory only and cannot grant writers. */
   async reconcileOnRestart(args: AgentSessionRestartProbeArgs) {
     const probes = await collectAgentSessionRestartProbes(this, args)
-    return this.transact((draft) => applyAgentSessionRestartProbes(draft, probes, args.now), {
-      inMemoryWhenReadOnly: true
-    })
+    return this.commitStoreCommand({ kind: 'restart', probes, now: args.now })
   }
 
   admitOperation = (args: AgentSessionOperationAdmission): Promise<AgentSessionOperationDecision> =>
-    this.transact((draft) => admitAgentSessionOperationInto(draft, args))
+    this.commitStoreCommand({ kind: 'admit', args })
 
   /** Global send ids survive caller reconnect/identity changes. */
   admitGlobalOperation = (
     args: AgentSessionOperationAdmission
   ): Promise<AgentSessionOperationDecision> =>
-    this.transact((draft) => admitAgentSessionGlobalOperationInto(draft, args))
+    this.commitStoreCommand({ kind: 'global-admit', args })
 
   admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
-    this.transact((draft) => admitAgentSessionMutationOperation(draft, args))
+    this.commitStoreCommand({ kind: 'admit-mutation', args })
 
   /** Replay evaluation writes nothing; admitMutationOperation owns the transaction. */
   evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
@@ -293,16 +275,17 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   /** Durable CAS decides which pending replay may run its effect; reading pending alone cannot grant it. */
   claimOperation = (args: Parameters<typeof claimAgentSessionOperationInto>[1]) =>
-    this.transact((draft) => claimAgentSessionOperationInto(draft, args))
+    this.commitStoreCommand({ kind: 'claim', args })
 
-  admitAndClaimOperation = (
-    args: Parameters<typeof admitAndClaimAgentSessionOperationInto>[1],
-    claimAfter: ClaimAfterAdmission
-  ) => this.transact((draft) => admitAndClaimAgentSessionOperationInto(draft, args, claimAfter))
+  admitAndClaimOperation = (args: Parameters<typeof admitAndClaimAgentSessionOperationInto>[1]) =>
+    this.commitStoreCommand({ kind: 'admit-launch', args })
 
   recordOperationOutcome = (
     args: Parameters<typeof settleAgentSessionOperationInto>[1]
-  ): Promise<void> => this.transact((draft) => settleAgentSessionOperationInto(draft, args))
+  ): Promise<void> =>
+    this.transactions.commitReceipt(
+      this.transactions.mutationReceipt({ kind: 'operation', operation: args })
+    )
 
   /** Commit settlement with the journal write, including any action-owned record transformation;
    *  new submissions also clear Sleep in that draft. */
@@ -314,23 +297,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     id: string,
     cut: usageLimitContinue.UsageLimitContinueIdentity
   ): JournalOperationReceipt | undefined => {
-    const saved = this.getRecord(id)?.usageLimitContinueCancel
-    return saved?.turnItemId === cut.turnItemId && saved.resetsAt === cut.resetsAt
-      ? undefined
-      : this.transactions.receipt((draft) => {
-          const record = draft.records.get(id)
-          if (record) {
-            draft.records.set(
-              id,
-              usageLimitContinue.cancelAgentSessionUsageLimitContinue(record, cut)
-            )
-          }
-        })
+    return this.transactions.mutationReceipt({ kind: 'cancel-continue', sessionId: id, cut })
   }
 
   /** Automatic queue admission uses the same record transition as a client's send receipt. */
   submissionReceipt = (sessionId: string) =>
-    this.transactions.receipt(() => {}, { submissionSessionId: sessionId })
+    this.transactions.mutationReceipt({ kind: 'submission-wake', sessionId }, sessionId)
 
   onAcceptedSend = (listener: (sessionId: string) => void): (() => void) => {
     this.transactions.acceptedSendListeners.add(listener)
@@ -348,27 +320,5 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     this.transactions.readCommandReceipt(...args)
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
-    this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
-
-  /** Evaluate options against the record held by this ordered write. */
-  reviseSessionOptions = <A extends { sessionId: string }>(
-    revise: (record: AgentSessionRecord, args: A) => AgentSessionRecord,
-    args: A
-  ) => this.mutate(args.sessionId, (record) => revise(record, args))
-
-  async retireClaimKey(keyId: string, now: number): Promise<void> {
-    await this.transact((draft) => retireAgentSessionClaimKey(draft, keyId, now))
-  }
-
-  private async mutate(
-    sessionId: string,
-    apply: (record: AgentSessionRecord) => AgentSessionRecord
-  ): Promise<AgentSessionRecord> {
-    return this.transact((draft) => {
-      const record = requireWritableAgentSessionRecord(draft, sessionId)
-      const next = apply(record)
-      draft.records.set(sessionId, next)
-      return next
-    })
-  }
+    this.updateRecord(args.sessionId, { kind: 'options', args })
 }

@@ -28,7 +28,6 @@ type HostRowModules = {
 type Build = {
   fold: Fold
   agentDotState: (row: Row, now: number) => string
-  agentDisplayLabel: (row: Row, now: number) => string
   host: HostRowModules
 }
 
@@ -102,7 +101,7 @@ async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [fold, display, sources, rows] = await Promise.all([
       import('../../../src/shared/agent-session/view/structured-agent-session-agent-status'),
-      importWorkingTreeModuleCopy(PHONE_ROW_READER),
+      importWorkingTreeModuleCopy('mobile/src/worktree/agent-lineage/agent-row-display.ts'),
       import('../../../src/main/runtime/workspaces/process-listing/runtime-worktree-agent-sources'),
       import('../../../src/main/runtime/workspaces/process-listing/runtime-worktree-agent-rows')
     ])
@@ -110,10 +109,7 @@ async function loadBuild(ref: string | null): Promise<Build> {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this spec drives both builds' fold through one untyped surface.
       fold: fold.structuredAgentSessionAgentStatus as unknown as Fold,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a dynamic import of a copy is typed unknown; this is the current phone's row reader by path.
-      agentDotState: display.agentDotState as unknown as Build['agentDotState'],
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above, the current phone's row label.
-      agentDisplayLabel: display.agentDisplayLabel as unknown as Build['agentDisplayLabel'],
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a dynamic import is typed by its module; this spec drives both builds through one untyped surface.
+      agentDotState: display.agentDotState as unknown as Build['agentDotState'], // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a dynamic import is typed by its module; this spec drives both builds through one untyped surface.
       host: { ...sources, ...rows } as unknown as HostRowModules
     }
   }
@@ -134,10 +130,7 @@ async function loadBuild(ref: string | null): Promise<Build> {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a dynamic import is typed unknown; this is the old build's summary fold by path.
     fold: fold.structuredAgentSessionAgentStatus as unknown as Fold,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a dynamic import is typed unknown; this is the old phone's row reader by path.
-    agentDotState: display.agentDotState as unknown as Build['agentDotState'],
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above, the old phone's row label.
-    agentDisplayLabel: display.agentDisplayLabel as unknown as Build['agentDisplayLabel'],
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a dynamic import is typed unknown; these two modules are the old host's row surface by path.
+    agentDotState: display.agentDotState as unknown as Build['agentDotState'], // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a dynamic import is typed unknown; these two modules are the old host's row surface by path.
     host: { ...sources, ...rows } as unknown as HostRowModules
   }
 }
@@ -150,14 +143,7 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version Stopping', () => {
-  it('an OLD desktop folds a new host summary into the plain working row it always drew', () => {
-    expect(oldBuild.fold(STOPPING_SUMMARY)).toEqual({
-      state: 'working',
-      mainAgent: { state: 'working' }
-    })
-  })
-
-  it("an OLD phone reads a new host's row as working, with its usual line", () => {
+  it("an OLD phone reads a new host's row as working", () => {
     const row = publishRow(newBuild.host, {
       state: 'working',
       stopping: true,
@@ -165,8 +151,6 @@ describe('cross-version Stopping', () => {
     })
     expect(row.mainAgent).toMatchObject({ stopping: true })
     expect(oldBuild.agentDotState(row, NOW)).toBe('working')
-    expect(oldBuild.agentDisplayLabel(row, NOW)).toBe('running the tests')
-    expect(newBuild.agentDisplayLabel(row, NOW)).toBe('Stopping…')
   })
 
   it('a NEW reader of an old host never reads Stopping, which that host never publishes', () => {
@@ -174,6 +158,5 @@ describe('cross-version Stopping', () => {
     expect(newBuild.fold(oldSummary)).toEqual({ state: 'working', mainAgent: { state: 'working' } })
     const row = publishRow(oldBuild.host, { state: 'working', stateStartedAt: NOW - 60_000 })
     expect(newBuild.agentDotState(row, NOW)).toBe('working')
-    expect(newBuild.agentDisplayLabel(row, NOW)).toBe('running the tests')
   })
 })

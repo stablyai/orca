@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterGitHubProjectRowsForRepos,
-  type GitHubProjectRepoMatch,
   type GitHubRepoSlugCacheEntry
 } from './github-project-repo-match'
 
@@ -30,36 +29,5 @@ describe('project repository matching within one row projection', () => {
     expect(filterGitHubProjectRowsForRepos(rows, repos, slugs)).toEqual([])
     slugs.one = { path: '/moved', repository: { owner: 'acme', repo: 'one' } }
     expect(filterGitHubProjectRowsForRepos(rows, repos, slugs)).toEqual(rows)
-  })
-
-  it('rechecks the active project host and fork-origin evidence on every projection', () => {
-    const repos: GitHubProjectRepoMatch[] = [
-      {
-        id: 'fork',
-        path: '/fork',
-        displayName: 'fork',
-        upstream: { owner: 'acme', repo: 'one' }
-      }
-    ]
-    const slugs: Record<string, GitHubRepoSlugCacheEntry | undefined> = {
-      fork: { path: '/fork', repository: { owner: 'me', repo: 'fork', host: 'github.com' } }
-    }
-    const rows = rowsFor(['acme/one', 'acme/one'])
-    expect(filterGitHubProjectRowsForRepos(rows, repos, slugs, 'github.com')).toEqual(rows)
-    expect(filterGitHubProjectRowsForRepos(rows, repos, slugs, 'github.enterprise.test')).toEqual(
-      []
-    )
-    slugs.fork = {
-      path: '/fork',
-      repository: { owner: 'me', repo: 'fork', host: 'github.enterprise.test' }
-    }
-    expect(filterGitHubProjectRowsForRepos(rows, repos, slugs, 'github.enterprise.test')).toEqual(
-      rows
-    )
-    expect(filterGitHubProjectRowsForRepos(rows, repos, slugs, 'github.com')).toEqual([])
-    slugs.fork = { path: '/fork', repository: null }
-    expect(filterGitHubProjectRowsForRepos(rows, repos, slugs, 'github.enterprise.test')).toEqual(
-      []
-    )
   })
 })

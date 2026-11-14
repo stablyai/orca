@@ -4,8 +4,8 @@
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing intervals: pnpm check:recurring-timer-ratchet --prune
 1 src/cli/orchestration/messages/check-keepalive.ts
-1 src/cli/runtime/mac-app-update-bundle.ts
-1 src/cli/runtime/serve-supervised-service.ts
+1 src/cli/runtime/serve/updates/mac-app-update-bundle.ts
+1 src/cli/runtime/serve/supervision/serve-supervised-service.ts
 1 src/main/agent-hooks/server/server-opencode-binder.ts
 1 src/main/automations/observation/retained-run-reconciliation.ts
 1 src/main/automations/automation-service.ts
@@ -29,7 +29,7 @@
 1 src/main/hang-watchdog/main-thread-hang-watchdog.ts
 2 src/main/ipc/filesystem/watcher-process/native-subscriptions/parcel-watcher-shallow-file-subscription.ts
 1 src/main/ipc/filesystem/watcher-process/native-subscriptions/parcel-watcher-shallow-subscription.ts
-1 src/main/ipc/runtime-environments/runtime-environment-preference.ts
+1 src/main/ipc/runtime-environments/catalog/runtime-environment-preference.ts
 1 src/main/ipc/worktrees/git/worktree-git-common-narrow-watch.ts
 1 src/main/ipc/worktrees/git/worktree-git-common-native-upgrade-poll.ts
 1 src/main/ipc/wsl/wsl-host-automation-wake-wiring.ts
@@ -45,7 +45,7 @@
 1 src/main/plugins/catalog/plugin-auto-updater.ts
 1 src/main/plugins/catalog/plugin-kill-list-service.ts
 1 src/main/plugins/installation/plugin-git-repository.ts
-1 src/main/plugins/plugin-service-housekeeping.ts
+1 src/main/plugins/development/plugin-service-housekeeping.ts
 1 src/main/rate-limits/service/service-polling.ts
 1 src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts

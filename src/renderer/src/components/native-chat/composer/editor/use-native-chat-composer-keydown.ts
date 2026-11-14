@@ -5,8 +5,8 @@ import {
   type KeyboardEventHandler,
   type SetStateAction
 } from 'react'
-import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/native-chat-composer-autocomplete'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import { isMacPlatform } from '../../pane/routing/native-chat-shortcut'
 import type { NativeChatMentionFiles } from '../pickers/use-native-chat-mention-files'
 import type { NativeChatComposerSendIntent } from '../submit/native-chat-composer-send-intent'

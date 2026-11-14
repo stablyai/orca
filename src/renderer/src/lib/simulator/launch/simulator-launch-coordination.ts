@@ -1,4 +1,4 @@
-import type { EmulatorStreamInfo } from '@/components/emulator-pane/emulator-pane-types'
+import type { EmulatorStreamInfo } from '@/components/emulator-pane/session/emulator-pane-types'
 
 export const EMULATOR_MANUAL_LAUNCH_STARTED_EVENT = 'orca:emulator-launch-started'
 export const EMULATOR_MANUAL_LAUNCH_FAILED_EVENT = 'orca:emulator-launch-failed'

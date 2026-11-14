@@ -6,13 +6,13 @@ import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { omitDefaultWorktreeMetaFields } from '../../../../shared/worktree/meta-persisted-defaults'
+import { omitDefaultWorktreeMetaFields } from '../../../../shared/worktree/metadata/meta-persisted-defaults'
 import { assertOrcadDestinationCanonicalMetadata } from './orcad-destination-worktree-metadata'
 import { assertSameValue } from '../catalog-commit/orcad-catalog-row-identity'
 import {
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
-} from '../../../../shared/worktree/retired-name-registry'
+} from '../../../../shared/worktree/naming/retired-name-registry'
 import { recordRetirementNamespaceRegistry } from '../../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   applyPreparedOrcadMigrationWorkspaceSession,

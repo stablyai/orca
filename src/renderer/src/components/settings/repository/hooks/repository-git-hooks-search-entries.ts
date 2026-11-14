@@ -6,7 +6,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { searchKeywordTranslator } from '../../search/settings-search-keywords'
 
 export function getRepositoryHookScriptDescription(
-  repo: Repo,
+  repo: Pick<Repo, 'kind' | 'displayName'>,
   hook: 'setup' | 'archive',
   t: Translate
 ): string {
@@ -33,8 +33,9 @@ export function getRepositoryHookScriptDescription(
 }
 
 export function getRepositoryGitHooksSearchEntries(
-  repo: Repo,
-  t: Translate = translate
+  repo: Pick<Repo, 'kind' | 'displayName'>,
+  t: Translate = translate,
+  options: { showArchive?: boolean } = {}
 ): SettingsSearchEntry[] {
   const translateSearchKeyword = searchKeywordTranslator(t)
   return [
@@ -64,35 +65,45 @@ export function getRepositoryGitHooksSearchEntries(
         ...translateSearchKeyword('auto.components.settings.repository.search.bf460fded8', 'yaml')
       ]
     },
-    {
-      title: t('auto.components.settings.repository.search.1617bc353d', 'Archive script'),
-      description: getRepositoryHookScriptDescription(repo, 'archive', t),
-      keywords: [
-        repo.displayName,
-        ...translateSearchKeyword('auto.components.settings.repository.search.8655e3387b', 'hooks'),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.4c17787d7b',
-          'archive'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.fbfd2386e8',
-          'archive script'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.a1a4c51d58',
-          'archive command'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.6b80f7d3c8',
-          'local settings scripts'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.9cad92fe77',
-          'orca.yaml hooks'
-        ),
-        ...translateSearchKeyword('auto.components.settings.repository.search.bf460fded8', 'yaml')
-      ]
-    },
+    ...(options.showArchive === false
+      ? []
+      : [
+          {
+            title: t('auto.components.settings.repository.search.1617bc353d', 'Archive script'),
+            description: getRepositoryHookScriptDescription(repo, 'archive', t),
+            keywords: [
+              repo.displayName,
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.8655e3387b',
+                'hooks'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.4c17787d7b',
+                'archive'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.fbfd2386e8',
+                'archive script'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.a1a4c51d58',
+                'archive command'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.6b80f7d3c8',
+                'local settings scripts'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.9cad92fe77',
+                'orca.yaml hooks'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.bf460fded8',
+                'yaml'
+              )
+            ]
+          }
+        ]),
     {
       title: t('auto.components.settings.repository.search.cc11699c3d', 'Advanced'),
       description: t(

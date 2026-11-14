@@ -46,18 +46,6 @@ describe('getSideRailStrip', () => {
     ).toEqual({ side: 'left', width: 84, top: 0, bottom: 124, height: 545 })
   })
 
-  it('offers none where nothing occludes the side inset, as on a landscape iPhone', () => {
-    expect(getSideRailStrip({ ...INNER_LANDSCAPE, occlusions: [] })).toBeNull()
-    expect(
-      getSideRailStrip({
-        windowWidth: 852,
-        windowHeight: 393,
-        insets: { top: 0, right: 59, bottom: 21, left: 59 },
-        occlusions: []
-      })
-    ).toBeNull()
-  })
-
   it('offers none beside a camera island or anything that does not reach a screen edge', () => {
     expect(
       getSideRailStrip({

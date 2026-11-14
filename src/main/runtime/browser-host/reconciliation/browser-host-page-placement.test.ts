@@ -21,3 +21,19 @@ describe('browser host page placement authority', () => {
     expect(pages.commitClientPageReservation(replacement)).toBe(replacement.placement)
   })
 })
+
+it('charges one page through reservation cancellation and exact current cleanup', () => {
+  const pages = placements(1)
+  const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }
+  const reservation = pages.reserveNewClientPage('page-a', host)
+  const releaseCleanup = pages.claimClientPageCleanup('page-a')
+  pages.cancelClientPageReservation(reservation)
+  expect(() => pages.placeServerPage('page-b')).toThrow('browser_page_placement_capacity')
+  const replacement = pages.reserveNewClientPage('page-a', host)
+  pages.commitClientPageReservation(replacement)
+  releaseCleanup()
+  releaseCleanup()
+  expect(() => pages.placeServerPage('page-b')).toThrow('browser_page_placement_capacity')
+  pages.completePageRetirement(pages.beginPageRetirement('page-a', replacement.placement))
+  expect(pages.placeServerPage('page-b')).toEqual({ kind: 'server' })
+})

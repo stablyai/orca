@@ -1,3 +1,5 @@
+import type * as NewWorkspaceExecutionTargetModule from '../../../new-workspace/creation/runtime/use-new-workspace-execution-target'
+import type * as NewWorkspaceSetupScriptModule from '../../../new-workspace/creation/runtime/use-new-workspace-setup-script'
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import { projectObservable } from '../observable-model'
@@ -11,10 +13,8 @@ export function newWorkspaceMountAdapters(
 ): Record<string, MountAdapter> {
   function executionTargetAdapter(connectionId: string | null): MountAdapter {
     return ({ client }) => {
-      const useTarget = modules.load<
-        typeof import('../../../components/use-new-workspace-execution-target')
-      >(
-        'mobile/src/components/use-new-workspace-execution-target.ts'
+      const useTarget = modules.load<typeof NewWorkspaceExecutionTargetModule>(
+        'mobile/src/new-workspace/creation/runtime/use-new-workspace-execution-target.ts'
       ).useNewWorkspaceExecutionTarget
       let state: ReturnType<typeof useTarget>
       let visible = true
@@ -52,9 +52,9 @@ export function newWorkspaceMountAdapters(
     'components.execution-target': executionTargetAdapter('ssh-1'),
     'components.execution-target-local': executionTargetAdapter(null),
     'components.setup-script': ({ client }) => {
-      const useSetup = modules.load<
-        typeof import('../../../components/use-new-workspace-setup-script')
-      >('mobile/src/components/use-new-workspace-setup-script.ts').useNewWorkspaceSetupScript
+      const useSetup = modules.load<typeof NewWorkspaceSetupScriptModule>(
+        'mobile/src/new-workspace/creation/runtime/use-new-workspace-setup-script.ts'
+      ).useNewWorkspaceSetupScript
       let state: ReturnType<typeof useSetup>
       const hook = hookMount(() => {
         state = useSetup({

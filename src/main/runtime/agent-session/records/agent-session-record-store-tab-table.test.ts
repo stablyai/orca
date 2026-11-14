@@ -1,15 +1,16 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  closeTestAgentSessionRecordStores,
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStore
+  readPersistedTestAgentSessionStore,
+  withTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 
@@ -30,7 +31,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -65,6 +66,25 @@ async function open(): Promise<AgentSessionRecordStore> {
 }
 
 describe('chat tab table', () => {
+  it('keeps an observable record in its tab when its lease has an unknown write requirement', async () => {
+    const store = await open()
+    await store.reserveOwner(reserveRequest())
+    await withTestAgentSessionDatabase(directory, (db) =>
+      db
+        .prepare(
+          `UPDATE agent_session_records SET record_json=json_set(record_json,'$.lease.minimumNextFence','future-floor') WHERE session_id=?`
+        )
+        .run('session-alpha')
+    )
+    const reopened = await open()
+    await reopened.setSessionTabVisibility('session-alpha', true, 'tab-alpha')
+    expect(reopened.getSessionTabId('session-alpha')).toBe('tab-alpha')
+    expect((await readPersistedTestAgentSessionStore(directory)).sessionTabs).toEqual([
+      { tabId: 'tab-alpha', sessionId: 'session-alpha' }
+    ])
+    await expect(reopened.setConversationName('session-alpha', 'changed')).rejects.toThrow()
+  })
+
   it('takes a reserved id only when the tab is shown, and refuses it to a second chat', async () => {
     const store = await open()
     await store.reserveOwner(reserveRequest({ surfaceTabId: 'tab-alpha' }))

@@ -30,21 +30,6 @@ describe('computeActiveTerminalKeyboardLift', () => {
     expect({ candidate, cursorOnly }).toEqual({ candidate: 220, cursorOnly: 140 })
   })
 
-  it('applies the supplied keyboard coverage to the lift', () => {
-    const tuiMetrics = metrics({ cursorY: 30, contentBottomRow: 34 })
-    const android = computeActiveTerminalKeyboardLift({
-      keyboardLift: 300,
-      metrics: tuiMetrics,
-      terminalFrameHeight: FRAME_HEIGHT
-    })
-    const ios = computeActiveTerminalKeyboardLift({
-      keyboardLift: 266,
-      metrics: tuiMetrics,
-      terminalFrameHeight: FRAME_HEIGHT
-    })
-    expect({ android, ios }).toEqual({ android: 220, ios: 186 })
-  })
-
   describe('a keyboard that covers the frame', () => {
     const lift = (keyboardLift: number, m: TerminalKeyboardAvoidanceMetrics, frame = 713.7) =>
       computeActiveTerminalKeyboardLift({

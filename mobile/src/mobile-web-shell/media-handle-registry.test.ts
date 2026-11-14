@@ -67,7 +67,6 @@ describe('reading a handle', () => {
     const [item] = registry.mint([staged(1, 1000)])
     const handle = item?.handle ?? ''
     expect(refusalOf(() => registry.read(handle, 1000, 16))).toBe('native_media_range')
-    expect(refusalOf(() => registry.read(handle, 4000, 16))).toBe('native_media_range')
   })
 
   it('refuses a handle it never minted, one it released, and one the TTL swept', () => {

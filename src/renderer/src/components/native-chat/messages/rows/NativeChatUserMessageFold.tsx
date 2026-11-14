@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
-import { nativeChatUserMessageFolds } from '../../../../../../shared/native-chat/transcript/native-chat-user-message-fold'
+import { nativeChatUserMessageFolds } from '../../../../../../shared/native-chat/transcript/folding/native-chat-user-message-fold'
 import {
   NATIVE_CHAT_UNKERNED_CSS,
   nativeChatTextHasUnkernedRun

@@ -1,4 +1,4 @@
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 
 // Preserve RPC refusal codes so search recognizes older hosts that lack the method.
 export async function callRuntimeSessionSearch(

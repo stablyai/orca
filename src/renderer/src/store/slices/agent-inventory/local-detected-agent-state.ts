@@ -36,6 +36,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     detectPromises: new Map(),
     refreshPromises: new Map(),
     wakeRefreshes: new WeakSet(),
+    explicitRefreshes: new WeakSet(),
     wakeDetects: new WeakSet(),
     refusedContextKeys: new Set(),
     keptThroughFailure: new WeakSet(),

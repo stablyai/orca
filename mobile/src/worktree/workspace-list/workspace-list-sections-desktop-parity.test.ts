@@ -1,0 +1,88 @@
+import { NO_WORKSPACE_ROW_FILTERS } from '../../../../src/shared/workspace-view/workspace-row-filters'
+import { describe, expect, it } from 'vitest'
+import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
+import {
+  PROJECT_SECTION_PARITY_ROWS,
+  PROJECT_SECTION_PARITY_SERVED
+} from '../../../../src/shared/project-section-parity.test-fixture'
+import { buildProjectSectionCatalog } from '../project-sections/project-section-catalog'
+import { readServedProjectSections } from '../project-sections/project-sections-operations'
+import { buildSections } from './workspace-list-sections'
+import type { Worktree } from './workspace-list-types'
+
+function rows(): Worktree[] {
+  const repoById = new Map(PROJECT_SECTION_PARITY_SERVED.repos.map((repo) => [repo.id, repo]))
+  return PROJECT_SECTION_PARITY_ROWS.flatMap((row) => {
+    const repo = repoById.get(row.repoId)
+    return repo
+      ? [
+          {
+            worktreeId: row.id,
+            repoId: row.repoId,
+            hostId: getRepoExecutionHostId(repo),
+            repo: repo.displayName,
+            branch: 'feature',
+            displayName: row.id,
+            path: `${repo.path}-${row.id}`,
+            lastActivityAt: row.lastActivityAt,
+            liveTerminalCount: 0,
+            hasAttachedPty: false,
+            unread: false,
+            isPinned: false,
+            linkedPR: null
+          }
+        ]
+      : []
+  })
+}
+
+function headers(catalog: ReturnType<typeof buildProjectSectionCatalog>) {
+  return buildSections(
+    rows(),
+    'recent',
+    { ...NO_WORKSPACE_ROW_FILTERS },
+    '',
+    'repo',
+    new Set(),
+    catalog
+  ).map((section) => ({ key: section.key, label: section.title }))
+}
+
+describe('Project grouping on the phone', () => {
+  it("groups by repo from an older desktop's own repos when it serves no catalog", () => {
+    const desktopRepos = PROJECT_SECTION_PARITY_SERVED.repos.filter(
+      (repo) => repo.executionHostId === 'local'
+    )
+
+    expect(headers(buildProjectSectionCatalog(null, desktopRepos, null, 'manual'))).toEqual([
+      { key: 'repo:m4-orca-two', label: 'orca' },
+      { key: 'repo:win-orca', label: 'orca' },
+      { key: 'repo:local-workspace', label: 'orca/orca' },
+      { key: 'repo:local-stably', label: 'stably/orca' },
+      { key: 'repo:m4-orca', label: 'orca' },
+      { key: 'repo:local-assets', label: 'design-assets' }
+    ])
+  })
+})
+
+describe('readServedProjectSections', () => {
+  it.each(['forbidden', 'method_not_found'])(
+    'reads an older desktop that answers %s as serving none',
+    (code) => {
+      expect(
+        readServedProjectSections({ id: 'sections', ok: false, error: { code, message: code } })
+      ).toEqual({ kind: 'answered', value: null })
+    }
+  )
+
+  it('keeps the last catalog after a timeout or a dropped reply', () => {
+    expect(
+      readServedProjectSections({
+        id: 'sections',
+        ok: false,
+        error: { code: 'timeout', message: 'timed out' }
+      })
+    ).toEqual({ kind: 'kept' })
+    expect(readServedProjectSections(null)).toEqual({ kind: 'kept' })
+  })
+})

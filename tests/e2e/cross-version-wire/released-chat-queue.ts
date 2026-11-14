@@ -29,7 +29,10 @@ const message = (text: string): AgentJournalMessageItem => ({
 })
 
 export async function queueReleasedCards(
-  queue: AgentSessionJournal['queuedMessages']
+  queue: Pick<
+    AgentSessionJournal['queuedMessages'],
+    'insert' | 'update' | 'move' | 'hold' | 'withdraw'
+  >
 ): Promise<void> {
   const table: unknown = queue
   if (isTableQueue(table)) {

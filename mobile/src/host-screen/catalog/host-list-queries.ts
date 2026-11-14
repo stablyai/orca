@@ -16,12 +16,12 @@ import {
   NO_SERVER_WORKSPACES,
   ServerRowSnapshots,
   type ServerWorkspaces
-} from '../../worktree/server-workspaces'
+} from '../../worktree/execution-hosts/server-workspaces'
 import {
   readWorktreeCatalogSnapshot,
   type WorktreeCatalogSnapshot
-} from '../../worktree/worktree-catalog-snapshot-client'
-import type { Worktree } from '../../worktree/workspace-list-types'
+} from '../../worktree/catalog/worktree-catalog-snapshot-client'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import {
   hostRepoCatalogRepos,
   hostSshTargetSummarySchema,

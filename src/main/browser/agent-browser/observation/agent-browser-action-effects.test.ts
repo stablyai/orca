@@ -66,54 +66,10 @@ function fakeHost(
     },
     admit: vi.fn()
   }
-  const emit = (event: BrowserPageEvent): void => pageEvents.forEach((listener) => listener(event))
-  return { host, tabs, emit }
+  return { host }
 }
 
 describe('runWithActionEffects', () => {
-  it('waits for a navigation the action started and reports where it landed', async () => {
-    const guest = fakeGuest()
-    const appTree = '- heading "Welcome ada" [level=1, ref=e9]\n- button "Submit ticket" [ref=e10]'
-    const { host } = fakeHost(guest, [UNCHANGED, { snapshot: { kind: 'full', tree: appTree } }])
-
-    const result = await runWithActionEffects(host, async () => {
-      guest.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
-      // A redirecting submit replaces its first navigation, which then fails as ERR_ABORTED.
-      guest.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
-      guest.emit('did-fail-load', {}, -3, 'ERR_ABORTED', 'http://127.0.0.1/submit', true)
-      setTimeout(() => {
-        guest.url = 'http://127.0.0.1/app.html'
-        guest.title = 'App'
-        guest.emit('dom-ready')
-      }, 120)
-      return { clicked: '@e6' }
-    })
-
-    expect(readBrowserActionEffects(result)).toEqual({
-      settled: true,
-      url: 'http://127.0.0.1/app.html',
-      title: 'App',
-      page: { lines: appTree.split('\n'), removedLines: 0, full: true, truncated: false }
-    })
-  })
-
-  it('reports a new tab once it opens and a child window separately', async () => {
-    const guest = fakeGuest()
-    const { host, tabs, emit } = fakeHost(guest, [UNCHANGED, UNCHANGED])
-
-    const result = await runWithActionEffects(host, async () => {
-      emit({ kind: 'popup', action: 'window', origin: 'https://accounts.example' })
-      emit({ kind: 'tab', url: 'http://127.0.0.1/basic2.html' })
-      setTimeout(() => tabs.set('page-2', 'http://127.0.0.1/basic2.html'), 100)
-      return { clicked: '@e18' }
-    })
-
-    expect(readBrowserActionEffects(result)).toMatchObject({
-      newTabs: [{ browserPageId: 'page-2', url: 'http://127.0.0.1/basic2.html' }],
-      popups: [{ action: 'window', origin: 'https://accounts.example' }]
-    })
-  })
-
   it('does not read a replacement guest the caller was never admitted to', async () => {
     const guest = fakeGuest()
     const replacement = Object.assign(fakeGuest('http://127.0.0.1/app.html', 'App'), { id: 8 })

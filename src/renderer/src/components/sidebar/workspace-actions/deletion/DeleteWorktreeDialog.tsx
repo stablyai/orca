@@ -31,7 +31,7 @@ import {
 } from './delete-worktree-dialog-copy'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
 import { useDeleteWorktreeAtRiskLocalFiles } from './use-delete-worktree-at-risk-local-files'
 import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-delete-targets'

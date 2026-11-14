@@ -8,8 +8,8 @@ import {
 import { relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isPluginWorkerSourcePath } from '../../../../shared/plugins/frames/plugin-frame-source-modules'
-import { pluginModuleCandidatePaths } from '../../plugin-module-candidate-paths'
-import { transformPluginSource } from '../../plugin-source-sucrase-transform'
+import { pluginModuleCandidatePaths } from '../../source-loading/plugin-module-candidate-paths'
+import { transformPluginSource } from '../../source-loading/plugin-source-sucrase-transform'
 import { isOrcaSpecifier, pluginWorkerOrcaImportMessage } from './plugin-worker-orca-import'
 
 // Plain-Node entry code: runs in the plugin host process, so no Electron imports.

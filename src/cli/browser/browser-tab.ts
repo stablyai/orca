@@ -19,15 +19,15 @@ import {
   getPresentStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { isBrowserTabSplitDirection } from '../../shared/browser-tab-split-direction'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
-import { getBrowserCommandTarget } from './browser-command-target'
+import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './browser-command-target'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'open-url': async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
-    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<{ browserPageId: string }>(
       'browser.openUrl',
       { url, worktree },
@@ -54,7 +54,7 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTabAnnotations)
   },
   'tab current': async ({ flags, client, cwd, json }) => {
-    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<BrowserTabCurrentResult>('browser.tabCurrent', { worktree })
     printResult(result, json, formatTabShow)
   },
@@ -82,7 +82,7 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     if (split !== undefined && !isBrowserTabSplitDirection(split)) {
       throw new RuntimeClientError('invalid_argument', '--split must be right, left, down, or up')
     }
-    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
     // Why the caller's tab: the split should sit beside the terminal that ran the command, not
     // wherever the user last clicked. Spread conditionally so a plain create keeps its old payload.
     const callerTabId = process.env.ORCA_TAB_ID

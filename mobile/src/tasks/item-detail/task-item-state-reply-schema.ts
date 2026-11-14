@@ -1,5 +1,9 @@
 import * as z from 'zod'
-import { prCount, prFlag, prText } from '../../source-control/review/github-pr-entity-reply-schema'
+import {
+  prCount,
+  prFlag,
+  prText
+} from '../../source-control/review/github-operations/github-pr-entity-reply-schema'
 import {
   detailCheckListSchema,
   taskMutationEnvelopeSchema

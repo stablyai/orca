@@ -12,7 +12,7 @@ import {
   readClipboardPasteText,
   type ClipboardEventLike
 } from './native-chat-clipboard-payload'
-import { clipboardEventImageFile } from '../../../../../shared/native-chat/input/native-chat-clipboard-event'
+import { clipboardEventImageFile } from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
 import {
   nativeChatLocalAttachmentUnsupportedNotice,
   nativeChatWorktreeNotReadyNotice

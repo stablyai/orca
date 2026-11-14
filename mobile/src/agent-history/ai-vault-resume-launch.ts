@@ -21,8 +21,8 @@ import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-mes
 import {
   reviewTerminalCreateRun,
   reviewTerminalSendRun
-} from '../source-control/review/mobile-review-terminal-operations'
-import type { MobileReviewTerminalTab } from '../source-control/review/review-terminal-reply-schema'
+} from '../source-control/review/terminal-delivery/mobile-review-terminal-operations'
+import type { MobileReviewTerminalTab } from '../source-control/review/terminal-delivery/review-terminal-reply-schema'
 import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault/resume/ai-vault-resume-target'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
 import { agentHistoryHostStatusSchema } from './agent-history-reply-schema'

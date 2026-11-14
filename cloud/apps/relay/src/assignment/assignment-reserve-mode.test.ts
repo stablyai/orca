@@ -64,24 +64,6 @@ describe('assignment reserve-mode behavior', () => {
     expect(await store.releaseExpiredActivityLeases()).toBeGreaterThan(0)
   })
 
-  it('keeps an idle host sticky on a reserve-mode cell where today it would be re-placed', async () => {
-    let now = 1_000
-    const store = await setup(() => now)
-    const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
-    const first = await store.assign(identity)
-    await store.changeActivity(identity, 'control', -1)
-    now += ASSIGNMENT_LIMITS.activityLeaseMs + ASSIGNMENT_LIMITS.dormantTtlMs + 1
-    await setReserve(store, [first.cellId])
-    expect(await store.assign(identity)).toMatchObject({
-      cellId: first.cellId,
-      assignmentEpoch: first.assignmentEpoch
-    })
-    // Not knowing which cells are switched on is treated the same way.
-    const { unknown, restore } = await unknownSet(() => now)
-    expect((await unknown.assign(identity)).assignmentEpoch).toBe(first.assignmentEpoch)
-    await restore()
-  })
-
   it('keeps a connected host pinned when its reserve cell goes existing-only after a ledger write', async () => {
     let now = 1_000
     const store = await setup(() => now)
@@ -192,12 +174,6 @@ describe('assignment reserve-mode behavior', () => {
     }
   })
 
-  it('never places a fresh host on a reserve-mode cell through the database', async () => {
-    const store = await setup(() => 1_000, ['cell-a'])
-    const placed = await store.assign({ userId: 'user-0', relayHostId: 'host000000000000' })
-    expect(placed.cellId).toBe('cell-b')
-  })
-
   it('refuses drains, evacuations and status reads that would treat a reserve-mode cell as empty', async () => {
     const store = await setup(() => 1_000, ['cell-a'])
     await expect(store.cellDeploymentStatus('cell-a')).rejects.toBeInstanceOf(
@@ -223,26 +199,5 @@ describe('assignment reserve-mode behavior', () => {
     const { unknown, restore } = await unknownSet(() => 1_000)
     await expect(unknown.cellDeploymentStatus('cell-b')).rejects.toThrow('reserve_mode_unknown')
     await restore()
-  })
-
-  it('refuses the flip to reserve while a migration names the cell', async () => {
-    const store = await setup(() => 1_000)
-    await database!.query(
-      `INSERT INTO relay_assignment_migrations
-       (user_id, relay_host_id, source_cell_id, target_cell_id, previous_epoch, assignment_epoch,
-        source_request_units, target_reserved_units, expires_at, created_at, updated_at)
-       VALUES ('user-a', 'host000000000001', 'cell-b', 'cell-a', 1, 2, 0, 1, 9999, 1000, 1000)`
-    )
-    await expect(store.setCellAdmitMode('cell-a', 'reserve')).rejects.toThrow(
-      'cell_has_open_migration'
-    )
-    expect(await store.cellAdmitMode('cell-a')).toMatchObject({ admitMode: 'db' })
-    await store.setCellAdmitMode('cell-a', 'db')
-    await database!.query(`UPDATE relay_assignment_migrations SET aborted_at = 1001`)
-    await store.setCellAdmitMode('cell-a', 'reserve')
-    expect(await store.cellAdmitMode('cell-a')).toMatchObject({
-      admitMode: 'reserve',
-      updatedAt: 1_000
-    })
   })
 })

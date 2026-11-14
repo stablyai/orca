@@ -40,6 +40,26 @@ export function deliveryReceipt(args: {
   format: boolean
 }) {
   const { batch } = args
+  if (batch?.finalResponse) {
+    const saved = batch.finalResponse
+    const response = {
+      ...saved,
+      replayed: batch.replayed,
+      acknowledged: args.acknowledged ?? null
+    }
+    if (args.format) {
+      response.formatted = batch.messages
+        .map((message, index) =>
+          formatMessageBanner(message, {
+            followUp: saved.messages[index]?.follow_up
+          })
+        )
+        .join('\n\n')
+    } else {
+      delete response.formatted
+    }
+    return response
+  }
   return {
     ...args.mailbox,
     deliveryId: batch?.delivery.id ?? null,

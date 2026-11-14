@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { isSyntheticWorkspaceRoute } from './synthetic-workspace-route'
-import type { WorktreeShowResolution } from '../worktree/worktree-show-resolution'
+import type { WorktreeShowResolution } from '../worktree/navigation/worktree-show-resolution'
 
 export function shouldBounceMissingWorktree(
   worktreeId: string,

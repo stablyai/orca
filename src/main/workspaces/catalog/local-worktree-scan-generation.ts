@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { WorktreeCatalogVersion } from '../../../shared/worktree/catalog-version'
+import type { WorktreeCatalogVersion } from '../../../shared/worktree/catalog/catalog-version'
 
 const generationByRepoId = new Map<string, number>()
 let generationSequence = 0

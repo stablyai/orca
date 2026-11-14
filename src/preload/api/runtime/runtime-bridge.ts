@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
-import type { SidebarInputsChangedEvent } from '../../../shared/sidebar-list/sidebar-inputs-feed-contract'
+import type { SidebarInputsChangedEvent } from '../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeStatus,

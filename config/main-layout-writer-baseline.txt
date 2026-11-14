@@ -8,8 +8,8 @@
 3 src/main/ipc/pty/pane/stable-owner.ts
 1 src/main/ipc/pty/spawn-commit-binding.ts
 1 src/main/ipc/renderer-shutdown-checkpoint.ts
-1 src/main/ipc/runtime-environments/runtime-environment-removal-cleanup.ts
-1 src/main/ipc/runtime-environments/runtime-environment-session-reconcile.ts
+1 src/main/ipc/runtime-environments/catalog/runtime-environment-removal-cleanup.ts
+1 src/main/ipc/runtime-environments/catalog/runtime-environment-session-reconcile.ts
 2 src/main/ipc/session.ts
 6 src/main/orca-profiles/project-transfer/profile-project-session-state.ts
 4 src/main/orca-profiles/project-transfer/profile-project-source-removal.ts

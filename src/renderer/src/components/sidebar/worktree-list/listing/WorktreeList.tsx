@@ -21,7 +21,7 @@ import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar
 import {
   getProjectGroupHeaderKey,
   isProjectSectionGroupKey
-} from '../../../../../../shared/sidebar-list/group-keys'
+} from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { SidebarWorktreeListDialogs } from '../rows/ProjectGroupDialogs'

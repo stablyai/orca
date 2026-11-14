@@ -10,7 +10,7 @@ import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/ho
 import {
   agentSessionInstallCommand,
   agentSessionSignInCommand
-} from '../../../../../shared/agent-session/lifecycle/agent-session-setup-commands'
+} from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -231,8 +231,8 @@ function useNativeChatInstall(
     setRechecking(true)
     void (
       environmentId
-        ? state.refreshRuntimeDetectedAgents(environmentId, worktreeId)
-        : state.refreshDetectedAgents(worktreeId, { wakeWslDistro: true })
+        ? state.refreshRuntimeDetectedAgents(environmentId, worktreeId, { userInitiated: true })
+        : state.refreshDetectedAgents(worktreeId, { wakeWslDistro: true, userInitiated: true })
     )
       .then(() => {
         // Refreshes can resolve with cached agents after failure; check their explicit outcome.

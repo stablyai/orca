@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { SidebarInputsReadResultSchema } from '../../../../src/shared/sidebar-list/sidebar-inputs-feed-contract'
+import { SidebarInputsReadResultSchema } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import type { SidebarFeedTransport } from '../../../../src/shared/sidebar-feed-client/sidebar-feed-reader'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'

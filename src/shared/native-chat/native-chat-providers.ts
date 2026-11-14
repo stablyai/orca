@@ -2,7 +2,7 @@
 
 import type { GlobalSettings } from '../global-settings-types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
-import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentDefaultSurface } from './native-chat-appearance-settings'
 
 export type NativeChatProviderChoices = Partial<Record<string, boolean>>

@@ -30,10 +30,10 @@ import type {
   DiffCommentActions,
   DiffSyntaxState,
   RenderableDiffLine
-} from '../../source-control/review/mobile-review-comment-state'
+} from '../../source-control/review/review-notes/mobile-review-comment-state'
 import type { FileDocState, FileSyntaxState } from './session-document-state'
-import { DiffLineRow } from '../../source-control/review/MobileSessionDiffLineRow'
-import { sendableMobileDiffComments } from '../../source-control/review/mobile-diff-comments'
+import { DiffLineRow } from '../../source-control/review/review-notes/MobileSessionDiffLineRow'
+import { sendableMobileDiffComments } from '../../source-control/review/review-notes/mobile-diff-comments'
 import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
 import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 

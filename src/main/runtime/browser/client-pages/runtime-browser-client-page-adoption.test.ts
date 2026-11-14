@@ -132,6 +132,19 @@ describe('adoptRuntimeBrowserClientPagesFromInventory', () => {
     expect(rig.leases.getPlacement('x')).toBeUndefined()
   })
 
+  it('restores a legacy empty-address guest after closing its predecessor with the old omitted URL shape', async () => {
+    const rig = attach([orphanedPage({ currentUrl: '' })])
+    try {
+      const result = await rig.adopt()
+      expect(result.adoptedPageIds).toEqual(['page-a'])
+      expect(rig.commands.map((event) => event.command.type)).toEqual(['closePage', 'restorePage'])
+      expect(rig.commands[1].command).not.toHaveProperty('url')
+      expect(rig.pages.getPage('page-a')).toBeDefined()
+    } finally {
+      rig.host.release()
+    }
+  })
+
   it('leaves a page adopted on an earlier attach untouched when the host reconnects', async () => {
     const pages = new RuntimeBrowserPageRegistry()
     const leases = new BrowserHostLeaseRegistry({
