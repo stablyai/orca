@@ -91,8 +91,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         cacheKey: string
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const ptyId = args.ptyId ?? 'tab-pty'
         const tabId = args.tabId ?? `tab-${ptyId}`
         const hasReattachMetadata =
@@ -506,8 +507,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         // Why: a cached visible read has no routing authority; on a racing command boundary, trust the shell marker over stale identity.
         vi.useFakeTimers()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks3 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
         getForegroundProcess.mockResolvedValue('codex')
         const ptyId = 'pty-reattach-idle-codex-leaked-d'
@@ -555,8 +557,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
       it('re-confirms leaked 133;D after detach moved pane-scoped Droid identity', async () => {
         vi.useFakeTimers()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks4 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
         getForegroundProcess.mockResolvedValue('droid')
         const ptyId = 'pty-detached-droid-leaked-d'

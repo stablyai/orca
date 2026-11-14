@@ -7,8 +7,8 @@ import type { AgentSessionSubscribeEvent } from '../../../../../src/shared/agent
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
 import { markRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambiguity'
-import type { StructuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
-import { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
+import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
+import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 import type { RpcClientContextValue } from '../../../transport/connection/rpc-client-context-contract'
 

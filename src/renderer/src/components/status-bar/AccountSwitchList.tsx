@@ -6,6 +6,8 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '../../store'
+import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 
 export function AccountSwitchList({
   heading,
@@ -14,9 +16,27 @@ export function AccountSwitchList({
   heading: string
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
+  const display = normalizeUsagePercentageDisplay(
+    useAppStore((state) => state.usagePercentageDisplay)
+  )
   return (
     <div className="pb-1">
-      <DropdownMenuLabel>{heading}</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        <span className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate">{heading}</span>
+          <span className="flex shrink-0 items-end gap-1 text-right">
+            <span className="min-w-8 whitespace-nowrap">
+              {display === 'used'
+                ? t('auto.components.status.bar.AccountSwitchList.used', 'Used')
+                : t('auto.components.status.bar.AccountSwitchList.left', 'Left')}
+            </span>
+            <span className="w-11 shrink-0 whitespace-normal break-all">
+              {t('auto.components.status.bar.AccountSwitchList.reset', 'Reset')}
+            </span>
+          </span>
+        </span>
+      </DropdownMenuLabel>
       <div className="max-h-[min(300px,40vh)] overflow-y-auto scrollbar-sleek">{children}</div>
     </div>
   )

@@ -3,7 +3,7 @@ import type { JSX } from 'react'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
-import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type {
   DeleteWorktreeChangeCheckState,

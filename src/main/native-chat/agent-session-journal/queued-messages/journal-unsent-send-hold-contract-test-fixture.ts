@@ -10,16 +10,18 @@ import type {
 } from '../../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { holdUnsentSends, type UnsentSendHold } from './journal-unsent-send-hold'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import type { JournalWriterOperation } from '../journal-writer-command'
+type UnsentSendHold = Extract<JournalWriterOperation, { kind: 'hold-unsent' }>['hold']
 import type { AgentSessionJournal } from '../journal-store'
+import type { JournalRow, JournalSubmissionRow } from '../durable-rows/journal-row-schema'
+import type { JournalQueueRow } from './journal-queue-events'
+import { seedTestJournalHistoricalRows } from '../replay/journal-historical-inputs.test-support'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener,
-  liveTestJournalRows,
-  openTestJournalHostDatabase,
-  updateTestJournalRowJson
+  openTestJournalHostDatabase
 } from '../store-lifecycle/journal-host-database-test-support'
 
 export function createFixture() {
@@ -69,7 +71,7 @@ export function createFixture() {
   }
 
   function hold(journal: AgentSessionJournal, settle: UnsentSendHold = { cause: 'hostRestarted' }) {
-    return holdUnsentSends(journal, { fence: 0, hold: settle })
+    return journal.write({ kind: 'hold-unsent', fence: 0, hold: settle })
   }
 
   const MAIL_SOURCE: AgentMessageSource = {
@@ -118,30 +120,60 @@ export function createFixture() {
     return open()
   }
 
-  async function storeSubmissionSourceAs(
-    journal: AgentSessionJournal,
-    id: string,
-    source: unknown
-  ): Promise<void> {
-    await journal.close()
-    const seq = journal.submission(id)?.submittedSequence
-    const { db } = openTestJournalHostDatabase(root)
-    const stored = liveTestJournalRows(db, IDENTITY.sessionId).find((row) => row.seq === seq)
-    if (!stored) {
-      throw new Error(`no stored row for ${id}`)
+  const historicalBase = (seq: number) => ({
+    v: 4,
+    epoch: 'old-queue',
+    seq,
+    fence: 0,
+    ts: 1_000 + seq
+  })
+  function historicalQueue(
+    seq: number,
+    messageId: string,
+    body = message(messageId),
+    position = seq
+  ): JournalQueueRow {
+    return {
+      ...historicalBase(seq),
+      kind: 'queue',
+      messageId,
+      change: { op: 'queued', body, position, queuedAt: { epoch: 'old-queue', sequence: seq } }
     }
-    const row: unknown = JSON.parse(stored.rowJson)
-    updateTestJournalRowJson(
-      db,
-      IDENTITY.sessionId,
-      stored.seq,
-      JSON.stringify({ ...(typeof row === 'object' ? row : {}), source })
-    )
+  }
+  function historicalSend(
+    seq: number,
+    clientMessageId: string,
+    fields: Partial<JournalSubmissionRow> = {}
+  ): JournalSubmissionRow {
+    const body = fields.body ?? message(clientMessageId)
+    return {
+      ...historicalBase(seq),
+      kind: 'submission',
+      clientMessageId,
+      body,
+      payloadFingerprint: fingerprint(body),
+      providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null },
+      origin: 'client',
+      source: { kind: 'user' },
+      handoverRecorded: true,
+      ...fields
+    }
+  }
+  async function openHistorical(rows: JournalRow[]) {
+    seedTestJournalHistoricalRows(openTestJournalHostDatabase(root).db, IDENTITY, [
+      {
+        ...historicalBase(1),
+        kind: 'epoch',
+        reason: 'session_created',
+        providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+      },
+      ...rows
+    ])
+    return open()
   }
 
-  function cardOrder(journal: AgentSessionJournal): string[] {
-    return journal.queuedMessages
-      .list()
+  async function cardOrder(journal: AgentSessionJournal): Promise<string[]> {
+    return (await journal.queuedMessages.list())
       .filter((card) => card.state === 'waiting')
       .map((card) => card.messageId)
   }
@@ -179,6 +211,10 @@ export function createFixture() {
     },
     fingerprint,
     hold,
+    historicalBase,
+    historicalQueue,
+    historicalSend,
+    openHistorical,
     journals,
     message,
     open,
@@ -187,7 +223,6 @@ export function createFixture() {
     },
     set root(value: typeof root) {
       root = value
-    },
-    storeSubmissionSourceAs
+    }
   }
 }

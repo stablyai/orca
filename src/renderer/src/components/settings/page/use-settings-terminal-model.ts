@@ -4,7 +4,7 @@ import {
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import {

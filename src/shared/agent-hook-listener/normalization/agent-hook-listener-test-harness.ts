@@ -1,5 +1,6 @@
 import { normalizeHookPayload } from './normalize-hook-payload'
-import { seedLegacyAgentStatusForTests, type HookListenerState } from '../listener-state'
+import type { HookListenerState } from '../listener-state'
+import { seedLegacyAgentStatusForTests } from '../legacy-agent-status-test-seed'
 import { makePaneKey } from '../../workspace-layout/stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

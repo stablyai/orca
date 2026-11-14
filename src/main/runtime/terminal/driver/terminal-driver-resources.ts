@@ -20,7 +20,7 @@ import type {
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
-import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 import type {
   ApplyLayoutResult,
   PtyLayoutTarget,
@@ -43,6 +43,7 @@ import { RuntimeWorktreeBaseReconciliation } from '../../workspaces/metadata/run
 import { RuntimeWorktreeRemovalInFlight } from '../../workspaces/removal/runtime-worktree-removal-in-flight'
 import { ServeBrowserTabs } from '../../browser/headless/serve-browser-tabs'
 import { readBrowserTabBar } from '../../browser/tabs/browser-tab-listing'
+import { readSavedBrowserPageAnnotations } from '../../browser/tabs/browser-tab-annotations'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { ServeBrowserPageState } from '../../browser/headless/serve-browser-tab-layout'
@@ -121,7 +122,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     providerSnapshot?: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead>
 
-  abstract getDriver(ptyId: string): DriverState
+  abstract getDriver(ptyId: string): RuntimeTerminalDriverState
   protected abstract enqueueLayout(
     ptyId: string,
     target: PtyLayoutTarget
@@ -129,7 +130,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   abstract mobileTookFloor(
     ptyId: string,
     clientId: string,
-    previousFloor?: DriverState,
+    previousFloor?: RuntimeTerminalDriverState,
     isCurrent?: () => boolean
   ): Promise<void>
   protected abstract resolveDesktopRestoreTarget(ptyId: string): { cols: number; rows: number }
@@ -201,6 +202,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
       notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
         this.notifyMobileSessionTabsChanged(worktreeId),
+      readBrowserPageAnnotations: (browserPageId) =>
+        readSavedBrowserPageAnnotations(this.store, browserPageId),
       readBrowserTabBar: (worktreeId) =>
         readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId, (id) => {
           // Why: an SSH host's bridged workspace may have no row here, yet its pages render in this window.

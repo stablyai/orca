@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('react-native', () => ({ AppState: { currentState: 'active' } }))
 
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+
 import { relayHostsFeed } from './relay-hosts-feed'
 
 function hostsReply(health: string) {

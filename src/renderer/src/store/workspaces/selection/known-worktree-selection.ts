@@ -1,7 +1,7 @@
 import type { AppState } from '../../types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { findKnownWorktreeById } from '../../slices/worktrees/listing/detected-worktree-meta'
-import { getSelectedFolderTwinHostId } from '../../../lib/folder-workspace-runtime-owner'
+import { getSelectedFolderTwinHostId } from '../../../lib/workspace/ownership/folder-workspace-runtime-owner'
 
 type WorktreeLookupHostState = Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>
 

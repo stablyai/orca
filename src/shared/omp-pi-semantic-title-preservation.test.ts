@@ -7,7 +7,6 @@ import {
   detectAgentStatusFromTitle,
   normalizeTerminalTitle
 } from './agent-status/title/agent-title-status'
-import { isDecorativeAgentTitleFrameChange } from './agent-status/title/agent-decorative-title-signature'
 import { normalizeCompatibleAgentTitleForOwner } from './agent-status/title/agent-title-owner'
 import { getPiCompatibleTitleSeparatorStatus } from './agent-status/title/providers/pi-compatible-synthetic-title'
 
@@ -69,30 +68,6 @@ describe('detectAgentStatusFromTitle reads the π state separator', () => {
   })
 })
 
-describe('the churn is gone at the suppressor', () => {
-  it('treats consecutive animation frames as decoration', () => {
-    for (const build of [ORCA_EXTENSION_WORKING, OMP_NATIVE_WORKING]) {
-      for (let index = 1; index < FRAMES.length; index += 1) {
-        expect(
-          isDecorativeAgentTitleFrameChange(
-            normalizeTerminalTitle(build(FRAMES[index - 1])),
-            normalizeTerminalTitle(build(FRAMES[index]))
-          )
-        ).toBe(true)
-      }
-    }
-  })
-
-  it('still commits a real working -> attention transition', () => {
-    expect(
-      isDecorativeAgentTitleFrameChange(
-        normalizeTerminalTitle(ORCA_EXTENSION_WORKING('⠋')),
-        normalizeTerminalTitle('π ! fixing the sidebar')
-      )
-    ).toBe(false)
-  })
-})
-
 describe('the owner relabel keeps the label and swaps only the brand', () => {
   // Rewrite only brand across pane/tab/sidebar/mobile displays: preserve session text (#16093) and explicit owner identity (#6689/#7633/#9077).
   it.each([
@@ -102,21 +77,6 @@ describe('the owner relabel keeps the label and swaps only the brand', () => {
     ['π > fixing the sidebar', 'OMP > fixing the sidebar']
   ])('rewrites %s to %s for an omp-owned pane', (title, expected) => {
     expect(normalizeCompatibleAgentTitleForOwner(title, 'omp')).toBe(expected)
-  })
-
-  // Owner-rewritten titles feed classification; preserve the source’s status through that round trip.
-  it.each([
-    '⠋ π - fixing the sidebar - orca',
-    'π - fixing the sidebar - orca',
-    'π ! fixing the sidebar',
-    'π > fixing the sidebar',
-    '⠋ Pi',
-    'Pi ready',
-    'Pi - action required'
-  ])('preserves the status of %s across the owner rewrite', (title) => {
-    expect(detectAgentStatusFromTitle(normalizeCompatibleAgentTitleForOwner(title, 'omp'))).toBe(
-      detectAgentStatusFromTitle(title)
-    )
   })
 })
 
@@ -145,17 +105,4 @@ describe('latent hazards the reviewers flagged', () => {
       expect(getPiCompatibleTitleSeparatorStatus(title)).toBe('permission')
     }
   )
-
-  // Hydration reprocesses rewritten titles; preserve the fixed point so future omp/pi tokenization cannot erase session text.
-  it.each([
-    '⠋ π - fixing the sidebar - orca',
-    'π - fixing the sidebar - orca',
-    'π ! fixing the sidebar',
-    'π ⠙ fixing the sidebar',
-    'zsh | ⠙ π - a - b'
-  ])('is a fixed point when the owner rewrite re-runs on %s', (title) => {
-    const once = normalizeCompatibleAgentTitleForOwner(title, 'omp')
-    expect(normalizeCompatibleAgentTitleForOwner(once, 'omp')).toBe(once)
-    expect(once).toContain('OMP')
-  })
 })

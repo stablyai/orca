@@ -1,7 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { GitHubCommentResult, PRComment } from '../../../../../shared/github/comment-types'
+import type {
+  GitHubCommentResult,
+  PRComment
+} from '../../../../../shared/github/comments/comment-types'
 import { translate } from '@/i18n/i18n'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
 import { hostedReviewOwnerIpcArgs } from '../../slices/hosted-review/hosted-review-cache-state'

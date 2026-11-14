@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useTranslate } from '@/i18n/use-translate'
-import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'
+import { getCommentBodySubmitState } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import {
   buildResolutionFieldValue,
   classifyTransitionRequirements,

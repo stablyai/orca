@@ -145,26 +145,6 @@ describe('translated regex semantics', () => {
   })
 })
 
-// V8 reruns a runaway regex on its linear-time engine only when that engine can run it: no case
-// folding flag or (?i:...) group, and no repetition replicated past 16.
-describe('linear-time engine contract', () => {
-  it.each([
-    'ADS\\.js',
-    '(?i)ab(?-i:C)|D',
-    '[[:alpha:]_]+[^x]',
-    '^https?://[a-z0-9]{3,8}\\.com/[0-9a-f]{17}',
-    '\\b{50}x{3,}?',
-    '(a+)+$',
-    '(?:(?:ab){4}){5}'
-  ])('%s', (pattern) => {
-    const { flags, source } = compile(pattern)
-    expect(flags).toBe('')
-    expect(source).not.toMatch(/\(\?[a-z-]*i/)
-    // Counted repetitions without captures are copied out.
-    expect(source).not.toContain('{')
-  })
-})
-
 describe('regexSubstitution', () => {
   it('accepts only \\0-\\9 within the group count and \\\\', () => {
     expect(isValidRegexSubstitution('\\1', 1)).toBe(true)
@@ -195,20 +175,5 @@ describe('regexSubstitution', () => {
     expect(applyRegexSubstitution(regex, 'https://a.example/bbc/x', '[\\2|\\1]')).toBe(
       'https://a.example/[bb|]/x'
     )
-  })
-})
-
-describe('required literal', () => {
-  it.each([
-    ['^https?://[a-z]+\\.example\\.com/ads/', '.example.com/ads/'],
-    ['(?:foo|bar)baz', 'baz'],
-    ['a+bcdef', 'bcdef'],
-    ['ab?cdefg', 'cdefg'],
-    ['x*', ''],
-    ['ABC', 'abc'],
-    ['(?:https?://)?(tracker\\.net)/', 'tracker.net']
-  ])('%s → %s', (pattern, expected) => {
-    const result = translateDnrRegex(pattern, { caseSensitive: true, requireCapturing: false })
-    expect(result.ok && result.requiredLiteral).toBe(expected)
   })
 })

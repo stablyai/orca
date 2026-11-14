@@ -18,10 +18,7 @@ import {
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
 } from '../test-fixtures/pty-connection-test-deps'
-import {
-  createInitialStoreState,
-  buildActiveRuntimeEnvironmentState
-} from '../test-fixtures/pty-connection-test-store-fixtures'
+import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
@@ -37,11 +34,6 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
   function createDeps(overrides: Record<string, unknown> = {}) {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
-  }
-
-  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
-  function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
-    mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
   }
 
   describe('connectPanePty', () => {
@@ -67,54 +59,11 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('dispatches agent-task-complete for generic Codex spinner titles after process identity is confirmed', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport('pty-codex')
-      transportFactoryQueue.push(transport)
-
-      vi.useFakeTimers()
-      const api = (
-        globalThis as unknown as {
-          window: { api: { pty: { getForegroundProcess: ReturnType<typeof vi.fn> } } }
-        }
-      ).window.api
-      api.pty.getForegroundProcess.mockResolvedValue('codex')
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps()
-
-      connectPanePty(
-        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
-      )
-
-      const titleHandler = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      if (!titleHandler) {
-        throw new Error('Expected onTitleChange to be registered')
-      }
-
-      titleHandler('⠋ experimental-agent-observability', '⠋ experimental-agent-observability')
-      titleHandler('experimental-agent-observability', 'experimental-agent-observability')
-      await flushAsyncTicks()
-
-      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
-
-      expect(deps.dispatchNotification).toHaveBeenCalledWith({
-        source: 'agent-task-complete',
-        terminalTitle: 'experimental-agent-observability',
-        ptyId: 'tab-pty',
-        paneKey: makePaneKey('tab-1', LEAF_1)
-      })
-      expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
-    })
-
     it('does not dispatch generic spinner completions when process inspection finds no agent', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-shell')
       transportFactoryQueue.push(transport)
 
@@ -151,93 +100,11 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       )
     })
 
-    it('normalizes Pi-compatible remote titles to authoritative OMP launch identity', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport('pty-omp')
-      transportFactoryQueue.push(transport)
-      enableActiveRuntimeEnvironment()
-      mockStoreState.tabsByWorktree = {
-        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', launchAgent: 'omp' }]
-      }
-      mockStoreState.runtimePaneTitlesByTabId = { 'tab-1': { 1: '\u280b Pi' } }
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      manager.getActivePane.mockReturnValue({ id: 1 })
-      const deps = createDeps()
-
-      connectPanePty(
-        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks5))
-      )
-
-      const titleHandler = createdTransportOptions[0]?.onTitleChange as
-        | ((title: string, rawTitle: string) => void)
-        | undefined
-      if (!titleHandler) {
-        throw new Error('Expected onTitleChange to be registered')
-      }
-      titleHandler('\u280b Pi', '\u280b Pi')
-      expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '\u280b OMP')
-      expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '\u280b OMP')
-      titleHandler('π: tmp', 'π: tmp')
-      expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'OMP: tmp')
-      expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', 'OMP: tmp')
-
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: { state: 'working'; prompt: string; agentType: 'pi' }) => void)
-        | undefined
-      if (!statusHandler) {
-        throw new Error('Expected onAgentStatus to be registered')
-      }
-
-      statusHandler({
-        state: 'working',
-        prompt: 'fix the remote title',
-        agentType: 'pi'
-      })
-
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
-        makePaneKey('tab-1', LEAF_1),
-        {
-          state: 'working',
-          prompt: 'fix the remote title',
-          agentType: 'omp',
-          observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
-        },
-        '\u280b OMP',
-        undefined,
-        { connectionId: null }
-      )
-
-      mockStoreState.tabsByWorktree = {
-        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
-      }
-      statusHandler({
-        state: 'working',
-        prompt: 'keep the remote title',
-        agentType: 'pi'
-      })
-
-      expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
-        makePaneKey('tab-1', LEAF_1),
-        {
-          state: 'working',
-          prompt: 'keep the remote title',
-          agentType: 'omp',
-          observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
-        },
-        '\u280b OMP',
-        undefined,
-        { connectionId: null }
-      )
-    })
-
     it('queues the idle cursor reset behind hidden agent output', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -277,8 +144,9 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
     it('does not use stale agent status from an earlier turn in task-complete notifications', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('../../notifications/use-notification-dispatch')

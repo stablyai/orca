@@ -1,14 +1,15 @@
+import { getKeybindingDefinition } from './keybindings/definitions'
 import {
-  getKeybindingDefinition,
   isKeybindingAllowedInTerminal,
-  isKeybindingPotentialTerminalConflict,
-  keybindingMatchesAction,
-  matchKeybindingDigitIndex,
-  type KeybindingActionId,
-  type KeybindingMatchOptions,
-  type KeybindingOverrides,
-  type PhysicalModifierToken
-} from './keybindings'
+  isKeybindingPotentialTerminalConflict
+} from './keybindings/effective'
+import { keybindingMatchesAction, matchKeybindingDigitIndex } from './keybindings/matching'
+import type {
+  KeybindingActionId,
+  KeybindingMatchOptions,
+  KeybindingOverrides,
+  PhysicalModifierToken
+} from './keybindings/types'
 
 export type WindowShortcutInput = {
   type?: string
@@ -37,7 +38,6 @@ export type WindowShortcutAction =
   | { type: 'openQuickOpen' }
   | { type: 'toggleQuickCommandsMenu' }
   | { type: 'openNewWorkspace' }
-  | { type: 'deleteCurrentWorkspace' }
   | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
   | { type: 'toggleAgentDashboard' }
@@ -46,8 +46,6 @@ export type WindowShortcutAction =
   | { type: 'jumpToTabIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
   | { type: 'dictationKeyDown' }
-
-type WindowShortcutResolveOptions = KeybindingMatchOptions
 
 function platformPrimaryModifier(
   input: Pick<WindowShortcutInput, 'meta' | 'control'>,
@@ -67,7 +65,7 @@ export function matchesRecentTabSwitcherChord(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
   keybindings?: KeybindingOverrides,
-  options: WindowShortcutResolveOptions = {}
+  options: KeybindingMatchOptions = {}
 ): boolean {
   const control = Boolean(input.control ?? input.ctrlKey)
   const meta = Boolean(input.meta ?? input.metaKey)
@@ -121,16 +119,6 @@ export function isRecentTabSwitcherCommitRelease(input: WindowShortcutInput): bo
   return isTabKey(input) && control === false
 }
 
-function actionMatches(
-  actionId: KeybindingActionId,
-  input: WindowShortcutInput,
-  platform: NodeJS.Platform,
-  keybindings: KeybindingOverrides | undefined,
-  options: WindowShortcutResolveOptions
-): boolean {
-  return keybindingMatchesAction(actionId, input, platform, keybindings, options)
-}
-
 export function nativeZoomCommandMatchesKeybindings(
   direction: 'in' | 'out',
   platform: NodeJS.Platform,
@@ -167,88 +155,84 @@ export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
   keybindings?: KeybindingOverrides,
-  options: WindowShortcutResolveOptions = {}
+  options: KeybindingMatchOptions = {}
 ): WindowShortcutAction | null {
-  if (actionMatches('worktree.history.back', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('worktree.history.back', input, platform, keybindings, options)) {
     return {
       type: 'worktreeHistoryNavigate',
       direction: 'back'
     }
   }
 
-  if (actionMatches('worktree.history.forward', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('worktree.history.forward', input, platform, keybindings, options)) {
     return {
       type: 'worktreeHistoryNavigate',
       direction: 'forward'
     }
   }
 
-  if (actionMatches('floatingTerminal.toggle', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('floatingTerminal.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleFloatingTerminal' }
   }
 
-  if (actionMatches('zoom.in', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('zoom.in', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'in' }
   }
 
-  if (actionMatches('zoom.out', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('zoom.out', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'out' }
   }
 
-  if (actionMatches('zoom.reset', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('zoom.reset', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'reset' }
   }
 
-  if (actionMatches('app.settings', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('app.settings', input, platform, keybindings, options)) {
     return { type: 'openSettings' }
   }
 
-  if (actionMatches('app.forceReload', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('app.forceReload', input, platform, keybindings, options)) {
     return { type: 'forceReload' }
   }
 
-  if (actionMatches('worktree.palette', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('worktree.palette', input, platform, keybindings, options)) {
     return { type: 'toggleWorktreePalette' }
   }
 
-  if (actionMatches('sidebar.left.toggle', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('sidebar.left.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleLeftSidebar' }
   }
 
-  if (actionMatches('sidebar.right.toggle', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('sidebar.right.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleRightSidebar' }
   }
 
-  if (actionMatches('worktree.quickOpen', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('worktree.quickOpen', input, platform, keybindings, options)) {
     return { type: 'openQuickOpen' }
   }
 
   // Route workspace-create through main so contentEditable/browser guests cannot bypass it. Keep Shift for the former Create-from chord.
-  if (actionMatches('workspace.create', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('workspace.create', input, platform, keybindings, options)) {
     return { type: 'openNewWorkspace' }
   }
 
-  if (actionMatches('workspace.delete', input, platform, keybindings, options)) {
-    return { type: 'deleteCurrentWorkspace' }
-  }
-
-  if (actionMatches('workspace.openBoard', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('workspace.openBoard', input, platform, keybindings, options)) {
     return { type: 'openWorkspaceBoard' }
   }
 
-  if (actionMatches('voice.dictation', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('voice.dictation', input, platform, keybindings, options)) {
     return { type: 'dictationKeyDown' }
   }
 
-  if (actionMatches('view.tasks', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('view.tasks', input, platform, keybindings, options)) {
     return { type: 'openTasks' }
   }
 
-  if (actionMatches('dashboard.toggle', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('dashboard.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleAgentDashboard' }
   }
 
-  if (actionMatches('tab.previousRecent', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('tab.previousRecent', input, platform, keybindings, options)) {
     return { type: 'switchRecentTab' }
   }
 
@@ -275,7 +259,7 @@ export function resolveWindowShortcutAction(
     return { type: 'jumpToTabIndex', index: tabIndex }
   }
 
-  if (actionMatches('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
+  if (keybindingMatchesAction('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
     return { type: 'toggleQuickCommandsMenu' }
   }
 
@@ -309,8 +293,6 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'tab.openQuickCommandsMenu'
     case 'openNewWorkspace':
       return 'workspace.create'
-    case 'deleteCurrentWorkspace':
-      return 'workspace.delete'
     case 'openWorkspaceBoard':
       return 'workspace.openBoard'
     case 'openTasks':

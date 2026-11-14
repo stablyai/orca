@@ -2,13 +2,12 @@
  * IPC for converting a WSL-runtime project on a Windows drive to Windows Git (D1c). Refused while
  * the internal WSL hosts gate is closed or off Windows, before anything is read.
  */
-import { join } from 'node:path'
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversion-handlers'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { readWorktreeLinks as readWorktreeAdminLinks } from '../../git/worktrees/removal/worktree-prune-guard'
+import { readWorktreeLinks } from './wsl-drive-worktree-links'
 import { resolveLocalProjectRuntimeForProject } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import { wslHostsOptedIn } from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
@@ -68,8 +67,4 @@ function gatedDeps(store: Store): WslDriveProjectDeps {
       (await gitExecFileAsync(args, { cwd, hostGit: true })).stdout,
     readWorktreeLinks
   }
-}
-
-export async function readWorktreeLinks(commonDir: string): Promise<string[]> {
-  return (await readWorktreeAdminLinks(join(commonDir, 'worktrees'))).map(({ link }) => link)
 }

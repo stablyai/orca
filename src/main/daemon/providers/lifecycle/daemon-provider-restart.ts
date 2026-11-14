@@ -1,3 +1,4 @@
+import { daemonDiedRespawnMessage } from '../../launch/daemon-exit-record'
 import {
   rebindLocalProviderListeners,
   unbindLocalProviderListeners
@@ -135,7 +136,7 @@ async function runRestartDaemon(
     respawn: async (reason: DaemonRespawnReason) => {
       // A wedged daemon can look dead here; launch reports the proven replacement cause after recovery.
       if (reason === 'daemon_died') {
-        console.warn('[daemon] Daemon process died — respawning')
+        console.warn(daemonDiedRespawnMessage())
         // Synthetic exits during manual restart must not enter the crash bucket.
         if (!isDaemonRestartInFlight()) {
           trackDaemonRetired('died_respawn')

@@ -1,0 +1,64 @@
+name: Release Mirror (R2)
+
+# Copy published release downloads to the public R2 bucket behind https://downloads.orca.dev.
+# orca.dev keeps GitHub as the default download and offers this as an opt-in "mirror link"
+# for when GitHub release downloads return 5xx. Called by release-cut (stable desktop tags) and
+# mobile-android-release after publishing; dispatch manually to backfill a tag.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Published release tag to mirror (e.g. v1.4.254 or mobile-android-v0.0.64)
+        required: true
+        type: string
+      assets:
+        description: Space-separated asset names (blank = the orca.dev download assets)
+        required: false
+        default: ''
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to mirror (e.g. v1.4.254 or mobile-android-v0.0.64)
+        required: true
+        type: string
+      assets:
+        description: Space-separated asset names (blank = the orca.dev download assets)
+        required: false
+        default: ''
+        type: string
+
+# Why: two releases landing close together must not interleave writes to latest/.
+concurrency:
+  group: release-mirror-r2
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Mirror release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          ASSETS: ${{ inputs.assets }}
+          # R2 S3 API keys with Object Read & Write on the orca-downloads bucket.
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          WORK_DIR: ${{ runner.temp }}/release-mirror
+        run: |
+          set -euo pipefail
+          if [[ -z "$R2_ACCESS_KEY_ID" || -z "$R2_SECRET_ACCESS_KEY" ]]; then
+            echo "::error::Set the R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY secrets to mirror releases to R2."
+            exit 1
+          fi
+          read -r -a assets <<<"$ASSETS"
+          config/scripts/release/publication/mirror-release-to-r2.sh "$TAG" "${assets[@]}"

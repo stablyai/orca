@@ -64,7 +64,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -155,7 +155,9 @@ describe('shell showing through a hibernation kill', () => {
   }> {
     vi.useFakeTimers()
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const ptyId = 'pty-hibernating'

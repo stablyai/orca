@@ -1,20 +1,31 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubPRFallbackSource } from '../cache/cache-model'
 import { getHostedReviewCacheKey } from '../../slices/hosted-review/hosted-review-cache-identity'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
-import { prCacheKey } from '../cache/cache-identity'
+import '../cache/cache-identity'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { isFresh } from '../cache/cache-policy'
-import { buildGitHubPRRefreshStateClearToken } from '../refresh/pr-refresh-state'
+import {
+  buildGitHubPRRefreshStateClearToken,
+  bypassesGitHubPRRefreshFreshness
+} from '../refresh/pr-refresh-state'
 import { githubHostedReviewFallbackPRNumber, prLookupHintKey } from './pr-result-routing'
 import { nextLookupGeneration } from '../../slices/hosted-review/refresh/lookup-generation-sequence'
-import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
+import {
+  inflightPRRequests,
+  prRequestGenerations,
+  type InflightPR
+} from '../requests/request-coordination'
+import { sharedPromiseSettlementWaiters } from '../../../../../shared/promise-settlement-waiters'
 import { getGitHubSourceTarget, settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
-import { shouldClearDivergedLinkedMergedPR } from '../../../../../shared/github/linked-pr-staleness'
+import { shouldClearDivergedLinkedMergedPR } from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 import { startPullRequestLookup } from './pull-request-execution'
+import { findWorktreeById } from '../refresh/worktree-refresh'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 
 export const createPullRequestActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -29,7 +40,7 @@ export const createPullRequestActions = (
     )
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
-    const cacheKey = prCacheKey(
+    const cacheKey = getGitHubRepoCacheKey(
       repoPath,
       repoId,
       branch,
@@ -39,6 +50,9 @@ export const createPullRequestActions = (
       repo !== undefined
     )
     const cached = get().prCache[cacheKey]
+    if (options?.signal?.aborted) {
+      return cached?.data ?? null
+    }
     const hostedReviewCacheKey = getHostedReviewCacheKey(
       repoPath,
       branch,
@@ -67,7 +81,16 @@ export const createPullRequestActions = (
         ? null
         : (options?.fallbackPRSource ??
           (explicitFallbackPRNumber != null ? 'explicit' : 'hosted-review'))
-    const lookupHintKey = prLookupHintKey(linkedPRNumber, fallbackPRNumber)
+    const lookupHintKey = JSON.stringify([
+      prLookupHintKey(linkedPRNumber, fallbackPRNumber),
+      options?.worktreeId
+        ? (findWorktreeById(
+            get(),
+            options.worktreeId,
+            repo ? getRepoExecutionHostId(repo) : undefined
+          )?.head ?? null)
+        : null
+    ])
     const linkedRefetch =
       cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)
     if (!options?.force && !options?.userRefresh && !linkedRefetch && isFresh(cached)) {
@@ -101,13 +124,25 @@ export const createPullRequestActions = (
     if (
       !options?.userRefresh &&
       inflightRequest &&
+      !inflightRequest.controller.signal.aborted &&
       (!options?.force || inflightRequest.force) &&
       inflightRequest.lookupHintKey === lookupHintKey &&
+      !(
+        inflightRequest.reason === 'swr' &&
+        bypassesGitHubPRRefreshFreshness(options?.reason ?? 'manual')
+      ) &&
       !linkedRefetch
     ) {
-      return inflightRequest.promise
+      return waitForPullRequest(
+        inflightRequest,
+        options,
+        () => get().prCache[cacheKey]?.data ?? null
+      )
     }
 
+    if (inflightRequest) {
+      inflightRequest.superseded = true
+    }
     const generation = nextLookupGeneration()
     const requestStartedAt = Date.now()
     const requestStartedHostedReviewEntry = get().hostedReviewCache[hostedReviewCacheKey]
@@ -119,12 +154,13 @@ export const createPullRequestActions = (
     )
     prRequestGenerations.set(cacheKey, generation)
 
+    const controller = new AbortController()
     const request = startPullRequestLookup({
       set,
       get,
       repoPath,
       branch,
-      options,
+      options: { ...options, signal: controller.signal, onReadOutcome: undefined },
       repo,
       repoId,
       requestSettings,
@@ -140,12 +176,44 @@ export const createPullRequestActions = (
       requestStartedPRRefreshToken
     })
 
-    inflightPRRequests.set(cacheKey, {
+    const inflight: InflightPR = {
       promise: request,
+      controller,
+      waiters: sharedPromiseSettlementWaiters(request),
       force: Boolean(options?.force),
       generation,
+      reason: options?.reason,
       lookupHintKey
-    })
-    return request
+    }
+    inflightPRRequests.set(cacheKey, inflight)
+    return waitForPullRequest(inflight, options, () => get().prCache[cacheKey]?.data ?? null)
   }
 })
+
+function waitForPullRequest(
+  inflight: InflightPR,
+  options: Parameters<GitHubSlice['fetchPRForBranch']>[2],
+  fallback: () => PRInfo | null
+): Promise<PRInfo | null> {
+  return inflight.waiters
+    .wait({
+      signal: options?.signal,
+      deferSettled: true,
+      onFulfilled: () => {
+        if (inflight.outcome && !inflight.superseded) {
+          options?.onReadOutcome?.(inflight.outcome)
+        }
+      },
+      onAbandon: () => {
+        if (inflight.waiters.waiterCount === 0) {
+          inflight.controller.abort()
+        }
+      }
+    })
+    .catch((error: unknown) => {
+      if (options?.signal?.aborted) {
+        return fallback()
+      }
+      throw error
+    })
+}

@@ -1,7 +1,7 @@
 import React from 'react'
 import { DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { SwitchIndicator } from '@/components/ui/switch'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function FilterToggleRow({
   icon,

@@ -6,31 +6,41 @@ import type {
   BrowserScrollResult,
   BrowserSnapshotResult,
   BrowserWaitResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
-import {
-  CdpBridgeCommandModule,
-  type CdpScreenshotFormat,
-  type CdpScrollDirection
-} from './cdp-bridge-command-module'
+import type { CdpBridgeState } from './cdp-bridge-state'
+import type { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'
+import type { CdpNavigationOperations } from './cdp-navigation-operations'
 import { buildSnapshot } from '../snapshots/snapshot-engine'
 
-export class CdpPageCommands extends CdpBridgeCommandModule {
-  snapshot(): Promise<BrowserSnapshotResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+type CdpScrollDirection = BrowserScrollResult extends { scrolled: infer Direction }
+  ? Direction
+  : never
 
-      const tabId = this.resolveTabId(guest.id)
-      const state = this.getOrCreateTabState(tabId)
+type CdpScreenshotFormat = BrowserScreenshotResult extends { format: infer Format } ? Format : never
+
+export class CdpPageCommands {
+  constructor(
+    private readonly bridgeState: CdpBridgeState,
+    private readonly debuggerLifecycle: CdpDebuggerLifecycle,
+    private readonly navigation: CdpNavigationOperations
+  ) {}
+
+  snapshot(): Promise<BrowserSnapshotResult> {
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
+
+      const tabId = this.bridgeState.resolveTabId(guest.id)
+      const state = this.bridgeState.getOrCreateTabState(tabId)
 
       const result = await buildSnapshot(sender, state.iframeSessions, (sessionId) =>
-        this.makeCdpSender(guest, sessionId)
+        this.debuggerLifecycle.makeCdpSender(guest, sessionId)
       )
       state.snapshotResult = result
 
-      const navId = await this.getNavigationId(sender)
+      const navId = await this.navigation.getNavigationId(sender)
       state.navigationId = navId
 
       return {
@@ -44,10 +54,10 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
   }
 
   goto(url: string): Promise<BrowserGotoResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       const { errorText } = (await sender('Page.navigate', { url })) as {
         errorText?: string
@@ -57,18 +67,18 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
         throw new BrowserError('browser_navigation_failed', `Navigation failed: ${errorText}`)
       }
 
-      await this.waitForLoad(sender, guest)
-      this.invalidateRefMap(guest.id)
+      await this.navigation.waitForLoad(sender, guest)
+      this.bridgeState.invalidateRefMap(guest.id)
 
       return { url: guest.getURL(), title: guest.getTitle() }
     })
   }
 
   scroll(direction: CdpScrollDirection, amount?: number): Promise<BrowserScrollResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       // JS scrolling avoids focus changes and unreliable wheel delivery in Electron webviews.
       const expr = amount
@@ -81,19 +91,19 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
   }
 
   wait(timeoutMs: number): Promise<BrowserWaitResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      await this.ensureDebuggerAttached(guest)
-      await this.waitForNetworkIdle(guest, timeoutMs, 500)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
+      await this.navigation.waitForNetworkIdle(guest, timeoutMs, 500)
       return { waited: true }
     })
   }
 
   pdf(): Promise<BrowserPdfResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       const { data } = (await sender('Page.printToPDF', {
         printBackground: true
@@ -104,10 +114,10 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
   }
 
   fullPageScreenshot(format: CdpScreenshotFormat): Promise<BrowserScreenshotResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       const metrics = (await sender('Page.getLayoutMetrics')) as {
         cssContentSize?: { width: number; height: number }
@@ -136,40 +146,40 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
   }
 
   back(): Promise<{ url: string; title: string }> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       await sender('Page.navigateToHistoryEntry', {
-        entryId: await this.getPreviousHistoryEntryId(sender)
+        entryId: await this.navigation.getPreviousHistoryEntryId(sender)
       })
-      await this.waitForLoad(sender, guest)
-      this.invalidateRefMap(guest.id)
+      await this.navigation.waitForLoad(sender, guest)
+      this.bridgeState.invalidateRefMap(guest.id)
 
       return { url: guest.getURL(), title: guest.getTitle() }
     })
   }
 
   reload(): Promise<{ url: string; title: string }> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       await sender('Page.reload')
-      await this.waitForLoad(sender, guest)
-      this.invalidateRefMap(guest.id)
+      await this.navigation.waitForLoad(sender, guest)
+      this.bridgeState.invalidateRefMap(guest.id)
 
       return { url: guest.getURL(), title: guest.getTitle() }
     })
   }
 
   screenshot(format: CdpScreenshotFormat): Promise<BrowserScreenshotResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       const { data } = (await sender('Page.captureScreenshot', {
         format
@@ -180,10 +190,10 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
   }
 
   evaluate(expression: string): Promise<BrowserEvalResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       const { result, exceptionDetails } = (await sender('Runtime.evaluate', {
         expression,

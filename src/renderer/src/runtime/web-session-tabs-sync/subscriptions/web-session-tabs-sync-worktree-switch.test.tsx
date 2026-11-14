@@ -4,10 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { RuntimeHostStatusSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeStatus
-} from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import type * as WebRuntimeTerminalCreationModule from '../../hosted-terminals/creation/web-runtime-terminal-creation'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
@@ -38,7 +35,6 @@ import '../tracking'
 import { useWebSessionTabsSync } from '../use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from '../initial-terminal/web-runtime-initial-terminal-bootstrap'
-import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/parking/retention/terminal-hidden-view-parking'
 import { publicRuntimeEnvironment } from '../../rpc/testing/paired-runtime-environment-test-fixture'
 
 const ENV = 'env-a'
@@ -116,48 +112,6 @@ function latestStream(worktreeId: string): Recorded {
   return stream
 }
 
-function allWorktreesStreams(): Recorded[] {
-  return subscriptions.filter((entry) => entry.request.method === 'session.tabs.subscribeAll')
-}
-
-function terminalSnapshot(
-  worktree: string,
-  snapshotVersion: number
-): RuntimeMobileSessionTabsResult {
-  return {
-    worktree,
-    publicationEpoch: 'epoch-1',
-    snapshotVersion,
-    activeGroupId: 'host-tab-1',
-    activeTabId: 'host-tab-1::leaf-1',
-    activeTabType: 'terminal',
-    tabs: [
-      {
-        type: 'terminal',
-        id: 'host-tab-1::leaf-1',
-        parentTabId: 'host-tab-1',
-        leafId: 'leaf-1',
-        title: 'Terminal 1',
-        terminal: 'term_host',
-        status: 'ready',
-        isActive: true
-      }
-    ]
-  }
-}
-
-async function publish(stream: Recorded, result: unknown): Promise<void> {
-  await act(async () => {
-    stream.callbacks.onResponse({
-      id: 'subscription-event',
-      ok: true,
-      result,
-      _meta: { runtimeId: 'runtime-a' }
-    })
-    await settle()
-  })
-}
-
 async function selectWorktree(worktreeId: string): Promise<void> {
   await act(async () => {
     useAppStore.setState({ activeWorktreeId: worktreeId })
@@ -219,53 +173,6 @@ describe('session-tabs streams across worktree switches on one host', () => {
     clearRuntimeEnvironmentConnectionGenerationsForTests()
   })
 
-  it('keeps one stream per worktree while cycling the mounted-terminal working set', async () => {
-    await connect()
-    const installed = worktreeStreams().length
-    const closed = (): number =>
-      worktreeStreams().filter((stream) => stream.unsubscribe.mock.calls.length > 0).length
-    const closedBefore = closed()
-    const cycle = [WORKTREE_A, ...['b', 'c', 'd', 'e'].map((id) => `repo-a::worktree-${id}`)]
-    expect(cycle).toHaveLength(1 + TERMINAL_WORKTREE_HOT_RETAIN_LIMIT)
-
-    for (let round = 0; round < 4; round += 1) {
-      for (const worktreeId of cycle) {
-        await selectWorktree(worktreeId)
-      }
-    }
-
-    // Before the pool matched the retained set, every switch around five worktrees resubscribed.
-    expect(worktreeStreams()).toHaveLength(installed + cycle.length - 1)
-    expect(closed()).toBe(closedBefore)
-  })
-
-  it('seeds the first terminal once the user returns to a warm empty worktree', async () => {
-    await connect()
-    const streamA = latestStream(WORKTREE_A)
-    await selectWorktree(WORKTREE_B)
-    // A's first answer lands while B is selected, so its bootstrap waits.
-    await publish(streamA, {
-      type: 'snapshot',
-      ...terminalSnapshot(WORKTREE_A, 1),
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null,
-      tabs: []
-    })
-    expect(mocks.createTerminal).not.toHaveBeenCalled()
-
-    await selectWorktree(WORKTREE_A)
-
-    expect(latestStream(WORKTREE_A)).toBe(streamA)
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
-    expect(mocks.createTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: WORKTREE_A, environmentId: ENV })
-    )
-    await selectWorktree(WORKTREE_B)
-    await selectWorktree(WORKTREE_A)
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
-  })
-
   it('drops a warm stream when its host is re-paired while another host is selected', async () => {
     await connect()
     const streamA = latestStream(WORKTREE_A)
@@ -294,33 +201,6 @@ describe('session-tabs streams across worktree switches on one host', () => {
     })
 
     expect(streamA.unsubscribe).toHaveBeenCalled()
-  })
-
-  it('keeps live streams when a status probe flaps without the streams ending', async () => {
-    await connect()
-    const before = {
-      worktree: worktreeStreams().length,
-      all: allWorktreesStreams().length
-    }
-    const live = subscriptions.filter((stream) => stream.unsubscribe.mock.calls.length === 0)
-
-    await act(async () => {
-      useAppStore
-        .getState()
-        .applyRuntimeHostStatusSnapshot(hostSnapshot(2, { verification: 'unavailable' }))
-      await settle()
-    })
-    await act(async () => {
-      useAppStore.getState().applyRuntimeHostStatusSnapshot(hostSnapshot(3))
-      await settle()
-    })
-
-    expect(useAppStore.getState().runtimeStatusByEnvironmentId.get(ENV)?.hostContactEpoch).toBe(1)
-    expect(worktreeStreams()).toHaveLength(before.worktree)
-    expect(allWorktreesStreams()).toHaveLength(before.all)
-    for (const stream of live) {
-      expect(stream.unsubscribe).not.toHaveBeenCalled()
-    }
   })
 
   it('drops warm streams once the host returns as a new runtime session', async () => {

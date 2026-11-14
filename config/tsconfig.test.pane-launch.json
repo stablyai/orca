@@ -1,14 +1,10 @@
 {
   "extends": "./tsconfig.web.json",
   "include": [
-    "../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-main-surface.test.ts",
+    "../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-host-platform.test.ts",
     "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
-    "../src/main/runtime/rpc/methods/orchestration/orchestration-check-ambiguous-caller.test.ts",
-    "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
-    "../tests/e2e/terminal-agent-pane-launch.unit.test.ts",
     "../src/renderer/src/runtime/observed-provider-accounts.test.tsx",
     "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx",
-    "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
     "../src/renderer/src/env.d.ts",
     "../src/types/build-constants.d.ts",

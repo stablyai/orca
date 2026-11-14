@@ -22,12 +22,12 @@ import type {
   AgentLaunchChoices
 } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { SourceControlActionModelPicker } from './SourceControlActionModelPicker'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { AGENT_CATALOG } from '@/lib/agent-catalog/agent-catalog'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDefaultArgsInput } from '../../agent/launch-settings/AgentLaunchDefaultsEditor'
-import { AgentPermissionMenu } from '../../agent/launch-settings/AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from '../../agent/launch-settings/AgentPermissionMenu'
 
 export function SourceControlActionArguments({
   agent,

@@ -22,10 +22,14 @@ const SQLITE_HARNESSES = new Set([
   'terminal-topology-profile-fixture',
   'acknowledged-terminal-tab-retirement-fixture',
   // Opens the index read-only after the indexer closes; Bun's macOS SQLite refuses a WAL file then.
-  'session-search-indexer-test-fixture'
+  'session-search-indexer-test-fixture',
+  'session-search-index-test-fixture',
+  'session-search-engine-test-fixture'
 ])
 export const SQLITE_MODULES = [
   'src/main/sqlite/sync-database',
+  'src/main/ai-vault-search/storage/session-search-schema',
+  'src/main/ai-vault-search/storage/session-search-store',
   'src/main/persistence/profile-state/profile-state-sqlite-authority',
   'src/main/native-chat/agent-session-journal/database/journal-host-database',
   'src/main/runtime/orchestration/db',

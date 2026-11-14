@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { X, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
 import {
   Select,

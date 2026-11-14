@@ -2,7 +2,7 @@ import { Trans } from 'react-i18next'
 import type { AgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import { i18n } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { AgentPermissionModeMenu } from './AgentPermissionModeMenu'
 import { agentPermissionModeLabel } from './agent-permission-mode-label'
@@ -86,7 +86,7 @@ function AgentPermissionsDescription({
 export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): React.JSX.Element {
   const t = useTranslate()
   const { mode, nonAutoMode, onChange, onChangeNonAuto, autoSupported = true } = props
-  const title = t('auto.components.settings.AgentsPane.agentPermissions', 'Agent Permissions')
+  const title = t('auto.components.settings.AgentsPane.9f30095d49', 'Agent permissions')
   const showOthers = mode === 'auto' && onChangeNonAuto !== undefined
   return (
     <section className="flex items-start justify-between gap-3">

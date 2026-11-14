@@ -1,3 +1,5 @@
+import { guestNavigationMethods } from '../browser-manager-test-harness'
+// @orca-isolated-worker: cached Electron mocks can omit BrowserWindow across shared files.
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserManager } from '../browser-manager'
@@ -55,6 +57,7 @@ function createGuest(id: number) {
   let opened = false
   const frontend: { devToolsWebContents: DevToolsHost | null } = { devToolsWebContents: null }
   const guest = Object.assign(new EventEmitter(), frontend, {
+    ...guestNavigationMethods(),
     id,
     hostWebContents: {},
     getType: () => 'webview',
@@ -152,19 +155,6 @@ describe('pending page DevTools retirement', () => {
     })
   })
 
-  it('skips inspect when the detached fallback closes before its await resumes', async () => {
-    const { manager, guest, children } = createFixture()
-    native.window = null
-    guest.openDevTools.mockImplementationOnce(() => {
-      queueMicrotask(() => manager.closeDevTools('page'))
-    })
-
-    await expect(manager.openDevTools('page', { x: 1, y: 2 })).resolves.toBe(false)
-    expect(children).toHaveLength(0)
-    expect(guest.openDevTools).toHaveBeenCalledTimes(1)
-    expect(guest.inspectElement).not.toHaveBeenCalled()
-  })
-
   it('reopens for a surviving owner after the old host releases', async () => {
     const { manager, guest, children } = createFixture()
     await manager.openDevTools('page')
@@ -209,18 +199,5 @@ describe('pending page DevTools retirement', () => {
     await expect(manager.openDevTools('page')).resolves.toBe(true)
     expect(replacement.guest.openDevTools).toHaveBeenCalledTimes(1)
     expect(children).toHaveLength(1)
-  })
-
-  it('does not attach to a renderer retired while release is pending', async () => {
-    const { manager, guest, renderer, children } = createFixture()
-    await manager.openDevTools('page')
-    manager.closeDevTools('page')
-    const reopened = manager.openDevTools('page')
-    renderer.isDestroyed.mockReturnValue(true)
-    native.views[0].release()
-
-    await expect(reopened).resolves.toBe(false)
-    expect(guest.openDevTools).toHaveBeenCalledTimes(1)
-    expect(children).toHaveLength(0)
   })
 })

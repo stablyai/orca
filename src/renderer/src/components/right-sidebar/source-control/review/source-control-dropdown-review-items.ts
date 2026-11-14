@@ -101,6 +101,77 @@ export function buildHostedReviewDropdownItems(
     }
   })()
 
+  const createBlockedStatus = ((): string | undefined => {
+    switch (hostedReviewCreation?.blockedReason) {
+      case 'dirty':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusCommitFirst',
+          'Commit first'
+        )
+      case 'detached_head':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusNoBranch',
+          'No branch'
+        )
+      case 'existing_review':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusReviewOpen',
+          '{{shortLabel}} open',
+          {
+            shortLabel: createReviewCopy.shortLabel
+          }
+        )
+      case 'no_upstream':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusNotPublished',
+          'Not published'
+        )
+      case 'auth_required':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusSignIn',
+          'Sign in'
+        )
+      case 'base_not_on_remote':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusBaseNotOnRemote',
+          'Base not on remote'
+        )
+      case 'default_branch':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusDefaultBranch',
+          'Default branch'
+        )
+      case 'fork_head_unsupported':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusForkUnsupported',
+          'Fork unsupported'
+        )
+      case 'needs_push':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusPushFirst',
+          'Push first'
+        )
+      case 'needs_sync':
+        return shouldForcePushWithLease
+          ? t(
+              'auto.components.right.sidebar.source.control.dropdown.items.statusForcePushFirst',
+              'Force push first'
+            )
+          : t(
+              'auto.components.right.sidebar.source.control.dropdown.items.statusSyncFirst',
+              'Sync first'
+            )
+      case 'unsupported_provider':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusUnsupported',
+          'Unsupported'
+        )
+      case null:
+      case undefined:
+        return undefined
+    }
+  })()
+
   const createPR: DropdownItem = {
     kind: 'create_pr',
     label: t(
@@ -116,6 +187,7 @@ export function buildHostedReviewDropdownItems(
         )
       : createBlockedHint,
     hint: hostedReviewCreation?.canCreate ? undefined : createBlockedHint,
+    status: hostedReviewCreation?.canCreate ? undefined : createBlockedStatus,
     disabled:
       globalBusy ||
       !supportsHostedReviewCreation(hostedReviewCreation?.provider) ||
@@ -160,6 +232,7 @@ export function buildHostedReviewDropdownItems(
           )
       : createBlockedHint,
     hint: canPushAndCreate ? undefined : createBlockedHint,
+    status: canPushAndCreate ? undefined : createBlockedStatus,
     disabled: !canPushAndCreate
   }
 

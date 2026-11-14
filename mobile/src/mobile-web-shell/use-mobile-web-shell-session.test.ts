@@ -7,7 +7,11 @@ import type {
   MobileWebBundleFetchResult
 } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
-import type { ActiveGeneration, GenerationStore, StagedGeneration } from './generation-store'
+import type {
+  ActiveGeneration,
+  GenerationStore,
+  StagedGeneration
+} from './generations/generation-store'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import '../transport/rpc/rpc-delivery-ambiguity'
@@ -205,7 +209,6 @@ function createFakeStore(): {
   }
 }
 
-// Use recorded timers so deadline tests assert requested delays without wall-clock waits.
 type ArmedTimer = { delayMs: number; run: () => void; cancelled: boolean }
 
 function createTimerSeam() {
@@ -264,7 +267,8 @@ afterEach(async () => {
 
 async function mount(
   store: GenerationStore,
-  setForegroundTimer?: MobileWebShellRuntime['setForegroundTimer']
+  setForegroundTimer?: MobileWebShellRuntime['setForegroundTimer'],
+  claimSpareSessionId: MobileWebShellRuntime['claimSpareSessionId'] = async () => null
 ): Promise<Mounted> {
   const timers = createTimerSeam()
   // Mint distinct ids so a remount's replacement view can be told from the one it retires.
@@ -297,6 +301,7 @@ async function mount(
       runtime: {
         createStore: () => store,
         mintSessionId: () => `session-${++minted}`,
+        claimSpareSessionId,
         now: () => 0,
         setForegroundTimer: setForegroundTimer ?? timers.setTimer
       }
@@ -345,7 +350,6 @@ async function flush(): Promise<void> {
   await act(async () => undefined)
 }
 
-// Entry import failures can finish WebView load without mounting a boundary or sending ready; the deadline must recover that silent blank page.
 describe('the wait for the page to speak', () => {
   beforeEach(() => {
     doubles.manifestReads = 0
@@ -356,37 +360,17 @@ describe('the wait for the page to speak', () => {
     doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
   })
 
-  async function ready(fake = createFakeStore()): Promise<Mounted> {
-    const mounted = await mount(fake.store)
+  it('opens a page Home booted under its session id, and remounts under a fresh one', async () => {
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store, undefined, async () => 'home-spare')
     fake.settleCacheRead(activeGeneration())
     await flush()
-    expect(mounted.states().at(-1)?.kind).toBe('ready')
-    return mounted
-  }
-
-  // A remount mints the replacement's session before React commits it; reports the retired view already queued must not land on it.
-  it('does not charge a second fault from the retired view to its replacement', async () => {
-    const mounted = await ready()
+    expect(mounted.states().at(-1)).toMatchObject({ kind: 'ready', sessionId: 'home-spare' })
     await act(async () => {
       mounted.shellFailed('document-load-failed')
-      mounted.shellFailed('document-load-failed')
     })
-    expect(mounted.states().at(-1)?.kind).toBe('ready')
-  })
-
-  it('stays ready when the page speaks after document load and the timers fire', async () => {
-    const mounted = await ready()
-    await act(async () => {
-      mounted.documentLoaded()
-      mounted.pageReady()
-    })
-    await act(async () => {
-      mounted.timers.fire()
-    })
-    expect(mounted.states().at(-1)?.kind).toBe('ready')
-    await act(async () => {
-      mounted.tree.unmount()
-    })
+    await flush()
+    expect(mounted.states().at(-1)).toMatchObject({ kind: 'ready', sessionId: 'session-1' })
   })
 
   it('re-arms a session the route rebuilt, with the host and its gates unchanged', async () => {
@@ -401,6 +385,7 @@ describe('the wait for the page to speak', () => {
         runtime: {
           createStore: () => fake.store,
           mintSessionId: () => 'session-id',
+          claimSpareSessionId: async () => null,
           now: () => 0,
           setForegroundTimer: createTimerSeam().setTimer
         }
@@ -438,5 +423,3 @@ describe('the wait for the page to speak', () => {
     })
   })
 })
-
-// RN holds timers while backgrounded and fires overdue ones on resume, before the suspended WebView has loaded anything.

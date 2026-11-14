@@ -1,12 +1,12 @@
 import { ScrollView, Text, View } from 'react-native'
 import type { PRCommentGroup } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
-import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
+import { threadDiffLines } from '../../../../src/shared/github/comments/pr-comment-diff-hunk'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { openExternalLink } from '../../platform/external-link'
-import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
+import { openExternalLink } from '../../platform/external-links/external-link'
+import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
 import { isResolvableComment } from '../../source-control/review/pr-comment-actions'
 import { MobileStateView } from '../MobileStateView'
 import { PrMarkdown } from './PrMarkdown'
@@ -114,6 +114,7 @@ export function PrThreadScreen({
               placeholder={t('pullRequest.screens.replyPlaceholder', 'Reply…')}
               submitLabel={t('pullRequest.commentCard.reply', 'Reply')}
               submitting={actions.isReplyBusy(root.id)}
+              draftKey={actions.draftKey(root.id)}
               onSubmit={(body) => actions.reply(root, body)}
               autoFocus={focusReply}
               inline

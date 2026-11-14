@@ -9,18 +9,28 @@ const session = vi.hoisted(() => {
   return { client, environment: { id: 'env-1', createdAt: 1 } }
 })
 
-vi.mock('./web-runtime-session', () => ({
-  getClientForEnvironment: () => session.client,
-  manuallyDisconnectedEnvironmentIds: new Set<string>(),
-  manuallyDisconnectedResponse: () => ({ ok: false }),
-  requireActiveEnvironment: () => session.environment,
-  resolveEnvironment: () => session.environment,
-  runtimeCallQueuePool: { enqueue: (_id: string, _method: string, run: () => unknown) => run() },
-  updateEnvironmentFromResponse: () => undefined
-}))
+vi.mock('./web-runtime-session', async () => {
+  const { RuntimeRpcCallQueuePool } = await import('../../../../shared/runtime-rpc-call-queue')
+  return {
+    getClientForEnvironment: () => session.client,
+    manuallyDisconnectedEnvironmentIds: new Set<string>(),
+    manuallyDisconnectedResponse: () => ({ ok: false }),
+    requireActiveEnvironment: () => session.environment,
+    resolveEnvironment: () => session.environment,
+    runtimeCallQueuePool: new RuntimeRpcCallQueuePool(),
+    updateEnvironmentFromResponse: () => undefined
+  }
+})
 
-import { callEnvironmentEnvelope } from './web-runtime-calls'
-import { RuntimeConnectionChangedBeforeSendError } from '../../runtime/rpc/calls/runtime-rpc-result'
+import {
+  callRuntimeEnvelope,
+  callEnvironmentEnvelope,
+  callRuntimeResult
+} from './web-runtime-calls'
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  RuntimeRpcCallError
+} from '../../runtime/rpc/calls/runtime-rpc-result'
 
 describe('web runtime call pinned to the probed runtime', () => {
   beforeEach(() => {
@@ -64,4 +74,42 @@ describe('web runtime call pinned to the probed runtime', () => {
       { timeoutMs: 15_000, expectedConnectionEpoch: 2 }
     )
   })
+})
+
+it('preserves runtime failure details for web callers', async () => {
+  session.client.call.mockResolvedValueOnce({
+    id: 'rpc',
+    ok: false,
+    error: {
+      code: 'runtime_error',
+      message: 'Cannot add project',
+      data: { reason: 'windows_drive' }
+    }
+  })
+
+  const error = await callRuntimeResult('repo.add').catch((failure: unknown) => failure)
+  expect(error).toBeInstanceOf(RuntimeRpcCallError)
+  expect(error).toMatchObject({
+    code: 'runtime_error',
+    message: 'Cannot add project',
+    response: { error: { data: { reason: 'windows_drive' } } }
+  })
+})
+
+it('routes both web callers timed PR waits away from status and action calls', async () => {
+  const release = Promise.withResolvers<void>()
+  session.client.call.mockImplementation(async (_method, params) => {
+    if (params?.reason === 'swr') {
+      await release.promise
+    }
+    return { id: 'rpc', ok: true, result: 'current' }
+  })
+  const first = callRuntimeEnvelope('github.prForBranch', { reason: 'swr' })
+  const second = callEnvironmentEnvelope('env-1', 'github.prForBranch', { reason: 'swr' })
+  await expect(
+    callEnvironmentEnvelope('env-1', 'github.prForBranch', { reason: 'manual' })
+  ).resolves.toMatchObject({ result: 'current' })
+  await expect(callRuntimeEnvelope('git.status')).resolves.toMatchObject({ result: 'current' })
+  release.resolve()
+  await Promise.all([first, second])
 })

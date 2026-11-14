@@ -1,9 +1,9 @@
 import { resolve } from 'node:path'
 import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/electron-no-sandbox-request'
-import { needsElectronNoSandbox } from './electron-sandbox-switch'
-import { serverOnlyServeMessage } from './serve-app-launcher'
-import { SERVE_SUPERVISOR_APP_ROOT_ENV } from './serve-supervisor-relocation'
-import { RuntimeClientError } from './types'
+import { needsElectronNoSandbox } from './app-launch/electron-sandbox-switch'
+import { serverOnlyServeMessage } from './app-launch/serve-app-launcher'
+import { SERVE_SUPERVISOR_APP_ROOT_ENV } from './serve/supervision/serve-supervisor-relocation'
+import { RuntimeClientError } from './connection/types'
 
 export function getExecutableAppArgs(executable: string): string[] {
   const args = process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []

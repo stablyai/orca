@@ -4,15 +4,15 @@ import { useCallback } from 'react'
 import type { PullRequestGenerationOutcome } from '../../hosted-review/creation/create-pull-request-dialog-field-model'
 import { settlePullRequestGenerationRequest } from '../../hosted-review/creation/pull-request-generation-request-outcome'
 import { useAppStore } from '@/store/index'
-import { getConnectionId } from '@/lib/connection-context'
-import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'
 import {
   generateRuntimePullRequestFields,
   cancelRuntimeGeneratePullRequestFields
 } from '@/runtime/source-control/git/runtime-git-generation-client'
 import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/source-control/git/runtime-git-client-context'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import {
   createRunningPullRequestGenerationRecord,

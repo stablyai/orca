@@ -4,10 +4,10 @@ import {
   REMOTE_IMPORT_MAX_TOTAL_BYTES
 } from '../runtime-import-limits'
 import { constants } from 'node:fs'
-import { lstat, open, readdir, realpath, type FileHandle } from 'node:fs/promises'
+import { lstat, open, readdir, realpath } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { classifyImportSource } from './filesystem-import-source-stat'
-import { detectImageFileSignature, IMAGE_SIGNATURE_BYTES } from '../../media/image-file-signature'
+import { readImageFileSignature } from './local-regular-file-read'
 import type {
   StagedRuntimeUploadEntry as StagedExternalImportEntry,
   StagedRuntimeUploadSource as StagedExternalImportSource
@@ -177,18 +177,12 @@ async function stageFileEntry(
       },
       byteLength: openedStat.size,
       imageExtension: options.detectImageExtension
-        ? await readImageExtension(fileHandle)
+        ? (await readImageFileSignature(fileHandle))?.extension
         : undefined
     }
   } finally {
     await fileHandle.close()
   }
-}
-
-async function readImageExtension(fileHandle: FileHandle): Promise<string | undefined> {
-  const header = Buffer.alloc(IMAGE_SIGNATURE_BYTES)
-  const { bytesRead } = await fileHandle.read(header, 0, IMAGE_SIGNATURE_BYTES, 0)
-  return detectImageFileSignature(header.subarray(0, bytesRead))?.extension
 }
 
 async function assertRealPathInsideRoot(

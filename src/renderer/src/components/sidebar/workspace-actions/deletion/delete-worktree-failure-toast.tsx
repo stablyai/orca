@@ -4,7 +4,7 @@ import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { useTranslate } from '@/i18n/use-translate'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
-import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/nested-removal'
+import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/removal/nested-removal'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
@@ -12,7 +12,7 @@ import {
   SUBMODULE_DIRTY_REMOVAL_DETAIL,
   type WorktreeForceDeleteReason,
   type WorktreeRemovalTarget
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 
 type DeleteWorktreeFailureToastOptions = {
   error: string
@@ -144,10 +144,7 @@ export function showDeleteWorktreeFailureToast({
     id: worktreeId,
     executionHostId: executionHostId ?? null
   })
-  const nestedTarget =
-    isNestedWorktreeRemovalError(error) && window.api?.worktrees.previewNestedRemoval
-      ? nestedRemovalTarget
-      : undefined
+  const nestedTarget = isNestedWorktreeRemovalError(error) ? nestedRemovalTarget : undefined
 
   // Custom content gives multiline errors their own line instead of squeezing them into Sonner’s action/title row.
   showToast(toastCopy.title, {

@@ -8,7 +8,7 @@ import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-ca
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { sendSupportedMigrationRequest } from '../../managed-server/migration/catalog/orcad-migration-request'
 import { getWslHostService } from './wsl-host-service-instance'
-import type { WslMoveMovedAutomation } from '../../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
+import type { WslMoveMovedAutomation } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-host-automations-rewrite'
 
 // The host's automation service message for an id it does not hold.
 export const AUTOMATION_NOT_FOUND = 'Automation not found'

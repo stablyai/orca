@@ -15,10 +15,8 @@ import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
 import { decodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
 import { pairedRuntimeConnectionFromOffer } from '../../src/shared/remote-runtime/pairing/paired-runtime-connection'
-import {
-  sendRemoteRuntimeRequest,
-  subscribeRemoteRuntimeRequest
-} from '../../src/shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -130,9 +128,20 @@ test('phone subscribe to an idle relaunched terminal behind another tab fits the
     await expect
       .poll(
         async () => {
-          const list = await sendRemoteRuntimeRequest<{
+          const list = await sendRemoteRuntimeRequestOnSocket<{
             terminals: { handle: string; ptyId: string | null }[]
-          }>(connection, 'terminal.list', {}, 15_000)
+          }>(
+            connection,
+            'terminal.list',
+            {},
+            15_000,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined
+          )
           if (!list.ok) {
             return JSON.stringify(list)
           }
@@ -144,7 +153,7 @@ test('phone subscribe to an idle relaunched terminal behind another tab fits the
       .toBe('listed')
 
     const seen: { snapshot: { cols: number; rows: number } | null } = { snapshot: null }
-    const subscription = await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeTransport(
       connection,
       'terminal.subscribe',
       {

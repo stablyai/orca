@@ -82,7 +82,9 @@ async function connectBound(
   transport = createMockTransport()
 ) {
   const { connectPanePty } = await import('../connect-pane-pty')
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
   transportFactoryQueue.push(transport)
   setStore({
     tabsByWorktree: { 'wt-1': [{ id: TAB, ptyId: 'pty-old' }] },

@@ -106,11 +106,23 @@ describe.each<ChatStatusConsumer>(['sidebar', 'parent picker', 'palette'])(
       expect(chatStatusLabels()).toEqual(['inactive'])
       const tab = useAppStore.getState().unifiedTabsByWorktree[TARGET_WORKTREE_ID][0]
       const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-      act(() => useAppStore.getState().setStructuredChatSleptAt(paneKey, undefined))
+      act(() =>
+        useAppStore
+          .getState()
+          .applyStructuredChatCompanionWrites([{ kind: 'slept-at', paneKey, sleptAt: undefined }])
+      )
       expect(chatStatusLabels()).toEqual(['active'])
-      act(() => useAppStore.getState().setStructuredChatSleptAt(paneKey, 1))
+      act(() =>
+        useAppStore
+          .getState()
+          .applyStructuredChatCompanionWrites([{ kind: 'slept-at', paneKey, sleptAt: 1 }])
+      )
       expect(chatStatusLabels()).toEqual(['inactive'])
-      act(() => useAppStore.getState().setStructuredChatSleptAt(paneKey, null))
+      act(() =>
+        useAppStore
+          .getState()
+          .applyStructuredChatCompanionWrites([{ kind: 'slept-at', paneKey, sleptAt: null }])
+      )
       expect(chatStatusLabels()).toEqual(['active'])
       const working: AgentStatusEntry = {
         paneKey,

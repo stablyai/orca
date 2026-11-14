@@ -1,7 +1,7 @@
 /** Reuse one wsl.exe for sequential stdin-free probes (~180ms startup each on win-lowspec). Isolate each sh command in its own session with /dev/null stdin; base64-frame output/status with per-loop markers. */
 import { randomUUID } from 'node:crypto'
 import { Duplex, PassThrough, Writable } from 'node:stream'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { RemoteCommandChannel } from '../../managed-server/install/remote-install-transport'
 
 // setsid preserves per-command process-group isolation. Fresh output files keep background writers attached to old inodes, never the next command.
@@ -53,7 +53,10 @@ export function wslCommandLoopMarker(): string {
   return `__ORCA_WSL_EXEC_${randomUUID().replaceAll('-', '')}__`
 }
 
-export function startWslCommandLoop(child: PipedChildProcess, marker: string): WslCommandLoop {
+export function startWslCommandLoop(
+  child: ChildProcessWithoutNullStreams,
+  marker: string
+): WslCommandLoop {
   let pending: PendingCommand | null = null
   let alive = true
   let buffered = ''

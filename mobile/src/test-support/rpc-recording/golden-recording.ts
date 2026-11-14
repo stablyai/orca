@@ -43,7 +43,7 @@ export function goldenRecording(
     recording
   }
 }
-export function goldenBytes(golden: GoldenRecording): string {
+function goldenBytes(golden: GoldenRecording): string {
   const { recording: _value, ...header } = golden
   const interned = internRecording(golden.recording)
   return `${JSON.stringify({ ...header, values: interned.values, recording: interned.recording }, null, 2)}\n`

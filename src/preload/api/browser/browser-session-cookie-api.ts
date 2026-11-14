@@ -1,7 +1,7 @@
 import type {
   GoogleCookieClearLocalTarget,
   GoogleCookieClearResult
-} from '../../../shared/browser-google-cookie-clear'
+} from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import type { BrowserCookieImportResult } from '../../../shared/browser-workspace-types'
 
 export type BrowserSessionCookieApi = {

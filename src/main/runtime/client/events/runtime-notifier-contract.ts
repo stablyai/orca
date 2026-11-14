@@ -1,3 +1,5 @@
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
+import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -12,12 +14,12 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-reveal-identity'
-import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-pane-reveal'
+import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
+import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import type {
   TerminalLeafMoveResult,
   TerminalPaneMoveToNewTabRequest
-} from '../../../../shared/workspace-layout/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -25,11 +27,10 @@ import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hos
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
-} from '../../../../shared/worktree/base-ref-drift-types'
+} from '../../../../shared/worktree/base-refs/base-ref-drift-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
-  RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState
 } from '../../../../shared/runtime-session-contracts'
@@ -38,8 +39,6 @@ import type {
   AgentListPublication,
   AgentPaneActivityChange
 } from '../../../../shared/agent-status/presentation/agent-list-status'
-
-type DriverState = RuntimeTerminalDriverState
 
 export type RuntimeNotifier = {
   automationsChanged?(payload: {
@@ -52,10 +51,12 @@ export type RuntimeNotifier = {
     // Why: false for metadata-only changes (sort order) that leave Git scan results valid.
     options?: { invalidateGitScans?: boolean }
   ): void
+  workspaceMetadataSet?(set: WorkspaceMetadataSet): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
   browserProfilesChanged?(): void
+  workspaceCleanupRunFinished?(run: WorkspaceCleanupRunFinishedEvent['run']): void
   activateWorktree(
     repoId: string,
     worktreeId: string,
@@ -130,6 +131,8 @@ export type RuntimeNotifier = {
       sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
       newLeafId?: string
+      /** An agent's split: the new pane leaves the user's active pane and keyboard focus alone. */
+      activate?: false
     }
   ): void
   /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
@@ -139,7 +142,8 @@ export type RuntimeNotifier = {
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
-  focusEditorTab?(tabId: string, worktreeId: string): void
+  /** `userInitiated` lets a chat tab move the window to another worktree. */
+  focusEditorTab?(tabId: string, worktreeId: string, options?: { userInitiated: true }): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /** The window moves a client's pane to a new tab, since it owns the layout; rejects when it cannot answer. */
@@ -187,12 +191,12 @@ export type RuntimeNotifier = {
     rows: number
   ): void
   // Publish driver/clientId so the lock banner distinguishes mobile actors; boolean lock state loses identity (docs/mobile-presence-lock.md).
-  terminalDriverChanged(ptyId: string, driver: DriverState): void
+  terminalDriverChanged(ptyId: string, driver: RuntimeTerminalDriverState): void
   nativeChatLaunchDraftResolved?(
     tabId: string,
     resolution: { text: string; createdAt: number }
   ): void
-  browserDriverChanged?(browserPageId: string, driver: RuntimeBrowserDriverState): void
+  browserDriverChanged?(browserPageId: string, driver: RuntimeTerminalDriverState): void
   browserRemoteViewersChanged?(browserPageId: string, hasRemoteViewers: boolean): void
   clientHostedBrowserRowsChanged?(event: ClientHostedBrowserRowsEvent): void
   claudeAccountSelected?(change: ClaudeAccountSelectionChange): void

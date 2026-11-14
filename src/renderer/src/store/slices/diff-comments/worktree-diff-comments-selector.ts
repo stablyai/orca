@@ -2,8 +2,11 @@ import type { DiffComment } from '../../../../../shared/diff-comment-types'
 import { authorityKey, type HostAuthority } from '../../../../../shared/host-authority'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { AppState } from '../../types'
-import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
-import { resolveRecordOwner, resolveSourceCopy } from '@/lib/workspace-copy-owner'
+import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
+import {
+  resolveRecordOwner,
+  resolveSourceCopy
+} from '@/lib/workspace/ownership/workspace-copy-owner'
 import { findIndexedWorktreeRows } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'

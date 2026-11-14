@@ -30,7 +30,7 @@ export function TerminalRenderingSection({
       )}
     >
       <SearchableSetting
-        title={t('auto.components.settings.TerminalPane.c1fc9e9444', 'GPU Acceleration')}
+        title={t('auto.components.settings.TerminalPane.37389522c6', 'GPU acceleration')}
         description={t(
           'auto.components.settings.TerminalPane.f07dfb4466',
           'Controls whether the terminal uses xterm.js WebGL rendering. Auto tries WebGL when the renderer is supported, with a conservative Linux fallback for software or unknown GPU renderers.'
@@ -47,7 +47,7 @@ export function TerminalRenderingSection({
         ]}
       >
         <SettingsRow
-          label={t('auto.components.settings.TerminalPane.c1fc9e9444', 'GPU Acceleration')}
+          label={t('auto.components.settings.TerminalPane.37389522c6', 'GPU acceleration')}
           description={
             settings.terminalGpuAcceleration === 'off'
               ? t(
@@ -66,7 +66,7 @@ export function TerminalRenderingSection({
           }
           control={
             <SettingsSegmentedControl
-              ariaLabel={t('auto.components.settings.TerminalPane.c1fc9e9444', 'GPU Acceleration')}
+              ariaLabel={t('auto.components.settings.TerminalPane.37389522c6', 'GPU acceleration')}
               value={settings.terminalGpuAcceleration ?? 'auto'}
               onChange={(option) => updateSettings({ terminalGpuAcceleration: option })}
               options={[
@@ -91,7 +91,7 @@ export function TerminalRenderingSection({
       <TerminalContrastSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
-        title={t('auto.components.settings.TerminalRenderingSection.6d4c55bacc', 'Inline Images')}
+        title={t('auto.components.settings.TerminalRenderingSection.08db7947d8', 'Inline images')}
         description={t(
           'auto.components.settings.TerminalRenderingSection.fffab5890b',
           'Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.'
@@ -111,7 +111,7 @@ export function TerminalRenderingSection({
         className="py-2"
       >
         <SettingsSwitchRow
-          label={t('auto.components.settings.TerminalRenderingSection.6d4c55bacc', 'Inline Images')}
+          label={t('auto.components.settings.TerminalRenderingSection.08db7947d8', 'Inline images')}
           description={t(
             'auto.components.settings.TerminalRenderingSection.fffab5890b',
             'Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.'

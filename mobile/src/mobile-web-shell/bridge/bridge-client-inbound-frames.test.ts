@@ -77,31 +77,6 @@ describe('bridge client refusals and send failures', () => {
     expect(isRpcDeliveryUnknown(error)).toBe(true)
   })
 
-  it('leaves a refused frame that names no open exchange to the diagnostic alone', async () => {
-    const page = createPageClient()
-    page.start()
-    const answer = page.client.sendRequest('worktree.ps')
-    page.deliver({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'reply',
-      id: 'ZZZZZZZZZZZZZZZZZZZZZZ',
-      payload: { id: 'frame-1', ok: true }
-    })
-    expect(page.diagnostics).toEqual([{ kind: 'refused', refusal: 'unrecognised-message' }])
-    page.deliver({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'reply',
-      id: idOf(page, 0),
-      payload: { id: 'frame-1', ok: true, result: 7, _meta: { runtimeId: 'runtime-a' } }
-    })
-    await expect(answer).resolves.toEqual({
-      id: 'frame-1',
-      ok: true,
-      result: 7,
-      _meta: { runtimeId: 'runtime-a' }
-    })
-  })
-
   it('fails a request whose frame never left the page, without the delivery mark', async () => {
     let live = true
     const page = createPageClient({

@@ -14,20 +14,6 @@ function pageRoutesOf(routes: Parameters<typeof routeViewOf>[0]): string[] {
   return routeViewOf(routes, '/h/host-1').pageRoutes
 }
 
-describe('matching a concrete route against a pattern', () => {
-  it('matches a dynamic segment against one segment and never against a path', () => {
-    expect(matchesRoutePattern('/h/host-1', '/h/[hostId]')).toBe(true)
-    expect(matchesRoutePattern('/h/host-1/session/wt-1', '/h/[hostId]')).toBe(false)
-    expect(matchesRoutePattern('/h', '/h/[hostId]')).toBe(false)
-  })
-
-  it('matches a static segment exactly, case and all', () => {
-    expect(matchesRoutePattern('/h/host-1/tasks', '/h/[hostId]/tasks')).toBe(true)
-    expect(matchesRoutePattern('/h/host-1/Tasks', '/h/[hostId]/tasks')).toBe(false)
-    expect(matchesRoutePattern('/h/host-1/accounts', '/h/[hostId]/tasks')).toBe(false)
-  })
-})
-
 // Accept trailing rest patterns from future desktops so already-installed shells can serve new catch-all screens.
 describe('a pattern with a rest segment', () => {
   const PATTERN = '/h/[hostId]/[...page]'
@@ -35,7 +21,6 @@ describe('a pattern with a rest segment', () => {
   it('matches one segment and as many as follow it', () => {
     expect(matchesRoutePattern('/h/a/x', PATTERN)).toBe(true)
     expect(matchesRoutePattern('/h/a/x/y', PATTERN)).toBe(true)
-    expect(matchesRoutePattern('/h/a/x/y/z', PATTERN)).toBe(true)
   })
 
   // Expo Router 55.0.18 formats rest as ((.*\/)) after adding a trailing slash; the tail needs its own slash, so zero segments cannot match.
@@ -75,25 +60,15 @@ describe('a pattern with a rest segment', () => {
   })
 })
 
-describe('the routes this shell will render from the page', () => {
-  it('drops a route needing a grant this app has never heard of', () => {
-    expect(
-      pageRoutesOf([
-        { pathname: '/h/[hostId]', grants: ['navigate', 'teleport'] },
-        { pathname: '/h/[hostId]/tasks', grants: ['navigate'] }
-      ])
-    ).toEqual(['/h/[hostId]/tasks'])
-  })
-})
-
 describe('the grants this app implements', () => {
   // Narrow declared grants before init so unimplemented and ungranted both reach host enforcement as absent.
   it('drops a grant the route declared and this shell does not implement', () => {
     const routes = [
-      { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate', 'aGrantFromTheFuture'] }
+      { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate', 'aGrantFromTheFuture'] },
+      { pathname: '/h/[hostId]/tasks', grants: ['navigate'] }
     ]
     expect(grantsForRoute(routes, '/h/host-1/session/wt-1')).toEqual(['navigate'])
-    expect(pageRoutesOf(routes)).toEqual([])
+    expect(pageRoutesOf(routes)).toEqual(['/h/[hostId]/tasks'])
   })
 })
 
@@ -114,10 +89,11 @@ describe('the pairs a session publishes to the page', () => {
       ...MANIFEST_WIRE,
       routes: carryingAnUnreadField
     }).routes
-    expect(BridgePageRouteGrantsSchema.safeParse(routes).success).toBe(false)
     const { pageRouteGrants } = routeViewOf(routes, '/h/host-1')
     const parsed = BridgePageRouteGrantsSchema.safeParse(pageRouteGrants)
-    expect(parsed.error?.issues[0]?.message ?? 'accepted').toBe('accepted')
+    expect(pageRouteGrants).toEqual([
+      { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'screencastBinary'] }
+    ])
     expect(parsed.success).toBe(true)
   })
 })

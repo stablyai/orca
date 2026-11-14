@@ -145,3 +145,18 @@ export function resolveStickyAutoExpandedTaskProvider({
 }): TaskProvider | null {
   return previousAutoExpanded ?? getAutoExpandedTaskProvider(providers, readinessByProvider)
 }
+
+export type ConnectStepProps = {
+  visible: boolean
+  canHide: boolean
+  onToggleVisible: () => void
+  connected: boolean
+  checking: boolean
+}
+
+export function getConnectStepState(props: ConnectStepProps): 'in-progress' | 'done' | 'pending' {
+  if (props.checking) {
+    return 'in-progress'
+  }
+  return props.connected ? 'done' : 'pending'
+}

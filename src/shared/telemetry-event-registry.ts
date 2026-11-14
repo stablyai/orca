@@ -30,6 +30,7 @@ import {
   daemonAuditEligibilitySchema,
   daemonFolderAccessNoticeSchema,
   daemonLifecycleSchema,
+  daemonPtyCwdDenialCaptureSchema,
   daemonPtyCwdVerdictSchema,
   daemonStartFailedSchema,
   mainThreadHangDetectedSchema,
@@ -110,6 +111,11 @@ import {
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
 import { pluginInstalledSchema } from './telemetry-plugin-event-schemas'
+import { browserExtensionsEventSchemas } from './browser/extensions/browser-extensions-banner'
+import {
+  firstAgentInteractionSchema,
+  meaningfulActivityDaySchema
+} from './telemetry-protected-milestone-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
 import { wslUsageSnapshotSchema } from './telemetry-wsl-usage-event-schemas'
 import {
@@ -134,6 +140,8 @@ export const eventSchemas = {
   app_starred_orca: appStarredOrcaSchema,
   star_nag_outcome: starNagOutcomeEventSchema,
   feature_interaction_usage_bucket_reached: featureInteractionUsageBucketReachedSchema,
+  first_agent_interaction: firstAgentInteractionSchema,
+  meaningful_activity_day: meaningfulActivityDaySchema,
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
@@ -162,6 +170,7 @@ export const eventSchemas = {
   daemon_async_io_health: daemonAsyncIoHealthSchema,
   daemon_pty_cwd_denied: daemonPtyCwdVerdictSchema,
   daemon_pty_cwd_readable: daemonPtyCwdVerdictSchema,
+  daemon_pty_cwd_denial_capture: daemonPtyCwdDenialCaptureSchema,
   daemon_folder_access_notice: daemonFolderAccessNoticeSchema,
   daemon_audit_eligibility: daemonAuditEligibilitySchema,
   runtime_rpc_start_failed: runtimeRpcStartFailedSchema,
@@ -174,6 +183,8 @@ export const eventSchemas = {
 
   native_chat_toggled: nativeChatToggledSchema,
   native_chat_message_sent: nativeChatMessageSentSchema,
+  // Main-owned provider-accepted prompts; legacy message_sent includes commands and queued writes.
+  native_chat_prompt_submitted: nativeChatMessageSentSchema,
   native_chat_picker_opened: nativeChatPickerOpenedSchema,
   native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
   native_chat_send_classified: nativeChatSendClassifiedSchema,
@@ -249,5 +260,7 @@ export const eventSchemas = {
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
-  plugin_installed: pluginInstalledSchema
+  plugin_installed: pluginInstalledSchema,
+
+  ...browserExtensionsEventSchemas
 } as const

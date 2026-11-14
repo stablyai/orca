@@ -1,4 +1,5 @@
 import { beforeEach, vi, type Mock } from 'vitest'
+import { replaceRuntimeEnvironmentRevisions } from '../../runtime/rpc/environment-revisions/runtime-environment-revision'
 import { toast } from 'sonner'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -60,6 +61,7 @@ export const runtimeEnvironmentsList: Mock = vi.fn()
 // Registers the per-test reset + window stub. Call once inside the suite's module scope.
 export function installReposRuntimeRoutingHarness(): void {
   beforeEach(() => {
+    replaceRuntimeEnvironmentRevisions([])
     clearRuntimeCompatibilityCacheForTests()
     vi.mocked(toast.error).mockReset()
     vi.mocked(toast.info).mockReset()

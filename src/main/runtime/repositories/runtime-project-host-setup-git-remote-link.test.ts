@@ -26,6 +26,7 @@ async function clonedRepo(remoteUrl: string): Promise<Repo> {
 function makeController(cloned: Repo) {
   const repos: Repo[] = []
   const store = {
+    getRepos: () => repos,
     getProjects: () => projectHostSetupProjectionFromRepos(repos).projects,
     getProjectHostSetups: () => projectHostSetupProjectionFromRepos(repos).setups,
     updateRepo: ({ id }: Pick<Repo, 'id'>, updates: Partial<Repo>) => {
@@ -55,6 +56,8 @@ function makeController(cloned: Repo) {
     invalidateResolvedWorktrees: vi.fn(),
     invalidateWorktreeScan: vi.fn(),
     notifyReposChanged: vi.fn(),
+    enqueueRepositoryMetadata: vi.fn(),
+    resolveRepositoryMetadata: vi.fn().mockResolvedValue(true),
     countLiveTerminalsForRepo: () => 0
   })
   return { controller, repos }

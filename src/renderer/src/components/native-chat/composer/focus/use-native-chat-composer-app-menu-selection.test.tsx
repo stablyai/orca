@@ -2,8 +2,8 @@
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppMenuSelectionAction } from '@/lib/app-menu-selection-actions'
-import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
+import type { AppMenuSelectionAction } from '@/lib/app-commands/app-menu-selection-actions'
+import { useAppMenuSelectionActions } from '@/hooks/app-commands/useAppMenuSelectionActions'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 
 let appMenuListener: ((action: AppMenuSelectionAction) => void) | null = null

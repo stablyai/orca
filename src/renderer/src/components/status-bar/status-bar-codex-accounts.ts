@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getCodexAccountDisplayDetail,
   getCodexAccountDisplayLabel
-} from '@/lib/codex-account-display-label'
+} from '@/lib/provider-accounts/codex-account-display-label'
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,

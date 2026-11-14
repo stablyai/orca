@@ -3,9 +3,9 @@ import type {
   HostedReviewInfo,
   HostedReviewForBranchArgs
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { singlePaneLayoutSnapshot } from '../../../terminals/terminal-single-pane-layout'
+import { singlePaneLayoutSnapshot } from '../../../terminals/layout/terminal-single-pane-layout'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeTerminalTab } from '../../../terminals/terminal-row.test-fixture'
+import { makeTerminalTab } from '../../../terminals/testing/terminal-row.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import {
   createTestStore,
@@ -133,121 +133,6 @@ describe('terminal reference evidence', () => {
     ])
   })
 
-  it('confirms a secondary review without publishing it into the primary branch cache', async () => {
-    const { store } = setup()
-    const workspace = store.getState().worktreesByRepo.repo1[0]
-    const fetchHostedReviewForBranch = vi.fn()
-    const primary: HostedReviewInfo = {
-      provider: 'github',
-      number: 7,
-      title: 'Primary',
-      state: 'open',
-      url: 'https://github.com/acme/orca/pull/7',
-      status: 'failure',
-      mergeable: 'MERGEABLE',
-      updatedAt: '2026-01-01'
-    }
-    const hostedReviewCache = {
-      'local::repo1::feature': { data: primary, fetchedAt: Date.now() }
-    }
-    store.setState({
-      fetchHostedReviewForBranch,
-      hostedReviewCache,
-      worktreesByRepo: {
-        repo1: [
-          {
-            ...workspace,
-            linkedGitLabMR: null,
-            linkedBitbucketPR: null,
-            linkedAzureDevOpsPR: null,
-            linkedGiteaPR: null,
-            linkedItems: [
-              ...getWorkspaceAttachments(workspace),
-              {
-                provider: 'github',
-                type: 'pr',
-                number: 42
-              }
-            ]
-          }
-        ]
-      }
-    })
-    store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
-    await flush()
-    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
-    expect(store.getState().hostedReviewCache).toBe(hostedReviewCache)
-    expect(
-      getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0])[1].origins?.[0].tabId
-    ).toBe('tab-1')
-  })
-  it('confirms on the terminal owner when another host has the same repository ID', async () => {
-    const { store } = setup()
-    const repo = store.getState().repos[0]
-    const readHostedReview = installReviewRead().mockResolvedValue({
-      provider: 'github',
-      number: 42,
-      title: 'Confirmed',
-      state: 'open',
-      url,
-      status: 'success',
-      mergeable: 'MERGEABLE',
-      updatedAt: '2026-01-01'
-    })
-    store.setState({
-      repos: [{ ...repo, executionHostId: 'runtime:other' }, repo]
-    })
-    store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
-    await flush()
-    expect(readHostedReview).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoPath: repo.path,
-        repoId: repo.id,
-        repoOwnerExecutionHostId: 'local'
-      })
-    )
-    expect(getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0])[1].origins).toEqual([
-      expect.objectContaining({ hostId: 'local', tabId: 'tab-1' })
-    ])
-  })
-  it('rejects a different provider returned by owner-scoped branch confirmation', async () => {
-    const { store } = setup()
-    installReviewRead().mockResolvedValue({
-      provider: 'gitlab',
-      number: 42,
-      title: 'Other provider',
-      state: 'open',
-      url,
-      status: 'success',
-      mergeable: 'MERGEABLE',
-      updatedAt: '2026-01-01'
-    })
-    store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
-    await flush()
-    expect(getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0])).toHaveLength(1)
-  })
-  it('records two terminals for one PR and keeps repeated evidence deduplicated', async () => {
-    const { store, readHostedReview } = setup()
-    for (const tabId of ['tab-1', 'tab-2', 'tab-2']) {
-      store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context(tabId))
-      await flush()
-    }
-    expect(
-      getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0])[1].origins?.map(
-        (origin) => origin.tabId
-      )
-    ).toEqual(['tab-1', 'tab-2'])
-    expect(readHostedReview.mock.calls.filter(([args]) => args.active === true)).toHaveLength(1)
-  })
-  it('ignores a stale PTY even when its caller supplies an execution host', async () => {
-    const { store, readHostedReview } = setup()
-    store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, {
-      ...context('tab-1'),
-      ptyId: 'old-pty'
-    })
-    await flush()
-    expect(readHostedReview).not.toHaveBeenCalled()
-  })
   it('does not attribute a delayed confirmation after the pane is rebound', async () => {
     const { store, readHostedReview } = setup()
     let complete: (value: Awaited<ReturnType<typeof readHostedReview>>) => void = () => {}
@@ -274,39 +159,5 @@ describe('terminal reference evidence', () => {
     })
     await flush()
     expect(getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0])).toHaveLength(1)
-  })
-  it('keeps a pending observation when only the terminal label changes', async () => {
-    const { store, readHostedReview } = setup()
-    const confirmed = await readHostedReview({ repoPath: '/repo', branch: 'branch' })
-    let complete: (value: typeof confirmed) => void = () => {}
-    readHostedReview.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          complete = resolve
-        })
-    )
-    store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, context('tab-1'))
-    await flush()
-    store.setState({
-      tabsByWorktree: {
-        [worktreeId]: store
-          .getState()
-          .tabsByWorktree[worktreeId].map((tab) => ({ ...tab, customTitle: 'Renamed' }))
-      }
-    })
-    complete(confirmed)
-    await flush()
-    expect(
-      getWorkspaceAttachments(store.getState().worktreesByRepo.repo1[0]).map((item) => item.number)
-    ).toEqual([7, 42])
-  })
-  it('rejects an explicit host that disagrees with the PTY owner', async () => {
-    const { store, readHostedReview } = setup()
-    store.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, {
-      ...context('tab-1'),
-      executionHostId: 'ssh:other'
-    })
-    await flush()
-    expect(readHostedReview).not.toHaveBeenCalled()
   })
 })

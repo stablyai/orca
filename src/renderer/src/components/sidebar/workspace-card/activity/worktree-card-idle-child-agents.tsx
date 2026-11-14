@@ -1,12 +1,12 @@
 import React, { useCallback } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { cn } from '@/lib/utils'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { CompactAgentExpansion } from './worktree-card-compact-agents'
 import { SUMMARY_STATE_ORDER } from './worktree-card-agent-summary'
-import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-row-dot-state'
+import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-status/presentation/agent-row-dot-state'
 import type { AgentDotState } from '@/components/AgentStateDot'
 
 // A lone idle child costs the same row as its group, so only fold two or more.

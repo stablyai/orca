@@ -9,7 +9,7 @@ import {
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
+import { createWorktreeTabBucketProjection } from '@/lib/workspace/tabs/worktree-tab-bucket-projection'
 
 // Budget hidden worktrees by count and absolute TTL: measured pane heap grows with scrollback. Last-active exempts only the cap; unrestorable live tabs must remain mounted, and scrollback depth is unbounded, so force-park may free nothing.
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 4

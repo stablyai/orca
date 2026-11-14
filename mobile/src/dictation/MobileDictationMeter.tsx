@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { memo, useSyncExternalStore } from 'react'
 import { Text, View } from 'react-native'
 import { DICTATION_GRAPES } from '../../../src/shared/dictation-audio-meter'
 import {
@@ -6,7 +6,7 @@ import {
   type MobileDictationMeter
 } from '../hooks/mobile-dictation-meter'
 import { useNow } from '../hooks/use-now'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { colors, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -20,8 +20,11 @@ function useMeterEnergy(meter: MobileDictationMeter): { energy: number; isClippi
   return { energy: useReducedMotionEnabled() === false ? level : 0, isClipping }
 }
 
-// Desktop's nine dots, red while the mic clips.
-export function MobileDictationGrapes({ meter, dotSize }: MeterProps & { dotSize: number }) {
+// Desktop's nine dots, red while the mic clips. Memoized: its parent re-renders on the timer's clock, the dots on the meter.
+export const MobileDictationGrapes = memo(function MobileDictationGrapes({
+  meter,
+  dotSize
+}: MeterProps & { dotSize: number }) {
   const { energy, isClipping } = useMeterEnergy(meter)
   return (
     <View
@@ -48,14 +51,21 @@ export function MobileDictationGrapes({ meter, dotSize }: MeterProps & { dotSize
       ))}
     </View>
   )
-}
+})
 
-export function MobileDictationTimer({ meter }: MeterProps) {
-  useMobileColorScheme()
+export function useMobileDictationElapsed(meter: MobileDictationMeter): {
+  now: number
+  elapsedSeconds: number
+} {
   const startedAt = useSyncExternalStore(meter.subscribe, () => meter.getSnapshot().startedAt)
   const now = useNow(250)
   // The hook starts the meter in an effect, so the first recording frame may still read 0.
   const elapsedSeconds = startedAt === 0 ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000))
+  return { now, elapsedSeconds }
+}
+
+export function MobileDictationTimer({ elapsedSeconds }: { readonly elapsedSeconds: number }) {
+  useMobileColorScheme()
   const minutes = Math.floor(elapsedSeconds / 60)
   const seconds = String(elapsedSeconds % 60).padStart(2, '0')
   return <Text style={styles.timer}>{`${minutes}:${seconds}`}</Text>

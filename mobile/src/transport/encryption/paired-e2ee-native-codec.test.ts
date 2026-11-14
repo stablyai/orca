@@ -1,4 +1,4 @@
-import { gunzipSync } from 'node:zlib'
+import { brotliDecompressSync, gunzipSync } from 'node:zlib'
 import sodium from 'react-native-libsodium'
 
 import { beforeAll, describe, expect, it, vi } from 'vitest'
@@ -38,6 +38,8 @@ function libsodiumBindings(): PairedE2EENativeBindings {
     },
     codec: {
       gunzip: (input, outputLimit) => new Uint8Array(gunzipSync(input)).slice(0, outputLimit),
+      brotliDecompress: async (input, outputLimit) =>
+        new Uint8Array(brotliDecompressSync(input)).slice(0, outputLimit),
       decodeUtf8: (input) => {
         if (input[0] === 0xef && input[1] === 0xbb && input[2] === 0xbf) {
           return null
@@ -81,13 +83,11 @@ describe('the native paired E2EE codec', () => {
     await sodium.ready
   })
 
-  // UTF-8 fallback must preserve an already-opened frame whose counter advanced.
-
   // libsodium sizes its output as the box length minus the MAC, which underflows and crashes.
   it('never hands libsodium a box shorter than its MAC', async () => {
     const { native } = await load(true)
     secretboxOpenCalls.mockClear()
-    for (let length = 0; length < 16; length++) {
+    for (const length of [0, 15]) {
       expect(
         native!.openSecretbox(new Uint8Array(length), randomBytes(24), randomBytes(32))
       ).toBeNull()

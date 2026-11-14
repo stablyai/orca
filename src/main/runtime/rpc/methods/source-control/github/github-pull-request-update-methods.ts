@@ -11,7 +11,7 @@ import {
   UpdatePr,
   UpdatePrState,
   UpdatePrTitle
-} from '../../../../../../shared/rpc-contract/github-pull-request-update-params'
+} from '../../../../../../shared/rpc-contract/github/github-pull-request-update-params'
 
 export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({

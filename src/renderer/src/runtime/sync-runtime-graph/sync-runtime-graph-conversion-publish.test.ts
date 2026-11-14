@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '../../lib/agent-status'
+import type * as AgentStatusModule from '../../lib/agent-status/aggregation/worktree-agent-status'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { createTestStore } from '../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
@@ -8,13 +8,13 @@ import {
   type TabsDrawnFromMain
 } from '../../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/lib/doc-preview-grants', () => ({
+vi.mock('@/lib/browser/documents/doc-preview-grants', () => ({
   releaseDocPreviewGrant: vi.fn(),
   ensureDocPreviewGrant: vi.fn(),
   buildDocPreviewGrantRequest: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

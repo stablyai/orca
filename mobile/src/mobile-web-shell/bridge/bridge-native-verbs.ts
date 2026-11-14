@@ -21,7 +21,7 @@ import { imageParamsSchema, imageResultSchema } from './bridge-image-verbs'
 import { BRIDGE_SPEECH_VERB, speechParamsSchema, speechResultSchema } from './bridge-speech-verbs'
 import { BRIDGE_STORE_VERB, storeParamsSchema, storeResultSchema } from './bridge-store-verb'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
-import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/mobile-file-media'
+import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/media/mobile-file-media'
 
 // Fence native-prefixed requests on-device; desktop allowlist refusal alone would hide leaked forwarding and depend on desktop version.
 // Native replies use existing frames/in-flight caps without runtime _meta; adding a verb needs a table row and handler, never a new frame kind.
@@ -41,7 +41,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.pdf.view',
   'native.image.act',
   BRIDGE_SPEECH_VERB,
-  BRIDGE_STORE_VERB
+  BRIDGE_STORE_VERB,
+  'native.a11y.announce'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -92,6 +93,11 @@ export type BridgePdfOpenParams = Omit<
   Extract<z.infer<typeof pdfViewParamsSchema>, { action: 'open' }>,
   'action'
 >
+
+// The page has no announce call of its own (RNW's is a no-op); the shell speaks for it. Long text is a page bug, so it is refused.
+export const a11yAnnounceParamsSchema = z.strictObject({ message: z.string().min(1).max(500) })
+// announced:false when the shell leaves it to the page's live region (Android, where TalkBack reads it).
+export const a11yAnnounceResultSchema = z.strictObject({ announced: z.boolean() })
 
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
@@ -150,6 +156,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   [BRIDGE_STORE_VERB]: {
     params: storeParamsSchema,
     result: storeResultSchema
+  },
+  'native.a11y.announce': {
+    params: a11yAnnounceParamsSchema,
+    result: a11yAnnounceResultSchema
   }
 }
 

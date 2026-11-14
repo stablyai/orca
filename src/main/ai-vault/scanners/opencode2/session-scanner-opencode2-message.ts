@@ -1,6 +1,6 @@
 import type { AiVaultSessionPreviewMessage } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { asRecord } from '../../session-scanner-record-value'
-import { parseJsonObject } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { parseJsonObject } from '../../parsing/session-json-object'
 import {
   decodeSessionMessage,
   type SessionMessageDecodeOptions

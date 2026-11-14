@@ -1,13 +1,14 @@
 import { useAppStore } from '@/store'
-import { resolveDefaultAgentForWorktree } from '@/lib/agent-tab-shortcuts'
+import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { agentTabLaunchStore } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
 import { activateAndRevealWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
-import { reportAgentWorkspaceActivation } from '@/lib/worktree-activation-outcome'
+import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 
 export async function launchOnboardingCompletionAgent(
   worktreeId: string,
@@ -24,7 +25,7 @@ export async function launchOnboardingCompletionAgent(
     return
   }
   launchAgentInNewTabWithOutcome({
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     ...captureAgentTabLaunchContext(worktreeId),
     agent,
     worktreeId,

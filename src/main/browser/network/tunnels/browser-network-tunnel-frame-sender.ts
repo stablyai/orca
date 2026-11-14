@@ -3,7 +3,7 @@ import {
   encodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSessionOptions } from './browser-network-tunnel-stream-state'
 
 export function sendBrowserNetworkTunnelFrame(

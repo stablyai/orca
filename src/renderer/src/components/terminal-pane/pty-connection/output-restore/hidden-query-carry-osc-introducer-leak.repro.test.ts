@@ -63,7 +63,9 @@ describe('hidden query carry vs a following OSC', () => {
 
   it('does not paint an OSC payload after the reveal restore when a hidden chunk ended mid-CSI', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('pty-id')
     const dataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null

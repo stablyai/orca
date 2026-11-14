@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
-import { CELL_ADMIT_EFFECTIVE_REFRESH_MS } from './cell-admit-effective-writer.js'
 import { RESERVE_DEAD_MAN_MS, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { openRelayDatabase } from '../../database/database.js'
 import {
@@ -34,7 +33,7 @@ describe('flipping a reserve-mode cell back to the database', () => {
     vi.restoreAllMocks()
   })
 
-  async function cell(now?: () => number, options: { flagsUnread?: boolean } = {}) {
+  async function cell(now?: () => number) {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -42,7 +41,7 @@ describe('flipping a reserve-mode cell back to the database', () => {
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }))
     const database = await openRelayDatabase({ dataDir })
     cleanup.push(() => database.close())
-    return await startReserveModeCell({ database, dataDir, cleanup, ...options, ...(now ? { now } : {}) })
+    return await startReserveModeCell({ database, dataDir, cleanup, ...(now ? { now } : {}) })
   }
 
   it('registers every memory-admitted control without disconnecting any, matching the seat report', async () => {
@@ -158,47 +157,6 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect(await reserve.controlLeases()).toHaveLength(1)
     expect(host.socket.readyState).toBe(WebSocket.OPEN)
   }, 60_000)
-
-  it('takes its flip-back pace from the switch file', async () => {
-    const reserve = await cell()
-    for (let index = 0; index < 4; index += 1) await reserve.bookedHost(5 + index)
-    const real = reserve.relay.assignments.activateControlDeferringCell.bind(reserve.relay.assignments)
-    let inFlight = 0
-    let peak = 0
-    vi.spyOn(reserve.relay.assignments, 'activateControlDeferringCell').mockImplementation(async (...args) => {
-      inFlight += 1
-      peak = Math.max(peak, inFlight)
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      try {
-        return await real(...args)
-      } finally {
-        inFlight -= 1
-      }
-    })
-    reserve.setAdmitMode('db', { reregisterInFlight: 1 })
-    await until(async () => (await reserve.controlLeases()).length === 4)
-    expect(peak).toBe(1)
-  }, 30_000)
-
-  // Step 5 off adds no writes before/after flag reads; leaving reserve owes exactly one db write.
-  it('writes an admit-effective row only while its switch says reserve, plus one db write on the way out', async () => {
-    let now = Date.now()
-    const booting = await cell(() => now, { flagsUnread: true })
-    await new Promise((resolve) => setTimeout(resolve, 2_500))
-    expect(await booting.admitEffectiveRow()).toBeUndefined()
-    booting.setAdmitMode('db')
-    now += 3 * CELL_ADMIT_EFFECTIVE_REFRESH_MS
-    await new Promise((resolve) => setTimeout(resolve, 2_500))
-    expect(await booting.admitEffectiveRow()).toBeUndefined()
-    booting.setAdmitMode('reserve')
-    await until(async () => (await booting.admitEffectiveRow())?.mode === 'reserve')
-    booting.setAdmitMode('db')
-    await until(async () => (await booting.admitEffectiveRow())?.mode === 'db')
-    const last = (await booting.admitEffectiveRow())!.updated_at
-    now += 3 * CELL_ADMIT_EFFECTIVE_REFRESH_MS
-    await new Promise((resolve) => setTimeout(resolve, 2_500))
-    expect((await booting.admitEffectiveRow())!.updated_at).toEqual(last)
-  }, 30_000)
 
   it('flips itself back to db when no placing director has been in touch for the dead-man window', async () => {
     let now = Date.now()

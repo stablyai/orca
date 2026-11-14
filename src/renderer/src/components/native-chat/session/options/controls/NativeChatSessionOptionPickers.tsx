@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-snapshot'
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
@@ -19,7 +19,7 @@ import {
   nativeChatOptionsPillTitle,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionDisabledReason
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import type { NativeChatOptionPickerRequest } from './native-chat-option-picker-request'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
@@ -261,8 +261,14 @@ function SessionOptionPopover(props: {
         onInteractOutside={focusReturn.onInteractOutside}
         onCloseAutoFocus={focusReturn.onCloseAutoFocus}
         // Close through a level tooltip’s first Escape; let Radix handle search Escape after IME.
+        // Escape from a portaled child (the speed list) closes only that child.
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) {
+          if (
+            event.key === 'Escape' &&
+            !(event.target instanceof HTMLInputElement) &&
+            event.target instanceof Node &&
+            event.currentTarget.contains(event.target)
+          ) {
             setOpen(false)
           }
         }}

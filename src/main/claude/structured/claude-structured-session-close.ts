@@ -13,14 +13,15 @@ import {
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
-import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
-import type { ClaudePromptRegistry } from '../claude-prompt-registry'
+import type { ClaudeJournalTranslator } from './journal/claude-journal-translator-contract'
+import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
 import { closeProcessRegistry } from '@orca/process-host/close-process-registry'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
-import { claudeHeldSends } from '../claude-command-lifecycle'
+import { claudeHeldSends } from './turns/claude-command-lifecycle'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
-import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
+import { settleClaudeTurnEndWaiters } from './turns/claude-request-end-wait'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import type { ProviderProcessCloseOptions } from '../../provider-process/provider-process-close'
 
 /** Root exit releases the lease even with unverified descendants; a failed spawn proves no exit. */
 export function claudeRootExitObserved(
@@ -85,7 +86,9 @@ export async function resolveClaudeAcquisitionError(input: {
 }
 
 export function settleClaudeExitedSession(session: ClaudeSession): void {
+  session.delivery.dispose()
   retireClaudeDispatchWaiters(session)
+  session.historyCatchUp?.abort()
   settleClaudeTurnEndWaiters(session)
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
@@ -105,18 +108,21 @@ type CloseClaudePublishedSessionInput = {
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
   settledExitErrors?: Map<string, Error>
+  closeOptions?: ProviderProcessCloseOptions
 }
 
 async function finalizeClaudePublishedSession(
   input: CloseClaudePublishedSessionInput,
   session: ClaudeSession
 ): Promise<boolean> {
+  session.historyCatchUp?.abort()
+  session.delivery.dispose()
   settleClaudeTurnEndWaiters(session)
   // Null settles callbacks without writing responses during SDK cleanup.
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
   }
-  const connectionClosed = await session.connection.close()
+  const connectionClosed = await session.connection.close(input.closeOptions)
   session.unbindReadingControl?.()
   const rootExitVerdict = claudeCloseReport(
     session.connection,

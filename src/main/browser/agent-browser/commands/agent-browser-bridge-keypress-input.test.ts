@@ -79,7 +79,8 @@ describe('AgentBrowserBridge keypress input', () => {
     webContentsFromIdMock.mockImplementation((id: number) => (id === 100 ? wc : null))
   })
 
-  describe.each(['a', 'MediaPlayPause'])('target admission for %s', (key) => {
+  describe('target admission', () => {
+    const key = 'a'
     function registerTwoWorkspaces(): MockWebContents {
       const otherPage = mockWebContents(200)
       otherPage.debugger.sendCommand.mockResolvedValue({})

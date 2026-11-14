@@ -11,7 +11,7 @@ import { resolveIndexedWorktreeOwner } from '../ownership/worktree-runtime-owner
 import {
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteState
-} from '../../worktree-operation-route'
+} from '../ownership/worktree-operation-route'
 
 /** Only a reachable execution-owner route can authorize activation from its inventory. */
 export function resolveActivationPtyListScope(

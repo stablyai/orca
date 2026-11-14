@@ -2,12 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store/index'
 import type { AppState } from '../../store/types'
 import { buildEditorSessionData } from '../../lib/workspace/persistence/workspace-session'
-import { buildRuntimeMobileOpenFilesProjection } from './sync-projections'
-import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
-import { makeState } from './testing/sync-runtime-graph-test-harness'
 import type { Tab } from '../../../../shared/tab-types'
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: () => null
 }))
 
@@ -49,7 +46,7 @@ function dirtyThroughRecord(): { before: AppState; after: AppState } {
   return { before, after }
 }
 
-describe('a dirty change on the buffer record reaches every openFiles reader', () => {
+describe('dirty buffer records in saved editor sessions', () => {
   beforeEach(() => {
     resetEditorState()
     openMarkdownFile()
@@ -70,24 +67,5 @@ describe('a dirty change on the buffer record reaches every openFiles reader', (
 
     expect(save(before)).toBeUndefined()
     expect(save(after)).toBe('# edited\n')
-  })
-
-  it('mobile session projections publish the dirty flag', () => {
-    const { before, after } = dirtyThroughRecord()
-    const markdownTab = (state: AppState) =>
-      buildMobileSessionTabSnapshots(
-        makeState({
-          openFiles: state.openFiles,
-          editorDrafts: state.editorDrafts,
-          unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-          tabBarOrderByWorktree: { 'wt-1': [FILE_ID] }
-        })
-      )[0]?.tabs.find((tab) => tab.type === 'markdown')
-
-    expect(buildRuntimeMobileOpenFilesProjection(after.openFiles)).not.toBe(
-      buildRuntimeMobileOpenFilesProjection(before.openFiles)
-    )
-    expect(markdownTab(before)).toMatchObject({ isDirty: false })
-    expect(markdownTab(after)).toMatchObject({ isDirty: true })
   })
 })

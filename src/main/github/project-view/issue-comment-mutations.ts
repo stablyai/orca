@@ -1,15 +1,17 @@
-import { githubBodyImageUrls, githubBodyMediaHeaders } from '../body-image-urls'
-import { assertPositiveInt, projectGhExecOptions, runRest, validateSlugArgs } from './internals'
-import type { PRComment } from '../../../shared/github/comment-types'
+import { githubBodyImageUrls, githubBodyMediaHeaders } from '../attachments/body-image-urls'
+import { assertPositiveInt, validateSlugArgs } from './project-argument-validation'
+import { projectGhExecOptions } from './project-host-execution'
+import { runRest } from './project-rest'
+import type { PRComment } from '../../../shared/github/comments/comment-types'
 import type {
   GitHubProjectCommentMutationResult,
   GitHubProjectMutationResult
-} from '../../../shared/github/project-result-types'
+} from '../../../shared/github/projects/project-result-types'
 import type {
   AddIssueCommentBySlugArgs,
   DeleteIssueCommentBySlugArgs,
   UpdateIssueCommentBySlugArgs
-} from '../../../shared/github/project-request-types'
+} from '../../../shared/github/projects/project-request-types'
 
 type RawIssueCommentResponse = {
   id?: number

@@ -3,8 +3,8 @@ import type { AgentModelCatalogSource } from '../../agent-model-catalog/agent-mo
 // the session's events go through, and its open begins.
 
 import type { AttachedJournal } from './structured-agent-session-attach'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { AttachedOwner } from './structured-agent-session-attach-flow'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
@@ -12,7 +12,8 @@ import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress
 import { indexProviderChild } from '../host/structured-agent-session-provider-child'
 import { noteStructuredAgentSessionProviderStarted } from '../startup/structured-agent-session-provider-started'
 import type { StructuredAgentSessionStartupAttempt } from '../startup/structured-agent-session-startup-attempt-contract'
-import { structuredAgentSessionEndedEventExit } from '../termination/structured-agent-session-child-exit'
+import '../termination/structured-agent-session-child-exit'
+import { structuredAgentSessionEndedEventExit } from '../termination/structured-agent-session-child-exit-record'
 import {
   applyStructuredRewindRecovery,
   readStructuredRewindRecovery,

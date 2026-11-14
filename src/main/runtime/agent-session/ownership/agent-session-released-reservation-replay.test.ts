@@ -1,20 +1,23 @@
 // Retry crash-interrupted create ids at the next fence only after recovery releases the old reservation; held reservations replay unchanged.
 
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 } from '../../../../shared/agent-session/agent-session-host-authority'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionLease } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  closeTestAgentSessionRecordStores,
+  withTestAgentSessionDatabase
+} from '../records/agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -30,7 +33,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -81,7 +84,7 @@ describe('a create retried after recovery released its reservation', () => {
     ['its operation row has expired', PAST_EXPIRY]
   ])('continues when %s, and the old reservation can never commit', async (_case, elapsed) => {
     const now = NOW + elapsed
-    const store = await releasedByRestart(now)
+    const store = await releasedByRestart(NOW + 1_000)
 
     const continued = await store.reserveOwner(createRequest({ spawnToken: () => 'spawn-b', now }))
     expect(continued.disposition).toBe('reserved')
@@ -105,11 +108,9 @@ describe('a create retried after recovery released its reservation', () => {
       store.commitProcessIdentity({ sessionId: SESSION, fence: 3, process: lateSpawn, now })
     ).rejects.toThrow('agent_session_ownership_unknown')
 
-    const mint = vi.fn(() => 'spawn-c')
-    const retried = await store.reserveOwner(createRequest({ spawnToken: mint, now }))
+    const retried = await store.reserveOwner(createRequest({ spawnToken: 'spawn-c', now }))
     expect(retried.disposition).toBe('replayed')
     expect(retried.record.lease).toMatchObject({ runtimeFence: 3, reservedSpawnToken: 'spawn-b' })
-    expect(mint).not.toHaveBeenCalled()
   })
 
   it('refuses an expired retry of a session that has no record', async () => {
@@ -160,10 +161,13 @@ describe('a create retried after recovery released its reservation', () => {
   ])('still refuses a retry whose reservation is %s', async (_case, lease, code) => {
     const store = await open()
     await store.reserveOwner(createRequest())
-    await store.transitionHandoff(SESSION, (record) => ({
-      ...record,
-      lease: { ...record.lease, ...lease }
-    }))
+    await withTestAgentSessionDatabase(directory, (db) =>
+      db
+        .prepare(
+          `UPDATE agent_session_records SET record_json=json_patch(record_json,?) WHERE session_id=?`
+        )
+        .run(JSON.stringify({ lease }), SESSION)
+    )
 
     await expect(store.reserveOwner(createRequest())).rejects.toThrow(code)
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(1)

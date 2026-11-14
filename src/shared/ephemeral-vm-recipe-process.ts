@@ -2,6 +2,7 @@ import { quoteCmdDoubleQuoted, quotePosixShell } from './shell/launch/shell-argu
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
+import { buildRecipeInheritedEnv } from './ephemeral-vm-recipe-env'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
 import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
 
@@ -33,6 +34,8 @@ export async function runRecipeCommand(args: {
   resultSchemaVersion: 1 | 2
   stdin?: string
   env?: NodeJS.ProcessEnv
+  /** When set, only these (plus a safe base set) of Orca's own variables reach the script. */
+  passEnv?: readonly string[]
   maxCaptureBytes?: number
   signal?: AbortSignal
   /** Wall-clock limit; on expiry the process tree is stopped like a cancel and the result has timedOut. */
@@ -53,10 +56,11 @@ export async function runRecipeCommand(args: {
   return new Promise((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams
     try {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spawn without a stdio option always pipes stdin/stdout/stderr.
       child = spawnCommand(args.command, {
         cwd: args.repoPath,
         detached: process.platform !== 'win32',
-        env: buildRecipeEnv(args.env, args.mode, args.context, args.resultSchemaVersion),
+        env: buildRecipeEnv(args, args.mode, args.context, args.resultSchemaVersion),
         shell: true,
         windowsHide: true
       }) as ChildProcessWithoutNullStreams
@@ -247,13 +251,14 @@ export function killRecipeProcess(child: ChildProcessWithoutNullStreams, force =
 }
 
 function buildRecipeEnv(
-  env: NodeJS.ProcessEnv | undefined,
+  { env, passEnv }: { env?: NodeJS.ProcessEnv; passEnv?: readonly string[] },
   mode: 'create' | 'suspend' | 'resume' | 'destroy',
   context: EphemeralVmRecipeContext,
   resultSchemaVersion: 1 | 2
 ): NodeJS.ProcessEnv {
   return {
-    ...process.env,
+    // Why: without passEnv recipes keep inheriting everything; provider CLIs and git auth rely on it.
+    ...buildRecipeInheritedEnv(process.env, passEnv),
     ...env,
     ORCA_VM_MODE: mode,
     ORCA_VM_INSTANCE_ID: context.instanceId ?? '',

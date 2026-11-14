@@ -2,8 +2,8 @@ import {
   prepareQuickOpenFiles,
   rankQuickOpenFiles
 } from '../../../shared/quick-open/quick-open-path-search'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { detectLanguage } from '@/lib/language-detect'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import { detectLanguage } from '../../../shared/editor-language/editor-language-detect'
 import { joinPath, getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file-metadata-client'

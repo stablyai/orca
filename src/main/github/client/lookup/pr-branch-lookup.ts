@@ -1,10 +1,16 @@
-import { ghExecFileAsync } from '../../gh-utils'
-import type { OwnerRepo, ghRepoExecOptions } from '../../gh-utils'
+import { assertRateLimitBudget } from './pr-lookup-rate-limit'
+import { selectBranchReview } from '../../../source-control/branch-review-selection'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import type {
+  GitHubRepositoryIdentity as OwnerRepo,
+  GitHubRepositoryIdentity as GitHubApiRepository
+} from '../../../../shared/github/repositories/repository-identity'
+import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
 import {
   githubHostExecOptions,
-  githubRepositoryWebHost,
-  type GitHubApiRepository
-} from '../../github-api-repository'
+  githubRepositoryWebHost
+} from '../../repositories/github-repository-host'
+
 import type { GhExecOptions } from './../github-exec-scope'
 import { isNoPullRequestError } from './../gh-error-predicates'
 import {
@@ -20,16 +26,24 @@ import {
 import { getPRByNumber } from './pr-number-lookup'
 import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
 import type { PRProviderReadOptions } from './shared-pr-provider-reads'
-import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { revalidateGitHubRestJson } from '../../api/github-rest-revalidation'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
 
-// Why: GitHub lists a branch's PRs newest first, so with a page of one a closed PR opened after
-// the live one wins. Fetch a page and prefer the open PR; fall back to the newest one.
 const BRANCH_PR_LOOKUP_PAGE_SIZE = 10
 
-function preferOpenPullRequest<T extends { state: string }>(list: T[]): T | undefined {
-  return list.find((pr) => pr.state.toLowerCase() === 'open') ?? list[0]
+function parseBranchList<T extends { state: string; number: number }>(stdout: string): T[] {
+  const parsed: unknown = JSON.parse(stdout)
+  if (
+    !Array.isArray(parsed) ||
+    !parsed.every(
+      (row) =>
+        row && typeof row.state === 'string' && Number.isInteger(row.number) && row.number > 0
+    )
+  ) {
+    throw new Error('Invalid branch review list')
+  }
+  return parsed
 }
 
 export async function getRestPRForBranch(
@@ -39,13 +53,20 @@ export async function getRestPRForBranch(
   ghOptions: ReturnType<typeof ghRepoExecOptions>
 ): Promise<PullRequestLookupData | null> {
   const head = encodeURIComponent(`${headOwner}:${branchName}`)
-  const stdout = await revalidateGitHubRestJson(
-    prRepo,
-    `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=${BRANCH_PR_LOOKUP_PAGE_SIZE}`,
-    ghOptions
-  )
-  const list = JSON.parse(stdout) as RestPullRequest[]
-  const pr = preferOpenPullRequest(list)
+  const read = async (state: 'all' | 'open', limit: number): Promise<RestPullRequest[]> =>
+    parseBranchList<RestPullRequest>(
+      await revalidateGitHubRestJson(
+        prRepo,
+        `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=${state}&per_page=${limit}`,
+        ghOptions
+      )
+    )
+  const pr = await selectBranchReview({
+    readRecent: () => read('all', BRANCH_PR_LOOKUP_PAGE_SIZE),
+    readActive: async () => (await read('open', 1))[0] ?? null,
+    isActive: (row) => row.state.toLowerCase() === 'open',
+    pageSize: BRANCH_PR_LOOKUP_PAGE_SIZE
+  })
   return pr ? mapRestPullRequest(pr) : null
 }
 
@@ -54,26 +75,34 @@ export async function getFallbackPRListForBranch(
   branchName: string,
   ghOptions: ReturnType<typeof ghRepoExecOptions>
 ): Promise<PullRequestLookupData | null> {
-  noteRepositoryRateLimitSpend(prRepo, 'graphql', 1, ghOptions)
-  const { stdout } = await ghExecFileAsync(
-    [
-      'pr',
-      'list',
-      '--repo',
-      `${prRepo.owner}/${prRepo.repo}`,
-      '--head',
-      branchName,
-      '--state',
-      'all',
-      '--limit',
-      String(BRANCH_PR_LOOKUP_PAGE_SIZE),
-      '--json',
-      PR_BRANCH_LIST_JSON_FIELDS
-    ],
-    { ...ghOptions, ...githubHostExecOptions(prRepo) }
-  )
-  const list = JSON.parse(stdout) as PullRequestLookupData[]
-  const pr = preferOpenPullRequest(list)
+  const read = async (state: 'all' | 'open', limit: number): Promise<PullRequestLookupData[]> => {
+    await assertRateLimitBudget('graphql', prRepo, ghOptions)
+    noteRepositoryRateLimitSpend(prRepo, 'graphql', 1, ghOptions)
+    const { stdout } = await ghExecFileAsync(
+      [
+        'pr',
+        'list',
+        '--repo',
+        `${prRepo.owner}/${prRepo.repo}`,
+        '--head',
+        branchName,
+        '--state',
+        state,
+        '--limit',
+        String(limit),
+        '--json',
+        PR_BRANCH_LIST_JSON_FIELDS
+      ],
+      { ...ghOptions, ...githubHostExecOptions(prRepo) }
+    )
+    return parseBranchList<PullRequestLookupData>(stdout)
+  }
+  const pr = await selectBranchReview({
+    readRecent: () => read('all', BRANCH_PR_LOOKUP_PAGE_SIZE),
+    readActive: async () => (await read('open', 1))[0] ?? null,
+    isActive: (row) => row.state.toLowerCase() === 'open',
+    pageSize: BRANCH_PR_LOOKUP_PAGE_SIZE
+  })
   // Branch lists paginate PRs, not their nested check contexts.
   return pr ? { ...pr, statusCheckRollup: [], checksUnavailable: true } : null
 }

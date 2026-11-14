@@ -3,7 +3,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import {
   listClaudeProfileHomes,
   listClaudeProfileHomesAsync
-} from '../claude-accounts/claude-profile-homes'
+} from '../claude-accounts/profiles/claude-profile-homes'
 import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
 import type {
@@ -20,7 +20,7 @@ import {
 } from '../agent-hooks/installation/configuration/hooks-json-remote'
 import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
-import { getManagedScript } from './hook-script'
+import { getManagedScript } from './hooks/hook-script'
 import {
   removeClaudeAgentViewRemote,
   refreshClaudeAgentView,
@@ -32,18 +32,17 @@ import {
   installWindowsClaudeHookExecutable,
   installWindowsClaudeHookFiles,
   refreshWindowsClaudeHookFiles
-} from './windows-hook-files'
+} from './hooks/windows-hook-files'
 
-export { getManagedScript }
-import { getManagedStatusLineScript } from './statusline-script'
-import { installClaudeManagedStatusLine, retireClaudeManagedStatusLine } from './statusline-install'
-import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
+import { getManagedStatusLineScript } from './hooks/statusline-script'
+// oxfmt-ignore
+import { installClaudeManagedStatusLine, retireClaudeManagedStatusLine } from './hooks/statusline-install'
+import { refuseProfileAtDefaultHome } from './hooks/claude-profile-hook-target'
 import {
   applyManagedHooks,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
   getConfigPath,
-  getManagedEventHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
@@ -55,13 +54,14 @@ import {
   removeManagedHooks,
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
-} from './hook-settings'
-import { claudeAcceptsExecFormHooks } from './claude-hook-event-versions'
+} from './hooks/hook-settings'
+import { claudeAcceptsExecFormHooks } from './cli-capabilities/claude-hook-event-versions'
+import { getManagedEventHook } from './hooks/claude-managed-event-hook'
 import {
   getClaudeManagedHookPlan,
   OPENCLAUDE_MANAGED_HOOK_PLAN,
   type ClaudeManagedHookPlan
-} from './claude-managed-hook-events'
+} from './hooks/claude-managed-hook-events'
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
@@ -209,7 +209,8 @@ export class ClaudeHookService {
       (eventName) =>
         getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
       getManagedScriptFileName(this.options.settings),
-      plan
+      plan,
+      process.platform !== 'win32'
     )
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
@@ -254,7 +255,8 @@ export class ClaudeHookService {
         (eventName) =>
           buildManagedCommandHook(getRemoteManagedEventCommand(eventName, remoteScriptPath)),
         remoteScriptFileName,
-        this.managedHookPlan(options)
+        this.managedHookPlan(options),
+        true
       )
 
       // Publish scripts before settings can reference them.

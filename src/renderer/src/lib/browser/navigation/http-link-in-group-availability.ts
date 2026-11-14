@@ -1,13 +1,11 @@
 import { resolveBrowserLinkSession } from './browser-link-session'
 import { createBrowserLinkHostMatcher } from './browser-link-owner'
-import type { AppState } from '@/store/types'
-import type { HttpLinkGroupActionRequest } from './http-link-routing'
-import { captureLinkOpenIntent } from '../../link-open-intent'
-import { getWorkspaceClientCreationActionPolicy } from '../../client-creation-action-policy'
+import { captureLinkOpenIntent } from '../../links/placement/link-open-intent'
+import { getWorkspaceClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute
-} from '../../worktree-operation-route'
+} from '../../workspace/ownership/worktree-operation-route'
 import {
   isExpectedRuntimeBrowserRoute,
   isSshDeploymentClientBrowserRoute,
@@ -18,6 +16,8 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host'
+import type { AppState } from '@/store/types'
+import type { HttpLinkGroupActionRequest } from './http-link-routing'
 
 /** Strict local creation is supported; an unproven runtime route can only reuse a pinned match. */
 export function canOfferHttpLinkGroupAction(

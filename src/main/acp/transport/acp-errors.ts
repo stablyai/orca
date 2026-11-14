@@ -5,6 +5,17 @@ import {
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
 
+// Structured metadata is not user-facing diagnostic text.
+export function acpErrorDataWords(data: unknown): string | undefined {
+  const words =
+    typeof data === 'string'
+      ? data
+      : typeof data === 'object' && data !== null && 'details' in data
+        ? data.details
+        : undefined
+  return typeof words === 'string' && words.trim() ? words : undefined
+}
+
 export class AcpRpcError extends Error {
   constructor(
     readonly code: number,
@@ -101,4 +112,15 @@ export class AcpRequestTimeoutError extends Error {
     this.name = 'AcpRequestTimeoutError'
     withProviderRequestTimeout(this, { method, timeoutMs })
   }
+}
+
+/** Null waits for the answer; otherwise `expire` runs once the call goes unanswered. */
+export function startAcpRequestDeadline(
+  method: string,
+  timeoutMs: number | null,
+  expire: (error: AcpRequestTimeoutError) => void
+): ReturnType<typeof setTimeout> | undefined {
+  return timeoutMs === null
+    ? undefined
+    : setTimeout(() => expire(new AcpRequestTimeoutError(method, timeoutMs)), timeoutMs)
 }

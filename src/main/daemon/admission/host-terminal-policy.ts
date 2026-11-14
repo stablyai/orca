@@ -10,7 +10,7 @@ import {
   terminalLimitInputMaximum,
   type TerminalLimitStatus
 } from '../../../shared/terminal/runtime-policy/terminal-limit-policy'
-import { profileStateAccessMachineIdentity } from '../../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../../persistence/profile-state/access/profile-state-access-identity'
 import { isSafeOwnedDirectory } from '../../../shared/owned-private-directory'
 import { awaitDaemonValueWithinCallerDeadline } from '../launch/daemon-request-deadline'
 import { DEFAULT_MAX_HOST_TERMINALS, resolveMaxHostTerminals } from './host-terminal-ledger'

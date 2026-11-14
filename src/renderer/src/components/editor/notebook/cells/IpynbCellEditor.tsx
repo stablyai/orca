@@ -1,23 +1,23 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Components } from 'react-markdown'
 import type { editor } from 'monaco-editor'
-import { monaco } from '@/lib/monaco-setup'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
 import {
   EDITOR_TYPOGRAPHY_SURFACE_CLASS,
   editorTypographyTextStyle,
   monacoTypographyOptions
-} from '@/lib/editor-typography'
+} from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
-import { cn } from '@/lib/utils'
-import { installMonacoEditorFindShortcut } from '../../editor-shortcuts'
-import { syncContentUpdate } from '../../monaco-content-sync'
+import { cn } from '@/lib/class-names'
+import { installMonacoEditorFindShortcut } from '../../commands/editor-shortcuts'
+import { syncContentUpdate } from '../../model-lifetime/buffer-text/monaco-content-sync'
 import {
   IPYNB_CODE_CELL_PREVIEW_MAX_LINES,
   getIpynbCodeCellPreviewLines
 } from './ipynb-code-cell-lines'
 import type { IpynbCell } from '../document/ipynb-parse'
 import { MarkdownPreviewBody } from '../../markdown-preview/render-tree/MarkdownPreviewBody'
-import { useMonacoColorizedLines } from '../../MonacoCodeExcerpt'
+import { useMonacoColorizedLines } from '../../monaco/MonacoCodeExcerpt'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 

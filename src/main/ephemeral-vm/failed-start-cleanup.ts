@@ -16,10 +16,8 @@ import {
   type EphemeralVmFailure
 } from '../../shared/ephemeral-vm-failure-copy'
 import type { ProvisionEphemeralVmRuntimeArgs } from './runtime-service'
-import {
-  runEphemeralVmRecipeCleanup,
-  type EphemeralVmRecipeContext
-} from '../../shared/ephemeral-vm-recipe-runner'
+import type { EphemeralVmRecipeContext } from '../../shared/ephemeral-vm-recipe-runner'
+import { ShellRecipeDriver } from '../environment-providers/shell-recipe-driver'
 
 type FailedStart = {
   context: EphemeralVmRecipeContext
@@ -74,9 +72,7 @@ async function getCleanupError(
   start: FailedStart
 ): Promise<EphemeralVmFailure | null> {
   try {
-    const cleanup = await runEphemeralVmRecipeCleanup({
-      repoPath: args.repoPath,
-      recipe: args.recipe,
+    const cleanup = await new ShellRecipeDriver(args.recipe, args.repoPath).runDestroy({
       context: start.context,
       recipeResult: start.recipeResult,
       signal: args.signal,

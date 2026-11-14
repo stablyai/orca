@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 

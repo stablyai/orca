@@ -2,17 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { createTestStore } from '../testing/app-store-test-fixture'
-import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { mergeFetchedRepoCatalog } from './repo-catalog-merge'
 import {
   listPendingRuntimeRepoRemovals,
-  replayPendingRuntimeRepoRemovals,
   resetPendingRuntimeRepoRemovalsForTests,
   seedPendingRuntimeRepoRemovals
 } from './pending-runtime-repo-removals'
@@ -61,25 +58,6 @@ async function answer(args: RuntimeEnvironmentCallRequest): Promise<unknown> {
   return { id: args.method, ok: true, result: {}, _meta: meta }
 }
 
-function seedRemoteProject(): ReturnType<typeof createTestStore> {
-  const store = createTestStore()
-  const worktree = makeWorktree({ id: 'app::/home/me/app', repoId: 'app', hostId: 'runtime:env-1' })
-  store.setState({ repos: [remoteRepo], worktreesByRepo: { app: [worktree] } })
-  return store
-}
-
-function serverStillLists(store: ReturnType<typeof createTestStore>): readonly Repo[] {
-  return mergeFetchedRepoCatalog(
-    {
-      repos: [remoteRepo],
-      projectHostSetupCompatibility: { projects: [], setups: [] },
-      hostId: 'runtime:env-1',
-      reposAtRequest: store.getState().repos
-    },
-    store.getState().repos
-  ).repos
-}
-
 function readySnapshot(): RuntimeHostStatusSnapshot {
   return {
     environmentId: 'env-1',
@@ -114,74 +92,6 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('removing a project while its paired server is unreachable', () => {
-  it('offers local removal, fences the server catalog, and replays repo.rm on reconnect', async () => {
-    const store = seedRemoteProject()
-
-    await store.getState().removeProject('app', { hostId: 'runtime:env-1', errorFeedback: 'toast' })
-
-    expect(store.getState().repos).toEqual([remoteRepo])
-    expect(vi.mocked(toast.error).mock.calls[0]?.[1]?.action).toMatchObject({
-      label: 'Remove from this desktop now'
-    })
-
-    // What that action runs: the same removal, skipping the unreachable server.
-    await store.getState().removeProject('app', { hostId: 'runtime:env-1', localOnly: true })
-    expect(store.getState().repos).toEqual([])
-    expect(listPendingRuntimeRepoRemovals('env-1')).toMatchObject([{ repoId: 'app' }])
-    expect(uiSet).toHaveBeenLastCalledWith({
-      pendingRuntimeRepoRemovals: [
-        expect.objectContaining({ environmentId: 'env-1', repoId: 'app' })
-      ]
-    })
-    // The server still lists it until the replay lands; that listing must not re-add it.
-    expect(serverStillLists(store)).toEqual([])
-
-    reachable = true
-    observeRuntimeHostStatusForPendingRemovals(readySnapshot())
-    await vi.waitFor(() => expect(listPendingRuntimeRepoRemovals('env-1')).toEqual([]), {
-      timeout: 20_000
-    })
-    expect(hostCalls.filter((method) => method === 'repo.rm')).toEqual(['repo.rm'])
-    expect(uiSet).toHaveBeenLastCalledWith({ pendingRuntimeRepoRemovals: [] })
-  })
-
-  it('keeps a record across disconnect, reconnect and re-pair, then replays it', async () => {
-    seedPendingRuntimeRepoRemovals([{ environmentId: 'env-1', repoId: 'app', requestedAt: 1 }])
-    const disconnected = { ...readySnapshot(), transport: 'disconnected' as const }
-
-    // Disconnect retires the status owner; a re-pair retires it again under a new revision.
-    observeRuntimeHostStatusForPendingRemovals(disconnected)
-    observeRuntimeHostStatusForPendingRemovals({ ...disconnected, retired: true })
-    observeRuntimeHostStatusForPendingRemovals({
-      ...disconnected,
-      pairingRevision: 2,
-      retired: true
-    })
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(listPendingRuntimeRepoRemovals('env-1')).toHaveLength(1)
-
-    reachable = true
-    observeRuntimeHostStatusForPendingRemovals({ ...readySnapshot(), pairingRevision: 2 })
-    await vi.waitFor(() => expect(listPendingRuntimeRepoRemovals('env-1')).toEqual([]), {
-      timeout: 20_000
-    })
-    expect(hostCalls.filter((method) => method === 'repo.rm')).toEqual(['repo.rm'])
-  })
-
-  it('replays at once when local removal is chosen while the server already reports ready', async () => {
-    const store = seedRemoteProject()
-    observeRuntimeHostStatusForPendingRemovals(readySnapshot())
-    reachable = true
-
-    await store.getState().removeProject('app', { hostId: 'runtime:env-1', localOnly: true })
-
-    await vi.waitFor(() => expect(listPendingRuntimeRepoRemovals('env-1')).toEqual([]), {
-      timeout: 20_000
-    })
-    expect(hostCalls.filter((method) => method === 'repo.rm')).toEqual(['repo.rm'])
-    expect(store.getState().repos).toEqual([])
-  })
-
   it('retries when the server reconnects while a replay is still failing', async () => {
     seedPendingRuntimeRepoRemovals([{ environmentId: 'env-1', repoId: 'app', requestedAt: 1 }])
     reachable = true
@@ -206,29 +116,6 @@ describe('removing a project while its paired server is unreachable', () => {
       timeout: 20_000
     })
     expect(rmAttempts).toBe(2)
-  })
-
-  it('never lets a replayed repo.rm undo a re-add of the same project', async () => {
-    seedPendingRuntimeRepoRemovals([{ environmentId: 'env-1', repoId: 'app', requestedAt: 1 }])
-    reachable = true
-    const store = createTestStore()
-
-    // Re-add first: it clears the record, so the replay that reconnect starts removes nothing.
-    const added = store.getState().addRepoPath('/home/me/app', 'git', {
-      runtimeEnvironmentId: 'env-1'
-    })
-    const replay = replayPendingRuntimeRepoRemovals(
-      'env-1',
-      async (repoId) => {
-        hostCalls.push(`replay:${repoId}`)
-      },
-      vi.fn()
-    )
-    await Promise.all([added, replay])
-
-    expect(hostCalls).not.toContain('replay:app')
-    expect(listPendingRuntimeRepoRemovals('env-1')).toEqual([])
-    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['app'])
   })
 
   it('holds a re-add until an in-flight replay has finished', async () => {

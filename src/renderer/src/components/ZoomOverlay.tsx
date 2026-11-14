@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
-import { ZOOM_LEVEL_CHANGED_EVENT } from '@/lib/zoom-events'
-import type { ZoomLevelChangedEventDetail } from '@/lib/zoom-events'
+import {
+  ZOOM_LEVEL_CHANGED_EVENT,
+  type ZoomLevelChangedEventDetail
+} from '@/app-shell/chrome/zoom-events'
+
 import { useTranslate } from '@/i18n/use-translate'
 
 // Unmount after fading so the fixed overlay cannot interfere with Radix layering, outside clicks or focus.

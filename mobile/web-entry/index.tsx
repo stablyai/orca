@@ -17,6 +17,7 @@ import {
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-bootstrap'
 import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/bridge-native-verbs'
+import { BRIDGE_HOST_CATALOGS_GRANT } from '../src/mobile-web-shell/bridge/bridge-frame-fields'
 import {
   publishPageStorage,
   refreshPageTerminalSettings
@@ -33,13 +34,14 @@ import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-bou
 import type { BridgeUiLocale } from '../src/mobile-web-shell/bridge/bridge-envelope'
 import { BRIDGE_OPEN_ROUTE_PARAM } from '../src/mobile-web-shell/bridge/bridge-route-update'
 import { activateMobileUiLocale, subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
+import { startPageLocaleCatalogs } from '../src/i18n/page-locale-catalog-source'
 import { getUiIntlLocale } from '../src/i18n/ui-intl-locale'
 import { readDeviceUiLocaleTags, resolveUiLocaleFromTags } from '../src/i18n/system-ui-locale'
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host-profile'
-import { publishExternalLinkOpener } from '../src/platform/external-link.web'
-import { publishHapticsNotifier } from '../src/platform/haptics.web'
-import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blur.web'
-import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
+import { publishExternalLinkOpener } from '../src/platform/external-links/external-link.web'
+import { publishHapticsNotifier } from '../src/platform/haptics/haptics.web'
+import { startBlurringOnKeyboardClose } from '../src/platform/keyboard/keyboard-close-blur.web'
+import { publishShellKeyboardSource } from '../src/platform/keyboard/keyboard-occlusion.web'
 // Select the page-client provider explicitly; the builder aliases extensionless screen imports to this same web module.
 import { RpcClientProvider } from '../src/transport/connection/client-context.web'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider.web'
@@ -158,6 +160,12 @@ bootstrapShellPage({
     // Apply before the first render so no component paints the default dark palette first.
     applyMobileColorScheme(session.colorScheme)
     client.onColorSchemeUpdate(applyMobileColorScheme)
+    const deviceStore = createPageDeviceStore(client)
+    publishPageDeviceStore(deviceStore)
+    // A shell that skipped the catalog chunks has the page read its catalog from the desktop; before the first load.
+    if (session.grants.native.includes(BRIDGE_HOST_CATALOGS_GRANT)) {
+      startPageLocaleCatalogs({ client, store: deviceStore })
+    }
     // Subscribe before the first catalog load so a switch during startup is not lost; the latest request wins.
     let uiLocaleActivation = activatePageUiLocale(session.uiLocale)
     client.onUiLocaleUpdate((locale) => {
@@ -187,8 +195,6 @@ bootstrapShellPage({
             ).value
         : null
     )
-    const deviceStore = createPageDeviceStore(client)
-    publishPageDeviceStore(deviceStore)
     // An open-target boot paints the shell's target first, so that is the screen to preload and restore.
     const route = bootRoute(session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM])
     const queryClient = createOrcaQueryClient()

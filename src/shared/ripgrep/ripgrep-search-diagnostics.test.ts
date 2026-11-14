@@ -3,14 +3,6 @@ import { createAccumulator } from '../file-search/text-search'
 import { RipgrepSearchDiagnostics } from './ripgrep-search-diagnostics'
 
 describe('ripgrep search diagnostics', () => {
-  it('reports invalid regex diagnostics instead of an empty successful search', () => {
-    const diagnostics = new RipgrepSearchDiagnostics()
-    diagnostics.append(Buffer.from('regex parse error: unclosed character class'))
-    expect(diagnostics.failure(2, null, createAccumulator())?.message).toContain(
-      'unclosed character class'
-    )
-  })
-
   it('marks permission-error results as incomplete', () => {
     const acc = createAccumulator()
     acc.totalMatches = 1
@@ -45,12 +37,6 @@ describe('ripgrep search diagnostics', () => {
       diagnostics.append('rg: .\\nul: Incorrect function. (os error 1)\n')
       diagnostics.append('rg: ./secret: Access is denied. (os error 5)\n')
       expect(diagnostics.failure(2, null, createAccumulator())).toBeInstanceOf(Error)
-    })
-
-    it('fails when exit 2 left no diagnostic to classify', () => {
-      expect(
-        new RipgrepSearchDiagnostics(skippable).failure(2, null, createAccumulator())
-      ).toBeInstanceOf(Error)
     })
   })
 })

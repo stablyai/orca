@@ -16,7 +16,7 @@ import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspaces/space-
 import { isLocalWorktreeScanGenerationCurrent } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { localWorktreePathsExistOrAreUnverifiable } from '../../../workspaces/catalog/local-worktree-path-presence'
 import { worktreeRetentionPathComparisonKey } from '../../../workspaces/catalog/worktree-retention-path-comparison'
-import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 
 type AuthoritativeLocalMetadataPruneStore = Pick<
   Store,

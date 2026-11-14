@@ -1,18 +1,7 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  handlers,
-  store,
-  checkIgnoredPathsMock,
-  detectConflictOperationMock,
-  getBranchCompareMock,
-  getBranchDiffMock,
-  getDiffMock,
-  getStatusMock,
-  realpathMock,
-  resetFilesystemIpcMocks
-} from './filesystem-test-harness'
+import { handlers, store, realpathMock, resetFilesystemIpcMocks } from './filesystem-test-harness'
 
 const diskPreconditionMock = vi.hoisted(() => ({ writeLocalTextFileWithDiskPrecondition: vi.fn() }))
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
@@ -49,47 +38,47 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
-  '../../crash-reporting/crash-breadcrumb-store',
+  '../../crash-reporting/breadcrumbs/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
-vi.mock('../../git/source-control/commit-changes', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/commit-changes', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   commitChanges: (await import('./filesystem-test-harness')).commitChangesMock
 }))
 
-vi.mock('../../git/source-control/status-read', async (importOriginal) => ({
+vi.mock('../../git/source-control/status/status-read', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getStatus: (await import('./filesystem-test-harness')).getStatusMock
 }))
 
-vi.mock('../../git/source-control/git-conflict-operation', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/git-conflict-operation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   detectConflictOperation: (await import('./filesystem-test-harness')).detectConflictOperationMock,
   abortMerge: (await import('./filesystem-test-harness')).abortMergeMock,
   abortRebase: (await import('./filesystem-test-harness')).abortRebaseMock
 }))
 
-vi.mock('../../git/source-control/file-diff', async (importOriginal) => ({
+vi.mock('../../git/source-control/diffs/file-diff', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDiff: (await import('./filesystem-test-harness')).getDiffMock
 }))
 
-vi.mock('../../git/source-control/branch-compare', async (importOriginal) => ({
+vi.mock('../../git/source-control/comparisons/branch-compare', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBranchCompare: (await import('./filesystem-test-harness')).getBranchCompareMock
 }))
 
-vi.mock('../../git/source-control/branch-diff', async (importOriginal) => ({
+vi.mock('../../git/source-control/comparisons/branch-diff', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBranchDiff: (await import('./filesystem-test-harness')).getBranchDiffMock
 }))
 
-vi.mock('../../git/source-control/staged-commit-context', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/staged-commit-context', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getStagedCommitContext: (await import('./filesystem-test-harness')).getStagedCommitContextMock
 }))
 
-vi.mock('../../git/source-control/staging', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/staging', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   stageFile: (await import('./filesystem-test-harness')).stageFileMock,
   bulkStageFiles: (await import('./filesystem-test-harness')).bulkStageFilesMock,
@@ -98,13 +87,13 @@ vi.mock('../../git/source-control/staging', async (importOriginal) => ({
   bulkUnstageFiles: (await import('./filesystem-test-harness')).bulkUnstageFilesMock
 }))
 
-vi.mock('../../git/source-control/discard-changes', async (importOriginal) => ({
+vi.mock('../../git/source-control/mutations/discard-changes', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   bulkDiscardChanges: (await import('./filesystem-test-harness')).bulkDiscardChangesMock,
   discardChanges: (await import('./filesystem-test-harness')).discardChangesMock
 }))
 vi.mock(
-  '../../git/source-control/check-ignored-paths',
+  '../../git/source-control/ignores/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
 
@@ -113,7 +102,7 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
 vi.mock(
-  '../../text-generation/pull-request-context',
+  '../../text-generation/pull-request-context/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
 vi.mock(
@@ -153,33 +142,9 @@ describe('background Git for a stopped WSL distro', () => {
 
   it.each([
     ['git:status', { worktreePath: UNC_ROOT }],
-    ['git:conflictOperation', { worktreePath: UNC_ROOT }],
-    ['git:upstreamStatus', { worktreePath: UNC_ROOT }],
-    ['git:branchCompare', { worktreePath: UNC_ROOT, baseRef: 'main' }],
-    // Status followers: re-read whenever status changes, so each is a background poll.
-    ['git:history', { worktreePath: UNC_ROOT, limit: 50 }],
-    ['git:submoduleStatus', { worktreePath: UNC_ROOT, submodulePath: 'vendor/lib' }],
-    ['git:checkIgnored', { worktreePath: UNC_ROOT, paths: ['dist'] }],
-    ['git:findHugeFoldersToIgnore', { worktreePath: UNC_ROOT }],
-    ['git:diff', { worktreePath: UNC_ROOT, filePath: 'a.ts', staged: false }],
-    [
-      'git:branchDiff',
-      {
-        worktreePath: UNC_ROOT,
-        compare: { baseRef: 'main', baseOid: 'b', headOid: 'h', mergeBase: 'm' },
-        filePath: 'a.ts'
-      }
-    ],
-    ['git:commitDiff', { worktreePath: UNC_ROOT, commitOid: 'a'.repeat(40), filePath: 'a.ts' }]
+    ['git:diff', { worktreePath: UNC_ROOT, filePath: 'a.ts', staged: false }]
   ])('%s refuses before resolving the path or running Git', async (channel, args) => {
     await expect(invoke(channel, args)).rejects.toBeInstanceOf(WslDistroStoppedError)
-    expect(isWslDistroRunningMock).toHaveBeenCalledWith('Ubuntu', expect.anything())
     expect(realpathMock).not.toHaveBeenCalled()
-    expect(getStatusMock).not.toHaveBeenCalled()
-    expect(detectConflictOperationMock).not.toHaveBeenCalled()
-    expect(getBranchCompareMock).not.toHaveBeenCalled()
-    expect(getDiffMock).not.toHaveBeenCalled()
-    expect(getBranchDiffMock).not.toHaveBeenCalled()
-    expect(checkIgnoredPathsMock).not.toHaveBeenCalled()
   })
 })

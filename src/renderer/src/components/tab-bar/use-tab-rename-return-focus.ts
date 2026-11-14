@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, type KeyboardEvent } from 'react'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { useAppStore } from '@/store'
 
 export function useTabRenameReturnFocus({

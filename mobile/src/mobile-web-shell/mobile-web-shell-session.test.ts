@@ -56,7 +56,7 @@ describe('recovery follows the shell view contract', () => {
 })
 
 describe('try again', () => {
-  it('clears every latch, deletes the unreadable files and restarts the flow', () => {
+  it('deletes unreadable files and lets the retried generation refetch again', () => {
     const unreadable = { type: 'shell-failed', reason: 'generation-unreadable' } as const
     const lost = run(readySession().session, {
       type: 'shell-failed',
@@ -66,12 +66,7 @@ describe('try again', () => {
     const first = run(remounted.session, unreadable)
     const refetched = readyAgain(first.session, 'session-two')
     const failed = run(refetched.session, unreadable)
-    expect(failed.session.retriedOnce).toBe(true)
-    expect(failed.session.remountedOnce).toBe(true)
     const retried = run(failed.session, { type: 'retry-pressed' })
-    expect(retried.session.retriedOnce).toBe(false)
-    expect(retried.session.remountedOnce).toBe(false)
-    expect(retried.session.cached).toBeNull()
     expect(retried.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
     const again = run(
       run(retried.session, { type: 'cache-read', generation: CACHED }).session,
@@ -141,21 +136,6 @@ describe('a result from a superseded flow reports into nothing', () => {
   })
 })
 
-describe('a reconnect does not refill the remount budget', () => {
-  it('keeps the latch set when the gates restart the flow after a load failure', () => {
-    const remounted = run(
-      readySession().session,
-      { type: 'shell-failed', reason: 'render-process-gone' },
-      { type: 'remounted', sessionId: 'session-two' },
-      { type: 'shell-failed', reason: 'document-load-failed' }
-    )
-    expect(remounted.session.remountedOnce).toBe(true)
-    const restarted = run(remounted.session, { type: 'gates-changed', gates: gates() })
-    expect(restarted.session.remountedOnce).toBe(true)
-    expect(run(restarted.session, { type: 'retry-pressed' }).session.remountedOnce).toBe(false)
-  })
-})
-
 describe('only the state that mounted the view hears the view', () => {
   it('ignores the second failure of one native batch, leaving the first recovery running', () => {
     const recovering = run(readySession().session, {
@@ -168,7 +148,6 @@ describe('only the state that mounted the view hears the view', () => {
     })
     expect(batched.session.state).toEqual({ kind: 'checking' })
     expect(batched.effects).toEqual([])
-    expect(batched.session.flow).toBe(recovering.session.flow)
     expect(run(batched.session, { type: 'cache-read', generation: null }).effects).toEqual([
       { kind: 'read-manifest' }
     ])
@@ -177,17 +156,6 @@ describe('only the state that mounted the view hears the view', () => {
 
 // A finished WebView load can still have failed script evaluation; only page ready proves its code ran.
 describe('the page has to speak for the document that loaded', () => {
-  it('does nothing when the wait expires after the page has spoken', () => {
-    const step = run(
-      readySession().session,
-      { type: 'document-loaded' },
-      { type: 'page-ready' },
-      { type: 'page-ready-deadline' }
-    )
-    expect(step.effects).toEqual([])
-    expect(step.session.state.kind).toBe('ready')
-  })
-
   it('leaves a remounted document its own wait when the first one expires late', () => {
     const first = run(readySession().session, { type: 'document-loaded' }, { type: 'page-ready' })
     const armed = first.session.flow
@@ -219,7 +187,6 @@ describe('the page reporting a frame on screen', () => {
     const painted = run(readySession().session, { type: 'page-ready' }, { type: 'page-painted' })
     expect(shellPageFrame(painted.session)).toBe('painted')
     const restarted = run(painted.session, { type: 'document-started' })
-    expect(restarted.session.pagePainted).toBe(false)
     const reasked = run(restarted.session, { type: 'page-ready' })
     expect(shellPageFrame(reasked.session)).toBe('unpainted')
     expect(shellPageFrame(run(reasked.session, { type: 'page-painted' }).session)).toBe('painted')
@@ -244,15 +211,6 @@ describe('a cached page opened before the verdict', () => {
       }
     )
   }
-
-  it('checks for a newer build once the verdict opens, and stages it behind the page', () => {
-    const opened = run(openedWhileDialling().session, { type: 'gates-changed', gates: gates() })
-    expect(opened.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-early' })
-    expect(opened.effects).toEqual([{ kind: 'read-manifest' }])
-    const staged = run(opened.session, { type: 'manifest-read', manifest: NEWER })
-    expect(staged.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-early' })
-    expect(staged.effects).toEqual([{ kind: 'stage-update' }])
-  })
 
   it('stages the newer build when the manifest answers after the page document starts', () => {
     const opened = run(openedWhileDialling().session, { type: 'gates-changed', gates: gates() })

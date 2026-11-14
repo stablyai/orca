@@ -8,7 +8,7 @@ import { type GitRemoteIdentityProbe, probeGitRemoteIdentity } from './repo-git-
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 import type * as DistroGate from '../../wsl/discovery/wsl-background-distro-gate'
 import type { WslDistroRunningState } from '../../wsl/discovery/wsl-background-distro-gate'
-import '../../git/command-runner/local-git-runtime-route'
+import '../../git/command-runner/host-routing/local-git-runtime-route'
 import {
   enrichMissingRepoGitRemoteIdentities,
   flushRepoGitRemoteIdentityEnrichmentForTests,

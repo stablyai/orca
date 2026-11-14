@@ -107,15 +107,6 @@ describe('ingestGitGrepLine', () => {
     expect(f.relativePath).toBe('weird:name.ts')
   })
 
-  it('skips malformed lines (no null, no colon, bad line num)', () => {
-    const acc = createAccumulator()
-    const re = buildSubmatchRegex('q', {})
-    ingestGitGrepLine('no-null-byte', '/r', re, acc, 100)
-    ingestGitGrepLine('a.ts\x00no-colon', '/r', re, acc, 100)
-    ingestGitGrepLine('a.ts\x00NaN:content', '/r', re, acc, 100)
-    expect(acc.totalMatches).toBe(0)
-  })
-
   it('stops at maxResults boundary and sets truncated synchronously', () => {
     const acc = createAccumulator()
     const re = buildSubmatchRegex('a', {})

@@ -6,7 +6,7 @@ import type { KernelFrameEvent } from '../../../../../../shared/notebook-kernel-
 import type {
   WorktreeOperationOwnerRecord,
   WorktreeOperationRouteState
-} from '@/lib/worktree-operation-route'
+} from '@/lib/workspace/ownership/worktree-operation-route'
 
 const { storeState, notebookApi, toastError, frameListener } = vi.hoisted(() => {
   const frameListener = { current: (_event: KernelFrameEvent): void => {} }

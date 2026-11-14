@@ -13,7 +13,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   encodeFederatedControlMessage,
   importFederatedControlMessage
-} from '../../../../orchestration/federation/relay/federation-control-message'
+} from '../../../../orchestration/legacy-remote/federation-control-message'
 
 const DISPATCH_ID = 'ctx_federated_worker_1'
 const WORKER_HANDLE = 'term_federated_worker'

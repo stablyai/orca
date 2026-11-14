@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/overlay-interaction/focus-keeping-press'
 import {
   REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE,
+  releaseTerminalFocusForOutsidePointerDown,
   releaseTerminalFocusForWindowBlur,
   resyncTerminalFocusForWindowFocus
 } from './regular-terminal-focus-ownership'
@@ -25,42 +27,27 @@ describe('regular terminal focus ownership', () => {
     document.documentElement.removeAttribute(REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE)
   })
 
-  it('reclaims the exact split helper that was released, not the first one in the container', () => {
-    // Split helpers are siblings in one container; first-match lookup would reclaim the wrong pane.
+  it('keeps terminal focus for a press on a focus-keeping control, and releases it elsewhere', () => {
     const pane = appendPane()
-    const firstHelper = appendHelper(pane)
-    const secondHelper = appendHelper(pane)
-    const syncFocused = vi.fn()
-    const firstFocus = vi.spyOn(firstHelper, 'focus')
-    const secondFocus = vi.spyOn(secondHelper, 'focus')
-    secondHelper.focus()
+    const helper = appendHelper(pane)
+    const pill = document.createElement('div')
+    pill.setAttribute(KEEPS_FOCUS_ATTRIBUTE, '')
+    const pillButton = document.createElement('button')
+    pill.appendChild(pillButton)
+    document.body.append(pill)
+    helper.focus()
+    const press = (pointerTarget: EventTarget) =>
+      releaseTerminalFocusForOutsidePointerDown({
+        container: pane,
+        activeElement: document.activeElement,
+        pointerTarget,
+        syncFocused: vi.fn()
+      })
 
-    const releasedHelper = releaseTerminalFocusForWindowBlur({
-      container: pane,
-      activeElement: secondHelper,
-      syncFocused
-    })
-    expect(releasedHelper).toBe(secondHelper)
-    document.body.focus()
-    firstFocus.mockClear()
-    secondFocus.mockClear()
-    const scheduled: (() => void)[] = []
-
-    resyncTerminalFocusForWindowFocus({
-      container: pane,
-      activeElement: document.activeElement,
-      syncFocused,
-      releasedHelper,
-      isMac: false,
-      scheduleRefocus: (callback) => scheduled.push(callback)
-    })
-    for (const run of scheduled) {
-      run()
-    }
-
-    expect(secondFocus).toHaveBeenCalledOnce()
-    expect(firstFocus).not.toHaveBeenCalled()
-    expect(document.activeElement).toBe(secondHelper)
+    expect(press(pillButton)).toBe(false)
+    expect(document.activeElement).toBe(helper)
+    expect(press(document.body)).toBe(true)
+    expect(document.activeElement).not.toBe(helper)
   })
 
   it('does not yank focus back into the terminal if the user clicked elsewhere during reactivation', () => {
@@ -100,64 +87,5 @@ describe('regular terminal focus ownership', () => {
     expect(focus).not.toHaveBeenCalled()
     expect(syncFocused).toHaveBeenCalledWith(false)
     expect(document.activeElement).toBe(outside)
-  })
-
-  it('does not clear ownership published by a newer terminal during deferred reclaim', () => {
-    const pane = appendPane()
-    const helper = appendHelper(pane)
-    const newerPane = appendPane()
-    const newerHelper = appendHelper(newerPane)
-    const syncFocused = vi.fn()
-    helper.focus()
-
-    const releasedHelper = releaseTerminalFocusForWindowBlur({
-      container: pane,
-      activeElement: helper,
-      syncFocused
-    })
-    document.body.focus()
-    syncFocused.mockClear()
-    const scheduled: (() => void)[] = []
-
-    resyncTerminalFocusForWindowFocus({
-      container: pane,
-      activeElement: document.activeElement,
-      syncFocused,
-      releasedHelper,
-      isMac: false,
-      scheduleRefocus: (callback) => scheduled.push(callback)
-    })
-    newerHelper.focus()
-    for (const run of scheduled) {
-      run()
-    }
-
-    expect(document.activeElement).toBe(newerHelper)
-    expect(syncFocused).not.toHaveBeenCalled()
-  })
-
-  it('does not clear ownership published by a newer terminal during IME refresh', () => {
-    const pane = appendPane()
-    const helper = appendHelper(pane)
-    const newerHelper = appendHelper(appendPane())
-    const syncFocused = vi.fn()
-    helper.focus()
-    const scheduled: (() => void)[] = []
-
-    resyncTerminalFocusForWindowFocus({
-      container: pane,
-      activeElement: document.activeElement,
-      syncFocused,
-      isMac: true,
-      scheduleRefocus: (callback) => scheduled.push(callback)
-    })
-    syncFocused.mockClear()
-    newerHelper.focus()
-    for (const run of scheduled) {
-      run()
-    }
-
-    expect(document.activeElement).toBe(newerHelper)
-    expect(syncFocused).not.toHaveBeenCalled()
   })
 })

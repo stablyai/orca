@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { WorktreeHostContextBadge } from '../../workspace-card/host/WorktreeHostContextBadge'
 

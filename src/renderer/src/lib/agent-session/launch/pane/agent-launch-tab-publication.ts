@@ -1,17 +1,17 @@
 /** Publish under host-reserved IDs before the agent exists so PTY routing names this pane and retries reuse its tab; the pane’s spawn waits in main and attaches to the host’s process. */
 
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { presentAgentLaunchTab } from './agent-launch-tab-presentation'
+import { useAppStore } from '../../../../store/index'
+import { resolveUnifiedTabCreatePlacement } from '../../../../store/slices/tabs/tabs-create-placement'
+import { insertUnifiedTabAfterAnchor } from '../../../workspace/tabs/unified-tab-anchor-insertion'
+import { rememberAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AgentLaunchPlacementReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
 } from '../../../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { presentAgentLaunchTab } from './agent-launch-tab-presentation'
-import { useAppStore } from '../../../../store/index'
-import { resolveUnifiedTabCreatePlacement } from '../../../../store/slices/tabs/tabs-create-placement'
-import { insertUnifiedTabAfterAnchor } from '../../../unified-tab-anchor-insertion'
-import { rememberAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 function landedGroupId(worktreeId: string, tabId: string): string | undefined {
   return useAppStore

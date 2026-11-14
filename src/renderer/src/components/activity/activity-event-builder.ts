@@ -1,6 +1,7 @@
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
-import { freshActivityLiveAgentState } from './activity-event-state'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
+import { activityLiveAgentState } from './activity-event-state'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusEntry,
@@ -15,23 +16,19 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ActivityEvent, ActivityLiveAgentSnapshot } from './activity-thread-types'
 import { capActivityEvents } from './activity-event-cap'
-import { newestActivityHistoryEntries } from './activity-pane-events'
+import './activity-pane-events'
 import {
-  createActivityEventBuildCache,
+  resolveActivityTabIndexes,
   resolvePaneBuild,
   type ActivityEventBuildCache
 } from './activity-event-build-cache'
 import { appendUnsupportedAndRetainedEvents } from './activity-event-builder-sources'
 import {
   attributedActivityTabContext,
-  buildActivityTabContext,
-  buildActivityTabHostIndex,
   resolveActivityEventOwner,
   type ActivityEventOwner
 } from './activity-event-builder-context'
 import type { Translate } from '@/i18n/use-translate'
-
-export { createActivityEventBuildCache, type ActivityEventBuildCache, newestActivityHistoryEntries }
 
 export type BuildActivityEventsArgs = {
   chatNames: StructuredChatTabNames
@@ -40,6 +37,7 @@ export type BuildActivityEventsArgs = {
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   tabsByWorktree: Record<string, TerminalTab[]>
+  ptyIdsByTabId?: Record<string, string[]>
   unifiedTabsByWorktree?: Record<string, Tab[]>
   worktreeMap: Map<string, Worktree>
   repoMap: Map<string, Repo>
@@ -63,12 +61,7 @@ export function buildActivityEvents(
   const events: ActivityEvent[] = []
   const paneEntryByPaneKey: Record<string, AgentStatusEntry> = {}
   const seenEventIds = new Set<string>()
-  const tabContext = buildActivityTabContext(
-    args.tabsByWorktree,
-    args.unifiedTabsByWorktree,
-    args.chatNames
-  )
-  const tabHostIndex = buildActivityTabHostIndex(args.unifiedTabsByWorktree)
+  const { context: tabContext, hosts: tabHostIndex } = resolveActivityTabIndexes(args, cache)
   const ownerCache = new Map<string, ActivityEventOwner>()
   const liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot> = {}
   const seenCacheKeys = cache ? new Set<string>() : null
@@ -110,7 +103,11 @@ export function buildActivityEvents(
     )
     const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
     // Only fresh raw live state proves working; history and orchestration enrichment cannot establish liveness.
-    const liveState = freshActivityLiveAgentState(entry, args.now)
+    const liveState = activityLiveAgentState(
+      entry,
+      args.now,
+      tabHasLivePty(args.ptyIdsByTabId ?? {}, context.tab.id)
+    )
     const {
       events: paneEvents,
       live,

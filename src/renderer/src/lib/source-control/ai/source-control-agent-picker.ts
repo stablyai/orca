@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { readAgentLaunchChoice } from '@/lib/host-chat-program'
+import { readAgentLaunchChoice } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import type {
   SourceControlActionId,
@@ -21,7 +21,7 @@ import type {
   AgentMenuRowsTarget,
   NewTabAgentMenuModel
 } from '@/components/tab-bar/new-tab-agent-menu-model'
-import type { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
+import type { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { resolveSourceControlActionPreferredSurface } from '../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'

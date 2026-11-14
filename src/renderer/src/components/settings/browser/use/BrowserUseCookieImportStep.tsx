@@ -86,7 +86,7 @@ export function BrowserUseCookieImportStep({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.BrowserUsePane.2eb906706c', 'Import Browser Cookies')}
+      title={t('auto.components.settings.BrowserUsePane.b3e79d1c51', 'Import browser cookies')}
       description={t(
         'auto.components.settings.BrowserUsePane.af8c83ed61',
         'Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.'
@@ -101,7 +101,7 @@ export function BrowserUseCookieImportStep({
         />
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-medium">
-            {t('auto.components.settings.BrowserUsePane.2eb906706c', 'Import Browser Cookies')}
+            {t('auto.components.settings.BrowserUsePane.b3e79d1c51', 'Import browser cookies')}
           </p>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -193,7 +193,7 @@ export function BrowserUseCookieImportStep({
             )}
             {detectedBrowsers.length > 0 ? <DropdownMenuSeparator /> : null}
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-              {t('auto.components.settings.BrowserUsePane.be6df68384', 'From File…')}
+              {t('auto.components.settings.BrowserUsePane.4ab048c0b8', 'From file…')}
             </DropdownMenuItem>
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>

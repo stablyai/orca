@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { useAppStore } from '@/store'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged

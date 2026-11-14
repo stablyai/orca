@@ -1,10 +1,10 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
 import {
   getTerminalAdvancedSearchEntries,
-  getTerminalConfigImportSearchEntries,
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries
 } from './platform/terminal-advanced-platform-search'
+import { getTerminalConfigImportSearchEntries } from './configuration/terminal-config-import-search'
 import {
   getTerminalPaneAppearanceSearchEntries,
   getTerminalPaneInteractionSearchEntries
@@ -28,10 +28,8 @@ import {
   getTerminalWindowsShellSearchEntry,
   getTerminalWindowsAdministratorSearchEntry
 } from './platform/terminal-windows-search'
-import {
-  getManageSessionsSearchEntries,
-  getTerminalWindowSearchEntries
-} from './terminal-window-setup-search'
+import { getManageSessionsSearchEntries } from './session-management/manage-sessions-search'
+import { getTerminalWindowSearchEntries } from './appearance/terminal-window-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

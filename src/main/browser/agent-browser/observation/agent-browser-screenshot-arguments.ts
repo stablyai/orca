@@ -1,4 +1,4 @@
-import type { BrowserScreenshotOptions } from '../../../../shared/rpc-contract/browser-observation-params'
+import type { BrowserScreenshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import { randomUUID } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -6,7 +6,7 @@ import { z } from 'zod'
 import type {
   BrowserScreenshotAnnotation,
   BrowserScreenshotResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 
 const Annotation: z.ZodType<BrowserScreenshotAnnotation> = z.object({

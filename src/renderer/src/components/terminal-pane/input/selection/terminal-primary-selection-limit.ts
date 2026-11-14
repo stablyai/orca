@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { PRIMARY_SELECTION_MAX_LENGTH } from '@/lib/primary-selection'
+import { PRIMARY_SELECTION_MAX_LENGTH } from '@/lib/clipboard/primary-selection/primary-selection'
 
 export function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
   const range = terminal.getSelectionPosition()

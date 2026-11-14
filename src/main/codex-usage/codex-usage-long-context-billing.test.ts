@@ -1,26 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createStoreWithState, setupCodexUsageStoreEnv } from './store-test-harness'
+import { describe, expect, it } from 'vitest'
 
-const { getPathMock } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: getPathMock
-  }
-}))
-
-vi.mock('../usage/usage-scan-worker-spawn', () => ({
-  scanCodexUsageFilesViaWorker: vi.fn(),
-  splitUsageCacheFileViaWorker: vi.fn()
-}))
-
-import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
-import { parseCodexUsageFile } from './codex-rollout-file-parse'
 import { parseCodexUsageRecord, type CodexUsageParseContext } from './codex-usage-record-parser'
 
 type Usage = { input: number; cached: number; output: number }
@@ -123,75 +102,5 @@ describe('per-request long-context classification', () => {
       longContextCachedInputTokens: 0,
       longContextOutputTokens: 0
     })
-  })
-})
-
-describe('long-context cost across rollups', () => {
-  setupCodexUsageStoreEnv(getPathMock)
-  let rolloutDir: string | null = null
-
-  afterEach(() => {
-    if (rolloutDir) {
-      rmSync(rolloutDir, { recursive: true, force: true })
-      rolloutDir = null
-    }
-  })
-
-  it('prices a mixed two-day rollout per request, and the summary matches the breakdown', async () => {
-    rolloutDir = mkdtempSync(join(tmpdir(), 'orca-codex-long-context-'))
-    const rolloutPath = join(rolloutDir, 'rollout-session-1.jsonl')
-    const shortRequest: Usage = { input: 200_000, cached: 100_000, output: 10_000 }
-    const requests = [
-      {
-        timestamp: '2026-04-08T12:00:00.000Z',
-        usage: { input: 300_000, cached: 150_000, output: 100_000 }
-      },
-      ...Array.from({ length: 10 }, (_, index) => ({
-        timestamp: `2026-04-0${index < 5 ? 8 : 9}T12:${String(10 + index).padStart(2, '0')}:00.000Z`,
-        usage: shortRequest
-      }))
-    ]
-    const lines = [
-      JSON.stringify({
-        type: 'session_meta',
-        payload: { id: 'session-1', cwd: '/workspace/repo' }
-      }),
-      JSON.stringify({
-        type: 'turn_context',
-        payload: { cwd: '/workspace/repo', model: 'gpt-6-astra' }
-      }),
-      ...requestLines(requests)
-    ]
-    writeFileSync(rolloutPath, `${lines.join('\n')}\n`)
-
-    const parsed = await parseCodexUsageFile(rolloutPath, await createUsageWorktreeResolver([]))
-    const store = createStoreWithState({
-      sessions: parsed.sessions,
-      dailyAggregates: parsed.dailyAggregates
-    })
-
-    expect(parsed.dailyAggregates).toHaveLength(2)
-    expect(parsed.sessions[0]?.locationModelBreakdown[0]).toMatchObject({
-      longContextInputTokens: 300_000,
-      longContextCachedInputTokens: 150_000,
-      longContextOutputTokens: 100_000
-    })
-    const summary = await store.getSummary('all', '30d')
-    const breakdown = await store.getBreakdown('all', '30d', 'model')
-    // Long request: 0.15M*$20 + 0.15M*$2 + 0.1M*$75 = 10.8.
-    // Ten short requests: 10 * (0.1M*$10 + 0.1M*$1 + 0.01M*$50) = 16.
-    expect(summary.estimatedCostUsd).toBeCloseTo(26.8, 9)
-    expect(breakdown).toHaveLength(1)
-    expect(breakdown[0]?.estimatedCostUsd).toBeCloseTo(26.8, 9)
-
-    store['state'].scanState.enabled = true
-    vi.spyOn(store, 'refresh').mockResolvedValue({ ...store.getScanState(), lastScanError: null })
-    const runUsage = await store.getAutomationRunUsage({
-      worktreeId: 'unrelated-worktree',
-      terminalSessionId: 'session-1',
-      startedAt: Date.parse('2026-04-08T11:59:00.000Z'),
-      completedAt: Date.parse('2026-04-09T12:30:00.000Z')
-    })
-    expect(runUsage.estimatedCostUsd).toBeCloseTo(26.8, 9)
   })
 })

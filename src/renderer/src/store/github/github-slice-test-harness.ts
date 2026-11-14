@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from '../slices/hosted-review/hosted-review'
 import type { AppState } from '../types'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -14,7 +14,7 @@ import type { TaskSourceContext } from '../../../../shared/work-items/task-sourc
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason
-} from '../../../../shared/github/pull-request-refresh-types'
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 /** Bare `vi.fn()` infers @vitest/spy's un-nameable `Procedure`, which breaks declaration emit. */
 export type StubMock<TArgs extends unknown[] = never[]> = Mock<(...args: TArgs) => unknown>

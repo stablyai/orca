@@ -1,6 +1,9 @@
 // In layout-owner builds propose per-workspace rename IDs to main; its frame atomically rekeys drafts/buffers/autosave gate. Refusal changes nothing.
 
-import { isTwinWorkspace, runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import {
+  isTwinWorkspace,
+  runtimeEnvironmentIdUnlessTwin
+} from '@/lib/workspace/ownership/resolve-owner'
 import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import {
   expectContentRekey,

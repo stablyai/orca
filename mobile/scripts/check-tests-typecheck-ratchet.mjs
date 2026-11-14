@@ -14,12 +14,7 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
 // Tests outside the RN program. Checked transfers are the roots of tsconfig.test.node.json and must pass
 // that strict program; the rest are legacy runtime-only allowances whose bodies nothing typechecks.
-export const TESTS_OUTSIDE_PROGRAM = new Map([
-  [
-    'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop SQLite assignment projection, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ]
-])
+export const TESTS_OUTSIDE_PROGRAM = new Map([])
 
 // Normalize tsc’s host separators to POSIX baseline paths or Windows reports every entry stale and added.
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')

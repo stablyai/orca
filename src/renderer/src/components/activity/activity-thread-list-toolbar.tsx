@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select'
 import { Toggle } from '@/components/ui/toggle'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { ActivityThreadOptionsMenu } from './activity-thread-controls'
 import type {

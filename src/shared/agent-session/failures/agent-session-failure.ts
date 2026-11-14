@@ -52,6 +52,9 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerExited',
   'restartFailed',
   'providerRejected',
+  'providerUnavailable',
+  'providerSafetyStopped',
+  'providerResponseFailed',
   'pluginInputRequired',
   'modelUnavailable',
   /** The agent had no model when the message reached it; why (selection, sign-in) is unknown. */
@@ -101,6 +104,9 @@ export function isAgentSessionFailureKind(value: unknown): value is AgentSession
 
 /** Kinds only a status row reports: none is ever why a message was not sent. */
 const STATUS_ROW_ONLY_FAILURE_KINDS = [
+  'providerUnavailable',
+  'providerSafetyStopped',
+  'providerResponseFailed',
   'compactionFailed',
   'compactionUnconfirmed',
   'cancelUnconfirmed',

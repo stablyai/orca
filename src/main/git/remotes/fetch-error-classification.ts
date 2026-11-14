@@ -1,0 +1,32 @@
+import { isExecKilledError } from '../../../shared/git/remotes/git-remote-error'
+
+import { isMissingRemoteRefGitError } from '../../../shared/git/refs/git-missing-remote-ref'
+
+// Keep durable review heads only after transport failures; auth, deleted refs, and stale RPC failures must surface.
+const TRANSIENT_FETCH_ERROR_PATTERNS = [
+  'timed out',
+  'timeout',
+  'operation was aborted',
+  'network error',
+  'network is unreachable',
+  'could not resolve host',
+  'temporary failure in name resolution',
+  'connection refused',
+  'connection reset',
+  'connection closed',
+  'early eof',
+  'remote end hung up',
+  'the requested url returned error: 5'
+]
+
+export function isTransientReviewHeadFetchError(error: unknown): boolean {
+  if (isMissingRemoteRefGitError(error)) {
+    return false
+  }
+  if (isExecKilledError(error)) {
+    return true
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  const normalized = message.toLowerCase()
+  return TRANSIENT_FETCH_ERROR_PATTERNS.some((pattern) => normalized.includes(pattern))
+}

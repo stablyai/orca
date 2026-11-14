@@ -3,7 +3,7 @@ import {
   createWorkerFollowUpQualification,
   planSemanticWorkerFollowUp,
   workerFollowUpArguments
-} from '../../rpc/methods/orchestration/worker/worker-follow-up-admission'
+} from '../../rpc/methods/orchestration/worker/follow-up/worker-follow-up-admission'
 import type { createCrewFollowUpAuthorityInputs } from './crew-follow-up-authority-inputs'
 import type { DispatchCreator } from '../db/dispatch-depth'
 import {

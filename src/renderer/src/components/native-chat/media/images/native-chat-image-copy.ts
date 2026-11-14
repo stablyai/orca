@@ -3,8 +3,8 @@ import { translate } from '@/i18n/i18n'
 import {
   clipboardImageCopyErrorDescription,
   copyImageToClipboard
-} from '@/lib/clipboard-image-copy'
-import { isWebClientLocation } from '@/lib/web-client-location'
+} from '@/lib/clipboard/images/clipboard-image-copy'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 /** The chat context menu offers "Copy image" for elements carrying this attribute. */
 const COPY_IMAGE_SRC_SELECTOR = '[data-native-chat-copy-image-src]'

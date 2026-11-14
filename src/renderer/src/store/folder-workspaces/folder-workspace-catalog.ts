@@ -6,16 +6,14 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toSshExecutionHostId,
-  type ExecutionHostId
+  type ExecutionHostId,
+  getRepoExecutionHostId
 } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
-import {
-  catalogOwnsHost,
-  getProjectGroupHostId
-} from '../project-groups/project-group-owner-routing'
+import { catalogOwnsHost } from '../project-groups/project-group-owner-routing'
 import type { FolderWorkspaceUpdateTicket } from './folder-workspace-update-coordinator'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -46,7 +44,7 @@ function createFolderWorkspaceHostIndex(
 ): FolderWorkspaceHostIndex {
   const hostByGroupId = new Map<string, ExecutionHostId | null>()
   for (const group of projectGroups) {
-    const hostId = getProjectGroupHostId(group)
+    const hostId = getRepoExecutionHostId(group)
     if (!hostByGroupId.has(group.id)) {
       hostByGroupId.set(group.id, hostId)
       continue
@@ -126,6 +124,17 @@ function mergeFetchedFolderWorkspacesForHost({
     mergeByIdentity(preserved, fetched, (workspace) =>
       getFolderWorkspaceHostIdentity(workspace, resolveHostId)
     )
+  )
+}
+
+export function mergeCreatedFolderWorkspace(
+  created: FolderWorkspace,
+  current: readonly FolderWorkspace[],
+  projectGroups: readonly ProjectGroup[]
+): readonly FolderWorkspace[] {
+  const resolveHostId = createFolderWorkspaceHostResolver(projectGroups)
+  return mergeByIdentity([created], current, (workspace) =>
+    getFolderWorkspaceHostIdentity(workspace, resolveHostId)
   )
 }
 
