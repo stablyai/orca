@@ -4,6 +4,17 @@ import type { SessionSearchCandidateRow } from './session-search-catalog-candida
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 import { sessionSearchStoredCandidate } from './session-search-candidate-facts'
 
+export function readSessionSearchChangedCandidates(db: SyncDatabase) {
+  const references = new Map<string, SessionSearchFactReference>()
+  const rows = readSessionSearchCandidateRows(
+    db,
+    'WHERE changed=1 ORDER BY mtime DESC,key LIMIT 256',
+    [],
+    (reference, key) => references.set(key, reference)
+  )
+  return { rows, references }
+}
+
 export function consumeSessionSearchCandidatePage(
   db: SyncDatabase,
   receipts: { key: string; revision: number }[]

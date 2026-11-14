@@ -9,14 +9,12 @@ import {
 } from './session-search-candidate-admission'
 import {
   readSessionSearchCandidateRows,
+  readSessionSearchChangedCandidates,
   consumeSessionSearchCandidatePage
 } from './session-search-candidate-rows'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 import { putSessionSearchCandidate } from './session-search-candidate-entry'
-import {
-  sessionSearchCandidateFacts,
-  type SessionSearchFactReference
-} from './session-search-candidate-facts'
+import { sessionSearchCandidateFacts } from './session-search-candidate-facts'
 import { putSessionSearchCandidateBatch } from './session-search-independent-candidates'
 
 import type {
@@ -247,14 +245,7 @@ export class SessionSearchCatalogCandidates {
     return this.read('WHERE key=?', [key])[0]
   }
   changedPage() {
-    const references = new Map<string, SessionSearchFactReference>()
-    const rows = readSessionSearchCandidateRows(
-      this.db,
-      'WHERE changed=1 ORDER BY mtime DESC,key LIMIT 256',
-      [],
-      (reference, key) => references.set(key, reference)
-    )
-    return { rows, references }
+    return readSessionSearchChangedCandidates(this.db)
   }
   consumedPage(receipts: { key: string; revision: number }[]): void {
     this.pending -= consumeSessionSearchCandidatePage(this.db, receipts)
