@@ -52,15 +52,13 @@ export class PRRefreshAdmission {
   private stillDemanded(
     entry: PRRefreshQueueEntry,
     requestSequence: number,
-    exactKey?: string
+    prepared?: PreparedPRBranchRead
   ): boolean {
-    // Cheap checks first; the scope is resolved once, only when a row of the key is still shown,
-    // and every shown alias is then compared in it without resolving its own.
+    // Scope is checked by the prepared read; demand compares only the exact request inputs.
     if (this.queue.ownsRequest(entry.key, requestSequence) && this.visibility.has(entry.key)) {
-      const sameRequest = exactRequestMatcher(
-        candidateReadRequest(entry.candidate, 'visible'),
-        exactKey
-      )
+      const sameRequest =
+        prepared?.matchesRequest ??
+        exactRequestMatcher(candidateReadRequest(entry.candidate, 'visible'))
       const shownRequest = (shown: GitHubPRRefreshCandidate) =>
         sameRequest(candidateReadRequest(shown, 'visible'))
       if (this.visibility.hasDemand(entry.key, shownRequest)) {
@@ -193,7 +191,7 @@ export class PRRefreshAdmission {
       this.endAttempt(entry, requestSequence)
       return false
     }
-    if (entry.reason === 'visible' && !this.stillDemanded(entry, requestSequence, prepared.key)) {
+    if (entry.reason === 'visible' && !this.stillDemanded(entry, requestSequence, prepared)) {
       return false
     }
     const candidate = this.visibility.candidate(entry.key, entry.candidate)

@@ -8,7 +8,6 @@ import type {
   PRBranchReadProducer,
   PRBranchReadRequest
 } from '../../client/lookup/pr-branch-read-resources'
-import { exactRequestMatcher } from '../../client/lookup/pr-read-identity'
 import {
   aliasFromCandidate,
   automaticDueAt,
@@ -174,15 +173,9 @@ export class PRRefreshQueueScheduler {
     if (!representative || !producer.current?.()) {
       return outcome
     }
-    const matchesCurrentRequest = () => {
-      const sameRequest = exactRequestMatcher(
-        candidateReadRequest(representative, 'visible'),
-        prepared.key
-      )
-      return (shown: GitHubPRRefreshCandidate) =>
-        sameRequest(candidateReadRequest(shown, 'visible'))
-    }
-    const shown = this.visibility.shown(key, matchesCurrentRequest())
+    const matchesCurrentRequest = (shown: GitHubPRRefreshCandidate) =>
+      prepared.matchesRequest(candidateReadRequest(shown, 'visible'))
+    const shown = this.visibility.shown(key, matchesCurrentRequest)
     if (!shown) {
       return outcome
     }
@@ -199,7 +192,7 @@ export class PRRefreshQueueScheduler {
       producer,
       true,
       () => {
-        return this.visibility.has(key) && this.visibility.hasDemand(key, matchesCurrentRequest())
+        return this.visibility.has(key) && this.visibility.hasDemand(key, matchesCurrentRequest)
       }
     )
     // A rate limit the read reported holds the row's retries, as a local read's would.

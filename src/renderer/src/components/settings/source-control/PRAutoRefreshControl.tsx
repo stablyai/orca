@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import { Info } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import type { PRAutoRefreshCadence } from '../../../../../shared/review-refresh-policy'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -52,25 +53,26 @@ export function PRAutoRefreshControl({
       title={title}
       description={description}
       keywords={PR_AUTO_REFRESH_KEYWORDS}
-      className="max-w-none"
+      className="@container max-w-none"
     >
       <SettingsRow
-        className="max-sm:flex-col max-sm:items-start"
+        className="@max-sm:flex-col @max-sm:items-start"
         label={
           <>
             {title}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
                   aria-label={t(
                     'auto.components.settings.GitPane.prAutoRefreshAbout',
                     'About PR Updates'
                   )}
-                  className="inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  className="size-5 text-muted-foreground"
                 >
                   <Info className="size-3.5" />
-                </button>
+                </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
                 {description}

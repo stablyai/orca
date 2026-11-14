@@ -190,7 +190,7 @@ it.each([
   [7_500, 1],
   [7_500, 4]
 ])(
-  'admits a visible row at %i workspaces with one scope per demand decision, %i window(s) showing it',
+  'admits a visible row at %i workspaces with no inventory scans for demand decisions, %i window(s) showing it',
   async (population, windows) => {
     const { work } = await installFleet(population)
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
@@ -220,8 +220,7 @@ it.each([
     await vi.advanceTimersByTimeAsync(0)
     expect(fixture.gate).toHaveBeenCalledTimes(1)
     expect(fixture.reads).toEqual([])
-    // From quota to the provider start: the decision after quota, preparation, its own scope
-    // check, and the decision after preparation.
+    // From quota release to provider start, only preparation and its current-scope fence resolve ownership.
     const atQuota = work()
     const marks: { atStart?: ReturnType<typeof work> } = {}
     fixture.onRead = () => {
@@ -236,12 +235,11 @@ it.each([
       metadata: marks.atStart!.metadata - atQuota.metadata,
       visits: marks.atStart!.visits - atQuota.visits
     }
-    // One scope for each of the two demand decisions, plus preparation's own scope and its
-    // independent current-scope check; none for any compared window, at either fleet size.
-    expect(spent.discoveries).toBe(4)
-    expect(spent.inventories).toBe(4)
-    expect(spent.metadata).toBe(4)
-    expect(spent.visits).toBe(4 * population)
+    // Demand comparisons add no account discovery, regardless of fleet size or window count.
+    expect(spent.discoveries).toBe(2)
+    expect(spent.inventories).toBe(2)
+    expect(spent.metadata).toBe(2)
+    expect(spent.visits).toBe(2 * population)
   }
 )
 

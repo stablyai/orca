@@ -4,6 +4,7 @@ import type {
   PRRefreshOutcome
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { readTimedPROutcome } from './pr-last-outcome'
+import type { prBranchReadKeys } from './pr-read-identity'
 
 /**
  * One exact PR read (scope, branch, links, options) and what reads it: its coalesced timed and
@@ -25,6 +26,7 @@ export type PRReadSettlement = (
 
 export type PreparedPRBranchRead = {
   key: string
+  matchesRequest: (request: Parameters<typeof prBranchReadKeys>) => boolean
   reprepare: () => Promise<PreparedPRBranchRead>
   cached: () => ReturnType<typeof readTimedPROutcome>
   isCurrent: () => boolean

@@ -22,7 +22,13 @@ import {
   recordPRLastOutcome,
   startPRLookup
 } from './pr-last-outcome'
-import { prLookupScope, lastOutcomeKey, completeReadKey } from './pr-read-identity'
+import {
+  prLookupScope,
+  lastOutcomeKey,
+  completeReadKey,
+  exactRequestMatcher,
+  snapshotPRLookupOptions
+} from './pr-read-identity'
 import { refreshPRPolicyContext, recordPRPolicyOutcome } from './pr-quiet-policy-evidence'
 import {
   hostedReviewRepoScope,
@@ -83,21 +89,15 @@ export async function preparePRBranchRead(
   fallbackPRNumber?: number | null,
   options: GitHubPRBranchLookupOptions = {}
 ): Promise<PreparedPRBranchRead> {
-  options = {
-    ...options,
-    ...(options.localGitExecOptions
-      ? {
-          localGitExecOptions: {
-            ...options.localGitExecOptions,
-            ...(options.localGitExecOptions.ghAccount
-              ? { ghAccount: { ...options.localGitExecOptions.ghAccount } }
-              : {})
-          }
-        }
-      : {}),
-    ...(options.sharedLinkPaths ? { sharedLinkPaths: [...options.sharedLinkPaths] } : {}),
-    ...(options.exactRepository ? { exactRepository: { ...options.exactRepository } } : {})
-  }
+  options = snapshotPRLookupOptions(options)
+  const matchesRequest = exactRequestMatcher([
+    repoPath,
+    branch,
+    linkedPRNumber ?? null,
+    connectionId ?? null,
+    fallbackPRNumber ?? null,
+    options
+  ])
   const reprepare = () =>
     outsideGitHubRepoExecution(() =>
       preparePRBranchRead(repoPath, branch, linkedPRNumber, connectionId, fallbackPRNumber, options)
@@ -117,6 +117,7 @@ export async function preparePRBranchRead(
       ) {
         return {
           key: '',
+          matchesRequest,
           reprepare,
           cached: () => null,
           isCurrent: () => true,
@@ -268,6 +269,7 @@ export async function preparePRBranchRead(
       const request = { repoPath, branch, linkedPRNumber, connectionId, localGitOptions }
       const prepared: PreparedPRBranchRead = {
         key,
+        matchesRequest,
         reprepare,
         cached: () => readTimedPROutcome(ownerKey, key),
         isCurrent,

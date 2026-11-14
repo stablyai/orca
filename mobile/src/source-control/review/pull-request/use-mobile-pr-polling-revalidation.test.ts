@@ -2,23 +2,20 @@ import { createElement } from 'react'
 import { environmentManager, QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
-import type { PRAutoRefreshCadence } from '../../../../src/shared/review-refresh-policy'
-import { createOrcaQueryClient } from '../../query/orca-query-client'
-import { hostQueryKey } from '../../query/host-query-key'
-import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
-import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
+import type { PRInfo } from '../../../../../src/shared/github/pull-requests/pull-request-types'
+import type { PRAutoRefreshCadence } from '../../../../../src/shared/review-refresh-policy'
+import { createOrcaQueryClient } from '../../../query/orca-query-client'
+import { hostQueryKey } from '../../../query/host-query-key'
+import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
+import { stubRpcClient } from '../../../transport/rpc/rpc-client-test-stub'
 import {
   DESKTOP_SOURCE_CONTROL_DEFAULTS,
   NO_SOURCE_CONTROL_SETTINGS_INPUT,
   sourceControlSettingsQuery
-} from '../../source-control/settings/mobile-source-control-settings'
-import {
-  prBranchReviewQuery,
-  type PrQueryScope
-} from '../../source-control/review/pull-request/mobile-pr-queries'
-import type { PrBranchReview } from '../../source-control/review/pull-request/mobile-pr-sidebar-state'
-import { useMobilePrPolling } from '../../source-control/review/pull-request/use-mobile-pr-polling'
+} from '../../settings/mobile-source-control-settings'
+import { prBranchReviewQuery, type PrQueryScope } from './mobile-pr-queries'
+import type { PrBranchReview } from './mobile-pr-sidebar-state'
+import { useMobilePrPolling } from './use-mobile-pr-polling'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')

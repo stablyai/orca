@@ -41,6 +41,47 @@ export function lastOutcomeKey(
   ])
 }
 
+export function snapshotPRLookupOptions(
+  options: GitHubPRBranchLookupOptions
+): GitHubPRBranchLookupOptions {
+  return {
+    ...options,
+    ...(options.localGitExecOptions
+      ? {
+          localGitExecOptions: {
+            ...options.localGitExecOptions,
+            ...(options.localGitExecOptions.ghAccount
+              ? { ghAccount: { ...options.localGitExecOptions.ghAccount } }
+              : {})
+          }
+        }
+      : {}),
+    ...(options.sharedLinkPaths ? { sharedLinkPaths: [...options.sharedLinkPaths] } : {}),
+    ...(options.exactRepository ? { exactRepository: { ...options.exactRepository } } : {})
+  }
+}
+
+function completeReadInputs(
+  repoPath: string,
+  branchName: string,
+  linkedPRNumber: number | null | undefined,
+  fallbackPRNumber: number | null | undefined,
+  options: GitHubPRBranchLookupOptions
+) {
+  return [
+    repoPath,
+    branchName,
+    linkedPRNumber ?? null,
+    fallbackPRNumber ?? null,
+    options.acceptMergedFallbackPR ?? false,
+    options.currentHeadOid ?? null,
+    options.checkPageLimit ?? null,
+    options.exactRepository ?? null,
+    options.includeDerivedData !== false,
+    options.sharedLinkPaths ?? null
+  ]
+}
+
 export function completeReadKey(
   repoPath: string,
   branchName: string,
@@ -51,18 +92,9 @@ export function completeReadKey(
 ): string {
   return JSON.stringify([
     scope.executionScope,
-    repoPath,
     scope.generation,
-    branchName,
-    linkedPRNumber ?? null,
-    fallbackPRNumber ?? null,
-    options.acceptMergedFallbackPR ?? false,
-    options.currentHeadOid ?? null,
-    options.checkPageLimit ?? null,
-    options.exactRepository ?? null,
-    options.includeDerivedData !== false,
-    options.sharedLinkPaths ?? null,
-    scope.readScope
+    scope.readScope,
+    ...completeReadInputs(repoPath, branchName, linkedPRNumber, fallbackPRNumber, options)
   ])
 }
 
@@ -99,41 +131,25 @@ function scopeInputs(
   ])
 }
 
-/**
- * Whether other requests are the same exact request as this one, for one synchronous decision:
- * this request's current scope is resolved once, now, and each compared request with the same
- * repository and execution inputs takes its exact key in that scope (the full `completeReadKey`
- * definition), with no scope resolution of its own. A request with other inputs is another
- * request. `exactKey` compares against that key (a prepared read's) instead of this request's.
- * Nothing is kept: a later decision samples its own scope.
- */
+/** Compares request inputs without discovering accounts; callers fence the prepared scope separately. */
 export function exactRequestMatcher(
-  request: Parameters<typeof prBranchReadKeys>,
-  exactKey?: string
+  request: Parameters<typeof prBranchReadKeys>
 ): (other: Parameters<typeof prBranchReadKeys>) => boolean {
-  const [repoPath, branch, linkedPRNumber, connectionId, fallbackPRNumber, options] = request
-  const scope = prLookupScope(repoPath, connectionId, options)
-  const inputs = scopeInputs(repoPath, connectionId, options)
-  const key =
-    exactKey ??
-    completeReadKey(
-      repoPath,
-      branch.replace(/^refs\/heads\//, ''),
-      linkedPRNumber,
-      fallbackPRNumber,
-      options,
-      scope
-    )
-  return ([otherRepo, otherBranch, otherLinked, otherConnection, otherFallback, otherOptions]) =>
-    scopeInputs(otherRepo, otherConnection, otherOptions) === inputs &&
-    completeReadKey(
-      otherRepo,
-      otherBranch.replace(/^refs\/heads\//, ''),
-      otherLinked,
-      otherFallback,
-      otherOptions,
-      scope
-    ) === key
+  const identity = ([repoPath, branch, linked, connectionId, fallback, options]: Parameters<
+    typeof prBranchReadKeys
+  >) =>
+    JSON.stringify([
+      scopeInputs(repoPath, connectionId, options),
+      ...completeReadInputs(
+        repoPath,
+        branch.replace(/^refs\/heads\//, ''),
+        linked,
+        fallback,
+        options
+      )
+    ])
+  const expected = identity(request)
+  return (other) => identity(other) === expected
 }
 
 export function cachedPRBranchOutcome(
