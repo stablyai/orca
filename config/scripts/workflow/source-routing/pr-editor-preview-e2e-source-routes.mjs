@@ -43,7 +43,7 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       isProductSource(file) &&
       (/^src\/main\/media\/[^/]+\.ts$/.test(file) ||
-        /^src\/renderer\/src\/components\/editor\/(?:ImageViewer|PdfViewer|pdf-document-loader|pdf-js-document-options|pdf-orca-media-range-transport)\.tsx?$/.test(
+        /^src\/renderer\/src\/components\/editor\/(?:document-images\/ImageViewer|pdf\/(?:PdfViewer|pdf-document-loader|pdf-js-document-options|pdf-orca-media-range-transport))\.tsx?$/.test(
           file
         ) ||
         /^src\/renderer\/src\/components\/editor\/(?:EditorEditFileSurface|EditorConflictReviewSurface)\.tsx$/.test(

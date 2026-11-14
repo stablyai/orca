@@ -85,8 +85,8 @@
 1 src/renderer/src/components/diff-comments/useDiffCommentDecorator.tsx
 1 src/renderer/src/components/editor/EditorPanelShell.tsx
 5 src/renderer/src/components/editor/MonacoEditor.tsx
-1 src/renderer/src/components/editor/PdfViewer.tsx
-1 src/renderer/src/components/editor/PluginCustomEditorFrame.tsx
+1 src/renderer/src/components/editor/pdf/PdfViewer.tsx
+1 src/renderer/src/components/editor/plugin-editors/PluginCustomEditorFrame.tsx
 3 src/renderer/src/components/editor/check-details/actions/check-run-details-fix-with-ai.ts
 1 src/renderer/src/components/editor/check-details/reading/use-check-details-reading-position.ts
 3 src/renderer/src/components/editor/combined-diff/CombinedDiffViewer.tsx
@@ -143,7 +143,7 @@
 1 src/renderer/src/components/editor/useEditorPanelDiffContentLoader.ts
 3 src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts
 4 src/renderer/src/components/editor/useLocalLogTail.ts
-1 src/renderer/src/components/editor/usePreserveSectionDuringExternalEdit.ts
+1 src/renderer/src/components/editor/markdown-preview/viewport/usePreserveSectionDuringExternalEdit.ts
 1 src/renderer/src/components/emulator-pane/emulator-screen-stream-content.tsx
 3 src/renderer/src/components/emulator-pane/use-emulator-pane-session.ts
 1 src/renderer/src/components/emulator-pane/use-emulator-pane-shutdown.ts

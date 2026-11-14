@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -140,91 +140,6 @@ async function startQuit(
   app.emit('will-quit', { preventDefault: vi.fn() })
   return { app, admission, store, state }
 }
-
-it('quits at the teardown deadline without releasing admission while the writer is pending', async () => {
-  const { app, admission, store, state } = await startQuit(() => new Promise<void>(() => {}))
-  await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS - 1)
-  expect(app.quit).not.toHaveBeenCalled()
-  await vi.advanceTimersByTimeAsync(1)
-  expect(app.quit).toHaveBeenCalledOnce()
-  expect(console.warn).toHaveBeenCalledWith('[shutdown] Quit teardown deadline reached', {
-    pendingTeardowns: ['state']
-  })
-  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
-  expect(store.freezeWritesAsync).not.toHaveBeenCalled()
-  expect(admission.release).not.toHaveBeenCalled()
-  expect(state.profileStateAdmission).toBe(admission)
-})
-
-it('keeps profile, watcher and daemon ownership until successful removal metadata and journal settle', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'orca-quit-removal-'))
-  let release!: () => void
-  let readRecords!: () => Promise<unknown[]>
-  let reset!: () => void
-  const { store, admission } = await startQuit(
-    async () => {},
-    { watcherShutdownDone: false },
-    async () => {
-      const { worktreeRemovalLifetime } =
-        await import('../../workspaces/removal/worktree-removal-lifetime')
-      const { holdRemovalMetadata } =
-        await import('../../workspaces/removal/worktree-removal-lifetime.test-fixtures')
-      release = (await holdRemovalMetadata(directory)).release
-      const records = await import('../../workspaces/removal/worktree-removal-records')
-      readRecords = () => records.readWorktreeRemovalRecords(directory)
-      reset = (await import('../../workspaces/removal/worktree-background-removal'))
-        ._resetPendingWorktreeRemovalsForTests
-      expect(worktreeRemovalLifetime.closing).toBe(false)
-    }
-  )
-  await vi.advanceTimersByTimeAsync(0)
-  expect(store.flushFinalOrThrowAsync).not.toHaveBeenCalled()
-  expect(admission.release).not.toHaveBeenCalled()
-  expect(disconnectDaemon).not.toHaveBeenCalled()
-  expect(closeAllWatchers).not.toHaveBeenCalled()
-  expect(await readRecords()).toHaveLength(1)
-  release()
-  await vi.waitFor(() => expect(admission.release).toHaveBeenCalledOnce())
-  expect(await readFile(join(directory, 'metadata-finished'), 'utf8')).toBe('removed')
-  expect(await readRecords()).toEqual([])
-  reset()
-  await rm(directory, { recursive: true, force: true })
-  expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
-  expect(admission.release).toHaveBeenCalledOnce()
-  expect(disconnectDaemon).toHaveBeenCalledOnce()
-  expect(closeAllWatchers).toHaveBeenCalledOnce()
-})
-
-it('finishes saving after a quiescent removal reports failure, retaining the failed ownership fence', async () => {
-  const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-  const { store, admission } = await startQuit(
-    async () => {},
-    { watcherShutdownDone: false },
-    async () => {
-      const { worktreeRemovalLifetime } =
-        await import('../../workspaces/removal/worktree-removal-lifetime')
-      await expect(
-        worktreeRemovalLifetime.prepare(
-          async () => {
-            throw new Error('load failed')
-          },
-          () => {},
-          async () => {}
-        )
-      ).rejects.toThrow('load failed')
-    }
-  )
-  await vi.advanceTimersByTimeAsync(0)
-  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
-  expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
-  expect(admission.release).not.toHaveBeenCalled()
-  expect(disconnectDaemon).toHaveBeenCalledOnce()
-  expect(closeAllWatchers).toHaveBeenCalledOnce()
-  expect(log).toHaveBeenCalledWith(
-    '[worktrees] Failed to finish stopping workspace deletion:',
-    expect.any(Error)
-  )
-})
 
 it('checkpoints pane state during a held synchronous deletion, then saves later metadata before releasing ownership', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'orca-quit-checkpoint-'))

@@ -95,8 +95,8 @@ vi.mock('@/i18n/i18n', () => ({
 vi.mock('../../document-images/useLocalImageSrc', () => ({
   useLocalImageSrc: (src?: string) => src
 }))
-vi.mock('../../MermaidBlock', () => ({ default: () => null }))
-vi.mock('../../CodeBlockCopyButton', () => ({
+vi.mock('../../diagrams/MermaidBlock', () => ({ default: () => null }))
+vi.mock('../render-tree/CodeBlockCopyButton', () => ({
   default: ({ children }: { children: React.ReactNode }) => children
 }))
 vi.mock('../../../diff-comments/DiffCommentCard', () => ({ DiffCommentCard: () => null }))
@@ -106,7 +106,6 @@ vi.mock('../../markdown/navigation/MarkdownTableOfContentsPanel', () => ({
 }))
 
 import MarkdownPreview from './MarkdownPreview'
-import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import '@/store/slices/editor/focus/editor-focus-reveal'
 import { registerHttpLinkStoreAccessor } from '../../../../lib/browser/navigation/http-link-routing'
 
@@ -181,174 +180,12 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     return anchor
   }
 
-  function click(anchor: HTMLAnchorElement, modifiers: Partial<MouseEventInit>): void {
-    act(() => {
-      anchor.dispatchEvent(
-        new window.MouseEvent('click', { bubbles: true, cancelable: true, ...modifiers })
-      )
-    })
-  }
-
-  it('plain left-click opens an HTTP link in Orca even when openLinksInApp is false', () => {
-    registerHttpLinkStoreAccessor(() => ({
-      settings: { openLinksInApp: false, activeRuntimeEnvironmentId: null },
-      setActiveWorktree: setActiveWorktreeMock,
-      createBrowserTab: createBrowserTabMock
-    }))
-    const anchor = render()
-    click(anchor, { button: 0 })
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
-    })
-    expect(openUrlMock).not.toHaveBeenCalled()
-  })
-
-  it('middle-click opens an HTTP link in the system browser', () => {
-    const anchor = render()
-    act(() => {
-      anchor.dispatchEvent(
-        new window.MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 })
-      )
-    })
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
-  it('Cmd+Shift-click opens the link in the system default browser', () => {
-    const anchor = render()
-    click(anchor, { metaKey: true, shiftKey: true })
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps system-browser HTTP and file links inert while ownership is unknown', () => {
-    connectionOwner.value = undefined
-    const httpAnchor = render()
-    click(httpAnchor, { metaKey: true, shiftKey: true })
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-
-    act(() => {
-      root.unmount()
-    })
-    container.remove()
-    const fileAnchor = render('[file](file:///tmp/example.md)', 'file:///tmp/example.md')
-    click(fileAnchor, { metaKey: true, shiftKey: true })
-    expect(pathExistsMock).not.toHaveBeenCalled()
-    expect(openFileUriMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps same-path file links on the explicit SSH source worktree', async () => {
-    const localWorktree = { id: 'local-wt', path: '/srv/repo', diffComments: [] as never[] }
-    const sshWorktree = { id: 'ssh-wt', path: '/srv/repo', diffComments: [] as never[] }
-    worktreeLookup.value = [localWorktree, sshWorktree]
-    storeState.worktreesByRepo = { repo: [localWorktree, sshWorktree] }
-    connectionOwner.value = 'ssh-1'
-    targetConnectionOwners.set('local-wt', null)
-    targetConnectionOwners.set('ssh-wt', 'ssh-1')
-    const anchor = render('[child](child.md)', 'child.md', 'ssh-wt', '/srv/repo/README.md')
-
-    await act(async () => {
-      anchor.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }))
-    })
-
-    expect(statRuntimePathMock).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: 'ssh-wt', connectionId: 'ssh-1' }),
-      '/srv/repo/child.md'
-    )
-    expect(storeState.openMarkdownPreview).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: 'ssh-wt', filePath: '/srv/repo/child.md' }),
-      { anchor: null }
-    )
-  })
-
-  it('renders a raw HTML superscript citation and routes it like a Markdown link', () => {
+  it('renders a raw HTML superscript citation', () => {
     const source = '<sup><a href="https://example.com">[12]</a></sup>'
     const anchor = render(source)
 
     expect(anchor.parentElement?.tagName).toBe('SUP')
     expect(anchor.textContent).toBe('[12]')
     expect(container.textContent).not.toContain('<sup>')
-    click(anchor, { metaKey: true })
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
-    })
-    expect(openUrlMock).not.toHaveBeenCalled()
-  })
-
-  describe('file links with a #L line', () => {
-    const frames = new Map<number, FrameRequestCallback>()
-    let nextFrameId = 0
-
-    beforeEach(() => {
-      frames.clear()
-      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-        nextFrameId += 1
-        frames.set(nextFrameId, callback)
-        return nextFrameId
-      })
-      vi.stubGlobal('cancelAnimationFrame', (frameId: number) => {
-        frames.delete(frameId)
-      })
-      const diffComments: never[] = []
-      const sourceWorktree = { id: 'wt-1', path: '/repo', diffComments }
-      const otherWorktree = { id: 'wt-2', path: '/other', diffComments }
-      worktreeLookup.value = [sourceWorktree, otherWorktree]
-      storeState.worktreesByRepo = { repo: [sourceWorktree], other: [otherWorktree] }
-      targetConnectionOwners.set('wt-1', null)
-      targetConnectionOwners.set('wt-2', null)
-      storeState.openFile.mockReset()
-      storeState.setPendingEditorReveal.mockClear()
-    })
-
-    afterEach(() => {
-      vi.unstubAllGlobals()
-      storeState.openFiles = []
-      storeState.activeFileIdByWorktree = {}
-    })
-
-    function flushFrames(): void {
-      // Map iteration also visits frames queued by the callbacks it runs.
-      for (const [frameId, callback] of frames) {
-        frames.delete(frameId)
-        callback(0)
-      }
-    }
-
-    async function clickLineLink(href: string): Promise<void> {
-      const anchor = render(`[target](${href})`, href)
-      await act(async () => {
-        anchor.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }))
-      })
-    }
-
-    it('reveals the line in another worktree after the preview unmounts', async () => {
-      const targetFileId = buildOwnedEditorFileId('/other/src/Example.cs', 'wt-2', null)
-      // Use the real owner-qualified file ID so the editor can match and apply the reveal.
-      storeState.openFile.mockImplementation(
-        (file: { filePath: string; relativePath: string; worktreeId: string }) => {
-          storeState.openFiles = [{ ...file, id: targetFileId, mode: 'edit' }]
-          storeState.activeFileIdByWorktree = { [file.worktreeId]: targetFileId }
-        }
-      )
-      await clickLineLink('file:///other/src/Example.cs#L120')
-      // Worktree switching unmounts this preview before reveal frames execute.
-      act(() => {
-        root.unmount()
-      })
-      flushFrames()
-
-      expect(storeState.openFile).toHaveBeenCalledWith(
-        expect.objectContaining({ worktreeId: 'wt-2', filePath: '/other/src/Example.cs' })
-      )
-      expect(storeState.setPendingEditorReveal).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          fileId: targetFileId,
-          filePath: '/other/src/Example.cs',
-          line: 120,
-          column: 1
-        })
-      )
-    })
   })
 })

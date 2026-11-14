@@ -1,4 +1,5 @@
 import { test, expect } from './helpers/orca-app'
+import { openSidebarProjectMenu } from './helpers/sidebar-project-dialog'
 
 test.use({ seedTestRepo: false, orcaAppExtraEnv: { ORCA_BACKGROUND_LAUNCH: '1' } })
 
@@ -20,11 +21,8 @@ for (const theme of ['dark', 'light'] as const) {
 
     const scene = orcaPage.locator('.app-layout > :first-child')
     await expect(scene).toHaveCSS('filter', 'none')
-    await orcaPage
-      .locator('[data-sidebar-header-actions]')
-      .getByRole('button', { name: 'Add project', exact: true })
-      .click()
-    await orcaPage.getByRole('menuitem', { name: /Clone from URL/ }).click()
+    await openSidebarProjectMenu(orcaPage)
+    await orcaPage.getByRole('menuitem', { name: /Clone from URL/i }).click()
     const dialog = orcaPage.getByRole('dialog', { name: 'Clone from URL', exact: true })
     await expect(dialog).toBeVisible()
     await expect(scene).toHaveCSS('filter', 'blur(2px)')

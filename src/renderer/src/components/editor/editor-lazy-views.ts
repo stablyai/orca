@@ -11,10 +11,10 @@ export const RichMarkdownEditor = lazy(
   }
 )
 export const MarkdownPreview = lazy(() => import('./markdown-preview/surface/MarkdownPreview'))
-export const ImageViewer = lazy(() => import('./ImageViewer'))
-export const MediaViewer = lazy(() => import('./MediaViewer'))
+export const ImageViewer = lazy(() => import('./document-images/ImageViewer'))
+export const MediaViewer = lazy(() => import('./document-media/MediaViewer'))
 export const ImageDiffViewer = lazy(() => import('./diff/large-files/ImageDiffViewer'))
-export const MermaidViewer = lazy(() => import('./MermaidViewer'))
+export const MermaidViewer = lazy(() => import('./diagrams/MermaidViewer'))
 export const CsvViewer = lazy(() => import('./csv/CsvViewer'))
 export const CsvPagedViewer = lazy(() => import('./csv/preview/CsvPagedViewer'))
 export const IpynbViewer = lazy(() => import('./notebook/document/IpynbViewer'))

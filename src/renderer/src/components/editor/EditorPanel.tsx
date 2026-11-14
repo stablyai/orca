@@ -7,7 +7,7 @@ import { canShowWorkspaceFileBrowserAction } from '@/lib/browser/documents/file-
 import { openEditorHtmlPreview } from './open-editor-html-preview'
 import { getEditorHeaderCopyState } from './editor-header'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
-import { exportActiveMarkdownToPdf } from './export-active-markdown'
+import { exportActiveMarkdownToPdf } from './markdown/export/export-active-markdown'
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
 import { DiffNavigationProvider } from './diff/review/diff-navigation-context'

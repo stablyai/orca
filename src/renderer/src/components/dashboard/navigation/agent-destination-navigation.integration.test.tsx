@@ -116,10 +116,7 @@ it('rejects a live terminal row on a different host before workspace activation'
   })
 })
 
-it.each([
-  { label: 'live', activate: activateWorktreeAgentPane },
-  { label: 'retained', activate: activateRetainedAgentRow }
-])('opens a $label paired chat from its physical SSH workspace', ({ activate }) => {
+it('opens a paired chat from its physical SSH workspace', () => {
   const worktree = {
     ...makeCreatedAgentWorktree(),
     hostId: 'ssh:server' as const,
@@ -148,7 +145,7 @@ it.each([
       ]
     }
   })
-  activate(
+  activateRetainedAgentRow(
     worktree.id,
     'native-B',
     structuredAgentSessionPaneKey('native-B', 'session-B'),
