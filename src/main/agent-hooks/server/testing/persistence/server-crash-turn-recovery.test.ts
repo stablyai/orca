@@ -220,6 +220,7 @@ async function openChildHeldRestore(connectionId: string | null): Promise<AgentH
         state: 'working',
         prompt: 'delegate the review',
         lastAssistantMessage: 'lead summary',
+        turnCompletedAt: 2_000_000_000_500,
         mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 2_000_000_000_500 },
         subagents: [{ id: 'child', state: 'working', startedAt: 2_000_000_000_100 }]
       }
@@ -243,6 +244,7 @@ it('marks child work cut off by process loss without dropping the lead reply', a
     {
       state: 'done',
       lastAssistantMessage: 'lead summary',
+      turnCompletedAt: 2_000_000_000_500,
       mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: 2_000_000_000_500 }
     }
   ])
@@ -262,6 +264,7 @@ it('marks child work unconfirmed when an idle resume reopens the thread', async 
     {
       state: 'done',
       lastAssistantMessage: 'lead summary',
+      turnCompletedAt: 2_000_000_000_500,
       mainAgent: { state: 'done', outcome: 'unconfirmed', stateStartedAt: 2_000_000_000_500 }
     }
   ])

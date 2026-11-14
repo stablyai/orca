@@ -41,6 +41,9 @@ export function codexResumedTurn(
           prompt: previous.payload.prompt,
           model: event.payload.model ?? previous.payload.model,
           lastAssistantMessage: previous.payload.lastAssistantMessage,
+          ...(previous.payload.turnCompletedAt !== undefined
+            ? { turnCompletedAt: previous.payload.turnCompletedAt }
+            : {}),
           mainAgent: settleUnfinishedMainAgent(
             previous.payload.mainAgent,
             'unconfirmed',

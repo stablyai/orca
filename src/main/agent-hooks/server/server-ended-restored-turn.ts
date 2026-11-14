@@ -46,6 +46,9 @@ export function endedRestoredTurn(
       model: payload.model,
       lastAssistantMessage: payload.lastAssistantMessage,
       lastAssistantMessageIsToolOutput: payload.lastAssistantMessageIsToolOutput,
+      ...(payload.turnCompletedAt !== undefined
+        ? { turnCompletedAt: payload.turnCompletedAt }
+        : {}),
       mainAgent: settleUnfinishedMainAgent(payload.mainAgent, 'interruption', entry.receivedAt)
     }
   }
