@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isolateFromUserAgentBrowserSettings } from './agent-browser-user-settings-isolation'
 
@@ -22,11 +23,9 @@ export function createAgentBrowserProcessEnvironment(options: {
   // Commands get Orca's tokened proxy URL per spawn; a user's autoConnect, pinTab or extensions
   // would refuse it or open tabs behind Orca's tab model.
   // A namespace moves sockets under namespaces/<name>/, where session reset and exit waits don't look.
-  const env = isolateFromUserAgentBrowserSettings({
-    inheritedEnv: options.inheritedEnv,
-    keepKeys: ['AGENT_BROWSER_SOCKET_DIR'],
-    configPath: writeEmptyAgentBrowserConfig(options.userDataPath)
-  })
+  const env = isolateFromUserAgentBrowserSettings(options.inheritedEnv, [
+    'AGENT_BROWSER_SOCKET_DIR'
+  ])
   env.AGENT_BROWSER_IDLE_TIMEOUT_MS =
     options.inheritedEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS?.trim() ||
     String(AGENT_BROWSER_IDLE_TIMEOUT_MS)
@@ -47,14 +46,13 @@ export function createAgentBrowserProcessEnvironment(options: {
   return { env, ownsSocketDirectory: true }
 }
 
-// Unwritable leaves agent-browser's own config lookup, since a missing file fails every command.
-function writeEmptyAgentBrowserConfig(userDataPath: string): string | null {
+/** Until this lands, agent-browser reads the user's config files; a missing file would fail every command. */
+export async function pointAtEmptyAgentBrowserConfig(
+  env: NodeJS.ProcessEnv,
+  userDataPath: string
+): Promise<void> {
   const path = join(userDataPath, 'agent-browser-config.json')
-  try {
-    mkdirSync(userDataPath, { recursive: true })
-    writeFileSync(path, '{}\n', { mode: 0o600 })
-    return path
-  } catch {
-    return null
-  }
+  await writeFile(path, '{}\n', { mode: 0o600 })
+  // An explicit config skips ~/.agent-browser/config.json and ./agent-browser.json.
+  env.AGENT_BROWSER_CONFIG = path
 }

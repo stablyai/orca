@@ -14,16 +14,14 @@ export function externalChromiumAgentBrowserEnvironment(options: {
   browserArgs?: readonly string[]
 }): NodeJS.ProcessEnv {
   return {
-    ...isolateFromUserAgentBrowserSettings({
-      inheritedEnv: options.inheritedEnv,
-      keepKeys: SOCKET_LOCATION_KEYS,
-      configPath: options.configPath
-    }),
+    ...isolateFromUserAgentBrowserSettings(options.inheritedEnv, SOCKET_LOCATION_KEYS),
     AGENT_BROWSER_IDLE_TIMEOUT_MS:
       options.inheritedEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS?.trim() || '0',
     AGENT_BROWSER_EXECUTABLE_PATH: options.executablePath,
     AGENT_BROWSER_PROFILE: options.profilePath,
     AGENT_BROWSER_SESSION: options.sessionName,
+    // An explicit config skips ~/.agent-browser/config.json and ./agent-browser.json.
+    AGENT_BROWSER_CONFIG: options.configPath,
     AGENT_BROWSER_ARGS: options.browserArgs?.join('\n') ?? ''
   }
 }

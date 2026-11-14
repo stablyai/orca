@@ -3,7 +3,10 @@ import type { ChildProcess } from 'node:child_process'
 import { BrowserError } from '../../browser-error'
 import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
 import type { BrowserPopupPage } from '../../guest-lifecycle/popups/browser-popup-ownership'
-import { createAgentBrowserProcessEnvironment } from '../helper-process/agent-browser-process-environment'
+import {
+  createAgentBrowserProcessEnvironment,
+  pointAtEmptyAgentBrowserConfig
+} from '../helper-process/agent-browser-process-environment'
 import { resolveAgentBrowserBinary } from '../helper-process/agent-browser-binary'
 import type { QueuedCommand } from '../command-queue/agent-browser-queued-command'
 import type { SessionState } from '../session-lifecycle/agent-browser-session-state'
@@ -38,12 +41,15 @@ export abstract class AgentBrowserBridgeState {
     protected readonly options: AgentBrowserBridgeOptions = {}
   ) {
     this.agentBrowserBin = resolveAgentBrowserBinary()
+    const userDataPath = app.getPath('userData')
     const processEnvironment = createAgentBrowserProcessEnvironment({
       inheritedEnv: process.env,
       platform: process.platform,
-      userDataPath: app.getPath('userData')
+      userDataPath
     })
     this.agentBrowserEnv = processEnvironment.env
+    // Lands long before an agent's first command; a failed write keeps agent-browser's own lookup.
+    void pointAtEmptyAgentBrowserConfig(this.agentBrowserEnv, userDataPath).catch(() => {})
     this.ownsAgentBrowserSocketDirectory = processEnvironment.ownsSocketDirectory
     const idleTimeoutMs = Number(this.agentBrowserEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS)
     this.agentBrowserIdleTimeoutMs = idleTimeoutMs > 0 ? idleTimeoutMs : null
