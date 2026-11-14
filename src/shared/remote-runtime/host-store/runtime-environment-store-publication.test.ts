@@ -96,6 +96,7 @@ posixIt.each(['sidecar', 'wsl'] as const)(
               updatedAt: 100,
               pairingRevision: 100,
               runtimeId: null,
+              lastUsedAt: null,
               preferredEndpointId: 'endpoint',
               endpoints: []
             },

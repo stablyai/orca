@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
     handle: (channel: string, handler: Handler) => handlers.set(channel, handler)
   }
 }))
+vi.mock('./wsl-host-service-availability', () => ({ canCreateWslHostService: () => true }))
 vi.mock('../../wsl/host-lifecycle/wsl-host-connector', () => ({ createWslHostConnector: vi.fn() }))
 vi.mock('../../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
   createFakeWslHostConnector: vi.fn(),
