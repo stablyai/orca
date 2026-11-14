@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HostInstance } from 'react-native'
-import { hookMount, performHookAction } from '../../test-support/rpc-recording/hook-mount'
-import { mountFixture } from '../../test-support/rpc-recording/recorder-fixture-shape'
+import {
+  hookMount,
+  performHookAction
+} from '../../test-support/rpc-recording/react-mounting/hook-mount'
+import { mountFixture } from '../../test-support/rpc-recording/react-mounting/recorder-fixture-shape'
 import { useSessionTitleCard } from './use-session-title-card'
 import {
   useAnchoredDetailCard,

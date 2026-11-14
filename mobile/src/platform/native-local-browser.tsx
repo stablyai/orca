@@ -14,8 +14,8 @@ import {
   browserViewParamsSchema,
   type BridgeBrowserViewEnding,
   type BridgeBrowserViewFrame
-} from '../mobile-web-shell/bridge/bridge-native-verbs'
-import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
+} from '../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
+import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/host-bridge/bridge-host-errors'
 import {
   loadBrowserDrawing,
   type MobileBrowserDrawing,

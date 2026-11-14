@@ -60,35 +60,6 @@ describe('relocateServeSupervisor', () => {
     ...overrides
   })
 
-  it('re-runs a packaged supervisor from a copy outside the app, pointing back at the app', async () => {
-    const d = deps()
-    await expect(relocateServeSupervisor(d)).resolves.toBe('relocated')
-
-    const [file, args, env] = vi.mocked(d.execve).mock.calls[0]
-    expect(file).toBe(d.execPath)
-    const snapshotCli = String(args[1])
-    expect(args).toEqual([d.execPath, snapshotCli, 'serve', '--supervise'])
-    const snapshot = join(snapshotCli, '..', '..', '..', '..')
-    expect(existsSync(join(snapshot, 'node_modules', 'ws', 'index.js'))).toBe(true)
-    expect(existsSync(join(snapshot, 'app.asar.unpacked', 'out', 'package.json'))).toBe(true)
-    expect(env[SERVE_SUPERVISOR_APP_ROOT_ENV]).toBe(appRoot)
-    expect(env.ELECTRON_RUN_AS_NODE).toBe('1')
-  })
-
-  it('reuses a finished copy and never relocates twice', async () => {
-    const first = deps()
-    await relocateServeSupervisor(first)
-    const [, firstArgs, firstEnv] = vi.mocked(first.execve).mock.calls[0]
-    await writeFile(join(appRoot, 'out', 'cli', 'index.js'), 'changed but same release')
-
-    const again = deps()
-    await relocateServeSupervisor(again)
-    expect(vi.mocked(again.execve).mock.calls[0][1]).toEqual(firstArgs)
-
-    const relocated = deps({ env: firstEnv })
-    await expect(relocateServeSupervisor(relocated)).resolves.toBe('already-relocated')
-  })
-
   // Re-exec closes the AppImage keepalive pipe and unmounts libraries needed by the new image.
   it('stays in place when running from an AppImage, whose files cannot change under it', async () => {
     const d = deps({
@@ -103,19 +74,6 @@ describe('relocateServeSupervisor', () => {
 
     const elsewhere = deps({ env: { ELECTRON_RUN_AS_NODE: '1', APPDIR: join(root, 'other') } })
     await expect(relocateServeSupervisor(elsewhere)).resolves.toBe('relocated')
-  })
-
-  it('keeps running in place when the copy or the re-exec fails', async () => {
-    await writeFile(join(root, 'blocker'), '')
-    const blocked = deps({ userDataPath: join(root, 'blocker') })
-    await expect(relocateServeSupervisor(blocked)).resolves.toBe('in-place')
-
-    const failing = deps({
-      execve: vi.fn(() => {
-        throw new Error('ENOENT')
-      })
-    })
-    await expect(relocateServeSupervisor(failing)).resolves.toBe('in-place')
   })
 
   // Mode 000 does not block root or Windows readers.

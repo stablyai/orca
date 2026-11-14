@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 export const MOBILE_BROWSER_TUNNEL_METHOD = 'network.mobileBrowserTunnel' as const
 export const MOBILE_BROWSER_TUNNEL_UNSUBSCRIBE_METHOD =

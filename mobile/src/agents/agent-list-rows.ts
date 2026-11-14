@@ -42,6 +42,8 @@ export type AgentListRow = Readonly<{
   hostId: string
   entry: HomeAgentEntry
   title: string
+  /** The title names a forked chat, drawn after the fork mark. */
+  forked: boolean
   dotState: AgentDotState
   timeAt: number
   /** A copy from a read the desktop no longer backs: it claims no state. */
@@ -104,11 +106,13 @@ export function hostAgents(input: AgentListInput, hostId: string): HostAgents {
     const verdict = listedAgentVerdict(agent)
     const liveVerdict = live ? verdict : undefined
     const change = pending(agent.paneKey)
+    const title = verdict?.title.trim() || agentListTitle(agent)
     return {
       key: agentListRowKey(hostId, agent.paneKey),
       hostId,
       entry,
-      title: verdict?.title.trim() || agentListTitle(agent),
+      title,
+      forked: agent.conversationForked === true && title === agent.conversationName?.trim(),
       dotState: !live ? 'idle' : verdict ? verdict.status : agentDotState(agent, input.now),
       timeAt: verdict?.sortAt ?? agentRowTimeAt(agent),
       stale: !live,

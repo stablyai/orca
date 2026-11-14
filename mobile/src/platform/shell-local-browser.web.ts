@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useNativeVerbs } from '../mobile-web-shell/bridge/use-native-verbs'
+import { useNativeVerbs } from '../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import type { ShellLocalBrowser } from './shell-local-browser-types'
 
 /** A served page asks the app shell to draw the tab in its own web view. */

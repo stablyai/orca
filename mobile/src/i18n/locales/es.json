@@ -682,7 +682,10 @@
       "busy": "Se está abriendo otro chat o terminal. Espera y vuelve a crear una rama del chat de {{agent}}.",
       "unconfirmed": "{{agent}} no pudo confirmar la creación de la rama. Es posible que se haya abierto; revisa el historial de sesiones antes de volver a intentarlo.",
       "failed": "{{agent}} no pudo crear una rama de este chat. {{detail}}",
-      "unsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo."
+      "unsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
+      "mark": "Rama ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Rama: {{name}}"
     }
   },
   "common": {

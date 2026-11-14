@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import { refreshBrowserGuestMetadata } from './browser-guest-metadata-cache'
 import { redactKagiSessionToken } from '../../../../../shared/browser-url'
 import {
   browserViewportPresetToOverride,
@@ -139,6 +140,7 @@ export function createBrowserPageWebviewGuestSession({
     }
     activeLoadFailureRef.current = null
     onUpdatePageStateRef.current(browserTabId, { loading: false, loadError: null })
+    refreshBrowserGuestMetadata(browserTabId, webview)
   }
 
   const guestRecovery = createBrowserPageGuestRecovery({

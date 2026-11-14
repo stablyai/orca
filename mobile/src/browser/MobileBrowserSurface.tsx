@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ComponentProps } from 'react'
 import { View } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
-import type { BridgeBrowserViewEnding } from '../mobile-web-shell/bridge/bridge-native-verbs'
+import type { BridgeBrowserViewEnding } from '../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { useShellLocalBrowser } from '../platform/shell-local-browser'
 import { loadBrowserDrawing, type MobileBrowserDrawing } from '../storage/preferences'
 import type { MobileBrowserViewMode } from './screencast/browser-screencast-request-parameters'

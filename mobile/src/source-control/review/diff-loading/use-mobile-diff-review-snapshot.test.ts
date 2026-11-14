@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { documentQueryClient } from '../../../test-support/rpc-recording/hook-mount'
+import { documentQueryClient } from '../../../test-support/rpc-recording/react-mounting/hook-mount'
 import { stubRpcClient } from '../../../transport/rpc/rpc-client-test-stub'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
 import { useMobileDiffReviewSnapshot } from './use-mobile-diff-review-snapshot'

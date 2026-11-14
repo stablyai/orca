@@ -3,7 +3,7 @@ import { View, type HostInstance } from 'react-native'
 import type {
   BridgeBrowserViewEnding,
   BridgeBrowserViewFrame
-} from '../mobile-web-shell/bridge/bridge-native-verbs'
+} from '../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import type { ShellLocalBrowser } from '../platform/shell-local-browser-types'
 import type { MobileLocalBrowserNetwork } from '../storage/preferences'
 import type { MobileBrowserViewMode } from './screencast/browser-screencast-request-parameters'

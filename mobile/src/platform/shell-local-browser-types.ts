@@ -3,7 +3,7 @@ import type {
   BridgeBrowserViewResult,
   BridgeBrowserViewFrame,
   BridgeBrowserViewShowParams
-} from '../mobile-web-shell/bridge/bridge-native-verbs'
+} from '../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 
 // What a served page can ask the app shell to draw for a browser tab; null when the installed app cannot.
 export type ShellLocalBrowser = {

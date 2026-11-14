@@ -643,7 +643,10 @@
       "busy": "另一個聊天或終端機正在開啟。請稍候，再次從 {{agent}} 聊天建立分支。",
       "unconfirmed": "{{agent}} 無法確認是否已建立分支。它可能已經開啟；請先檢查工作階段歷史記錄，再試一次。",
       "failed": "{{agent}} 無法從此聊天建立分支。{{detail}}",
-      "unsupported": "此主機執行的是舊版 Orca。請更新主機上的 Orca 後再試一次。"
+      "unsupported": "此主機執行的是舊版 Orca。請更新主機上的 Orca 後再試一次。",
+      "mark": "分支 ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "分支：{{name}}"
     }
   },
   "common": {
