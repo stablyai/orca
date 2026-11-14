@@ -31,7 +31,8 @@ import { installVisibilityProbe } from './native-chat-4a-probes'
 const HARNESS_ROOT = path.resolve(import.meta.dirname, '../../../..')
 const SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
 // The envelope builders each arm bundles from its own checkout.
-const MUTATION_SOURCE = 'src/shared/agent-session/lifecycle/structured-agent-session-mutation.ts'
+const MUTATION_SOURCE =
+  'src/shared/agent-session/lifecycle/operations/structured-agent-session-mutation.ts'
 const CREATE_SOURCE = 'src/shared/agent-session/structured-agent-session-create.ts'
 const SEND_SOURCE = 'src/shared/agent-session/requests/structured-agent-session-send-mutation.ts'
 

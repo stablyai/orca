@@ -17,7 +17,7 @@ const WRITER_SOURCES = [
   ['{ journalPayload }', `${JOURNAL}/item-lifecycle/journal-payload-bounds.ts`],
   [
     '{ decodePersistedAgentSessionProviderHandle }',
-    'src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding.ts'
+    'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding.ts'
   ]
 ] as const
 
