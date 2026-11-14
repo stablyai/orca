@@ -1,5 +1,6 @@
 import { resolveAgentModelCatalogAccount } from './agent-model-catalog-account-resolution'
-import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import type { AgentModelCatalogAdmission } from './agent-model-catalog-admission'
+import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogReadParams,
@@ -55,7 +56,7 @@ type Held = AgentModelCatalogRefresh & { workspaceId?: string; end: () => void }
 export function createAgentModelCatalogRefreshes(context: {
   deps: AgentModelCatalogServiceDeps
   lifetime: AbortSignal
-  admission: PrioritySemaphore
+  admission: AgentModelCatalogAdmission
   bindings: Map<string, AgentModelCatalogBinding>
   requestKey: (params: AgentModelCatalogReadParams) => string
   tasks: Set<Promise<unknown>>
@@ -156,6 +157,9 @@ export function createAgentModelCatalogRefreshes(context: {
         probe &&
         probeHome
       ) {
+        const accountAdmission = admission.forAccount(
+          agentModelCatalogFingerprint({ agent, accountHome: probeHome, wslDistro: null })
+        )
         const lister = scopedAgentModelCatalogLister({
           legacy: launch.legacy,
           signal: lifetime,
@@ -177,7 +181,7 @@ export function createAgentModelCatalogRefreshes(context: {
               void task.finally(() => tasks.delete(task)).catch(() => {})
               return task
             },
-            { signal: holder, lifetime, admission }
+            { signal: holder, lifetime, admission: accountAdmission }
           )
         }
         register = (holder) => {

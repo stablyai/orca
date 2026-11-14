@@ -25,7 +25,7 @@ import {
   agentModelCatalogMemoryBinding,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { AgentModelCatalogAdmission } from './agent-model-catalog-admission'
 import {
   AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
   waitForAgentModelCatalogRead,
@@ -40,7 +40,7 @@ export function createAgentModelCatalogService(
   )
   const tasks = new Set<Promise<unknown>>()
   const lifetime = new AbortController()
-  const admission = new PrioritySemaphore(2)
+  const admission = new AgentModelCatalogAdmission()
 
   const bindings = new Map<string, AgentModelCatalogBinding>()
   const requestKey = agentModelCatalogRequestKey.bind(null, deps)
