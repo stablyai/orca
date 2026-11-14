@@ -23570,8 +23570,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Agent benötigt eine Genehmigung",
-      "statusStale": "Agentenstatus ist veraltet"
+      "needsPermission": "Agent benötigt eine Genehmigung"
     }
   },
   "wslDistroHold": {

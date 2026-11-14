@@ -25556,8 +25556,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Agent needs permission",
-      "statusStale": "Agent status is stale"
+      "needsPermission": "Agent needs permission"
     }
   },
   "wslDistroHold": {

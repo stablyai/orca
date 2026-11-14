@@ -23235,8 +23235,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "代理程式需要權限",
-      "statusStale": "代理程式狀態資訊已過期"
+      "needsPermission": "代理程式需要權限"
     }
   },
   "wslDistroHold": {

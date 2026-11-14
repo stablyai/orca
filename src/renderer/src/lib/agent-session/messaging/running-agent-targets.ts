@@ -7,7 +7,6 @@ import type { TerminalTab } from '../../../../../shared/workspace-layout/termina
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
-import { resolvePaneAgentActivity } from '@/lib/agent-status/evidence/pane-agent-evidence'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/runtime-pane-title-leaf-id'
@@ -66,11 +65,10 @@ export function runningAgentSendTargetAgentType(
 
 export function deriveRunningAgentSendTargets(
   state: RunningAgentTargetState,
-  worktreeId: string,
-  now = Date.now()
+  worktreeId: string
 ): RunningAgentSendTarget[] {
   return [
-    ...deriveTerminalAgentSendTargets(state, worktreeId, now),
+    ...deriveTerminalAgentSendTargets(state, worktreeId),
     ...deriveStructuredAgentSendTargets(state, worktreeId, 'with-status')
   ]
 }
@@ -85,8 +83,7 @@ export function deriveStatuslessStructuredAgentSendTargets(
 
 function deriveTerminalAgentSendTargets(
   state: RunningAgentTargetState,
-  worktreeId: string,
-  now: number
+  worktreeId: string
 ): TerminalAgentSendTarget[] {
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   if (tabs.length === 0) {
@@ -108,37 +105,22 @@ function deriveTerminalAgentSendTargets(
 
     const layoutPtyId =
       state.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
-    const tabPtyIds = state.ptyIdsByTabId?.[parsed.tabId]
     const ptyId =
-      layoutPtyId && (tabPtyIds === undefined || tabPtyIds.includes(layoutPtyId))
-        ? layoutPtyId
-        : null
+      layoutPtyId && state.ptyIdsByTabId?.[parsed.tabId]?.includes(layoutPtyId) ? layoutPtyId : null
     let disabledReason: string | undefined
 
-    // Shared hookState applies freshness; keep live-title detection local because its strict idle-send gate differs from raw resolver titleStatus.
-    const decision = resolvePaneAgentActivity({
-      explicitEntry: entry,
-      liveTitle: null,
-      hasLivePty: ptyId !== null,
-      now
-    })
-    // Stale hooks can outlive live agents; current PTY titles still prove targetability.
+    // Idle agents emit no hooks, so row age never disables a live pane; the host's process/screen check gates the send.
     const liveTitleStatus = ptyId
       ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
       : null
-    if (entry.restoredUnconfirmed) {
-      disabledReason = 'Agent status is stale'
-    } else if (decision.hookState === null) {
-      if (liveTitleStatus === 'permission') {
-        disabledReason = 'Agent needs permission'
-      } else if (liveTitleStatus === null) {
-        disabledReason = 'Agent status is stale'
-      }
-    } else if (!ptyId) {
+    // An unanswered prompt sends no further hooks and idle titles can persist under open dialogs, so only the agent's next report clears it.
+    if (!ptyId) {
       disabledReason = 'Terminal is no longer available'
-    } else if (decision.hookState === 'blocked' || decision.hookState === 'waiting') {
-      disabledReason = 'Agent needs permission'
-    } else if (liveTitleStatus === 'permission') {
+    } else if (
+      entry.state === 'blocked' ||
+      entry.state === 'waiting' ||
+      liveTitleStatus === 'permission'
+    ) {
       disabledReason = 'Agent needs permission'
     }
 
@@ -202,8 +184,10 @@ function detectLiveAgentPaneStatus(
   const layout = state.terminalLayoutsByTabId[tabId]
   const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
   const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
-  // Prefer each split leaf’s runtime title; use tab title only before that leaf reports one.
-  const title = paneTitleResolution.title ?? (paneTitleResolution.hasAnyPaneTitle ? null : tabTitle)
+  // The tab title is the active surface's; it belongs to this leaf only when the tab has no split.
+  const tabTitleIsLeafs =
+    !paneTitleResolution.hasAnyPaneTitle && (!layout?.root || layout.root.type === 'leaf')
+  const title = paneTitleResolution.title ?? (tabTitleIsLeafs ? tabTitle : null)
   if (title === null) {
     return null
   }
@@ -213,10 +197,7 @@ function detectLiveAgentPaneStatus(
 export function resolveRunningAgentSendTarget(
   state: RunningAgentTargetState,
   worktreeId: string,
-  paneKey: string,
-  now = Date.now()
+  paneKey: string
 ): RunningAgentSendTarget | null {
-  return (
-    deriveRunningAgentSendTargets(state, worktreeId, now).find((t) => t.paneKey === paneKey) ?? null
-  )
+  return deriveRunningAgentSendTargets(state, worktreeId).find((t) => t.paneKey === paneKey) ?? null
 }

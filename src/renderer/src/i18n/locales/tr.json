@@ -23540,8 +23540,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Ajan için izin gerekiyor",
-      "statusStale": "Ajan durumu güncel değil"
+      "needsPermission": "Ajan için izin gerekiyor"
     }
   },
   "wslDistroHold": {
