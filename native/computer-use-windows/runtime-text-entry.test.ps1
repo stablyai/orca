@@ -17,6 +17,7 @@ public static class OrcaDesktopWin32 {
     public static int[] Selection;
     public static int EditOwner;
     public static bool IgnoreInsertion;
+    public static long Limit;
 
     public static void Reset(string text, int start, int end) {
         Calls.Clear();
@@ -25,6 +26,7 @@ public static class OrcaDesktopWin32 {
         Selection = new[] { start, end };
         EditOwner = 4242;
         IgnoreInsertion = false;
+        Limit = 30000;
     }
     public static int GetProcessIntegrityLevel(int processId) { return 0x2000; }
     public static IntPtr GetForegroundWindow() { return Foreground; }
@@ -47,6 +49,7 @@ public static class OrcaDesktopWin32 {
         return true;
     }
     public static bool SendUnicodeText(string text) { Calls.Add("keys:" + text); return true; }
+    public static long? SendControlMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam) { return message == 0x00D5 ? Limit : 0; }
 }
 "@
 
@@ -134,6 +137,13 @@ if ($outcome.message -notlike "text_insertion_unconfirmed:*") { throw "ignored i
 $outcome = Invoke-TestOperation ([pscustomobject]@{ tool = "type_text"; app = "Fixture"; text = "abc"; element = (New-TestElement "Edit" 303) })
 if ($null -ne $outcome.message) { throw "identical replacement failed: $($outcome.message)" }
 Assert-TestEqual $outcome.result.action.verification.state "verified" "identical replacement verification"
+
+# An edit cuts text past its limit, so an insertion that would overflow it is refused before anything is sent.
+[OrcaDesktopWin32]::Reset("old", 3, 3)
+[OrcaDesktopWin32]::Limit = 5
+$outcome = Invoke-TestOperation ([pscustomobject]@{ tool = "type_text"; app = "Fixture"; text = "abc"; element = (New-TestElement "Edit" 303) })
+if ($outcome.message -notlike "element 7 text is not settable: the result would be 6 characters, past the field's 5-character limit") { throw "over-limit insertion, received '$($outcome.message)'" }
+Assert-TestEqual ([OrcaDesktopWin32]::EditText) "old" "over-limit insertion leaves the field untouched"
 
 # Edit messages would bypass a disabled field's lock, so a disabled field is refused untouched.
 [OrcaDesktopWin32]::Reset("", 0, 0)

@@ -996,6 +996,12 @@ function Invoke-OrcaEditTextInsertion($Edit, [int]$Index, [string]$Text) {
     $insert = ConvertTo-OrcaEditNewlines $Text $false
     $before = if ($Edit.sensitive) { $null } else { [OrcaDesktopWin32]::GetEditText($Edit.handle, $EditReadbackLimit) }
     $selection = [OrcaDesktopWin32]::GetEditSelection($Edit.handle)
+    # Why: an edit cuts text past its EM_SETLIMITTEXT limit, which would leave a partial write; refuse it untouched instead.
+    $limit = [OrcaDesktopWin32]::SendControlMessage($Edit.handle, 0x00D5, [IntPtr]::Zero, [IntPtr]::Zero)
+    if ($null -ne $limit -and $limit -gt 0 -and $null -ne $before -and $null -ne $selection) {
+        $length = $before.Length - [Math]::Abs($selection[1] - $selection[0]) + $insert.Length
+        if ($length -gt $limit) { throw "element $Index text is not settable: the result would be $length characters, past the field's $limit-character limit" }
+    }
     Assert-OrcaWindowOwner $Edit.handle $Edit.processId
     if (-not [OrcaDesktopWin32]::ReplaceEditSelection($Edit.handle, $insert)) {
         throw "window_not_responding: the text field did not answer the insertion in time; the text may still land, so run get-app-state before retrying"
@@ -1784,10 +1790,13 @@ function Find-OrcaElement($RootElement, $Record) {
     $null
 }
 
-# Why: UI Automation's Invoke and Toggle focus a user32 or WinForms button first, which activates its background
-# window; BM_CLICK runs the button's own click (and check box or radio state) with no focus change.
+# Why: UI Automation's Invoke and Toggle focus a WinForms button first, which activates its background window;
+# BM_CLICK runs the button's own click (and check box or radio state) with no focus change.
 function Invoke-OrcaNativeButtonClick($Element, $Process) {
     if ($null -eq $Process) { return $false }
+    # Why: measured on WinForms, whose buttons click on BM_CLICK directly; a user32 button simulates the mouse and
+    # sets focus, which can fail in an inactive dialog, so those keep the UI Automation pattern.
+    if ((Get-OrcaProperty $Element "ClassName") -notmatch "^WindowsForms\d+\.BUTTON\.") { return $false }
     $button = Get-OrcaNativeControl $Element $Process "Button"
     if ($null -eq $button) { return $false }
     # Why: a group box shares the Button class but presses nothing; real buttons offer one of these patterns.
@@ -1895,6 +1904,7 @@ function Set-OrcaNativeComboValue($Element, $Process, [string]$Value) {
     if ($exact.Count -eq 0) { return $null }
     if ($exact.Count -gt 1) { throw "element value is not settable by name: more than one option is named '$Value'" }
     # CB_SETCURSEL changes the selection without opening the list; CBN_SELCHANGE runs the app's own change handler.
+    Assert-OrcaWindowOwner $combo ([int]$Process.Id)
     if ($null -eq [OrcaDesktopWin32]::SendControlMessage($combo, 0x014E, [IntPtr]$exact[0], [IntPtr]::Zero)) {
         throw "window_not_responding: the combo box did not answer in time; the selection may still change, so run get-app-state before retrying"
     }
@@ -1906,7 +1916,8 @@ function Set-OrcaNativeComboValue($Element, $Process, [string]$Value) {
     }
     # Why: the change handler ran inside the send above, so the selection now is the one the app kept.
     $selected = [OrcaDesktopWin32]::SendControlMessage($combo, 0x0147, [IntPtr]::Zero, [IntPtr]::Zero)
-    $actual = if ($null -ne $selected -and $selected -ge 0) { [OrcaDesktopWin32]::GetControlItemText($combo, 0x0149, 0x0148, [int]$selected) } else { $null }
+    # Why: a handler that clears the selection leaves CB_ERR (-1), which contradicts the write rather than hiding it.
+    $actual = if ($null -eq $selected) { $null } elseif ($selected -lt 0) { "" } else { [OrcaDesktopWin32]::GetControlItemText($combo, 0x0149, 0x0148, [int]$selected) }
     $verification = if ($actual -ceq $Value) {
         [pscustomobject]@{ state = "verified"; property = "value" }
     } elseif ($null -eq $actual) {
@@ -1941,7 +1952,9 @@ function Set-OrcaElementValue($Element, $Process, [int]$Index, [string]$Value) {
     if ($null -ne $Process) {
         # Why: these write native controls without focusing them; a disabled one is locked against the user, so it is refused.
         $native = (Test-OrcaEditClass (Get-OrcaProperty $Element "ClassName")) -or (Test-OrcaNativeClass (Get-OrcaProperty $Element "ClassName") "ComboBox")
-        if ($native -and (Test-OrcaElementDisabled $Element)) { throw "element $Index value is not settable: the control is disabled" }
+        if ($native -and (Test-OrcaElementDisabled $Element)) {
+            throw "element_not_enabled: element $Index is disabled, so no input was sent; do what enables it first, then run get-app-state and retry once its line no longer lists disabled"
+        }
         $combo = Set-OrcaNativeComboValue $Element $Process $Value
         if ($null -ne $combo) { return $combo }
         $edit = Set-OrcaNativeEditValue $Element $Process $Index $Value
@@ -2103,8 +2116,9 @@ function Invoke-OrcaNativeListScroll($Element, $RootElement, $Process, [string]$
         $current = try { [Windows.Automation.TreeWalker]::RawViewWalker.GetParent($current) } catch { $null }
     }
     if ($null -eq $list) { return $false }
-    # Why: rows of an LBS_OWNERDRAWVARIABLE list differ in height, so a page can't be counted in rows.
-    if (([OrcaDesktopWin32]::GetWindowLong($list, -16) -band 0x0020) -ne 0) { return $false }
+    # Why: rows of an LBS_OWNERDRAWVARIABLE list differ in height, so a page can't be counted in rows, and an
+    # LBS_MULTICOLUMN list pages sideways.
+    if (([OrcaDesktopWin32]::GetWindowLong($list, -16) -band 0x0220) -ne 0) { return $false }
     $top = [OrcaDesktopWin32]::SendControlMessage($list, 0x018E, [IntPtr]::Zero, [IntPtr]::Zero)
     $count = [OrcaDesktopWin32]::SendControlMessage($list, 0x018B, [IntPtr]::Zero, [IntPtr]::Zero)
     $itemHeight = [OrcaDesktopWin32]::SendControlMessage($list, 0x01A1, [IntPtr]::Zero, [IntPtr]::Zero)
@@ -2112,9 +2126,11 @@ function Invoke-OrcaNativeListScroll($Element, $RootElement, $Process, [string]$
     $rows = [Math]::Max(1, [Math]::Floor([OrcaDesktopWin32]::GetClientHeight($list) / $itemHeight))
     $step = [int][Math]::Max(1, [Math]::Round($rows * $Pages))
     $target = if ($Direction -eq "down") { $top + $step } else { $top - $step }
+    # Why: a list that shows every row leaves the scroll to an enclosing ScrollPattern.
+    if ($count -le $rows) { return $false }
     $target = [Math]::Max(0, [Math]::Min($count - $rows, $target))
-    # Why: a list that shows every row, or is already at that end, leaves the scroll to an enclosing ScrollPattern.
-    if ($target -eq $top) { return $false }
+    # Why: at that end already there is nothing left to move, as ScrollPattern reports at the end of its content.
+    if ($target -eq $top) { return $true }
     if ($null -eq [OrcaDesktopWin32]::SendControlMessage($list, 0x0197, [IntPtr][int]$target, [IntPtr]::Zero)) {
         throw "window_not_responding: the list did not answer in time; it may still scroll, so run get-app-state before retrying"
     }

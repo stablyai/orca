@@ -94,7 +94,7 @@ Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count) 0 "ambiguous combo sends noth
 # A disabled combo box is locked against the user, so it is refused before any message.
 [OrcaDesktopWin32]::Reset(@("Alpha", "Gamma"))
 $message = try { Set-OrcaElementValue (New-TestControl "ComboBox" $false) $process 5 "Gamma" | Out-Null; $null } catch { $_.Exception.Message }
-Assert-TestEqual $message "element 5 value is not settable: the control is disabled" "disabled combo"
+Assert-TestEqual $message "element_not_enabled: element 5 is disabled, so no input was sent; do what enables it first, then run get-app-state and retry once its line no longer lists disabled" "disabled combo"
 Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count) 0 "disabled combo sends nothing"
 
 # A page is the rows the list shows: 60 px at 15 px a row is 4 rows.
@@ -102,6 +102,12 @@ $list = New-TestControl "ListBox"
 [OrcaDesktopWin32]::Reset(@())
 Assert-TestEqual (Invoke-OrcaNativeListScroll $list $list $process "down" 2) $true "list scroll"
 Assert-TestEqual ([OrcaDesktopWin32]::Calls -join "|") "top:8" "list scroll top row"
+
+# At the end already, there is nothing to move and nothing falls back to ScrollPattern.
+[OrcaDesktopWin32]::Reset(@())
+[OrcaDesktopWin32]::Top = 96
+Assert-TestEqual (Invoke-OrcaNativeListScroll $list $list $process "down" 1) $true "list at its end"
+Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count) 0 "list at its end sends nothing"
 
 # A list that shows all its rows leaves the scroll to an enclosing ScrollPattern.
 [OrcaDesktopWin32]::Reset(@())
