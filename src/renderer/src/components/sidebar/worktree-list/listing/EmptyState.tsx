@@ -4,6 +4,11 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { isRepoHidden } from '../../../../../../shared/hidden-projects'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { useSleepingWorkspacesFooter } from './SleepingWorkspacesFooter'
+
+const NO_VISIBLE_WORKTREES: readonly Worktree[] = []
 
 export function SidebarWorktreeListEmptyState({
   hasFilters,
@@ -16,6 +21,8 @@ export function SidebarWorktreeListEmptyState({
   const discoveryCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const repos = useAppStore((s) => s.repos)
   const everyProjectHidden = useMemo(() => repos.length > 0 && repos.every(isRepoHidden), [repos])
+  // Why empty: this state renders only when no workspace row is visible.
+  const footer = useSleepingWorkspacesFooter(NO_VISIBLE_WORKTREES, useRepoMap(), repos.length)
   return (
     <div
       data-worktree-sidebar-container
@@ -49,6 +56,7 @@ export function SidebarWorktreeListEmptyState({
             </Button>
           )}
         </div>
+        {footer}
       </div>
     </div>
   )
