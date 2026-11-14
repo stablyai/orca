@@ -10,26 +10,28 @@ import { planQueuedPaneAgentLaunch } from '../pane-agent-launch.test-fixture'
 import { endPaneAgentLaunch, type PaneAgentLaunch } from './spawn-agent-launch-end'
 import { checkPtyIpcLaunchPane } from './spawn-begin'
 import type { PtyIpcSpawnState } from './spawn-state'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 const PANE = { worktreeId: 'wt-1', tabId: 'tab-1', leafId: '11111111-1111-4111-8111-111111111111' }
 const PANE_KEY = `${PANE.tabId}:${PANE.leafId}`
 
 function refusedLaunchEnd(error: Error): Error | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endPaneAgentLaunch reads only paneAgentLaunch.
-  const ctx = {
-    paneAgentLaunch: {
-      runtime: { reportAgentLaunchPaneVerdict: vi.fn() },
-      address: PANE,
-      paneKey: PANE_KEY,
-      running: { finish: vi.fn(), closedByUser: () => false },
-      dispatched: false,
-      refuseIfClosed: () => undefined
-    } as unknown as PaneAgentLaunch
-  } as PtyIpcSpawnState
+  const stub = {
+    runtime: { reportAgentLaunchPaneVerdict: vi.fn() },
+    address: PANE,
+    paneKey: PANE_KEY,
+    running: { finish: vi.fn(), closedByUser: () => false },
+    dispatched: false,
+    refuseIfClosed: () => undefined
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endPaneAgentLaunch reads only these members of the launch and the state.
+  const ctx = { paneAgentLaunch: stub as unknown as PaneAgentLaunch } as PtyIpcSpawnState
   return endPaneAgentLaunch(ctx, { error })
 }
 
-function launchPaneSpawn(agentLaunch: object): PtyIpcSpawnState {
+function launchPaneSpawn(
+  agentLaunch: Pick<AgentPaneLaunchRequest, 'replacesRefusedLaunch'>
+): PtyIpcSpawnState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission check reads only args and the optional runtime and store.
   return {
     args: { ...PANE, agentLaunch },
@@ -55,11 +57,11 @@ describe('a launch pane refused for its pinned Claude account', () => {
       kind: 'not-started',
       code: 'refused'
     })
-    await expect(checkPtyIpcLaunchPane(launchPaneSpawn({ launch: {} }))).rejects.toThrow(
+    await expect(checkPtyIpcLaunchPane(launchPaneSpawn({}))).rejects.toThrow(
       AGENT_LAUNCH_PANE_REFUSED_CODE
     )
     await expect(
-      checkPtyIpcLaunchPane(launchPaneSpawn({ launch: {}, replacesRefusedLaunch: true }))
+      checkPtyIpcLaunchPane(launchPaneSpawn({ replacesRefusedLaunch: true }))
     ).resolves.toBeUndefined()
   })
 

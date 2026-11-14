@@ -17,15 +17,15 @@ const runtime = new OrcaRuntimeService(
     })
   } as never
 )
+type ResumeBuilder = {
+  resolveMobileSessionResumeCommand: (
+    workspace: TerminalWorkspaceLaunchScope,
+    record: ResumableAgentSessionSource
+  ) => MobileTerminalResumeCommand | null
+}
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exposes the protected resume builder under test; its signature matches mobile-terminal-startup.ts.
-const resume = (
-  runtime as unknown as {
-    resolveMobileSessionResumeCommand: (
-      workspace: TerminalWorkspaceLaunchScope,
-      record: ResumableAgentSessionSource
-    ) => MobileTerminalResumeCommand | null
-  }
-).resolveMobileSessionResumeCommand.bind(runtime)
+const internal = runtime as unknown as ResumeBuilder
+const resume = internal.resolveMobileSessionResumeCommand.bind(runtime)
 const workspace: TerminalWorkspaceLaunchScope = {
   id: 'worktree-1',
   path: '/repo',
