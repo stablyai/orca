@@ -198,6 +198,15 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'chat rename' && flag === 'session') {
     return '--session <id>        Chat session id (defaults to the chat this runs in)'
   }
+  if ((command === 'chat send' || command === 'chat close') && flag === 'session') {
+    return '--session <id>        Chat session id'
+  }
+  if (command === 'chat send' && flag === 'text') {
+    return '--text <text>         Message to send'
+  }
+  if (command === 'chat send' && flag === 'text-file') {
+    return '--text-file <path|->  Read the message from a file, or from stdin with -'
+  }
   if (command === 'chat rename' && flag === 'name') {
     return '--name <text>         New name for the chat'
   }
