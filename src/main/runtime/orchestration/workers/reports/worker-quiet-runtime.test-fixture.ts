@@ -1,3 +1,4 @@
+import { resolveWorkerQuietMinutes } from '../../../../../shared/orchestration/workers/worker-quiet-settings'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import { OrchestrationDb } from '../../db/orchestration-db'
@@ -66,9 +67,25 @@ export function runtimeFixture() {
   const changes = new CrewChanges()
   const panes = new Map<string, RuntimePtyWorktreeRecord>()
   const handles = new Map<string, string>()
+  let quietMinutes: number | null | undefined
+  const settingsListeners = new Set<() => void>()
+  const settingStore = {
+    getSettings: () => ({ orchestrationQuietWorkerMinutes: quietMinutes }),
+    onSettingsChanged: (
+      listener: (updates: { orchestrationQuietWorkerMinutes?: number | null }) => void
+    ) => {
+      const notify = () => listener({ orchestrationQuietWorkerMinutes: quietMinutes })
+      settingsListeners.add(notify)
+      return () => {
+        settingsListeners.delete(notify)
+      }
+    }
+  }
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
+    quietMinutes = 15
+    settingsListeners.clear()
     chat.handles.clear()
     chat.statuses.clear()
     panes.clear()
@@ -88,6 +105,13 @@ export function runtimeFixture() {
   return {
     chat,
     changes,
+    settingStore,
+    setMinutes: (value: number | null | undefined) => {
+      quietMinutes = value
+      for (const listener of settingsListeners) {
+        listener()
+      }
+    },
     stop: () => {
       stop?.()
       stop = undefined
@@ -104,6 +128,13 @@ export function runtimeFixture() {
       stop = startWorkerQuietSweep({
         store,
         changes,
+        getMinutes: () => resolveWorkerQuietMinutes(settingStore.getSettings()),
+        subscribeSettings: (changed) => {
+          settingsListeners.add(changed)
+          return () => {
+            settingsListeners.delete(changed)
+          }
+        },
         getDb: () => db,
         readPaneKeys: () => panes.keys(),
         resolveTerminal: (paneKey) =>

@@ -1,3 +1,4 @@
+import { resolveWorkerQuietMinutes } from '../../../shared/orchestration/workers/worker-quiet-settings'
 import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/follow-up/worker-resume-session-capture'
 import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
@@ -181,6 +182,13 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     this.externalConversations.current()
     const stopQuietSweep = startWorkerQuietSweep({
       store,
+      getMinutes: () => resolveWorkerQuietMinutes(this.store?.getSettings()),
+      subscribeSettings: (changed) =>
+        this.store?.onSettingsChanged?.((updates) => {
+          if ('orchestrationQuietWorkerMinutes' in updates) {
+            changed()
+          }
+        }) ?? (() => {}),
       changes: this.crewChanges,
       subscribeTitleStatus: (wake) => {
         this.quietWorkerTitleWakes.add(wake)

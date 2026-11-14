@@ -82,7 +82,10 @@ Never:
   `exited` or `lost` means it is gone: retry it or tell the user.
 - A `status` with `quietNotice` is advisory: the worker is still running and
   silence may be normal. Don't stop or message it unless the user asks or you
-  know it should have finished. Continue other work or keep waiting.
+  know it should have finished. Continue other work or keep waiting. Quiet notices
+  are Off by default; the user can enable them in Settings → Orchestration on
+  each execution host. Other hosts use their own setting. No notice does not
+  prove progress. Don't change this setting on the user's behalf.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.

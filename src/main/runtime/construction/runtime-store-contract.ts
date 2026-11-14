@@ -124,6 +124,7 @@ export type RuntimeStore = {
     codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
+    orchestrationQuietWorkerMinutes?: GlobalSettings['orchestrationQuietWorkerMinutes']
     orchestrationCoordinatorApprovalsEnabled?: GlobalSettings['orchestrationCoordinatorApprovalsEnabled']
     workspaceDir: string
     nestWorkspaces: boolean

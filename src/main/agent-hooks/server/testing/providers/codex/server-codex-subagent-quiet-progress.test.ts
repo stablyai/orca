@@ -93,7 +93,8 @@ it.each([false, true])(
         (_row, notice) => {
           sent.push(notice.observedAt - now)
           return true
-        }
+        },
+        () => 15
       )
       for (let elapsed = 0; elapsed <= 3_600_000; elapsed += 60_000) {
         sweep.sweep(row ? [row] : [], now + elapsed)

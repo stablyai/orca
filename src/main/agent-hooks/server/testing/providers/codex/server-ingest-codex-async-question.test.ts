@@ -91,7 +91,8 @@ describe('Codex async questions', () => {
         (_row, notice) => {
           sent.push(notice.observedAt - 1_790_000_000_000)
           return true
-        }
+        },
+        () => 15
       )
       for (let elapsed = 0; elapsed <= 900_000; elapsed += 60_000) {
         sweep.sweep(

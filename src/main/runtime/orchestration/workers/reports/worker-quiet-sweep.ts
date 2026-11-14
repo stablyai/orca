@@ -44,7 +44,8 @@ export class WorkerQuietSweep {
   constructor(
     private readonly startedAt: number,
     private readonly latest: (dispatchIds: readonly string[]) => ReadonlyMap<string, QuietNotice>,
-    private readonly send: (observation: WorkerQuietObservation, notice: QuietNotice) => boolean
+    private readonly send: (observation: WorkerQuietObservation, notice: QuietNotice) => boolean,
+    private readonly getMinutes: () => number
   ) {
     this.lastSweepAt = startedAt
     this.resumedAt = startedAt
@@ -155,7 +156,8 @@ export class WorkerQuietSweep {
         this.resumedAt,
         episode.grace
       )
-      const interval = row.tool || row.lastProducerEventAt === undefined ? 3_600_000 : 900_000
+      const interval =
+        this.getMinutes() * 60_000 * (row.tool || row.lastProducerEventAt === undefined ? 4 : 1)
       if (now - since < interval) {
         continue
       }

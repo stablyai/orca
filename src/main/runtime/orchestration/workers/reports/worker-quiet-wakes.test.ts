@@ -34,6 +34,7 @@ it.each(['hook', 'title'])(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: invoke the real subscription and title edges with only their runtime dependencies; never construct or operate a PTY.
     const runtime = Object.assign(Object.create(OrcaRuntimeWithAgentTransitions.prototype), {
       crewChanges: changes,
+      store: fixture.settingStore,
       quietWorkerTitleWakes: new Set<() => void>(),
       _orchestrationDb: db,
       externalConversations: { current: () => null },

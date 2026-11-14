@@ -1,3 +1,4 @@
+import { getWorkerQuietDescription, getWorkerQuietTitle } from './worker-quiet-copy'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -27,7 +28,8 @@ const COORDINATOR_APPROVALS_SEARCH_ENTRY_ID = 'coordinator-approvals'
 const LOCAL_RUNTIME_SEARCH_ENTRY_IDS: ReadonlySet<string | undefined> = new Set([
   NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID,
   WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID,
-  COORDINATOR_APPROVALS_SEARCH_ENTRY_ID
+  COORDINATOR_APPROVALS_SEARCH_ENTRY_ID,
+  'worker-quiet-notices'
 ])
 
 const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
@@ -108,6 +110,12 @@ const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
     title: getWorkerAutoReleaseTitle(),
     description: getWorkerAutoReleaseDescription(),
     keywords: getWorkerAutoReleaseSearchKeywords()
+  },
+  {
+    id: 'worker-quiet-notices',
+    title: getWorkerQuietTitle(),
+    description: getWorkerQuietDescription(),
+    keywords: [getWorkerQuietTitle()]
   },
   {
     id: COORDINATOR_APPROVALS_SEARCH_ENTRY_ID,

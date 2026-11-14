@@ -52,7 +52,8 @@ it('only advises for a quiet working episode, respects tools, fallback, grace, a
     (row, notice) => {
       sent.push({ id: row.dispatchId, ordinal: notice.ordinal, at: notice.observedAt })
       return true
-    }
+    },
+    () => 15
   )
   let rows: WorkerQuietObservation[] = [
     { dispatchId: 'quiet', turnStartedAt: 0, working: true, lastProducerEventAt: 0 },
@@ -154,7 +155,8 @@ it('relays status/normal with deterministic ids and retains the turn ordinal acr
       (_row, next) => {
         sent.push(next.ordinal)
         return true
-      }
+      },
+      () => 15
     )
     for (let now = 1_000_000; now <= 5_000_000; now += 60_000) {
       restarted.sweep([row], now)
@@ -206,7 +208,8 @@ it('uses captured Claude call matching and shell monitoring for the longer advis
       (_row, notice) => {
         sent.push(notice.observedAt - 1_790_000_000_000)
         return true
-      }
+      },
+      () => 15
     )
     for (let elapsed = 0; elapsed <= 3_600_000; elapsed += 60_000) {
       sweep.sweep([row], Date.now() + elapsed)
@@ -345,7 +348,12 @@ it.each([false, true])(
       sent.push({ id: row.dispatchId, at: notice.observedAt })
       return true
     }
-    const live = new WorkerQuietSweep(0, () => new Map(), send)
+    const live = new WorkerQuietSweep(
+      0,
+      () => new Map(),
+      send,
+      () => 15
+    )
     const recovered = new WorkerQuietSweep(
       960_000,
       () =>
@@ -361,7 +369,8 @@ it.each([false, true])(
             }
           ]
         ]),
-      send
+      send,
+      () => 15
     )
     const liveRow = { dispatchId: 'live', turnStartedAt: 0, working: true, lastProducerEventAt: 0 }
     const recoveredRow = { ...liveRow, dispatchId: 'recovered' }
@@ -408,7 +417,8 @@ it('starts a fresh episode on producer evidence newer than the recovered notice,
     (_row, notice) => {
       sent.push({ ordinal: notice.ordinal, at: notice.observedAt })
       return true
-    }
+    },
+    () => 15
   )
   for (let now = 1_020_000; now <= 3_720_000; now += 60_000) {
     sweep.sweep(
@@ -419,5 +429,40 @@ it('starts a fresh episode on producer evidence newer than the recovered notice,
   expect(sent).toEqual([
     { ordinal: 2, at: 1_920_000 },
     { ordinal: 3, at: 3_720_000 }
+  ])
+})
+
+it('uses the chosen minutes for normal silence, tools, fallback and their single reminders', () => {
+  const sent: { id: string; at: number }[] = []
+  const sweep = new WorkerQuietSweep(
+    0,
+    () => new Map(),
+    (row, notice) => {
+      sent.push({ id: row.dispatchId, at: notice.observedAt })
+      return true
+    },
+    () => 7
+  )
+  const rows = [
+    { dispatchId: 'normal', turnStartedAt: 0, working: true, lastProducerEventAt: 0 },
+    {
+      dispatchId: 'tool',
+      turnStartedAt: 0,
+      working: true,
+      lastProducerEventAt: 0,
+      tool: { name: 'Bash', startedAt: 0 }
+    },
+    { dispatchId: 'fallback', turnStartedAt: 0, working: true }
+  ]
+  for (let now = 0; now <= 6_000_000; now += 60_000) {
+    sweep.sweep(rows, now)
+  }
+  expect(sent).toEqual([
+    { id: 'normal', at: 420_000 },
+    { id: 'normal', at: 1_260_000 },
+    { id: 'tool', at: 1_680_000 },
+    { id: 'fallback', at: 1_680_000 },
+    { id: 'tool', at: 5_040_000 },
+    { id: 'fallback', at: 5_040_000 }
   ])
 })
