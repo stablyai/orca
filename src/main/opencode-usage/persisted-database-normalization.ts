@@ -8,11 +8,18 @@ import type {
 export function normalizeOpenCodeUsagePersistedDatabases(
   databases: OpenCodeUsagePersistedDatabase[] | undefined
 ): OpenCodeUsagePersistedDatabase[] {
-  return (databases ?? []).map((database) => ({
-    ...database,
-    sessions: (database.sessions ?? []).map(normalizeSessionCost),
-    dailyAggregates: (database.dailyAggregates ?? []).map(normalizeDailyAggregateCost)
-  }))
+  // A record missing a projection would be reused as zero usage; drop it so the scanner rereads the database.
+  return (databases ?? []).flatMap((database) =>
+    Array.isArray(database?.sessions) && Array.isArray(database.dailyAggregates)
+      ? [
+          {
+            ...database,
+            sessions: database.sessions.map(normalizeSessionCost),
+            dailyAggregates: database.dailyAggregates.map(normalizeDailyAggregateCost)
+          }
+        ]
+      : []
+  )
 }
 
 export function normalizeDailyAggregateCost(
