@@ -263,7 +263,15 @@ describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline',
       expect(startup).toEqual({
         command: `${baseCommand} '-c' 'model_reasoning_effort=high'`,
         env: {},
-        launchConfig: { agentCommand: baseCommand, agentArgs: actualArgs, agentEnv: {} },
+        launchConfig: {
+          agentCommand: [
+            'cx',
+            `'-c' 'model_reasoning_effort=high'`,
+            ...expectedTokens.map((token) => `'${token}'`)
+          ].join(' '),
+          agentArgs: actualArgs,
+          agentEnv: {}
+        },
         launchAgent: 'codex',
         ...(agentArgs !== undefined ? { agentArgsOverride: agentArgs } : {}),
         telemetry: {

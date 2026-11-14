@@ -183,15 +183,22 @@ export function resolveAgentLaunchCommand(args: {
     args.agent === 'aider'
       ? insertBeforeTerminator(args.agent, initialTokens, suppressionArgs)
       : initialTokens
-  // Restart retains explicit policy and surviving raw pins, while providers restore model seeds.
-  const resumeArgs = render(
-    insertBeforeTerminator(args.agent, keptTokens, resolvedOptions.permissionArgs ?? [])
+  const permissionArgs = resolvedOptions.permissionArgs ?? []
+  const resumeArgs = render(insertBeforeTerminator(args.agent, keptTokens, permissionArgs))
+  // The recipe replays every launch choice except those the agent's own session restores; choices
+  // lead so the Arguments stay a suffix Codex's resume can strip its permission flag from.
+  const choiceArgs = render(
+    removeOverriddenAgentSessionArgs(
+      args.agent,
+      sessionOwnedLaunchChoices(args.agent, resolvedOptions.appliedValues),
+      resolvedOptions.args.slice(0, resolvedOptions.args.length - permissionArgs.length)
+    )
   )
   return {
     ok: true,
     command: withArgs(render(launchTokens), launchHead),
     resumeLaunch: {
-      agentCommand: withArgs(resumeArgs),
+      agentCommand: withArgs(resumeArgs, withArgs(choiceArgs)),
       ...(keptTokens.length !== rawTokens.length ||
       keptTokens.some((token, index) => token !== rawTokens[index]) ||
       resolvedOptions.permissionArgs
@@ -203,6 +210,16 @@ export function resolveAgentLaunchCommand(args: {
       ? { startupEnv: STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[args.agent] }
       : {})
   }
+}
+
+// Claude resumes on its session's model, and its resume replays the live effort; a recorded flag would undo a mid-session switch.
+const SESSION_OWNED_LAUNCH_CHOICES: Partial<Record<TuiAgent, readonly string[]>> = {
+  claude: ['model', 'effort']
+}
+
+function sessionOwnedLaunchChoices(agent: TuiAgent, applied: Record<string, SessionOptionValue>) {
+  const owned = SESSION_OWNED_LAUNCH_CHOICES[agent] ?? []
+  return Object.fromEntries(Object.entries(applied).filter(([id]) => owned.includes(id)))
 }
 
 function insertBeforeTerminator(
