@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useMemo, useRef } from 'react'
-import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
+import { Check, Copy, ExternalLink, GitPullRequest, Globe, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
@@ -43,6 +43,7 @@ function ActionRow({
     >
       {action.external === true ? <ExternalLink className="size-3.5" /> : null}
       {action.external === false ? <Globe className="size-3.5" /> : null}
+      {action.icon === 'pull-request' ? <GitPullRequest className="size-3.5" /> : null}
       <span className="min-w-0 flex-1 truncate text-left" title={action.label}>
         {action.label}
       </span>
