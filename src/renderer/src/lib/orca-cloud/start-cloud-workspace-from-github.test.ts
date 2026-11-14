@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
       worktreeId: null
     })
   ),
-  launch: vi.fn()
+  launch: vi.fn<(args: Record<string, unknown>) => void>()
 }))
 
 vi.mock('@/components/cloud-workspaces/open-cloud-workspace', () => ({
@@ -193,7 +193,7 @@ describe('the name field is only the workspace name', () => {
     expect(await started).toBe(true)
     expect(createFromGitHub).toHaveBeenCalledWith(expect.objectContaining({ title: 'endpass-c64' }))
     await vi.waitFor(() => expect(mocks.launch).toHaveBeenCalledTimes(1))
-    const args = mocks.launch.mock.calls[0]![0] as Record<string, unknown>
+    const args = mocks.launch.mock.calls[0]![0]
     expect(args).toMatchObject({ agent: 'claude', worktreeId: 'wt-1' })
     expect(args).not.toHaveProperty('prompt')
     expect(args).not.toHaveProperty('promptDelivery')
