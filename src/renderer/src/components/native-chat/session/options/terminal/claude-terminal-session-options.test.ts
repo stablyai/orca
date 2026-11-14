@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { CatalogModel } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
 
 const OPTION_LESS_MODEL_60_COLS = [
@@ -40,5 +41,47 @@ describe('Claude terminal session option detection', () => {
     expect(readClaudeSessionOptionsFromTerminalScreen(OPTION_LESS_MODEL_60_COLS)).toEqual({
       model: 'haiku'
     })
+  })
+
+  // A gateway host lists the alias-resolved row with the vendor prefix next to older point releases.
+  const GATEWAY_MODELS: CatalogModel[] = [
+    { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', options: [] },
+    { id: 'claude-opus-4-5-20251101', label: 'Opus 4.5', options: [] },
+    { id: 'claude-opus-5', label: 'Opus 5', options: [] },
+    { id: 'claude-sonnet-5', label: 'Sonnet 5', options: [] },
+    { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', options: [] }
+  ]
+  const bannerFor = (descriptor: string) =>
+    [
+      ' ▐▛███▜▌   Claude Code v2.1.325',
+      `▝▜█████▛▘  ${descriptor}`,
+      '  ▘▘ ▝▝    ~/workspace/project'
+    ].join('\n')
+
+  it('does not let an earlier point release claim a dotted version', () => {
+    expect(
+      readClaudeSessionOptionsFromTerminalScreen(
+        bannerFor('Opus 5.5 · API Usage Billing'),
+        GATEWAY_MODELS
+      )
+    ).toEqual({ model: 'claude-opus-5-5' })
+    expect(
+      readClaudeSessionOptionsFromTerminalScreen(
+        bannerFor('Sonnet 5.5 · API Usage Billing'),
+        GATEWAY_MODELS
+      )
+    ).toEqual({ model: 'claude-sonnet-5-5' })
+  })
+
+  it('still picks the exact point release and falls back to the seed family', () => {
+    expect(
+      readClaudeSessionOptionsFromTerminalScreen(
+        bannerFor('Opus 5 · API Usage Billing'),
+        GATEWAY_MODELS
+      )
+    ).toEqual({ model: 'claude-opus-5' })
+    expect(
+      readClaudeSessionOptionsFromTerminalScreen(bannerFor('Opus 5.5 · API Usage Billing'))
+    ).toEqual({ model: 'opus' })
   })
 })
