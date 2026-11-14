@@ -7,12 +7,16 @@ import {
 import type { BrowserClientRetainedRendererPage } from './browser-client-page-retained-state'
 
 export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedRendererPage): void {
-  const bounds = page.visibleAttachment?.container.getBoundingClientRect()
+  const container = page.visibleAttachment?.container
+  const bounds = container?.getBoundingClientRect()
   const visible = Boolean(bounds && bounds.width > 0 && bounds.height > 0)
+  // The host lives in <body>, so ancestor opacity hiding a retained inactive pane never reaches it.
+  const shown =
+    visible && container!.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
   const viewed = isBrowserPageRemotelyViewed(page.identity.browserPageId)
   const blank = page.host.dataset.browserClientPageBlank === 'true'
   const viewport = page.host.ownerDocument.defaultView
-  const interactive = visible && !blank
+  const interactive = shown && !blank
   // Chromium needs a sized, onscreen guest to composite even when its desktop pane is hidden.
   const style = {
     left: visible ? `${bounds!.left}px` : viewed ? '0px' : '-10000px',
@@ -27,7 +31,7 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
       : viewed
         ? `${Math.max(240, viewport?.innerHeight ?? 0)}px`
         : '1px',
-    opacity: interactive ? '' : viewed ? '0' : '',
+    opacity: interactive ? '' : viewed || visible ? '0' : '',
     visibility: blank && !viewed ? 'hidden' : '',
     'pointer-events': interactive && !isWebviewDragPassthroughActive() ? 'auto' : 'none'
   }
