@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import { AcpRpcError, acpErrorDataWords, type AcpAgentError } from '../transport/acp-errors'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
-import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 
 // interaction_ permissions are questions, even in yolo mode; never auto-approve them.
@@ -125,10 +126,86 @@ function promptErrorDetail(error: AcpAgentError): string | undefined {
   }
 }
 
+const LEVEL_ORDER: readonly string[] = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'extra_high',
+  'max'
+]
+
+const LEVEL_LABELS: Readonly<Record<string, string>> = {
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra High',
+  extra_high: 'Extra High',
+  max: 'Max'
+}
+
+const LEGACY_VARIANTS: Readonly<Record<string, readonly [familyId: string, level: string]>> = {
+  'gemini-3.5-flash-extra-low': ['gemini-3.5-flash', 'low'],
+  'gemini-3.5-flash-low': ['gemini-3.5-flash', 'medium'],
+  'gemini-3-flash-agent': ['gemini-3.5-flash', 'high'],
+  'gemini-3.1-pro-low': ['gemini-3.1-pro', 'low'],
+  'gemini-pro-agent': ['gemini-3.1-pro', 'high']
+}
+
+function parseAntigravityVariant(
+  modelId: string,
+  hasLegacyFlash: boolean
+): readonly [familyId: string, level: string] | null {
+  const legacy = LEGACY_VARIANTS[modelId]
+  if (legacy && (modelId !== 'gemini-3.5-flash-low' || hasLegacyFlash)) {
+    return legacy
+  }
+  const stripped = modelId.endsWith('-effort') ? modelId.slice(0, -'-effort'.length) : modelId
+  const dash = stripped.lastIndexOf('-')
+  if (dash <= 0) {
+    return null
+  }
+  const familyId = stripped.slice(0, dash)
+  const level = stripped.slice(dash + 1)
+  return Object.hasOwn(LEVEL_LABELS, level) ? [familyId, level] : null
+}
+
+// Antigravity groups variant models by family in `configOptions` while listing flat variants in `availableModels`.
+function groupedModelEfforts(
+  modelId: string,
+  availableModels: readonly ModelInfo[]
+): { efforts: AgentSessionOptionChoice[] } | undefined {
+  // Single-variant models stay literal in `configOptions` and offer no thinking-level menu.
+  if (availableModels.some((entry) => entry.modelId === modelId)) {
+    return { efforts: [] }
+  }
+  const hasLegacyFlash = availableModels.some(
+    (entry) =>
+      entry.modelId === 'gemini-3.5-flash-extra-low' || entry.modelId === 'gemini-3-flash-agent'
+  )
+  const levels = new Set<string>()
+  for (const entry of availableModels) {
+    const parsed = parseAntigravityVariant(entry.modelId, hasLegacyFlash)
+    if (parsed && parsed[0] === modelId) {
+      levels.add(parsed[1])
+    }
+  }
+  if (levels.size < 2) {
+    return undefined
+  }
+  const ordered = [...levels].sort((a, b) => LEVEL_ORDER.indexOf(a) - LEVEL_ORDER.indexOf(b))
+  return {
+    efforts: ordered.map((value) => ({ value, label: LEVEL_LABELS[value] ?? value }))
+  }
+}
+
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   request: (method, params) => questionRequest(method, params) ?? warnedApproval(method, params),
   normalizeToolUpdate,
   promptErrorDetail,
+  groupedModelEfforts,
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.

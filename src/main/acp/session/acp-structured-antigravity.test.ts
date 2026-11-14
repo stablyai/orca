@@ -295,3 +295,87 @@ it('stops a chat that has left the gate but is not loaded yet before the operati
   )
   expect(ranOverLiveChild).toBe(false)
 })
+
+it('derives effort choices for grouped model families from availableModels before switching models', async () => {
+  const configOptions = fixture.session.configOptions.map((option) =>
+    option.category === 'model'
+      ? {
+          ...option,
+          currentValue: 'gemini-3.8-flash',
+          options: [
+            { value: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
+            { value: 'gemini-4-hydrogen', name: 'Gemini 4 Hydrogen' },
+            { value: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro' },
+            { value: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)' }
+          ]
+        }
+      : option
+  )
+  const rig = await openAcpAdapterRig({
+    spec: ANTIGRAVITY,
+    initialize: fixture.initialize,
+    script: (agent) => {
+      agent.on('session/new', (frame) =>
+        agent.reply(frame, {
+          ...fixture.session,
+          sessionId: PROVIDER_SESSION,
+          configOptions,
+          models: {
+            currentModelId: 'gemini-3.8-flash-high',
+            availableModels: [
+              ...fixture.session.models.availableModels,
+              { modelId: 'gemini-4-hydrogen-xhigh', name: 'Gemini 4 Hydrogen (XHigh)' },
+              { modelId: 'gemini-4-hydrogen-low', name: 'Gemini 4 Hydrogen (Low)' },
+              { modelId: 'gemini-4-hydrogen-high', name: 'Gemini 4 Hydrogen (High)' },
+              { modelId: 'gemini-4-hydrogen-medium', name: 'Gemini 4 Hydrogen (Medium)' },
+              { modelId: 'gemini-3.1-pro-high', name: 'Gemini 3.1 Pro (High)' },
+              { modelId: 'gemini-3.1-pro-low', name: 'Gemini 3.1 Pro (Low)' },
+              { modelId: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)' }
+            ]
+          }
+        })
+      )
+      agent.on('session/set_config_option', (frame) => agent.reply(frame, { configOptions }))
+    }
+  })
+  await rig.acquire()
+  const options = await rig.adapter.readOptions({ sessionId: SESSION, fence: 1 })
+  expect(options.models).toEqual([
+    {
+      id: 'gemini-3.8-flash',
+      label: 'Gemini 3.8 Flash',
+      isDefault: false,
+      efforts: [
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' }
+      ]
+    },
+    {
+      id: 'gemini-4-hydrogen',
+      label: 'Gemini 4 Hydrogen',
+      isDefault: false,
+      efforts: [
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' },
+        { value: 'xhigh', label: 'Extra High' }
+      ]
+    },
+    {
+      id: 'gemini-3.1-pro',
+      label: 'Gemini 3.1 Pro',
+      isDefault: false,
+      efforts: [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' }
+      ]
+    },
+    {
+      id: 'gpt-oss-120b-medium',
+      label: 'GPT-OSS 120B (Medium)',
+      isDefault: false,
+      efforts: []
+    }
+  ])
+})
