@@ -5,12 +5,19 @@ import {
   rebuildAppMenu,
   getNextDefaultOnAppearanceSettingValue
 } from '../../menu/register-app-menu'
-import { zoomDashboardPopoutIfFocused } from '../../window/dashboard-popout-window'
-import { zoomWorkspaceSpaceWindowIfFocused } from '../../window/workspace-space-window'
+import {
+  isDashboardPopoutRenderer,
+  zoomDashboardPopoutIfFocused
+} from '../../window/dashboard-popout-window'
+import {
+  isWorkspaceSpaceWindowRenderer,
+  zoomWorkspaceSpaceWindowIfFocused
+} from '../../window/workspace-space-window'
 import { recordCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { mainProcessState as state } from '../main-process-state'
 import {
   getAppMenuQuitHandlers,
+  quitFromUserCommand,
   openSettingsFromSystemMenu,
   runUserInitiatedUpdateCheck,
   sendOpenCrashReport,
@@ -20,6 +27,8 @@ import {
 import { ensureAutoUpdaterConfigured } from '../../updater/lifecycle/main-window-updater'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
+import { installDesktopHoldQuit } from '../../window/desktop-hold-quit'
+import { isTrustedUIRenderer } from '../../ipc/ui'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store
@@ -28,9 +37,26 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   }
   await setMainUiLanguage(store.getSettings().uiLanguage)
   logStartupMilestone('i18n-ready')
+  installDesktopHoldQuit({
+    store,
+    isActivityOwner: isTrustedUIRenderer,
+    isLocalWorkActive: () => (state.agentAwakeService?.getWorkingAgentCount() ?? 0) > 0,
+    getKeybindings: () => state.keybindings?.getOverrides(),
+    isUIRenderer: (sender) =>
+      isTrustedUIRenderer(sender) ||
+      isDashboardPopoutRenderer(sender) ||
+      isWorkspaceSpaceWindowRenderer(sender),
+    quit: quitFromUserCommand,
+    rebuildMenu: rebuildAppMenu
+  })
   registerAppMenu({
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
     ...getAppMenuQuitHandlers(),
+    holdQuitShortcut: {
+      isEnabled: () =>
+        process.platform === 'darwin' && store.getSettings().holdQuitWhileAgentsWork === true,
+      quit: quitFromUserCommand
+    },
     onCheckForUpdates: (options) => {
       ensureAutoUpdaterConfigured()
       runUserInitiatedUpdateCheck(options)

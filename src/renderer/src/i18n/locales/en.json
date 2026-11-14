@@ -826,6 +826,13 @@
       "uiZoom": {
         "zoomOut": "Zoom out",
         "zoomIn": "Zoom in"
+      },
+      "holdQuit": {
+        "title": "Hold ⌘Q while agents are working",
+        "description": "Hold for about a second to quit during active work. When agents finish, a quick press quits normally.",
+        "keyword": {
+          "quit": "quit"
+        }
       }
     },
     "browser": {
@@ -25743,5 +25750,9 @@
       "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
+  },
+  "holdQuit": {
+    "hint": "Agents are still working. Hold ⌘Q to quit.",
+    "unavailable": "Hold-to-quit is unavailable. Use the application menu to quit."
   }
 }

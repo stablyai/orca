@@ -146,7 +146,7 @@ function GeneralRootSettings({
   wslDistros = EMPTY_WSL_DISTROS
 }: GeneralPaneProps & { query: string; showNavigation: boolean }): React.JSX.Element {
   const t = useTranslate()
-  const tabsEntries = getGeneralNavigationSearchEntries()
+  const tabsEntries = getGeneralNavigationSearchEntries({ showHoldQuit: false })
   const runtimeEntries = getGeneralProjectRuntimeSearchEntries()
   const showRuntime = shouldShowProjectRuntimeSection(wslSupportedPlatform, query, runtimeEntries)
   const autoSaveEntries = getGeneralEditorSearchDescriptors()

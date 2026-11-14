@@ -1,4 +1,5 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
+import { getHoldQuitEntries } from './general-hold-quit-search'
 import { getGeneralConfirmationSearchEntries } from './general-confirmations-search'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
@@ -19,6 +20,12 @@ export function GeneralConfirmationsSection({
   const query = useAppStore((state) => state.settingsSearchQuery)
   const entries = getGeneralConfirmationSearchEntries()
   const rows: (SettingsSearchEntry & { id?: string; checked: boolean; onChange: () => void })[] = [
+    ...getHoldQuitEntries().map((entry) => ({
+      ...entry,
+      checked: settings.holdQuitWhileAgentsWork === true,
+      onChange: () =>
+        updateSettings({ holdQuitWhileAgentsWork: settings.holdQuitWhileAgentsWork !== true })
+    })),
     {
       ...entries.pinned,
       checked: settings.confirmClosePinnedTab ?? true,

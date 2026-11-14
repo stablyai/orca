@@ -4,7 +4,10 @@ import type { VoiceSettings } from './speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal/quick-commands/terminal-quick-commands'
 import { TASK_PROVIDERS } from './work-items/task-providers'
-import { getDefaultSourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings'
+import {
+  getDefaultCommitMessageAiSettings,
+  getDefaultSourceControlAiSettings
+} from './source-control/ai/settings/source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from './native-chat/native-chat-idle-stop'
@@ -129,6 +132,7 @@ export function buildDefaultSettings(args: {
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
+    holdQuitWhileAgentsWork: false,
     terminalClipboardOnSelect: false,
     // Trim only the shared leading-space gutter, preserving relative indentation.
     terminalCopyTrimsGutter: true,
@@ -306,17 +310,7 @@ export function buildDefaultSettings(args: {
       activeProject: null
     },
     // Why: keep agent/model maps empty so first use follows the default agent's model, not a frozen stale choice.
-    commitMessageAi: {
-      enabled: true,
-      agentId: null,
-      selectedModelByAgent: {},
-      discoveredModelsByAgent: {},
-      selectedModelByAgentByHost: {},
-      discoveredModelsByAgentByHost: {},
-      selectedThinkingByModel: {},
-      customPrompt: '',
-      customAgentCommand: ''
-    },
+    commitMessageAi: getDefaultCommitMessageAiSettings(),
     sourceControlAi: getDefaultSourceControlAiSettings(),
     voice: args.voice,
     voiceDictationModeDefaultedToAuto: true

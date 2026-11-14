@@ -29,6 +29,20 @@ function copyRecord<T>(value: T | undefined): T | undefined {
   return value === undefined ? undefined : structuredClone(value)
 }
 
+export function getDefaultCommitMessageAiSettings(): CommitMessageAiSettings {
+  return {
+    enabled: true,
+    agentId: null,
+    selectedModelByAgent: {},
+    discoveredModelsByAgent: {},
+    selectedModelByAgentByHost: {},
+    discoveredModelsByAgentByHost: {},
+    selectedThinkingByModel: {},
+    customPrompt: '',
+    customAgentCommand: ''
+  }
+}
+
 export function getDefaultSourceControlAiSettings(): SourceControlAiSettings {
   const actions: NonNullable<SourceControlAiSettings['actions']> = {}
   for (const actionId of AI_ACTION_IDS) {
