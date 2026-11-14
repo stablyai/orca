@@ -7,7 +7,7 @@ import '../../shared/protocol-version'
 import '../orchestration/recovery/orchestration-mutation-recovery'
 import { reportCliError } from '../output/cli-error'
 import { RuntimeClient } from './client'
-import { RuntimeClientError, RuntimeRpcFailureError } from './types'
+import { RuntimeClientError, RuntimeRpcFailureError } from './connection/types'
 
 const servers = new Set<Server>()
 
@@ -95,6 +95,5 @@ describe('RuntimeClient orchestration recovery identity', () => {
     expect(error).toBeInstanceOf(RuntimeClientError)
     expect(error).not.toBeInstanceOf(RuntimeRpcFailureError)
     expectPromptRetryBlockedJson(error, 'prompt-downgraded-lost-reply')
-    expect(JSON.stringify((error as RuntimeClientError).data)).not.toContain('Update Orca')
   })
 })

@@ -1,4 +1,4 @@
-import { SERVE_GAVE_UP_ADVICE } from '../runtime/serve-supervisor-brake'
+import { SERVE_GAVE_UP_ADVICE } from '../runtime/serve/supervision/serve-supervisor-brake'
 import type { ServeServiceStatus } from './serve-service'
 
 export function formatServeServiceInstall(result: Record<string, unknown>): string {

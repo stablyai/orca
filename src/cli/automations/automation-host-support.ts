@@ -8,7 +8,7 @@ import {
 } from '../../shared/agent-launch/startup/automation-extra-agent-args'
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 const SETUP_CHOICE_HOST_UPDATE_REQUIRED =
   "This host's Orca is too old for --setup on automations. Update Orca on that host, or run the command without --setup."

@@ -10,7 +10,7 @@ import {
 } from '../../shared/worktree-runtime-capabilities'
 import { getOptionalStringFlag } from '../arguments/flags'
 import { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { resolveWorktreeCreateCwdContext } from '../workspace-selection/workspace-selector'
 import { mayNameFolderWorkspace } from '../workspace-selection/folder-workspace-selector'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from './worktree-selector-recovery'

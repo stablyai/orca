@@ -17,7 +17,7 @@ import { writePluginTypeFiles } from './plugin-type-files'
 import { findPluginTestFiles, runPluginTests } from './plugin-test-runner'
 import { checkPluginPanels, formatPluginPanelCheck } from './plugin-panel-check'
 import { checkPluginEditors, formatPluginEditorCheck } from './plugin-editor-check'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { PLUGIN_INVALID_CODE } from '../../../shared/plugins/approval/plugin-cli-approval'
 import { formatPluginGrantLines } from '../plugin-grant-lines'
 
