@@ -178,7 +178,8 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
       color?: string | null
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
-    }
+    },
+    options?: { keepPublicationEpoch: true }
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
@@ -206,7 +207,10 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
     }
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      // A headless epoch on a window's snapshot lets later merges resurrect tabs the window closed.
+      publicationEpoch: options?.keepPublicationEpoch
+        ? snapshot.publicationEpoch
+        : `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs
     }
