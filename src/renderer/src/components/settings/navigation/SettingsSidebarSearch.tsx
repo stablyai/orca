@@ -55,6 +55,8 @@ export function SettingsSearchField({
           aria-expanded={expanded}
           aria-controls={expanded ? listboxId : undefined}
           aria-activedescendant={activeOptionId}
+          // Settings autofocuses this field on open; a halo there reads as an alert.
+          focusRing="quiet"
           className="bg-background/60 pl-9 pr-14 text-[13px]"
         />
         {query === '' ? (
