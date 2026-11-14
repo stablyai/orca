@@ -1,5 +1,6 @@
 import { NativeChatForkContext, NativeChatForkSlotContext } from './native-chat-fork-context'
-import { NativeChatWorktreeForkDialogHost } from './NativeChatWorktreeForkDialog'
+import { NativeChatForkWindowHost } from './fork-window/NativeChatForkWindow'
+import { terminalForkTurnEnd } from '../../../../../../shared/native-chat/terminal-fork-point'
 import { useNativeChatWorktreeForkRequest } from './native-chat-worktree-fork-requests'
 import { useNativeChatTerminalFork } from './use-native-chat-terminal-fork'
 import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
@@ -36,16 +37,24 @@ export function NativeChatTerminalForkProvider({
     <NativeChatForkContext.Provider value={fork}>
       <NativeChatForkSlotContext.Provider value={fork !== undefined}>
         {children}
-        {fork && worktreeId ? (
-          <NativeChatWorktreeForkDialogHost
+        {fork?.worktreeForkDialog && worktreeId && sessionId ? (
+          <NativeChatForkWindowHost
             dialog={fork.worktreeForkDialog}
-            sourceWorktreeId={worktreeId}
-            agent="claude"
-            request={fork.request}
             source={{
+              kind: 'terminal',
+              agent: 'claude',
+              sessionId,
+              worktreeId,
               target: target ?? { kind: 'local' },
-              sessionId: sessionId ?? '',
-              label: agent
+              label: agent,
+              usageLimited: fork.worktreeForkDialog.usageLimited === true,
+              subagentOffered: false,
+              newWorktreeOffered: fork.worktreeForkOffered === true,
+              destinationOffered: fork.worktreeForkOffered === true,
+              messages: () => messages,
+              cutThrough: (throughItemId) =>
+                terminalForkTurnEnd(messages, throughItemId) ?? throughItemId,
+              request: fork.request
             }}
           />
         ) : null}

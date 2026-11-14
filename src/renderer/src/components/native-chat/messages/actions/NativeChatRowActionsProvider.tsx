@@ -13,7 +13,9 @@ import type { NativeChatRewindSurface } from '@/components/native-chat/messages/
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import { useAppStore } from '@/store'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { NativeChatWorktreeForkDialogHost } from './NativeChatWorktreeForkDialog'
+import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import { NativeChatForkWindowHost } from './fork-window/NativeChatForkWindow'
+import { nativeChatWorktreeForkSourceBranch } from './native-chat-worktree-fork'
 import { useNativeChatWorktreeForkRequest } from './native-chat-worktree-fork-requests'
 
 /** The chat tab's title, as a subagent addresses its report. */
@@ -42,7 +44,10 @@ export function NativeChatRowActionsProvider({
   children
 }: {
   pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target' | 'sessionId'>
-  chat: { rewind: { surface: NativeChatRewindSurface | undefined } }
+  chat: {
+    rewind: { surface: NativeChatRewindSurface | undefined }
+    messages: readonly NativeChatMessage[]
+  }
   /** The session's fork, shared with its `/fork` and `/btw` commands. */
   forks: NativeChatPaneForks
   children: React.ReactNode
@@ -76,16 +81,25 @@ export function NativeChatRowActionsProvider({
           <NativeChatForkedFromContext.Provider value={openSource}>
             <NativeChatForkSlotContext.Provider value>
               {children}
-              {forks.fork && worktreeId && isTuiAgent(agent) ? (
-                <NativeChatWorktreeForkDialogHost
+              {forks.fork?.worktreeForkDialog && worktreeId && isTuiAgent(agent) ? (
+                <NativeChatForkWindowHost
                   dialog={forks.fork.worktreeForkDialog}
-                  sourceWorktreeId={worktreeId}
-                  agent={agent}
-                  request={forks.fork.request}
                   source={{
-                    target,
+                    kind: 'structured',
+                    agent,
                     sessionId: pane.sessionId,
-                    label: chatTabLabel(pane.tabId, worktreeId) ?? agent
+                    worktreeId,
+                    target,
+                    label: chatTabLabel(pane.tabId, worktreeId) ?? agent,
+                    usageLimited: forks.fork.worktreeForkDialog.usageLimited === true,
+                    subagentOffered: forks.fork.subagentOffered !== false,
+                    newWorktreeOffered:
+                      forks.fork.worktreeForkOffered === true &&
+                      nativeChatWorktreeForkSourceBranch(worktreeId) !== null,
+                    destinationOffered: forks.fork.worktreeForkOffered === true,
+                    messages: () => chat.messages,
+                    cutThrough: (throughItemId) => throughItemId,
+                    request: forks.fork.request
                   }}
                 />
               ) : null}

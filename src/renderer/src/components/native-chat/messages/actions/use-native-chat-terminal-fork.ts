@@ -105,7 +105,8 @@ export function useNativeChatTerminalFork(input: {
       forkPointBefore,
       // A terminal fork resumes the CLI, which cannot be handed a task to start in the background.
       subagentOffered: false,
-      ...(worktreeOffered ? { openWorktreeFork } : {})
+      openWorktreeFork,
+      worktreeForkOffered: worktreeOffered
     }),
     [forkPointBefore, openWorktreeFork, pendingItemId, request, worktreeOffered]
   )
@@ -123,10 +124,10 @@ export function useNativeChatTerminalFork(input: {
               !slot.activeTurnIsWorking &&
               slot.endsResponse !== false,
             forkLatest: () => 'none' as const,
-            ...(worktreeOffered ? { openWorktreeForkLatest } : {}),
+            openWorktreeForkLatest,
             worktreeForkDialog
           }
         : undefined,
-    [enabled, openWorktreeForkLatest, rowAction, worktreeForkDialog, worktreeOffered]
+    [enabled, openWorktreeForkLatest, rowAction, worktreeForkDialog]
   )
 }

@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import { useNativeChatOrcaStopView } from '../notices/native-chat-orca-stop-context'
 import { NativeChatForkContext } from './native-chat-fork-context'
 import { NativeChatForkIcon } from './NativeChatForkIcon'
 
@@ -23,6 +24,8 @@ export function NativeChatUserForkAction({
   text: string
 }): React.JSX.Element | null {
   const t = useTranslate()
+  // Fork stays offered at a usage limit; the window then suggests another agent.
+  const usageLimited = useNativeChatOrcaStopView().usageLimitTurnItemId !== null
   const fork = useContext(NativeChatForkContext)
   const forkPointBefore = fork?.forkPointBefore
   if (!fork || !forkPointBefore || !text.trim()) {
@@ -55,9 +58,14 @@ export function NativeChatUserForkAction({
     }
     run(throughItemId)
   }
-  const inTab = (): void =>
-    start((through) => void fork.request(through, undefined, undefined, text))
   const openWorktreeFork = fork.openWorktreeFork
+  const inTab = (): void =>
+    start((through) =>
+      openWorktreeFork
+        ? openWorktreeFork(through, 'tab', text, usageLimited)
+        : void fork.request(through, undefined, undefined, text)
+    )
+  const menu = Boolean(openWorktreeFork && fork.worktreeForkOffered)
   const button = (
     <button
       type="button"
@@ -65,12 +73,12 @@ export function NativeChatUserForkAction({
       aria-label={label}
       aria-description={disabledReason ?? undefined}
       aria-disabled={disabledReason !== null}
-      onClick={openWorktreeFork || disabledReason !== null ? undefined : inTab}
+      onClick={menu || disabledReason !== null ? undefined : inTab}
     >
       <NativeChatForkIcon />
     </button>
   )
-  if (!openWorktreeFork || disabledReason !== null) {
+  if (!openWorktreeFork || !menu || disabledReason !== null) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
@@ -92,10 +100,12 @@ export function NativeChatUserForkAction({
       </Tooltip>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={inTab}>
-          {t('components.native-chat.fork.fromMessageTab', 'Edit in a new tab')}
+          {t('components.native-chat.fork.fromMessageTabWindow', 'Edit in a new tab…')}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => start((through) => openWorktreeFork(through, 'worktree', text))}
+          onSelect={() =>
+            start((through) => openWorktreeFork(through, 'worktree', text, usageLimited))
+          }
         >
           {t('components.native-chat.fork.fromMessageWorktree', 'Edit in a new worktree…')}
         </DropdownMenuItem>

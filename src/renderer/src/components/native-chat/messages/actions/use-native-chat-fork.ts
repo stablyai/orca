@@ -34,7 +34,7 @@ import {
   type NativeChatSideChatRequest
 } from '@/components/native-chat/messages/actions/native-chat-fork-launch'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
-import type { NativeChatWorktreeForkMode } from './native-chat-worktree-fork'
+import type { NativeChatForkWindowPreset } from './fork-window/native-chat-fork-window-choices'
 import { nativeChatForkPoint, nativeChatUserForkPoint } from './native-chat-fork-point'
 import { useNativeChatWorktreeForkDialog } from './use-native-chat-worktree-fork-dialog'
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
@@ -56,12 +56,15 @@ export type NativeChatForkRowAction = {
     destination?: NativeChatForkDestination,
     draft?: string
   ) => Promise<NativeChatForkOutcome | undefined>
-  /** Asks where a fork into a new worktree should branch from; absent where the host can't. */
+  /** Opens the Fork window with a menu item's starting choices. */
   openWorktreeFork?: (
     throughItemId: string,
-    mode?: NativeChatWorktreeForkMode,
-    draft?: string
+    mode?: NativeChatForkWindowPreset,
+    draft?: string,
+    usageLimited?: boolean
   ) => void
+  /** The host can fork into a new worktree, so menus offer it as a preset. */
+  worktreeForkOffered?: boolean
   /** False where a fork cannot be handed a task to start in the background (terminal chats). */
   subagentOffered?: boolean
   /** The response a fork from one of your messages copies through: the last one before it. */
@@ -74,9 +77,11 @@ export type NativeChatForkDestination = { worktreeId: string }
 /** The response a fork into a new worktree copies through, while its dialog is open. */
 export type NativeChatWorktreeForkDialog = {
   throughItemId: string
-  mode: NativeChatWorktreeForkMode
+  mode: NativeChatForkWindowPreset
   /** Your message, left unsent in the fork's composer. */
   draft?: string
+  /** The chat had stopped at its agent's usage limit, so the window suggests another agent. */
+  usageLimited?: boolean
   close: () => void
 }
 
@@ -96,8 +101,8 @@ export type NativeChatForkSurface = NativeChatForkRowAction & {
 /** The rows' surface plus `/fork`: the same request, through the newest response still in context. */
 export type NativeChatPaneFork = NativeChatForkSurface & {
   forkLatest: () => NativeChatForkLatestOutcome
-  /** Opens the new-worktree fork from the newest response still in context; false when there is none. */
-  openWorktreeForkLatest?: (mode?: NativeChatWorktreeForkMode) => boolean
+  /** Opens the Fork window from the newest response still in context; false when there is none. */
+  openWorktreeForkLatest?: (mode?: NativeChatForkWindowPreset) => boolean
   worktreeForkDialog: NativeChatWorktreeForkDialog | null
 }
 
@@ -243,7 +248,8 @@ export function useNativeChatFork(input: {
       pendingItemId,
       request,
       forkPointBefore,
-      ...(worktreeForkOffered ? { openWorktreeFork } : {})
+      openWorktreeFork,
+      worktreeForkOffered
     }),
     [
       fork,
@@ -266,7 +272,7 @@ export function useNativeChatFork(input: {
             inheritedThroughSequence,
             rowAction,
             forkLatest,
-            ...(worktreeForkOffered ? { openWorktreeForkLatest } : {}),
+            openWorktreeForkLatest,
             worktreeForkDialog
           },
     [
@@ -279,8 +285,7 @@ export function useNativeChatFork(input: {
       rowAction,
       supportKind,
       openWorktreeForkLatest,
-      worktreeForkDialog,
-      worktreeForkOffered
+      worktreeForkDialog
     ]
   )
 }
