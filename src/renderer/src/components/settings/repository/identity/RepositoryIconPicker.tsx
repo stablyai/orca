@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -17,7 +17,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { RepositoryIconColorSection } from './RepositoryIconColorSection'
-import { RepositoryIconTabs } from './RepositoryIconTabs'
+import { RepositoryIconTabs, type RepositoryIconTabsHandle } from './RepositoryIconTabs'
 import {
   buildRepositoryGitHubAvatarUpdate,
   resolveRepositoryGitHubAvatar
@@ -63,6 +63,7 @@ export function RepositoryIconPicker({
   const [loadingGitHub, setLoadingGitHub] = useState(false)
   const [resetting, setResetting] = useState(false)
   const mountedRef = useMountedRef()
+  const iconTabsRef = useRef<RepositoryIconTabsHandle>(null)
   // Resolve avatars/upstream on the selected repo owner, independent of focused host.
   const selectedHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const ownerEnvironmentId = selectedHost?.kind === 'runtime' ? selectedHost.environmentId : null
@@ -124,6 +125,7 @@ export function RepositoryIconPicker({
   }
 
   const handleResetToDefault = async () => {
+    iconTabsRef.current?.cancelUpload()
     setResetting(true)
     try {
       const resolution = await resolveGitHubAvatar({ forceLive: true }).catch(() => null)
@@ -174,6 +176,7 @@ export function RepositoryIconPicker({
       <RepositoryIconColorSection badgeColor={repo.badgeColor} onBadgeColorChange={setBadgeColor} />
 
       <RepositoryIconTabs
+        ref={iconTabsRef}
         initialTab={initialTab}
         selectedLucideName={selectedLucideName}
         selectedEmoji={selectedEmoji}

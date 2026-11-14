@@ -7,6 +7,10 @@ import {
 
 const COPY: Record<RepoIconPickFailureCode, () => string> = {
   notPng: () => translate('settings.repository.iconPickErrors.notPng', EN.notPng),
+  unsupportedImage: () =>
+    translate('settings.repository.iconPickErrors.unsupportedImage', EN.unsupportedImage),
+  sourceTooLarge: () =>
+    translate('settings.repository.iconPickErrors.sourceTooLarge', EN.sourceTooLarge),
   tooLarge: () => translate('settings.repository.iconPickErrors.tooLarge', EN.tooLarge)
 }
 

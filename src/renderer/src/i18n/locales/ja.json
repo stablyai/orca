@@ -7977,10 +7977,10 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} リポジトリカラーを使用する",
           "useRepoIcon": "{{value0}} リポジトリアイコンを使用する",
-          "fde066a63b": "PNG アップロードは 256KB 以下である必要があります。",
+          "fde066a63b": "PNG、JPEG、SVG、WebP、GIF、BMP、ICO、AVIF。最大10MB、3200万画素。",
           "cc1286e263": "ファビコン",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "PNG をアップロードする",
+          "381b4844fd": "画像をアップロード",
           "7da623abcc": "デフォルトで使用 — 所有者がカスタムイメージを設定していない場合でも、GitHub は常にイメージを提供します。",
           "c490787d24": "絵文字",
           "b2d7fd2116": "アイコン",
@@ -7998,7 +7998,8 @@
           "currentEmojiSelection": "現在: {{value0}}",
           "searchEmojiPlaceholder": "絵文字を検索",
           "cc76342291": "GitHub アバターを使用する",
-          "43bf3709dd": "リポジトリアイコン"
+          "43bf3709dd": "リポジトリアイコン",
+          "imageTooLarge": "画像が10MBまたは3200万画素の上限を超えています。"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相対パスは、このプロジェクトのルートから解決されます。",
