@@ -4,8 +4,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 const hosts = vi.hoisted(() => {
   const make = (name: string) => {
-    const Host = (props: { children?: ReactNode; accessibilityLabel?: string }): ReactNode =>
-      props.children ?? null
+    const Host = (props: {
+      children?: ReactNode
+      accessibilityLabel?: string
+      name?: string
+    }): ReactNode => props.children ?? null
     Host.displayName = name
     return Host
   }
