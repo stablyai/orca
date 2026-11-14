@@ -8,8 +8,7 @@ import {
   formatCandidateProvenance,
   formatCandidateSource,
   getDetectedSetupPreviewContent,
-  isSetupScriptPromptDismissed,
-  isSilentSetupScriptPromptState
+  isSetupScriptPromptDismissed
 } from '@/runtime/repo-hooks/setup-script-prompt'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
@@ -20,6 +19,7 @@ import { openSetupScriptSettings } from './open-setup-script-settings'
 import { trackSetupScriptPromptExposure } from './setup-script-prompt-exposure-telemetry'
 import {
   findSetupScriptPromptRepo,
+  isSetupScriptPromptActionable,
   isSharedSetupIgnored,
   markSetupScriptPromptSaved,
   type SetupScriptPromptState
@@ -108,7 +108,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       promptState?.repoId !== activeRepo.id ||
       promptState.repoHostIdentity !== activeRepoHostIdentity ||
       promptState.status !== 'ok' ||
-      promptState.hasEffectiveSetup
+      !isSetupScriptPromptActionable(promptState, activeRepo)
     ) {
       return
     }
@@ -339,8 +339,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     promptTargetHidden ||
     !activeRepo ||
     !renderedPromptState ||
-    (renderedPromptState.status === 'ok' && renderedPromptState.hasEffectiveSetup) ||
-    isSilentSetupScriptPromptState(renderedPromptState)
+    !isSetupScriptPromptActionable(renderedPromptState, activeRepo)
   ) {
     return null
   }
