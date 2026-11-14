@@ -41,17 +41,25 @@ export function readEnvironmentRegistryFile(
   if (observation?.has(path)) {
     return observation.get(path) ?? null
   }
+  const read = readHardenedEnvironmentRegistryFile(path, maxBytes)
+  observation?.set(path, read)
+  return read
+}
+
+function readHardenedEnvironmentRegistryFile(
+  path: string,
+  maxBytes: number
+): BoundedNodeFileRead | null {
   let read: BoundedNodeFileRead | null
   try {
     read = readPresentEnvironmentRegistryFile(path, maxBytes)
   } catch {
     hardenExistingSecureFile(path)
-    read = readPresentEnvironmentRegistryFile(path, maxBytes)
+    return readPresentEnvironmentRegistryFile(path, maxBytes)
   }
   if (read) {
     hardenExistingSecureFile(path)
   }
-  observation?.set(path, read)
   return read
 }
 

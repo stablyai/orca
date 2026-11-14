@@ -58,6 +58,18 @@ describe('asynchronous environment store owner', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps an oversized rejected registry private',
+    async () => {
+      const root = profile()
+      const path = getEnvironmentStorePath(root)
+      writeFileSync(path, 'x'.repeat(1_048_577))
+      chmodSync(path, 0o644)
+      await expect(listEnvironments(root)).rejects.toBeInstanceOf(RuntimeEnvironmentStoreError)
+      expect(statSync(path).mode & 0o777).toBe(0o600)
+    }
+  )
+
   it('captures arguments before the caller can mutate them', async () => {
     const root = profile()
     const args = { name: 'Before', pairingCode: pairing(9), now: 100 }
