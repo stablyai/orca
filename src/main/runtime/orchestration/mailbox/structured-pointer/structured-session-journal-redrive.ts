@@ -1,6 +1,6 @@
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createKeyedTrailingEdgeCoalescer } from '../../../client/events/keyed-trailing-edge-coalescer'
-import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
+import type { JournalPublication } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
 
 /** Coalesce streaming batches until quiet; settled turns stop emitting, so the final nudge still lands promptly. */
 const REDRIVE_FLUSH_MS = 300
@@ -15,23 +15,25 @@ export function subscribeForRedrive(
   sessionId: string,
   onJournalActivity: (sessionId: string) => void,
   /** Whether a publication changed anything the subscriber acts on. */
-  relevant: (journal: AgentSessionJournal) => boolean
+  relevant: (publication: JournalPublication) => boolean
 ): () => void {
   const coalescer = createKeyedTrailingEdgeCoalescer(onJournalActivity, {
     flushMs: REDRIVE_FLUSH_MS,
     maxWaitMs: REDRIVE_MAX_WAIT_MS
   })
   try {
-    const unsubscribe = host.observeJournalPublications(
-      sessionId,
-      (journal) => {
-        if (relevant(journal)) {
+    let seeded = false
+    const unsubscribe = host.observeConversationPublications(sessionId, {
+      next: (publication) => {
+        const changed = relevant(publication)
+        if (seeded && changed) {
           coalescer.schedule(sessionId)
         }
+        seeded = true
       },
-      // The journal as it is now is the baseline: only a later change wakes the subscriber.
-      (journal) => journal && relevant(journal)
-    )
+      error: (error) =>
+        console.warn('[orchestration] structured session redrive failed', sessionId, error)
+    })
     // Discard pending redrive on settlement so it cannot nudge a session no dispatch owns.
     return () => {
       coalescer.dispose()

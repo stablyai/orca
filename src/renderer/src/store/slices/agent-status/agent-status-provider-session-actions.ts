@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
@@ -5,12 +6,12 @@ import type {
   AgentProviderSessionRouting,
   AgentProviderSessionTiming
 } from './agent-status-contract'
-import {
-  agentProviderSessionsEqual,
-  type ResumableTuiAgent,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentSessionRecord
+import type {
+  ResumableTuiAgent,
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
@@ -24,7 +25,7 @@ import {
   ownerLaunchAttested,
   registryEntryMatchesStatus
 } from './agent-status-launch-config'
-import { copyLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { copyLaunchConfig } from '../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import { agentVerdictFields } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
 
@@ -165,10 +166,9 @@ export function createAgentStatusProviderSessionActions(
               ? { agentConversationsByPaneKey: nextConversations }
               : {}),
             retainedAgentsByPaneKey: nextRetained,
-            sleepingAgentSessionsByPaneKey: {
-              ...s.sleepingAgentSessionsByPaneKey,
-              [paneKey]: record
-            },
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
+              [paneKey, record]
+            ]),
             agentLaunchConfigByPaneKey: nextLaunchConfigs,
             acknowledgedAgentsByPaneKey: removePaneKeys(
               s.acknowledgedAgentsByPaneKey,

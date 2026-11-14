@@ -12,7 +12,7 @@ import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
 import {
   findSelfInitiatedTreeKills,
   resetSelfInitiatedTreeKillLogForTest
-} from '../../crash-reporting/self-initiated-tree-kill-log'
+} from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import { installMainProcessTreeKillGate } from './own-chromium-tree-kill-guard'
 import { terminateWindowsProcessTree } from './windows-process-tree-kill'
 

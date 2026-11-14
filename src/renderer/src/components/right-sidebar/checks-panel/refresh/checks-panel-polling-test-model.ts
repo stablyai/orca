@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 import type { useChecksPanelPolling } from './use-checks-panel-polling'
 
 type PollingInput = Parameters<typeof useChecksPanelPolling>[0]

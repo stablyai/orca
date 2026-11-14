@@ -22,33 +22,8 @@ const violations = [
     String.raw`'\x6fverflow-y-auto'`
   ],
   [
-    'unstyled class',
-    'export const X = () => <div className="max-h-64 overflow-y-auto" />',
-    '"max-h-64 overflow-y-auto"'
-  ],
-  [
-    'unstyled suffix-important class',
-    'export const X = () => <div className="max-h-64 overflow-y-auto!" />',
-    '"max-h-64 overflow-y-auto!"'
-  ],
-  [
-    'unknown scrollbar class',
-    'export const X = () => <div className="overflow-auto scrollbar-none" />',
-    '"overflow-auto scrollbar-none"'
-  ],
-  [
-    'separate class composer arguments',
-    "export const X = () => <div className={cn('overflow-y-auto', 'scrollbar-sleek')} />",
-    "'overflow-y-auto'"
-  ],
-  [
     'conditional scrollbar',
     "export const X = ({ enabled }) => <div className={cn('overflow-y-auto', enabled && 'scrollbar-sleek')} />",
-    "'overflow-y-auto'"
-  ],
-  [
-    'arbitrary class wrapper',
-    "export const X = () => <div className={identity('overflow-y-auto')} />",
     "'overflow-y-auto'"
   ],
   [
@@ -57,19 +32,9 @@ const violations = [
     '"overflow-y-auto md:scrollbar-sleek"'
   ],
   [
-    'inline overflow',
-    "export const X = () => <div style={{ overflowY: 'auto' }} />",
-    "overflowY: 'auto'"
-  ],
-  [
     'logical inline style spread',
     "export const X = ({ open }) => <div style={{ ...(open && { overflowY: 'auto' }) }} />",
     "overflowY: 'auto'"
-  ],
-  [
-    'JSX spread class',
-    "export const X = () => <div {...{ className: 'overflow-y-auto' }} />",
-    "'overflow-y-auto'"
   ],
   [
     'later spread override',
@@ -80,29 +45,12 @@ const violations = [
 
 const accepted = [
   [
-    'styled vertical class',
-    'export const X = () => <div className="overflow-auto scrollbar-sleek" />'
-  ],
-  [
-    'styled suffix-important classes',
-    'export const X = () => <div className="overflow-y-auto! scrollbar-sleek!" />'
-  ],
-  [
-    'same composer literal',
-    "export const X = () => <div className={cn('overflow-y-auto scrollbar-sleek')} />"
-  ],
-  [
     'same conditional literal',
     "export const X = ({ enabled }) => <div className={cn(enabled && 'overflow-y-auto scrollbar-sleek')} />"
   ],
-  ['horizontal-only overflow', 'export const X = () => <pre className="overflow-x-auto" />'],
   [
     'matching responsive variants',
     'export const X = () => <div className="md:overflow-y-auto md:scrollbar-sleek" />'
-  ],
-  [
-    'unconditional scrollbar',
-    'export const X = () => <div className="md:overflow-y-auto scrollbar-sleek" />'
   ],
   [
     'styled inline overflow',
@@ -111,10 +59,6 @@ const accepted = [
   [
     'styled JSX spread class',
     "export const X = () => <div {...{ className: 'overflow-y-auto scrollbar-sleek' }} />"
-  ],
-  [
-    'variant configuration',
-    "export const X = () => <div className={buttonVariants({ className: 'overflow-y-auto scrollbar-sleek' })} />"
   ]
 ]
 

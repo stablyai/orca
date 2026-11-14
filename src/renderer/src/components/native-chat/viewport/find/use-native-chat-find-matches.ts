@@ -4,7 +4,7 @@ import {
   findDomTextSearchRanges,
   type DomTextSearchInstance,
   type DomTextSearchScope
-} from '@/lib/dom-text-search-highlights'
+} from '@/lib/text-search/dom-text-search-highlights'
 import { nativeChatFindGeometry } from './native-chat-find-visibility'
 
 // Must match the ::highlight() selectors in native-chat-find.css.

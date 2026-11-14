@@ -18,6 +18,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
   protected abstract getListedBrowserTabsByPageId(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['getListedBrowserTabsByPageId']>
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['getListedBrowserTabsByPageId']>
+
   protected abstract notifyMobileSessionTabsChangedNow(
     ...args: Parameters<
       ScheduleMobileSessionTabsChangedMethods['notifyMobileSessionTabsChangedNow']
@@ -208,12 +209,16 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
       tabs: []
     }
     const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
+    for (const subscription of this.selectMobileSessionTabsListeners(worktreeId)) {
+      if (!this.mobileSessionTabListeners.has(subscription)) {
+        continue
+      }
       subscription.listener(
         this.clientSessionTabSelections.project(removed, subscription.clientNavigationId),
         changeSequence
       )
     }
+    this.clientHostedPageReconciliation.forgetWorktree(worktreeId)
     this.clientSessionTabSelections.forgetWorktree(worktreeId)
   }
 

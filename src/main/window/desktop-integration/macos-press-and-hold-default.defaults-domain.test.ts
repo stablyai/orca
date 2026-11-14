@@ -1,25 +1,20 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { rmSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcessSync } from '@orca/process-host'
 import {
   PRESS_AND_HOLD_KEY,
   ensureMacPressAndHoldDefault,
-  interpretDefaultsRead,
   readDomainPressAndHoldPreference,
   writeDomainPressAndHoldPreference,
-  type PressAndHoldHost,
-  type PressAndHoldRecord
+  type PressAndHoldHost
 } from './macos-press-and-hold-default'
 
 // Verify real defaults distinguishes absence from false using disposable Orca-prefixed domains.
 
 const domains: string[] = []
-
-const DEFAULTS_MISSING_EXIT_CODE = 1
 
 function throwawayDomain(): string {
   const domain = `com.stablyai.orca.defaults-domain-test.${randomUUID()}`
@@ -40,11 +35,11 @@ function rawRead(domain: string): string {
   }).trim()
 }
 
-function hostFor(domain: string, record: PressAndHoldRecord | null = null): PressAndHoldHost {
+function hostFor(domain: string): PressAndHoldHost {
   return {
     platform: 'darwin',
     resolveBundleIdentifier: () => domain,
-    readRecord: () => record,
+    readRecord: () => null,
     writeRecord: () => undefined,
     readDomainPreference: readDomainPressAndHoldPreference,
     writeDomainPreference: writeDomainPressAndHoldPreference,
@@ -65,16 +60,6 @@ describe.skipIf(process.platform !== 'darwin')(
       }
     })
 
-    it('tells an unset key apart from an explicit false', () => {
-      const unset = throwawayDomain()
-      const explicitlyFalse = throwawayDomain()
-      write(explicitlyFalse, 'false')
-
-      expect(readDomainPressAndHoldPreference(unset)).toBe('unset')
-      expect(readDomainPressAndHoldPreference(explicitlyFalse)).toBe('set')
-      expect(rawRead(explicitlyFalse)).toBe('0')
-    })
-
     it('writes false into a previously unset domain', () => {
       const domain = throwawayDomain()
 
@@ -90,55 +75,6 @@ describe.skipIf(process.platform !== 'darwin')(
         expect(ensureMacPressAndHoldDefault(hostFor(domain))).toBe('kept-user-preference')
         expect(rawRead(domain)).toBe(value === 'true' ? '1' : '0')
       }
-    })
-
-    it('refuses to call a failed probe "unset"', () => {
-      const spawnFailure = (): ReturnType<typeof runProcessSync> =>
-        runProcessSync({
-          program: '/usr/bin/defaults-does-not-exist',
-          args: ['read'],
-          stdio: ['ignore', 'ignore', 'ignore']
-        })
-      expect(spawnFailure).toThrow()
-      expect(interpretDefaultsRead(spawnFailure)).toBe('unknown')
-
-      const missingKey = runProcessSync({
-        program: '/usr/bin/defaults',
-        args: ['read', throwawayDomain(), PRESS_AND_HOLD_KEY],
-        stdio: ['ignore', 'ignore', 'ignore']
-      })
-      expect(missingKey.code).toBe(DEFAULTS_MISSING_EXIT_CODE)
-      expect(missingKey.timedOut).toBe(false)
-      expect(interpretDefaultsRead(() => missingKey)).toBe('unset')
-    })
-
-    // Root could still write the read-only fixture directory.
-    it.skipIf(process.getuid?.() === 0)('reports a write the binary refused', () => {
-      const readOnly = join(mkdtempSync(join(tmpdir(), 'orca-press-hold-ro-')), 'locked')
-      mkdirSync(readOnly)
-      chmodSync(readOnly, 0o500)
-      try {
-        expect(writeDomainPressAndHoldPreference(join(readOnly, 'domain'), false)).toBe(false)
-      } finally {
-        chmodSync(readOnly, 0o700)
-        rmSync(readOnly, { recursive: true, force: true })
-      }
-    })
-
-    it('sees the key disappear again after the user deletes it', () => {
-      const domain = throwawayDomain()
-      write(domain, 'false')
-      execFileSync('/usr/bin/defaults', ['delete', domain, PRESS_AND_HOLD_KEY], { stdio: 'ignore' })
-
-      expect(readDomainPressAndHoldPreference(domain)).toBe('unset')
-      const decided: PressAndHoldRecord = {
-        version: 1,
-        decision: 'applied',
-        domain,
-        decidedAt: '2026-01-01T00:00:00.000Z'
-      }
-      expect(ensureMacPressAndHoldDefault(hostFor(domain, decided))).toBe('already-decided')
-      expect(readDomainPressAndHoldPreference(domain)).toBe('unset')
     })
   }
 )

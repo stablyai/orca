@@ -1,8 +1,9 @@
-import type { GitHubPRStack } from '../../../../shared/github/pull-request-types'
-import type { ghRepoExecOptions } from '../../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import type { GitHubPRStack } from '../../../../shared/github/pull-requests/pull-request-types'
+import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { getRestPRByNumber } from './pr-number-lookup'
 export const PR_STACK_SUMMARY_CACHE_TTL_MS = 60_000
 

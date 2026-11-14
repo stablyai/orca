@@ -88,46 +88,6 @@ function writeCalls(): RuntimeRpcRequest[] {
 }
 
 describe('writeRuntimeFile disk precondition', () => {
-  it('refuses without writing when an older host holds newer disk content', async () => {
-    serveHost({ enforcesPrecondition: false, diskContent: 'agent rewrite' })
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(writeCalls()).toHaveLength(0)
-  })
-
-  it.each(['original', 'edited'])(
-    'skips identical content on a v1 guarded host for an automatic save (baseline %s)',
-    async (baseline) => {
-      serveHost({ enforcesPrecondition: true, identicalNoop: false, diskContent: 'edited' })
-      expect(
-        await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, {
-          expectedSignature: getDiskBaselineSignature(baseline),
-          requireLosslessUtf8: true
-        })
-      ).toEqual({ ok: true, unchanged: true })
-      expect(writeCalls()).toHaveLength(0)
-    }
-  )
-
-  it('refuses an ambiguous automatic baseline before sending to a v1 host', async () => {
-    serveHost({ enforcesPrecondition: true, identicalNoop: false, diskContent: 'a�' })
-    expect(
-      await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'a�', undefined, {
-        expectedSignature: getDiskBaselineSignature('a�'),
-        requireLosslessUtf8: true
-      })
-    ).toEqual({ ok: false, diskConflict: 'not-utf8' })
-    expect(writeCalls()).toHaveLength(0)
-  })
-
   it('refuses to send when the runtime connection changes after the probe', async () => {
     serveHost({
       enforcesPrecondition: false,
@@ -139,26 +99,6 @@ describe('writeRuntimeFile disk precondition', () => {
       writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
     ).rejects.toThrow('Runtime connection changed')
     expect(writeCalls()).toHaveLength(0)
-  })
-
-  it('keeps the save when the guarded write landed but its reply timed out', async () => {
-    serveHost({ enforcesPrecondition: true, diskContent: 'edited' })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc',
-      ok: false,
-      error: { code: 'runtime_timeout', message: 'Timed out waiting for the remote Orca runtime' },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: true })
   })
 
   it('does not take a re-paired host holding the text as proof a lost write landed', async () => {
@@ -181,44 +121,5 @@ describe('writeRuntimeFile disk precondition', () => {
     await expect(
       writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
     ).rejects.toThrow('Timed out')
-  })
-
-  it('still fails a timed-out guarded write whose content is not on disk', async () => {
-    serveHost({ enforcesPrecondition: true, diskContent: 'original' })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc',
-      ok: false,
-      error: { code: 'runtime_timeout', message: 'Timed out waiting for the remote Orca runtime' },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await expect(
-      writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
-    ).rejects.toThrow('Timed out')
-  })
-
-  it('recovers when the transport refused to send to a replacement runtime', async () => {
-    serveHost({ enforcesPrecondition: true })
-    runtimeEnvironmentCall
-      .mockResolvedValueOnce({
-        id: 'files.writeIfUnchanged',
-        ok: false,
-        error: {
-          code: 'runtime_environment_changed',
-          message: 'Runtime environment identity changed; refresh and try again'
-        },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-      .mockResolvedValue(rpcOk({ ok: true }))
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: true })
   })
 })

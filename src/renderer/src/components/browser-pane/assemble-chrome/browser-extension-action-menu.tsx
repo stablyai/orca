@@ -18,7 +18,7 @@ import {
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { browserExtensionRemovalDescription } from '@/components/browser-extension-removal-description'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { BrowserExtensionContextMenuItem } from '../../../../../shared/browser/extensions/browser-extension-context-menu-types'
 import type { BrowserExtensionActionResult } from '../../../../../shared/browser/extensions/browser-extension-types'
 import type { BrowserExtensionToolbarAction } from '../../../../../shared/browser/extensions/browser-extension-toolbar-types'

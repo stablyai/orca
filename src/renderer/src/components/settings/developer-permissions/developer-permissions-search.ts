@@ -1,9 +1,17 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import type { DeveloperPermissionId } from '../../../../../shared/developer-permissions-types'
+
+export const DEVELOPER_PERMISSIONS_OVERVIEW_ID = 'developer-permissions-overview'
+
+export function getDeveloperPermissionSettingId(id: DeveloperPermissionId): string {
+  return `developer-permissions-${id}`
+}
 
 export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: DEVELOPER_PERMISSIONS_OVERVIEW_ID,
     title: translate(
       'auto.components.settings.developer.permissions.search.ad085fa291',
       'Developer permissions'
@@ -36,6 +44,7 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
     ]
   },
   {
+    targetSectionId: getDeveloperPermissionSettingId('microphone'),
     title: translate(
       'auto.components.settings.developer.permissions.search.16490ec4cd',
       'Microphone and camera'
@@ -80,6 +89,7 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
     ]
   },
   {
+    targetSectionId: getDeveloperPermissionSettingId('screen'),
     title: translate(
       'auto.components.settings.developer.permissions.search.70ffdc218d',
       'Screen recording and accessibility'
@@ -144,6 +154,7 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
     ]
   },
   {
+    targetSectionId: getDeveloperPermissionSettingId('local-network'),
     title: translate(
       'auto.components.settings.developer.permissions.search.3363889768',
       'LAN, USB, and Bluetooth'

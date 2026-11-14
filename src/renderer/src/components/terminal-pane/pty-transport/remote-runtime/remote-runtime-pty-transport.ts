@@ -1,7 +1,7 @@
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
-import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
+import { pairedAgentLaunchInputs } from '@/lib/agent-session/launch/routing/paired-agent-launch-inputs'
 import {
   agentSessionCreateCapabilities,
   agentSessionCreateRequest,
@@ -123,7 +123,10 @@ import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
 } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-operation'
-import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  replaceFitOverridePtyId,
+  setFitOverride
+} from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import {
   isWebTerminalSurfaceTabId,
@@ -3942,7 +3945,7 @@ export function createRemoteRuntimePtyTransport(
             .catch(() => false)
             .then(async (promptDelivered) => {
               const { completeWebHostAgentLaunch } =
-                await import('@/lib/web-host-agent-launch-completion')
+                await import('@/lib/agent-session/launch/new-tab/web-host-agent-launch-completion')
               completeWebHostAgentLaunch({
                 agent: launchAgentToSend,
                 worktreeId,
@@ -4150,6 +4153,8 @@ export function createRemoteRuntimePtyTransport(
     ownsRecovery() {
       return !destroyed && !terminalEnded && recoveryBlocksIo()
     },
+
+    isHoldingInput: shouldHoldInput,
 
     hasUndeliveredInput() {
       return (

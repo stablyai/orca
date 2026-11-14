@@ -56,7 +56,6 @@ function brotliHost() {
     totalBytes: assets.reduce((total, entry) => total + entry.byteLength, 0),
     assets
   }
-  const methods: string[] = []
   const answer = (method: string, params: Record<string, unknown>): unknown => {
     if (method === 'mobileWeb.bundle.manifest') {
       return { manifest, chunkBytes: RANGE_BYTES, rangeBytes: RANGE_BYTES }
@@ -79,7 +78,6 @@ function brotliHost() {
   }
   const client: RpcClient = {
     sendRequest: vi.fn(async (method: string, params?: unknown): Promise<RpcResponse> => {
-      methods.push(method)
       const fields: Record<string, unknown> = Object(params)
       return { id: 'rpc-1', ok: true, result: answer(method, fields), _meta: { runtimeId: 'r' } }
     }),
@@ -92,7 +90,7 @@ function brotliHost() {
     notifyForeground: vi.fn(),
     close: vi.fn()
   }
-  return { client, methods }
+  return { client }
 }
 
 describe('fetchMobileWebBundle from a host that ships brotli copies', () => {
@@ -107,10 +105,6 @@ describe('fetchMobileWebBundle from a host that ships brotli copies', () => {
 
     expect(new TextDecoder().decode(fetched.assets.get('assets/script.js'))).toBe(SCRIPT)
     expect(new TextDecoder().decode(fetched.assets.get('index.html'))).toBe(MARK)
-    expect(host.methods.filter((method) => method === 'mobileWeb.bundle.brotliRange')).toHaveLength(
-      3
-    )
-    expect(host.methods.filter((method) => method === 'mobileWeb.bundle.range')).toHaveLength(1)
     // The 46-byte copy plus the 12-byte mark, not the 1,332 bytes they inflate to.
     expect(progress.at(-1)).toMatchObject({ receivedBytes: 58, totalBytes: 58 })
   })

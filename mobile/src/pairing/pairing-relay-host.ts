@@ -3,7 +3,7 @@ import type {
   MobileRelayEndpoint
 } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
-import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostProfile } from '../host-catalog/host-profile'
 import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 export function directHost(

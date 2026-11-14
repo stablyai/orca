@@ -38,6 +38,23 @@ function normalizedKnownAgentType(agentType: AgentType | null | undefined): Agen
   return agentType
 }
 
+// OSC 7501 reports OpenCode 2 as `opencode`. The status plugin posts `opencode2`.
+const OPEN_CODE_STATUS_AGENTS = new Set<AgentType>(['opencode', 'opencode2'])
+
+function sameOpenCodeStatusAgent(left: AgentType, right: AgentType): boolean {
+  return OPEN_CODE_STATUS_AGENTS.has(left) && OPEN_CODE_STATUS_AGENTS.has(right)
+}
+
+function presenceComparedAs(
+  presence: AgentProcessPresence | undefined,
+  agent: AgentType
+): AgentProcessPresence | undefined {
+  if (!presence || !sameOpenCodeStatusAgent(presence.agent, agent)) {
+    return presence
+  }
+  return { ...presence, agent }
+}
+
 function isActiveExistingIdentity(
   existing: ExistingAgentIdentity,
   now: number,
@@ -70,11 +87,17 @@ export function resolveAgentStatusIdentity(args: {
       inheritedFromActivePane: false
     }
   }
-  const otherProcessOwner = hasOtherAgentProcessOwner(args.existing.agentPresence, {
-    agent: incomingAgentType,
-    process: args.incomingProcess
-  })
-  if (existingAgentType === incomingAgentType) {
+  const sameOpenCode = sameOpenCodeStatusAgent(existingAgentType, incomingAgentType)
+  const otherProcessOwner = hasOtherAgentProcessOwner(
+    sameOpenCode
+      ? presenceComparedAs(args.existing.agentPresence, incomingAgentType)
+      : args.existing.agentPresence,
+    {
+      agent: incomingAgentType,
+      process: args.incomingProcess
+    }
+  )
+  if (existingAgentType === incomingAgentType || sameOpenCode) {
     return {
       agentType: incomingAgentType,
       // Why: a nested `claude -p` shares the pane key; only the owner's own process speaks for it.

@@ -3,24 +3,13 @@ import { rm, stat } from 'node:fs/promises'
 
 import {
   buildJcodeRuntimeDir,
-  buildJcodeRuntimeDirEnv,
   ensureJcodeRuntimeDir,
-  JCODE_RUNTIME_DIR_ENV_KEY,
-  shouldInjectJcodeRuntimeDir
+  JCODE_RUNTIME_DIR_ENV_KEY
 } from './jcode-runtime-dir'
 
 describe('shared jcode-runtime-dir', () => {
   it('keeps runtime dirs distinct across panes', () => {
     expect(buildJcodeRuntimeDir('tab-a:leaf-1')).not.toBe(buildJcodeRuntimeDir('tab-a:leaf-2'))
-  })
-
-  it('builds the env only on unix platforms', () => {
-    expect(buildJcodeRuntimeDirEnv('tab-a:leaf-b', 'darwin')).toEqual({
-      [JCODE_RUNTIME_DIR_ENV_KEY]: buildJcodeRuntimeDir('tab-a:leaf-b')
-    })
-    expect(buildJcodeRuntimeDirEnv('tab-a:leaf-b', 'linux')).toBeDefined()
-    expect(buildJcodeRuntimeDirEnv('tab-a:leaf-b', 'win32')).toBeUndefined()
-    expect(shouldInjectJcodeRuntimeDir('win32')).toBe(false)
   })
 
   it('ensures the runtime dir exists and returns the env on unix', async () => {

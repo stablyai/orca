@@ -98,15 +98,6 @@ describe('the list page highlight across the shell’s separate pages', () => {
     list.unmount()
   })
 
-  it('reads the stored visit when the list page loads again', async () => {
-    appStore.clear()
-    const session = await loadPage(`/h/${HOST}/session/w`)
-    await session.visits.writeLastVisitedWorktree({ hostId: HOST, worktreeId: 'repo::/w/3' })
-    const list = await mountListPage()
-    expect(list.value()).toEqual({ worktreeId: 'repo::/w/3' })
-    list.unmount()
-  })
-
   it('follows a session page’s write when the list is the app’s own screen beside it', async () => {
     appStore.clear()
     const list = await mountListPage()

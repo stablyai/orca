@@ -43,7 +43,7 @@ import {
   SkillsCancelInstallParams,
   SkillsDiscoverParams,
   SkillsGetInstallProgressParams
-} from '../../../../../shared/rpc-contract/skills-params'
+} from '../../../../../shared/rpc-contract/skills/skills-params'
 import { unavailableWhileWslDistroStopped } from '../../../../skills/discovery/skill-discovery-stopped-wsl-roots'
 import { runAsWslUserAct, wslDistroForPath } from '../../../../wsl/filesystem/wsl-unc-access-gate'
 

@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { Ellipsis, FolderSearch, Trash2 } from 'lucide-react'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
+import {
+  getRevealInFileManagerLabel,
+  revealInFileManager
+} from '@/lib/files/os-open/reveal-in-file-manager'
 import { Button } from '../ui/button'
 import { ContextMenuItem } from '../ui/context-menu'
 import {

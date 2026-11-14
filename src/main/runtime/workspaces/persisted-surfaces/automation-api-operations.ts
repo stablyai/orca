@@ -15,7 +15,9 @@ import {
   type AutomationChangeSelector,
   type AutomationListResult
 } from '../../../../shared/automations/ownership/automation-list-scope'
-import type { AutomationService } from '../../../automations/service'
+import type { AutomationService } from '../../../automations/automation-service'
+import type { RuntimeAutomationBatchUpdate } from '../../integrations/automations/runtime-automation-batch-update'
+import type { AutomationBatchUpdateResult } from '../../../persistence/scheduling-automations/automation-definition-update'
 import { OrcaRuntimeWithCrewOperations } from './crew-operations'
 
 export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntimeWithCrewOperations {
@@ -93,10 +95,11 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
 
   createAutomation(
     input: RuntimeAutomationCreateInput,
-    destination?: AutomationDestination
+    destination?: AutomationDestination,
+    beforeWrite?: () => void
   ): Promise<Automation> {
     return this.automation.withExternalProbePriority(() =>
-      this.automation.create(input, destination).then((automation) => {
+      this.automation.create(input, destination, beforeWrite).then((automation) => {
         const selector = this.automationChangeSelector(automation.id)
         this.publishAutomationDefinitionChange(selector, selector)
         return automation
@@ -114,6 +117,36 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
       return this.automation.update(id, updates, options).then((automation) => {
         this.publishAutomationDefinitionChange(source, this.automationChangeSelector(automation.id))
         return automation
+      })
+    })
+  }
+
+  /** Many updates with one write, and one change event per affected host instead of per row. */
+  updateAutomations(
+    entries: readonly RuntimeAutomationBatchUpdate[]
+  ): Promise<AutomationBatchUpdateResult[]> {
+    return this.automation.withExternalProbePriority(() => {
+      const sources = new Map(entries.map(({ id }) => [id, this.automationChangeSelector(id)]))
+      return this.automation.updateMany(entries).then((results) => {
+        const published = new Set<string>()
+        for (const result of results) {
+          if (!('automation' in result)) {
+            continue
+          }
+          const before = sources.get(result.id) ?? null
+          const after = this.automationChangeSelector(result.automation.id)
+          for (const selector of automationChangePublications(before, after)) {
+            const key = JSON.stringify(selector ?? null)
+            if (!published.has(key)) {
+              published.add(key)
+              this.notifyAutomationsChanged({
+                reason: 'definition',
+                ...(selector ? { selector } : {})
+              })
+            }
+          }
+        }
+        return results
       })
     })
   }

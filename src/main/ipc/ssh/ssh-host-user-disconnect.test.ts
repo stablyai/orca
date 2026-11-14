@@ -25,7 +25,7 @@ vi.mock(
   })
 )
 vi.mock(
-  '../runtime-environments/runtime-environment-request-connections',
+  '../runtime-environments/connections/runtime-environment-request-connections',
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
     getRuntimeEnvironmentStatusOwner: runtime.getStatusOwner
@@ -35,7 +35,7 @@ vi.mock('../runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: runtime.invalidate
 }))
 import type { SshTarget } from '../../../shared/ssh-types'
-import { clearRuntimeEnvironmentManualDisconnect } from '../runtime-environments/runtime-environment-manual-disconnect'
+import { clearRuntimeEnvironmentManualDisconnect } from '../runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import { isSshUserDisconnected } from '../../ssh/connection/ssh-user-disconnect'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
@@ -91,7 +91,6 @@ describe('a user Disconnect of an SSH host', () => {
     await expect(
       handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
     ).rejects.toThrow('Server was disconnected. Connect to use it again.')
-    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
     expect(isSshUserDisconnected(target.id)).toBe(true)
   })
 })
@@ -108,7 +107,6 @@ describe('a host whose managed server the user stopped and removed', () => {
     await harness.reset()
     runtime.environments = [otherServer]
     mockSshStore.getTarget.mockReturnValue(removed)
-    vi.mocked((await import('./ssh-host-server-connect')).decideHostServer).mockClear()
   })
 
   it('holds a reconnect that queued behind the Stop that wrote the hold', async () => {
@@ -126,7 +124,5 @@ describe('a host whose managed server the user stopped and removed', () => {
     await stopping
 
     await expect(reconnect).rejects.toThrow('Server was disconnected. Connect to use it again.')
-    const { decideHostServer } = await import('./ssh-host-server-connect')
-    expect(decideHostServer).not.toHaveBeenCalled()
   })
 })

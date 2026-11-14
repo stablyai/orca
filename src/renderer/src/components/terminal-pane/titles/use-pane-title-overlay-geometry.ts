@@ -4,7 +4,7 @@ import {
   clearPaneTitleOverlayRects
 } from './pane-title-overlay-rects'
 import type { PaneTitleOverlayRect } from './pane-title-overlay-rects'
-import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
 
 export function usePaneTitleOverlayGeometry({
   containerRef,
@@ -12,6 +12,7 @@ export function usePaneTitleOverlayGeometry({
   isolatedPaneKey,
   isVisible,
   managerRef,
+  terminalManager,
   paneCount,
   paneLayoutRevision,
   paneTitles,
@@ -20,12 +21,13 @@ export function usePaneTitleOverlayGeometry({
   setPaneTitleOverlayRects,
   shouldMeasureHiddenStartup
 }: Pick<
-  TerminalPaneCloseController,
+  TerminalPaneMountedController,
   | 'containerRef'
   | 'expandedPaneId'
   | 'isolatedPaneKey'
   | 'isVisible'
   | 'managerRef'
+  | 'terminalManager'
   | 'paneCount'
   | 'paneLayoutRevision'
   | 'paneTitles'
@@ -37,7 +39,7 @@ export function usePaneTitleOverlayGeometry({
   const syncPaneTitleOverlayRects = useCallback((): void => {
     const manager = managerRef.current
     const container = containerRef.current
-    if (!manager || !container) {
+    if (!terminalManager || manager !== terminalManager || !container) {
       setPaneTitleOverlayRects(clearPaneTitleOverlayRects)
       return
     }
@@ -57,12 +59,12 @@ export function usePaneTitleOverlayGeometry({
     setPaneTitleOverlayRects((previous) =>
       arePaneTitleOverlayRectsEqual(previous, nextRects) ? previous : nextRects
     )
-  }, [containerRef, managerRef, setPaneTitleOverlayRects])
+  }, [terminalManager, containerRef, managerRef, setPaneTitleOverlayRects])
 
   useLayoutEffect(() => {
     const manager = managerRef.current
     const container = containerRef.current
-    if (!manager || !container) {
+    if (!terminalManager || manager !== terminalManager || !container) {
       setPaneTitleOverlayRects(clearPaneTitleOverlayRects)
       return
     }
@@ -105,6 +107,7 @@ export function usePaneTitleOverlayGeometry({
     syncPaneTitleOverlayRects,
     containerRef,
     managerRef,
+    terminalManager,
     setPaneTitleOverlayRects
   ])
 }

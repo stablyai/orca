@@ -6,7 +6,7 @@ import {
 } from '../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 import { aiVaultResumePreparationRun } from './mobile-ai-vault-resume-operations'
-import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { translate } from '../i18n/mobile-i18n'
 
 // Why: without an explicit timeout, a socket drop mid-resume parks the request
@@ -14,7 +14,7 @@ import { translate } from '../i18n/mobile-i18n'
 export const RESUME_RPC_TIMEOUT_MS = 30_000
 
 export async function prepareMobileAiVaultSessionResume(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   session: AiVaultSession
 ): Promise<AiVaultSession> {
   // Why: per-account repinning runs on the serving host, whose account

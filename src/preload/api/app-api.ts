@@ -54,7 +54,9 @@ export type AppApi = {
   /** Whether this machine's runtime holds a structured chat, saved or live. */
   holdsStructuredAgentSessions: () => Promise<boolean>
   onStructuredAgentSessionsHeldChanged: (callback: (held: boolean) => void) => () => void
-  recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
+  recoverLegacyWorkerTerminalsForRendererStartup: (options?: {
+    afterReconnect?: boolean
+  }) => Promise<void>
   /** Enabled only by ORCA_STARTUP_DIAGNOSTICS. */
   startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
   /** macOS input mode or non-IME layout ID; null off macOS or if the defaults read fails. */

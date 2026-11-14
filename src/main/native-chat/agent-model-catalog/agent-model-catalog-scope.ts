@@ -1,13 +1,13 @@
-import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
+import type { StructuredAgentResolutionOperation } from '../agent-launch/structured-agent-command-resolution'
 import { resolveHiddenProbeCwd } from '../../lib/hidden-probe-cwd'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
   AgentModelCatalogService,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 import { agentModelCatalogScopeFingerprint } from './agent-model-catalog-fingerprint'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogLookup,
   AgentModelCatalogResolvedProbe
@@ -34,7 +34,7 @@ export async function resolveAgentModelCatalogScope(
   if (!current()) {
     return null
   }
-  if (!independentAgentModelCatalog(params.agent) || !home) {
+  if (!home) {
     return { base, fingerprint: base, exact: false }
   }
   if (record && !isNativeLocalLocation(record.location)) {
@@ -43,14 +43,25 @@ export async function resolveAgentModelCatalogScope(
   const probe = deps.probes?.[params.agent]
   // Fixed when its readers asked: no chat closing later turns a shared refresh passive.
   const savedOnly = () => !!params.savedOnly
-  if (params.legacy) {
+  if (params.legacy && independentAgentModelCatalog(params.agent)) {
     const fingerprint = agentModelCatalogScopeFingerprint(base, 'legacy-account')
-    const resolved =
-      savedOnly() || !deps.store.probeDue(fingerprint)
-        ? null
-        : await probe?.resolveLegacy?.(home, operation).catch(() => null)
+    let resolved = await probe
+      ?.resolveLegacy?.(home, operation, savedOnly() ? 'saved' : 'snapshot')
+      .catch(() => null)
     if (!current()) {
       return null
+    }
+    if (resolved?.inputStamp !== undefined) {
+      deps.store.observeInputs(fingerprint, resolved.inputStamp)
+    }
+    if (!savedOnly() && deps.store.probeDue(fingerprint)) {
+      resolved = await probe?.resolveLegacy?.(home, operation, 'recover').catch(() => null)
+    }
+    if (!current()) {
+      return null
+    }
+    if (resolved?.inputStamp !== undefined) {
+      deps.store.observeInputs(fingerprint, resolved.inputStamp)
     }
     return {
       base,
@@ -59,10 +70,34 @@ export async function resolveAgentModelCatalogScope(
       ...(resolved ? { resolved } : {})
     }
   }
+  if (!independentAgentModelCatalog(params.agent)) {
+    const cwd =
+      params.workspacePath ?? (record ? await sessionWorkspacePath(deps, record) : undefined)
+    let resolved = await probe
+      ?.resolve?.(home, cwd ?? '', savedOnly() ? 'saved' : 'snapshot', operation)
+      .catch(() => null)
+    if (!current()) {
+      return null
+    }
+    if (resolved?.inputStamp !== undefined) {
+      deps.store.observeInputs(base, resolved.inputStamp)
+    }
+    if (!savedOnly() && deps.store.probeDue(base)) {
+      resolved = await probe?.resolve?.(home, cwd ?? '', 'recover', operation).catch(() => null)
+    }
+    if (!current()) {
+      return null
+    }
+    if (resolved?.inputStamp !== undefined) {
+      deps.store.observeInputs(base, resolved.inputStamp)
+    }
+    return { base, fingerprint: base, exact: false, ...(resolved ? { resolved } : {}) }
+  }
   // The list belongs to the account and the CLI a chat here would launch, not to this folder:
   // resolve the executable where the chat runs, but list from an empty Orca-owned folder so the
   // listing reads only account settings (a home folder can hold another account's settings as
-  // project settings) and every workspace sharing that invocation shares one listing.
+  // project settings) and every workspace sharing that invocation shares one listing. A command
+  // line that may name files in the chat's folder lists there instead (`catalogListingDirectory`).
   let listIn: string
   try {
     listIn = resolveHiddenProbeCwd()
@@ -89,12 +124,18 @@ export async function resolveAgentModelCatalogScope(
   if (!current()) {
     return null
   }
+  if (resolved?.inputStamp !== undefined) {
+    deps.store.observeInputs(scopeKey(resolved), resolved.inputStamp)
+  }
   // Rerun shells only for reads due to list; saved-only reads must remain passive.
   if (!savedOnly() && (!resolved || deps.store.probeDue(scopeKey(resolved)))) {
     resolved = await resolve('recover')
   }
   if (!current() || (probe?.resolve && !resolved)) {
     return null
+  }
+  if (resolved?.inputStamp !== undefined) {
+    deps.store.observeInputs(scopeKey(resolved), resolved.inputStamp)
   }
   return {
     base,

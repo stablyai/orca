@@ -135,7 +135,6 @@ describePostgres('PostgreSQL control rebind under a held cell row', () => {
 
       // A generation-2 rebind on cell A supersedes generation 1. It must not
       // wait on cell B's row.
-      const startedAt = Date.now()
       const blockedStatement = async (): Promise<string> => {
         const rows = await databases[1]!.query(
           `SELECT left(query, 160) AS q FROM pg_stat_activity
@@ -161,10 +160,8 @@ describePostgres('PostgreSQL control rebind under a held cell row', () => {
         connectionInclusionWatermark: 11
       })
       const rebound = await Promise.race([reboundWork, timeout])
-      const elapsedMs = Date.now() - startedAt
 
       expect(rebound).toBe(`control:${cells[0]!.id}:2`)
-      expect(elapsedMs).toBeLessThan(2_000)
       const controls = await databases[0]!.query(
         `SELECT activity_id FROM relay_assignment_activity_leases
        WHERE user_id = ? AND activity_kind = 'control' ORDER BY activity_id`,

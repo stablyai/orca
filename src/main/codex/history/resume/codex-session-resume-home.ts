@@ -6,7 +6,7 @@ import {
   relativePathInsideRoot
 } from '../../../../shared/cross-platform-path'
 import { listCodexSessionRolloutFilesIncrementally } from '../rollouts/codex-session-file-listing'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 // Only the dated rollout layout may establish credential provenance.
 const CLAIMED_CODEX_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/]+\.jsonl(?:\.zst)?`

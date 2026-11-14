@@ -70,6 +70,39 @@ describe('OrchestrationDb mutation and question state', () => {
       ).toThrow(/different answer/)
     })
 
+    it('marks the question it answers read and leaves other unread mail alone', () => {
+      const d = createDb()
+      const run = d.createRun({
+        objective: 'Read on answer',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
+      })
+      const task = d.createTask({ spec: 'ask', runId: run.id })
+      const dispatch = createRootDispatch(d, task.id, 'term_worker')
+      const created = d.createQuestion({
+        runId: run.id,
+        dispatchId: dispatch.id,
+        askerHandle: 'term_worker',
+        question: 'Which format?'
+      })
+      const status = d.insertMessage({
+        runId: run.id,
+        from: `dispatch:${dispatch.id}`,
+        to: `run:${run.id}`,
+        subject: 'Progress'
+      })
+
+      d.answerQuestion({
+        messageId: created.message.id,
+        runId: run.id,
+        consumerGeneration: run.consumer_generation,
+        body: 'old'
+      })
+
+      expect(d.getMessageById(created.message.id)?.read).toBe(1)
+      expect(d.getMessageById(status.id)?.read).toBe(0)
+    })
+
     it('closes pending questions with their Dispatch', () => {
       const d = createDb()
       const run = d.createRun({

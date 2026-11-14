@@ -168,6 +168,46 @@ describe('the shared catalog probe runner', () => {
     expect(failure).toMatchObject({ reason: 'spawn', executableMissing: true })
   })
 
+  it('returns a ready partial list on work expiry, awaits close, and drops it on cancellation', async () => {
+    for (const expiry of ['body', 'owner', 'cancel'] as const) {
+      const stop = new AbortController()
+      const closing = Promise.withResolvers<void>()
+      const beganClose = Promise.withResolvers<void>()
+      const run = runAgentModelCatalogSession(
+        () => ({
+          close: () => {
+            beganClose.resolve()
+            return closing.promise
+          }
+        }),
+        async (_connection, ready) => {
+          ready(
+            async () => {},
+            () => ['usable-model']
+          )
+          return new Promise<string[]>(() => {})
+        },
+        { label: 'partial', signal: stop.signal, timeoutMs: expiry === 'body' ? 20 : 60_000 }
+      )
+      const observed = run.then(
+        (value) => value,
+        (error: unknown) => error
+      )
+      if (expiry !== 'body') {
+        stop.abort(
+          expiry === 'owner' ? new AgentModelCatalogProbeError('deadline', 'timeout') : undefined
+        )
+      }
+      await beganClose.promise
+      closing.resolve()
+      if (expiry === 'cancel') {
+        expect(await observed).toMatchObject({ reason: 'stopped' })
+      } else {
+        expect(await observed).toEqual(['usable-model'])
+      }
+    }
+  })
+
   it('closes a probe connection on success, failure and timeout alike', async () => {
     const closes: string[] = []
     const open = (name: string) => () => ({

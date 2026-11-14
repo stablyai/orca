@@ -5,10 +5,8 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import { findRegisteredTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AppState } from '@/store/types'
-import {
-  collectAgentPaneConversations,
-  type AiVaultTitleRequest
-} from './ai-vault-tab-title-requests'
+import type { AiVaultTitleRequest } from './ai-vault-tab-title-requests'
+import { collectAgentPaneConversations } from '../../identity/pane-agent-conversations'
 
 export function aiVaultTitleRequestKey(request: AiVaultTitleRequest): string {
   return `${request.tabId}\0${request.paneKey}\0${request.executionHostId}\0${request.agent}\0${request.providerSession.id}\0${request.providerSession.transcriptPath ?? ''}`

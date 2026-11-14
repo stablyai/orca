@@ -31,6 +31,7 @@ function runtimeWithCwdOnlyTerminal() {
     getRepos: () => [],
     getProjectGroups: () => [{ id: 'group-1', parentPath: '/fixture' }],
     getFolderWorkspaces: () => [FOLDER],
+    getFolderWorkspace: (id: string) => (id === FOLDER.id ? FOLDER : undefined),
     getSettings: () => ({}),
     getAllWorktreeMeta: () => ({}),
     getWorkspaceSessionHostIds: () => ['local'],

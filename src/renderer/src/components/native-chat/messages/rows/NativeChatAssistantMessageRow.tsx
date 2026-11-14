@@ -1,10 +1,10 @@
 import { useContext } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
 import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from '../../markdown/NativeChatPacedMarkdown'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../selection-quotes/native-chat-quote-selection'
@@ -52,7 +52,8 @@ export function NativeChatAssistantMessageRow({
     trailingRun,
     continuesTurn = false,
     endsResponse,
-    inSubagentSection = false,
+    latestResponse = true,
+    actionsHang = false,
     runtimeContext,
     fork
   } = props
@@ -74,7 +75,6 @@ export function NativeChatAssistantMessageRow({
     message.role === 'assistant' &&
     message.source === 'transcript' &&
     !message.agentStart &&
-    !inSubagentSection &&
     isRootAgentJournalItem(message)
 
   return (
@@ -122,8 +122,12 @@ export function NativeChatAssistantMessageRow({
           }
           className={cn(
             'mt-1 w-fit select-none',
-            // They hang into the gap below; a section keeps them inside its border instead.
-            !inSubagentSection && '-mb-5'
+            !latestResponse &&
+              fork?.pendingItemId !== message.id &&
+              'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
+            // They hang into the gap below only when nothing left-side starts there. Never in a
+            // section, which keeps them inside its border.
+            actionsHang && '-mb-5'
           )}
         />
       ) : null}
@@ -151,8 +155,7 @@ function toolRunProps(
     revealedDiff: run ? run.revealedDiff : props.revealedDiff,
     onRevealDiff: props.onScrollMessageToTop,
     subagentGroups: content.subagentGroups,
-    subagentRoster: props.subagentRoster,
-    subagentDisclosure: props.subagentDisclosure,
+    onOpenSubagent: props.onOpenSubagent,
     backgroundTasks: content.backgroundTasks,
     followsProse: content.markdown.length > 0 || content.hasImages,
     expandSignal: props.expandSignal,

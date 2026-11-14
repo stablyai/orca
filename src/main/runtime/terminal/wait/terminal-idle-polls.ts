@@ -9,6 +9,7 @@ import {
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { settlesForMidTurnInput } from './terminal-delivery-refusal'
 import { evaluateTuiIdle, type QuietForegroundLane, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
   outputClockOf,
@@ -56,6 +57,8 @@ type IdlePollEntry = {
 /** One reading of a waiter's pane, and the results it would settle with. */
 type IdlePollSample = {
   verdict: TuiIdleVerdict
+  /** A mid-turn agent that takes input settles a waiter that accepts it. */
+  takesInputNow: boolean
   ptyId: string
   ready(): RuntimeTerminalWait
   blocked(reason: RuntimeTerminalWaitBlockedReason): RuntimeTerminalWait
@@ -116,11 +119,12 @@ export class RuntimeTerminalIdlePolls {
     const { pty } = entry
     const readWaitText = () =>
       buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    const evidence = ptyTuiIdleEvidence(this.deps, pty, readWaitText)
+    const verdict = evaluateTuiIdle({ ...evidence, launchReadiness: entry.waiter.launchReadiness })
     return {
-      verdict: evaluateTuiIdle({
-        ...ptyTuiIdleEvidence(this.deps, pty, readWaitText),
-        launchReadiness: entry.waiter.launchReadiness
-      }),
+      verdict,
+      takesInputNow:
+        !!entry.waiter.acceptsMidTurnInput && settlesForMidTurnInput(verdict, pty.ptyId, this.deps),
       ptyId: pty.ptyId,
       ready: () => buildPtyTerminalWaitResult(handle, 'tui-idle', pty),
       blocked: (reason) => buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, reason),
@@ -144,7 +148,7 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       // Strong readiness outranks unscoped dialog wording elsewhere on the screen.
-      if (verdict.kind === 'ready-strong') {
+      if (verdict.kind === 'ready-strong' || sample.takesInputNow) {
         this.settle(entry, sample.ready())
         return
       }

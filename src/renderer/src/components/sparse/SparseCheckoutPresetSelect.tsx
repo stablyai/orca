@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button'
 import { SparsePresetChooser } from './SparsePresetChooser'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
-import { parseSparsePresetDirectories, validateSparsePresetName } from '@/lib/sparse-preset-draft'
+import {
+  parseSparsePresetDirectories,
+  validateSparsePresetName
+} from '@/components/sparse/sparse-preset-draft'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { translate } from '@/i18n/i18n'

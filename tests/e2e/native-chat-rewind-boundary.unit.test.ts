@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import {
+  readTestJournalSnapshot,
+  readTestJournalItems
+} from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import { renderHook } from '@testing-library/react'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,17 +14,18 @@ import {
 } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../src/shared/agent-session/structured-agent-session-reducer'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
-import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { structuredRewindCut } from '../../src/main/native-chat/agent-session-wire/rewind/structured-rewind-cut'
+import { completeTestJournalRewind } from '../../src/main/native-chat/agent-session-wire/rewind/structured-rewind-completion.test-support'
 import { useNativeChatRewind } from '../../src/renderer/src/components/native-chat/messages/actions/use-native-chat-rewind'
 
 const IDENTITY = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
-  agent: 'codex',
-  providerHandle: codexProviderHandle('main')
+  agent: 'claude',
+  providerHandle: claudeProviderHandle('original', null)
 }
 const journals = createTrackedJournalOpener()
 let root: string
@@ -46,9 +51,8 @@ it('offers a recovered opener only when its saved native alias arrives, retainin
     fence: 1
   })
   await journals.closeAll()
-  const recovered = await journals.open(options)
-  await recovered.markPendingSubmissionsUnknown(2)
-  const snapshot = recovered.snapshot()
+  const recovered = await journals.open({ ...options, recover: { fence: 2 } })
+  const snapshot = await readTestJournalSnapshot(recovered)
   const target = agentJournalSubmissionKey('lost')
   expect(snapshot.submissions.find((row) => row.clientMessageId === 'lost')).toMatchObject({
     dispatchState: 'unknown',
@@ -74,26 +78,34 @@ it('offers a recovered opener only when its saved native alias arrives, retainin
     expect(view.result.current.surface?.eligibleItemIds).not.toContain(target)
     const cursor = recovered.cursor()
     expect(
-      structuredRewindCut(recovered, { itemId: target, provider: 'claude', nativeId: 'forked' })
+      await structuredRewindCut(recovered, {
+        itemId: target,
+        provider: 'claude',
+        nativeId: 'forked'
+      })
     ).toBeNull()
     expect(recovered.cursor()).toEqual(cursor)
     view.rerender({ ...props, state: { ...state, submissions: [] } })
     expect(view.result.current.surface?.eligibleItemIds).toContain(target)
-    await recovered.acceptLate({
+    await recovered.settleLateDispatch({
       clientMessageId: 'lost',
       state: 'accepted',
       providerIdentity: native('genuine'),
       fence: 2
     })
-    view.rerender({ ...props, state: { ...state, submissions: recovered.snapshot().submissions } })
+    view.rerender({
+      ...props,
+      state: { ...state, submissions: (await readTestJournalSnapshot(recovered)).submissions }
+    })
     expect(view.result.current.surface?.eligibleItemIds).toContain(target)
-    const cut = structuredRewindCut(recovered, {
+    const cut = await structuredRewindCut(recovered, {
       itemId: target,
       provider: 'claude',
       nativeId: 'forked'
     })
     expect(cut).toMatchObject({ beforeMessage: { sessionId: 'original', uuid: 'genuine' } })
-    expect(cut?.kept.map(({ identity }) => agentJournalItemKey(identity))).toEqual([
+    await completeTestJournalRewind(root, recovered, target, 2)
+    expect((await readTestJournalItems(recovered)).map(({ itemId }) => itemId)).toEqual([
       agentJournalItemKey(native('earlier')),
       agentJournalItemKey(native('reply'))
     ])

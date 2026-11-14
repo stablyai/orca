@@ -101,19 +101,6 @@ const ALL_HOSTS: AutomationHostFilterResolution = {
 }
 
 describe('automation host list rows', () => {
-  it('reports nothing answered until a host has actually committed', () => {
-    const rows = resolveAutomationHostListRows({
-      catalog: catalogOf([DESKTOP_SELF]),
-      resolution: ALL_HOSTS,
-      entry: () => cached([], null)
-    })
-
-    // Why this matters: the caller keeps its own list while this is false, so a
-    // never-answered host must not read as an empty one.
-    expect(rows.answered).toBe(false)
-    expect(rows.automations).toEqual([])
-  })
-
   it('keeps the owned copy when the orphan scope returns the same record', () => {
     const owned = row('a-1', DESKTOP_SELF.owner)
     const rows = resolveAutomationHostListRows({

@@ -3,12 +3,12 @@ import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
-import { editorTabFileAccess } from '@/lib/local-file-access'
+import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import {
   getRuntimeTargetForFileOwner,
   requireRuntimeTargetForFileOwner
-} from '@/lib/file-owner-runtime-target'
+} from '@/lib/files/access/file-owner-runtime-target'
 import { canAutoSaveOpenFile } from '../autosave/editor-autosave'
 import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'

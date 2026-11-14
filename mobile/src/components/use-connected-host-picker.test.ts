@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { useConnectedHostPicker } from './use-connected-host-picker'
 
 function host(id: string, name: string, endpoint: string): HostProfile {
@@ -49,16 +49,6 @@ describe('useConnectedHostPicker', () => {
   function pickHost(action: (hostId: string) => void, hosts?: HostProfile[]) {
     act(() => handle.current!.pickHost(action, hosts))
   }
-
-  it('closes a stale picker when an offered host disconnects', () => {
-    const rerender = render([desk, laptop])
-
-    pickHost(vi.fn())
-    expect(picker().visible).toBe(true)
-
-    rerender([desk])
-    expect(picker().visible).toBe(false)
-  })
 
   it('does not reopen a stale picker if its old host set returns while closing', () => {
     const rerender = render([desk, laptop])

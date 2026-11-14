@@ -9,7 +9,7 @@ import {
   agentsWithSavedModelPick,
   HOST_MODEL_CATALOG_ACCOUNT_SETTINGS,
   hostReadsSavedModelCatalogsOnly
-} from '../../../../../shared/agent-session/options/host-model-catalog-snapshot-rules'
+} from '../../../../../shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {

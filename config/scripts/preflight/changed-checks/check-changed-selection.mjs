@@ -35,8 +35,19 @@ const RATCHET_INPUTS = {
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
   'check-id-only-store-write-ratchet.mjs': ['src/main/persistence/'],
   'check-layout-writer-ratchets.mjs': ['src/main/', 'src/renderer/src/'],
-  'check-main-sync-fs-ratchet.mjs': ['src/main/', 'src/shared/'],
-  'check-main-sync-spawn-ratchet.mjs': ['src/main/'],
+  'check-main-sync-fs-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'config/main-blocking-worker-entries.json',
+    'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
+  ],
+  'check-main-sync-spawn-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'src/preload/',
+    'config/main-blocking-worker-entries.json',
+    'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
+  ],
   'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
   'check-recurring-timer-ratchet.mjs': [
     'src/main/',
@@ -48,6 +59,7 @@ const RATCHET_INPUTS = {
   'check-repo-host-read-ratchet.mjs': ['src/cli/', 'src/main/', 'src/shared/'],
   'check-runtime-electron-ratchet.mjs': ['src/main/', 'src/cli/', 'src/shared/'],
   'check-tab-map-seam-ratchet.mjs': ['src/renderer/src/'],
+  'check-terminal-parking-ownership-ratchet.mjs': ['src/renderer/src/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
@@ -292,6 +304,7 @@ export function selectTypecheckProjects(files) {
 // Shared analysis modules select every ratchet built on them.
 const RATCHET_SHARED_MODULES = {
   'config/scripts/static-analysis/process-boundaries/gated-call-use-collector.mjs': [
+    'check-main-blocking-api-ratchet.mjs',
     'check-daemon-blocking-call-ratchet.mjs',
     'check-main-sync-fs-ratchet.mjs',
     'check-main-sync-spawn-ratchet.mjs',

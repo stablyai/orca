@@ -3,9 +3,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
 import { getCachedTerminalTabForWorktree } from './tab-state/terminal-tab-lookup'
 import { selectTerminalTabAgentTypesByLeaf } from '../titles/terminal-tab-agent-type-index'
-import { collectLeafIdsInOrder } from '../layout/terminal-layout-leaf-traversal'
+import '../layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { EMPTY_LAYOUT } from '../layout/empty-terminal-layout'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../../../shared/workspace-layout/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import { selectUnifiedTerminalTabFields } from './tab-state/terminal-unified-tab-lookup'
 import type { TerminalPaneTitleController } from '../titles/use-terminal-pane-title-state'
 
@@ -39,7 +40,7 @@ export function useTerminalPaneTabState({
     [savedLayout, terminalTab]
   )
   const expectedLayoutLeafIds = useMemo(
-    () => collectLeafIdsInOrder(restoredLayout.root),
+    () => collectLayoutLeafIdsInOrder(restoredLayout.root),
     [restoredLayout.root]
   )
   return {

@@ -1,0 +1,285 @@
+import type {
+  ManagedPane,
+  ManagedPaneInternal,
+  PaneManagerOptions,
+  PaneSplitOptions,
+  PaneStyleOptions
+} from '../pane-manager-types'
+import type { DragReorderCallbacks } from './pane-drag-reorder'
+import { updateMultiPaneState } from './pane-drag-reorder'
+import { promoteSibling, removeDividers, wrapInSplit } from './pane-tree-ops'
+import { captureScrollState } from '../terminal-scroll/pane-scroll-snapshot'
+import { findPaneChildren } from './pane-tree-equalization'
+import { safeFit } from '../terminal-fit/pane-fit'
+import { applyDividerStyles, applyPaneOpacity } from './pane-divider'
+import { disposePane, openTerminal } from '../pane-lifecycle'
+import { disposeWebgl } from '../terminal-rendering/pane-webgl-renderer'
+import {
+  clearPendingSplitScrollRestore,
+  scheduleSplitScrollRestore
+} from '../terminal-scroll/pane-split-scroll'
+import { reattachWebglIfNeeded } from '../terminal-rendering/pane-webgl-reattach'
+import { toPublicPane } from '../pane-public-view'
+import { findClosedPaneSuccessor } from './pane-close-focus-successor'
+import { releaseTerminalScrollIntentKey } from '../terminal-scroll/terminal-scroll-intent-key-store'
+
+type MovedPaneSplitState = {
+  pane: ManagedPaneInternal
+  scrollState: ReturnType<typeof captureScrollState>
+  hadWebgl: boolean
+}
+
+type SplitManagedPaneArgs = {
+  paneId: number
+  direction: 'vertical' | 'horizontal'
+  opts?: PaneSplitOptions
+  sourceContainer?: HTMLElement
+  /** Before publishing, so the pane-created tree already has the final order. */
+  newPaneFirst?: boolean
+  panes: Map<number, ManagedPaneInternal>
+  root: HTMLElement
+  styleOptions: PaneStyleOptions
+  managerOptions: PaneManagerOptions
+  createPaneInternal: (leafIdHint?: string) => ManagedPaneInternal
+  createDivider: (isVertical: boolean) => HTMLElement
+  publishPaneCreated: (
+    pane: ManagedPaneInternal,
+    spawnHints?: Parameters<NonNullable<PaneManagerOptions['onPaneCreated']>>[1]
+  ) => void
+  getDragCallbacks: () => DragReorderCallbacks
+  activePaneId: number | null
+  setActivePaneId: (paneId: number | null) => void
+  isDestroyed: () => boolean
+}
+
+export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null {
+  const existing = args.panes.get(args.paneId)
+  if (!existing) {
+    return null
+  }
+  const existingContainer = args.sourceContainer ?? existing.container
+  const parent = existingContainer.parentElement
+  if (!parent) {
+    return null
+  }
+  const newPane = args.createPaneInternal(args.opts?.leafId)
+  const isVertical = args.direction === 'vertical'
+  const divider = args.createDivider(isVertical)
+
+  const movedPaneStates = prepareMovedPanesForSplit(existingContainer, existing, args.panes)
+  const activate = args.opts?.activate !== false
+  const focusedBefore = activate ? null : document.activeElement
+
+  wrapInSplit(existingContainer, newPane.container, isVertical, divider, {
+    ratio: args.opts?.ratio,
+    newPaneFirst: args.newPaneFirst
+  })
+  if (activate) {
+    args.setActivePaneId(newPane.id)
+  } else if (
+    focusedBefore instanceof HTMLElement &&
+    focusedBefore.isConnected &&
+    document.activeElement !== focusedBefore
+  ) {
+    // Reparenting the source pane drops its focus; give the user's keyboard back.
+    focusedBefore.focus({ preventScroll: true })
+  }
+  openSplitPane(args, newPane, existing.leafId, activate)
+
+  for (const movedPaneState of movedPaneStates) {
+    scheduleSplitScrollRestore(
+      (id) => args.panes.get(id),
+      movedPaneState.pane.id,
+      movedPaneState.scrollState,
+      args.isDestroyed,
+      movedPaneState.hadWebgl ? reattachWebglIfNeeded : undefined
+    )
+  }
+
+  return toPublicPane(newPane)
+}
+
+function prepareMovedPanesForSplit(
+  sourceContainer: HTMLElement,
+  fallbackPane: ManagedPaneInternal,
+  panes: Map<number, ManagedPaneInternal>
+): MovedPaneSplitState[] {
+  const movedPanes = findManagedPanesInContainer(sourceContainer, panes)
+  if (movedPanes.length === 0) {
+    movedPanes.push(fallbackPane)
+  }
+
+  return movedPanes.map((pane) => {
+    clearPendingSplitScrollRestore(pane)
+    // DOM reparenting clears scrollTop; preserve it across wrapInSplit.
+    const scrollState = captureScrollState(pane.terminal)
+    // The split scroll lock owns async settling; ordinary fits must not restore concurrently.
+    pane.pendingSplitScrollState = scrollState
+
+    // Reparenting can silently invalidate WebGL; dispose before moving and reattach after settle.
+    const hadWebgl = !!pane.webglAddon
+    disposeWebgl(pane)
+    return { pane, scrollState, hadWebgl }
+  })
+}
+
+function findManagedPanesInContainer(
+  sourceContainer: HTMLElement,
+  panes: Map<number, ManagedPaneInternal>
+): ManagedPaneInternal[] {
+  const movedPanes: ManagedPaneInternal[] = []
+  const appendPaneById = (paneIdValue: string | undefined): void => {
+    if (!paneIdValue) {
+      return
+    }
+    const paneId = Number(paneIdValue)
+    if (!Number.isFinite(paneId)) {
+      return
+    }
+    const pane = panes.get(paneId)
+    if (pane && !movedPanes.includes(pane)) {
+      movedPanes.push(pane)
+    }
+  }
+
+  if (sourceContainer.classList.contains('pane')) {
+    appendPaneById(sourceContainer.dataset.paneId)
+  }
+  for (const paneElement of sourceContainer.querySelectorAll<HTMLElement>('.pane[data-pane-id]')) {
+    appendPaneById(paneElement.dataset.paneId)
+  }
+  return movedPanes
+}
+
+function openSplitPane(
+  args: SplitManagedPaneArgs,
+  newPane: ManagedPaneInternal,
+  parentLeafId: string,
+  activate: boolean
+): void {
+  const cwd = args.opts?.cwd
+  openTerminal(newPane, {
+    ligatures: args.managerOptions.terminalLigaturesEnabled?.(),
+    inlineImages: args.managerOptions.terminalInlineImagesEnabled?.()
+  })
+  applyPaneOpacity(
+    args.panes.values(),
+    activate ? newPane.id : args.activePaneId,
+    args.styleOptions
+  )
+  applyDividerStyles(args.root, args.styleOptions)
+  if (activate) {
+    newPane.terminal.focus()
+  }
+  updateMultiPaneState(args.getDragCallbacks())
+  // Forward creation hints to inherit local cwd or adopt the runtime-spawned PTY in web splits.
+  args.publishPaneCreated(newPane, {
+    ...(cwd ? { cwd } : {}),
+    ...(args.opts?.cwdPromise ? { cwdPromise: args.opts.cwdPromise } : {}),
+    ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {}),
+    placement: {
+      kind: 'split',
+      parentLeafId,
+      direction: args.direction,
+      ...(args.opts?.ratio !== undefined ? { ratio: args.opts.ratio } : {})
+    }
+  })
+  args.managerOptions.onLayoutChanged?.()
+}
+
+type CloseManagedPaneArgs = {
+  paneId: number
+  activePaneId: number | null
+  panes: Map<number, ManagedPaneInternal>
+  root: HTMLElement
+  styleOptions: PaneStyleOptions
+  managerOptions: PaneManagerOptions
+  getDragCallbacks: () => DragReorderCallbacks
+  releasePaneIdentity: (numericPaneId: number) => void
+  setActivePaneId: (paneId: number | null) => void
+}
+
+function teardownManagedPane(
+  args: CloseManagedPaneArgs,
+  reason: 'close' | 'detach' | 'retire'
+): void {
+  const pane = args.panes.get(args.paneId)
+  if (!pane) {
+    return
+  }
+  const closedLeafId = pane.leafId
+  const successor =
+    args.activePaneId === args.paneId ? findClosedPaneSuccessor(pane.container, args.panes) : null
+  args.releasePaneIdentity(args.paneId)
+  removePaneContainer(args, pane)
+  if (reason === 'close') {
+    // Closed UUID leaves never recur; detach/retire transfers ownership and must preserve scroll intent.
+    releaseTerminalScrollIntentKey(closedLeafId)
+  }
+  const nextActivePaneId = activateReplacementPane(args, successor)
+  applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
+  for (const p of args.panes.values()) {
+    safeFit(p)
+  }
+  updateMultiPaneState(args.getDragCallbacks())
+  args.managerOptions.onPaneClosed?.(args.paneId, {
+    paneId: args.paneId,
+    leafId: closedLeafId,
+    reason
+  })
+  args.managerOptions.onLayoutChanged?.()
+}
+
+export function closeManagedPane(args: CloseManagedPaneArgs): void {
+  teardownManagedPane(args, 'close')
+}
+
+export function detachManagedPaneForExternalMove(args: CloseManagedPaneArgs): boolean {
+  if (!args.panes.has(args.paneId) || args.panes.size <= 1) {
+    return false
+  }
+  // Detach destroys only the renderer pane; the new tab adopts its PTY, so skip process-close cleanup.
+  teardownManagedPane(args, 'detach')
+  return true
+}
+
+export function retireManagedPanePreservingPty(args: CloseManagedPaneArgs): boolean {
+  if (!args.panes.has(args.paneId) || args.panes.size <= 1) {
+    return false
+  }
+  teardownManagedPane(args, 'retire')
+  return true
+}
+
+function removePaneContainer(args: CloseManagedPaneArgs, pane: ManagedPaneInternal): void {
+  const paneContainer = pane.container
+  const parent = paneContainer.parentElement
+  disposePane(pane, args.panes)
+  if (!parent) {
+    return
+  }
+  if (parent.classList.contains('pane-split')) {
+    const siblings = findPaneChildren(parent)
+    const sibling = siblings.find((c) => c !== paneContainer) ?? null
+    paneContainer.remove()
+    removeDividers(parent)
+    promoteSibling(sibling, parent, args.root)
+  } else {
+    paneContainer.remove()
+  }
+}
+
+function activateReplacementPane(
+  args: CloseManagedPaneArgs,
+  successor: ManagedPaneInternal | null
+): number | null {
+  if (args.activePaneId !== args.paneId) {
+    return args.activePaneId
+  }
+  const next =
+    successor && args.panes.has(successor.id) ? successor : args.panes.values().next().value
+  const nextActivePaneId = next?.id ?? null
+  args.setActivePaneId(nextActivePaneId)
+  next?.terminal.focus()
+  return nextActivePaneId
+}

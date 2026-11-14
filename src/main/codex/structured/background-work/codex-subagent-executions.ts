@@ -1,8 +1,9 @@
 import type { NativeChatSubagentState } from '../../../../shared/native-chat/native-chat-types'
+import type { CodexChildLaunch } from './codex-subagent-activity'
 import {
   MAX_SUBAGENT_FIELD_CHARS,
   canReplaceSubagentState
-} from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+} from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 
 const MAX_SETTLED_TURNS = 256
 /** Evicted turn ordinals fall back to first-run attribution. */
@@ -20,6 +21,8 @@ export type CodexExecutionChild = {
   label: string | null
   /** Spawn announcements arrive on the parent's thread. */
   spawnerThreadId: string | null
+  model: string | null
+  effort: string | null
   execution: CodexChildExecution | null
   turnOrdinals: Map<string, number>
   turnCount: number
@@ -37,12 +40,15 @@ export class CodexSubagentExecutions {
   register(
     agentThreadId: string,
     label: string | null,
-    spawnerThreadId?: string
+    spawnerThreadId?: string,
+    launch?: CodexChildLaunch
   ): CodexExecutionChild {
     const child = this.child(agentThreadId)
-    const previousLabel = child.label
+    const previous = [child.label, child.model, child.effort]
     // Keep the original spawner across duplicate announcement frames.
     child.spawnerThreadId ??= spawnerThreadId ?? null
+    child.model ??= launch?.model ?? null
+    child.effort ??= launch?.effort ?? null
     child.registered = true
     // Retain one overflow unit so the journal can append its per-row truncation marker.
     child.label ??=
@@ -51,7 +57,9 @@ export class CodexSubagentExecutions {
         .replace(/\s+/g, ' ')
         .slice(0, MAX_SUBAGENT_FIELD_CHARS + 1) || null
     this.updateWorking(child)
-    if (previousLabel !== child.label) {
+    if (
+      [child.label, child.model, child.effort].some((value, index) => value !== previous[index])
+    ) {
       this.changed.add(agentThreadId)
     }
     return child
@@ -210,6 +218,8 @@ export class CodexSubagentExecutions {
       observationOrder: this.children.size,
       registered: false,
       label: null,
+      model: null,
+      effort: null,
       spawnerThreadId: null,
       execution: null,
       turnOrdinals: new Map(),

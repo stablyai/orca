@@ -1,9 +1,4 @@
-import {
-  spawn as nodeSpawn,
-  spawnSync as nodeSpawnSync,
-  type ChildProcess,
-  type ChildProcessWithoutNullStreams
-} from 'node:child_process'
+import type { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process'
 import { resolveSpawn, type ResolvedSpawn } from './spawn-resolution'
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 import { inFlightWindowsTreeKill } from './windows-tree-kill'
@@ -11,6 +6,7 @@ import { inFlightWindowsTreeKill } from './windows-tree-kill'
 import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
+import { spawnNativeProcess, spawnNativeProcessSync } from './native-process-spawn'
 
 import type { PipedProcessSpec, ProcessSpec, ProcessResult } from './process-spec'
 import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
@@ -24,13 +20,13 @@ export function spawnProcess(spec: PipedProcessSpec): ChildProcessWithoutNullStr
 export function spawnProcess(spec: ProcessSpec): ChildProcess
 export function spawnProcess(spec: ProcessSpec): ChildProcess {
   const resolved = resolveSpawn(spec, process.platform)
-  // uv_spawn blocks the calling thread; measure that block for diagnostics.
-  const spawnStartedAt = hasSpawnObserver() ? performance.now() : null
-  const child = nodeSpawn(resolved.file, [...resolved.args], resolved.options)
-  if (spawnStartedAt !== null) {
-    notifySpawnObserver(resolved.file, resolved.args, performance.now() - spawnStartedAt)
-  }
-  return child
+  return spawnNativeProcess(
+    resolved.file,
+    resolved.args,
+    resolved.options,
+    undefined,
+    hasSpawnObserver() ? notifySpawnObserver : undefined
+  )
 }
 
 /** Nonzero exits resolve; spawn errors reject. Tail capture preserves final diagnostics. */
@@ -294,26 +290,23 @@ function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
 /** Prefer runProcess; reserve blocking execution for synchronous entry points and teardown. */
 export function runProcessSync(spec: ProcessSpec): ProcessResult {
   const resolved = resolveSpawn(spec, process.platform)
-  // spawnSync blocks until exit; report that duration even if it throws.
-  const spawnStartedAt = hasSpawnObserver() ? performance.now() : null
-  try {
-    return runResolvedProcessSync(spec, resolved)
-  } finally {
-    if (spawnStartedAt !== null) {
-      notifySpawnObserver(resolved.file, resolved.args, performance.now() - spawnStartedAt)
-    }
-  }
+  return runResolvedProcessSync(spec, resolved)
 }
 
 function runResolvedProcessSync(spec: ProcessSpec, resolved: ResolvedSpawn): ProcessResult {
-  const result = nodeSpawnSync(resolved.file, [...resolved.args], {
-    ...resolved.options,
-    input: spec.input,
-    timeout: spec.timeoutMs === null ? undefined : (spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS),
-    maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
-    // Keep raw output without applying the nonexistent 'buffer' encoding to string stdin.
-    encoding: null
-  })
+  const result = spawnNativeProcessSync(
+    resolved.file,
+    resolved.args,
+    {
+      ...resolved.options,
+      input: spec.input,
+      timeout: spec.timeoutMs === null ? undefined : (spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS),
+      maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+      // Keep raw output without applying the nonexistent 'buffer' encoding to string stdin.
+      encoding: null
+    },
+    hasSpawnObserver() ? notifySpawnObserver : undefined
+  )
   const timedOut = result.error
     ? 'code' in result.error && result.error.code === 'ETIMEDOUT'
     : false

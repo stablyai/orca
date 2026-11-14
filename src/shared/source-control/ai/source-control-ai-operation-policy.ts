@@ -10,7 +10,8 @@ import {
   readSourceControlActionDefault,
   resolveSourceControlActionCommandTemplate,
   type AiActionId,
-  type SourceControlTextActionId
+  type SourceControlTextActionId,
+  isGlobalAiTextAction
 } from './recipes/source-control-ai-actions'
 import { commandTemplateFromOperationInstruction } from './recipes/source-control-ai-command-template'
 import { normalizeRepoSourceControlAiOverrides } from './settings/source-control-ai-repo-settings'
@@ -44,10 +45,9 @@ export function resolveInstructionsFromNormalized(
   operation: AiTextOperation,
   legacyCustomPrompt: string | undefined
 ): string {
-  const repoInstruction =
-    operation === 'conversationName'
-      ? undefined
-      : readRepoInstructionOverride(repoOverrides?.instructionsByOperation, operation)
+  const repoInstruction = isGlobalAiTextAction(operation)
+    ? undefined
+    : readRepoInstructionOverride(repoOverrides?.instructionsByOperation, operation)
   if (repoInstruction !== undefined) {
     return repoInstruction.trim()
   }
@@ -80,14 +80,12 @@ export function hasConfiguredSourceControlAiInstructions(args: {
   repo?: Pick<Repo, 'sourceControlAi'> | null
   operation: AiTextOperation
 }): boolean {
-  const repoInstruction =
-    args.operation === 'conversationName'
-      ? undefined
-      : readRepoInstructionOverride(
-          normalizeRepoSourceControlAiOverrides(args.repo?.sourceControlAi)
-            ?.instructionsByOperation,
-          args.operation
-        )
+  const repoInstruction = isGlobalAiTextAction(args.operation)
+    ? undefined
+    : readRepoInstructionOverride(
+        normalizeRepoSourceControlAiOverrides(args.repo?.sourceControlAi)?.instructionsByOperation,
+        args.operation
+      )
   return repoInstruction !== undefined || resolveSourceControlAiInstructions(args).length > 0
 }
 
@@ -118,12 +116,12 @@ export function resolveActionRecipeForTextOperation(
   operation: AiTextOperation
 ): { agentId?: TuiAgent | CustomAgentId | null; commandInputTemplate: string; agentArgs?: string } {
   const globalRecipe = readSourceControlActionDefault(source.actions, operation)
-  const repoRecipe =
-    operation === 'conversationName' ? undefined : repoOverrides?.actionOverrides?.[operation]
-  const repoInstruction =
-    operation === 'conversationName'
-      ? undefined
-      : readRepoInstructionOverride(repoOverrides?.instructionsByOperation, operation)
+  const repoRecipe = isGlobalAiTextAction(operation)
+    ? undefined
+    : repoOverrides?.actionOverrides?.[operation]
+  const repoInstruction = isGlobalAiTextAction(operation)
+    ? undefined
+    : readRepoInstructionOverride(repoOverrides?.instructionsByOperation, operation)
   const fallbackTemplate =
     repoInstruction !== undefined
       ? commandTemplateFromOperationInstruction(operation, repoInstruction)
@@ -197,12 +195,11 @@ export function captureSourceControlActionSelection(input: {
     input.settings?.commitMessageAi
   )
   const globalRecipe = readSourceControlActionDefault(source.actions, input.actionId)
-  const repoRecipe =
-    input.actionId === 'conversationName'
-      ? undefined
-      : normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)?.actionOverrides?.[
-          input.actionId
-        ]
+  const repoRecipe = isGlobalAiTextAction(input.actionId)
+    ? undefined
+    : normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)?.actionOverrides?.[
+        input.actionId
+      ]
   const commandInputTemplate = resolveSourceControlActionCommandTemplate(
     source.actions,
     input.actionId

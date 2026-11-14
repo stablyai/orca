@@ -1,11 +1,11 @@
-import { emulatorOpeningMessage } from './emulator-opening-message'
+import { emulatorOpeningMessage } from './session/emulator-opening-message'
 import type { Tab } from '../../../../shared/tab-types'
-import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
-import { EmulatorDeviceFrame } from './emulator-device-frame'
-import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
-import { useEmulatorPaneSession } from './use-emulator-pane-session'
-import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
-import { useEmulatorInputCheck } from './use-emulator-input-check'
+import { EmulatorPaneToolbar } from './devices/emulator-pane-toolbar'
+import { EmulatorDeviceFrame } from './frame/emulator-device-frame'
+import { MobileEmulatorAgentSetupGuideLayer } from './agent-setup/MobileEmulatorAgentSetupGuideLayer'
+import { useEmulatorPaneSession } from './session/use-emulator-pane-session'
+import { scrcpyDeviceIdFromStreamUrl } from './streaming/emulator-scrcpy-stream-url'
+import { useEmulatorInputCheck } from './input/use-emulator-input-check'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
@@ -34,6 +34,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     sendGesture,
     sendRotate,
     displayName,
+    deviceId,
     previewUrl,
     wsUrl,
     streamKey,
@@ -97,6 +98,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             </p>
           ) : null}
           <EmulatorDeviceFrame
+            deviceId={deviceId}
             previewUrl={previewUrl}
             wsUrl={wsUrl}
             streamKey={streamKey}

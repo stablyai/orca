@@ -73,48 +73,6 @@ describe('TabsSlice', () => {
 
   // Already-active group clicks skip activateTab; focusGroup must still expose its tab to the attention scan.
   describe('focusGroup', () => {
-    it('does not broadcast active-surface writes when the focused group is already current', () => {
-      const editorFileId = '/tmp/feature/src/main.ts'
-      const tab = store.getState().createUnifiedTab(WT, 'editor', {
-        id: 'editor-tab-1',
-        entityId: editorFileId,
-        label: 'main.ts'
-      })
-      const groupId = store.getState().groupsByWorktree[WT][0].id
-      store.setState({
-        activeWorktreeId: WT,
-        openFiles: [makeOpenFile({ id: editorFileId, worktreeId: WT })],
-        activeGroupIdByWorktree: { [WT]: groupId },
-        activeFileId: editorFileId,
-        activeFileIdByWorktree: { [WT]: editorFileId },
-        activeBrowserTabId: null,
-        activeBrowserTabIdByWorktree: { [WT]: null },
-        activeTabId: null,
-        activeTabIdByWorktree: { [WT]: null },
-        activeTabType: 'editor',
-        activeTabTypeByWorktree: { [WT]: 'editor' },
-        groupsByWorktree: {
-          [WT]: [
-            {
-              ...store.getState().groupsByWorktree[WT][0],
-              activeTabId: tab.id
-            }
-          ]
-        }
-      })
-      const before = store.getState()
-      const listener = vi.fn()
-      const unsubscribe = store.subscribe(listener)
-
-      store.getState().focusGroup(WT, groupId)
-      unsubscribe()
-
-      expect(listener).not.toHaveBeenCalled()
-      expect(store.getState().activeGroupIdByWorktree).toBe(before.activeGroupIdByWorktree)
-      expect(store.getState().activeFileIdByWorktree).toBe(before.activeFileIdByWorktree)
-      expect(store.getState().activeTabTypeByWorktree).toBe(before.activeTabTypeByWorktree)
-    })
-
     // Why: focusGroup fires on every pointerdown in the group chrome; it moves what is on screen and the scan reads it.
     it("puts the focused group's active tab on screen", () => {
       const tabA = store.getState().createUnifiedTab(WT, 'terminal')

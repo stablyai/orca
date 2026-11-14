@@ -6,7 +6,7 @@ import { isShellProcess } from '../../../../../../shared/agent-status/process/sh
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status/ownership/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { rendererAgentStatusObservations } from '@/lib/agent-status/evidence/renderer-agent-status-observations'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store/index'
 import {

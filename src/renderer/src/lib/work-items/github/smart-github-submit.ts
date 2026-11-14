@@ -1,12 +1,15 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitPushTarget } from '../../../../../shared/worktree/types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+import {
+  type TaskSourceContext,
+  getTaskSourceCacheScope
+} from '../../../../../shared/work-items/task-source-context'
+
 import { getLinkedWorkItemWorkspaceName } from '../../../../../shared/workspace-name'
-import type { LinkedWorkItemSummary } from '../../new-workspace'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
+import type { LinkedWorkItemSummary } from '../../workspace/creation/new-workspace'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { resolveGitHubWorkItemIdentity } from '../../../../../shared/new-workspace/github-work-item-identity'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 
 export type SmartGitHubSubmitIntent =
   | {

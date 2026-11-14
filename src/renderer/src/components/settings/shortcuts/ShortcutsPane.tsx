@@ -13,11 +13,6 @@ import {
 } from '../../../../../shared/keybindings/profile-defaults'
 import { keybindingFromInputForAction } from '../../../../../shared/keybindings/input'
 import { normalizeKeybindingListForAction } from '../../../../../shared/keybindings/normalization'
-import type {
-  KeybindingActionId,
-  KeybindingDefinition,
-  KeybindingInput
-} from '../../../../../shared/keybindings/types'
 import { EMPTY_DISABLED_TUI_AGENTS } from './shortcut-groups'
 import { useAppStore } from '../../../store/index'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
@@ -27,7 +22,8 @@ import {
   removeBindingOverride,
   sameBindings
 } from './keybinding-override-edits'
-import { ShortcutFilterRail, type ShortcutFilter } from './ShortcutFilterRail'
+import { ShortcutFilterRail } from './ShortcutFilterRail'
+import type { ShortcutFilter } from './ShortcutFilterRail'
 import { ShortcutRowsList } from './ShortcutRowsList'
 import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
 import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
@@ -43,11 +39,17 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useEditablePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { buildShortcutRowVisibility } from './shortcut-row-visibility'
 import { useMacCapturedDigitChords } from './use-mac-captured-digit-chords'
 import { keybindingValidationErrorText } from './keybinding-diagnostic-text'
 import { KeybindingFileDiagnostics } from './KeybindingFileDiagnostics'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
+import type {
+  KeybindingActionId,
+  KeybindingDefinition,
+  KeybindingInput
+} from '../../../../../shared/keybindings/types'
 
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
@@ -315,11 +317,13 @@ export function ShortcutsPane(): React.JSX.Element {
     <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
       <section className="flex min-h-0 flex-1 flex-col space-y-3">
         {showPolicy ? (
-          <ShortcutTerminalPolicyControl
-            terminalShortcutPolicy={terminalShortcutPolicy}
-            keywords={getTerminalShortcutPolicySearchEntry().keywords}
-            updateSettings={updateSettings}
-          />
+          <SettingsGroup>
+            <ShortcutTerminalPolicyControl
+              terminalShortcutPolicy={terminalShortcutPolicy}
+              keywords={getTerminalShortcutPolicySearchEntry().keywords}
+              updateSettings={updateSettings}
+            />
+          </SettingsGroup>
         ) : null}
 
         <SettingsSubsectionHeader

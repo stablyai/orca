@@ -17,7 +17,7 @@ import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,
   type MobileSocketTransport
-} from '../../../src/main/runtime/rpc/mobile-socket-wiring'
+} from '../../../src/main/runtime/rpc/mobile/mobile-socket-wiring'
 import type { KeyedWebDeviceKeySupport } from '../../../src/renderer/src/web/web-device-key'
 import { createMemoryWebDeviceKeyStore } from '../../../src/renderer/src/web/web-device-key-store'
 import { WebRuntimeConnectionTransport } from '../../../src/renderer/src/web/web-runtime-connection-transport'

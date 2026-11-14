@@ -1,6 +1,6 @@
 // Persisted leases grant no writer until this runtime reconciles them; their recorded process may still live.
 
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'

@@ -42,6 +42,8 @@ export type CommitMessagePlanInput = {
   customAgentCommand?: string
   agentCommandOverride?: string
   agentArgs?: string
+  /** The prompt is the user's own words, not a repo task: the agent gets no tools where its CLI allows. */
+  toolFree?: boolean
 }
 
 export type CommitMessagePlan = {
@@ -189,6 +191,7 @@ export function planCommitMessageGeneration(
     thinkingLevel: input.thinkingLevel,
     strictMcp: options.strictMcp,
     legacyToolPolicy: options.legacyToolPolicy,
+    toolFree: input.toolFree,
     userArgs: [...prefixArgs, ...recipeArgs]
   })
   // Replace singleton values rather than stack them: yargs arrays crash CLIs such as OpenCode model.split.

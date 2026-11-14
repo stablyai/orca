@@ -5,8 +5,8 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 
 export function ProjectsCollapseAllButton({
   allCollapsed,

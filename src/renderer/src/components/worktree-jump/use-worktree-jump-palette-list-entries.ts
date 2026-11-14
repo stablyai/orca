@@ -7,12 +7,16 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   appendPaletteListEntries,
-  CONTINUED_SECTION_HEADER_ID_SUFFIX,
   type PaletteItem,
   type PaletteListEntry
 } from './worktree-jump-palette-model'
 import { buildPaletteListEntryRenderKeys } from '@/components/cmd-j/palette-list-entry-render-keys'
 import { BROWSER_NAVIGATION_ACTION_ID } from '@/components/cmd-j/browser-navigation-action'
+import {
+  buildPaletteExtraSectionEntries,
+  type PaletteExtraSlot
+} from './worktree-jump-palette-extra-list-entries'
+import { appendMultiPrimaryPaletteSections } from './worktree-jump-palette-multi-primary-entries'
 import type { WorktreeJumpPaletteSections } from './use-worktree-jump-palette-sections'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
@@ -38,7 +42,7 @@ export function useWorktreeJumpPaletteListEntries({
 }: WorktreeJumpPaletteListEntriesInput) {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
-  const listEntries = useMemo<PaletteListEntry[]>(() => {
+  const { listEntries, defaultSelectionStart } = useMemo(() => {
     const entries: PaletteListEntry[] = []
     const {
       visibleWorktreeItems,
@@ -50,7 +54,8 @@ export function useWorktreeJumpPaletteListEntries({
       middleOverflowCount,
       openTabOverflowCount,
       multiPrimaryFirstScreen,
-      multiPrimaryLayout
+      multiPrimaryLayout,
+      visibleExtraSections
     } = paletteSections
     // Exact entity matches keep priority; issue/PR URLs keep their jump and create rows first.
     const browserNavigationItem =
@@ -82,6 +87,11 @@ export function useWorktreeJumpPaletteListEntries({
           onSeeMore
         })
       }
+    }
+    const pushExtras = (slot: PaletteExtraSlot): void => {
+      entries.push(
+        ...buildPaletteExtraSectionEntries(visibleExtraSections, slot, t, handleExpandSection)
+      )
     }
     const showWorktreeHeader = visibleWorktreeItems.length > 0
     const showOpenTabsHeader = visibleOpenTabItems.length > 0
@@ -176,77 +186,50 @@ export function useWorktreeJumpPaletteListEntries({
       if (browserNavigationItem) {
         entries.push(browserNavigationItem)
       }
-      return entries
+      return { listEntries: entries, defaultSelectionStart: 0 }
     }
     if (!hasQuery) {
+      pushExtras({ emptyQuery: 'first' })
+      // Rows above this index lead the list without taking the default selection.
+      const defaultSelectionStart = entries.length
       pushOpenTabSection()
       pushWorktreeSection()
-      return entries
+      pushExtras({ emptyQuery: 'last' })
+      return { listEntries: entries, defaultSelectionStart }
     }
     if (browserNavigationItem) {
       entries.push(browserNavigationItem)
     }
     if (multiPrimaryFirstScreen && multiPrimaryLayout) {
-      const leadingSectionKey = openTabsLeadSections ? 'open-tabs' : 'worktrees'
-      const trailingSectionKey = openTabsLeadSections ? 'worktrees' : 'open-tabs'
-      const leadingHintId = openTabsLeadSections
-        ? '__hint_open_tab_overflow__'
-        : '__hint_worktree_overflow__'
-      const trailingHintId = openTabsLeadSections
-        ? '__hint_worktree_overflow__'
-        : '__hint_open_tab_overflow__'
-      const pushLeadingHeader = (idSuffix = ''): void => {
-        if (openTabsLeadSections) {
-          pushOpenTabsHeader(idSuffix)
-        } else {
-          pushWorktreesHeader(idSuffix)
-        }
-      }
-      const pushTrailingHeader = (idSuffix = ''): void => {
-        if (openTabsLeadSections) {
-          pushWorktreesHeader(idSuffix)
-        } else {
-          pushOpenTabsHeader(idSuffix)
-        }
-      }
-      pushLeadingHeader()
-      appendPaletteListEntries(entries, multiPrimaryLayout.leadingPreview as PaletteItem[])
-      pushOverflowHint(leadingHintId, multiPrimaryLayout.leadingMoreCount, () =>
-        handleExpandSection(openTabsLeadSections ? 'open-tabs' : 'worktrees')
-      )
-      pushTrailingHeader()
-      appendPaletteListEntries(entries, multiPrimaryLayout.trailingFloor as PaletteItem[])
-      const hasLeadingRest = multiPrimaryLayout.leadingRest.length > 0
-      if (hasLeadingRest) {
-        pushLeadingHeader(CONTINUED_SECTION_HEADER_ID_SUFFIX)
-        appendPaletteListEntries(entries, multiPrimaryLayout.leadingRest as PaletteItem[])
-        pushOverflowHint(`${leadingHintId}_tail`, multiPrimaryLayout.leadingHardOverflowCount, () =>
-          handleExpandSection(leadingSectionKey)
-        )
-      }
-      if (multiPrimaryLayout.trailingRest.length > 0) {
-        if (hasLeadingRest) {
-          pushTrailingHeader(CONTINUED_SECTION_HEADER_ID_SUFFIX)
-        }
-        appendPaletteListEntries(entries, multiPrimaryLayout.trailingRest as PaletteItem[])
-      }
-      pushOverflowHint(trailingHintId, multiPrimaryLayout.trailingHardOverflowCount, () =>
-        handleExpandSection(trailingSectionKey)
-      )
+      pushExtras('leading')
+      appendMultiPrimaryPaletteSections({
+        entries,
+        layout: multiPrimaryLayout,
+        openTabsLeadSections,
+        pushOpenTabsHeader,
+        pushWorktreesHeader,
+        pushOverflowHint,
+        handleExpandSection,
+        pushExtras
+      })
+      pushExtras('after-workspaces')
       pushProjectAndMiddleSections()
       pushTasks()
       if (showCreateAction) {
         entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
       }
-      return entries
+      return { listEntries: entries, defaultSelectionStart: 0 }
     }
     if (middleLeadsSections) {
       pushProjectAndMiddleSections()
     }
+    pushExtras('leading')
     if (openTabsLeadSections) {
       pushOpenTabSection()
     }
+    pushExtras('before-workspaces')
     pushWorktreeSection()
+    pushExtras('after-workspaces')
     if (!middleLeadsSections) {
       pushProjectAndMiddleSections()
     }
@@ -257,7 +240,7 @@ export function useWorktreeJumpPaletteListEntries({
     if (showCreateAction) {
       entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
     }
-    return entries
+    return { listEntries: entries, defaultSelectionStart: 0 }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
     handleExpandSection,
@@ -289,10 +272,27 @@ export function useWorktreeJumpPaletteListEntries({
     () => getWorktreePaletteSelectionItemIds(listEntries, listEntryRenderKeys),
     [listEntries, listEntryRenderKeys]
   )
+  // null keeps the shared rule: first row, never an unasked Create.
+  const defaultSelectionItemId = useMemo(
+    () =>
+      defaultSelectionStart > 0
+        ? (getWorktreePaletteSelectionItemIds(
+            listEntries.slice(defaultSelectionStart),
+            listEntryRenderKeys.slice(defaultSelectionStart)
+          )[0] ?? null)
+        : null,
+    [defaultSelectionStart, listEntries, listEntryRenderKeys]
+  )
   useEffect(() => {
-    autoSelectedItemIdRef.current = selectionItemIds[0] ?? null
-  }, [autoSelectedItemIdRef, selectionItemIds])
-  return { listEntries, listEntryRenderKeys, selectableItems, selectionItemIds }
+    autoSelectedItemIdRef.current = defaultSelectionItemId ?? selectionItemIds[0] ?? null
+  }, [autoSelectedItemIdRef, defaultSelectionItemId, selectionItemIds])
+  return {
+    listEntries,
+    listEntryRenderKeys,
+    selectableItems,
+    selectionItemIds,
+    defaultSelectionItemId
+  }
 }
 
 export type WorktreeJumpPaletteListEntries = ReturnType<typeof useWorktreeJumpPaletteListEntries>

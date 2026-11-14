@@ -1,8 +1,8 @@
 import React from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { resolveVmEnvironmentCheckDecision } from '@/lib/ephemeral-vm-environment-check-decision'
+import { resolveVmEnvironmentCheckDecision } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-decision'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
 import type { EnvironmentSetupFailureContext } from '../../../../shared/environment-setup-agent-prompt'
@@ -45,7 +45,7 @@ function startFixWithAgent(args: {
   recipeId: string
   failure: EnvironmentSetupFailureContext
 }): void {
-  void import('@/lib/environment-setup-agent-launch')
+  void import('@/lib/agent-session/launch/environment-setup-agent-launch')
     .then(({ launchEnvironmentSetupAgent }) => launchEnvironmentSetupAgent(args))
     .catch((launchError: unknown) => {
       toast.error(launchError instanceof Error ? launchError.message : String(launchError))

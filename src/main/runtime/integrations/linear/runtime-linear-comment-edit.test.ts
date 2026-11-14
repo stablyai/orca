@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as LinearClientModule from '../../../linear/client'
+import type * as LinearClientModule from '../../../linear/accounts/linear-account-client'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 
 const COMMENT_ID = '9f3c2a10-1111-4222-8333-444455556666'
@@ -13,13 +13,13 @@ const mocks = vi.hoisted(() => ({
   deleteComment: vi.fn()
 }))
 
-vi.mock('../../../linear/client', async (importOriginal) => ({
+vi.mock('../../../linear/accounts/linear-account-client', async (importOriginal) => ({
   ...(await importOriginal<typeof LinearClientModule>()),
   getClients: mocks.getClients,
   getStatus: mocks.getStatus
 }))
 
-vi.mock('../../../linear/linear-sdk', () => {
+vi.mock('../../../linear/requests/linear-sdk', () => {
   const sdk = {
     // Why: writes build a fresh SDK client per call so the deadline signal can abort it.
     LinearClient: class {
@@ -36,7 +36,7 @@ vi.mock('../../../linear/linear-sdk', () => {
 })
 
 import { RuntimeLinearReadCommands } from './runtime-linear-read-commands'
-import { acquire, release } from '../../../linear/linear-request-concurrency'
+import { acquire, release } from '../../../linear/requests/linear-request-concurrency'
 
 function rawComment(body: string): unknown {
   return {

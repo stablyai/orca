@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useContextWorkspaceStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
@@ -27,12 +27,13 @@ import {
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
+import { selectWorkspaceShowsUnread } from '../../worktree-card-slot-rollup'
 import {
   useWorktreeParentPickerTransition,
   type PendingParentPicker
 } from '../parenting/use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -111,6 +112,10 @@ export function useWorktreeContextMenuModel({
   )
   const unifiedTabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.unifiedTabsByWorktree, EMPTY_UNIFIED_TABS_BY_WORKTREE)
+  )
+  // The menu offers what the card shows: unread when any agent result or the flag is unread.
+  const showsUnread = useAppStore((s) =>
+    menuOpen ? selectWorkspaceShowsUnread(s, worktree) : worktree.isUnread
   )
   const agentStatusByPaneKey = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
@@ -288,6 +293,7 @@ export function useWorktreeContextMenuModel({
     setMenuOpenState,
     setWorkspaceUnreadByUser,
     setWorktreesPinnedAndReveal,
+    showsUnread,
     sleepableWorktrees,
     subtreeSleepableWorktrees,
     statusesForWorktree,
@@ -331,6 +337,7 @@ export function useWorktreeContextMenuModel({
 
   return {
     ...commands,
+    showsUnread,
     activeContextWorktrees,
     batchDeleteWorktrees,
     browserTabsByWorktree,

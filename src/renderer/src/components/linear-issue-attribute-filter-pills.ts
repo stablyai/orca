@@ -1,6 +1,7 @@
 // Keep coverage visible on pills after the picker’s detailed notice closes.
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import {
   canonicalizeLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
@@ -91,7 +92,7 @@ export function linearIssueAttributeFilterPillLabels(
     pills.push({
       key: 'assignee',
       label: t('auto.components.linear-issue-attribute-filter-sections.assignee', 'Assignee'),
-      value: t('auto.components.linear-issue-attribute-filter-sections.unassigned', 'Unassigned'),
+      value: translateUnassignedLabel(),
       partial: false
     })
   } else if (canonical.assignee?.kind === 'user') {

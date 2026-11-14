@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { sessionSearchPageKey } from '../../ai-vault-search/session-search-page-cursor'
+import { sessionSearchPageKey } from '../../ai-vault-search/query/session-search-page-cursor'
 import { resolveSessionSearchLimit } from '../../../shared/ai-vault/search/ai-vault-search-limit'
 import type {
   AiVaultSearchHit,

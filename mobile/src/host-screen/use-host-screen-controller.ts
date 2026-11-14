@@ -17,18 +17,21 @@ import {
   useReconnectAttempt,
   useRelayRecoveryStatus
 } from '../transport/connection/client-context-connection-metrics'
-import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
-import { useHostListSections } from './use-host-list-sections'
-import { useSwitchedHostSidebarFeed } from './use-host-sidebar-feed'
-import { useHostProjectSections } from './use-host-project-sections'
-import { useHostRepoMetadata } from './use-host-repo-metadata'
-import { peekStoredHost, useHostScreenIdentity } from './use-host-screen-identity'
+import {
+  useHostDisplayWorktrees,
+  useResolvedHostPlatform
+} from './workspace-list/use-host-display-worktrees'
+import { useHostListSections } from './workspace-list/use-host-list-sections'
+import { useSwitchedHostSidebarFeed } from './sidebar-feed/use-host-sidebar-feed'
+import { useHostProjectSections } from './catalog/use-host-project-sections'
+import { useHostRepoMetadata } from './catalog/use-host-repo-metadata'
+import { peekStoredHost, useHostScreenIdentity } from './identity/use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
-import { useHostViewSettings } from './use-host-view-settings'
+import { useHostViewSettings } from './view-settings/use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
-import { useHostWorktreeActions } from './use-host-worktree-actions'
-import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
-import { useHostDisplay } from '../transport/hosts/use-host-display'
+import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-actions'
+import { useHostWorktreeCatalog } from './catalog/use-host-worktree-catalog'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { classifyConnection } from '../transport/connection/connection-health'
 
 export type HostScreenProps = {

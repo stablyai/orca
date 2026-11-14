@@ -1,6 +1,6 @@
 import React, { memo, useMemo } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AppMemory, UsageValues } from '../../../../shared/process-stats-types'
 import type { Metric } from './resource-usage-merge-types'

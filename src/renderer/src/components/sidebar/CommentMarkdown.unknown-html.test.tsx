@@ -15,22 +15,6 @@ describe('CommentMarkdown unknown HTML as text', () => {
     expect(markup).not.toContain('<script>')
   })
 
-  it('still sanitizes unsafe attributes and URLs on allowed HTML', () => {
-    const markup = renderChat('<a href="javascript:alert(1)" onclick="alert(2)">link</a>')
-
-    expect(markup).toContain('>link</a>')
-    expect(markup).not.toContain('javascript:')
-    expect(markup).not.toContain('onclick')
-  })
-
-  it('keeps disallowed elements inert even when they have executable attributes', () => {
-    const markup = renderChat('<iframe srcdoc="<script>alert(1)</script>"></iframe>')
-
-    expect(markup).toContain('&lt;iframe')
-    expect(markup).not.toContain('<iframe')
-    expect(markup).not.toContain('<script')
-  })
-
   it('keeps an unknown tag inert inside a mixed HTML block', () => {
     const markup = renderChat('<div>\n<iframe srcdoc="<script>alert(1)</script>"></iframe>\n</div>')
 

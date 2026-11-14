@@ -9,7 +9,8 @@ import type {
 } from '../../../../../../shared/project-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getHostSetupUnavailableDetail } from '@/lib/project-host-setup-options'
+import { translateHostDisplayLabel } from '../../../sidebar/execution-host-label'
+import { getHostSetupUnavailableDetail } from '@/lib/workspace/creation/project-host-setup-options'
 import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 
 export type SetupHostOption = {
@@ -62,7 +63,7 @@ export function buildSetupHostOptions(
       const canUsePathActions = host.health === 'local' || host.health === 'available'
       return {
         id: host.id,
-        label: host.label || getExecutionHostLabel(host.id),
+        label: host.label ? translateHostDisplayLabel(host) : getExecutionHostLabel(host.id),
         detail:
           unavailableDetail ??
           (canUsePathActions

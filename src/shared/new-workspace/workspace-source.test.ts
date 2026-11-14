@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resolveComposerBranchSelection } from '../composer-branch-selection'
 import {
   buildLinearWorkspaceSource,
   buildWorkspaceSourceSelection,
@@ -8,6 +9,23 @@ import {
 } from './workspace-source'
 
 describe('workspace source policy', () => {
+  it.each([
+    ['refs/remotes/origin/topic', 'origin/topic'],
+    ['refs/heads/topic', 'topic'],
+    ['origin/topic', 'origin/topic']
+  ])('shows selected branch %s without rewriting its action', (refName, label) => {
+    const selection = resolveComposerBranchSelection({
+      refName,
+      localBranchName: 'topic',
+      currentName: '',
+      lastAutoName: ''
+    })
+    expect(
+      buildWorkspaceSourceSelection({ linkedWorkItem: null, baseBranch: selection.baseBranch })
+    ).toEqual({ kind: 'branch', label })
+    expect(selection.baseBranch).toBe(refName)
+  })
+
   it.each(['347', '002', '#347', 'https://github.com/fixture/repo/issues/347'])(
     'keeps manual name %s after the query field becomes a selected source',
     (currentName) => {
