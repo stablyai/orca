@@ -185,6 +185,13 @@ export function createRelayApp(
   }
 ): Hono {
   const app = new Hono()
+  app.use(
+    '/v1/*',
+    bodyLimit({
+      maxSize: RELAY_PROTOCOL_LIMITS.maxHttpBodyBytes,
+      onError: (context) => context.json({ error: 'request_too_large' }, 413)
+    })
+  )
   let regionCatalogCache:
     | { expiresAt: number; value: Awaited<ReturnType<RelayAssignmentStore['regionCatalog']>> }
     | undefined
