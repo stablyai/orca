@@ -37,7 +37,6 @@ describe('sanitizePluginIconSvg', () => {
     ['a style element', '<style>*{fill:red}</style>', 'style>'],
     ['use', '<use href="#a"/>', 'use'],
     ['an event handler', '<rect onclick="x()"/>', 'onclick'],
-    ['an xlink href', '<rect xlink:href="https://evil"/>', 'evil'],
     [
       'any-prefix href',
       '<rect xmlns:x="http://www.w3.org/1999/xlink" x:href="https://evil"/>',

@@ -18,7 +18,7 @@ function chunk(type: string, data: number[] = []): number[] {
 }
 const be32 = (n: number) => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]
 
-function pngBytes(width: number, height: number, animated = false): Uint8Array {
+function pngBytes(width: number, height: number): Uint8Array {
   return Uint8Array.from([
     0x89,
     0x50,
@@ -29,7 +29,6 @@ function pngBytes(width: number, height: number, animated = false): Uint8Array {
     0x1a,
     0x0a,
     ...chunk('IHDR', [...be32(width), ...be32(height), 8, 6, 0, 0, 0]),
-    ...(animated ? chunk('acTL', [0, 0, 0, 2, 0, 0, 0, 0]) : []),
     ...chunk('IDAT', [1, 2, 3]),
     ...chunk('IEND')
   ])
