@@ -1,7 +1,7 @@
 import type {
   RendererStatusPublication,
   RendererStatusAck
-} from '../../shared/agent-status/renderer-status-publication'
+} from '../../../shared/agent-status/renderer-status-publication'
 import type {
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks,
