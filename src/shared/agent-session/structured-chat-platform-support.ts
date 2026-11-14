@@ -1,7 +1,7 @@
-/** Google publishes no Windows Antigravity chat server Orca can run (#30817); relax this once one ships. */
+/** Structured chat platform support. Antigravity chat is available on Windows via managed server and host agy. */
 export function structuredChatUnavailableOnPlatform(
-  agent: string,
-  platform: string | null | undefined
+  _agent: string,
+  _platform: string | null | undefined
 ): boolean {
-  return agent === 'antigravity' && platform === 'win32'
+  return false
 }
