@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from 'react'
 import { Mic, Square } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 

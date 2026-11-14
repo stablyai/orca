@@ -5,7 +5,8 @@ import {
   resetTerminalWebglSuggestion,
   shouldUseTerminalWebgl
 } from './pane-webgl-renderer'
-import { safeFit } from '../pane-tree-ops'
+import '../pane-layout/pane-tree-ops'
+import { safeFit } from '../terminal-fit/pane-fit'
 import { applyDomBlockFills } from './terminal-dom-block-fill'
 import { resetPaneWebglContextLosses } from './pane-webgl-context-loss-policy'
 

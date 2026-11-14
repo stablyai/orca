@@ -1,5 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
+import type { ScrollState } from '@/lib/pane-manager/terminal-scroll/pane-scroll-snapshot'
 import { resetAndRefreshAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import {
   flushTerminalOutput,
@@ -8,15 +8,15 @@ import {
 import {
   enforceTerminalCurrentScrollIntent,
   syncTerminalScrollIntentFromViewport
-} from '@/lib/pane-manager/terminal-scroll-intent'
+} from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import {
   isTerminalLinkifierHoverActive,
   resetTerminalLinkifierHoverState
-} from '@/lib/pane-manager/terminal-linkifier-hover-reset'
+} from '@/lib/pane-manager/terminal-input/terminal-linkifier-hover-reset'
 import { focusActivePane } from '../../input/focus/mounted-pane-focus'
 import { useAppStore } from '@/store/index'
 import { auditPaneWeightParity } from '../../render-health/terminal-render-desync-weight-probe'
-import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit-measurability'
+import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/terminal-fit/pane-fit-measurability'
 import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-rendering/terminal-canvas-dpr-repair'
 import { presentPaneViewport } from '@/lib/pane-manager/terminal-rendering/pane-viewport-present'
 

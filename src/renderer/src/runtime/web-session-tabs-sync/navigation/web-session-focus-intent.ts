@@ -11,6 +11,8 @@ export type WebSessionFocusIntent = {
   hostTabId: string
   leafId?: string
   expectedCurrentLocalTabId?: string | null
+  /** With the tab: the intent yields if the viewer picked another pane in it meanwhile. */
+  expectedCurrentLocalLeafId?: string | null
 }
 
 export const MAX_WEB_SESSION_FOCUS_INTENTS = 512
@@ -129,7 +131,8 @@ export function recordWebSessionFocusIntent(
   worktreeId: string,
   hostTabId: string,
   leafId?: string,
-  expectedCurrentLocalTabId?: string | null
+  expectedCurrentLocalTabId?: string | null,
+  expectedCurrentLocalLeafId?: string | null
 ): void {
   const trimmed = hostTabId.trim()
   if (!worktreeId || !trimmed) {
@@ -141,7 +144,8 @@ export function recordWebSessionFocusIntent(
   pendingFocusByOwnerAndWorktree.set(key, {
     hostTabId: trimmed,
     ...(trimmedLeafId ? { leafId: trimmedLeafId } : {}),
-    ...(expectedCurrentLocalTabId !== undefined ? { expectedCurrentLocalTabId } : {})
+    ...(expectedCurrentLocalTabId !== undefined ? { expectedCurrentLocalTabId } : {}),
+    ...(expectedCurrentLocalLeafId !== undefined ? { expectedCurrentLocalLeafId } : {})
   })
   while (pendingFocusByOwnerAndWorktree.size > MAX_WEB_SESSION_FOCUS_INTENTS) {
     const oldest = pendingFocusByOwnerAndWorktree.keys().next()

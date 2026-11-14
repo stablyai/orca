@@ -164,7 +164,7 @@ async function createHostFolderWorkspace(page: Page, folderPath: string): Promis
       name: 'Paired skill folder E2E',
       folderPath: path
     })
-    return workspace.id
+    return workspace.folderWorkspace.id
   }, folderPath)
 }
 

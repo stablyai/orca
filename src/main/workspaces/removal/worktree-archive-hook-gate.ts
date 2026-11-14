@@ -4,7 +4,7 @@ import {
   formatArchiveHookFailure,
   type ArchiveHookOverride,
   type ArchiveHookRunResult
-} from '../../../shared/worktree/archive-hook-removal-gate'
+} from '../../../shared/worktree/removal/archive-hook-removal-gate'
 
 /** Run before PTY teardown, deregistration or deletion, while the archive hook still has its checkout. */
 export function gateWorktreeRemovalOnArchiveHook(args: {

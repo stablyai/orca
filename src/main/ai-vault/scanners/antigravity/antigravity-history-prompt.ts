@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 export function antigravityHistoryPromptHash(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 4096) {

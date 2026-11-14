@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -11,7 +12,7 @@ import {
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { evictStructuredAgentSession } from '../native-chat/agent-session-wire/termination/structured-agent-session-eviction'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { JsonlRpcTimelineLane } from './timeline-lane'
 
 const cleanups: (() => void)[] = []
@@ -73,7 +74,7 @@ describe('Pi final tail before host eviction', () => {
       expect(append('ordinary')).toEqual({ accepted: true })
       return gate.promise
     })
-    const before = journal.snapshot().items.length
+    const before = (await readTestJournalItems(journal)).length
     vi.useFakeTimers()
     const reply = `Final reply${'r'.repeat(2 * 1024 * 1024)}`
     const status = `Final status${'s'.repeat(17 * 1024 * 1024)}`
@@ -99,7 +100,7 @@ describe('Pi final tail before host eviction', () => {
       return result
     })
     await vi.advanceTimersByTimeAsync(2_501)
-    expect(journal.snapshot().items).toHaveLength(before)
+    expect(await readTestJournalItems(journal)).toHaveLength(before)
     expect(landed).toBe(false)
     expect(onFailed).not.toHaveBeenCalled()
     gate.resolve()
@@ -115,11 +116,11 @@ describe('Pi final tail before host eviction', () => {
     })
     expect(acknowledgeRelease).toHaveBeenCalledOnce()
     expect(
-      journal
-        .snapshot()
-        .items.some((item) => item.body.kind === 'status' && item.body.text === 'must not land')
+      (await readTestJournalItems(journal)).some(
+        (item) => item.body.kind === 'status' && item.body.text === 'must not land'
+      )
     ).toBe(false)
-    expect(journal.snapshot().items.map((item) => item.body)).toEqual(
+    expect((await readTestJournalItems(journal)).map((item) => item.body)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: 'message',

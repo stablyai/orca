@@ -3,10 +3,10 @@ import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../../src/shared/orca-profiles
 import {
   acquireProfileStateMaintenance,
   acquireProfileStateRuntimeAdmission
-} from '../../../src/main/persistence/profile-state/profile-state-access'
-import { openProfileStateDatabaseReadOnly } from '../../../src/main/persistence/profile-state/profile-state-database'
-import { readProfileStateParsedSnapshot } from '../../../src/main/persistence/profile-state/profile-state-documents'
-import { parseProfileStateRoot } from '../../../src/main/persistence/profile-state/profile-state-document-validation'
+} from '../../../src/main/persistence/profile-state/access/profile-state-access'
+import { openProfileStateDatabaseReadOnly } from '../../../src/main/persistence/profile-state/database/profile-state-database'
+import { readProfileStateParsedSnapshot } from '../../../src/main/persistence/profile-state/documents/profile-state-documents'
+import { parseProfileStateRoot } from '../../../src/main/persistence/profile-state/documents/profile-state-document-validation'
 import { ProfileStateSqliteAuthority } from '../../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 
 /** Read committed storage without consulting a retained migration JSON snapshot. */

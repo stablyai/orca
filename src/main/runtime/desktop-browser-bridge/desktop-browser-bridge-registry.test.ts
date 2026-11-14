@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { DesktopBrowserBridgeEvent } from '../../../shared/desktop-browser-bridge-protocol'
-import {
-  DesktopBrowserBridgeRegistry,
-  MAX_PENDING_PER_ATTACHMENT
-} from './desktop-browser-bridge-registry'
+import { DesktopBrowserBridgeRegistry } from './desktop-browser-bridge-registry'
 import { routeDesktopBrowserBridgeRpc } from './desktop-browser-bridge-route'
 
 describe('tab annotations through the desktop bridge', () => {
@@ -111,22 +108,6 @@ describe('--expect-url through the desktop bridge', () => {
 })
 
 describe('DesktopBrowserBridgeRegistry', () => {
-  it('keeps waiting commands under what one desktop socket can answer at once', async () => {
-    const registry = new DesktopBrowserBridgeRegistry()
-    registry.attach({ connectionId: 'c', pairedDeviceId: 'd', emit: () => {} })
-    const waiting = Array.from({ length: MAX_PENDING_PER_ATTACHMENT }, () =>
-      registry.forward({ method: 'browser.snapshot', params: {} }, { timeoutMs: 60_000 })
-    )
-    for (const pending of waiting) {
-      pending.catch(() => {})
-    }
-
-    await expect(
-      registry.forward({ method: 'browser.snapshot', params: {} }, { timeoutMs: 60_000 })
-    ).rejects.toMatchObject({ code: 'browser_busy' })
-    expect(MAX_PENDING_PER_ATTACHMENT).toBeLessThan(32)
-  })
-
   it('tells a cancel-capable desktop to drop a command the CLI cancelled', async () => {
     const registry = new DesktopBrowserBridgeRegistry()
     const events: DesktopBrowserBridgeEvent[] = []

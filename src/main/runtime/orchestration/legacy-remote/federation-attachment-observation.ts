@@ -3,7 +3,7 @@ import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release
 import { OrchestrationError } from '../orchestration-error'
 import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { RemoteDispatchAttachmentRow } from '../db/orchestration-records'
-import { orchestrationTimestampToMs } from '../../rpc/methods/orchestration/worker/worker-output'
+import { orchestrationTimestampToMs } from '../../rpc/methods/orchestration/worker/output/worker-output'
 
 export function requireHomeAttachment(
   runtime: WorkerTerminalReleaseRuntime,

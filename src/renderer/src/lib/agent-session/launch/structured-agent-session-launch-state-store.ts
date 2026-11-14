@@ -8,7 +8,6 @@ import type {
 } from './structured-agent-session-launch-callers'
 import {
   deleteStructuredAgentLaunchRecord,
-  readStructuredAgentLaunchRecord,
   updateStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
 } from './structured-agent-session-launch-persistence'
@@ -111,12 +110,6 @@ function structuredLaunchRecord(
     ...structuredAgentLaunchRecordFor(state.intent, lifecycle),
     ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
   }
-}
-
-export function getPersistedStructuredAgentLaunchRecord(
-  sessionId: string
-): StructuredAgentLaunchPersistedRecord | undefined {
-  return readStructuredAgentLaunchRecord(sessionId)
 }
 
 export function structuredLaunchStates(): IterableIterator<StructuredLaunchState> {

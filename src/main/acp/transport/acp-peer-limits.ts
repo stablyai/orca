@@ -1,5 +1,8 @@
 import { isSafeTimerDelayMs } from '../../../shared/timer-delay'
 
+// Under the ACP SDK's 32 MiB stdin line limit (OpenCode 2); a longer line kills the agent.
+export const ACP_MAX_LINE_BYTES = 31 * 1024 * 1024
+
 export type AcpPeerOptions = {
   maxLineBytes?: number
   maxQueuedWriteBytes?: number
@@ -12,8 +15,8 @@ export type AcpPeerOptions = {
 
 export function resolveAcpPeerOptions(options: AcpPeerOptions = {}): Required<AcpPeerOptions> {
   return {
-    maxLineBytes: bounded(options.maxLineBytes, 16 * 1024 * 1024),
-    maxQueuedWriteBytes: bounded(options.maxQueuedWriteBytes, 32 * 1024 * 1024),
+    maxLineBytes: bounded(options.maxLineBytes, ACP_MAX_LINE_BYTES),
+    maxQueuedWriteBytes: bounded(options.maxQueuedWriteBytes, 2 * ACP_MAX_LINE_BYTES),
     maxPendingRequests: bounded(options.maxPendingRequests, 128),
     maxIncomingRequests: bounded(options.maxIncomingRequests, 128),
     requestTimeoutMs: requestTimeout(options.requestTimeoutMs),

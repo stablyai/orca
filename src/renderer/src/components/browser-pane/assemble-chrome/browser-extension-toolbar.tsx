@@ -18,6 +18,7 @@ import type {
   BrowserExtensionToolbarAction,
   BrowserExtensionToolbarState
 } from '../../../../../shared/browser/extensions/browser-extension-toolbar-types'
+import { trackBrowserExtensionsWebStoreOpened } from '@/diagnostics/telemetry/browser-extensions-telemetry'
 import { CHROME_WEB_STORE_HOME_URL } from '../../../../../shared/browser/extensions/browser-extension-webstore'
 import {
   BrowserExtensionContextEntries,
@@ -243,9 +244,16 @@ export function BrowserExtensionsMenuSub({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   return (
-    <DropdownMenuSub>
+    <DropdownMenuSub
+      onOpenChange={(open) => {
+        if (open) {
+          void recordFeatureInteraction('browser-extensions')
+        }
+      }}
+    >
       <DropdownMenuSubTrigger>
         <Puzzle className="mr-2 size-3.5" />
         {t('browser.extensions.menu', 'Extensions')}
@@ -278,7 +286,15 @@ export function BrowserExtensionsMenuSub({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           // Why this profile: an install from the store page lands where the store was opened.
-          onSelect={() => void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.profileId)}
+          onSelect={() =>
+            void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.profileId).then(
+              (opened) => {
+                if (opened) {
+                  trackBrowserExtensionsWebStoreOpened('toolbar_menu')
+                }
+              }
+            )
+          }
         >
           <Store className="size-3.5" />
           {t('browser.extensions.visitWebStore', 'Visit Chrome Web Store')}

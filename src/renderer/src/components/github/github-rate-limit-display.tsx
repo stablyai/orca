@@ -8,7 +8,7 @@ import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-
 import type {
   GetRateLimitResult,
   GitHubRateLimitSnapshot
-} from '../../../../shared/github/rate-limit-types'
+} from '../../../../shared/github/api/rate-limit-types'
 import { getProviderRateLimitScope } from '@/components/provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '@/components/provider-accounts/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'

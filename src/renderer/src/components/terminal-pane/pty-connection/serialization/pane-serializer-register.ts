@@ -7,8 +7,8 @@ import {
 } from '../../snapshots/pty-buffer-serializer'
 import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
-import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
-import { terminalMouseEncodingRestoreAnsi } from '@/lib/pane-manager/terminal-mouse-encoding-tracker'
+import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scroll/terminal-scrollback-clear'
+import { terminalMouseEncodingRestoreAnsi } from '@/lib/pane-manager/terminal-protocol/terminal-mouse-encoding-tracker'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
@@ -63,6 +63,7 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
       },
       {
         clear: () => {
+          session.deps.invalidateRetainedInlineScrollback(session.pane.leafId)
           session.clearHiddenOutputRestoreState()
           discardTerminalOutput(session.pane.terminal)
           clearTerminalScrollbackAndFollowOutput(session.pane.terminal)

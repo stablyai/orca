@@ -3,6 +3,8 @@ import { PackedRefsLockGate } from './packed-refs-lock-gate'
 import { RepoMaintenanceSchedule } from './repo-maintenance-schedule'
 import {
   LOOSE_REF_PACK_THRESHOLD,
+  REF_MAINTENANCE_LIMITS,
+  type TrackedRepo,
   REF_MAINTENANCE_ATTEMPT_DEADLINE_MS,
   REF_MAINTENANCE_CLEAN_COOLDOWN_MS,
   REF_MAINTENANCE_FAILURE_COOLDOWN_MS,
@@ -17,20 +19,6 @@ import {
   type RepoRefMaintenanceOptions,
   type RepoRefMaintenanceTarget
 } from './repo-ref-maintenance-policy'
-
-/** Give up until the next real activity rather than re-arming forever. */
-const MAX_DEFERRALS = 6
-/** Each deferral doubles the wait, so a busy app is retried rarely, not hammered. */
-const MAX_DEFERRAL_BACKOFF_MULTIPLIER = 8
-/** Armed repos are evicted oldest-first past this; the next write on one re-arms it. */
-const MAX_TRACKED_REPOS = 64
-
-type TrackedRepo = {
-  target: RepoRefMaintenanceTarget
-  timer: ReturnType<typeof setTimeout> | null
-  deferrals: number
-  superseded?: boolean
-}
 
 const noopSpan: RefMaintenanceSpan = { setAttribute: () => {} }
 
@@ -63,7 +51,7 @@ export class RepoRefMaintenance {
     this.onError = options.onError ?? (() => {})
   }
 
-  /** Restart the quiet countdown on every write so maintenance cannot interrupt the burst that armed it. */
+  /** Keep an elapsed opportunity; actual activity is checked again before admission. */
   arm(target: RepoRefMaintenanceTarget): void {
     if (this.disposed) {
       return
@@ -73,12 +61,18 @@ export class RepoRefMaintenance {
       this.inFlightTracked.superseded = true
     }
     const existing = this.tracked.get(target.key)
+    if (existing && !existing.superseded) {
+      existing.target = target
+      this.tracked.delete(target.key)
+      this.tracked.set(target.key, existing)
+      return
+    }
     if (existing?.timer) {
       clearTimeout(existing.timer)
     }
     const tracked: TrackedRepo = { target, timer: null, deferrals: existing?.deferrals ?? 0 }
     this.tracked.delete(target.key)
-    while (this.tracked.size >= MAX_TRACKED_REPOS) {
+    while (this.tracked.size >= REF_MAINTENANCE_LIMITS.trackedRepos) {
       const oldest = this.tracked.keys().next()
       if (oldest.done) {
         break
@@ -161,21 +155,24 @@ export class RepoRefMaintenance {
     tracked.timer = timer
   }
 
-  /** Charge only activity/failed probes against the give-up budget; waiting behind other packs or requested yields
-   * ends independently and must not starve maintenance until the next fetch. */
-  private defer(key: string, tracked: TrackedRepo, counted: boolean): void {
+  /** Activity retains debt; failed probes still retire at the existing shared budget. */
+  private defer(
+    key: string,
+    tracked: TrackedRepo,
+    cause: 'activity' | 'probe_failure' | 'waiting'
+  ): void {
     // Do not overwrite a fresher arm from a fetch that landed during the probe.
     if (this.disposed || tracked.superseded || this.tracked.has(key)) {
       return
     }
-    if (counted) {
-      if (tracked.deferrals >= MAX_DEFERRALS) {
-        return
-      }
-      tracked.deferrals += 1
+    if (cause === 'probe_failure' && tracked.deferrals >= REF_MAINTENANCE_LIMITS.deferrals) {
+      return
+    }
+    if (cause !== 'waiting') {
+      tracked.deferrals = Math.min(tracked.deferrals + 1, REF_MAINTENANCE_LIMITS.deferrals)
     }
     this.tracked.set(key, tracked)
-    const multiplier = Math.min(2 ** tracked.deferrals, MAX_DEFERRAL_BACKOFF_MULTIPLIER)
+    const multiplier = Math.min(2 ** tracked.deferrals, REF_MAINTENANCE_LIMITS.backoffMultiplier)
     this.schedule(key, tracked, this.quietPeriodMs * multiplier)
   }
 
@@ -194,11 +191,11 @@ export class RepoRefMaintenance {
       return
     }
     if (this.inFlight !== null) {
-      this.defer(key, tracked, false)
+      this.defer(key, tracked, 'waiting')
       return
     }
     if (this.suspensions > 0 || this.isBusy(tracked)) {
-      this.defer(key, tracked, true)
+      this.defer(key, tracked, 'activity')
       return
     }
     const abort = new AbortController()
@@ -237,7 +234,7 @@ export class RepoRefMaintenance {
       return this.yieldTo(key, tracked, span, signal)
     }
     if (typeof optedOut === 'object') {
-      this.defer(key, tracked, true)
+      this.defer(key, tracked, 'probe_failure')
       throw optedOut.error
     }
     if (optedOut) {
@@ -324,7 +321,7 @@ export class RepoRefMaintenance {
   ): void {
     if (!signal.aborted || tracked.superseded) {
       span.setAttribute('repo.maintenance_outcome', 'deferred' satisfies RefMaintenanceOutcome)
-      this.defer(key, tracked, true)
+      this.defer(key, tracked, 'activity')
       return
     }
     if (signal.reason instanceof RefMaintenanceInterrupted && signal.reason.deadline) {
@@ -332,6 +329,6 @@ export class RepoRefMaintenance {
       return
     }
     span.setAttribute('repo.maintenance_outcome', 'interrupted' satisfies RefMaintenanceOutcome)
-    this.defer(key, tracked, false)
+    this.defer(key, tracked, 'waiting')
   }
 }

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { fixture } from '../../persistence/loading-store/profile-state-delayed-authority-fixture'
+import { fixture } from '../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

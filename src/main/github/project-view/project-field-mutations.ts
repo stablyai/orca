@@ -1,10 +1,11 @@
-import { projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
-import type { GitHubProjectFieldMutationValue } from '../../../shared/github/project-types'
-import type { GitHubProjectMutationResult } from '../../../shared/github/project-result-types'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
+import type { GitHubProjectFieldMutationValue } from '../../../shared/github/projects/project-types'
+import type { GitHubProjectMutationResult } from '../../../shared/github/projects/project-result-types'
 import type {
   ClearProjectItemFieldArgs,
   UpdateProjectItemFieldArgs
-} from '../../../shared/github/project-request-types'
+} from '../../../shared/github/projects/project-request-types'
 
 class UnknownFieldMutationKindError extends Error {
   constructor(kind: string) {

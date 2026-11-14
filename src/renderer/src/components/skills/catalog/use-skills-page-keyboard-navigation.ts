@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { SkillsPageView } from './skills-page-view'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 type UseSkillsPageKeyboardNavigationOptions = {

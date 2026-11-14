@@ -8,7 +8,7 @@ import type {
 import {
   createOrcadMigrationManifest,
   type OrcadMigrationExportStore
-} from '../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+} from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import {
   collectTargetCatalogBlockers,
   resolveOrcadPreflightTarget

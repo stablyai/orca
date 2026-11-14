@@ -2,7 +2,7 @@ import type { ImageAddon } from '@xterm/addon-image'
 import type { Terminal } from '@xterm/xterm'
 import type { KittyFileRequest } from './terminal-kitty-file-reader'
 import { readTerminalKittyFile } from './terminal-kitty-file-reader'
-import { refreshTerminalDa1Owner } from '../terminal-da1-ownership'
+import { refreshTerminalDa1Owner } from '../terminal-protocol/terminal-da1-ownership'
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import {
   getTerminalImageAddonConstructor,

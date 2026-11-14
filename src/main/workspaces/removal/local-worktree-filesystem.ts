@@ -1,4 +1,5 @@
 import { posix } from 'node:path'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
@@ -121,6 +122,7 @@ export async function removeLocalWorktreePath(
 ): Promise<void> {
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
+    throwIfSignalAborted(signal)
     await removeHostTree(targetPath, { signal })
     return
   }

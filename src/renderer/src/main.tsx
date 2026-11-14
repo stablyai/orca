@@ -28,7 +28,7 @@ import { installBrowserClientPageRenderer } from './components/browser-pane/brow
 import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
-import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()

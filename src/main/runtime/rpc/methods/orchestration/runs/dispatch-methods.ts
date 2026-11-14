@@ -11,7 +11,7 @@ import {
 import {
   DispatchParams,
   DispatchShowParams
-} from '../../../../../../shared/rpc-contract/orchestration-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import {
   orcaSessionIdOrHandle,
   resolveDispatchAssigneeParty

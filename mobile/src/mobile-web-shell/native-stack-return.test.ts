@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nativeStackReturn, type NativeStackState } from './native-stack-return'
+import { nativeSessionReturn, type NativeStackState } from './native-stack-return'
 
 type Route = NativeStackState['routes'][number]
 
@@ -26,44 +26,19 @@ const SESSION = {
   params: { hostId: 'mac/1', worktreeId: 'wt-a' }
 }
 
-describe('nativeStackReturn', () => {
-  it('pops back to Home under the host instead of stacking a second Home', () => {
-    expect(nativeStackReturn(rootStack(HOME, hostStack(HOST)), '/')).toEqual({
-      target: 'root-stack',
-      source: 'root-stack/1',
-      count: 1
+describe('nativeSessionReturn', () => {
+  const SOURCE_CONTROL = { name: '[hostId]/source-control/[worktreeId]', params: SESSION.params }
+
+  it('keeps execution hosts apart for a worktree holding an encoded question mark', () => {
+    const params = { hostId: 'mac/1', worktreeId: 'repo::/w/a?x' }
+    const local = `/h/mac%2F1/session/${encodeURIComponent(params.worktreeId)}?paneKey=tab-1%3A11111111-1111-4111-8111-111111111111`
+    const remote = { ...SESSION, params: { ...params, executionHost: 'ssh:box' } }
+    const state = rootStack(HOME, hostStack(HOST, remote, SOURCE_CONTROL))
+    expect(nativeSessionReturn(state, local)).toBeNull()
+    expect(nativeSessionReturn(state, `${local}&executionHost=ssh%3Aother`)).toBeNull()
+    expect(nativeSessionReturn(state, `${local}&executionHost=ssh%3Abox`)).toMatchObject({
+      count: 1,
+      routeKey: 'host-stack/1'
     })
-  })
-
-  it('finds nothing when the host is the root, as after a cold deep link', () => {
-    expect(nativeStackReturn(rootStack(hostStack(HOST)), '/')).toBeNull()
-  })
-
-  it('returns to an exact path and query, however the href spells it', () => {
-    const files = { name: '[hostId]/files/[worktreeId]', params: SESSION.params }
-    const tabbed = { ...SESSION, params: { ...SESSION.params, tab: 'b', pane: '1' } }
-    const state = rootStack(HOME, hostStack(HOST, tabbed, files))
-    expect(nativeStackReturn(state, '/h/mac%2F1/session/wt-a?pane=1&tab=b')).toEqual({
-      target: 'host-stack',
-      source: 'host-stack/2',
-      count: 1
-    })
-    expect(nativeStackReturn(state, '/h/mac%2F1')).toMatchObject({ target: 'host-stack', count: 2 })
-    expect(nativeStackReturn(state, '/h/mac%2F1/session/wt-a?pane=1&tab=c')).toBeNull()
-    expect(nativeStackReturn(state, '/h/mac%2F1/session/wt-b?pane=1&tab=b')).toBeNull()
-  })
-
-  it('treats a param cleared to empty as absent', () => {
-    const cleared = { ...SESSION, params: { ...SESSION.params, paneKey: '' } }
-    const state = rootStack(
-      HOME,
-      hostStack(HOST, cleared, { name: '[hostId]/files/[worktreeId]', params: SESSION.params })
-    )
-    expect(nativeStackReturn(state, '/h/mac%2F1/session/wt-a')).toMatchObject({ count: 1 })
-  })
-
-  it('names the focused screen as current rather than a pop', () => {
-    const state = rootStack(HOME, hostStack(HOST, SESSION))
-    expect(nativeStackReturn(state, '/h/mac%2F1/session/wt-a')).toBe('current')
   })
 })

@@ -73,52 +73,45 @@ export function AllAgentsPermissionSetting({
           'What every agent may do without asking. You can set one agent differently below.'
         )}
       </p>
-      <div className="min-h-6">
-        {choice === 'auto' ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {t('settings.agents.permissionWithoutAuto', 'Agents without Approve for me')}
-            </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  aria-label={withoutAutoTitle}
-                  className="min-w-0 max-w-full"
-                >
-                  {withoutAutoChoice === null ? (
-                    <span className="truncate">
-                      {t('settings.agents.permissionMixed', 'Mixed')}
-                    </span>
-                  ) : (
-                    <AgentPermissionChoiceName
-                      choice={withoutAutoChoice}
-                      ownLabel={ownLabel}
-                      truncate
-                    />
-                  )}
-                  <ChevronDown className="size-3 shrink-0" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" collisionPadding={8} className="w-72">
-                <DropdownMenuRadioGroup
-                  aria-label={withoutAutoTitle}
-                  value={withoutAutoChoice ?? ''}
-                >
-                  <AgentPermissionChoiceItems
-                    choices={['full-access', 'own']}
+      {choice === 'auto' ? (
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-xs text-muted-foreground">
+            {t('settings.agents.permissionWithoutAuto', 'Agents without Approve for me')}
+          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                aria-label={withoutAutoTitle}
+                className="min-w-0 max-w-full"
+              >
+                {withoutAutoChoice === null ? (
+                  <span className="truncate">{t('settings.agents.permissionMixed', 'Mixed')}</span>
+                ) : (
+                  <AgentPermissionChoiceName
+                    choice={withoutAutoChoice}
                     ownLabel={ownLabel}
-                    chatOwnSupported={chatOwnSupported}
-                    onSelect={onChangeWithoutAuto}
+                    truncate
                   />
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : null}
-      </div>
+                )}
+                <ChevronDown className="size-3 shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" collisionPadding={8} className="w-72">
+              <DropdownMenuRadioGroup aria-label={withoutAutoTitle} value={withoutAutoChoice ?? ''}>
+                <AgentPermissionChoiceItems
+                  choices={['full-access', 'own']}
+                  ownLabel={ownLabel}
+                  chatOwnSupported={chatOwnSupported}
+                  onSelect={onChangeWithoutAuto}
+                />
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : null}
     </section>
   )
 }

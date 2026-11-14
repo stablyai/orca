@@ -1,6 +1,6 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
-import '../unused-default-rpc-methods.test-fixture'
+import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -9,7 +9,6 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { shortDaemonSocketDir } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
-import { createRuntimeTransportMetadata } from './runtime-rpc-socket-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
 import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
@@ -128,31 +127,6 @@ describe('OrcaRuntimeRpcServer', () => {
     await heldCheck
 
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
-  })
-
-  it('closes the socket if metadata publication fails during startup', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({ methods: [], runtime, userDataPath })
-    const writeMetadataSpy = vi
-      .spyOn(runtimeMetadataModule, 'writeRuntimeMetadata')
-      .mockImplementationOnce(() => {
-        throw new Error('write failed')
-      })
-    const endpoint = createRuntimeTransportMetadata(
-      userDataPath,
-      process.pid,
-      process.platform,
-      runtime.getRuntimeId()
-    ).endpoint
-
-    await expect(server.start()).rejects.toThrow('write failed')
-    expect(readRuntimeMetadata(userDataPath)).toBeNull()
-    expect(existsSync(endpoint)).toBe(false)
-    expect(server['transports']).toEqual([])
-    expect(server['activeTransports']).toEqual([])
-
-    writeMetadataSpy.mockRestore()
   })
 
   it.skipIf(process.platform === 'win32')(

@@ -1,0 +1,318 @@
+import { createHash, randomUUID } from 'node:crypto'
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { z } from 'zod'
+import { BrowserError } from '../../../browser/browser-error'
+import {
+  AGENT_BROWSER_BATCH_ARGS,
+  agentBrowserBatchInput,
+  isAgentBrowserStaleRefError,
+  parseAgentBrowserJsonOutput
+} from '../../../browser/agent-browser/protocol/agent-browser-batch-command'
+import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-session-contracts'
+import { Screenshot } from '../../../../shared/rpc-contract/browser/browser-observation-params'
+import {
+  agentBrowserScreenshotArgs,
+  readAgentBrowserScreenshot
+} from '../../../browser/agent-browser/observation/agent-browser-screenshot-arguments'
+import { runProcess } from '@orca/process-host'
+import { resolveExternalChromiumProfilePath } from './external-chromium-profile-path'
+import { externalChromiumAgentBrowserEnvironment } from './external-chromium-agent-browser-environment'
+
+const COMMAND_TIMEOUT_MS = 90_000
+const MAX_OUTPUT_BYTES = 50 * 1024 * 1024
+const CLOSE_TIMEOUT_MS = 5_000
+
+export type ExternalChromiumLaunch = {
+  executablePath: string
+  browserArgs?: readonly string[]
+  provider: 'electron' | 'chromium'
+}
+
+const AgentBrowserTab = z.object({
+  active: z.boolean(),
+  tabId: z.string(),
+  title: z.string(),
+  url: z.string()
+})
+const AgentBrowserTabsResult = z.object({ tabs: z.array(AgentBrowserTab).optional() })
+const AgentBrowserStep = z.object({
+  success: z.boolean(),
+  result: z.unknown().optional(),
+  error: z.string().nullable().optional()
+})
+const AgentBrowserBatch = z.object({
+  success: z.boolean().optional(),
+  data: z.array(AgentBrowserStep).optional(),
+  error: z.string().nullable().optional()
+})
+const AgentBrowserEnvelope = z.object({
+  success: z.boolean(),
+  data: z.unknown().optional(),
+  error: z.string().nullable().optional()
+})
+
+export type AgentBrowserTab = z.infer<typeof AgentBrowserTab>
+export type AgentBrowserStep = z.infer<typeof AgentBrowserStep>
+
+function classifyAgentBrowserError(message: string): string {
+  if (isAgentBrowserStaleRefError(message)) {
+    return 'browser_stale_ref'
+  }
+  if (/evaluation error/i.test(message)) {
+    return 'browser_eval_error'
+  }
+  if (/navigation|net::err/i.test(message)) {
+    return 'browser_navigation_failed'
+  }
+  if (/timed out|timeout/i.test(message)) {
+    return 'browser_timeout'
+  }
+  if (/tab.*not found|unknown tab/i.test(message)) {
+    return 'browser_tab_not_found'
+  }
+  return 'browser_error'
+}
+
+// A profile held by another Chromium also fails ProcessSingleton; only an access failure means unwritable.
+function unwritableProfileLockLine(message: string): string | undefined {
+  return message
+    .split('\n')
+    .find((line) => /SingletonLock: (Permission denied|Read-only file system)/.test(line))
+    ?.trim()
+}
+
+export class ExternalChromiumBrowserSession {
+  private readonly identity: string
+  private readonly sessionName: string
+  private profilePathResolution: Promise<string> | null = null
+  private configPathWrite: Promise<string> | null = null
+
+  constructor(
+    private readonly agentBrowserPath: string,
+    private readonly launch: ExternalChromiumLaunch,
+    private readonly statePath: string
+  ) {
+    this.identity = createHash('sha256')
+      .update(`${statePath}:${launch.provider}`)
+      .digest('hex')
+      .slice(0, 16)
+    this.sessionName = `orca-orcad-${this.identity}`
+  }
+
+  private profilePath(): Promise<string> {
+    this.profilePathResolution ??= resolveExternalChromiumProfilePath(
+      this.launch,
+      this.statePath,
+      this.identity
+    )
+    return this.profilePathResolution
+  }
+
+  // Empty, so agent-browser's defaults (headless, no extensions) apply instead of a user's config.
+  private configPath(): Promise<string> {
+    if (!this.configPathWrite) {
+      const write = (async () => {
+        const path = join(this.statePath, 'agent-browser-config.json')
+        await mkdir(this.statePath, { recursive: true, mode: 0o700 })
+        await writeFile(path, '{}\n', { mode: 0o600 })
+        return path
+      })()
+      // A failed write retries on the next command instead of failing every later one.
+      write.catch(() => {
+        if (this.configPathWrite === write) {
+          this.configPathWrite = null
+        }
+      })
+      this.configPathWrite = write
+    }
+    return this.configPathWrite
+  }
+
+  async start(signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted()
+    const profilePath = await this.profilePath()
+    signal?.throwIfAborted()
+    // A relocated snap profile sits outside orcad's private data root; it holds browser state and captures.
+    await mkdir(profilePath, { recursive: true, mode: 0o700 })
+    await chmod(profilePath, 0o700)
+    signal?.throwIfAborted()
+    // Stable sessions survive orcad restarts without --cdp binding; reuse them to preserve live tabs.
+    const reusable = await this.readActiveTabId(signal)
+    signal?.throwIfAborted()
+    if (reusable) {
+      return reusable
+    }
+    // Reclaim the stable name only when no active tab answers.
+    await this.stop()
+    signal?.throwIfAborted()
+    try {
+      await this.run(['open', 'about:blank'], { signal })
+    } catch (error) {
+      // Chromium aborts when it cannot write its profile lock; the driver's generic hint misleads here.
+      const lockFailure =
+        error instanceof BrowserError ? unwritableProfileLockLine(error.message) : undefined
+      if (lockFailure) {
+        throw new BrowserError(
+          BROWSER_UNAVAILABLE_ERROR_CODE,
+          `Chromium cannot lock its profile directory ${profilePath} (${lockFailure}). ` +
+            'The browser needs write access there; confinement such as a snap sandbox can block it.'
+        )
+      }
+      throw error
+    }
+    const opened = await this.readActiveTabId(signal)
+    signal?.throwIfAborted()
+    if (!opened) {
+      throw new BrowserError(
+        BROWSER_UNAVAILABLE_ERROR_CODE,
+        'The browser launched without an automation target.'
+      )
+    }
+    return opened
+  }
+
+  private async readActiveTabId(signal?: AbortSignal): Promise<string | null> {
+    try {
+      const tabs = await this.readTabs(signal)
+      return (tabs.find((tab) => tab.active) ?? tabs[0])?.tabId ?? null
+    } catch {
+      signal?.throwIfAborted()
+      return null
+    }
+  }
+
+  async stop(): Promise<void> {
+    try {
+      await this.run(['close'], { timeoutMs: CLOSE_TIMEOUT_MS })
+    } catch {
+      // Closing an already-dead browser is complete cleanup.
+    }
+  }
+
+  async selectPage(agentPageId: string): Promise<void> {
+    // Selecting any tab, even the active one, discards the refs of the last snapshot.
+    if ((await this.readTabs()).some((tab) => tab.tabId === agentPageId && tab.active)) {
+      return
+    }
+    await this.run(['tab', agentPageId])
+  }
+
+  async readTabs(signal?: AbortSignal): Promise<AgentBrowserTab[]> {
+    return AgentBrowserTabsResult.parse(await this.run(['tab'], { signal })).tabs ?? []
+  }
+
+  async screenshot(params: Record<string, unknown>, full: boolean): Promise<unknown> {
+    const options = Screenshot.parse(params)
+    const raw = await this.run(
+      agentBrowserScreenshotArgs(options, { outputDir: await this.profilePath(), fullPage: full }),
+      { cliArgv: true }
+    )
+    return readAgentBrowserScreenshot(raw, options.format ?? 'png', (bytes) =>
+      bytes.toString('base64')
+    )
+  }
+
+  async pdf(): Promise<unknown> {
+    const outputPath = join(await this.profilePath(), `capture-${randomUUID()}.pdf`)
+    await this.run(['pdf', outputPath])
+    const data = (await readFile(outputPath)).toString('base64')
+    await rm(outputPath, { force: true }).catch(() => undefined)
+    return { data }
+  }
+
+  async run(
+    command: readonly string[],
+    options: {
+      timeoutMs?: number
+      signal?: AbortSignal
+      /** Raw CLI tokens: global options apply, so only for Orca-authored or passthrough lines. */
+      cliArgv?: boolean
+    } = {}
+  ): Promise<unknown> {
+    const { envelope, stderr } = await this.execute(
+      options.cliArgv ? [...command, '--json'] : AGENT_BROWSER_BATCH_ARGS,
+      options.cliArgv ? undefined : agentBrowserBatchInput(command),
+      options,
+      (stdout) => AgentBrowserEnvelope.parse(parseAgentBrowserJsonOutput(stdout, options))
+    )
+    if (!envelope.success) {
+      throw agentBrowserError(envelope.error ?? stderr)
+    }
+    return envelope.data
+  }
+
+  /** Runs commands in one helper process; `bail` stops at the first failed step. */
+  async runSteps(
+    commands: readonly (readonly string[])[],
+    { bail = false }: { bail?: boolean } = {}
+  ): Promise<AgentBrowserStep[]> {
+    const { envelope, stderr } = await this.execute(
+      [...AGENT_BROWSER_BATCH_ARGS, ...(bail ? ['--bail'] : [])],
+      agentBrowserBatchInput(...commands),
+      {},
+      (stdout) => AgentBrowserBatch.parse(parseAgentBrowserJsonOutput(stdout, { cliArgv: true }))
+    )
+    // A launch or daemon failure answers the whole batch with one envelope.
+    if (!envelope.success || !envelope.data) {
+      throw agentBrowserError(envelope.error ?? stderr)
+    }
+    return envelope.data
+  }
+
+  private async execute<T>(
+    command: readonly string[],
+    input: string | undefined,
+    { timeoutMs = COMMAND_TIMEOUT_MS, signal }: { timeoutMs?: number; signal?: AbortSignal },
+    read: (stdout: string) => T
+  ): Promise<{ envelope: T; stderr: string }> {
+    signal?.throwIfAborted()
+    const profilePath = await this.profilePath()
+    signal?.throwIfAborted()
+    const configPath = await this.configPath()
+    signal?.throwIfAborted()
+    // Pinned per command so a daemon started headed by an older environment relaunches headless.
+    const args = ['--session', this.sessionName, '--profile', profilePath, '--headed', 'false']
+    if (this.launch.browserArgs?.length) {
+      args.push('--args', this.launch.browserArgs.join('\n'))
+    }
+    args.push(...command)
+    const env = externalChromiumAgentBrowserEnvironment({
+      inheritedEnv: process.env,
+      executablePath: this.launch.executablePath,
+      profilePath,
+      sessionName: this.sessionName,
+      configPath,
+      browserArgs: this.launch.browserArgs
+    })
+    const result = await runProcess({
+      program: this.agentBrowserPath,
+      args,
+      input,
+      env,
+      timeoutMs,
+      signal,
+      maxOutputBytes: MAX_OUTPUT_BYTES
+    })
+    signal?.throwIfAborted()
+    if (result.timedOut) {
+      throw new BrowserError('browser_timeout', 'Browser command timed out.')
+    }
+    try {
+      return { envelope: read(result.stdout), stderr: result.stderr }
+    } catch {
+      const detail = result.stderr.trim() || `exit ${String(result.code)}`
+      throw new BrowserError('browser_error', `Browser command failed: ${detail.slice(0, 1000)}`)
+    }
+  }
+}
+
+export function agentBrowserError(error: string | null | undefined): BrowserError {
+  const message = error?.trim() || 'Unknown browser error.'
+  return new BrowserError(classifyAgentBrowserError(message), message)
+}
+
+export function agentBrowserEvalCommand(script: string): string[] {
+  // eval reads a leading -b or --stdin as its own option; base64 never starts with "-".
+  return ['eval', '-b', Buffer.from(script).toString('base64')]
+}

@@ -30,6 +30,8 @@ export type LiveWorktreeName = {
   /** Where the worktree lives on its host; null until the host's record arrives. */
   path: string | null
   hostId: string | null
+  /** The checked-out branch without refs/heads/; null for folders, detached heads and until the record arrives. */
+  branch: string | null
   resolution: WorktreeShowResolution
 }
 
@@ -48,6 +50,7 @@ export function useLiveWorktreeName({
     name: string
     path?: string | null
     hostId?: string | null
+    branch?: string | null
   }>(() => ({ worktreeId, name: routeNameHint }))
   // Key verdicts by route so a previous workspace’s deletion cannot escape into the new one.
   const [resolved, setResolved] = useState<{
@@ -125,13 +128,16 @@ export function useLiveWorktreeName({
           if (liveName) {
             const path = worktree?.path || null
             const hostId = worktree?.hostId ?? null
+            // Match desktop formatBranchName by hiding the refs/heads/ prefix.
+            const branch = worktree?.branch?.replace(/^refs\/heads\//, '') || null
             setWorktreeName((current) =>
               current.worktreeId === worktreeId &&
               current.name === liveName &&
               current.path === path &&
-              current.hostId === hostId
+              current.hostId === hostId &&
+              current.branch === branch
                 ? current
-                : { worktreeId, name: liveName, path, hostId }
+                : { worktreeId, name: liveName, path, hostId, branch }
             )
           }
           hasSuccessfulRefresh = true
@@ -197,12 +203,19 @@ export function useLiveWorktreeName({
   )
 
   if (isFloatingWorkspace) {
-    return { name: getFloatingWorkspaceTitle(), path: null, hostId: 'local', resolution: 'unknown' }
+    return {
+      name: getFloatingWorkspaceTitle(),
+      path: null,
+      hostId: 'local',
+      branch: null,
+      resolution: 'unknown'
+    }
   }
   return {
     name: worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint,
     path: worktreeName.worktreeId === worktreeId ? (worktreeName.path ?? null) : null,
     hostId: worktreeName.worktreeId === worktreeId ? (worktreeName.hostId ?? null) : null,
+    branch: worktreeName.worktreeId === worktreeId ? (worktreeName.branch ?? null) : null,
     resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown'
   }
 }

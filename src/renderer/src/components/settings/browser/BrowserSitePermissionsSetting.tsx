@@ -19,7 +19,7 @@ import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { useAppStore } from '../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 
 function SitePermissionRow({
   entry,

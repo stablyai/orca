@@ -3,7 +3,7 @@ import type {
   NativeChatBlock,
   NativeChatMessage
 } from '../../../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
   nativeChatWorkRunEditKey,
   nativeChatWorkRunEntries

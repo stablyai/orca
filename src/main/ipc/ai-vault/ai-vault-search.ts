@@ -32,7 +32,7 @@ import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
 import {
   OPENS_EVERY_STRUCTURED_CHAT,
   searchWithStructuredOwners
-} from '../../ai-vault/structured-session-ownership'
+} from '../../ai-vault/structured-sessions/structured-session-ownership'
 
 export type RuntimeSessionSearchCall = (
   environmentId: string,

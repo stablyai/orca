@@ -9,7 +9,7 @@ import {
   confirmAndClearGoogleCookies
 } from '@/lib/browser/cookies/browser-google-cookie-clear'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export function useGoogleCookieClear(hostId: ExecutionHostId, profileId: string, label?: string) {

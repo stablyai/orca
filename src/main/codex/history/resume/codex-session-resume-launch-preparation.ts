@@ -9,7 +9,7 @@ import {
   prepareCodexAccountRestartResume,
   prepareLegacySharedCodexSessionResume
 } from './codex-legacy-session-resume'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import { codexHookService } from '../../hooks/installation/hook-service'
 import { reconcileCodexHooksForLaunch } from '../../hooks/reconciliation/codex-hook-reconcile'
 import { ensureCodexDaemonSocketGuard } from '../../configuration/settings/codex-config-mirror'

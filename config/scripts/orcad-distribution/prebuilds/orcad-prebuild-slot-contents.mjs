@@ -95,6 +95,7 @@ export function slotSourceFiles({ platform, arch, buildDir, nodePtyDir }) {
     const conptyRuntime = windowsConptyRuntimeDir(nodePtyDir, arch)
     const upstream = join(nodePtyDir, 'prebuilds', `win32-${arch}`)
     return [
+      ['journal-file-lock.exe', join(buildDir, 'journal-file-lock.exe')],
       ['conpty.node', join(buildDir, 'conpty.node')],
       ['conpty_console_list.node', join(upstream, 'conpty_console_list.node')],
       ['conpty/conpty.dll', join(conptyRuntime, 'conpty.dll')],
@@ -104,6 +105,7 @@ export function slotSourceFiles({ platform, arch, buildDir, nodePtyDir }) {
   }
   // macOS posix_spawns spawn-helper and builds it only there; Linux forks directly.
   return [
+    ['journal-file-lock', join(buildDir, 'journal-file-lock')],
     ['pty.node', join(buildDir, 'pty.node')],
     ...(platform === 'darwin' ? [['spawn-helper', join(buildDir, 'spawn-helper')]] : [])
   ]

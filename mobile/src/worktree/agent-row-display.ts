@@ -88,7 +88,7 @@ export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): st
 
 // Mirror desktop lastEnteredDoneAt: date main-agent failures independently while subagents remain active.
 export function agentRowTimeAt(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'mainAgent' | 'stateStartedAt'>
+  row: AgentRowVerdictSource & Pick<RuntimeWorktreeAgentRow, 'stateStartedAt'>
 ): number {
   if (row.state !== 'done' && row.mainAgent && agentVerdictDisplayMark(row) === 'failed') {
     return row.mainAgent.stateStartedAt

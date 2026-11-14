@@ -29,8 +29,8 @@ import {
   shouldSuppressTerminalModifierKeyboardEvent,
   TERMINAL_INTERRUPT_INPUT
 } from './keyboard/xterm-bypass-policy'
-import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll-intent'
-import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll-intent-settle'
+import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
+import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-settle'
 
 type PaneInputContext = {
   pane: Pick<ManagedPane, 'id' | 'terminal'>

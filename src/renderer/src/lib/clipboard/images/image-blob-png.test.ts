@@ -6,7 +6,7 @@ import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
 } from '../../../../../shared/clipboard-image'
-import { convertImageBlobToPng } from './image-blob-png'
+import { blobToBase64, convertImageBlobToPng } from './image-blob-png'
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13])
 const WEBP_BYTES = new TextEncoder().encode('RIFF\u0000\u0000\u0000WEBPVP8 ')
@@ -129,5 +129,29 @@ describe('convertImageBlobToPng', () => {
       convertImageBlobToPng(new Blob([PNG_BYTES], { type: 'image/png' }))
     ).rejects.toThrow(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
+  })
+})
+
+it('aborts an active image read and settles both active and already-retired reads', async () => {
+  const abort = vi.fn()
+  vi.stubGlobal(
+    'FileReader',
+    class {
+      onabort: (() => void) | null = null
+      readAsDataURL() {}
+      abort() {
+        abort()
+        this.onabort?.()
+      }
+    }
+  )
+  const controller = new AbortController()
+  const pending = blobToBase64(new Blob(['image']), controller.signal)
+  const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await rejected
+  expect(abort).toHaveBeenCalledOnce()
+  await expect(blobToBase64(new Blob(['next']), controller.signal)).rejects.toMatchObject({
+    name: 'AbortError'
   })
 })

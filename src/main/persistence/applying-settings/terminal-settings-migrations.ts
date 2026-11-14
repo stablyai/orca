@@ -12,7 +12,7 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
-import { normalizeWorkspaceDirInput } from '../../../shared/worktree/workspace-dir-input'
+import { normalizeWorkspaceDirInput } from '../../../shared/worktree/paths/workspace-dir-input'
 
 /** A raw ~ or padded absolute path resolves inside each repo (#34944, STA-14308); normalize at the store boundary. */
 export function normalizeWorkspaceDirSetting(
@@ -108,6 +108,8 @@ type RetiredGlobalSettings = {
   orchestrationHeartbeatIntervalMinutes?: unknown
   // Full-access plugins now need only their own approval.
   pluginFullAccessEnabled?: unknown
+  // Extensions left Experimental and default on; browserExtensionsEnabled replaces this.
+  experimentalBrowserExtensions?: unknown
 }
 
 export function stripRetiredGlobalSettings(
@@ -127,6 +129,7 @@ export function stripRetiredGlobalSettings(
     orchestrationHeartbeatsEnabled: _retiredHeartbeatsEnabled,
     orchestrationHeartbeatIntervalMinutes: _retiredHeartbeatInterval,
     pluginFullAccessEnabled: _retiredPluginFullAccessSwitch,
+    experimentalBrowserExtensions: _retiredBrowserExtensionsExperiment,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _retiredChatPermissionCopies
@@ -142,6 +145,7 @@ export function stripRetiredGlobalSettings(
   void _retiredHeartbeatsEnabled
   void _retiredHeartbeatInterval
   void _retiredPluginFullAccessSwitch
+  void _retiredBrowserExtensionsExperiment
   return rest
 }
 

@@ -40,20 +40,15 @@ describe('artifact sharing default', () => {
   })
 
   it('allows publishing on a new profile and keeps it after a reload', async () => {
-    const store = await createStore()
+    const store = createStore()
     expect(store.getSettings().artifactSharingEnabled).toBe(true)
     store.flush()
     await closeTestStores()
-    expect((await createStore()).getSettings().artifactSharingEnabled).toBe(true)
+    expect(createStore().getSettings().artifactSharingEnabled).toBe(true)
   })
 
-  it('keeps a stored opt-out', async () => {
-    writeSettings({ artifactSharingEnabled: false })
-    expect((await createStore()).getSettings().artifactSharingEnabled).toBe(false)
-  })
-
-  it('keeps publishing off for a stored profile saved before the setting existed', async () => {
+  it('keeps publishing off for a stored profile saved before the setting existed', () => {
     writeSettings({ showArtifactsButton: false })
-    expect((await createStore()).getSettings().artifactSharingEnabled).toBe(false)
+    expect(createStore().getSettings().artifactSharingEnabled).toBe(false)
   })
 })

@@ -1,4 +1,4 @@
-import type { JournalInputOrder } from '../input-order/journal-input-order'
+import type { JournalInputReader } from '../journal-input-reads'
 import type { AgentJournalDispatchState } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type AgentJournalDispatchObservation = {
@@ -6,12 +6,12 @@ export type AgentJournalDispatchObservation = {
   recovered: boolean
 }
 
-export function latestJournalDispatchObservation(
-  journal: {
-    inputOrder: Pick<JournalInputOrder, 'latestSubmission'>
-  },
+export async function latestJournalDispatchObservation(
+  journal: { reads: { input: JournalInputReader } },
   fence: number
-): AgentJournalDispatchObservation | null {
-  const latest = journal.inputOrder.latestSubmission(fence)
-  return latest ? { state: latest.dispatchState, recovered: latest.recovered === true } : null
+): Promise<AgentJournalDispatchObservation | null> {
+  const { submission } = await journal.reads.input({ kind: 'latest-submission', fence })
+  return submission
+    ? { state: submission.dispatchState, recovered: submission.recovered === true }
+    : null
 }

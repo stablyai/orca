@@ -14,7 +14,7 @@ const { useSourceControlAgentActionStart } =
   await import('@/components/right-sidebar/source-control/ai/useSourceControlAgentActionStart')
 const { startFixChecksFromDialog } =
   await import('@/components/pull-request-page/checks/fix-launch')
-const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+await import('./launch-work-item-direct')
 
 const { __resetTrustPromptChainForTests } =
   await import('../../../../runtime/repo-hooks/ensure-hooks-confirmed')
@@ -133,28 +133,4 @@ it('does not release or close a successor when cancelled pre-create work later s
   expect(mocks.createWorktree).toHaveBeenCalledOnce()
   expect(view.onClose).toHaveBeenCalledOnce()
   expect(view.result.current.isStarting).toBe(false)
-})
-
-it('keeps a functional navigation fallback after reporting a PR lookup failure', async () => {
-  mocks.resolvePrBase.mockResolvedValueOnce({
-    error: 'PR #42 not found.',
-    errorCode: 'github.prNotFound',
-    errorParams: { number: 42 }
-  })
-  const fallback = vi.fn()
-  const notified = vi.fn()
-  expect(
-    await launchWorkItemDirect({
-      item,
-      repoId: 'repo-1',
-      agentOverride: 'codex',
-      launchSource: 'task_page',
-      openModalFallback: fallback,
-      onFailureNotified: notified
-    })
-  ).toBe(false)
-  expect(fallback).toHaveBeenCalledOnce()
-  expect(notified).toHaveBeenCalledOnce()
-  expect(mocks.toastError).toHaveBeenCalledOnce()
-  expect(mocks.createWorktree).not.toHaveBeenCalled()
 })

@@ -10,7 +10,7 @@ import type { VoiceSettings } from './speech-types'
 import { DICTATION_LANGUAGE_AUTO } from './dictation-language'
 import { DEFAULT_UNLOAD_MODEL_AFTER_MINUTES } from './voice-model-unload'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/row-display/card-properties'
 import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
@@ -28,16 +28,6 @@ import {
 } from './terminal/appearance/terminal-platform-defaults'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
-export {
-  COMPACT_WORKTREE_CARD_PROPERTIES,
-  DEFAULT_WORKTREE_CARD_PROPERTIES,
-  TASK_WORKTREE_CARD_PROPERTIES,
-  getWorktreeCardModeProperties,
-  getWorktreeCardModeUpdates,
-  isCurrentCompactWorktreeCardProperties,
-  isDefaultedCompactWorktreeCardProperties,
-  normalizeWorktreeCardProperties
-} from './worktree/card-properties'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
@@ -170,6 +160,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
+    activityBarPosition: 'top',
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',

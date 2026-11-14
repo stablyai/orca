@@ -4,6 +4,7 @@ import {
   TextInput,
   View,
   type StyleProp,
+  type TextInputInstance,
   type TextInputProps,
   type ViewStyle
 } from 'react-native'
@@ -13,7 +14,7 @@ import { composerInputStyles as styles } from './composer-input-styles'
 import { useInputFocus } from './use-input-focus'
 
 type TextFieldProps = Omit<TextInputProps, 'style' | 'placeholderTextColor' | 'selectionColor'> & {
-  inputRef?: Ref<TextInput>
+  inputRef?: Ref<TextInputInstance>
   /** An icon before the text, e.g. Search. */
   leading?: ReactNode
   /** A control after the text, e.g. a clear chip. */

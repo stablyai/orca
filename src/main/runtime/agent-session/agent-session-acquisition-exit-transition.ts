@@ -3,8 +3,8 @@ import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionRecord
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionLeaseIsReleased } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { nextAgentSessionFence } from '../../../shared/agent-session/lifecycle/agent-session-next-fence'
+import { agentSessionLeaseIsReleased } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import { nextAgentSessionFence } from '../../../shared/agent-session/lifecycle/leases/agent-session-next-fence'
 import type { StructuredAgentSessionAcquisitionReceipt } from '../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
 import { assertFence, withLease } from './ownership/agent-session-lease-transitions'
 

@@ -2,8 +2,9 @@ import type { ManagedPaneInternal } from '../pane-manager-types'
 import {
   resumeTerminalCursorBlink,
   suspendTerminalCursorBlink
-} from '../pane-cursor-blink-suspension'
-import { safeFit } from '../pane-tree-ops'
+} from '../pane-focus/pane-cursor-blink-suspension'
+import '../pane-layout/pane-tree-ops'
+import { safeFit } from '../terminal-fit/pane-fit'
 import {
   attachWebgl,
   clearTerminalWebglAttachBackoff,

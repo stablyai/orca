@@ -1,6 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import '../terminal-reply-schema'
+import '../host-operations/terminal-reply-schema'
 import { terminalQuickCommandsSchema } from './mobile-quick-command-reply-schema'
 
 export const quickCommandsReader = rpcResultVariant(

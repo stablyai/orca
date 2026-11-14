@@ -6,7 +6,7 @@ import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import {
   createClaudeModelCatalogProbe,
   type ClaudeModelCatalogProbeDeps
-} from '../../../claude/claude-model-catalog-probe'
+} from '../../../claude/model-catalog/claude-model-catalog-probe'
 import { createCodexModelCatalogProbe } from '../../../codex/structured/catalog/codex-model-catalog-probe'
 import type { AgentModelCatalogDiscovery } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { StructuredAgentModelCatalogContext } from '../installation/structured-agent-runtime-registration-types'
@@ -87,6 +87,7 @@ export function acpModelCatalogDiscovery(
     ...(acpListingNeedsChatFolder(discovery) ? { listsInChatFolder: true as const } : {}),
     probe: createAcpModelCatalogProbe(spec, {
       resolveEnvironment: environment.resolveBaseEnvironment,
+      resolveSavedEnvironment: () => environment.resolveBaseEnvironment(true),
       refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,
       dataDirectory: deps.stateDirectory,
       ...(deps.resolveAgentLaunchEnv ? { resolveLaunchEnv: deps.resolveAgentLaunchEnv } : {}),

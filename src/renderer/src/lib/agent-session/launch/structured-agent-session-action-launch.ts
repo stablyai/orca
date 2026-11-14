@@ -5,7 +5,7 @@ import { readStructuredChatTabSavedName } from '@/runtime/native-chat/naming/str
 import {
   getStructuredLaunchStateBySessionId,
   publishStructuredLaunchChange
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 import { focusTerminalTabSurface } from '../../../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { insertUnifiedTabAfterAnchor } from '../../workspace/tabs/unified-tab-anchor-insertion'
 import { useAppStore } from '@/store/index'

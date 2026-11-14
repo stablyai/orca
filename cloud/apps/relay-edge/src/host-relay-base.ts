@@ -77,6 +77,9 @@ export const NO_DEADLINE = Number.MAX_SAFE_INTEGER
 // How long a silent keepalive control has to answer the relay ping before it is closed.
 export const KEEPALIVE_PROBE_MS = 10_000
 export const SWEEP_AT_KEY = 'sweepAt'
+// Diagnostics only: the host's last control close, read once by the next activation.
+export const LAST_CONTROL_CLOSE_KEY = 'lastControlClose'
+export type LastControlClose = { goneAt: number; closedAt: number; code: number }
 // 6 h ± 30 min, as the cells: desktops re-ask the director at least this often.
 export const LEASE_BASE_MS = 6 * 60 * 60 * 1000
 export const LEASE_JITTER_MS = 30 * 60 * 1000
@@ -181,6 +184,7 @@ export abstract class HostRelayBase extends DurableObject<Env> {
     this.attach(ws, null)
     if (a.k === 'control' && a.phase === 'active') { metric(this.env, 'control_close', 1, String(code), [], '', a.place) }
     if (a.k === 'control' && a.phase === 'active' && !this.activeControl()) {
+      await this.ctx.storage.put<LastControlClose>(LAST_CONTROL_CLOSE_KEY, { goneAt, closedAt: Date.now(), code })
       const session = await this.ctx.storage.get<Session>('session')
       if (session && session.generation === a.generation) {
         const hostReason = relayHostCloseReasonFrom(reason)

@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { safeFit, safeFitAndThen } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { waitForTerminalReplayWritesParsed } from '../../snapshots/replay-guard'
 import {
   POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
@@ -12,7 +12,7 @@ import {
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
 import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
-import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
+import { recordTerminalOutput } from '@/lib/pane-manager/terminal-scroll/pane-scroll'
 import { presentPaneViewport } from '@/lib/pane-manager/terminal-rendering/pane-viewport-present'
 import {
   buildMainModelSnapshotReplayWrites,
@@ -185,7 +185,11 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           session.recordRendererOrderedSeq(snapshot)
           if (typeof snapshot.seq === 'number' && restorePtyId) {
             // The replay, pending escape tail included, leaves xterm exactly at the snapshot's position.
-            session.streamPosition.anchor(restorePtyId, snapshot.seq)
+            session.streamPosition.anchor(
+              restorePtyId,
+              snapshot.seq,
+              snapshot.pendingEscapeTailAnsi ?? ''
+            )
           }
           recordTerminalOutput(session.pane.terminal)
           await waitForTerminalReplayWritesParsed(session.pane.terminal)

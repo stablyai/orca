@@ -33,6 +33,11 @@ export type MetricEvent =
   | 'auth_expired_close'
   // Control closed for silence (deadControlMetric, host-relay-control.ts).
   | 'silence_close'
+  // A host's control came back after its last control closed: value = seconds from when that
+  // control was last known alive (silence closes) or closed (others) to this activation; label =
+  // that close code; double2 = seconds between last-known-alive and the actual close.
+  // reason 'keepalive' | 'legacy' of the new control.
+  | 'reconnect_gap'
   // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data' | 'health'. Unpushed-host phones: 'not_on_edge'.
   | 'preauth_limited'
   | 'not_on_edge'

@@ -1,8 +1,9 @@
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { ensureDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { useAppStore } from '@/store/index'
 import {
   acquireAgentLaunchChoices,
@@ -155,7 +156,7 @@ export async function launchAgentSessionContinuation({
     ...(delivery.chatSessionOptions !== undefined
       ? { chatLaunchOptions: delivery.chatSessionOptions }
       : {}),
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     workspace: worktreeLaunchWorkspace(worktreeId),
     tuiCustomization: { cwd: initialCwd }
   }
@@ -173,7 +174,7 @@ export async function launchAgentSessionContinuation({
   const workspace = state.getKnownWorktreeById(worktreeId, executionHostId)
   const workspaceName =
     (workspace && resolveWorktreeDisplayName(workspace)) || initialCwd || worktreeId
-  const result = launchAgentInNewTab({ ...delivery, agentSessionLaunchPlan: plan })
+  const result = launchAgentInNewTabWithOutcome({ ...delivery, agentSessionLaunchPlan: plan })
   if (!result || 'refused' in result) {
     return false
   }

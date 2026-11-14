@@ -3,7 +3,7 @@
 import { useAppStore } from '@/store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
-import type { PaneStartStatus } from '../../../../../../shared/workspace-layout/workspace-layout-published'
+import type { PaneStartStatus } from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { resolveTerminalTabId } from '../terminal-tab-id'
 import {

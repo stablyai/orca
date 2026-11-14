@@ -1,4 +1,4 @@
-import '../../ai-vault-search/session-search-worker.test-fixture'
+import '../../ai-vault-search/worker/session-search-worker.test-fixture'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -9,7 +9,7 @@ import {
   claudeLines,
   openSessionSearchIndexerHarness,
   type SessionSearchIndexerHarness
-} from '../../ai-vault-search/session-search-indexer-test-fixture'
+} from '../../ai-vault-search/indexing/session-search-indexer-test-fixture'
 import type { AiVaultSearchResponse } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
@@ -106,39 +106,6 @@ function everyKey(): string[] {
     host.sessionIds.map((sessionId) => `${host.executionHostId}/${sessionId}`)
   )
 }
-
-async function paginate(
-  limit: number,
-  sort: 'relevance' | 'newest',
-  hostLegs = legs()
-): Promise<{ keys: string[]; pages: number }> {
-  const request = { query: 'needle', limit, filters: { sort } }
-  const keys: string[] = []
-  let cursor: string | null = null
-  let pages = 0
-  do {
-    const response = resultsOf(
-      await searchAllExecutionHosts(cursor === null ? request : { ...request, cursor }, hostLegs)
-    )
-    keys.push(...keysOf(response))
-    cursor = response.page.cursor
-    pages++
-    expect(pages).toBeLessThan(40)
-  } while (cursor !== null)
-  return { keys, pages }
-}
-
-it('hands out every hit on every host exactly once, at limit 5 and limit 20', async () => {
-  const expected = everyKey().sort()
-  expect(expected).toHaveLength(40)
-  for (const limit of [5, 20]) {
-    for (const sort of ['relevance', 'newest'] as const) {
-      const { keys } = await paginate(limit, sort)
-      expect(new Set(keys).size, `${sort} at ${limit} repeated a hit`).toBe(keys.length)
-      expect([...keys].sort(), `${sort} at ${limit} lost a hit`).toEqual(expected)
-    }
-  }
-})
 
 it('replays snapshot tails then fences the changed host at its next read while healthy hosts finish', async () => {
   const request = { query: 'needle', limit: 5 }

@@ -1,5 +1,5 @@
 import type { ManagedPane, ManagedPaneInternal } from '../pane-manager-types'
-import { isManagedPaneDisplayNone } from '../pane-display-visibility'
+import { isManagedPaneDisplayNone } from '../terminal-fit/pane-display-visibility'
 import { requestFullViewportPresent } from './terminal-render-pause-release'
 
 /** Viewport presentation also serves DOM panes; keep visibility retries separate from WebGL lifecycle. */

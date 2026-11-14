@@ -1,10 +1,13 @@
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../../types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import {
+  type TaskSourceContext,
+  getTaskSourceCacheScope
+} from '../../../../../shared/work-items/task-source-context'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { CacheEntry } from '../cache/cache-model'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+
 import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import {
   bindingKey,

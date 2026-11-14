@@ -5,17 +5,19 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-sw
 import { markStructuredAgentLaunchCancellation } from './structured-agent-session-launch-cancellation'
 import { cancelStructuredAgentLaunchOnLocalHost } from './structured-agent-session-local-launch-cancel'
 import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
-import { hasStructuredAgentLaunchCancellationTombstonePersisted } from './structured-agent-session-launch-persistence'
+import {
+  hasStructuredAgentLaunchCancellationTombstonePersisted,
+  readStructuredAgentLaunchRecord
+} from './structured-agent-session-launch-persistence'
 import {
   removeStructuredLaunchSlot,
   type StructuredLaunchSlotOwner
 } from './structured-agent-session-launch-slot'
 import {
   deleteStructuredLaunchStateIfCurrent,
-  getPersistedStructuredAgentLaunchRecord,
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 
 function markStructuredAgentSessionLaunchCancelledInternal(
   worktreeId: string,
@@ -25,7 +27,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
 ): boolean {
   const alreadyCancelled = hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId)
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  const record = getPersistedStructuredAgentLaunchRecord(sessionId)
+  const record = readStructuredAgentLaunchRecord(sessionId)
   const surfaceAddress = state?.intent.surfaceAddress ?? record?.surfaceAddress
   const matchingState = state?.intent.worktreeId === worktreeId ? state : undefined
   const host = matchingState?.intent.executionHostId ?? record?.executionHostId ?? executionHostId
