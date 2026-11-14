@@ -19,6 +19,12 @@ import {
 import { runExclusivelyForRuntimeAndSystemTrustConfig } from '../../trust/hooks/codex-hook-trust-queue'
 import { withFileContentObservation } from '../../../filesystem/file-content-observation'
 import { readCodexLaunchPreparationInputs } from './codex-launch-preparation-inputs'
+import type { CodexHookAnswer } from '../../trust/hooks/codex-hook-trust-derivation'
+
+export type CodexLaunchConfigPreparation = {
+  run: () => boolean
+  complete: () => void
+}
 
 // Separate hooks-on/off and Codex/terminal runs: their trust outcomes and wait budgets differ.
 function launchPrepKey(
@@ -49,20 +55,44 @@ export class CodexHookLaunchPreparation {
     runtimeHomePath: string,
     launchesCodex: boolean,
     isHooksEnabled: () => boolean,
-    reuseKey?: string
+    reuseKey?: string,
+    configPreparation?: CodexLaunchConfigPreparation,
+    resolvedAnswer?: CodexHookAnswer
   ): Promise<AgentHookInstallStatus> {
     let answer =
+      resolvedAnswer ??
       (await resolveCodexHookAnswerForLaunch(launchesCodex ? CODEX_HOOK_LAUNCH_WAIT_MS : 0)) ??
       CODEX_ANSWER_AWAITED
+    if (configPreparation && answer.kind !== 'hashes') {
+      if (reuseKey) {
+        this.completedLaunchPrep.delete(reuseKey)
+      }
+      configPreparation.run()
+      return dedupeInFlightRun(
+        this.launchPrepInFlight,
+        launchPrepKey(launchesCodex ? 'codex-launch' : 'install', runtimeHomePath),
+        () =>
+          this.prepareLocalInstall(
+            runtimeHomePath,
+            launchesCodex,
+            isHooksEnabled,
+            undefined,
+            undefined,
+            answer
+          )
+      )
+    }
     return runExclusivelyForRuntimeAndSystemTrustConfig(runtimeHomePath, () => {
       // Recheck in the queue so an Off that landed during hash lookup wins.
       let enabled = isHooksEnabled()
       const run = (onComplete?: () => void): Promise<AgentHookInstallStatus> => {
+        const configComplete = configPreparation?.run() ?? true
+        const completed = configComplete ? onComplete : undefined
         if (!enabled || answer.kind === 'refused') {
           return refreshCodexRuntimeUserHooksExclusively(
             runtimeHomePath,
             (homePath) => readCodexHookHomeStatus(homePath, answer),
-            onComplete
+            completed
           )
         }
         // Pending answers still consult the complete stopgap memo/ledger on every preparation.
@@ -77,7 +107,7 @@ export class CodexHookLaunchPreparation {
           runtimeHomePath,
           hashes,
           (homePath) => readCodexHookHomeStatus(homePath, answer),
-          onComplete
+          completed
         )
       }
       if (!reuseKey) {
@@ -102,47 +132,72 @@ export class CodexHookLaunchPreparation {
   }
 
   // Reuse only a complete pass whose actual observations and fresh inputs still agree.
-  installForLaunchPrep(
+  async installForLaunchPrep(
     runtimeHomePath: string,
     launchesCodex: boolean,
-    isHooksEnabled: () => boolean
+    isHooksEnabled: () => boolean,
+    configPreparation?: CodexLaunchConfigPreparation
   ): Promise<AgentHookInstallStatus> {
     const homePath = runtimeHomePath
-    return dedupeInFlightRun(
-      this.launchPrepInFlight,
-      launchPrepKey(launchesCodex ? 'codex-launch' : 'install', homePath),
-      () =>
-        this.prepareLocalInstall(
-          homePath,
-          launchesCodex,
-          isHooksEnabled,
-          launchPrepKey(launchesCodex ? 'codex-launch' : 'install', homePath)
-        )
-    )
+    const key = launchPrepKey(launchesCodex ? 'codex-launch' : 'install', homePath)
+    const run = (): Promise<AgentHookInstallStatus> =>
+      this.prepareLocalInstall(
+        homePath,
+        launchesCodex,
+        isHooksEnabled,
+        configPreparation ? `${key}\0config` : key,
+        configPreparation
+      )
+    const status = await (configPreparation
+      ? run()
+      : dedupeInFlightRun(this.launchPrepInFlight, key, run))
+    configPreparation?.complete()
+    return status
   }
 
-  refreshRuntimeUserHooksForLaunchPrep(
+  async refreshRuntimeUserHooksForLaunchPrep(
     runtimeHomePath: string,
-    getStatus: (home: string) => AgentHookInstallStatus
+    getStatus: (home: string) => AgentHookInstallStatus,
+    configPreparation?: CodexLaunchConfigPreparation
   ): Promise<AgentHookInstallStatus> {
     const homePath = runtimeHomePath
-    return dedupeInFlightRun(this.launchPrepInFlight, launchPrepKey('refresh', homePath), () =>
+    const key = `${launchPrepKey('refresh', homePath)}${configPreparation ? '\0config' : ''}`
+    if (configPreparation && readKnownCodexHookAnswer()?.kind !== 'hashes') {
+      this.completedLaunchPrep.delete(key)
+      configPreparation.run()
+      const status = await this.refreshRuntimeUserHooksForLaunchPrep(homePath, getStatus)
+      configPreparation.complete()
+      return status
+    }
+    const run = (): Promise<AgentHookInstallStatus> =>
       runExclusivelyForRuntimeAndSystemTrustConfig(homePath, () => {
+        const refresh = (onComplete?: () => void): Promise<AgentHookInstallStatus> => {
+          const configComplete = configPreparation?.run() ?? true
+          return refreshCodexRuntimeUserHooksExclusively(
+            homePath,
+            getStatus,
+            configComplete ? onComplete : undefined
+          )
+        }
         const answer = readKnownCodexHookAnswer()
         if (answer?.kind !== 'hashes') {
-          this.completedLaunchPrep.delete(launchPrepKey('refresh', homePath))
-          return refreshCodexRuntimeUserHooksExclusively(homePath, getStatus)
+          this.completedLaunchPrep.delete(key)
+          return refresh()
         }
         const answerKey = JSON.stringify(answer)
         return this.reuseCompletedPreparation(
-          launchPrepKey('refresh', homePath),
+          key,
           homePath,
           answerKey,
           () => JSON.stringify(readKnownCodexHookAnswer()),
-          (onComplete) => refreshCodexRuntimeUserHooksExclusively(homePath, getStatus, onComplete)
+          refresh
         )
       })
-    )
+    const status = await (configPreparation
+      ? run()
+      : dedupeInFlightRun(this.launchPrepInFlight, key, run))
+    configPreparation?.complete()
+    return status
   }
 
   private async reuseCompletedPreparation(

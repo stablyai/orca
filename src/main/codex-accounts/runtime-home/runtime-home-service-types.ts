@@ -1,5 +1,10 @@
 import type { CodexManagedAccount } from '../../../shared/managed-account-types'
 
+export type CodexHomeLaunchOptions = {
+  unavailableManagedHomePath?: string
+  deferConfigSync?: (syncConfig: () => boolean) => void
+}
+
 export type CodexSystemDefaultSnapshot = {
   authJson: string | null
 }

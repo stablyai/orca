@@ -18,7 +18,7 @@ import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { setupCodexHookHomes } from './hook-service-test-harness'
 
-const { getPathMock, homedirMock, controls } = vi.hoisted(() => {
+const { getPathMock, homedirMock, prepareFactoryHooks, controls } = vi.hoisted(() => {
   const controls: {
     aroundMirror: null | (() => () => void)
     afterCleanup: null | (() => void)
@@ -37,11 +37,15 @@ const { getPathMock, homedirMock, controls } = vi.hoisted(() => {
   return {
     getPathMock: vi.fn<(name: string) => string>(),
     homedirMock: vi.fn<() => string>(),
+    prepareFactoryHooks: vi.fn(),
     controls
   }
 })
 
 vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
+vi.mock('./hook-service', () => ({
+  codexHookService: { prepareRuntimeHomeForLaunch: prepareFactoryHooks }
+}))
 vi.mock('os', async (importOriginal) => ({
   ...(await importOriginal<typeof Os>()),
   homedir: homedirMock
@@ -120,6 +124,8 @@ vi.mock('../reconciliation/codex-hook-legacy-cleanup', async (importOriginal) =>
 
 import { CodexHookService } from './codex-hook-service-implementation'
 import { getManagedScriptPath } from '../definitions/codex-hook-definition'
+import { createCodexRuntimeHomeLaunchPreparation } from '../../configuration/homes/codex-runtime-home-launch-preparation'
+import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 beforeEach(() => {
@@ -156,6 +162,35 @@ async function settle(service: CodexHookService, home: string): Promise<void> {
 }
 
 describe('completed Codex launch preparation', () => {
+  it('preserves the recovery backup through the launch factory when inputs are unchanged', async () => {
+    const { service, home, runtime } = seed()
+    prepareFactoryHooks.mockImplementation(service.prepareRuntimeHomeForLaunch.bind(service))
+    const prepare = createCodexRuntimeHomeLaunchPreparation({
+      getRuntimeHome: () => ({
+        prepareForCodexLaunchAsync: async (_target, _env, options) => {
+          const sync = (): boolean =>
+            syncSystemConfigIntoManagedCodexHome({
+              systemHomePath: join(homes.tmpHome, '.codex'),
+              runtimeHomePath: home
+            })
+          if (options?.deferConfigSync) {
+            options.deferConfigSync(sync)
+          } else {
+            sync()
+          }
+          return home
+        }
+      }),
+      getSettings: () => undefined
+    })
+    for (let index = 0; index < 3; index++) {
+      expect(await prepare()).toBe(home)
+    }
+    writeFileSync(`${runtime}.bak`, 'model = "recoverable"\n')
+    expect(await prepare()).toBe(home)
+    expect(readFileSync(`${runtime}.bak`, 'utf8')).toBe('model = "recoverable"\n')
+  })
+
   it('reports a newly pending Codex answer after an asynchronous refresh snapshot', async () => {
     const { service, home } = seed()
     await settle(service, home)

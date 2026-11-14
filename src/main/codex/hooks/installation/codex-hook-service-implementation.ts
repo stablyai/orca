@@ -32,7 +32,10 @@ import {
   type CodexWslRuntimeHookTarget,
   type WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
-import { CodexHookLaunchPreparation } from './codex-hook-launch-preparation'
+import {
+  CodexHookLaunchPreparation,
+  type CodexLaunchConfigPreparation
+} from './codex-hook-launch-preparation'
 
 export class CodexHookService {
   async refreshManagedScripts(): Promise<void> {
@@ -163,7 +166,8 @@ export class CodexHookService {
     runtimeHomePath: string | null | undefined,
     target: CodexWslRuntimeHookTarget | undefined,
     isHooksEnabled: () => boolean,
-    launchesCodex: boolean
+    launchesCodex: boolean,
+    configPreparation?: CodexLaunchConfigPreparation
   ): Promise<AgentHookInstallStatus> {
     if (isHooksEnabled()) {
       // Install hooks into the managed account's launch home, where its Codex reads trust.
@@ -177,13 +181,17 @@ export class CodexHookService {
         (await this.installForLaunchPrep(
           runtimeHomePath ?? undefined,
           launchesCodex,
-          isHooksEnabled
+          isHooksEnabled,
+          configPreparation
         ))
       )
     }
     return (
       this.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, target) ??
-      (await this.refreshRuntimeUserHooksForLaunchPrep(runtimeHomePath ?? undefined))
+      (await this.refreshRuntimeUserHooksForLaunchPrep(
+        runtimeHomePath ?? undefined,
+        configPreparation
+      ))
     )
   }
 
@@ -227,18 +235,24 @@ export class CodexHookService {
   installForLaunchPrep(
     runtimeHomePath: string | undefined,
     launchesCodex: boolean,
-    isHooksEnabled: () => boolean
+    isHooksEnabled: () => boolean,
+    configPreparation?: CodexLaunchConfigPreparation
   ): Promise<AgentHookInstallStatus> {
     return this.localLaunchPreparation.installForLaunchPrep(
       runtimeHomePath ?? getOrcaManagedCodexHomePath(),
       launchesCodex,
-      isHooksEnabled
+      isHooksEnabled,
+      configPreparation
     )
   }
-  refreshRuntimeUserHooksForLaunchPrep(runtimeHomePath?: string): Promise<AgentHookInstallStatus> {
+  refreshRuntimeUserHooksForLaunchPrep(
+    runtimeHomePath?: string,
+    configPreparation?: CodexLaunchConfigPreparation
+  ): Promise<AgentHookInstallStatus> {
     return this.localLaunchPreparation.refreshRuntimeUserHooksForLaunchPrep(
       runtimeHomePath ?? getOrcaManagedCodexHomePath(),
-      (home) => this.getStatus(home)
+      (home) => this.getStatus(home),
+      configPreparation
     )
   }
 

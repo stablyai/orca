@@ -7,6 +7,7 @@ import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileCodexHooksForLaunch } from '../../hooks/reconciliation/codex-hook-reconcile'
 import { grantCodexSandboxReadOnManagedHome } from './codex-windows-sandbox-read-grant'
+import type { CodexLaunchConfigPreparation } from '../../hooks/installation/codex-hook-launch-preparation'
 
 export function createCodexRuntimeHomeLaunchPreparation(deps: {
   getRuntimeHome: () => Pick<CodexRuntimeHomeService, 'prepareForCodexLaunchAsync'> | null
@@ -21,50 +22,94 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
     if (!runtimeHome) {
       throw new Error('Codex runtime home service is not initialized')
     }
-    // Propagate home failures: null selects the system account, which could launch the wrong identity (STA-4422).
-    const runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
-      unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
-    })
-    const launchesCodex = launchContext?.launchesCodex === true
-    if (runtimeHomePath === null && target?.runtime !== 'wsl') {
-      // Only terminal Codex launches wait for the scheduled hook reconciliation.
-      if (launchesCodex) {
-        await reconcileCodexHooksForLaunch()
+    let syncConfig: (() => boolean) | undefined
+    let configComplete = false
+    let configResult: { value: boolean } | { error: unknown } | undefined
+    const configPreparation: CodexLaunchConfigPreparation = {
+      run: () => {
+        if (!syncConfig) {
+          return true
+        }
+        if (!configResult) {
+          try {
+            configResult = { value: syncConfig() }
+          } catch (error) {
+            configResult = { error }
+          }
+        }
+        if ('error' in configResult) {
+          throw configResult.error
+        }
+        configComplete = true
+        return configResult.value
+      },
+      complete: () => {
+        configComplete = true
       }
-      return null
     }
-    if (runtimeHomePath !== null && target?.runtime !== 'wsl') {
-      await grantCodexSandboxReadOnManagedHome(runtimeHomePath)
-    }
-    const hookTarget =
-      target?.runtime === 'wsl'
-        ? { runtime: 'wsl' as const, wslDistro: target.wslDistro?.trim() || getDefaultWslDistro() }
-        : target
-    const isHooksEnabled = (): boolean =>
-      isAgentStatusHooksEnabledForAgent(deps.getSettings(), 'codex')
-    const hooksEnabled = isHooksEnabled()
     try {
-      // Not a user act here: a passive restore or remount reaches this too (#35813), so a
-      // stopped distro skips the install; the hook relay installs once the distro runs.
-      const status = await codexHookService.prepareRuntimeHomeForLaunch(
-        runtimeHomePath,
-        hookTarget,
-        isHooksEnabled,
-        launchesCodex
-      )
-      if (status.state === 'error') {
+      // Propagate home failures: null selects the system account, which could launch the wrong identity (STA-4422).
+      const runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
+        unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
+        deferConfigSync: (prepare) => {
+          syncConfig = prepare
+        }
+      })
+      const launchesCodex = launchContext?.launchesCodex === true
+      if (runtimeHomePath === null && target?.runtime !== 'wsl') {
+        // Only terminal Codex launches wait for the scheduled hook reconciliation.
+        if (launchesCodex) {
+          await reconcileCodexHooksForLaunch()
+        }
+        return null
+      }
+      const hookTarget =
+        target?.runtime === 'wsl'
+          ? {
+              runtime: 'wsl' as const,
+              wslDistro: target.wslDistro?.trim() || getDefaultWslDistro()
+            }
+          : target
+      const isHooksEnabled = (): boolean =>
+        isAgentStatusHooksEnabledForAgent(deps.getSettings(), 'codex')
+      const hooksEnabled = isHooksEnabled()
+      try {
+        // Not a user act here: a passive restore or remount reaches this too (#35813), so a
+        // stopped distro skips the install; the hook relay installs once the distro runs.
+        const status = await codexHookService.prepareRuntimeHomeForLaunch(
+          runtimeHomePath,
+          hookTarget,
+          isHooksEnabled,
+          launchesCodex,
+          syncConfig ? configPreparation : undefined
+        )
+        if (status.state === 'error') {
+          console.warn(
+            `[codex-hook-service] failed to ${hooksEnabled ? 'refresh' : 'refresh user'} runtime hooks before launch`,
+            status.detail
+          )
+        }
+      } catch (error) {
+        if (configResult && 'error' in configResult && error === configResult.error) {
+          throw error
+        }
+        // Malformed hooks must not prevent Codex from starting.
         console.warn(
           `[codex-hook-service] failed to ${hooksEnabled ? 'refresh' : 'refresh user'} runtime hooks before launch`,
-          status.detail
+          error
         )
       }
-    } catch (error) {
-      // Malformed hooks must not prevent Codex from starting.
-      console.warn(
-        `[codex-hook-service] failed to ${hooksEnabled ? 'refresh' : 'refresh user'} runtime hooks before launch`,
-        error
-      )
+      if (!configComplete) {
+        configPreparation.run()
+      }
+      if (runtimeHomePath !== null && target?.runtime !== 'wsl') {
+        await grantCodexSandboxReadOnManagedHome(runtimeHomePath)
+      }
+      return runtimeHomePath
+    } finally {
+      if (!configComplete) {
+        configPreparation.run()
+      }
     }
-    return runtimeHomePath
   }
 }
