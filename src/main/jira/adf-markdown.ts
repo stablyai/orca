@@ -34,22 +34,6 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
-function textNode(text: string): JiraAdfRecord {
-  return text ? { type: 'text', text } : { type: 'hardBreak' }
-}
-
-export function textToAdf(text: string): JiraAdfRecord {
-  const lines = text.split(/\r?\n/)
-  return {
-    type: 'doc',
-    version: 1,
-    content: lines.map((line) => ({
-      type: 'paragraph',
-      content: line ? [textNode(line)] : []
-    }))
-  }
-}
-
 function positiveInteger(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
 }
