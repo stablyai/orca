@@ -7,6 +7,22 @@ import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
+import { withoutInheritedClaudeConfigDir } from '../structured/launch/claude-config-dir-pin'
+import { withoutRejectedClaudeApiKey } from '../configuration/claude-rejected-api-key'
+
+export function prepareClaudeChildProcessEnv(
+  configuredEnv: Record<string, string> | undefined,
+  envToDelete: readonly string[] = []
+): Promise<Record<string, string>> {
+  return withoutRejectedClaudeApiKey(
+    withoutClaudeChildEnvironmentKeys(
+      buildClaudeChildProcessEnv(configuredEnv, {
+        inheritedEnv: withoutInheritedClaudeConfigDir(process.env)
+      }),
+      envToDelete
+    )
+  )
+}
 
 function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
@@ -75,4 +91,14 @@ export function buildClaudeChildProcessEnv(
   }
   stripInheritedAgentSessionEnv(env, { platform })
   return { ...env, ...configuredEnv }
+}
+
+export function withoutClaudeChildEnvironmentKeys(
+  env: Record<string, string>,
+  keys: readonly string[]
+): Record<string, string> {
+  for (const key of keys) {
+    delete env[key]
+  }
+  return env
 }

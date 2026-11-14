@@ -1,3 +1,7 @@
+import { isPlanApprovalSubject } from '../../../../shared/agent-session/agent-session-approval-subject'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -10,6 +14,7 @@ import {
   type AgentSessionQuestionAnswer
 } from '../../../../shared/agent-session/agent-session-question-answer'
 import type {
+  AgentJournalMessageItem,
   AgentJournalApprovalItem,
   AgentJournalQuestionItem,
   AgentJournalResolution
@@ -98,12 +103,8 @@ export async function performPrompt(
   }
   const { prompt } = validated
   const work = contextStructuredAgentSessionCurrentWork(ctx)
-  if (!work.isCurrentItem(input.itemId)) {
-    // Never deliver an old agent’s prompt answer to its replacement.
-    return invalid(
-      'promptOwnerEnded',
-      `Item ${input.itemId} was raised by an agent that has ended.`
-    )
+  if (!work.attentionPrompts().some((item) => item.itemId === input.itemId)) {
+    return invalid('promptOwnerEnded', 'This question is no longer waiting for an answer.')
   }
   const choice = readPromptChoice(prompt, input)
   if (!choice) {
@@ -126,6 +127,53 @@ export async function performPrompt(
     ...(response.kind === 'answers' ? { answers: response.answers } : {}),
     resolvedBy: ctx.resolvedBy,
     resolvedAt: ctx.now()
+  }
+  if (!work.isCurrentItem(input.itemId)) {
+    if (!ctx.operationId) {
+      return invalid('promptOwnerEnded', 'This question is no longer waiting for an answer.')
+    }
+    const body = savedPromptAnswerMessage(prompt, response)
+    const interactionMode =
+      ctx.agent === 'claude' ? promptAnswerInteractionMode({ ...prompt, resolution }) : undefined
+    const captured = captureStructuredExecutionOptions(
+      ctx,
+      interactionMode ? { interactionMode } : undefined
+    )
+    if ('refusal' in captured) {
+      return { ok: false, refusal: captured.refusal }
+    }
+    await ctx.journal.appendSubmission(
+      {
+        clientMessageId: ctx.operationId,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.send',
+          sessionId: ctx.sessionId,
+          fields: { body }
+        }),
+        body,
+        fence: ctx.fence,
+        origin: 'client',
+        source: { kind: 'user' },
+        handoverRecorded: true,
+        options: captured.options
+      },
+      undefined,
+      ctx.operationReceipt,
+      {
+        itemId: input.itemId,
+        expectedRevision: input.expectedRevision,
+        contextEpoch: ctx.journal.cursor().epoch,
+        identity,
+        body: { ...prompt, resolution },
+        options: {
+          ...validated.item,
+          fence: ctx.fence,
+          turnScope: validated.item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+        }
+      }
+    )
+    const item = ctx.journal.item(input.itemId)!
+    return { ok: true, value: { itemId: item.itemId, revision: item.revision, resolution } }
   }
   const committed: { item?: Awaited<ReturnType<typeof ctx.journal.appendItem>> } = {}
   try {
@@ -218,4 +266,41 @@ export function acceptedPromptAnswer(
   return receipt?.kind === 'prompt-answer'
     ? { itemId: receipt.itemId, revision: receipt.revision, resolution: receipt.resolution }
     : null
+}
+
+/** The exact plan subject changes mode with its answer, including an ordinary saved-request answer. */
+export function promptAnswerInteractionMode(
+  body: AgentJournalApprovalItem | AgentJournalQuestionItem | undefined
+): 'default' | 'plan' | undefined {
+  if (
+    body?.kind !== 'approval' ||
+    body.resolution.state !== 'resolved' ||
+    !isPlanApprovalSubject(body.subject)
+  ) {
+    return undefined
+  }
+  const choice = body.resolution.selectedOptionId
+  return choice === 'allow' || choice === 'allowForSession'
+    ? 'default'
+    : choice === 'deny'
+      ? 'plan'
+      : undefined
+}
+
+function savedPromptAnswerMessage(
+  prompt: AgentJournalApprovalItem | AgentJournalQuestionItem,
+  response: AgentSessionPromptResponse
+): AgentJournalMessageItem {
+  const text =
+    prompt.kind === 'approval' && response.kind === 'option'
+      ? `For your saved request: ${prompt.title}\n${prompt.detail ?? prompt.description ?? ''}\nMy choice: ${prompt.options.find((option) => option.id === response.optionId)?.label ?? response.optionId}. Recheck the action and continue the unfinished task using this instruction.`
+      : prompt.kind === 'question' && response.kind === 'answers'
+        ? agentSessionPromptQuestions(prompt)
+            .map((question) => {
+              const answer = response.answers.find((value) => value.questionId === question.id)!
+              return `${question.question}\nMy answer: ${[...answer.optionIds.map((id) => question.options.find((option) => option.id === id)?.label ?? id), ...(answer.other === undefined ? [] : [answer.other])].join(', ')}`
+            })
+            .join('\n\n')
+        : ''
+  return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
 }

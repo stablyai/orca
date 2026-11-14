@@ -28,7 +28,8 @@ function callbacksFor(fullAccess = false) {
     sessionId: 'session-1',
     prompts,
     emit,
-    fullAccessAt: () => fullAccess
+    fullAccessAt: () => fullAccess,
+    wasProviderWithdrawal: () => true
   })
   return { prompts, emit, canUseTool, onUserDialog }
 }

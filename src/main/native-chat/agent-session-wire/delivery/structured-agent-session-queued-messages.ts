@@ -47,6 +47,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     | 'journal'
     | 'fence'
     | 'operationReceipt'
+    | 'sendAdmission'
     | 'currentWork'
     | 'agents'
     | 'agent'
@@ -111,7 +112,8 @@ export async function maybeQueueStructuredAgentSessionSend(
         options: captured.options,
         ...(params.userSend ? { requireAttachments: true } : {})
       },
-      ctx.operationReceipt
+      ctx.operationReceipt,
+      ctx.sendAdmission
     )
   } catch (error) {
     return agentSessionAdmissionWriteRefusal(ctx, error)

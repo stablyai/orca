@@ -48,6 +48,38 @@ async function fileFailure(overrides: Partial<AgentSessionResumeFailureInput> = 
 }
 
 describe('durable restart offers', () => {
+  it('keeps healthy admissions independent and honors a queued dismissal before a later admission', async () => {
+    await capsule.record(
+      [marker(), marker({ sessionId: 'second' }), marker({ sessionId: 'later' })],
+      NOW
+    )
+    const selections = await capsule.selectResume(NOW)
+    const first = selections.find((selection) => selection.marker.sessionId === SESSION)!
+    const second = selections.find((selection) => selection.marker.sessionId === 'second')!
+    const later = selections.find((selection) => selection.marker.sessionId === 'later')!
+    const other = new AgentSessionRecoveryCapsule(directory)
+    const accepted: string[] = []
+    let lateAdmission: Promise<unknown> | undefined
+    let dismissal: Promise<number> | undefined
+    const results = await Promise.allSettled([
+      capsule.withSelectedResume(first, NOW, () => {
+        lateAdmission = capsule.withSelectedResume(later, NOW, () => accepted.push('later'))
+        dismissal = other.dismiss(['later'], NOW)
+        throw new Error('first acceptance failed')
+      }),
+      capsule.withSelectedResume(second, NOW, () => accepted.push('second'))
+    ])
+
+    expect(results).toMatchObject([
+      { status: 'rejected', reason: { message: 'first acceptance failed' } },
+      { status: 'fulfilled', value: { selected: true, value: 1 } }
+    ])
+    expect(await dismissal).toBe(1)
+    expect(await lateAdmission).toEqual({ selected: false })
+    expect(accepted).toEqual(['second'])
+    expect((await other.list(NOW)).map((offer) => offer.sessionId)).toEqual([SESSION, 'second'])
+  })
+
   it('reserves only one copy of a selected session across competing owners', async () => {
     await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
     const other = new AgentSessionRecoveryCapsule(directory)

@@ -94,7 +94,10 @@ export async function runCommandReceiptMutation<TValue>(
     }
     return failedAfterAcceptance(input, acceptedReceipt, { error })
   } finally {
-    if (committed && submissionWritten) {
+    if (
+      committed &&
+      (submissionWritten || context.journal.submission(envelope.clientOperationId))
+    ) {
       try {
         wakeDelivery?.(envelope.sessionId)
       } catch (error) {

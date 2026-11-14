@@ -52,6 +52,7 @@ export type StructuredAgentSessionMutationContext = {
   /** Join without starting a child, inside existing serialization. */
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
   readStopping: (sessionId: string) => boolean
+  hasUnacceptedRecovery?: (sessionId: string) => boolean
   wakeDelivery: (sessionId: string) => void
   /** Stop the provider child inside serialization, retaining the conversation. */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>

@@ -1,3 +1,4 @@
+import { AcpIncomingRequestClosedError } from '../transport/acp-incoming-requests'
 // Claim requests through journal commit before replying so competing clients cannot answer twice.
 
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
@@ -80,7 +81,11 @@ export class AcpStructuredPrompts {
         'abort',
         () => {
           if (this.open.get(key) === entry && !entry.claimed) {
-            this.withdraw(entry)
+            if (context.signal.reason instanceof AcpIncomingRequestClosedError) {
+              entry.settle(entry.presentation.reply(null))
+            } else {
+              this.withdraw(entry)
+            }
           }
         },
         { once: true }
@@ -110,7 +115,9 @@ export class AcpStructuredPrompts {
       await input.commit()
     } catch (error) {
       entry.claimed = false
-      if (entry.signal.aborted || entry.withdrawing) {
+      if (entry.signal.reason instanceof AcpIncomingRequestClosedError) {
+        entry.settle(entry.presentation.reply(null))
+      } else if (entry.signal.aborted || entry.withdrawing) {
         this.withdraw(entry)
       }
       throw error

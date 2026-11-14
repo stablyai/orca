@@ -1,5 +1,6 @@
 import { withOrcaClaudeChatEntrypoint } from '../../../shared/agent-launch/startup/claude-chat-entrypoint'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { createInterface } from 'node:readline'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
@@ -18,6 +19,7 @@ export type ClaudeCodeProcessSpawn = {
   readonly pid: number | undefined
   /** The spawn spec's verdict, so the close ladder never re-decides it. False until the SDK spawns. */
   readonly supervised: boolean
+  disposeStdoutObservation: () => void
 }
 
 function definedEnv(env: Record<string, string | undefined>): Record<string, string> {
@@ -33,17 +35,33 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
 /** Subscribes alongside the SDK's reader: an earlier listener would drain output it never sees. */
 function observeStdoutWithReader(
   stdout: ChildProcessWithoutNullStreams['stdout'],
-  onStdout: (chunk: Buffer | string) => void
-): void {
+  onStdout?: (chunk: Buffer | string) => void,
+  onLine?: (line: string) => void
+): () => void {
+  let lines: ReturnType<typeof createInterface> | undefined
   const onSubscribe = (event: string | symbol): void => {
     if (event !== 'data' && event !== 'readable') {
       return
     }
     stdout.removeListener('newListener', onSubscribe)
     // Same tick as the reader, so no chunk can be emitted to one and not the other.
-    stdout.on('data', onStdout)
+    if (onLine) {
+      lines = createInterface({ input: stdout })
+      lines.on('line', onLine)
+      lines.on('error', () => {})
+    }
+    if (onStdout) {
+      stdout.on('data', onStdout)
+    }
   }
   stdout.on('newListener', onSubscribe)
+  return () => {
+    stdout.removeListener('newListener', onSubscribe)
+    if (onStdout) {
+      stdout.removeListener('data', onStdout)
+    }
+    lines?.close()
+  }
 }
 
 // Orca owns the child for PID-based exit proof and Windows .cmd quoting.
@@ -52,9 +70,11 @@ export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,
   launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] },
-  onStdout?: (chunk: Buffer | string) => void
+  onStdout?: (chunk: Buffer | string) => void,
+  onLine?: (line: string) => void
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
+  let disposeStdoutObservation = (): void => {}
   return {
     spawn: (options) => {
       const args = [...options.args]
@@ -77,8 +97,8 @@ export function createClaudeCodeProcessSpawn(
           acceptClose: claudeChildCloseProven
         }
       )
-      if (onStdout) {
-        observeStdoutWithReader(managed.child.stdout, onStdout)
+      if (onStdout || onLine) {
+        disposeStdoutObservation = observeStdoutWithReader(managed.child.stdout, onStdout, onLine)
       }
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.
       return managed.child
@@ -94,6 +114,7 @@ export function createClaudeCodeProcessSpawn(
     },
     get supervised() {
       return managed?.supervised ?? false
-    }
+    },
+    disposeStdoutObservation: () => disposeStdoutObservation()
   }
 }

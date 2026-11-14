@@ -4,19 +4,16 @@
 import type { AgentSessionResumeMarker } from './agent-session-resume-marker'
 
 export const AGENT_SESSION_RESTART_CONTINUATION_MESSAGE =
-  "Orca restarted, so your previous reply was cut off partway through. Before continuing, check whether your most recent action completed — don't repeat it if it did. Then carry on."
+  "Orca restarted. Check what's completed or still running before repeating actions, then recover unfinished work within the existing authorization. Any question or approval still pending in Orca remains open; its answer will arrive as a new user message. Check the chat's current requests before asking: do not re-ask a saved pending request, infer its answer, or perform work that requires it. Continue independent authorized background work. Ask a necessary question only when no corresponding saved pending request remains."
 
-/** For interrupted children/prompts too; name no activity because providers restate it and journal-dependent wording would change retry fingerprints. */
 export const AGENT_SESSION_RESTART_WORK_CONTINUATION_MESSAGE =
-  "Orca restarted. Resume the original unfinished user task with existing commitments and authorization. Check what's completed or still running before repeating actions. Recover needed interrupted work, re-ask only necessary unanswered questions, and continue until done or genuinely blocked."
+  AGENT_SESSION_RESTART_CONTINUATION_MESSAGE
 
-/** Derive only from the marker to keep retry fingerprints stable; legacy working-lead markers retain original wording. */
+/** Current request state is read separately; accepted attempts replay their original saved body. */
 export function restartContinuationMessage(
-  marker: Pick<AgentSessionResumeMarker, 'activity'>
+  _marker: Pick<AgentSessionResumeMarker, 'activity'>
 ): string {
-  return marker.activity
-    ? AGENT_SESSION_RESTART_WORK_CONTINUATION_MESSAGE
-    : AGENT_SESSION_RESTART_CONTINUATION_MESSAGE
+  return AGENT_SESSION_RESTART_CONTINUATION_MESSAGE
 }
 
 /** Attribute the send in our journal, not provider params: Codex allowlists them, older servers cannot be verified, and a Codex-only field would break provider parity. */

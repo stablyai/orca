@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionSendAcceptance } from '../operations/structured-agent-session-turns'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionMutationEnvelope,
@@ -17,6 +18,7 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
     envelope: AgentSessionMutationEnvelope
     body: AgentJournalMessageItem
     beforeRun?: () => void
+    accept?: StructuredAgentSessionSendAcceptance
   }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
   awaitSendSettlement: (
     sessionId: string,
@@ -28,6 +30,7 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   childWorkOpen: (sessionId: string) => boolean
+  childWorkAutonomous?: (sessionId: string) => boolean
   publishStatus?: (sessionId: string) => void
   now: () => number
 }
@@ -43,6 +46,7 @@ type RestartResumeHostBindings = {
       envelope: AgentSessionMutationEnvelope
       body: AgentJournalMessageItem
       beforeRun?: () => void
+      accept?: StructuredAgentSessionSendAcceptance
     }
   ) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
   waitForSendSettlement: (

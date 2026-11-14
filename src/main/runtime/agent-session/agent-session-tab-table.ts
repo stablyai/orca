@@ -1,3 +1,4 @@
+import type { JournalOperationReceipt } from '../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { AgentSessionRecordPublication } from './records/agent-session-record-publication'
 import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { AgentSessionReserveRequest } from './ownership/agent-session-reservation-admission'
@@ -221,9 +222,10 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
     visible: boolean,
     tabId?: string,
     check?: () => void,
-    capture?: (tabId: string | null) => void
+    capture?: (tabId: string | null) => void,
+    commit?: (receipt: JournalOperationReceipt) => Promise<unknown>
   ): Promise<void> {
-    return this.transact((draft) => {
+    const apply = (draft: AgentSessionStoreState) => {
       check?.()
       const retired =
         effectiveAgentSessionTabs(draft, this.transactions.legacySessionTabIds).tabIdFor(
@@ -237,7 +239,8 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
         this.transactions.legacySessionTabIds
       )
       capture?.(visible ? (draft.sessionTabs?.tabIdFor(sessionId) ?? null) : retired)
-    })
+    }
+    return commit ? commit(this.transactions.receipt(apply)).then(() => {}) : this.transact(apply)
   }
 
   setSwitchedSessionTabVisibility(

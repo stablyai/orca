@@ -149,7 +149,10 @@ export class AcpStructuredChildren {
     if (requested && session.journalClosed === null) {
       // Allow the running turn to settle before closing the process.
       session.closeRequested = true
-      await windDownAcpTurn(session, this.stopGraceMs())
+      // A callback lost with the process remains a saved question, never a synthetic withdrawal.
+      if (session.prompts.size === 0) {
+        await windDownAcpTurn(session, this.stopGraceMs())
+      }
       if (session.ended) {
         return true
       }

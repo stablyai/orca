@@ -26,9 +26,9 @@ const REQUEST_PIECE_UNITS = 24 * 1024
 export function currentRequestsProjection(
   journal: StructuredAgentSessionCurrentWorkJournal,
   sessionId: string,
-  work: { actionablePrompts: () => AgentJournalRenderItem[]; viewKey: () => string }
+  work: { attentionPrompts: () => AgentJournalRenderItem[]; viewKey: () => string }
 ): Projection {
-  const items = work.actionablePrompts()
+  const items = work.attentionPrompts()
   const epoch = journal.cursor().epoch
   const previous = projections.get(journal)
   const identity = previous?.identity ?? randomUUID()

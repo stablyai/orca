@@ -20,6 +20,25 @@ export abstract class AgentSessionRecordPublication {
     return () => this.firstRecordListeners.delete(listener)
   }
 
+  onAcceptedSend = (listener: (sessionId: string) => void): (() => void) => {
+    this.transactions.acceptedSendListeners.add(listener)
+    return () => {
+      this.transactions.acceptedSendListeners.delete(listener)
+    }
+  }
+
+  admittedSendCount = (sessionId: string) => this.transactions.admittedSendCount(sessionId)
+
+  commitOperationReceipt = (...args: Parameters<AgentSessionStoreTransactions['commitReceipt']>) =>
+    this.transactions.commitReceipt(...args)
+
+  readCommandReceipt = (...args: Parameters<AgentSessionStoreTransactions['readCommandReceipt']>) =>
+    this.transactions.readCommandReceipt(...args)
+
+  discoverTaggedSendReceipts: AgentSessionStoreTransactions['discoverTaggedSendReceipts'] = (
+    targets
+  ) => this.transactions.discoverTaggedSendReceipts(targets)
+
   /** Serialize draft mutations; publish to readers only after row commit. */
   protected transact = async <T>(
     apply: (draft: AgentSessionStoreState) => T,

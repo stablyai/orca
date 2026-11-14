@@ -130,7 +130,8 @@ function staleMutations(
   for (const item of items) {
     // Honor existing personal Stop; only running turns need new evidence.
     const end = runningCallEnd(item.turnScope, (id) => journal.itemBody(id), verdictFor(item).state)
-    const terminal = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
+    const terminal =
+      endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end, true)
     const body = lostLiveWorkJournalBody(terminal ?? item.body) ?? terminal
     if (body) {
       mutations.push({

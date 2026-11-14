@@ -1,15 +1,10 @@
+import { structuredAgentSessionAttentionPrompts } from './structured-agent-session-attention-prompts'
 import type {
   StructuredAgentSessionWorkEvidence,
   StructuredAgentSessionCurrentWorkJournal,
   StructuredAgentSessionSeenEnd,
   StructuredAgentSessionReplacedEnd
 } from './structured-agent-session-work-evidence'
-import {
-  reusePromptProjection,
-  type PromptProjection
-} from './structured-agent-session-actionable-prompts'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 
 import { isHistoricalProviderTimelineItem } from '../../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
@@ -98,12 +93,20 @@ function structuredAgentSessionHandsOver(
   )
 }
 
-const promptProjections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, PromptProjection>()
+const promptProjections = new WeakMap<
+  StructuredAgentSessionCurrentWorkJournal,
+  {
+    attention: AgentJournalRenderItem[]
+    fence: number | null
+    items: AgentJournalRenderItem[]
+  }
+>()
 
 /** Re-read lease evidence per decision; immutable prompts share cursor/fence caches. */
 export class StructuredAgentSessionCurrentWork {
   readonly scope: StructuredAgentSessionWorkScope = {
     isCurrentItem: (itemId) => this.isCurrentItem(itemId),
+    isAttentionItem: (itemId) => this.attentionPrompts().some((item) => item.itemId === itemId),
     owesSend: (submission) => this.owesSend(submission)
   }
 
@@ -229,46 +232,20 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   actionablePrompts(): AgentJournalRenderItem[] {
-    const cursor = this.journal.cursor()
+    const attention = this.attentionPrompts()
     const prior = promptProjections.get(this.journal)
-    const reusable = reusePromptProjection(this.journal, prior, cursor, this.liveFence)
-    if (reusable) {
-      return reusable
+    if (prior?.attention === attention && prior.fence === this.liveFence) {
+      return prior.items
     }
-    const dependencies = new Set<string>()
-    const items: AgentJournalRenderItem[] = []
-    this.journal.visitItems((itemId, _sequence, body) => {
-      if (
-        (body.kind === 'approval' || body.kind === 'question') &&
-        body.resolution.state === 'pending'
-      ) {
-        const item = this.journal.item(itemId)
-        dependencies.add(itemId)
-        if (item?.turnScope?.kind === 'turn') {
-          dependencies.add(item.turnScope.turnItemId)
-          const turn = readAgentJournalTurn(this.journal.item(item.turnScope.turnItemId)?.body)
-          if (turn?.userItemId) {
-            dependencies.add(turn.userItemId)
-          }
-        }
-        if (item && this.isCurrentItem(itemId)) {
-          items.push(item)
-        }
-      }
-    })
-    items.sort(compareAgentJournalItems)
-    const stable =
-      prior?.items.length === items.length &&
-      items.every((item, index) => item === prior.items[index])
-        ? prior.items
-        : items
-    promptProjections.set(this.journal, {
-      ...cursor,
-      fence: this.liveFence,
-      items: stable,
-      dependencies
-    })
-    return stable
+    const items = attention.filter((item) => this.isCurrentItem(item.itemId))
+    promptProjections.set(this.journal, { attention, fence: this.liveFence, items })
+    return items
+  }
+
+  attentionPrompts(): AgentJournalRenderItem[] {
+    return structuredAgentSessionAttentionPrompts(this.journal, this.liveFence, (id) =>
+      this.isCurrentItem(id)
+    )
   }
 
   requestProjection(sessionId: string) {
@@ -276,11 +253,11 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   actionablePromptIds(): string[] {
-    return this.actionablePrompts().map((item) => item.itemId)
+    return this.attentionPrompts().map((item) => item.itemId)
   }
 
   hasActionablePrompt(): boolean {
-    return this.actionablePromptIds().length > 0
+    return this.actionablePrompts().length > 0
   }
 
   owesAnySend(): boolean {

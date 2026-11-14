@@ -7,7 +7,11 @@ import { journalQueuedRejectionRowBuilders } from '../submissions/journal-pendin
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
 import type { JournalOperationReceipt, JournalRowWriter } from '../writing/journal-row-writer'
-import { journalStopEventRowBuilder } from './journal-stop-and-resume-rows'
+import {
+  journalStopEventRowBuilder,
+  journalQueueResumeRowBuilder,
+  journalQueueReopenRowBuilder
+} from './journal-stop-and-resume-rows'
 
 export type JournalStopAcceptanceInput = {
   event: Omit<JournalStopEvent, 'at'>
@@ -32,10 +36,29 @@ export type JournalStopAcceptance = {
 export class JournalStopAcceptor {
   constructor(
     private readonly deps: {
-      writer: Pick<JournalRowWriter, 'enqueueRows'>
+      writer: Pick<JournalRowWriter, 'enqueueRows' | 'append'>
       state: () => JournalReducerState
     }
   ) {}
+
+  appendEvent(
+    event: Omit<JournalStopEvent, 'at'>,
+    fence: number,
+    receipt?: JournalOperationReceipt
+  ) {
+    return this.deps.writer.append(
+      journalStopEventRowBuilder(this.deps.state, event, fence),
+      receipt
+    )
+  }
+
+  appendResume(fence: number, receipt?: JournalOperationReceipt) {
+    return this.deps.writer.append(journalQueueResumeRowBuilder(this.deps.state, fence), receipt)
+  }
+
+  appendReopen(fence: number, since?: number) {
+    return this.deps.writer.append(journalQueueReopenRowBuilder(this.deps.state, fence, since))
+  }
 
   /** Rewound turns count as ended for Stop. */
   turnWasRemoved(turnId: string): boolean {

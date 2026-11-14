@@ -95,7 +95,7 @@ export function providerTimelineSettlement(
     // Background tasks/subagents outlive turns; only session end proves contact loss.
     const settled = !covered
       ? null
-      : (terminalAgentJournalBody(body, end) ??
+      : (terminalAgentJournalBody(body, end, scope === 'session') ??
         (scope === 'session' ? lostLiveWorkJournalBody(body, ending?.lostAt) : null))
     const identity = settled ? parseAgentJournalItemKey(itemId) : null
     if (settled && identity) {

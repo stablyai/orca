@@ -1,3 +1,6 @@
+import { JournalRestoreEvidence } from './journal-restore-evidence'
+import { journalHistoryAccess } from '../database/journal-history-access'
+import { hydrateJournalPersonalStops } from '../context-epochs/journal-personal-stop'
 import {
   restoreHistoricalPersonAcceptance,
   restoredJournalPersonAcceptance
@@ -37,6 +40,7 @@ export type JournalDamage = {
 
 export type JournalLoad = {
   state: JournalReducerState
+  recovery?: JournalRestoreEvidence
   /** Future row versions/kinds require an updated reader. */
   newer: { sequence: number } | null
   /** Newer content outranks adjacent damage. */
@@ -57,7 +61,11 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
 /** The read is synchronous, like main's replay: it blocks once for one chat's saved records (its
  * frozen input prefix, then each outcome key's newest record), and nothing can interleave with it.
  * Admission comes first, so a newer chat is never folded. */
-export function restoreJournal(db: Database.Database, sessionId: string): JournalLoad | null {
+export function restoreJournal(
+  db: Database.Database,
+  sessionId: string,
+  collectRecovery = false
+): JournalLoad | null {
   const epoch = readJournalSessionEpoch(db, sessionId)
   if (epoch === null) {
     return null
@@ -65,10 +73,19 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
   const empty = createJournalReducerState(sessionId, epoch, (id) =>
     journalInputAcceptance(db, sessionId, id)
   )
+  const evidence = new JournalRestoreEvidence(collectRecovery)
+  evidence.sourceIdentity = journalHistoryAccess(db)?.sourceIdentity(sessionId, true) ?? null
   try {
     const source = journalOutcomeSource(db, sessionId, epoch)
     if (!source) {
-      const loaded = foldJournalFromState(db, empty)
+      const loaded = foldJournalFromState(
+        db,
+        empty,
+        undefined,
+        undefined,
+        undefined,
+        evidence.observe
+      )
       if (!loaded.newer && !loaded.damage) {
         const personal = restoredJournalPersonAcceptance(db, loaded.state)
         const owner = journalInputOrder(loaded.state)
@@ -76,6 +93,12 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
           if (input.dispatchState === 'accepted' && personal(input)) {
             owner.seedPersonAcceptance(input.acceptedSequence ?? 0)
           }
+        }
+      }
+      if (!loaded.newer && !loaded.damage) {
+        hydrateJournalPersonalStops(db, loaded.state, null, evidence.stops, evidence.sourceIdentity)
+        if (collectRecovery) {
+          loaded.recovery = evidence
         }
       }
       return loaded
@@ -87,7 +110,8 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
         empty,
         source.prefix,
         source.marker === 5 ? 'marker5' : 'sources',
-        true
+        true,
+        evidence.observe
       )
       if (prefix.newer || prefix.damage || prefix.state.lastSequence !== source.prefix) {
         const gap = { sequence: prefix.state.lastSequence + 1, cause: 'sequence-gap' as const }
@@ -128,7 +152,8 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
     }
     restoreRetainedJournalInputs(db, state, source, prefixRevisions, acceptedPrefix)
     restoreHistoricalPersonAcceptance(db, state, source)
-    return { state, newer: null, damage: null }
+    hydrateJournalPersonalStops(db, state, source, evidence.stops, evidence.sourceIdentity)
+    return { state, newer: null, damage: null, ...(collectRecovery ? { recovery: evidence } : {}) }
   } catch (error) {
     if (error instanceof AgentSessionJournalError && error.code === 'journal_read_only') {
       return { state: empty, newer: { sequence: 1 }, damage: null }
@@ -147,10 +172,14 @@ function foldJournalFromState(
   state: JournalReducerState,
   through = Number.POSITIVE_INFINITY,
   interpretation: 'marker5' | 'sources' = 'sources',
-  deferNativeCleanup = false
+  deferNativeCleanup = false,
+  observe?: JournalRestoreEvidence['observe']
 ): JournalLoad {
   const { sessionId, epoch, lastSequence } = state
-  const fold = startJournalRowFold({ sessionId, epoch, interpretation, deferNativeCleanup }, state)
+  const fold = startJournalRowFold(
+    { sessionId, epoch, interpretation, deferNativeCleanup, observe },
+    state
+  )
   for (const entry of iterateJournalEpochRows(
     db,
     sessionId,
@@ -175,6 +204,7 @@ export function startJournalRowFold(
     untilDamage?: boolean
     interpretation?: 'marker5' | 'sources'
     deferNativeCleanup?: boolean
+    observe?: JournalRestoreEvidence['observe']
     originalAcceptance?: Parameters<typeof createJournalReducerState>[2]
   },
   state = createJournalReducerState(input.sessionId, input.epoch, input.originalAcceptance)
@@ -226,6 +256,7 @@ export function startJournalRowFold(
     } else {
       applyJournalRow(state, row, entry.ts)
     }
+    input.observe?.(row, state)
     return true
   }
   const finish = (): JournalLoad => {

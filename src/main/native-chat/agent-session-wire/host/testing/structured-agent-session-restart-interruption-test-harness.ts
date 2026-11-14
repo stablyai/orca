@@ -1,3 +1,4 @@
+import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
@@ -17,11 +18,8 @@ import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { parseAgentSessionResumeMarker } from '../../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import * as reducer from '../../../agent-session-journal/projection/journal-reducer'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from '../structured-agent-session-host-types'
-import { StructuredAgentSessionResumeAdmission } from '../../recovery/structured-agent-session-restart-resume-runner'
 import { childRecord } from '../../recovery/testing/structured-agent-session-restart-resume-test-harness'
 import {
   adapter,
@@ -58,7 +56,16 @@ export async function startAgent(state: {
 }
 
 export async function interruptedRestart(
-  work: 'turn' | 'submission' | 'send-after-reply' | 'children' | 'queued-cards' = 'turn',
+  work:
+    | 'turn'
+    | 'submission'
+    | 'send-after-reply'
+    | 'children'
+    | 'queued-cards'
+    | 'question'
+    | 'approval'
+    | 'mixed'
+    | 'waiting-children' = 'turn',
   /** What the restarted host proves about the recorded owner; gone unless a test says otherwise. */
   probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']> = async () => ({
     outcome: 'pid-absent'
@@ -68,7 +75,7 @@ export async function interruptedRestart(
 ) {
   const previous = hostTestState()
   let children: AgentChildWorkView[] = []
-  if (work === 'children') {
+  if (work === 'children' || work === 'mixed' || work === 'waiting-children') {
     serveHostTestChildWork(() => children)
   }
   await attach()
@@ -90,7 +97,7 @@ export async function interruptedRestart(
     const body = hostTestMessage('Perform the original task')
     await previous.host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
     await vi.waitFor(() => expect(previous.dispatch).toHaveBeenCalledOnce())
-  } else if (work === 'children') {
+  } else if (work === 'children' || work === 'waiting-children') {
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'settled-turn', ordinal: 1 },
       { kind: 'turn', turnId: 'settled-turn', state: 'completed' },
@@ -114,7 +121,21 @@ export async function interruptedRestart(
       ]
     })
     events.appendItem(group, roster('working'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    children = [childRecord({ id: 'child-1', kind: 'agent', description: 'Review loop 4' })]
+    const state = work === 'waiting-children' ? 'waiting' : 'working'
+    children = [childRecord({ id: 'child-1', kind: 'agent', state, description: 'Review loop 4' })]
+    previous.host.publishChildWorkEvidence(SESSION, [
+      {
+        type: 'live',
+        observedAt: NOW,
+        child: {
+          handle: { idKind: 'task_id', id: 'child-1' },
+          kind: 'agent',
+          residency: 'background',
+          state,
+          stoppable: false
+        }
+      }
+    ])
     // Match adapter close: settle child work once its transport is gone.
     previous.host.deps.adapter.closeSession = async () => {
       events.appendItem(group, roster('unverifiable'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
@@ -126,6 +147,65 @@ export async function interruptedRestart(
       { kind: 'turn', turnId: 'interrupted-turn', state: 'running' },
       { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
+  }
+  if (work === 'question' || work === 'approval' || work === 'mixed') {
+    events.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'interrupted-turn', ordinal: 2 },
+      work === 'approval'
+        ? {
+            kind: 'approval',
+            title: 'Run the command?',
+            detail: 'git status',
+            options: [
+              { id: 'allow', label: 'Allow' },
+              { id: 'deny', label: 'Deny' }
+            ],
+            resolution: {
+              state: 'pending',
+              selectedOptionId: null,
+              resolvedBy: null,
+              resolvedAt: null
+            }
+          }
+        : {
+            kind: 'question',
+            question: 'Which branch should I use?',
+            options: [{ id: 'main', label: 'Main' }],
+            resolution: {
+              state: 'pending',
+              selectedOptionId: null,
+              resolvedBy: null,
+              resolvedAt: null
+            }
+          },
+      {
+        turnScope: {
+          kind: 'turn',
+          turnItemId: agentJournalItemKey({
+            provider: 'codex',
+            threadId: THREAD,
+            turnId: 'interrupted-turn',
+            ordinal: 1
+          })
+        }
+      }
+    )
+  }
+  if (work === 'mixed') {
+    children = [childRecord({ id: 'child-1', kind: 'command', description: 'Background job' })]
+    previous.host.publishChildWorkEvidence(SESSION, [
+      {
+        type: 'live',
+        observedAt: NOW,
+        child: {
+          handle: { idKind: 'task_id', id: 'child-1' },
+          kind: 'command',
+          residency: 'background',
+          state: 'working',
+          stoppable: false
+        }
+      }
+    ])
   }
   await previous.host.flushStreamedEvents(SESSION)
   if (work === 'queued-cards') {
@@ -176,41 +256,6 @@ export async function interruptedRestart(
   return { ...hostTestState(), host, store, log, closeSession, marker, clock }
 }
 
-/** Commit/fold the only upcoming continuation submission, then throw to exercise replay. */
-export function throwAfterContinuationAccepted(): void {
-  const append = AgentSessionJournal.prototype.appendSubmission
-  vi.spyOn(AgentSessionJournal.prototype, 'appendSubmission').mockImplementation(async function (
-    this: AgentSessionJournal,
-    ...args: Parameters<AgentSessionJournal['appendSubmission']>
-  ) {
-    await append.apply(this, args)
-    throw new Error('the accepted continuation could not be answered')
-  })
-}
-
-/** Fail the continuation's fold; its row and receipt roll back before any dispatch. */
-export function continuationCannotFold(): void {
-  const fold = reducer.applyJournalRow
-  vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row) => {
-    if (row.kind === 'submission') {
-      throw new Error('the continuation could not fold')
-    }
-    fold(state, row)
-  })
-}
-
-/** The agent admits the continuation but no delivery proof arrives; only its later output can settle it. */
-export function continuationUnanswered(state: {
-  host: StructuredAgentSessionHost
-  dispatch: ReturnType<typeof hostTestState>['dispatch']
-}): void {
-  state.dispatch.mockResolvedValueOnce({ state: 'admitted' })
-  const wait = state.host.waitForSendSettlement
-  vi.spyOn(state.host, 'waitForSendSettlement').mockImplementation(async (...args) =>
-    args[2]?.until === 'handed-over' ? wait(...args) : undefined
-  )
-}
-
 export async function statusNotes(host: StructuredAgentSessionHost) {
   return notesOf((await host.journalSnapshot(SESSION)).items)
 }
@@ -234,38 +279,9 @@ export const QUIT_CUT_NOTICE = {
   tone: 'error'
 }
 
-/** Inject acceptance after reservation so the user wins; userAnswers moves the send outside the attempt. */
-export async function supersededRefusal(userAnswers?: 'before' | 'after') {
-  const { host, store, acquire, dispatch, root } = await interruptedRestart()
-  await host.restartResume.list()
-  const body = hostTestMessage('A newer task from another client')
-  const answer = () =>
-    host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
-  const send = host.send
-  const writing = vi.spyOn(host, 'send')
-  if (!userAnswers) {
-    writing.mockImplementationOnce(async (caller, params) => {
-      await answer()
-      return send(caller, params)
-    })
-  }
-  const admit = StructuredAgentSessionResumeAdmission.prototype.run
-  const admitting = vi.spyOn(StructuredAgentSessionResumeAdmission.prototype, 'run')
-  if (userAnswers) {
-    admitting.mockImplementationOnce(async function (this, ...args) {
-      await (userAnswers === 'before' ? answer() : null)
-      try {
-        return await admit.apply(this, args)
-      } finally {
-        await (userAnswers === 'after' ? answer() : null)
-      }
-    })
-  }
-  try {
-    const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
-    return { host, store, acquire, dispatch, root, result }
-  } finally {
-    writing.mockRestore()
-    admitting.mockRestore()
-  }
-}
+export {
+  throwAfterContinuationAccepted,
+  continuationCannotFold,
+  continuationUnanswered,
+  supersededRefusal
+} from './structured-agent-session-restart-fault-injection'

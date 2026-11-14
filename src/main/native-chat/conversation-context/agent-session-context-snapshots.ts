@@ -17,6 +17,11 @@ export function agentSessionContextSnapshotRoot(stateDirectory: string): string 
   return getOwnedTempStagingRoot(tmpdir(), `orca-handoff-${profile}`)
 }
 
+export function agentSessionContextSnapshotPath(stateDirectory: string, sessionId: string): string {
+  const name = createHash('sha256').update(sessionId).digest('hex')
+  return join(agentSessionContextSnapshotRoot(stateDirectory), `${name}.txt`)
+}
+
 /** One snapshot per chat, replaced on each hand-off; the OS owns temp retention. */
 export async function writeAgentSessionContextSnapshot(
   stateDirectory: string,
@@ -24,8 +29,7 @@ export async function writeAgentSessionContextSnapshot(
   text: string
 ): Promise<string> {
   const root = agentSessionContextSnapshotRoot(stateDirectory)
-  const name = createHash('sha256').update(sessionId).digest('hex')
-  const path = join(root, `${name}.txt`)
+  const path = agentSessionContextSnapshotPath(stateDirectory, sessionId)
   const temporary = `${path}.${randomUUID()}.part`
   const claim = {}
   claims.set(path, claim)

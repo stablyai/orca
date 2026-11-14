@@ -15,7 +15,7 @@ import type { SubmissionRejectionFact } from '../../../../shared/agent-session/f
 export type StructuredAgentSessionStopEnding =
   | { recorded: 'user-stop'; observeClose?: AgentSessionCloseObserver }
   | {
-      cause: Exclude<StructuredAgentSessionStopCause, 'user-stop'>
+      cause: Exclude<StructuredAgentSessionStopCause, 'user-stop'> | 'workspace-sleep'
       reason?: string
       failure?: SubmissionRejectionFact
       quit?: AgentSessionResumeTrigger
@@ -96,6 +96,9 @@ export function recordStopEvent(
     session.journal,
     session
   ).activeTurnId()
+  if (ending.cause === 'workspace-sleep') {
+    return Promise.resolve(session.journal.stopMarks.beginQuietClose(context.now(), turnId))
+  }
   return session.journal
     .appendStopEvent({ reason: ending.cause, ...(turnId !== null ? { turnId } : {}) }, fence)
     .then(

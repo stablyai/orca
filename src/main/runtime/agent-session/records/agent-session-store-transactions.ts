@@ -1,6 +1,7 @@
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
+import type { JournalWriteAdmission } from '../../../native-chat/agent-session-journal/writing/journal-write-queue'
 import { journalOpenRefusalError } from '../../../native-chat/agent-session-journal/replay/journal-open-failure'
 import { AgentSessionJournalError } from '../../../native-chat/agent-session-journal/writing/journal-write-guards'
 import {
@@ -11,7 +12,10 @@ import {
   insertAgentSessionOperationRowsIfAbsent,
   writeAgentSessionStoreRows
 } from './agent-session-record-rows'
-import { readCommandReceipt } from '../../../native-chat/agent-session-journal/writing/command-receipt-table'
+import {
+  discoverTaggedSendReceipts,
+  readCommandReceipt
+} from '../../../native-chat/agent-session-journal/writing/command-receipt-table'
 import type { CommandReceiptScope } from '../../../native-chat/agent-session-journal/writing/command-receipt-schema'
 import {
   agentSessionRuntimeIncarnation,
@@ -151,6 +155,10 @@ export class AgentSessionStoreTransactions {
     return readCommandReceipt(this.journalDatabase.db, scope, operationId)
   }
 
+  discoverTaggedSendReceipts(targets: Parameters<typeof discoverTaggedSendReceipts>[1]) {
+    return discoverTaggedSendReceipts(this.journalDatabase.db, targets)
+  }
+
   /** Mutate only the draft. Newer databases refuse writes; inMemoryWhenReadOnly permits startup-derived verdicts. */
   transact<T>(
     apply: (draft: AgentSessionStoreState) => T,
@@ -169,11 +177,12 @@ export class AgentSessionStoreTransactions {
     let staged: StagedStoreTransaction<void> | null = null
     let admitted: string | undefined
     return {
-      write: (db, row) => {
+      write: (db, row, submission) => {
         if (this.journalDatabase.readOnly) {
           throw readOnlyStoreRefusal()
         }
-        admitted = row?.kind === 'submission' ? options.submissionSessionId : undefined
+        const accepted = submission ?? (row?.kind === 'submission' ? row : undefined)
+        admitted = accepted ? options.submissionSessionId : undefined
         const transaction = this.journalDatabase.transactionNumber
         const base = this.staged?.transaction === transaction ? this.staged.draft : this.published
         // The ledger and wake share one draft as well as one commit.
@@ -221,11 +230,15 @@ export class AgentSessionStoreTransactions {
   }
 
   /** Commit a receipt separately when its command made no journal write. */
-  commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
-    const run = this.queue.then(() => {
+  commitReceipt(
+    receipt: JournalOperationReceipt,
+    admission?: JournalWriteAdmission
+  ): Promise<void> {
+    const write = () => {
       this.journalDatabase.transaction((db) => receipt.write(db))
       receipt.committed()
-    })
+    }
+    const run = this.queue.then(() => (admission ? admission(write) : write()))
     this.queue = run.catch(() => {})
     return run
   }

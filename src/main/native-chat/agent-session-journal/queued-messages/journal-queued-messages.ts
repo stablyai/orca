@@ -1,3 +1,5 @@
+import { writeJournalQueueChanges } from './journal-queue-change-writer'
+import type { JournalWriteAdmission } from '../writing/journal-write-queue'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import {
   journalInputAttemptEnded,
@@ -129,7 +131,8 @@ export class JournalQueuedMessages {
       holdReason?: QueuedMessageHoldReason
       options?: AgentSessionExecutionOptions
     },
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    admission?: JournalWriteAdmission
   ): Promise<QueuedMessageRow> {
     const { messageId, body } = input
     const claims = journalAttachmentClaimReceipt((db) =>
@@ -155,7 +158,8 @@ export class JournalQueuedMessages {
         }
         return { changes: [{ messageId, change }], result: undefined }
       },
-      composeJournalOperationReceipts(claims, ...(receipt ? [receipt] : []))
+      composeJournalOperationReceipts(claims, ...(receipt ? [receipt] : [])),
+      admission
     ).then(() => {
       const card = this.get(messageId)
       if (!card) {
@@ -296,35 +300,17 @@ export class JournalQueuedMessages {
     )
   }
 
-  /** Resolve after preceding writes; commit receipts with changed rows and skip empty plans. */
   private write<T>(
     plan: () => { changes: readonly JournalQueueCardChange[]; result: T },
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    admission?: JournalWriteAdmission
   ): Promise<T> {
-    let planned: { result: T; plan: JournalQueuePlan } | undefined
-    return this.deps.writer
-      .enqueueRows(
-        () => {
-          const next = plan()
-          planned = { result: next.result, plan: this.plan(next.changes) }
-          return planned.plan.rows
-        },
-        {
-          write: (db, row) => {
-            planned?.plan.receipt.write(db, row)
-            receipt?.write(db, row)
-          },
-          committed: () => {
-            planned?.plan.receipt.committed()
-            receipt?.committed()
-          }
-        }
-      )
-      .then(() => {
-        if (!planned) {
-          throw new Error('agent_session_queue_write_unplanned')
-        }
-        return planned.result
-      })
+    return writeJournalQueueChanges(
+      this.deps.writer,
+      (changes) => this.plan(changes),
+      plan,
+      receipt,
+      admission
+    )
   }
 }

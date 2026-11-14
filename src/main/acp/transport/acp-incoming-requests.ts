@@ -5,6 +5,13 @@ import type { AcpPeerHandlers } from './acp-json-rpc-peer'
 
 const cancelRequestSchema = z.looseObject({ requestId: z.union([z.string(), z.number()]) })
 
+/** Transport disposal releases callbacks; it is not a provider withdrawal. */
+export class AcpIncomingRequestClosedError extends Error {
+  constructor(cause: Error) {
+    super('ACP request transport closed', { cause })
+  }
+}
+
 type OpenRequest = {
   controller: AbortController
   abandon: () => void
@@ -26,7 +33,7 @@ export class AcpIncomingRequests {
   close(error: Error): void {
     for (const request of this.open.values()) {
       request.closed = true
-      request.controller.abort(error)
+      request.controller.abort(new AcpIncomingRequestClosedError(error))
       request.abandon()
     }
     this.open.clear()

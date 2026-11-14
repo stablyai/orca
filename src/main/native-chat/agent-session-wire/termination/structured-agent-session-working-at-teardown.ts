@@ -167,6 +167,7 @@ export function structuredAgentSessionWorkingAtStop(input: {
   childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   /** Include unrecorded live work rejected by bounded storage. */
   childWorkOpen: (sessionId: string) => boolean
+  childWorkAutonomous?: (sessionId: string) => boolean
   trigger: AgentSessionResumeTrigger
   teardownId: string
   now: number
@@ -216,8 +217,15 @@ export function structuredAgentSessionWorkingAtStop(input: {
     session.child.fence,
     scope
   )
-  // Unrecorded helpers still count as resumable work.
-  if (status.state === 'done' && !input.childWorkOpen(sessionId)) {
+  // Raw lifetimes include undisplayed work; waiting children alone do not need a model turn.
+  const autonomous = input.childWorkAutonomous?.(sessionId) ?? input.childWorkOpen(sessionId)
+  const execution = structuredAgentSessionShownStatus(
+    { items: current.items, submissions: handedOver },
+    childWork,
+    session.child.fence,
+    { isCurrentItem: scope.isCurrentItem, owesSend: scope.owesSend }
+  )
+  if (execution.mainAgent.state !== 'working' && !autonomous) {
     return null
   }
   const work = structuredAgentSessionResumeWork(current.items, handedOver, scope)

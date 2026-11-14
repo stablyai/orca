@@ -5,6 +5,7 @@ import { AgentSessionJournalError } from './journal-write-guards'
 /** Async bodies could interleave sequence assignment and commits. */
 export type JournalWriteResult<T> = T extends PromiseLike<unknown> ? never : T
 export type JournalWriteBody<T> = () => JournalWriteResult<T>
+export type JournalWriteAdmission = <T>(write: JournalWriteBody<T>) => Promise<T>
 
 /** Idle writes commit synchronously; reentrant/waiting writes queue. Admission remains valid after close. */
 export class JournalWriteQueue {
@@ -20,9 +21,36 @@ export class JournalWriteQueue {
     this.closed = true
   }
 
-  serialize<T>(run: JournalWriteBody<T>): Promise<T> {
+  serialize<T>(
+    run: JournalWriteBody<T>,
+    admission?: JournalWriteAdmission,
+    published?: () => void
+  ): Promise<T> {
     if (this.closed) {
       return Promise.reject(this.closedError())
+    }
+    if (admission) {
+      // Own the FIFO position before admission; no SQLite transaction spans its await.
+      return this.join(() =>
+        admission(run).then(
+          (value) => {
+            published?.()
+            return value
+          },
+          (error: unknown) => {
+            try {
+              published?.()
+            } catch (publicationError) {
+              throw new AggregateError(
+                [error, publicationError],
+                'journal admission failed before publication completed',
+                { cause: error }
+              )
+            }
+            throw error
+          }
+        )
+      )
     }
     return this.lineBusy ? this.join(run) : this.runNow(run)
   }
@@ -68,7 +96,7 @@ export class JournalWriteQueue {
     return result
   }
 
-  private join<T>(run: () => T): Promise<T> {
+  private join<T>(run: () => T | PromiseLike<T>): Promise<T> {
     const started = this.writes.then(run)
     this.writes = started.catch(() => undefined)
     this.waiting++

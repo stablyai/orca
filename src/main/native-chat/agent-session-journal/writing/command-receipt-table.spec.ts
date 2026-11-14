@@ -12,7 +12,11 @@ import {
   type CommandReceipt,
   type CommandReceiptScope
 } from './command-receipt-schema'
-import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
+import {
+  discoverTaggedSendReceipts,
+  insertCommandReceiptIfAbsent,
+  readCommandReceipt
+} from './command-receipt-table'
 import {
   commandReceiptFixture,
   writeCommandReceiptTestRecord
@@ -141,6 +145,36 @@ export function registerCommandReceiptTableTests(): void {
   })
 
   describe('unreadable command receipts', () => {
+    it('does not accept a tagged send when a colliding caller receipt is malformed', () => {
+      const operationId = '1794600000000-0123456789abcdef0123456789abcdef'
+      const earlier = { ...cancelReceipt('caller-a'), operationId }
+      insert(earlier, commandReceiptScope(earlier.callerKey))
+      const send = commandReceiptFixture({ operationId, callerKey: 'caller-b' })
+      insert(send, commandReceiptScope(send.callerKey))
+      database.db
+        .prepare("UPDATE agent_session_command_receipts SET result_json = '{' WHERE caller_key = ?")
+        .run(earlier.callerKey)
+      expect(
+        discoverTaggedSendReceipts(database.db, [
+          { sessionId: 'session-1', tag: '0123456789abcdef' }
+        ]).get('session-1')
+      ).toEqual({
+        verdict: 'readable',
+        attempts: [{ verdict: 'unreadable', scope: globalScope, operationId }]
+      })
+    })
+
+    it('keeps tagged discovery unreadable when a receipt column is unavailable', () => {
+      database.db.exec(
+        'ALTER TABLE agent_session_command_receipts RENAME COLUMN result_json TO future_result_json'
+      )
+      expect(
+        discoverTaggedSendReceipts(database.db, [
+          { sessionId: 'session-1', tag: '0123456789abcdef' }
+        ]).get('session-1')
+      ).toEqual({ verdict: 'unreadable' })
+    })
+
     it('treats a malformed rejection as unreadable rather than granting another execution', () => {
       const receipt = commandReceiptFixture()
       insert(receipt)

@@ -55,7 +55,9 @@ export function structuredAutomaticMailWaits(
   cards.ensure(journal.queuedMessages.inputState())
   return Boolean(
     cards.failureHolds() ||
-    (work?.hasActionablePrompt() && !pendingPromptsAllUnanswerableHere(work.actionablePrompts()))
+    (work &&
+      work.attentionPrompts().length > 0 &&
+      !pendingPromptsAllUnanswerableHere(work.attentionPrompts()))
   )
 }
 

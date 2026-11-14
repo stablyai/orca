@@ -10,4 +10,7 @@ export const fields = {
   queuePauseMarks: outcomeFormat3PauseMarks,
   inputEntries: z.array(z.tuple([z.string().min(1), inputEntrySchema])),
   inputCards: z.array(z.tuple([z.string().min(1), inputCardSchema]))
-} satisfies Record<Exclude<keyof JournalReducerState, 'inputs'>, z.ZodType>
+} satisfies Record<
+  Exclude<keyof JournalReducerState, 'inputs' | 'personalStops' | 'quietTurnEnd'>,
+  z.ZodType
+>

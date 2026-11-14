@@ -103,7 +103,6 @@ export function answerAcpPermission(
     return Promise.resolve(cancelled)
   }
   return new Promise((resolve) => {
-    const controller = new AbortController()
     let settled = false
     const finish = (response: RequestPermissionResponse, problem?: string): void => {
       if (settled) {
@@ -111,7 +110,6 @@ export function answerAcpPermission(
       }
       settled = true
       context.signal.removeEventListener('abort', onAbort)
-      controller.abort()
       if (problem) {
         diagnose(`Answered ACP permission request cancelled: ${problem}`)
       }
@@ -120,7 +118,7 @@ export function answerAcpPermission(
     const onAbort = (): void => finish(cancelled)
     context.signal.addEventListener('abort', onAbort, { once: true })
     void Promise.resolve()
-      .then(() => handler(request, { id: context.id, signal: controller.signal }))
+      .then(() => handler(request, context))
       .then(
         (response) => {
           const parsed = RequestPermissionResponseSchema.safeParse(response)

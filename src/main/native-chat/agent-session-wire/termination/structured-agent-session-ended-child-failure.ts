@@ -16,6 +16,7 @@ function providerEndFailure(
 const ENDED_CHILD_FAILURE = {
   'user-stop': () => null,
   'user-close': () => null,
+  'workspace-sleep': () => null,
   'context-clear': () => null,
   // Host Stop is Orca’s action, not a provider failure.
   'host-stop': (ended) => ({ failure: ended.failure ?? agentSessionFailureFact('hostStopped') }),

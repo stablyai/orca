@@ -134,6 +134,10 @@ export class StructuredAgentSessionStatusOwnership {
     return this.open.hasOpen(sessionId)
   }
 
+  childWorkAutonomous(sessionId: string): boolean {
+    return this.open.hasAutonomous(sessionId)
+  }
+
   /** Includes provider work rejected by display storage. */
   childWorkIncomplete(sessionId: string): boolean {
     const open = this.open.handles(sessionId)

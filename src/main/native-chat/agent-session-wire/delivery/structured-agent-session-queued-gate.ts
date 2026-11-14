@@ -1,3 +1,4 @@
+import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
@@ -62,7 +63,13 @@ export function nextStructuredQueuedMessage(
     return null
   }
   const selected = selectStructuredAgentSessionInput(input.journal, undefined, false, steer)
-  return selected.kind === 'card' && (!steer || input.canSteer?.(selected.card) === true)
+  return selected.kind === 'card' &&
+    !(
+      orchestrationMailNotice(selected.card.body.from) &&
+      input.work.attentionPrompts().length > 0 &&
+      !pendingPromptsAllUnanswerableHere(input.work.attentionPrompts())
+    ) &&
+    (!steer || input.canSteer?.(selected.card) === true)
     ? selected.card
     : null
 }
@@ -83,6 +90,12 @@ export function shouldQueueStructuredAgentSessionSend(
     return true
   }
   if (input.fromAgent) {
+    if (
+      input.work.attentionPrompts().length > 0 &&
+      !pendingPromptsAllUnanswerableHere(input.work.attentionPrompts())
+    ) {
+      return true
+    }
     // Only the person's own send recovers a failed turn; another agent's message waits held with the rest.
     const state = input.journal.queuedMessages.inputState()
     const cards = journalInputOrder(state).cards

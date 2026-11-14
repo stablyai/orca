@@ -15,7 +15,7 @@ export type StructuredAgentSessionRestartOfferRecords = {
 }
 
 export function createStructuredAgentSessionRestartOfferRecords(deps: {
-  capsule?: Pick<AgentSessionRecoveryCapsule, 'list' | 'forgetSuperseded'>
+  capsule?: Pick<AgentSessionRecoveryCapsule, 'list' | 'forgetWitnesses'>
   readFailedMarkers: () => Promise<AgentSessionResumeMarker[]>
   hasSession: (sessionId: string) => boolean
   reveal: (sessionId: string) => Promise<void>
@@ -63,12 +63,8 @@ export function createStructuredAgentSessionRestartOfferRecords(deps: {
       if (!capsule || superseded.length === 0) {
         return
       }
-      const gone = superseded.map((marker) => ({
-        sessionId: marker.sessionId,
-        recordedAt: marker.recordedAt
-      }))
       void deps
-        .enqueue(() => capsule.forgetSuperseded(gone, deps.now()))
+        .enqueue(() => capsule.forgetWitnesses(superseded, deps.now()))
         .catch(() => {
           deps.logger.warn('pruning superseded restart offers failed', {
             scope: 'restart-offer-prune'

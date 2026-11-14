@@ -17,7 +17,8 @@ export type StructuredAgentSessionRestartJournalSource = { journal: AgentSession
 
 export type StructuredAgentSessionRestartCandidateReader = (
   markers: readonly AgentSessionResumeMarker[],
-  leaseState: 'must-be-released' | 'may-be-held'
+  leaseState: 'must-be-released' | 'may-be-held',
+  movedOn?: (marker: AgentSessionResumeMarker) => boolean | 'unknown'
 ) => StructuredAgentSessionResumableSet
 
 export function createStructuredAgentSessionRestartCandidateReader(deps: {
@@ -26,15 +27,15 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   adapter: StructuredAgentSessionAdapter
   agents: Pick<StructuredAgentRegistry, 'definition'>
-  movedOn: (marker: AgentSessionResumeMarker) => boolean
+  movedOn: (marker: AgentSessionResumeMarker) => boolean | 'unknown'
   savedByNewerOrca: (sessionId: string) => boolean
 }): StructuredAgentSessionRestartCandidateReader {
-  return (markers, leaseState) =>
+  return (markers, leaseState, movedOn = deps.movedOn) =>
     structuredAgentSessionResumableSet({
       markers,
       getRecord: deps.getRecord,
       supportsRecord: (record) => hostCanStartRecord(deps, record),
-      movedOn: deps.movedOn,
+      movedOn,
       savedByNewerOrca: deps.savedByNewerOrca,
       latestPrompt: (sessionId) => {
         const session = deps.sessions.get(sessionId)
@@ -44,6 +45,30 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
       },
       leaseState
     })
+}
+
+/** Cancellation and retryability share one observation inside a synchronous failure evaluation. */
+export function failureEvaluator(
+  personalStop: (marker: AgentSessionResumeMarker) => boolean | 'unknown',
+  derive: StructuredAgentSessionRestartCandidateReader,
+  withdrawal: {
+    movedOnWithPersonalStop: (
+      marker: AgentSessionResumeMarker,
+      stopped: boolean
+    ) => boolean | 'unknown'
+  }
+): (marker: AgentSessionResumeMarker) => { cancelled: boolean; retryable: boolean } {
+  return (marker) => {
+    const stopped = personalStop(marker)
+    return {
+      cancelled: stopped === true,
+      retryable:
+        stopped === false &&
+        derive([marker], 'may-be-held', (selected) =>
+          withdrawal.movedOnWithPersonalStop(selected, stopped)
+        ).candidates.length === 1
+    }
+  }
 }
 
 /** Listing skips newer chats; pre-send must retain them so refused sends preserve their offers. */

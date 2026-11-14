@@ -2,15 +2,16 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import { insertJournalRow } from '../durable-rows/journal-row-table'
 import type { JournalHostDatabase } from '../database/journal-host-database'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalRow } from '../durable-rows/journal-row-schema'
+import type { JournalRow, JournalSubmissionRow } from '../durable-rows/journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
-import type { JournalWriteBody } from './journal-write-queue'
+import type { JournalWriteBody, JournalWriteAdmission } from './journal-write-queue'
 import type Database from '../../../sqlite/sync-database'
 
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
+  validate?: (db: Database.Database) => void
   fold?: (draft: JournalReducerState) => void
-  write: (db: Database.Database, row?: JournalRow) => void
+  write: (db: Database.Database, row?: JournalRow, submission?: JournalSubmissionRow) => void
   committed: () => void
 }
 
@@ -22,8 +23,10 @@ export function composeJournalOperationReceipts(
   ...receipts: JournalOperationReceipt[]
 ): JournalOperationReceipt {
   return {
+    validate: (db) => receipts.forEach((receipt) => receipt.validate?.(db)),
     fold: (draft) => receipts.forEach((receipt) => receipt.fold?.(draft)),
-    write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
+    write: (db, row, submission) =>
+      receipts.forEach((receipt) => receipt.write(db, row, submission)),
     committed: () => receipts.forEach((receipt) => receipt.committed())
   }
 }
@@ -45,7 +48,11 @@ export function writeReceiptIfChanged<T>(
 export type JournalRowWriterDeps = {
   sessionId: string
   now: () => number
-  serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
+  serialize: <T>(
+    run: JournalWriteBody<T>,
+    admission?: JournalWriteAdmission,
+    published?: () => void
+  ) => Promise<T>
   database: () => JournalHostDatabase
   readOnly: () => boolean
   highestFence: () => number
@@ -77,6 +84,7 @@ export class JournalRowWriter {
       const inputChanged = Boolean(receipt) || !this.outputOnly([row])
       this.deps.database().transaction(
         (db) => {
+          receipt?.validate?.(db)
           if (!this.deps.prepare) {
             insertJournalRow(db, this.deps.sessionId, row, savedAt)
           }
@@ -96,16 +104,33 @@ export class JournalRowWriter {
   enqueueRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
     receipt?: JournalReceiptPreparation,
-    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
+    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined,
+    admission?: JournalWriteAdmission
   ): Promise<JournalRow[]> {
-    return this.deps.serialize(() => this.writeRows(plan, receipt, receiptRow))
+    let publish: (() => void) | undefined
+    return this.deps.serialize(
+      () =>
+        this.writeRows(
+          plan,
+          receipt,
+          receiptRow,
+          admission
+            ? (run) => {
+                publish = run
+              }
+            : undefined
+        ),
+      admission,
+      () => publish?.()
+    )
   }
 
   /** Caller must already own the write lane. */
   writeRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
     prepareReceipt?: JournalReceiptPreparation,
-    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
+    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined,
+    afterAdmission?: (publish: () => void) => void
   ): JournalRow[] {
     assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
     const first = this.deps.nextSequence()
@@ -121,6 +146,7 @@ export class JournalRowWriter {
     const inputChanged = Boolean(receipt) || !this.outputOnly(rows)
     this.deps.database().transaction(
       (db) => {
+        receipt?.validate?.(db)
         if (!this.deps.prepare) {
           for (const row of rows) {
             insertJournalRow(db, this.deps.sessionId, row, ts)
@@ -133,7 +159,12 @@ export class JournalRowWriter {
       (adopt) => adopt?.()
     )
     receipt?.committed()
-    this.deps.commit(rows, ts, inputChanged)
+    const publish = () => this.deps.commit(rows, ts, inputChanged)
+    if (afterAdmission) {
+      afterAdmission(publish)
+    } else {
+      publish()
+    }
     return this.project(rows)
   }
 

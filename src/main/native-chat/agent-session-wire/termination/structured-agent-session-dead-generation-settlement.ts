@@ -132,7 +132,8 @@ export function planStructuredAgentSessionDeadGeneration(
   for (const item of items) {
     // Calls inherit turn outcomes; open reasoning ends without adding duplicate unfinished-work evidence.
     const end = runningCallEnd(item.turnScope, (id) => bodies.get(id), input.verdict.state)
-    const terminal = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
+    const terminal =
+      endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end, true)
     const body = lostLiveWorkJournalBody(terminal ?? item.body) ?? terminal
     if (body) {
       mutations.push({

@@ -49,6 +49,40 @@ afterEach(async () => {
 })
 
 describe('Pi host awaited open', () => {
+  it('retains a recorded pending dialog when its provider process closes', async () => {
+    const h = await setup()
+    const dialog = readFileSync(new URL('./__fixtures__/dialogs.jsonl', import.meta.url), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(JSON.parse(line).raw))
+      .find((frame) => frame.type === 'extension_ui_request' && frame.method === 'confirm')
+    expect(dialog).toBeDefined()
+    h.connection.receive(dialog)
+    await vi.waitFor(async () =>
+      expect(await h.rig.rows()).toContainEqual(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            kind: 'approval',
+            resolution: expect.objectContaining({ state: 'pending' })
+          })
+        })
+      )
+    )
+    expect(await h.adapter.closeSession(sessionId)).toBe(true)
+    await h.adapter.drainObservedExits()
+    expect(await h.rig.rows()).toContainEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          kind: 'approval',
+          resolution: expect.objectContaining({ state: 'pending' })
+        })
+      })
+    )
+    expect(h.connection.sent).not.toContainEqual(
+      expect.objectContaining({ type: 'extension_ui_response', cancelled: true })
+    )
+  })
+
   it('opens on Pi state received after the transport default would expire', async () => {
     const h = await setup()
     vi.useFakeTimers()

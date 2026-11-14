@@ -32,7 +32,7 @@ export const journalStateLayout = {
   contextBoundary: 'scalar',
   inputs: 'prepared'
 } as const satisfies Record<
-  keyof JournalReducerState,
+  Exclude<keyof JournalReducerState, 'personalStops' | 'quietTurnEnd'>,
   'scalar' | 'items' | 'map' | 'set' | 'queue' | 'prepared'
 >
 

@@ -1,3 +1,4 @@
+import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import { seedSavedStructuredSessionTabs } from '../observations/structured-agent-session-saved-status'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -16,7 +17,8 @@ export async function setStructuredAgentSessionTabVisibility(
           visible: boolean,
           tabId?: string,
           check?: () => void,
-          capture?: (tabId: string | null) => void
+          capture?: (tabId: string | null) => void,
+          commit?: (receipt: JournalOperationReceipt) => Promise<unknown>
         ) => Promise<void>
       }
       onSessionTabHidden?: (sessionId: string, tabId?: string) => void
@@ -27,10 +29,11 @@ export async function setStructuredAgentSessionTabVisibility(
   visible: boolean,
   tabId?: string,
   check?: () => void,
-  capture?: (tabId: string | null) => void
+  capture?: (tabId: string | null) => void,
+  commit?: (receipt: JournalOperationReceipt) => Promise<unknown>
 ): Promise<void> {
-  await (check || capture
-    ? host.deps.store.setSessionTabVisibility(sessionId, visible, tabId, check, capture)
+  await (check || capture || commit
+    ? host.deps.store.setSessionTabVisibility(sessionId, visible, tabId, check, capture, commit)
     : host.deps.store.setSessionTabVisibility(sessionId, visible, tabId))
   if (!visible) {
     void host.restartResume.dismiss([sessionId]).catch(() => {
@@ -76,8 +79,10 @@ export function createStructuredAgentSessionTabSurface(
     StructuredAgentSessionClientDelivery,
     'forgetStatus' | 'publishStatus' | 'publishSavedStatusGroup'
   >,
-  recover: (ids: readonly string[]) => Promise<void>
+  recover: (ids: readonly string[]) => Promise<void>,
+  recoveryHider?: Parameters<typeof createRestartTabHider>[0]
 ) {
+  const hideRecovery = recoveryHider ? createRestartTabHider(recoveryHider) : undefined
   return {
     listSessionTabs: (): StructuredAgentSessionTab[] =>
       host.deps.store.listVisibleSessionIds().flatMap((sessionId) => {
@@ -121,17 +126,20 @@ export function createStructuredAgentSessionTabSurface(
       }
     ): Promise<void> => {
       let actualId: string | null = null
-      await setStructuredAgentSessionTabVisibility(
-        host,
-        sessionId,
-        visible,
-        tabId,
-        options?.check,
-        (id) => {
-          actualId = id
-          options?.capture?.(id)
-        }
-      )
+      const write = (commit?: (receipt: JournalOperationReceipt) => Promise<unknown>) =>
+        setStructuredAgentSessionTabVisibility(
+          host,
+          sessionId,
+          visible,
+          tabId,
+          options?.check,
+          (id) => {
+            actualId = id
+            options?.capture?.(id)
+          },
+          commit
+        )
+      await (!visible && hideRecovery ? hideRecovery(sessionId, write) : write())
       if (!visible) {
         if (!options?.deferHiddenNotice) {
           notifyTabHidden(host, sessionId, actualId ?? undefined)
@@ -160,4 +168,36 @@ function notifyTabHidden(
       error
     })
   }
+}
+
+export function createRestartTabHider(input: {
+  serialize: <T>(id: string, apply: () => Promise<T>) => Promise<T>
+  hasUnaccepted: (id: string) => boolean
+  open: (id: string) => Promise<{
+    journal: {
+      appendStopEvent: (
+        event: { reason: 'user-close' },
+        fence: number,
+        receipt: JournalOperationReceipt
+      ) => Promise<unknown>
+    }
+  } | null>
+  fence: (id: string) => number
+}): (
+  id: string,
+  hide: (commit?: (receipt: JournalOperationReceipt) => Promise<unknown>) => Promise<void>
+) => Promise<void> {
+  return (id, hide) =>
+    input.serialize(id, async () => {
+      if (!input.hasUnaccepted(id)) {
+        return hide()
+      }
+      const session = await input.open(id)
+      if (!session) {
+        return hide()
+      }
+      return hide((receipt) =>
+        session.journal.appendStopEvent({ reason: 'user-close' }, input.fence(id), receipt)
+      )
+    })
 }
