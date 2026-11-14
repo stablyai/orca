@@ -311,7 +311,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         sendMessage: submission.send
       })
 
-    const interrupt = useNativeChatComposerInterrupt({
+    const { interrupt, confirmEscape } = useNativeChatComposerInterrupt(draftScopeKey, draft, {
       inert: inputOwnedByCard,
       cancelPendingSends,
       isWorking,
@@ -332,7 +332,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         ? chooseEditItem
         : goalMode.interceptPick(orcaCommands.interceptPick(dispatchPickerCommand)),
       dismissPicker: dismiss,
-      interrupt: editSession?.cancel ?? interrupt,
+      interrupt: editSession?.cancel ?? confirmEscape,
       send,
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && steerHead ? { steerHead } : {}),

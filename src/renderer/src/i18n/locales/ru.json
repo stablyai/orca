@@ -20041,6 +20041,7 @@
         "forkedFrom": "Ответвление от"
       },
       "composer": {
+        "confirmEscapeStop": "Нажмите Esc ещё раз, чтобы остановить",
         "planMode": "Планирование",
         "send": "Отправить",
         "alternateSteerHint": "{{shortcut}}, чтобы направить",
