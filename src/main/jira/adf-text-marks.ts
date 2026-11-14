@@ -1,10 +1,10 @@
-import type { PhrasingContent } from 'mdast'
+import type { Literal, PhrasingContent } from 'mdast'
 import { findProseUrlEnd } from '../../shared/prose-url-boundary'
 import { bareEmailSpans } from './adf-bare-email'
 import { escapeMarkdownTextLinkDestination } from './adf-media-destination'
 import { adfChildren, adfRecord, adfString } from './adf-nodes'
 
-export type JiraMediaMarkdown = { type: 'jiraMedia'; value: string }
+export type JiraMediaMarkdown = Literal & { type: 'jiraMedia'; value: string }
 declare module 'mdast' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Module augmentation requires declaration merging.
   interface RootContentMap {

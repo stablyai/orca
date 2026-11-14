@@ -258,7 +258,10 @@ it('bounds real email character reads through document read-back at N and 10N', 
     const fixtures = [
       { value: 'A'.repeat(length), expected: 'A'.repeat(length) },
       { value: `${'a'.repeat(length - 2)}@x`, expected: `${'a'.repeat(length - 2)}\\@x` },
-      { value: '@a. '.repeat(length / 4), expected: '@a. '.repeat(length / 4).trimEnd() },
+      {
+        value: `${'@a. '.repeat(length / 4 - 1)}@a.x`,
+        expected: `${'@a. '.repeat(length / 4 - 1)}@a.x`
+      },
       {
         value: 'me@example.com '.repeat(addresses) + 'a'.repeat(length % 15),
         expected: '<me@example.com> '.repeat(addresses) + 'a'.repeat(length % 15)

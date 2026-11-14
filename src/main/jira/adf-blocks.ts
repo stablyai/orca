@@ -77,7 +77,7 @@ function blockNode(value: unknown, media: MediaRenderer): BlockContent[] {
         }
       ]
     case 'listItem':
-      return listItem(node, media).children
+      return children()
     case 'codeBlock':
       return [
         {
