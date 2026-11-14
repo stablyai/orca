@@ -27,6 +27,8 @@ export function registerPlanBillingMenuItem(): () => void {
       icon: CreditCard,
       order: 11,
       requiredCapability: BILLING_CAPABILITY,
+      // The console's billing page is owners and admins only; don't offer members a dead end.
+      requiresTeamAdmin: true,
       onSelect: () => void openCloudConsole('billing')
     })
   let disposeBilling: (() => void) | null = registerBilling()
@@ -59,6 +61,7 @@ export function registerPlanBillingMenuItem(): () => void {
         order: 9,
         tone: 'accent',
         requiredCapability: BILLING_CAPABILITY,
+        requiresTeamAdmin: true,
         onSelect: () => void openCloudConsole('billing')
       })
     } else if (!show && disposeUpgrade) {

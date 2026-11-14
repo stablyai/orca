@@ -13,7 +13,11 @@ import {
 } from '@/lib/orca-cloud/cloud-wake-process-hints'
 import { cloudWokeActionFor, runCloudWokeAction } from '@/lib/orca-cloud/cloud-wake-hint-action'
 
-vi.mock('../cloud-workspace-actions', () => ({ wakeCloudWorkspace: vi.fn() }))
+const actions = vi.hoisted(() => ({ wake: vi.fn(), unarchive: vi.fn() }))
+vi.mock('../cloud-workspace-actions', () => ({
+  wakeCloudWorkspace: actions.wake,
+  runUnarchiveCloudWorkspace: actions.unarchive
+}))
 vi.mock('@/i18n/use-translate', () => ({
   useTranslate: () => (_key: string, fallback: string, params?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_slot: string, name: string) =>
@@ -52,6 +56,26 @@ describe('CloudAsleepTerminalNotice', () => {
     const divider = container.querySelector<HTMLElement>('[data-cloud-asleep-divider]')
     expect(divider?.style.top).toBe('44px')
     expect(divider?.className).toContain('absolute')
+  })
+
+  // END-PASS n64 P3: an archived workspace's bar said "asleep" and offered Wake.
+  it('says archived and offers Unarchive, not Wake, for an archived workspace', () => {
+    const { container } = render(
+      <CloudAsleepTerminalNotice
+        workspaceId="ws"
+        asleepSince={Date.UTC(2026, 10, 10, 15, 10)}
+        archived
+      />
+    )
+    expect(container.textContent).toContain('This workspace is archived.')
+    expect(container.textContent).not.toMatch(/asleep/i)
+    expect(container.querySelector('[data-cloud-asleep-divider]')?.textContent).toMatch(
+      /^Archived since /
+    )
+    expect(screen.queryByRole('button', { name: /Wake/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Unarchive/ }))
+    expect(actions.unarchive).toHaveBeenCalledWith('ws')
+    expect(actions.wake).not.toHaveBeenCalled()
   })
 
   it('omits the divider when the sleep time is unknown', () => {

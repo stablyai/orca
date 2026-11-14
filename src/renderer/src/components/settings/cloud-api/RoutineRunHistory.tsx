@@ -12,6 +12,7 @@ import type {
 import {
   cloudApiErrorCopy,
   describeRoutineRunError,
+  isRoutineRunAgentSignInFailure,
   routineRunTriggerLabel
 } from './cloud-api-copy'
 import { formatAbsoluteTime, formatRelativeFromNow, formatRunDuration } from './cloud-api-format'
@@ -310,10 +311,12 @@ function RunRow({
           )}
         </span>
       </div>
-      {run.result?.summary ? (
+      {/* Claude's raw "Not logged in · Please run /login" gives way to how to set it up (n64 P3). */}
+      {run.result?.summary &&
+      !(run.error && isRoutineRunAgentSignInFailure(run.error, run.result.summary)) ? (
         <p className="line-clamp-2 text-xs text-muted-foreground">{run.result.summary}</p>
       ) : null}
-      {run.error ? <RunFailure error={run.error} /> : null}
+      {run.error ? <RunFailure error={run.error} summary={run.result?.summary ?? null} /> : null}
     </li>
   )
 }
@@ -340,8 +343,14 @@ function RunAction({
 }
 
 /** Why a run didn't succeed: one quiet line under the row; red icon only for real failures. */
-function RunFailure({ error }: { error: string }): React.JSX.Element {
+function RunFailure({
+  error,
+  summary
+}: {
+  error: string
+  summary: string | null
+}): React.JSX.Element {
   const t = useTranslate()
-  const { text, tone } = describeRoutineRunError(error, t)
+  const { text, tone } = describeRoutineRunError(error, t, summary)
   return <InlineError layout="line" tone={tone} title={text} />
 }

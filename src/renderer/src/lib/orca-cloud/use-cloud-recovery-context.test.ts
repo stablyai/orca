@@ -43,7 +43,13 @@ describe('terminal recovery for an asleep Orca Cloud workspace (RA-12)', () => {
   it('is asleep when the control plane says so, so no "Reconnecting… Down for" toast', () => {
     act(() => seed('sleeping'))
     const { result } = renderHook(() => useCloudRecoveryContext('ws'))
-    expect(result.current).toMatchObject({ asleep: true, waking: false })
+    expect(result.current).toMatchObject({ asleep: true, waking: false, archived: false })
+  })
+
+  it('is archived, not just asleep, when the control plane says archived (n64 P3)', () => {
+    act(() => seed('archived'))
+    const { result } = renderHook(() => useCloudRecoveryContext('ws'))
+    expect(result.current).toMatchObject({ asleep: true, waking: false, archived: true })
   })
 
   it('is asleep right after Sleep from this computer, before the status poll catches up', () => {

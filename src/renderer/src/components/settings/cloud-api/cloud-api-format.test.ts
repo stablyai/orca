@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import {
   cloudApiErrorCopy,
   describeRoutineRunError,
+  isRoutineRunAgentSignInFailure,
   routineRunErrorCopy,
   routineRunTone
 } from './cloud-api-copy'
@@ -120,6 +121,24 @@ describe('run failure copy', () => {
       'The routine changed while this run was queued.'
     )
     expect(routineRunErrorCopy('totally_new:detail')).toBe('The run failed.')
+  })
+
+  // END-PASS n64 P3: a routine run without a Claude account showed Claude's "Please run /login".
+  it('turns Claude’s own "Please run /login" into how to set Claude up for Orca Cloud', () => {
+    const summary = 'Not logged in · Please run /login'
+    expect(isRoutineRunAgentSignInFailure('agent_exit_1', summary)).toBe(true)
+    expect(isRoutineRunAgentSignInFailure('agent_failed:exit', summary)).toBe(true)
+    const copy = describeRoutineRunError('agent_exit_1', translate, summary)
+    expect(copy.tone).toBe('error')
+    expect(copy.text).toContain('Claude isn’t set up for Orca Cloud')
+    expect(copy.text).toContain('Settings → Agent accounts')
+    expect(copy.text).not.toContain('/login')
+    // Another failure, or the same text outside an agent exit, keeps its own copy.
+    expect(isRoutineRunAgentSignInFailure('agent_exit_1', 'tests failed')).toBe(false)
+    expect(describeRoutineRunError('agent_exit_1', translate, 'tests failed').text).toBe(
+      'The run failed.'
+    )
+    expect(isRoutineRunAgentSignInFailure('post_failed', summary)).toBe(false)
   })
 })
 

@@ -14,11 +14,13 @@ import { workspaceSleepTarget } from './workspace-sleep-target'
 import { dismissOrcaCloudRestartWarning } from '@/lib/orca-cloud-session-toasts'
 import { notePredictiveWakeSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
 import {
+  clearDeliberateCloudStop,
   clearSleepCopySave,
   clearWorktreeGoingToSleep,
   clearWorktreeKeptAwake,
   markSleepCopySaving,
   markWorktreeGoingToSleep,
+  noteDeliberateCloudStop,
   releaseWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
 import { getCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
@@ -95,6 +97,8 @@ export async function runSleepWorktrees(
       // Saving its read-only copy until the asleep view reads one back (SLEEP-IN-PROGRESS); a
       // PAIRED one's is the sealed snapshot its sandbox hands the control plane as it sleeps.
       markSleepCopySaving(id, pressedAt)
+      // Its terminals drop on purpose: no "Reattaching terminal" until it's asleep (n64 P3).
+      noteDeliberateCloudStop(id, pressedAt)
     }
     notePredictiveWakeSlept(id)
     // "Going to sleep…" from the click on: main first saves the copy the asleep view shows.
@@ -116,9 +120,11 @@ export async function runSleepWorktrees(
   for (const id of unsleptWorktreeIds) {
     releaseWorktreeSleepView(id)
   }
-  // Awake after all (refused, or its machine kept running): no copy is coming.
+  // Awake after all (refused, or its machine kept running): no copy is coming, and a dropped
+  // connection is a real one again.
   for (const id of [...unsleptWorktreeIds, ...vmStillRunningIds]) {
     clearSleepCopySave(id)
+    clearDeliberateCloudStop(id)
   }
   // A paired cloud workspace's sandbox sleeps through the control plane (PAIRED-SLEEP).
   const unslept = new Set(unsleptWorktreeIds)
@@ -138,6 +144,7 @@ export async function runSleepWorktrees(
   // The paired sandbox kept running: no sealed copy is coming either.
   for (const id of pairedStillRunning) {
     clearSleepCopySave(id)
+    clearDeliberateCloudStop(id)
   }
   // An Orca Cloud sandbox left running gets the cloud copy (sandbox hours, Try again) instead.
   const cloudToasted = toastCloudSleepFailure(stillRunningIds, (ids) => void runSleepWorktrees(ids))

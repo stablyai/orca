@@ -39,7 +39,11 @@ import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host
 import { makePaneKey } from '../../../../../../../shared/workspace-layout/stable-pane-id'
 import { cloudWokeActionFor, runCloudWokeAction } from '@/lib/orca-cloud/cloud-wake-hint-action'
 import { captureCloudPaneBeforeWake } from '@/lib/orca-cloud/cloud-wake-pane-capture'
-import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
+import {
+  clearDeliberateCloudStop,
+  useIsDeliberateCloudStopHeld,
+  useIsWorktreeGoingToSleep
+} from '@/lib/worktree-sleep-view'
 import { armWakeScrollback, forgetWakeScrollback } from '@/lib/orca-cloud/cloud-wake-scrollback'
 import { listenForWakeScroll } from '@/lib/orca-cloud/cloud-wake-scroll-listener'
 import { restartPaneExists } from '@/lib/orca-cloud/cloud-agent-restart-pane-watch'
@@ -146,7 +150,16 @@ export function TerminalPaneRecoveryPortals({
   const asleepSince = cloud?.asleepSince ?? null
   // Sleep was asked for: look now, before the transport's resubscribes (while the VM suspends)
   // replace the pane's buffer with the host's 1000-row snapshot (WAKE-SCROLLBACK).
+  // A Sleep or Archive the person chose, until a wake starts (or the hold runs out): its dropped
+  // streams are on purpose, so no "Reattaching terminal" while the status catches up (n64 P3).
+  const deliberateStop = useIsDeliberateCloudStopHeld(controller.worktreeId)
   const goingToSleep = useIsWorktreeGoingToSleep(controller.worktreeId)
+  const stoppingOnPurpose = goingToSleep || deliberateStop
+  useEffect(() => {
+    if (deliberateStop && cloudWaking) {
+      clearDeliberateCloudStop(controller.worktreeId)
+    }
+  }, [deliberateStop, cloudWaking, controller.worktreeId])
   // Set once the workspace was asleep this cycle: only then is a replay the woken terminal's.
   const sleptRef = useRef(false)
   useEffect(() => {
@@ -230,7 +243,7 @@ export function TerminalPaneRecoveryPortals({
     !cloudWaking &&
     !cloudAsleep &&
     // SLEEP-RECONNECT-BANNER: a sleep the person asked for drops the connection on purpose.
-    !goingToSleep
+    !stoppingOnPurpose
   const serverDown = retryingOutageEnvironmentId !== null
   const notice = useRemoteServerNoticeClaim(ownerEnvironmentId, serverDown, canSpeak)
   const [noticeEnvironmentId, setNoticeEnvironmentId] = useState<string | null>(null)
@@ -303,6 +316,7 @@ export function TerminalPaneRecoveryPortals({
             <CloudAsleepTerminalNotice
               workspaceId={controller.worktreeId}
               asleepSince={cloud?.asleepSince ?? null}
+              archived={cloud?.archived === true}
               historyEndPx={historyEndOffsetPx(pane.terminal, pane.container)}
             />,
             pane.container,
@@ -391,7 +405,7 @@ export function TerminalPaneRecoveryPortals({
             // Why stopped panes too: a card flashing over the notice's hold is the overlap this avoids.
             heldByServer={
               cloudWaking ||
-              goingToSleep ||
+              stoppingOnPurpose ||
               // ASLEEP-RECONNECT-BANNER: asleep on purpose, so not a dropped connection.
               cloudAsleep ||
               (!isolated &&

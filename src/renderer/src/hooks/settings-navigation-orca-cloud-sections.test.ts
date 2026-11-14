@@ -175,15 +175,20 @@ describe('one Orca Cloud group (JA-16)', () => {
     expect(label(labelAccountBilling(all, false))).toBe('orca-account')
   })
 
-  it('has billing only when signed in with the billing capability', () => {
-    const connected = (billing: boolean): OrcaProfileAuthStatus => ({
+  it('has billing only when signed in with the billing capability, as an owner or admin', () => {
+    const connected = (billing: boolean, role = 'Owner'): OrcaProfileAuthStatus => ({
       activeProfileId: 'p',
       configured: true,
       state: 'connected',
       persistence: 'encrypted',
+      cloud: { cloudProfileId: 'c', userId: 'u', email: 'e', activeOrgId: 'org-1', linkedAt: 0 },
+      organizations: [{ orgId: 'org-1', name: 'Eval', role }],
       capabilities: { flags: { billing }, refreshedAt: 0 }
     })
     expect(hasOrcaBillingAccount({ orcaProfileAuthStatus: connected(true) })).toBe(true)
+    expect(hasOrcaBillingAccount({ orcaProfileAuthStatus: connected(true, 'admin') })).toBe(true)
+    // Members: the console refuses them Plan & billing, so the page has no billing half.
+    expect(hasOrcaBillingAccount({ orcaProfileAuthStatus: connected(true, 'Member') })).toBe(false)
     expect(hasOrcaBillingAccount({ orcaProfileAuthStatus: connected(false) })).toBe(false)
     expect(hasOrcaBillingAccount({ orcaProfileAuthStatus: null })).toBe(false)
   })

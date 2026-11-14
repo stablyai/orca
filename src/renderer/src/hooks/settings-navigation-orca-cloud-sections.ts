@@ -13,6 +13,7 @@ import {
   getOrcaCloudWorkspacesSearchEntries
 } from '@/components/settings/orca-cloud/orca-cloud-settings-search'
 import { translate } from '@/i18n/i18n'
+import { canManageActiveTeam } from '@/lib/orca-cloud/orca-cloud-team-role'
 import type { Translate } from '@/i18n/use-translate'
 import type {
   SettingsNavSection,
@@ -217,12 +218,19 @@ export function gatherOrcaCloudSettingsGroup(
   return [...rest.slice(0, at), ...leads, ...rest.slice(at)]
 }
 
-/** Signed in with billing turned on for the account: the combined page has a billing half. */
+/**
+ * Signed in with billing turned on, as an owner or admin of the active team: the combined page has
+ * a billing half. Members don't get it: the console refuses them Plan & billing (n64 P3 #4).
+ */
 export function hasOrcaBillingAccount(state: {
   orcaProfileAuthStatus: OrcaProfileAuthStatus | null
 }): boolean {
   const status = state.orcaProfileAuthStatus
-  return status?.state === 'connected' && status.capabilities?.flags.billing === true
+  return (
+    status?.state === 'connected' &&
+    status.capabilities?.flags.billing === true &&
+    canManageActiveTeam(status)
+  )
 }
 
 /**

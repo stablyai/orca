@@ -21,14 +21,20 @@ import { getBillingReadInFlight, recordBillingStatus } from './billing-summary-s
 import { sampleTeam } from './plan-billing-fixtures'
 import { BILLING_CAPABILITY, registerPlanBillingMenuItem } from './register-plan-billing-menu-item'
 
-const visible = (): string[] =>
-  selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), {
-    activeProfileId: 'p1',
-    configured: true,
-    state: 'connected',
-    persistence: 'encrypted',
-    capabilities: { flags: { [BILLING_CAPABILITY]: true }, refreshedAt: 0 }
-  }).map((entry) => entry.id)
+const asRole = (role: string) => ({
+  activeProfileId: 'p1',
+  configured: true,
+  state: 'connected' as const,
+  persistence: 'encrypted' as const,
+  cloud: { cloudProfileId: 'c1', userId: 'u1', email: 'e', activeOrgId: 'org-1', linkedAt: 0 },
+  organizations: [{ orgId: 'org-1', name: 'Eval', role }],
+  capabilities: { flags: { [BILLING_CAPABILITY]: true }, refreshedAt: 0 }
+})
+
+const visible = (role = 'Owner'): string[] =>
+  selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), asRole(role)).map(
+    (entry) => entry.id
+  )
 
 afterEach(() => {
   auth.status = null
@@ -50,6 +56,9 @@ describe('account menu billing items', () => {
       }).map((item) => item.id)
     ).toEqual(['orca.team'])
     expect(visible()).toEqual(['orca.team', 'orca.plan-billing'])
+    expect(visible('Admin')).toEqual(['orca.team', 'orca.plan-billing'])
+    // The console refuses members Plan & billing, so the menu doesn't offer it (n64 P3 #4).
+    expect(visible('Member')).toEqual(['orca.team'])
     const plans = getRegisteredAccountMenuItems().find((item) => item.id === 'orca.plan-billing')
     plans?.onSelect()
     expect(openCloudConsole).toHaveBeenCalledWith('billing')
