@@ -282,3 +282,28 @@ describe('replanning on a host’s cadence change', () => {
     }
   )
 })
+
+it('limits refocus discovery to opted-in open GitHub rows and the existing stopped interval', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1_000_000)
+  const github = target({
+    key: 'github',
+    fetchedAt: Date.now(),
+    intervalMs: 120_000,
+    refreshOnForeground: true
+  })
+  const closed = target({ key: 'closed', fetchedAt: Date.now(), intervalMs: 900_000 })
+  const other = target({ key: 'other', fetchedAt: Date.now(), intervalMs: 120_000 })
+  const stopped = target({ key: 'stopped', fetchedAt: Date.now(), intervalMs: null })
+  const scheduler = setup([github, closed, other, stopped])
+  scheduler.setVisible(false)
+  await vi.advanceTimersByTimeAsync(130_000)
+  scheduler.setVisible(true)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(github.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
+  expect(stopped.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
+  expect(closed.refresh).not.toHaveBeenCalled()
+  expect(other.refresh).toHaveBeenCalledWith(false, expect.any(AbortSignal), 'timer')
+  scheduler.dispose()
+  vi.useRealTimers()
+})

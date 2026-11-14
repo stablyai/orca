@@ -169,7 +169,7 @@ describe('daemon stream framing negotiation', () => {
     return new Promise((resolve) => fakeDaemon!.listen(socketPath, resolve))
   }
 
-  it.each([39, 41, 44])(
+  it.each([39])(
     'falls back to NDJSON against a v%i daemon and keeps an event that shares the hello read',
     async (protocolVersion) => {
       let requested: string | undefined

@@ -1421,6 +1421,14 @@
       "cleanup": {
         "recipeDescription": "Clean up dictated text before it lands."
       }
+    },
+    "groupHooks": {
+      "title": "Project Settings > {{name}}",
+      "example": "Example: create a worktree in each repo (this machine only)",
+      "useExample": "Use this example",
+      "description": "Scripts that run in this folder when a workspace is created. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
+      "invalidSetup": "The file is present, but Orca could not find a valid setup script.",
+      "supportedKeys": "Define only the supported keys: `scripts` and `setup`."
     }
   },
   "menu": {
@@ -22374,7 +22382,32 @@
           "apply": "Apply"
         },
         "rulesLoadFailed": "Couldn't load this host's cleanup rules: {{error}}",
-        "retry": "Try again"
+        "retry": "Try again",
+        "summary": {
+          "merged": "Delete merged",
+          "unchanged": "Delete unchanged",
+          "inactiveCleanUp": "Clean up inactive",
+          "inactive": "Delete inactive",
+          "automationRuns": "Automation workspaces",
+          "orchestrationWorkers": "Orchestration workers",
+          "off": "Off"
+        }
+      },
+      "repository": {
+        "workspaceCleanup": {
+          "title": "Workspace cleanup",
+          "description": "Rules for {{name}} only. Use global follows Settings / Workspace Cleanup.",
+          "usingGlobal": "Using global: {{rules}}",
+          "globalDefault": "Global default: {{rules}}",
+          "useGlobal": "Use global",
+          "off": "Off",
+          "custom": "Custom",
+          "rules": "Cleanup rules",
+          "rulesDescription": "Which workspace cleanup rules apply to this project.",
+          "keywordCleanup": "cleanup",
+          "keywordDelete": "delete",
+          "keywordMerged": "merged"
+        }
       }
     },
     "agentChildRow": {
@@ -23361,6 +23394,7 @@
     "retry": "Retry",
     "cancel": "Cancel",
     "unassigned": "Unassigned",
+    "copy": "Copy",
     "delete": "Delete"
   },
   "terminal": {

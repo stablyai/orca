@@ -17,6 +17,7 @@ export const PI_RPC_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
     listingNamesConfiguredModel: false,
     probe: createPiModelCatalogProbe({
       resolveEnvironment: () => context.environment.resolveAgentEnvironment('pi'),
+      resolveSavedEnvironment: () => context.environment.resolveAgentEnvironment('pi', true),
       refreshEnvironmentAfterMiss: context.environment.refreshAfterMissingProgram,
       ...(context.deps.resolveAgentCommandSettings
         ? { resolveCommandSettings: context.deps.resolveAgentCommandSettings }

@@ -2,6 +2,7 @@ import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared
 import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
+import type { WorkspaceHookOwner } from '../../../shared/workspace-hook-owner'
 import type { Repo } from '../../../shared/repo-types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
@@ -21,16 +22,16 @@ import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gat
 import { hashOrcaHookTrustContent } from '../../workspace-hooks/created-worktree-setup-trust'
 import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'
 
-type RuntimeRepositoryHooksCommandsDeps = {
-  resolveRepo: (selector: string) => Promise<Repo>
+type RuntimeRepositoryHooksCommandsDeps<TRepo extends WorkspaceHookOwner> = {
+  resolveRepo: (selector: string) => Promise<TRepo>
   readCreateSourceHooks: (
-    repo: Repo,
+    repo: TRepo,
     source: SetupHooksCreateSource
   ) => Promise<{ hooks: OrcaHooks | null } | undefined>
 }
 
-export class RuntimeRepositoryHooksCommands {
-  constructor(private readonly deps: RuntimeRepositoryHooksCommandsDeps) {}
+export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = Repo> {
+  constructor(private readonly deps: RuntimeRepositoryHooksCommandsDeps<TRepo>) {}
 
   async getRepoHooks(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
@@ -140,7 +141,7 @@ function hookTrust(scriptContent: string): { contentHash: string; scriptContent:
 }
 
 function archiveTrust(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   sharedHooks: OrcaHooks | null
 ): { contentHash: string; scriptContent: string } | null {
   const localArchive = repo.hookSettings?.scripts.archive?.trim()

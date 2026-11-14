@@ -1,3 +1,4 @@
+import { getDefaultRepoHookSettings } from './constants'
 import { normalizeExecutionHostId } from './execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
 import type { Repo } from './repo-types'
@@ -55,6 +56,15 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
     groups.push({
       id: raw.id,
       name: normalizeProjectGroupName(typeof raw.name === 'string' ? raw.name : ''),
+      ...(raw.hookSettings
+        ? {
+            hookSettings: {
+              ...getDefaultRepoHookSettings(),
+              ...raw.hookSettings,
+              scripts: { ...getDefaultRepoHookSettings().scripts, ...raw.hookSettings.scripts }
+            }
+          }
+        : {}),
       parentPath: typeof raw.parentPath === 'string' ? raw.parentPath : null,
       connectionId:
         typeof raw.connectionId === 'string'
