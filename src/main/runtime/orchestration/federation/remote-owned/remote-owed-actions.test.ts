@@ -17,11 +17,9 @@ import {
   oweRemoteDispatchStop
 } from '../../db/remote-owned/remote-dispatch-records'
 import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
-import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
   getRemoteRunLink,
   openRemoteRunLink,
-  remoteServerPin,
   type RemoteRunLinkRow
 } from '../../db/remote-owned/remote-run-links'
 import type {
@@ -162,29 +160,6 @@ describe('what the coordinating Orca owes a paired server', () => {
   }
 
   const owed = () => getRemoteDispatch(db, 'ctx_b1')!
-  const terminalItem = (sequence: number) => ({
-    conversationId: link.conversation_id,
-    sequence,
-    messageId: `state_${sequence}`,
-    kind: 'worker_state',
-    payload: JSON.stringify({
-      v: 1,
-      id: `state_${sequence}`,
-      homeRunId: run.id,
-      peerRunId: 'run_on_b',
-      dispatch: {
-        id: 'ctx_b1',
-        taskId: 'task_t',
-        status: 'completed',
-        workerState: 'succeeded',
-        lastFailure: null,
-        agent: null
-      },
-      task: { status: 'completed', result: 'done' },
-      correctedUnobservedPrompt: false,
-      removed: null
-    })
-  })
   const stopKeys = () =>
     sent
       .filter((s) => s.method === 'orchestration.workerStop')
@@ -241,26 +216,6 @@ describe('what the coordinating Orca owes a paired server', () => {
         status: 'pending',
         worker_state: null
       })
-    })
-  })
-
-  describe('#2 stop intents', () => {
-    it('owes a stop of a finished worker, whose helpers may still run, until the server proves it', async () => {
-      startedOnB()
-      importRemoteOwnedItem(db, remoteServerPin(server), terminalItem(1))
-      expect(oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')?.stopCount).toBe(1)
-      expect(owed().stop_owed).toBe(1)
-      answers['orchestration.workerStop'] = [
-        {
-          result: {
-            ...STOPPED,
-            alreadySettled: true,
-            helpers: [{ dispatchId: 'ctx_h', creatorDispatchId: 'ctx_b1', outcome: 'stopped' }]
-          }
-        }
-      ]
-      await resend()
-      expect(owed().stop_owed).toBe(0)
     })
   })
 

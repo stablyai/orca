@@ -15,6 +15,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Launch Orca and wait for the runtime to be reachable',
     usage: 'orca open [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      "It can bring Orca's window to the front. Agents should run it only when the user asks or `orca status --json` reports Orca is not running or still cannot connect after about 30 seconds of retries, never to retry a failed command."
+    ],
     examples: ['orca open', 'orca open --json']
   },
   ...SERVE_COMMAND_SPECS,
@@ -202,6 +205,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     notes: [
+      'It changes the terminal the user is looking at; agents should run it only when the user asked to switch.',
       "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
     ],
     examples: ['orca terminal switch --terminal term_abc123']

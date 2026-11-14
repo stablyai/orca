@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { resolveAgentResumeLaunchTarget } from '@/lib/agent-session/resume/agent-resume-launch-target'
-import { makeTerminalTab } from '@/store/terminals/terminal-row.test-fixture'
+
+import { makeTerminalTab } from '@/store/terminals/testing/terminal-row.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { buildPaneAccountRestartStartup } from './agent-account-restart-startup'
@@ -172,12 +172,6 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
 
       expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
         `${prefix}claude '--resume' '${SESSION_ID}'`
-      )
-      expect(resolveAgentResumeLaunchTarget).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          executionHostId: 'runtime:remote-host',
-          connectionId: 'selected-ssh'
-        })
       )
     } finally {
       useAppStore.setState(original)

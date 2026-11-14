@@ -1,4 +1,4 @@
-import { invalidateTerminalParkingPtyInputs } from '@/store/terminals/terminal-parking-input-owner'
+import { invalidateTerminalParkingPtyInputs } from '@/store/terminals/parking/terminal-parking-input-owner'
 let capabilityRevision = 0
 const capabilityRevisionListeners = new Set<() => void>()
 

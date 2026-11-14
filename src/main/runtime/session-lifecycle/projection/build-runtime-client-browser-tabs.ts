@@ -1,0 +1,36 @@
+import type { RuntimeBrowserClientPage } from '../../browser/client-pages/runtime-browser-page-registry'
+import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+
+export function buildRuntimeClientBrowserTabs(
+  pages: readonly RuntimeBrowserClientPage[],
+  authority: BrowserHostLeaseRegistry
+): RuntimeMobileSessionBrowserTab[] {
+  return pages.map((page) => {
+    const initializationState = authority.clientPageInitializations.status(
+      page.browserPageId,
+      page.placement
+    )
+    return {
+      type: 'browser' as const,
+      id: page.browserPageId,
+      title: page.title || page.url || 'Browser',
+      browserWorkspaceId: page.browserPageId,
+      browserPageId: page.browserPageId,
+      browserProfileId: page.browserProfileId,
+      executionHostKey: page.executionHostKey,
+      placement: page.placement,
+      url: page.url,
+      initializationState,
+      loading:
+        initializationState === 'pending'
+          ? true
+          : initializationState === 'stopped'
+            ? false
+            : page.loading,
+      canGoBack: page.canGoBack,
+      canGoForward: page.canGoForward,
+      isActive: page.active
+    }
+  })
+}
