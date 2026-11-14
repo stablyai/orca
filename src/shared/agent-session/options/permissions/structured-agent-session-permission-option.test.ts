@@ -67,6 +67,38 @@ describe('the permission mode picker', () => {
     ).toMatchObject({ settable: true, kind: { currentValue: 'full-access' } })
   })
 
+  it('names the mode the agent reports while following its own settings', () => {
+    const own = {
+      ...live('claude', { permissionMode: 'ask' }),
+      permissionOwnSupported: true,
+      permissionMode: 'own'
+    }
+    for (const [reportedPermissionMode, description] of [
+      ['full-access', 'Full access'],
+      ['ask', 'Ask for approval'],
+      ['plan', 'Plan mode']
+    ] as const) {
+      expect(permission({ ...own, reportedPermissionMode })).toMatchObject({
+        description,
+        kind: { currentValue: 'own', reportedValue: reportedPermissionMode }
+      })
+    }
+    // Before the agent reports, or after a cleared report, the chat still follows its settings.
+    for (const reportedPermissionMode of [undefined, null]) {
+      const descriptor = permission({ ...own, reportedPermissionMode })
+      expect(descriptor?.description).toBe("Agent's own settings")
+      expect(descriptor?.kind).not.toHaveProperty('reportedValue')
+    }
+    // An explicit pick names itself, whatever the agent last reported.
+    const explicit = permission({
+      ...own,
+      permissionMode: 'ask',
+      reportedPermissionMode: 'full-access'
+    })
+    expect(explicit?.description).toBe('Ask for approval')
+    expect(explicit?.kind).not.toHaveProperty('reportedValue')
+  })
+
   it('admits supported Own delegation through the same descriptor/readiness predicate', () => {
     const state = { ...live('codex', { permissionMode: 'ask' }), permissionOwnSupported: true }
     expect(canSetStructuredAgentSessionOption(state, 'permissionMode', 'own')).toBe(true)

@@ -24,7 +24,10 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
     descriptor.kind.type === 'select' &&
     descriptor.kind.currentValue === 'own'
   ) {
-    return translate('settings.agents.permissionOwnAll', "Agents' own settings")
+    // The descriptor names the mode the agent reports running in, once it has reported one.
+    return descriptor.kind.reportedValue !== undefined && descriptor.description
+      ? descriptor.description
+      : translate('settings.agents.permissionOwnAll', "Agents' own settings")
   }
   const choice = selectedNativeChatChoice(descriptor)
   if (!choice) {
