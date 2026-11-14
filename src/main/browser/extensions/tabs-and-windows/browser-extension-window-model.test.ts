@@ -83,7 +83,7 @@ describe("a profile's extension windows", () => {
     const popout = model.createBrowserExtensionPopout(profileA, {
       url: 'https://retained.test/',
       type: 'popup',
-      focused: false
+      presentation: 'unfocused'
     })
     try {
       source.emit('destroyed')
