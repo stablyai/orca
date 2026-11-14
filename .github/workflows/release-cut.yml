@@ -53,6 +53,8 @@ jobs:
       contents: write
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+      # Every build checks out this commit, never the movable tag name.
+      release_sha: ${{ steps.release-sha.outputs.sha }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
       # Why: downstream SignPath Slack pings need the cut source (not only the
@@ -633,6 +635,13 @@ jobs:
           fi
           git push origin "$TAG"
 
+      - name: Record the release commit
+        id: release-sha
+        if: steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+        run: echo "sha=$(git rev-parse --verify "refs/tags/${TAG}^{commit}")" >>"$GITHUB_OUTPUT"
+
       # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.
       - name: Detect whether the tag ships the orcad template
         id: orcad-template-support
@@ -675,7 +684,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      # Why: check out the commit cut recorded, then prove it, so a tag moved mid-run can't change what ships.
+      - &verify-release-checkout
+        name: Verify checkout is the release commit
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ needs.cut.outputs.release_sha }}
+        run: |
+          head="$(git rev-parse HEAD)"
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ || "$head" != "$RELEASE_SHA" ]]; then
+            echo "::error::Checkout $head is not the verified release commit '$RELEASE_SHA'."
+            exit 1
+          fi
 
       - name: Restore draft-release scripts from the workflow ref
         env:
@@ -700,7 +722,7 @@ jobs:
     if: needs.cut.outputs.should_release == 'true' && !contains(needs.cut.outputs.tag, '-')
     uses: ./.github/workflows/dependency-security.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       runner: ubuntu-latest
 
   terminal-rendering-golden:
@@ -728,7 +750,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      - *verify-release-checkout
 
       - name: Restore golden test harness from the workflow ref
         shell: bash
@@ -840,7 +864,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      - *verify-release-checkout
 
       - name: Restore skill-sharing test harness from the workflow ref
         shell: bash
@@ -899,10 +925,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
 
       - name: Trust the checked-out workspace in the job container
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - *verify-release-checkout
 
       - name: Restore skill-sharing test harness from the workflow ref
         shell: bash
@@ -971,7 +999,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      - *verify-release-checkout
 
       - name: Install native build tools
         if: runner.os == 'Linux'
@@ -1043,7 +1073,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/qualified-orcad-template.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       fast_runners: false
 
   # Server-only Linux tarballs from the same qualified template. Nothing depends on this job, so a
@@ -1058,7 +1088,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/orca-server-artifact.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       template_artifact: orcad-template
 
   # Gate SignPath artifact requests behind blocking tests to avoid approvals for unpublishable builds.
@@ -1089,7 +1119,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/release-javascript.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       runner: ubuntu-latest
     secrets:
       ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
@@ -1157,7 +1187,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      - *verify-release-checkout
 
       # GitHub reruns also resume jobs skipped behind a failed gate. Never
       # recreate Windows signing requests on a rerun; reuse the assets from the
@@ -2096,7 +2128,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "${{ needs.cut.outputs.tag }}"
+        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "$TAG"
 
       # Check Linux telemetry after inseparable pack/upload, then block final undraft. Reject null identity/key transport from missing configuration (#1385); prior step re-drafts premature publication.
       - name: Verify telemetry constants present in app.asar
@@ -2148,6 +2180,7 @@ jobs:
           RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
           RELEASE_MAC_BUILD_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_MAC_BUILD_RELEASE_SHA: ${{ needs.cut.outputs.release_sha }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
 
   verify-mac-build:

@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      release_sha:
+        description: Verified release commit to build; required unless qualification_only
+        required: false
+        default: ''
+        type: string
       javascript_source_sha:
         description: Commit of the shared JavaScript artifact; empty keeps the legacy build
         required: false
@@ -61,7 +66,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.qualification_only && github.sha || format('refs/tags/{0}', inputs.tag) }}
+          ref: ${{ inputs.qualification_only && github.sha || inputs.release_sha }}
+
+      # Why: build the commit release-cut verified, never the movable tag name.
+      - name: Verify checkout is the release commit
+        if: ${{ !inputs.qualification_only }}
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          head="$(git rev-parse HEAD)"
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ || "$head" != "$RELEASE_SHA" ]]; then
+            echo "::error::Checkout $head is not the verified release commit '$RELEASE_SHA'."
+            exit 1
+          fi
 
       # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
       - name: Refuse a ref that still ships the SSH relay
@@ -263,7 +280,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
-        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "${{ inputs.tag }}"
+        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "$TAG"
 
       # Check after publish because builder’s single pack/upload invocation has no cheap interposition point.
       - name: Verify telemetry constants present in app.asar
