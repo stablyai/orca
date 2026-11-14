@@ -3,6 +3,7 @@ import {
   assembleProfileStateDomainPayload,
   hasProfileStateDocumentPartsTables,
   isProfileStateSplitDomain,
+  parsePartKey,
   PROFILE_STATE_SPLIT_DOMAIN_DEPTHS,
   splitProfileStateDomainValue
 } from './profile-state-document-parts'
@@ -19,85 +20,22 @@ import {
 } from '../database/profile-state-database-schema'
 import type { ProfileStateDocumentPart } from './profile-state-document-parts'
 import { assignProfileStatePartOrdinals } from './profile-state-document-part-ordinals'
-
-type PartsMeta = {
-  domainVersion: number
-  revision: number
-  updatedAt: number
-  contentHash: string
-  legacyRevision: number | null
-}
+import { authoritativeMeta } from './profile-state-document-parts-metadata'
+export {
+  authoritativeMeta,
+  readLegacyRevision,
+  readSplitDomainWriteState,
+  safeInteger
+} from './profile-state-document-parts-metadata'
 
 export type ProfileStateExistingDocumentParts = Map<
   string,
-  { ordinal: number; contentHash: string; payload?: string }
+  { ordinal: number; contentHash: string; payload?: string; path?: readonly string[] }
 >
 
-function readPartsMeta(db: Database.Database, domain: string): PartsMeta | undefined {
-  if (!hasProfileStateDocumentPartsTables(db)) {
-    return undefined
-  }
-  const row = db
-    .prepare(
-      `SELECT domain_version, revision, updated_at, content_hash, legacy_revision
-       FROM ${PROFILE_STATE_DOCUMENT_PARTS_META_TABLE} WHERE domain = ?`
-    )
-    .get(domain)
-  if (row === undefined) {
-    return undefined
-  }
-  const domainVersion = isRecord(row) ? safeInteger(row.domain_version) : undefined
-  const revision = isRecord(row) ? safeInteger(row.revision) : undefined
-  const updatedAt = isRecord(row) ? safeInteger(row.updated_at) : undefined
-  const legacyRevision = isRecord(row) ? safeInteger(row.legacy_revision) : undefined
-  if (
-    !isRecord(row) ||
-    // Same bounds as an ordinary document row, which this metadata stands in for.
-    domainVersion === undefined ||
-    domainVersion < 1 ||
-    revision === undefined ||
-    revision < 1 ||
-    updatedAt === undefined ||
-    updatedAt < 0 ||
-    typeof row.content_hash !== 'string' ||
-    !/^[a-f0-9]{64}$/.test(row.content_hash) ||
-    (row.legacy_revision !== null && (legacyRevision === undefined || legacyRevision < 1))
-  ) {
-    throw new ProfileStateDocumentCorruptionError(
-      `Profile state document parts metadata is invalid: ${domain}`,
-      domain
-    )
-  }
-  return {
-    domainVersion,
-    revision,
-    updatedAt,
-    contentHash: row.content_hash,
-    legacyRevision: legacyRevision ?? null
-  }
-}
-
-export function safeInteger(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined
-}
-
-export function readLegacyRevision(db: Database.Database, domain: string): number | null {
-  const row = db
-    .prepare('SELECT revision FROM profile_state_documents WHERE domain = ?')
-    .get(domain)
-  return (isRecord(row) ? safeInteger(row.revision) : undefined) ?? null
-}
-
-/** Parts win only while the legacy row is the one this layout last synced. */
-export function authoritativeMeta(
-  db: Database.Database,
-  domain: string,
-  legacyRevision: number | null
-): PartsMeta | undefined {
-  const meta = readPartsMeta(db, domain)
-  return meta !== undefined && legacyRevision !== null && meta.legacyRevision === legacyRevision
-    ? meta
-    : undefined
+export type ProfileStatePreparedDocumentPart = ProfileStateDocumentPart & {
+  contentHash: string
+  ordinal: number
 }
 
 /** Reassembled document for a split domain, or undefined when its legacy row is authoritative. */
@@ -121,6 +59,7 @@ export function readProfileStateSplitDocument(
     )
     .iterate(domain)
   const parts: ProfileStateDocumentPart[] = []
+  const paths: string[][] = []
   for (const row of rows) {
     if (
       !isRecord(row) ||
@@ -133,16 +72,27 @@ export function readProfileStateSplitDocument(
         domain
       )
     }
+    let path: string[]
+    try {
+      path = parsePartKey(row.part_key)
+    } catch {
+      throw new ProfileStateDocumentCorruptionError(
+        `Profile state document parts are invalid: ${domain}`,
+        domain
+      )
+    }
     parts.push({ key: row.part_key, payload: row.payload })
+    paths.push(path)
     retainedParts?.set(row.part_key, {
       ordinal: Number(row.ordinal),
       contentHash: String(row.content_hash),
-      payload: row.payload
+      payload: row.payload,
+      path
     })
   }
   let payload: string
   try {
-    payload = assembleProfileStateDomainPayload(parts)
+    payload = assembleProfileStateDomainPayload(parts, paths)
   } catch {
     throw new ProfileStateDocumentCorruptionError(
       `Profile state document parts are invalid: ${domain}`,
@@ -163,25 +113,6 @@ export function readProfileStateSplitDocument(
     updatedAt: meta.updatedAt,
     contentHash: meta.contentHash
   }
-}
-
-export type SplitDomainWriteState =
-  | { kind: 'unsplit' }
-  | { kind: 'parts'; legacyRevision: number; contentHash: string; revision: number }
-
-/** Lets the writer compare by hash without reading or re-validating a stale legacy payload. */
-export function readSplitDomainWriteState(
-  db: Database.Database,
-  domain: string
-): SplitDomainWriteState {
-  if (!isProfileStateSplitDomain(domain)) {
-    return { kind: 'unsplit' }
-  }
-  const legacyRevision = readLegacyRevision(db, domain)
-  const meta = authoritativeMeta(db, domain, legacyRevision)
-  return meta && legacyRevision !== null
-    ? { kind: 'parts', legacyRevision, contentHash: meta.contentHash, revision: meta.revision }
-    : { kind: 'unsplit' }
 }
 
 export function deleteProfileStateDomainParts(db: Database.Database, domain: string): void {
@@ -220,7 +151,7 @@ export function writeProfileStateDomainParts(
     /** Existing parts are a valid base to diff against. */
     diffExisting: boolean
     existingParts?: ProfileStateExistingDocumentParts
-    preparedParts?: readonly (ProfileStateDocumentPart & { contentHash: string })[]
+    preparedParts?: readonly ProfileStatePreparedDocumentPart[]
   }
 ): boolean {
   if (!hasProfileStateDocumentPartsTables(db)) {
@@ -263,10 +194,12 @@ export function writeProfileStateDomainParts(
       args.domain
     )
   }
-  const ordinals = assignProfileStatePartOrdinals(
-    parts.map(({ key }) => key),
-    new Map([...existing].map(([key, { ordinal }]) => [key, ordinal]))
-  )
+  const ordinals =
+    args.preparedParts?.map(({ ordinal }) => ordinal) ??
+    assignProfileStatePartOrdinals(
+      parts.map(({ key }) => key),
+      new Map([...existing].map(([key, { ordinal }]) => [key, ordinal]))
+    )
   const insert = db.prepare(
     `INSERT INTO ${PROFILE_STATE_DOCUMENT_PARTS_TABLE}
      (domain, part_key, ordinal, payload, content_hash) VALUES (?, ?, ?, ?, ?)`

@@ -114,7 +114,7 @@ export function assembleProfileStateDomainPayload(
     : `{${out}}`
 }
 
-function parsePartKey(key: string): string[] {
+export function parsePartKey(key: string): string[] {
   const path: unknown = JSON.parse(key)
   if (!Array.isArray(path) || !path.every((segment) => typeof segment === 'string')) {
     throw new Error('Profile state document part key is invalid')

@@ -13,11 +13,15 @@ import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 type PathNode = { leaf?: string; children?: Map<string, PathNode> }
 
 /** Validate depth-first native object order without parsing any retained payload. */
-function canonicalPaths(keys: readonly string[], depth: number): string[][] | undefined {
+function canonicalPaths(
+  keys: readonly string[],
+  existingParts: ProfileStateExistingDocumentParts,
+  depth: number
+): (readonly string[])[] | undefined {
   const root: PathNode = {}
-  const paths: string[][] = []
+  const paths: (readonly string[])[] = []
   for (const key of keys) {
-    const path: unknown = JSON.parse(key)
+    const path = existingParts.get(key)?.path
     if (
       !Array.isArray(path) ||
       path.length > depth ||
@@ -71,14 +75,15 @@ export function prepareProfileStateFieldParts(
     return undefined
   }
   const keys = [...existingParts.keys()]
-  const paths = canonicalPaths(keys, depth)
+  const paths = canonicalPaths(keys, existingParts, depth)
   if (!paths) {
     return undefined
   }
   const parts = [...existingParts].map(([key, part]) => ({
     key,
     payload: part.payload!,
-    contentHash: part.contentHash
+    contentHash: part.contentHash,
+    ordinal: part.ordinal
   }))
   if (parts.some((part) => part.payload === undefined)) {
     return undefined
@@ -122,7 +127,8 @@ export function prepareProfileStateFieldParts(
       return undefined
     }
     replacement.forEach((part, offset) => {
-      parts[indices[offset]!] = part
+      const index = indices[offset]!
+      parts[index] = { ...part, ordinal: parts[index]!.ordinal }
     })
   }
   const payload = assembleProfileStateDomainPayload(parts, paths)

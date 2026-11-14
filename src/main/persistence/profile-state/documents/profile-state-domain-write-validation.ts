@@ -1,4 +1,3 @@
-import type { ProfileStateDocumentPart } from '../document-parts/profile-state-document-parts'
 import { PROFILE_STATE_DOCUMENT_VERSION } from '../database/profile-state-database-schema'
 import { isProfileStateSplitDomain } from '../document-parts/profile-state-document-parts'
 import './profile-state-documents'
@@ -15,7 +14,10 @@ import {
   isProfileStateStringArray,
   prepareProfileStateDomainPatches
 } from './profile-state-domain-patches'
-import type { ProfileStateExistingDocumentParts } from '../document-parts/profile-state-document-parts-storage'
+import type {
+  ProfileStateExistingDocumentParts,
+  ProfileStatePreparedDocumentPart
+} from '../document-parts/profile-state-document-parts-storage'
 
 export type PreparedProfileStateMutation = ProfileStateDomainMutation & {
   domainVersion: number
@@ -24,9 +26,7 @@ export type PreparedProfileStateMutation = ProfileStateDomainMutation & {
   automationRunsValue?: unknown
   /** Parsed payload of a split domain, so storing its parts does not parse it again. */
   splitDomainValue?: unknown
-  preparedParts?: readonly (ProfileStateDocumentPart & {
-    contentHash: string
-  })[]
+  preparedParts?: readonly ProfileStatePreparedDocumentPart[]
   existingParts?: ProfileStateExistingDocumentParts
   automationRuns?: AutomationRunsWritePreparation
 }
