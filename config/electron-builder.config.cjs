@@ -334,6 +334,7 @@ module.exports = {
     'out/package.json',
     'out/cli/**',
     'out/shared/**',
+    'out/main/worker-threads/worker-thread-{entry-path,spawn}.js',
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
