@@ -156,6 +156,7 @@ struct Snapshot {
     let windowBounds: CGRect
     let windowId: CGWindowID
     let windowLayer: Int
+    let windowVisibility: WindowVisibility
     let treeText: String
     let focusedElementId: Int?
     let screenshot: ScreenshotPayload?
@@ -173,6 +174,7 @@ struct Snapshot {
 
     func showsSameState(as other: Snapshot) -> Bool {
         treeText == other.treeText && windowBounds == other.windowBounds && appWindowIds == other.appWindowIds
+            && windowVisibility == other.windowVisibility
     }
 
     func withoutScreenshotPayload() -> Snapshot {
@@ -183,6 +185,7 @@ struct Snapshot {
             windowBounds: windowBounds,
             windowId: windowId,
             windowLayer: windowLayer,
+            windowVisibility: windowVisibility,
             treeText: treeText,
             focusedElementId: focusedElementId,
             screenshot: nil,
@@ -212,6 +215,31 @@ struct CapturedImage {
     let engine: String
 }
 
+/// Where an observed window is; only an on-screen one can take background pointer or key input.
+enum WindowVisibility {
+    case onScreen
+    case minimized
+    case appHidden
+    case otherSpace
+
+    var reason: String {
+        switch self {
+        case .onScreen: "is on screen"
+        case .minimized: "is minimized"
+        case .appHidden: "belongs to a hidden app"
+        case .otherSpace: "is on another Space"
+        }
+    }
+}
+
+/// A window an agent can observe: on screen, or off screen with an accessibility element it can still read.
+private struct ObservableWindow {
+    let candidate: WindowCandidate
+    /// Off-screen windows carry the element found for them; on-screen ones are matched later.
+    let element: AXUIElement?
+    let visibility: WindowVisibility
+}
+
 enum ScreenshotStatus {
     case captured
     case skipped
@@ -224,9 +252,25 @@ private struct CachedSnapshotEntry {
     let createdAt: Date
 }
 
+private struct OtherSpaceLookups {
+    var elements: [CGWindowID: AXUIElement] = [:]
+    var misses: [CGWindowID: Date] = [:]
+}
+
+/// The app's observable windows, plus other-Space windows that exist but accessibility can't read yet.
+private struct WindowInventory {
+    let windows: [ObservableWindow]
+    let unreadableOtherSpace: Set<CGWindowID>
+    /// Every window the app has, closed-but-kept ones included.
+    let windowIds: Set<CGWindowID>
+}
+
 final class Provider {
     private var snapshots: [String: Snapshot] = [:]
     private var snapshotEntries: [CachedSnapshotEntry] = []
+    /// Per app, window elements already read (valid while the window lives) for when a window moves to another Space,
+    /// and when a remote-token lookup last missed, since a window becomes findable only once some client reads it.
+    private var otherSpaceLookups: [pid_t: OtherSpaceLookups] = [:]
 
     init() {
         // Why: the system-wide element sets the wait for every AX call in this process, so a hung app costs one bounded timeout whatever the macOS default.
@@ -242,50 +286,60 @@ final class Provider {
         case "listWindows":
             return try listWindows(params: params)
         case "getAppState":
+            let params = isForegroundRequest(params) ? try recoverRequestedWindow(params: params) : params
             return try renderSnapshot(observe(params: params))
         case "click":
-            return try actionResult(params: params) { try click(params: params) }
+            return try actionResult(params: params) { try click(params: $0) }
         case "performSecondaryAction":
-            return try actionResult(params: params) { try performSecondaryAction(params: params) }
+            return try actionResult(params: params) { try performSecondaryAction(params: $0) }
         case "setValue":
-            return try actionResult(params: params) { try setValue(params: params) }
+            return try actionResult(params: params) { try setValue(params: $0) }
         case "typeText":
-            return try actionResult(params: params) { try typeText(params: params) }
+            return try actionResult(params: params) { try typeText(params: $0) }
         case "pressKey":
-            return try actionResult(params: params) { try pressKey(params: params) }
+            return try actionResult(params: params) { try pressKey(params: $0) }
         case "hotkey":
-            return try actionResult(params: params) { try hotkey(params: params) }
+            return try actionResult(params: params) { try hotkey(params: $0) }
         case "pasteText":
-            return try actionResult(params: params) { try pasteText(params: params) }
+            return try actionResult(params: params) { try pasteText(params: $0) }
         case "scroll":
-            return try actionResult(params: params) { try scroll(params: params) }
+            return try actionResult(params: params) { try scroll(params: $0) }
         case "drag":
-            return try actionResult(params: params) { try drag(params: params) }
+            return try actionResult(params: params) { try drag(params: $0) }
         default:
             throw ProviderError.coded("invalid_argument", "unknown method '\(method)'")
         }
     }
 
-    private func actionResult(params: [String: JSONValue], action runAction: () throws -> [String: Any]) throws -> [String: Any] {
-        var action = try runAction()
-        // Why: only --restore-window activates the app or posts to the HID tap; every other route leaves the user's desktop alone.
-        action["delivery"] = isForegroundRequest(params) ? "foreground" : "background"
+    private func actionResult(params requestParams: [String: JSONValue], action runAction: ([String: JSONValue]) throws -> [String: Any]) throws -> [String: Any] {
+        let app = try resolveApp(try requiredString(requestParams, "app"))
+        // Why: the main run loop keeps NSRunningApplication current while requests run on connection threads.
+        let frontBefore = ForegroundDelivery.Observation(
+            frontmost: app.app.isActive,
+            focusedWindowID: app.app.isActive ? focusedWindowId(of: app) : nil
+        )
+        // Why: raise once, before the action's reads, so the pre and post observations never raise again.
+        let params = isForegroundRequest(requestParams) ? try recoverRequestedWindow(params: requestParams) : requestParams
+        var action = try runAction(params)
         // Why: the action's currentSnapshot just cached this target's tree from before the action;
         // a subtree read can't be compared with the whole-window read that follows.
         let before = action["path"] as? String == "accessibility" && action["verification"] == nil
             ? (try? cachedSnapshot(params: params)).flatMap { $0.scope == nil ? $0 : nil }
             : nil
+        let snapshot: Snapshot
         do {
             let after = try observe(params: params)
-            guard let before, after.showsSameState(as: before) else {
-                return renderActionResult(action: action, snapshot: after)
+            if let before, after.showsSameState(as: before) {
+                if let changed = try observeLateChange(before: before, params: params) {
+                    snapshot = changed
+                } else {
+                    // Why: an AX call can succeed and do nothing, as AXPress does on many web controls (#31758).
+                    action["verification"] = unverifiedAction(reason: "suspected_noop")
+                    snapshot = after
+                }
+            } else {
+                snapshot = after
             }
-            if let changed = try observeLateChange(before: before, params: params) {
-                return renderActionResult(action: action, snapshot: changed)
-            }
-            // Why: an AX call can succeed and do nothing, as AXPress does on many web controls (#31758).
-            action["verification"] = unverifiedAction(reason: "suspected_noop")
-            return renderActionResult(action: action, snapshot: after)
         } catch let error as ProviderError where (error.code == "window_not_found" || error.code == "window_stale") && hasRequestedWindowSelector(params) {
             var fallbackParams = params
             fallbackParams.removeValue(forKey: "windowId")
@@ -293,25 +347,123 @@ final class Provider {
             if action["verification"] == nil {
                 action["verification"] = ["state": "unverified", "reason": "window_changed"]
             }
-            return try renderActionResult(action: action, snapshot: observe(params: fallbackParams))
+            snapshot = try observe(params: fallbackParams)
         }
+        // Why: measured after the settle reads, since apps that activate themselves on AXPress (Electron, sheet openers) do it a turn later.
+        let frontAfter = frontmostObservation(of: app)
+        let tookForeground = ForegroundDelivery.tookForeground(
+            before: frontBefore,
+            after: frontAfter,
+            targetWindowID: snapshot.windowId,
+            restoreRequested: isForegroundRequest(params)
+        )
+        action["delivery"] = tookForeground ? "foreground" : "background"
+        return renderActionResult(action: action, snapshot: snapshot)
     }
 
     /// Re-reads the target for about a second, since apps often apply an action on a later run-loop turn.
     /// Returns the observation to report once something changed, or nil if nothing did.
     private func observeLateChange(before: Snapshot, params: [String: JSONValue]) throws -> Snapshot? {
-        let settleParams = params.merging(["restoreWindow": .bool(false)]) { _, replacement in replacement }
-        let quietParams = settleParams.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
+        let quietParams = params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
         let deadline = Date().addingTimeInterval(1)
         while Date() < deadline {
             Thread.sleep(forTimeInterval: 0.2)
             let polled = try observe(params: quietParams)
             if !polled.showsSameState(as: before) {
                 if params["noScreenshot"]?.bool == true { return polled }
-                return try observe(params: settleParams)
+                return try observe(params: params)
             }
         }
         return nil
+    }
+
+    /// Brings the requested window forward for --restore-window, once per request, and returns the params pinned
+    /// to that window: raising reorders the window list, so a --window-index could name another window afterwards.
+    private func recoverRequestedWindow(params: [String: JSONValue]) throws -> [String: JSONValue] {
+        let app = try resolveApp(try requiredString(params, "app"))
+        // Why: the window-index cache keys are not per app, so another app's snapshot can sit under the same index.
+        let cached = try cachedSnapshot(params: params).flatMap { $0.app.pid == app.pid ? $0 : nil }
+        // Why: a stale index fails after the raise, which would take over the user's screen for nothing.
+        try requireCachedElements(cached: cached, requestedIndexes: try requestedElementIndexes(params))
+        let windows = windowInventory(app: app, appElement: AXUIElementCreateApplication(app.pid)).windows
+        let byIndex = try requestedWindowIndex(params).flatMap { index in
+            windows.filter { $0.candidate.layer == 0 }.dropFirst(index).first?.candidate.windowId
+        }
+        // Why: the cached snapshot is the window the agent's element indexes were read from, even if the index now names another.
+        let windowId = try requestedWindowId(params) ?? cached?.windowId ?? byIndex
+        let target = windowId.flatMap { id in windows.first { $0.candidate.windowId == id } }
+        if let requested = try requestedWindowId(params), target == nil {
+            throw ProviderError.coded("window_not_found", "window \(Int(requested)) of \(app.name) is closed or cannot be read, so nothing was raised; run list-windows and pick a listed window")
+        }
+        recoverWindow(app, windowId: windowId, windowBounds: target?.candidate.bounds ?? cached?.windowBounds, fallback: target?.element)
+        guard let windowId else { return params }
+        // Why: the raise reorders windows and focus, so later reads must not pick the target again; the id wins over
+        // the index when both are set, and the index still keys the snapshot cache.
+        var pinned = params
+        pinned["windowId"] = .number(Double(windowId))
+        return pinned
+    }
+
+    /// On-screen windows, plus minimized, hidden and other-Space windows that accessibility can still read.
+    private func windowInventory(app: AppDescriptor, appElement: AXUIElement) -> WindowInventory {
+        let all = WindowCapture.candidates(pid: app.pid, includeOffScreen: true)
+        let offScreen = all.filter { !$0.isOnScreen && $0.layer == 0 }
+        var elements: [CGWindowID: AXUIElement] = [:]
+        var unreadable = Set<CGWindowID>()
+        if !offScreen.isEmpty {
+            var listed: CFTypeRef?
+            let status = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &listed)
+            for window in (listed as? [AXUIElement]) ?? [] {
+                if let id = windowNumber(window) { elements[id] = window }
+            }
+            let unlisted = offScreen.map(\.windowId).filter { elements[$0] == nil }
+            // Why: closed windows the app keeps belong to no Space; without SkyLight, try them all.
+            let inSpaces = WindowSpaces.windowsInAnySpace(unlisted) ?? Set(unlisted)
+            // Why: kAXWindowsAttribute leaves out windows on other Spaces; skip the lookup when the app stopped answering.
+            if status != .cannotComplete {
+                let live = Set(all.map(\.windowId))
+                elements.merge(otherSpaceWindows(pid: app.pid, windowIds: inSpaces, live: live)) { listed, _ in listed }
+            }
+            unreadable = inSpaces.subtracting(elements.keys)
+        }
+        var appHidden: Bool?
+        let windows = all.compactMap { candidate -> ObservableWindow? in
+            if candidate.isOnScreen {
+                return ObservableWindow(candidate: candidate, element: nil, visibility: .onScreen)
+            }
+            guard candidate.layer == 0, let element = elements[candidate.windowId] else { return nil }
+            let visibility: WindowVisibility
+            if boolAttribute(element, kAXMinimizedAttribute as String) == true {
+                visibility = .minimized
+            } else {
+                if appHidden == nil { appHidden = boolAttribute(appElement, kAXHiddenAttribute as String) == true }
+                visibility = appHidden == true ? .appHidden : .otherSpace
+            }
+            return ObservableWindow(candidate: candidate, element: element, visibility: visibility)
+        }
+        return WindowInventory(windows: windows, unreadableOtherSpace: unreadable, windowIds: Set(all.map(\.windowId)))
+    }
+
+    private func otherSpaceWindows(pid: pid_t, windowIds: Set<CGWindowID>, live: Set<CGWindowID>) -> [CGWindowID: AXUIElement] {
+        var lookups = otherSpaceLookups[pid] ?? OtherSpaceLookups()
+        lookups.elements = lookups.elements.filter { live.contains($0.key) && windowNumber($0.value) == $0.key }
+        lookups.misses = lookups.misses.filter { live.contains($0.key) }
+        let wanted = windowIds.filter { id in
+            lookups.elements[id] == nil && lookups.misses[id].map { Date().timeIntervalSince($0) >= 10 } ?? true
+        }
+        if !wanted.isEmpty {
+            let found = RemoteAccessibilityWindows.windows(pid: pid, wanted: wanted)
+            for id in wanted {
+                if let element = found[id] {
+                    lookups.elements[id] = element
+                } else {
+                    lookups.misses[id] = Date()
+                }
+            }
+        }
+        otherSpaceLookups = otherSpaceLookups.filter { pidIsLive($0.key) }
+        otherSpaceLookups[pid] = lookups
+        return lookups.elements.filter { windowIds.contains($0.key) }
     }
 
     private func observe(params: [String: JSONValue]) throws -> Snapshot {
@@ -319,9 +471,6 @@ final class Provider {
         let windowId = try requestedWindowId(params)
         let windowIndex = try requestedWindowIndex(params)
         let app = try resolveApp(query)
-        if params["restoreWindow"]?.bool == true {
-            recoverWindow(app)
-        }
         let namespace = snapshotNamespace(params)
         pruneSnapshotCache()
         let subtree = try requestedSubtree(params: params, app: app)
@@ -330,7 +479,6 @@ final class Provider {
             includeScreenshot: params["noScreenshot"]?.bool != true,
             windowId: subtree.map(\.base.windowId) ?? windowId,
             windowIndex: subtree == nil ? windowIndex : nil,
-            restoreWindow: params["restoreWindow"]?.bool == true,
             subtree: subtree,
             previousSnapshot: { [snapshots] resolvedWindowId in
                 // Why: indexes carry over from this caller's own last view of exactly this window.
@@ -511,11 +659,19 @@ final class Provider {
         }
     }
 
-    private func validateRequestedElements(cached: Snapshot?, current: Snapshot, requestedIndexes: [Int]) throws {
+    private func requireCachedElements(cached: Snapshot?, requestedIndexes: [Int]) throws {
         guard !requestedIndexes.isEmpty else { return }
         guard let cached else {
             throw ProviderError.coded("element_not_found", "element indexes require a fresh get-app-state snapshot for this app/window")
         }
+        for index in requestedIndexes where cached.elements[index] == nil {
+            throw ProviderError.coded("element_not_found", "element \(index) is stale; run get-app-state again and use a fresh element index")
+        }
+    }
+
+    private func validateRequestedElements(cached: Snapshot?, current: Snapshot, requestedIndexes: [Int]) throws {
+        try requireCachedElements(cached: cached, requestedIndexes: requestedIndexes)
+        guard let cached else { return }
         for index in requestedIndexes {
             // Why: a subtree read also carries the window's earlier records, which prove nothing about the element now.
             guard let expected = cached.elements[index],
@@ -648,11 +804,12 @@ final class Provider {
 
     private func listWindows(params: [String: JSONValue]) throws -> [String: Any] {
         let app = try resolveApp(try requiredString(params, "app"))
-        let windows = WindowCapture.candidates(pid: app.pid)
-            .filter { $0.layer == 0 }
+        let windows = windowInventory(app: app, appElement: AXUIElementCreateApplication(app.pid)).windows
+            .filter { $0.candidate.layer == 0 }
             .enumerated()
-            .map { index, candidate -> [String: Any] in
-                [
+            .map { index, window -> [String: Any] in
+                let candidate = window.candidate
+                return [
                     "index": index,
                     "app": [
                         "name": app.name,
@@ -665,8 +822,8 @@ final class Provider {
                     "y": Int(candidate.bounds.origin.y.rounded()),
                     "width": Int(candidate.bounds.width.rounded()),
                     "height": Int(candidate.bounds.height.rounded()),
-                    "isMinimized": false,
-                    "isOffscreen": !candidate.isOnScreen,
+                    "isMinimized": window.visibility == .minimized,
+                    "isOffscreen": window.visibility != .onScreen,
                     "screenIndex": jsonNullable(screenIndex(for: candidate.bounds)),
                     "isMain": NSNull(),
                     "platform": [
@@ -696,7 +853,6 @@ final class Provider {
         includeScreenshot: Bool,
         windowId: CGWindowID?,
         windowIndex: Int?,
-        restoreWindow: Bool,
         subtree: (root: ElementRecord, base: Snapshot)?,
         previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
@@ -716,27 +872,36 @@ final class Provider {
             throw AccessibilityMessaging.appNotResponding(app.name)
         }
         enableManualAccessibilityIfNeeded(appElement, app: app)
-        let windowCandidates = WindowCapture.candidates(pid: app.pid)
-        let focused = try focusedWindow(
-            appElement: appElement,
-            app: app,
-            visibleWindowCount: windowCandidates.count,
-            allowRecovery: restoreWindow
-        )
+        let inventory = windowInventory(app: app, appElement: appElement)
+        let observable = inventory.windows
+        let focused = try focusedWindow(appElement: appElement, app: app, inventory: inventory)
         let focusedTitle = stringAttribute(focused, kAXTitleAttribute as String) ?? app.name
         let canCaptureScreenshot = includeScreenshot && screenCaptureTrustedSettled()
         guard let capture = WindowCapture.resolve(
-            candidates: windowCandidates,
+            candidates: observable.map(\.candidate),
             titleHint: focusedTitle,
             windowId: windowId,
             windowIndex: windowIndex,
             captureImage: canCaptureScreenshot
         ) else {
-            throw ProviderError.coded("window_not_found", "app '\(app.name)' has no on-screen window")
+            if let windowId, inventory.unreadableOtherSpace.contains(windowId) {
+                throw unreadableOtherSpaceError(app)
+            }
+            let reason = windowId != nil || windowIndex != nil ? "no window matching the requested selector; run list-windows and pick a listed one" : "no window to observe"
+            throw ProviderError.coded("window_not_found", "app '\(app.name)' has \(reason)")
         }
-        guard let window = matchingWindow(appElement: appElement, capture: capture, focused: focused, explicitTarget: windowId != nil || windowIndex != nil) else {
+        let target = observable.first { $0.candidate.windowId == capture.windowId }
+        let visibility = target?.visibility ?? .onScreen
+        guard let window = target?.element ?? matchingWindow(appElement: appElement, capture: capture, focused: focused, explicitTarget: windowId != nil || windowIndex != nil) else {
             throw ProviderError.coded("window_not_found", "could not match accessibility window to requested window; run get-app-state again or retry without a window selector")
         }
+        // Why: a window first read after a large tree walk gets a remote-token id past the lookup's range, so keep the element
+        // for when the window moves to another Space.
+        otherSpaceLookups = otherSpaceLookups.filter { pidIsLive($0.key) }
+        var lookups = otherSpaceLookups[app.pid] ?? OtherSpaceLookups()
+        lookups.elements = lookups.elements.filter { inventory.windowIds.contains($0.key) }
+        lookups.elements[capture.windowId] = window
+        otherSpaceLookups[app.pid] = lookups
         let title = stringAttribute(window, kAXTitleAttribute as String) ?? capture.title ?? app.name
         let renderer = TreeRenderer(
             windowBounds: capture.bounds,
@@ -771,6 +936,8 @@ final class Provider {
             .captured
         } else if includeScreenshot && !canCaptureScreenshot {
             .failed("Screen Recording permission is required for Orca Computer Use; grant permission or pass --no-screenshot to inspect accessibility state only.")
+        } else if includeScreenshot && visibility != .onScreen {
+            .failed("the window \(visibility.reason), so it has no pixels to capture; the accessibility tree is still current. Pass --no-screenshot to skip the capture.")
         } else if includeScreenshot {
             .failed("window screenshot capture returned no image; retry with --no-screenshot if accessibility state is sufficient.")
         } else {
@@ -783,6 +950,7 @@ final class Provider {
             windowBounds: capture.bounds,
             windowId: capture.windowId,
             windowLayer: capture.layer,
+            windowVisibility: visibility,
             treeText: renderTreeText(app: app, title: title, rootIndex: subtree?.root.index, lines: renderer.lines, focused: renderer.focusedSummary),
             focusedElementId: renderer.focusedElementId,
             screenshot: screenshot,
@@ -795,7 +963,7 @@ final class Provider {
             truncated: renderer.truncated,
             maxDepthReached: renderer.maxDepthReached,
             scope: subtree.map { SnapshotScope(rootIndex: $0.root.index, walkedIndexes: Set(indexes.order)) },
-            appWindowIds: windowCandidates.map(\.windowId).sorted()
+            appWindowIds: observable.filter { $0.visibility == .onScreen }.map(\.candidate.windowId).sorted()
         )
     }
 
@@ -824,8 +992,8 @@ final class Provider {
                 "y": Int(snapshot.windowBounds.origin.y.rounded()),
                 "width": Int(snapshot.windowBounds.width.rounded()),
                 "height": Int(snapshot.windowBounds.height.rounded()),
-                "isMinimized": false,
-                "isOffscreen": false,
+                "isMinimized": snapshot.windowVisibility == .minimized,
+                "isOffscreen": snapshot.windowVisibility != .onScreen,
                 "screenIndex": jsonNullable(screenIndex(for: snapshot.windowBounds)),
                 "platform": [
                     "layer": snapshot.windowLayer,
@@ -872,9 +1040,6 @@ final class Provider {
         }
         let modifiers = try KeyMap.parseModifiers(params["modifiers"]?.string)
         let foreground = isForegroundRequest(params)
-        if foreground {
-            recoverWindow(snapshot.app, windowId: snapshot.windowId, windowBounds: snapshot.windowBounds)
-        }
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
             try requireEnabled(record, snapshot: snapshot)
@@ -897,6 +1062,9 @@ final class Provider {
                     actionName: actionName
                 )
             }
+            if !foreground {
+                try requireBackgroundInputReachable(snapshot, input: "pointer click")
+            }
             let point = try pointerTarget(record, snapshot: snapshot)
             try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
             guard unselectedRow else {
@@ -911,6 +1079,9 @@ final class Provider {
                 path: "synthetic",
                 actionName: nil
             )
+        }
+        if !foreground {
+            try requireBackgroundInputReachable(snapshot, input: "pointer click")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
         try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground)
@@ -1125,6 +1296,10 @@ final class Provider {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
         let pasteKeys = try Input.keyEvents("cmd+v")
+        if !isForegroundRequest(params) {
+            // Why: refuse before the clipboard is replaced, so clipboard history never records text that was not sent.
+            try requireBackgroundInputReachable(snapshot, input: "paste")
+        }
         let insertion = TextInput.Insertion(into: focused, text: text)
         try Input.withPasteboardText(text) {
             try deliverKeys(pasteKeys, snapshot: snapshot, params: params)
@@ -1186,6 +1361,7 @@ final class Provider {
             try requireTargetWindowFocused(snapshot, restoreWindowRequested: true)
             try Input.drag(from: start, to: end, targetWindow: snapshot)
         } else {
+            try requireBackgroundInputReachable(snapshot, input: "drag")
             // Why: the mouse-down lands on whatever is under the start point, which can open a menu over the user.
             guard let startElement = elementAtPoint(start, pid: snapshot.app.pid) ?? fromRecord?.element else {
                 throw unidentifiedBackgroundTarget
@@ -1357,18 +1533,13 @@ private func enableManualAccessibilityIfNeeded(_ appElement: AXUIElement, app: A
     }
 }
 
-private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleWindowCount: Int, allowRecovery: Bool) throws -> AXUIElement {
+private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, inventory: WindowInventory) throws -> AXUIElement {
+    let observable = inventory.windows
     let systemWide = AXUIElementCreateSystemWide()
     if let window = lookupUsableWindow(systemWide: systemWide, appElement: appElement, app: app) {
         return window
     }
-    if allowRecovery {
-        recoverWindow(app)
-        if let window = lookupUsableWindow(systemWide: systemWide, appElement: appElement, app: app) {
-            return window
-        }
-    }
-    if visibleWindowCount > 0 {
+    if observable.contains(where: { $0.visibility == .onScreen }) {
         var settledWindow: AXUIElement?
         let outcome = PermissionTrustSettling.settle {
             settledWindow = lookupUsableWindow(
@@ -1381,12 +1552,26 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleW
         if let window = settledWindow, outcome.settled {
             return window
         }
-        throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but no accessibility window (AX reads stayed blocked for \(outcome.waitedMs)ms after retries). macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings.")
+        var windows: CFTypeRef?
+        if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows) == .apiDisabled {
+            throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but macOS refuses accessibility reads (AX reads stayed blocked for \(outcome.waitedMs)ms after retries). macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings.")
+        }
     }
-    if allowRecovery {
-        throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window even after --restore-window; ask the user to open or show one of its windows.")
+    let offScreen = observable.filter { $0.element != nil }
+    if let window = (offScreen.first { $0.visibility != .minimized } ?? offScreen.first)?.element {
+        return window
     }
-    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; it may have none open, or they may be minimized, hidden or on another Space. Ask the user to bring one on screen, or ask the user before retrying with --restore-window.")
+    if observable.contains(where: { $0.visibility == .onScreen }) {
+        throw ProviderError.coded("window_not_found", "app '\(app.name)' has visible windows but exposes no accessibility window; it may still be starting up. Run get-app-state again shortly.")
+    }
+    if !inventory.unreadableOtherSpace.isEmpty {
+        throw unreadableOtherSpaceError(app)
+    }
+    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no open window, counting minimized, hidden and other-Space windows; open one in the app first.")
+}
+
+private func unreadableOtherSpaceError(_ app: AppDescriptor) -> ProviderError {
+    .coded("window_not_found", "app '\(app.name)' has a window on another Space that accessibility cannot read yet: macOS leaves other-Space windows (full-screen ones included) out of accessibility until something has read them once. Ask the user to show that window (switch to its Space) and run get-app-state while it is showing, or ask the user before retrying with --restore-window.")
 }
 
 private func lookupUsableWindow(
@@ -1628,6 +1813,21 @@ private func isForegroundRequest(_ params: [String: JSONValue]) -> Bool {
     params["restoreWindow"]?.bool == true
 }
 
+/// Refuses, before anything is sent, background pointer or key input the window cannot receive while off screen.
+private func requireBackgroundInputReachable(_ snapshot: Snapshot, input: String) throws {
+    guard snapshot.windowVisibility != .onScreen else { return }
+    throw ProviderError.coded("background_unavailable", "window \(Int(snapshot.windowId)) of \(snapshot.app.name) \(snapshot.windowVisibility.reason), so background \(input) cannot reach it without bringing it forward; nothing was sent. Use its elements instead (click --element-index, set-value, type-text --element-index). Ask the user before retrying with --restore-window.")
+}
+
+private func frontmostObservation(of app: AppDescriptor) -> ForegroundDelivery.Observation {
+    let frontmost = boolAttribute(AXUIElementCreateApplication(app.pid), kAXFrontmostAttribute as String) == true
+    return ForegroundDelivery.Observation(frontmost: frontmost, focusedWindowID: frontmost ? focusedWindowId(of: app) : nil)
+}
+
+private func focusedWindowId(of app: AppDescriptor) -> CGWindowID? {
+    copyElement(AXUIElementCreateApplication(app.pid), kAXFocusedWindowAttribute as String).flatMap(windowNumber)
+}
+
 private func backgroundTarget(_ snapshot: Snapshot) -> BackgroundInputTransport.Target {
     BackgroundInputTransport.Target(pid: snapshot.app.pid, windowID: snapshot.windowId, windowFrame: snapshot.windowBounds)
 }
@@ -1737,6 +1937,7 @@ private func scrollPointer(at point: CGPoint, direction: String, pages: Double, 
         try Input.scroll(at: point, wheel1: wheel1, wheel2: wheel2, targetWindow: snapshot)
         return
     }
+    try requireBackgroundInputReachable(snapshot, input: "scroll")
     try withTransportErrors {
         try BackgroundInputTransport.scroll(backgroundTarget(snapshot), at: point, wheel1: wheel1, wheel2: wheel2)
     }
@@ -1750,6 +1951,7 @@ private func deliverKeys(_ events: [CGEvent], snapshot: Snapshot, params: [Strin
         }
         return
     }
+    try requireBackgroundInputReachable(snapshot, input: "key input")
     try withTransportErrors {
         try BackgroundInputTransport.sendKeys(events, to: backgroundTarget(snapshot))
     }
@@ -1786,16 +1988,14 @@ private func matchingWindow(appElement: AXUIElement, capture: WindowCapture, foc
     } ?? focused
 }
 
+/// Brings only the target window forward: no other window of the app, and no LaunchServices reopen that can open a new one.
 private func recoverWindow(
     _ app: AppDescriptor,
-    windowId: CGWindowID? = nil,
-    windowBounds: CGRect? = nil
+    windowId: CGWindowID?,
+    windowBounds: CGRect?,
+    fallback: AXUIElement?
 ) {
     _ = app.app.unhide()
-    _ = app.app.activate(options: [.activateAllWindows])
-    if let bundleId = app.bundleId {
-        openBundle(bundleId)
-    }
     let appElement = AXUIElementCreateApplication(app.pid)
     let focusedWindow = copyElement(appElement, kAXFocusedWindowAttribute as String)
     var cachedWindows: [AXUIElement]?
@@ -1805,41 +2005,28 @@ private func recoverWindow(
         cachedWindows = value
         return value
     }
-    let targetWindow: AXUIElement?
-    if let focusedWindow,
-       (windowId == nil && windowBounds == nil || windowMatchesCapture(
-           focusedWindow,
-           windowId: windowId,
-           windowBounds: windowBounds
-       )) {
-        targetWindow = focusedWindow
-    } else {
-        let exactWindow = windowId.flatMap { targetId in
-            windows().first { windowNumber($0) == targetId }
-        }
-        targetWindow = exactWindow ?? windowBounds.flatMap { targetBounds in
-            windows().first { window in
-                absoluteFrame(window).map { windowFramesMatch($0, targetBounds) } == true
-            }
+    // Why: an exact id wins over a frame match, since full-screen and minimized windows can share the focused window's frame.
+    let exactWindow = windowId.flatMap { targetId in
+        windows().first { windowNumber($0) == targetId }
+    } ?? fallback
+    let sameFrameWindow = windowBounds.flatMap { targetBounds in
+        windows().first { window in
+            absoluteFrame(window).map { windowFramesMatch($0, targetBounds) } == true
         }
     }
-    if let window = targetWindow ?? focusedWindow ?? windows().first {
+    let window = exactWindow ?? sameFrameWindow ?? focusedWindow ?? windows().first
+    if let window {
+        // Why: un-minimize first, so activating the app has the target to bring forward.
         _ = AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+    }
+    _ = app.app.activate(options: [])
+    _ = AXUIElementSetAttributeValue(appElement, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+    if let window {
         _ = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         _ = AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
         _ = AXUIElementSetAttributeValue(window, kAXFocusedAttribute as CFString, kCFBooleanTrue)
     }
     Thread.sleep(forTimeInterval: 0.4)
-}
-
-private func windowMatchesCapture(
-    _ window: AXUIElement,
-    windowId: CGWindowID?,
-    windowBounds: CGRect?
-) -> Bool {
-    if let windowId, windowNumber(window) == windowId { return true }
-    guard let windowBounds, let frame = absoluteFrame(window) else { return false }
-    return windowFramesMatch(frame, windowBounds)
 }
 
 private func windowFramesMatch(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
@@ -1848,16 +2035,6 @@ private func windowFramesMatch(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
         abs(lhs.minY - rhs.minY) <= tolerance &&
         abs(lhs.width - rhs.width) <= tolerance &&
         abs(lhs.height - rhs.height) <= tolerance
-}
-
-private func openBundle(_ bundleId: String) {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-    process.arguments = ["-b", bundleId]
-    process.standardOutput = Pipe()
-    process.standardError = Pipe()
-    try? process.run()
-    process.waitUntilExit()
 }
 
 private func hasRequestedWindowSelector(_ params: [String: JSONValue]) -> Bool {
@@ -2969,7 +3146,6 @@ private struct WindowCandidate {
         var value = Int(bounds.width * bounds.height)
         if layer == 0 { value += 1_000_000_000 }
         if title != nil && title?.isEmpty == false { value += 10_000_000 }
-        if isOnScreen { value += 1_000_000 }
         if alpha >= 0.99 { value += 100_000 }
         return value
     }
@@ -3015,6 +3191,8 @@ private struct WindowCapture {
             return WindowCapture(candidate: visibleWindows[windowIndex], captureImage: captureImage)
         }
         guard let best = candidates.sorted(by: { lhs, rhs in
+            // Why: the focused window's title can name a window on another Space; a visible window still comes first.
+            if lhs.isOnScreen != rhs.isOnScreen { return lhs.isOnScreen }
             if let titleHint, lhs.title == titleHint, rhs.title != titleHint { return true }
             if let titleHint, rhs.title == titleHint, lhs.title != titleHint { return false }
             return lhs.score > rhs.score
@@ -3038,8 +3216,10 @@ private struct WindowCapture {
         }
     }
 
-    static func candidates(pid: pid_t) -> [WindowCandidate] {
-        guard let infos = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
+    /// Off-screen windows include minimized, hidden and other-Space ones, but also closed windows apps keep; see `windowInventory`.
+    static func candidates(pid: pid_t, includeOffScreen: Bool = false) -> [WindowCandidate] {
+        let options: CGWindowListOption = includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly]
+        guard let infos = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
             return []
         }
         return infos.compactMap { info in
@@ -3057,7 +3237,8 @@ private struct WindowCapture {
             guard alpha > 0.01 else { return nil }
             let sharing = (info[kCGWindowSharingState as String] as? NSNumber).map { $0.intValue }
             if sharing == 0 { return nil }
-            let isOnScreen = (info[kCGWindowIsOnscreen as String] as? Bool) ?? true
+            // Why: CoreGraphics omits the key for off-screen windows, and every window of an on-screen-only list is on screen.
+            let isOnScreen = (info[kCGWindowIsOnscreen as String] as? Bool) ?? !includeOffScreen
             return WindowCandidate(
                 windowId: CGWindowID(number.uint32Value),
                 layer: layer,

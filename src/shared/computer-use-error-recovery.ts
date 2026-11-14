@@ -30,8 +30,8 @@ export function computerUseErrorRecoveryData(
     case 'window_not_found':
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and target one of the listed windows.',
-        'If the app is listed but has no usable window, ask the user to open or show one; on macOS a window that is minimized, hidden or on another Space cannot be read in the background. Do not add `--restore-window` on your own, not even just to observe.',
-        'If no window is listed, the app may have none open or, on macOS, only minimized, hidden or other-Space windows; ask the user to show one. `orca computer` does not launch desktop apps: start a closed one on macOS with `open -g -a <app>`; on Windows and Linux ask the user to.'
+        'If the app is listed but has no usable window, ask the user to open or show one. Do not add `--restore-window` on your own, not even just to observe.',
+        'If no window is listed, the app may have none open; ask the user to open one. `orca computer` does not launch desktop apps: start a closed one on macOS with `open -g -a <app>`; on Windows and Linux ask the user to.'
       )
     case 'window_not_focused':
       if (message?.includes('may already have been delivered')) {

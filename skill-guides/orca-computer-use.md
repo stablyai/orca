@@ -149,7 +149,7 @@ These need the foreground, so ask the user first:
 - On Windows, keyboard input (`press-key`, `hotkey`, `paste-text` and `type-text`) needs the target window focused; otherwise it is refused with `window_not_focused` and nothing is sent. For editable fields use `set-value`.
 - On Linux and Windows, actions that need the real pointer, and on Linux keys sent while the target window is not active (Return in a focused GTK text field works). They are refused with `background_unavailable`; see below.
 
-On macOS, a window that is minimized, hidden (Cmd+H) or on another Space cannot be read, so `get-app-state` fails with `window_not_found`. Ask the user to bring it on screen.
+On macOS, `list-windows` and `get-app-state` also read windows that are minimized, hidden (Cmd+H) or on another Space, full-screen ones included; `isMinimized` and `isOffscreen` say which. Element actions work there (`click --element-index`, `set-value`, `type-text --element-index`, secondary actions), while coordinate clicks, scrolls, drags, keys and pastes are refused with `background_unavailable` and nothing is sent. Minimized and hidden windows have no screenshot. A window on another Space that nothing has read yet fails with `window_not_found`; ask the user to show it once.
 
 On macOS, background actions that would open a menu or dialog over the user are refused before anything is sent: right-clicks and Control-clicks, clicks or drags that start on popup menus, menu buttons, native combo boxes and web `<select>` controls, and buttons whose title ends in an ellipsis (`Save…`), which usually open a dialog. For a popup, native combo box or `<select>`, set the option with `set-value` on that element.
 
