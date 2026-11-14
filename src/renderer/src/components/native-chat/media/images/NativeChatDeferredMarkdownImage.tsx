@@ -25,7 +25,7 @@ export function NativeChatDeferredMarkdownImage(props: {
         setNear(true)
       }
     })
-  }, [])
+  }, [near])
   if (near) {
     return <NativeChatMarkdownImage {...props} />
   }
