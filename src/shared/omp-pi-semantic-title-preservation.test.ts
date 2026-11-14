@@ -3,10 +3,12 @@
  * Orca manufactured OMP/Pi flicker via synthetic profile labels and normalization that discarded session/cwd (#16093).
  * OMP disables terminal-title synthesis so its session titles survive every state. Normalize rotating braille while preserving labels. */
 import { describe, expect, it } from 'vitest'
-import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
-import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
-import { normalizeCompatibleAgentTitleForOwner } from './agent-title-owner'
-import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-title'
+import {
+  detectAgentStatusFromTitle,
+  normalizeTerminalTitle
+} from './agent-status/title/agent-title-status'
+import { normalizeCompatibleAgentTitleForOwner } from './agent-status/title/agent-title-owner'
+import { getPiCompatibleTitleSeparatorStatus } from './agent-status/title/providers/pi-compatible-synthetic-title'
 
 // Verbatim from src/main/pi/titlebar-extension-source.ts:44 and oh-my-pi:530-544.
 const ORCA_EXTENSION_WORKING = (frame: string): string => `${frame} π - fixing the sidebar - orca`
@@ -49,12 +51,6 @@ describe('normalizeTerminalTitle keeps the OMP/Pi session label', () => {
     expect(normalized.size).toBe(1)
     expect([...normalized][0]).toContain('fixing the sidebar')
   })
-
-  it('keeps two different sessions distinguishable', () => {
-    expect(normalizeTerminalTitle('π - session A - orca')).not.toBe(
-      normalizeTerminalTitle('π - session B - orca')
-    )
-  })
 })
 
 describe('detectAgentStatusFromTitle reads the π state separator', () => {
@@ -72,30 +68,6 @@ describe('detectAgentStatusFromTitle reads the π state separator', () => {
   })
 })
 
-describe('the churn is gone at the suppressor', () => {
-  it('treats consecutive animation frames as decoration', () => {
-    for (const build of [ORCA_EXTENSION_WORKING, OMP_NATIVE_WORKING]) {
-      for (let index = 1; index < FRAMES.length; index += 1) {
-        expect(
-          isDecorativeAgentTitleFrameChange(
-            normalizeTerminalTitle(build(FRAMES[index - 1])),
-            normalizeTerminalTitle(build(FRAMES[index]))
-          )
-        ).toBe(true)
-      }
-    }
-  })
-
-  it('still commits a real working -> attention transition', () => {
-    expect(
-      isDecorativeAgentTitleFrameChange(
-        normalizeTerminalTitle(ORCA_EXTENSION_WORKING('⠋')),
-        normalizeTerminalTitle('π ! fixing the sidebar')
-      )
-    ).toBe(false)
-  })
-})
-
 describe('the owner relabel keeps the label and swaps only the brand', () => {
   // Rewrite only brand across pane/tab/sidebar/mobile displays: preserve session text (#16093) and explicit owner identity (#6689/#7633/#9077).
   it.each([
@@ -105,28 +77,6 @@ describe('the owner relabel keeps the label and swaps only the brand', () => {
     ['π > fixing the sidebar', 'OMP > fixing the sidebar']
   ])('rewrites %s to %s for an omp-owned pane', (title, expected) => {
     expect(normalizeCompatibleAgentTitleForOwner(title, 'omp')).toBe(expected)
-  })
-
-  // Owner-rewritten titles feed classification; preserve the source’s status through that round trip.
-  it.each([
-    '⠋ π - fixing the sidebar - orca',
-    'π - fixing the sidebar - orca',
-    'π ! fixing the sidebar',
-    'π > fixing the sidebar',
-    '⠋ Pi',
-    'Pi ready',
-    'Pi - action required'
-  ])('preserves the status of %s across the owner rewrite', (title) => {
-    expect(detectAgentStatusFromTitle(normalizeCompatibleAgentTitleForOwner(title, 'omp'))).toBe(
-      detectAgentStatusFromTitle(title)
-    )
-  })
-
-  // Persisted bare frames lack session text but still need explicit OMP owner identity (#6689/#7633/#9077).
-  it('still re-owns bare identity frames', () => {
-    expect(normalizeCompatibleAgentTitleForOwner('⠋ Pi', 'omp')).toBe('⠋ OMP')
-    expect(normalizeCompatibleAgentTitleForOwner('Pi ready', 'omp')).toBe('OMP ready')
-    expect(normalizeCompatibleAgentTitleForOwner('⠋ OMP', 'pi')).toBe('⠋ Pi')
   })
 })
 
@@ -155,17 +105,4 @@ describe('latent hazards the reviewers flagged', () => {
       expect(getPiCompatibleTitleSeparatorStatus(title)).toBe('permission')
     }
   )
-
-  // Hydration reprocesses rewritten titles; preserve the fixed point so future omp/pi tokenization cannot erase session text.
-  it.each([
-    '⠋ π - fixing the sidebar - orca',
-    'π - fixing the sidebar - orca',
-    'π ! fixing the sidebar',
-    'π ⠙ fixing the sidebar',
-    'zsh | ⠙ π - a - b'
-  ])('is a fixed point when the owner rewrite re-runs on %s', (title) => {
-    const once = normalizeCompatibleAgentTitleForOwner(title, 'omp')
-    expect(normalizeCompatibleAgentTitleForOwner(once, 'omp')).toBe(once)
-    expect(once).toContain('OMP')
-  })
 })

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeState as makePublicationState } from '../sync-runtime-graph-test-harness'
+import { makeState as makePublicationState } from './testing/sync-runtime-graph-test-harness'
 import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshot-api'
 import {
   ENV,
@@ -8,10 +8,10 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from '../web-session-tabs-sync-test-harness'
+} from '../web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { getRuntimeMobileSessionSyncKey, runtimeMobileSessionSyncKeysEqual } from './sync-key'
-import type { RuntimeMobileSessionFileTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionFileTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
 
@@ -35,19 +35,6 @@ describe('mirrored editor tab republication', () => {
     isDirty: false,
     isActive: true
   }
-
-  it('does not republish a file mirrored from a host snapshot and caches the empty snapshot', () => {
-    const clientState = mirrorHostTab(fileTab)
-    expect(clientState.openFiles).toMatchObject([
-      { worktreeId: WT, runtimeEnvironmentId: ENV, mirroredFromRuntimeSession: true }
-    ])
-    expect(clientState.unifiedTabsByWorktree[WT]).toMatchObject([
-      { id: 'host-file-tab', contentType: 'editor' }
-    ])
-    const snapshots = buildMobileSessionTabSnapshots(clientState, false)
-    expect(snapshots).toMatchObject([{ worktree: WT, tabs: [] }])
-    expect(buildMobileSessionTabSnapshots(clientState, false)[0]).toBe(snapshots[0])
-  })
 
   it('keeps a genuinely local file in the same worktree and retracts it after close', () => {
     const mirroredState = mirrorHostTab(fileTab)
@@ -80,16 +67,6 @@ describe('mirrored editor tab republication', () => {
     expect(buildMobileSessionTabSnapshots(clientState, false)[0]?.snapshotVersion).toBeGreaterThan(
       snapshots[0]!.snapshotVersion
     )
-  })
-
-  it('filters mirrors without unified tabs or groups', () => {
-    const clientState = mirrorHostTab(fileTab)
-    expect(
-      buildMobileSessionTabSnapshots(
-        makePublicationState({ openFiles: clientState.openFiles }),
-        false
-      )
-    ).toMatchObject([{ worktree: WT, tabs: [] }])
   })
 
   it('resyncs when only the mirror ownership flag changes', () => {

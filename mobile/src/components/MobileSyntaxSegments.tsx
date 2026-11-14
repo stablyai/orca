@@ -1,5 +1,8 @@
 import { Text, type TextStyle } from 'react-native'
-import type { MobileSyntaxSegment, MobileSyntaxTokenKind } from '../session/mobile-file-syntax'
+import type {
+  MobileSyntaxSegment,
+  MobileSyntaxTokenKind
+} from '../files/session-documents/mobile-file-syntax'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -44,5 +47,8 @@ const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = themedStyleS
   },
   meta: {
     color: colors.syntaxMeta
+  },
+  tag: {
+    color: colors.syntaxTag
   }
 }))

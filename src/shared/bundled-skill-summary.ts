@@ -37,6 +37,7 @@ const OP_PLAN_STATE: Readonly<Record<BundledSkillOpKind, BundledSkillPlanState>>
 
 export const BUNDLED_SKILL_LEAVE_REASON_TEXT: Readonly<Record<BundledSkillLeaveReason, string>> = {
   edited: 'Skill edited outside Orca',
+  'other-build': 'Installed by another Orca version',
   other: 'A different skill uses this name',
   unwritable: "Orca can't write to this folder",
   unreadable: "Orca can't read every file",
@@ -57,12 +58,19 @@ export const BUNDLED_SKILL_PLAN_OP_TEXT: Readonly<
   restore: 'Repair'
 }
 
-function opPlanState(op: Pick<BundledSkillOp, 'kind' | 'reason'>): BundledSkillPlanState {
-  // Other owners’ same-named skills are listed without flagging them.
-  if (op.kind === 'leave' && op.reason === 'other') {
+/** One location's summary state; other owners' and other builds' copies read as current. */
+function opPlanState(
+  op: Pick<BundledSkillOp, 'kind' | 'reason' | 'previous'>
+): BundledSkillPlanState {
+  // Other owners’ same-named skills, and another Orca build's copy, are listed without flagging them.
+  if (op.kind === 'leave' && (op.reason === 'other' || op.reason === 'other-build')) {
     return 'current'
   }
-  return isBundledSkillOpKind(op.kind) ? OP_PLAN_STATE[op.kind] : 'attention'
+  return op.previous?.length
+    ? 'update'
+    : isBundledSkillOpKind(op.kind)
+      ? OP_PLAN_STATE[op.kind]
+      : 'attention'
 }
 
 export function bundledSkillPlanState(entry: BundledSkillPlanEntry): BundledSkillPlanState {
@@ -105,7 +113,9 @@ export function summarizeBundledSkillPlan(plan: BundledSkillPlan): BundledSkillP
     // Clean leftover swap siblings or a stray released .orca-old could restore after the user deletes the skill.
     hasWork:
       skills.some((skill) => ['install', 'update', 'repair'].includes(skill.state)) ||
-      plan.skills.some((entry) => entry.ops.some((op) => op.cleanup.length > 0)),
+      plan.skills.some((entry) =>
+        entry.ops.some((op) => op.cleanup.length > 0 || Boolean(op.previous?.length))
+      ),
     skills
   }
 }
@@ -127,10 +137,15 @@ export function bundledSkillInstallAction(plan: BundledSkillPlan): BundledSkillI
   if (paths.length > 0) {
     return { kind: 'replace', paths }
   }
+  // Another Orca build's copy is kept on purpose: an installed skill, not one to fix.
   const current =
     plan.skills.length > 0 &&
     plan.skills.every(
-      (entry) => entry.ops.length > 0 && entry.ops.every((op) => op.kind === 'keep')
+      (entry) =>
+        entry.ops.length > 0 &&
+        entry.ops.every(
+          (op) => op.kind === 'keep' || (op.kind === 'leave' && op.reason === 'other-build')
+        )
     )
   return { kind: current ? 'none' : 'attention' }
 }
@@ -148,8 +163,24 @@ export function bundledSkillInstallAgents(
 }
 
 /** Replaces a copy whose hash matches a shipped Orca release; deletes only Orca's own swap leftovers. */
-export function isBundledSkillAutoUpdateOp(op: Pick<BundledSkillOp, 'kind' | 'cleanup'>): boolean {
-  return op.kind === 'update' && op.cleanup.every((item) => item.action === 'delete')
+export function isBundledSkillAutoUpdateOp(
+  op: Pick<BundledSkillOp, 'kind' | 'cleanup' | 'previous'>
+): boolean {
+  return (
+    (op.kind === 'update' ||
+      (Boolean(op.previous?.length) && ['write', 'copy', 'link', 'keep'].includes(op.kind))) &&
+    op.cleanup.every((item) => item.action === 'delete')
+  )
+}
+
+/** A location already holds exactly this build's bytes; executing records it as Orca's copy. */
+export function holdsCurrentBundledSkillCopy(entry: BundledSkillPlanEntry): boolean {
+  return entry.ops.some(
+    (op) =>
+      op.kind === 'keep' &&
+      op.observed.kind === 'folder' &&
+      op.observed.skillDigest === entry.digest
+  )
 }
 
 function opNeedsConsent(op: BundledSkillOp, autoUpdating: boolean): boolean {

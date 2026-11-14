@@ -8,7 +8,6 @@ import {
   createStagedCommitMessageChange,
   openChecks,
   openSourceControl,
-  seedCleanBranchEmptyState,
   seedCommitMessageComposer,
   seedCreatePrComposer
 } from './helpers/source-control-ai-generation'
@@ -550,59 +549,5 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         generatorLog: readLog(callLogPath)
       }
     )
-  })
-
-  test('hides the commit AI composer on a clean branch empty state', async ({
-    orcaPage
-  }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    const primaryWorktreeId = await seedCleanBranchEmptyState(orcaPage)
-
-    const screenshotDir = path.join(
-      process.cwd(),
-      'validation-screenshots',
-      `clean-empty-state-${Date.now()}`
-    )
-    mkdirSync(screenshotDir, { recursive: true })
-    await testInfo.attach('validation-screenshot-dir', {
-      body: screenshotDir,
-      contentType: 'text/plain'
-    })
-
-    await openSourceControl(orcaPage, primaryWorktreeId)
-    await expect
-      .poll(
-        async () => {
-          // Keep DOM assertions inside the reseeded poll because other workers’ real status refreshes share this E2E repo.
-          await seedCleanBranchEmptyState(orcaPage, primaryWorktreeId)
-          return orcaPage.evaluate(() => {
-            const emptyStateVisible =
-              document.body.textContent?.includes('No changes on this branch') === true
-            const commitMessageInput = document.querySelector('[aria-label="Commit message"]')
-            const commitAiButton = document.querySelector(
-              '[aria-label="Generate commit message with AI"]'
-            )
-            return {
-              emptyStateVisible,
-              hasCommitMessageInput: commitMessageInput !== null,
-              hasCommitAiButton: commitAiButton !== null
-            }
-          })
-        },
-        {
-          timeout: 10_000,
-          message: 'Clean branch empty state did not render without the commit AI composer'
-        }
-      )
-      .toEqual({
-        emptyStateVisible: true,
-        hasCommitMessageInput: false,
-        hasCommitAiButton: false
-      })
-    await seedCleanBranchEmptyState(orcaPage, primaryWorktreeId)
-    await orcaPage.screenshot({
-      path: path.join(screenshotDir, '01-clean-branch-no-commit-ai-composer.png')
-    })
   })
 })

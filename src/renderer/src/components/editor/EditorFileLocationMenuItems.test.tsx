@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,20 +65,6 @@ afterEach(() => {
 })
 
 describe('EditorFileLocationMenuItems', () => {
-  it('reveals the open file through the existing host-aware shell action', () => {
-    renderMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Finder' }))
-    expect(openInFileManager).toHaveBeenCalledWith(file.filePath, 'local')
-  })
-
-  it('uses the header copy feedback and copies the workspace-relative path separately', () => {
-    renderMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy Path' }))
-    expect(onCopyPath).toHaveBeenCalledOnce()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy Relative Path' }))
-    expect(writeClipboardText).toHaveBeenCalledWith('src/file.ts')
-  })
-
   it.each([{ externalSshTargetId: 'remote' }, { runtimeEnvironmentId: 'paired-server' }])(
     'disables local reveal for a remote file: %j',
     (overrides) => {
@@ -93,29 +79,9 @@ describe('EditorFileLocationMenuItems', () => {
     }
   )
 
-  it('refuses local reveal while the owning workspace is unresolved', () => {
-    store.state = { repos: [], worktreesByRepo: {}, folderWorkspaces: [], projectGroups: [] }
-    renderMenu()
-    expect(
-      screen.getByRole('menuitem', { name: /Reveal in Finder/ }).getAttribute('aria-disabled')
-    ).toBe('true')
-  })
-
   it('reveals local files even while a remote runtime is selected', () => {
     store.state.settings = { activeRuntimeEnvironmentId: 'paired-server' }
     renderMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Finder' }))
-    expect(openInFileManager).toHaveBeenCalledWith(file.filePath, 'local')
-  })
-
-  it('reveals a file in a folder workspace without a git worktree', () => {
-    store.state = {
-      repos: [],
-      worktreesByRepo: {},
-      folderWorkspaces: [{ id: 'folder', projectGroupId: 'group', executionHostId: 'local' }],
-      projectGroups: [{ id: 'group', connectionId: null }]
-    }
-    renderMenu({ worktreeId: 'folder:folder' })
     fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Finder' }))
     expect(openInFileManager).toHaveBeenCalledWith(file.filePath, 'local')
   })

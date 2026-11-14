@@ -1,6 +1,6 @@
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 export const REPO_ID = 'repo-close-continuity'
 export const WORKTREE_PATH = '/tmp/terminal-close-continuity'

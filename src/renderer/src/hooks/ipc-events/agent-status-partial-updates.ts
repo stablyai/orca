@@ -1,5 +1,5 @@
-import { RESUMABLE_TUI_AGENTS } from '../../../../shared/agent-session-resume'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import { RESUMABLE_TUI_AGENTS } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
 import type { AppState } from '@/store/types'
 import type {
@@ -60,7 +60,13 @@ export function applyProviderSessionOnlyUpdate(args: {
     providerSession: data.providerSession,
     timing: { updatedAt: data.receivedAt },
     routing,
-    metadata: data.launchToken ? { launchToken: data.launchToken } : undefined
+    metadata:
+      data.launchToken || data.launchConfig !== undefined
+        ? {
+            ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+            ...(data.launchConfig !== undefined ? { launchConfig: data.launchConfig } : {})
+          }
+        : undefined
   }
   if (batch) {
     return batch.transaction.apply(update) ? 'applied' : 'dropped'

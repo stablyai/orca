@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import {
@@ -8,15 +8,15 @@ import {
   tryCreateInstallLockCommand,
   tryStealInstallLockCommand
 } from './remote-install-lock-commands'
-import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
-import { powerShellCommand } from '../../ssh/ssh-remote-powershell'
+import { removeRemoteTreeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
+import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
 import {
   getRemoteHostPlatform,
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 const RELAY_GC_CLAIM_SUFFIX = '.gc-claim'
@@ -65,7 +65,7 @@ export async function tryAcquireRelayGcClaim(
       { signal }
     )
     if (created.trim().endsWith('OK')) {
-      return writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)
+      return await writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)
     }
     const stolen = await execHostCommand(
       conn,
@@ -76,7 +76,7 @@ export async function tryAcquireRelayGcClaim(
     if (!stolen.trim().endsWith('OK')) {
       return null
     }
-    return writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)
+    return await writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)
   } catch (error) {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error

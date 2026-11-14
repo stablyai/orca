@@ -2,6 +2,7 @@ import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type * as AudioChunkModule from '../../../hooks/mobile-dictation-audio-chunk'
+import type * as HeldAudioModule from '../../../hooks/mobile-dictation-held-audio'
 
 const DICTATION_ID = 'dictation-1'
 const MODEL_ID = 'whisper-small'
@@ -48,7 +49,7 @@ export function dictationMountAdapters(
       let started: unknown = 'unstarted'
       let idle = false
       return {
-        action(name, args) {
+        action(name) {
           if (name === 'supersede') {
             generation += 1
             return
@@ -71,7 +72,7 @@ export function dictationMountAdapters(
             setIdle: () => {
               idle = true
             },
-            commitRecordingStart: () => args.recording !== false,
+            commitRecordingStart: () => {},
             rollbackRecordingStart: () => effect('rollback-recording', {})
           }).then((value: unknown) => {
             started = value
@@ -90,6 +91,9 @@ export function dictationMountAdapters(
       const budget = modules.load<
         typeof import('../../../hooks/mobile-dictation-pending-audio-budget')
       >('mobile/src/hooks/mobile-dictation-pending-audio-budget.ts')
+      const heldAudio = new (modules.load<typeof HeldAudioModule>(
+        'mobile/src/hooks/mobile-dictation-held-audio.ts'
+      ).MobileDictationHeldAudio)()
       const pendingChunks = new Set<Promise<void>>()
       const pendingAudioBudget = new budget.MobileDictationPendingAudioBudget()
       const failures: string[] = []
@@ -107,8 +111,10 @@ export function dictationMountAdapters(
             {
               pendingChunks,
               pendingAudioBudget,
+              heldAudio,
               isActive: () => true,
               transcriptSoFar: new chunks.MobileDictationTranscriptSoFar(),
+              stopAtAudioLimit: () => {},
               failActiveDictation: (id: string, error: unknown) => {
                 failures.push(error instanceof Error ? error.message : String(error))
                 effect('dictation-failed', { id })

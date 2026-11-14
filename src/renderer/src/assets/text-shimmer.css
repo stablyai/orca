@@ -46,7 +46,7 @@
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: var(--shimmer-text-fill, transparent);
-  animation: tw-shimmer var(--shimmer-duration, 2s) linear infinite;
+  animation: tw-shimmer var(--shimmer-duration, 2s) var(--shimmer-timing, linear) infinite;
 
   @variant dark {
     --_highlight: var(
@@ -90,6 +90,11 @@
 
 @utility shimmer-duration-* {
   --shimmer-duration: calc(--value(integer) * 1ms);
+}
+
+/* Orca: steps cap repaints for long-lived shimmers; background-position animates on the main thread. */
+@utility shimmer-steps-* {
+  --shimmer-timing: steps(--value(integer));
 }
 
 @utility shimmer-spread-* {

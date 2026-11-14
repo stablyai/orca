@@ -1,14 +1,14 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { formatClipboardImagePasteError } from '@/components/terminal-pane/terminal-pane-paste-execution'
-import { resolveTerminalPasteRuntimeEnvironmentId } from '@/components/terminal-pane/terminal-paste-runtime'
-import { clipboardEventImageFile } from '@/components/native-chat/native-chat-clipboard-payload'
-import { useNativeChatComposerAttachmentPreviews } from '@/components/native-chat/use-native-chat-composer-attachment-previews'
-import type { NativeChatComposerImageAttachment } from '@/components/native-chat/NativeChatComposerField'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { formatClipboardImagePasteError } from '@/components/terminal-pane/input/paste/terminal-pane-paste-execution'
+import { resolveTerminalPasteRuntimeEnvironmentId } from '@/components/terminal-pane/input/paste/terminal-paste-runtime'
+import { clipboardEventImageFile } from '../../../../../shared/native-chat/input/native-chat-clipboard-event'
+import { useNativeChatComposerAttachmentPreviews } from '@/components/native-chat/attachments/chips/use-native-chat-composer-attachment-previews'
+import type { NativeChatComposerImageAttachment } from '@/components/native-chat/attachments/chips/native-chat-image-attachment'
 
 const NO_PENDING: readonly NativeChatComposerImageAttachment[] = []
 

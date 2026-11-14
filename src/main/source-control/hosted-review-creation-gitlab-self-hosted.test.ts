@@ -20,16 +20,30 @@ const {
   getRepoSlugMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
-  glabExecFileAsync: glabExecFileAsyncMock,
-  ghExecFileAsync: ghExecFileAsyncMock,
-  extractExecError: vi.fn()
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../github/client', () => ({
-  createGitHubPullRequest: vi.fn(),
-  getRepoSlug: getRepoSlugMock,
+vi.mock('../git/command-runner/hosted-cli/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  glabExecFileAsync: glabExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ghExecFileAsync: ghExecFileAsyncMock
+}))
+
+vi.mock('../github/client/create/create-github-pull-request', () => ({
+  createGitHubPullRequest: vi.fn()
+}))
+
+vi.mock('../github/client/fetch/repo-slug-upstream', () => ({
+  getRepoSlug: getRepoSlugMock
+}))
+
+vi.mock('../github/client/lookup/get-pr-for-branch', () => ({
   getPRForBranch: vi.fn()
 }))
 
@@ -55,9 +69,14 @@ vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
-import { _resetKnownHostsCache, _resetProjectRefCache } from '../gitlab/gl-utils'
-import { diagnoseAuth } from '../gitlab/client'
+import {
+  _resetKnownHostsCache,
+  rememberGlabKnownHosts
+} from '../gitlab/projects/gitlab-known-host-probe'
+import { _resetProjectRefCache } from '../gitlab/projects/gitlab-project-ref-resolution'
+import { diagnoseAuth } from '../gitlab/requests/gitlab-auth-and-rate-limit'
 import { getHostedReviewCreationEligibility } from './hosted-review-creation'
+import { detectHostedReviewProvider } from './forge-provider-detection'
 
 function resetMocks(): void {
   for (const mock of [
@@ -154,4 +173,49 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
       blockedReason: null
     })
   })
+
+  it.each(['per-host failure', 'global inventory', 'remembered inventory'])(
+    'keeps GitHub PR identity across repositories despite glab %s',
+    async (evidence) => {
+      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@github.com:team/orca.git\n' })
+      getRepoSlugMock.mockResolvedValue({ owner: 'team', repo: 'orca' })
+      if (evidence === 'remembered inventory') {
+        rememberGlabKnownHosts(['github.com'])
+      }
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        if (args.includes('--hostname')) {
+          // Captured glab 1.115 output for a configured host without a token.
+          throw Object.assign(new Error('glab auth status failed'), {
+            stdout: '',
+            stderr:
+              'github.com\n  x github.com: API call failed\n  ! No token found (checked config file, keyring, and environment variables).\n'
+          })
+        }
+        return {
+          stdout:
+            evidence === 'global inventory'
+              ? 'github.com\n  ✓ Logged in to github.com as example-user (config file)\n'
+              : 'gitlab.com\n  ✓ Logged in to gitlab.com as example-user (config file)\n',
+          stderr: ''
+        }
+      })
+      for (const repoPath of ['/first-repo', '/second-repo']) {
+        await expect(
+          detectHostedReviewProvider({ repoPath, executionHostId: 'local' })
+        ).resolves.toBe('github')
+      }
+
+      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'https://forge.acme.test/team/orca.git\n' })
+      glabExecFileAsyncMock.mockRejectedValue(
+        Object.assign(new Error('glab auth status failed'), {
+          stdout: '',
+          stderr:
+            'forge.acme.test\n  x forge.acme.test: API call failed\n  ! No token found (checked config file, keyring, and environment variables).\n'
+        })
+      )
+      await expect(
+        detectHostedReviewProvider({ repoPath: '/custom', executionHostId: 'local' })
+      ).resolves.toBe('gitlab')
+    }
+  )
 })

@@ -42,14 +42,22 @@ test.describe('Diff note delete', () => {
         if (!store) {
           throw new Error('window.__store is not available')
         }
-        const comment = await store.getState().addDiffComment({
-          worktreeId: wId,
-          filePath: rel,
-          source: 'diff',
-          lineNumber: 1,
-          body: 'delete-me note',
-          side: 'modified'
-        })
+        // The seeded worktree is this app's own (local) copy.
+        const comment = await store.getState().addDiffComment(
+          {
+            kind: 'worktree',
+            worktreeId: wId,
+            authority: { endpoint: { kind: 'self' }, at: 'local' }
+          },
+          {
+            worktreeId: wId,
+            filePath: rel,
+            source: 'diff',
+            lineNumber: 1,
+            body: 'delete-me note',
+            side: 'modified'
+          }
+        )
         return comment
       },
       { wId: worktreeId, rel: relativePath }

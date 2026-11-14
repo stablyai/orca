@@ -4,9 +4,9 @@ import { execFileSync } from 'node:child_process'
 import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
-import { relaySocketNameForInstanceId } from '../../../src/main/ssh/legacy-relay/ssh-relay-instance-id'
-import { SshChannelMultiplexer } from '../../../src/main/ssh/ssh-channel-multiplexer'
+import { quotePosixShell } from '../../../src/shared/shell/launch/shell-argument-quoting'
+import { relaySocketNameForInstanceId } from '../../../src/main/ssh/legacy-relay/endpoints/ssh-relay-instance-id'
+import { SshChannelMultiplexer } from '../../../src/main/ssh/protocol/ssh-channel-multiplexer'
 import {
   leaveShellInReleasedRelay,
   openShellRelayTransport

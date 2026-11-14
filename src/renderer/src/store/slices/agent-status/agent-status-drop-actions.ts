@@ -12,8 +12,8 @@ import {
   retainedAgentEntryFromLive,
   shouldReplaceRetainedWithLive
 } from './agent-status-pane-key-tab-binding'
-import { retireAgentPaneAuthorityAliasesByOwnerTab } from '../agent-pane-authority'
-import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-main-agent-verdict'
+import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
+import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
 
 function removeAcknowledgement(

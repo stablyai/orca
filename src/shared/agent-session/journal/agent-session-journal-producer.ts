@@ -1,5 +1,6 @@
 // Root means no producer id, never a matching value. First-write attribution survives revisions without linkage; all producers share one session timeline.
 
+import type { NativeChatBlock } from '../../native-chat/native-chat-types'
 import type {
   AgentJournalProducerLinkage,
   AgentJournalRenderItem
@@ -12,11 +13,23 @@ export function isRootAgentJournalItem(
   return agentJournalItemSubagentId(item) === null
 }
 
-/** The subagent that produced a row, or null when the session's own agent did.
+type ProducerItem = AgentJournalProducerLinkage & {
+  blocks?: readonly NativeChatBlock[]
+  body?: AgentJournalRenderItem['body']
+}
+
+/** The subagent section for a row, or null when the session's own agent produced it.
  *  Same reading of absence as {@link isRootAgentJournalItem}. */
-export function agentJournalItemSubagentId(
-  item: Pick<AgentJournalRenderItem, 'agentId'> | undefined
-): string | null {
+export function agentJournalItemSubagentId(item: ProducerItem | undefined): string | null {
+  const blocks = item?.blocks ?? (item?.body?.kind === 'message' ? item.body.blocks : [])
+  if (
+    item?.agentId !== undefined &&
+    item.producerKind === 'background' &&
+    item.parentAgentId !== undefined &&
+    blocks.some((block) => block.type === 'background-task' && block.taskId === item.agentId)
+  ) {
+    return item.parentAgentId
+  }
   return item?.agentId ?? null
 }
 

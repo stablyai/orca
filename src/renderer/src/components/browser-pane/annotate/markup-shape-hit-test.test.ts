@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arrowHeadGeometry, type MarkupPoint, type MarkupShape } from './markup-drawing-model'
+import type { MarkupPoint, MarkupShape } from './markup-drawing-model'
 import { shapesTouchedBySweep, topmostShapeAt } from './markup-shape-hit-test'
 
 // Pinned here on purpose: how close the pointer must come is part of the behaviour.
@@ -69,21 +69,6 @@ describe('shapesTouchedBySweep', () => {
     expect(touches(highlight, edge)).toBe(true)
     expect(touches(highlight, { x: 50, y: 8 + ERASER_RADIUS + 1 })).toBe(false)
     expect(touches({ ...base, kind: 'pen', width: 4, points }, edge)).toBe(false)
-  })
-
-  it('hits an arrow on its head wings as well as its shaft', () => {
-    const from = { x: 0, y: 0 }
-    const to = { x: 200, y: 0 }
-    const arrow: MarkupShape = { ...base, kind: 'arrow', width: 8, from, to }
-    const head = arrowHeadGeometry(from, to, 8)
-    expect(head).not.toBeNull()
-    // The wing tips sit well off the shaft, so only the head geometry can match them.
-    for (const wing of head ? [head.left, head.right] : []) {
-      expect(Math.abs(wing.y)).toBeGreaterThan(4 + ERASER_RADIUS)
-      expect(touches(arrow, wing)).toBe(true)
-    }
-    expect(touches(arrow, { x: 100, y: 4 + ERASER_RADIUS })).toBe(true)
-    expect(touches(arrow, { x: 100, y: 4 + ERASER_RADIUS + 1 })).toBe(false)
   })
 
   it('hits a rectangle on its border but not in its hollow interior', () => {

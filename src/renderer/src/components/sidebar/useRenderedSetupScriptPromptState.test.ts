@@ -2,7 +2,7 @@
 
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 import { useRenderedSetupScriptPromptState } from './useRenderedSetupScriptPromptState'
 

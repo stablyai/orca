@@ -1,5 +1,5 @@
 // GC only orcad-owned slots; pin active, rollback, live-daemon and journal versions, skipping collection when recovery state is unreadable.
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from './orcad-host-transport'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
@@ -16,15 +16,15 @@ import {
   orcadLivenessProbeCommand
 } from './orcad-remote-launch'
 import { gcRemoteNodeRuntimeStore } from './remote-node-runtime-store-gc'
-import { readOrcadGcTransactionPins } from '../../ssh/orcad-gc-transaction-pins'
+import { readOrcadGcTransactionPins } from '../activation/orcad-gc-transaction-pins'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
 import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { ORCAD_INSTALL_COMPLETE_FILENAME } from '../../../shared/orcad-artifacts'
 import { ORCAD_WINDOWS_LIVENESS_MANY_MARKER } from '../host-state/orcad-windows-host-script'
 
@@ -79,25 +79,7 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boole
               }
             }
           : {}),
-      isDirLive: async (dir) => {
-        try {
-          const probe = await execCommand(
-            options.conn,
-            orcadLivenessProbeCommand(options.host, dir),
-            {
-              wrapCommand: options.host.commandDialect !== 'powershell',
-              signal: options.signal
-            }
-          )
-          return orcadLivenessAnswerBlocksGc(probe)
-        } catch (error) {
-          if (isUnconfirmedSshCommandTermination(error)) {
-            throw error
-          }
-          // Failed probes cannot prove the tree is idle.
-          return true
-        }
-      }
+      isDirLive: (dir) => isOrcadInstallDirLive(options, dir)
     }
   )
   // Remove slots before runtimes so their references are released first.
@@ -109,6 +91,26 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boole
   }
   // A recent build kept now still needs pruning once it ages.
   return versionsClean && !keptRecent
+}
+
+/** True unless the slot's orcad is proven not running from `dir`. */
+export async function isOrcadInstallDirLive(
+  options: Pick<OrcadGcOptions, 'conn' | 'host' | 'signal'>,
+  dir: string
+): Promise<boolean> {
+  try {
+    const probe = await execCommand(options.conn, orcadLivenessProbeCommand(options.host, dir), {
+      wrapCommand: options.host.commandDialect !== 'powershell',
+      signal: options.signal
+    })
+    return orcadLivenessAnswerBlocksGc(probe)
+  } catch (error) {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+    // Failed probes cannot prove the tree is idle.
+    return true
+  }
 }
 
 /** Null means unknown host state and keeps every candidate; otherwise pin anything not proven dead. */

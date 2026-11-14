@@ -1,0 +1,60 @@
+/** A selection's text with each `[data-math-source]` formula as its TeX, not KaTeX's duplicated
+ *  visual and MathML text; null when the selection holds no formula. Desktop and mobile chat copy it. */
+export function markdownMathSelectionText(selection: Selection, root: Element): string | null {
+  if (selection.isCollapsed || !selection.rangeCount) {
+    return null
+  }
+  const range = selection.getRangeAt(0).cloneRange()
+  const ancestor = range.commonAncestorContainer
+  const container = ancestor instanceof Element ? ancestor : ancestor.parentElement
+  if (!container || !root.contains(container)) {
+    return null
+  }
+  const containingFormula = container.closest<HTMLElement>('[data-math-source]')
+  if (containingFormula && root.contains(containingFormula)) {
+    return containingFormula.dataset.mathSource ?? ''
+  }
+  const formulas = Array.from(container.querySelectorAll<HTMLElement>('[data-math-source]')).filter(
+    (element) => range.intersectsNode(element)
+  )
+  if (!formulas.length) {
+    return null
+  }
+  const first = formulas[0]
+  const last = formulas.at(-1)
+  if (first.contains(range.startContainer)) {
+    range.setStartBefore(first)
+  }
+  if (last?.contains(range.endContainer)) {
+    range.setEndAfter(last)
+  }
+  const fragment = range.cloneContents()
+  fragment.querySelectorAll<HTMLElement>('[data-math-source]').forEach((element) => {
+    element.replaceWith(element.dataset.mathSource ?? '')
+  })
+  fragment
+    .querySelectorAll(
+      '.select-none, .sr-only, [aria-hidden="true"], button, input, script, style, svg'
+    )
+    .forEach((element) => element.remove())
+  fragment.querySelectorAll('br').forEach((element) => element.replaceWith('\n'))
+  fragment.querySelectorAll('p,div,blockquote,pre,li,tr,h1,h2,h3,h4,h5,h6').forEach((element) => {
+    element.after(element.tagName === 'P' ? '\n\n' : '\n')
+  })
+  return (fragment.textContent ?? '').replace(/\n{3,}/g, '\n\n').trimEnd()
+}
+
+/** Puts the selection on the clipboard as {@link markdownMathSelectionText} when it holds a formula. */
+export function copyMarkdownMathSelection(
+  event: { defaultPrevented: boolean; clipboardData: DataTransfer | null; preventDefault(): void },
+  root: Element
+): void {
+  const selection = root.ownerDocument.getSelection()
+  const text = selection && markdownMathSelectionText(selection, root)
+  if (event.defaultPrevented || text === null || text === undefined || !event.clipboardData) {
+    return
+  }
+  event.clipboardData.setData('text/plain', text)
+  event.clipboardData.setData('text/html', '')
+  event.preventDefault()
+}

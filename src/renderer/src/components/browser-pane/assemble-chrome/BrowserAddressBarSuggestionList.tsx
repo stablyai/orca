@@ -2,7 +2,7 @@ import { FileText, Search } from 'lucide-react'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { Button } from '@/components/ui/button'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserAddressBarSuggestion } from './browser-address-bar-suggestions'
 import BrowserHistoryRowRemoveButton from '../history/BrowserHistoryRowRemoveButton'
 import { isRemovableHistoryRow } from '../history/browser-history-row-removal'
@@ -31,6 +31,7 @@ export default function BrowserAddressBarSuggestionList({
   onSwitchToTab,
   onRemove
 }: BrowserAddressBarSuggestionListProps): React.ReactElement {
+  const t = useTranslate()
   return (
     // cmdk auto-selects its first row for an empty value; use a sentinel when Enter has no target.
     <Command
@@ -78,10 +79,7 @@ export default function BrowserAddressBarSuggestionList({
                     onSwitchToTab(entry.url)
                   }}
                 >
-                  {translate(
-                    'auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92',
-                    'Switch to tab'
-                  )}
+                  {t('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab')}
                 </Button>
               ) : null}
               {isRemovableHistoryRow(entry) ? (

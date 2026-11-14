@@ -16,7 +16,7 @@ import {
   setPresenceGated
 } from './agent-auto-ack-presence'
 import type { AppState } from '@/store/types'
-import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import {
   acknowledgeViewedAutoAckTarget,
   readAgentAttentionTurnRecords,
@@ -29,9 +29,9 @@ import {
 import {
   isWorkspaceFlagSet,
   onScreenHostId
-} from '@/store/slices/workspace-attention/workspace-unread-flag'
+} from '@/store/slices/workspace-attention/workspace-unread-flag-reads'
 import { paneKeyTabId } from '@/store/slices/workspace-attention/workspace-live-markers'
-import { isOrcaWindowForegroundFocused } from '@/components/terminal-pane/terminal-notification-pane-visibility'
+import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
 import type { ClientWorkspaceViewReporter } from './client-workspace-view-report'
 
 type ScanStore = {
@@ -228,6 +228,7 @@ export function startOnScreenAttentionScan(
       }
     }
 
+    const markersRead = hasMarkersOnScreen(store.getState(), targets)
     for (const target of targets) {
       // Reread after each acknowledgement: synchronous store re-entry may already have handled later targets.
       acknowledgeViewedAutoAckTarget(store.getState(), target, {
@@ -235,7 +236,9 @@ export function startOnScreenAttentionScan(
         readViewed: options?.force
       })
     }
-    store.getState().readOnScreenAttention({ workspaceIds, targets }, { screenArrived: arrived })
+    store
+      .getState()
+      .readOnScreenAttention({ workspaceIds, targets }, { screenArrived: arrived, markersRead })
   }
   // Why: run once on mount to catch a restored session that already has agents on the visible tab.
   maybeAck({ force: true })

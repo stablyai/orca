@@ -2,11 +2,11 @@ import { mkdtemp, mkdir, realpath, rm, symlink, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
 import {
-  ensureDefaultFloatingWorkspacePath,
+  getFloatingWorkspaceFileRoots,
   trustFloatingWorkspaceDirectory,
   resolveFloatingTerminalCwd,
   sanitizeFloatingWorkspaceDirectorySetting
@@ -65,36 +65,6 @@ describe('floating workspace directory', () => {
     await symlink(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
   }
 
-  it('defaults terminal cwd to home', async () => {
-    const store = createStore()
-
-    await expect(resolveFloatingTerminalCwd(store as never)).resolves.toBe(homeDir)
-  })
-
-  it('keeps the app-owned directory for floating markdown notes', async () => {
-    await expect(ensureDefaultFloatingWorkspacePath()).resolves.toBe(
-      path.join(userDataDir, 'floating-workspace')
-    )
-  })
-
-  it('persists picker-approved directories and resolves them as the cwd', async () => {
-    const store = createStore()
-    const selectedDir = path.join(tempRoot, 'notes')
-    await mkdir(selectedDir)
-    const canonicalSelectedDir = await realpath(selectedDir)
-
-    await trustFloatingWorkspaceDirectory(store, selectedDir)
-
-    expect(store.settings.floatingTerminalTrustedCwds).toEqual([canonicalSelectedDir])
-
-    await expect(
-      resolveFloatingTerminalCwd(store as never, {
-        path: selectedDir,
-        requireTrusted: true
-      })
-    ).resolves.toBe(canonicalSelectedDir)
-  })
-
   it('stores a symlinked choice as its canonical target and rejects the link after retargeting', async () => {
     const store = createStore()
     const originalTarget = path.join(tempRoot, 'original-target')
@@ -122,56 +92,23 @@ describe('floating workspace directory', () => {
     ).resolves.toBe('')
   })
 
-  it('keeps temporarily inaccessible trusted directories when adding a new one', async () => {
-    const missingTrustedDir = path.join(tempRoot, 'offline-drive', 'notes')
-    const selectedDir = path.join(tempRoot, 'new-notes')
-    await mkdir(selectedDir)
-    const canonicalSelectedDir = await realpath(selectedDir)
-    const store = createStore({
-      floatingTerminalTrustedCwds: [missingTrustedDir]
-    })
+  it('never re-points an existing trusted folder swapped for a link when trusting another', async () => {
+    await mkdir(path.join(tempRoot, 'a'))
+    const approved = await realpath(path.join(tempRoot, 'a'))
+    const elsewhere = path.join(tempRoot, 'b')
+    const other = path.join(tempRoot, 'c')
+    await mkdir(elsewhere)
+    await mkdir(other)
+    const store = createStore({ floatingTerminalCwd: approved })
+    await trustFloatingWorkspaceDirectory(store, approved)
+    await rm(approved, { recursive: true })
+    await symlinkDirectory(elsewhere, approved)
 
-    await trustFloatingWorkspaceDirectory(store, selectedDir)
+    await trustFloatingWorkspaceDirectory(store, other)
 
-    expect(store.settings.floatingTerminalTrustedCwds).toEqual([
-      missingTrustedDir,
-      canonicalSelectedDir
-    ])
-  })
-
-  it('falls back to the app-owned workspace for untrusted settings paths', async () => {
-    const store = createStore()
-    const arbitraryDir = path.join(tempRoot, 'arbitrary')
-    await mkdir(arbitraryDir)
-
-    await expect(
-      resolveFloatingTerminalCwd(store as never, {
-        path: arbitraryDir,
-        requireTrusted: true
-      })
-    ).resolves.toBe(path.join(userDataDir, 'floating-workspace'))
-    await expect(
-      sanitizeFloatingWorkspaceDirectorySetting(store as never, arbitraryDir)
-    ).resolves.toBe('')
-  })
-
-  it('preserves home shorthand as a terminal-only setting', async () => {
-    const store = createStore()
-
-    await expect(sanitizeFloatingWorkspaceDirectorySetting(store as never, '~')).resolves.toBe('~')
-    await expect(resolveFloatingTerminalCwd(store as never, { path: '~' })).resolves.toBe(homeDir)
-    await expect(
-      resolveFloatingTerminalCwd(store as never, { path: '~', requireTrusted: true })
-    ).resolves.toBe(path.join(userDataDir, 'floating-workspace'))
-  })
-
-  it('still resolves accessible ad hoc terminal directories when trust is not required', async () => {
-    const store = createStore()
-    const arbitraryDir = path.join(tempRoot, 'terminal-only')
-    await mkdir(arbitraryDir)
-
-    await expect(resolveFloatingTerminalCwd(store as never, { path: arbitraryDir })).resolves.toBe(
-      arbitraryDir
-    )
+    const canonicalElsewhere = await realpath(elsewhere)
+    expect(store.settings.floatingTerminalTrustedCwds).not.toContain(canonicalElsewhere)
+    store.settings = { ...store.settings, floatingTerminalCwd: canonicalElsewhere }
+    expect(getFloatingWorkspaceFileRoots(store).exactRoots).toEqual([])
   })
 })

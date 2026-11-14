@@ -1,6 +1,7 @@
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { getProjectRuntimeShellMenuMode } from './use-tab-bar-runtime-model'
 
 export type WindowsShellMenuEntry = {
@@ -8,21 +9,24 @@ export type WindowsShellMenuEntry = {
   shell: BuiltInWindowsTerminalShell
 }
 
-export function buildWindowsShellMenuEntries({
-  showWindowsShellMenu,
-  hasShellLauncher,
-  projectRuntimeShellMenuMode,
-  defaultWindowsShell,
-  gitBashAvailable,
-  wslAvailable
-}: {
-  showWindowsShellMenu: boolean
-  hasShellLauncher: boolean
-  projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
-  defaultWindowsShell: string
-  gitBashAvailable: boolean
-  wslAvailable: boolean
-}): WindowsShellMenuEntry[] | undefined {
+export function buildWindowsShellMenuEntries(
+  {
+    showWindowsShellMenu,
+    hasShellLauncher,
+    projectRuntimeShellMenuMode,
+    defaultWindowsShell,
+    gitBashAvailable,
+    wslAvailable
+  }: {
+    showWindowsShellMenu: boolean
+    hasShellLauncher: boolean
+    projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
+    defaultWindowsShell: string
+    gitBashAvailable: boolean
+    wslAvailable: boolean
+  },
+  t: Translate = translate
+): WindowsShellMenuEntry[] | undefined {
   if (!showWindowsShellMenu || !hasShellLauncher) {
     return undefined
   }
@@ -32,24 +36,24 @@ export function buildWindowsShellMenuEntries({
   if (includeHostShells) {
     allShells.push(
       {
-        label: translate('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
+        label: t('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
         shell: 'powershell.exe'
       },
       {
-        label: translate('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
+        label: t('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
         shell: 'cmd.exe'
       }
     )
     if (gitBashAvailable) {
       allShells.push({
-        label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
+        label: t('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
         shell: WINDOWS_GIT_BASH_SHELL
       })
     }
   }
   if (includeWslShell && wslAvailable) {
     allShells.push({
-      label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
+      label: t('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
       shell: 'wsl.exe'
     })
   }

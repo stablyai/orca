@@ -1,4 +1,5 @@
-import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { readFileSync } from 'node:fs'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import {
@@ -34,7 +35,7 @@ export const SERVE_CHILD_FORCE_KILL_GRACE_MS =
 type ServeSupervisorArgs = {
   /** Respawned on update; `program` is also the bundle whose installed version a handoff awaits. */
   spec: ProcessSpec
-  spawnChild: (spec: ProcessSpec) => ChildProcessHandle
+  spawnChild: (spec: ProcessSpec) => ChildProcess
   handoffPath: string | null
 }
 
@@ -76,7 +77,7 @@ async function awaitInstalledHandoff(
 
 export async function superviseForegroundServe(
   args: ServeSupervisorArgs & {
-    child: ChildProcessHandle
+    child: ChildProcess
     expectedHandoff: InstallRequestedHandoff | null
   }
 ): Promise<number> {
@@ -129,7 +130,7 @@ export async function superviseForegroundServe(
 }
 
 function waitForForegroundChild(
-  child: ChildProcessHandle,
+  child: ChildProcess,
   expected: { handoffPath: string; handoff: InstallRequestedHandoff } | null
 ): Promise<{
   code: number | null

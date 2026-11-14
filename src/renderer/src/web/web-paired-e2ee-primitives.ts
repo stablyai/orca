@@ -1,7 +1,7 @@
 import nacl from 'tweetnacl'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
-import type { PairedE2EEPrimitives } from '../../../shared/paired-e2ee-primitives'
-import { derivePairedE2EEV2KeySchedule } from '../../../shared/paired-e2ee-v2-key-schedule'
+import type { PairedE2EEPrimitives } from '../../../shared/remote-runtime/e2ee/paired-e2ee-primitives'
+import { derivePairedE2EEV2KeySchedule } from '../../../shared/remote-runtime/e2ee/paired-e2ee-v2-key-schedule'
 import {
   decrypt,
   decryptBytes,

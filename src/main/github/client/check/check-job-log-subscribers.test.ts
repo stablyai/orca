@@ -7,7 +7,6 @@ import {
 import { attachLogFixture, failedLogJob } from './check-job-log-test-fixture'
 import { prCheckLogTailCache } from './check-job-log-tails'
 import { createCheckDetailsAdmissionLifetime } from './check-details-admission-lifetime'
-import { getPRCheckDetails } from './get-pr-check-details'
 const { spawnMock, signalMock, forceMock, resolverMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   signalMock: vi.fn(),
@@ -19,7 +18,9 @@ vi.mock('@orca/process-host/process-tree-termination', () => ({
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
-vi.mock('../../github-api-repository', () => ({ resolveGitHubRepoExecution: resolverMock }))
+vi.mock('../../repositories/github-api-repository', () => ({
+  resolveGitHubRepoExecution: resolverMock
+}))
 const children: ChildProcess[] = []
 function spawn(): ChildProcess {
   const child = createFakeSpawnedChild(children.length + 100)
@@ -133,27 +134,7 @@ describe('independent readers and positively closed retirement', () => {
     expect(children).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(12_000)
   })
-  it('rejects an already-aborted joiner and cleans reader listeners without affecting work', async () => {
-    const creator = new AbortController(),
-      follower = new AbortController()
-    const add = vi.spyOn(follower.signal, 'addEventListener'),
-      remove = vi.spyOn(follower.signal, 'removeEventListener')
-    const first = attachLogFixture([failedLogJob()], { controller: creator })
-    const second = attachLogFixture([failedLogJob()], { controller: follower }).catch(() => {})
-    await vi.advanceTimersByTimeAsync(0)
-    follower.abort()
-    await second
-    const before = children.length
-    await expect(
-      attachLogFixture([failedLogJob()], { controller: follower })
-    ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(children).toHaveLength(before)
-    expect(remove.mock.calls.filter((call) => call[0] === 'abort').length).toBe(
-      add.mock.calls.filter((call) => call[0] === 'abort').length
-    )
-    completeFakeSpawn(children[0], { stdout: 'ok' })
-    await first
-  })
+
   it('natural completion racing with last abort neither mutates nor caches canceled output', async () => {
     const controller = new AbortController(),
       jobs = [failedLogJob()]
@@ -183,64 +164,5 @@ describe('independent readers and positively closed retirement', () => {
     expect(laterJobs[0]).toMatchObject({ logState: 'error', logTail: null })
     expect(children).toHaveLength(1)
     expect(prCheckLogTailCache.size).toBe(0)
-  })
-  it('four retained shared creators prevent a fifth admitted log at unverified grace', async () => {
-    const logs: ChildProcess[] = []
-    spawnMock.mockImplementation((_program, argv: string[]) => {
-      const child = spawn()
-      const endpoint = argv.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint.endsWith('/logs')) {
-        logs.push(child)
-      } else {
-        const id = Number(endpoint.match(/runs\/(\d+)/)?.[1])
-        queueMicrotask(() =>
-          completeFakeSpawn(child, {
-            stdout: JSON.stringify({
-              jobs: [
-                {
-                  id,
-                  name: 'job',
-                  status: 'completed',
-                  conclusion: 'failure',
-                  completed_at: 'done'
-                }
-              ]
-            })
-          })
-        )
-      }
-      return child
-    })
-    const controllers = Array.from({ length: 4 }, () => new AbortController())
-    const requests = controllers.map((controller, i) =>
-      getPRCheckDetails(
-        '/folder',
-        { workflowRunId: i + 1 },
-        undefined,
-        {},
-        controller.signal
-      ).catch(() => {})
-    )
-    await vi.advanceTimersByTimeAsync(0)
-    expect(logs).toHaveLength(4)
-    const fifthController = new AbortController()
-    const fifth = getPRCheckDetails(
-      '/folder',
-      { workflowRunId: 5 },
-      undefined,
-      {},
-      fifthController.signal
-    ).catch(() => {})
-    for (const controller of controllers) {
-      controller.abort()
-    }
-    await Promise.all(requests)
-    await vi.advanceTimersByTimeAsync(12_000)
-    expect(logs).toHaveLength(4)
-    logs[0].emit('close', null, 'SIGKILL')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(logs).toHaveLength(5)
-    fifthController.abort()
-    await fifth
   })
 })

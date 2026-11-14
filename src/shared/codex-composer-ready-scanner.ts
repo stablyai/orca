@@ -1,6 +1,7 @@
-import { createTerminalEscapeScanner } from './terminal-escape-scanner'
+import { createTerminalEscapeScanner } from './terminal/protocol/escape/terminal-escape-scanner'
+import { createProgramStatusOscScanner } from './program-status/osc-scanner'
 
-/** The fullscreen loading frame has a composer too; only the live chat paints its footer. */
+/** The fullscreen loading frame has a composer too; only the live chat paints its footer or reports idle. */
 export function createCodexComposerReadyScanner(): {
   observe: (data: string) => { ready: boolean }
 } {
@@ -15,7 +16,10 @@ export function createCodexComposerReadyScanner(): {
   let hintRow: number | null = null
   let row: number | null = null
   let cursorShown = false
+  // Codex 0.166+ reports idle once its live chat is up; the footer rule misses a status line that paints nothing.
+  let reportedIdle = false
   const paintedRows = new Set<number>()
+  const scanProgramStatus = createProgramStatusOscScanner()
 
   const resetLayout = (): void => {
     promptSeen = false
@@ -34,11 +38,15 @@ export function createCodexComposerReadyScanner(): {
           if (mode === '2004') {
             bracketedPaste = set
             if (!set) {
+              reportedIdle = false
               resetLayout()
             }
           } else if (mode === '1049') {
             altScreen = set
             leftAltScreen = !set
+            if (!set) {
+              reportedIdle = false
+            }
             resetLayout()
           } else if (mode === '2026') {
             synchronized = set
@@ -74,7 +82,21 @@ export function createCodexComposerReadyScanner(): {
 
   return {
     observe: (data) => {
-      scanner.observe(data)
+      let scanned = 0
+      for (const event of scanProgramStatus(data)) {
+        if (event.type === 'report' && event.report.id === null && event.report.app === 'codex') {
+          const { state } = event.report
+          // Working keeps the composer open (MCP startup); a blocked view or exit discards input.
+          if (state === 'working' || state === 'done') {
+            continue
+          }
+          // In byte order: only a mode exit after the report revokes it.
+          scanner.observe(data.slice(scanned, event.offset))
+          scanned = event.offset
+          reportedIdle = state === 'idle'
+        }
+      }
+      scanner.observe(data.slice(scanned))
       const liveFullscreenComposer =
         altScreen &&
         !synchronized &&
@@ -89,7 +111,7 @@ export function createCodexComposerReadyScanner(): {
       // Older inline builds do not paint synchronized fullscreen frames.
       const legacyComposer = promptSeen && !leftAltScreen && (!altScreen || !sawSynchronizedFrame)
       return {
-        ready: bracketedPaste && (liveFullscreenComposer || legacyComposer)
+        ready: bracketedPaste && (reportedIdle || liveFullscreenComposer || legacyComposer)
       }
     }
   }

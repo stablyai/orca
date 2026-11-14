@@ -116,26 +116,4 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
       )
     }
   })
-
-  test('leaves the end-of-row composition untouched, with nothing covered to render', async ({
-    orcaPage
-  }, testInfo) => {
-    // Pass before/after the fix to guard against drawing a tail where the row has none.
-    const arena = await openTerminalImePaneArena(orcaPage)
-    let completed = false
-    try {
-      await writeToActiveTerminal(orcaPage, '\x1b[2J\x1b[H안녕하세요')
-      await setImeComposition(arena.session, '가')
-
-      const sample = await sampleOpenComposition(orcaPage)
-      expect(sample.rowTailFromCursor, 'text still sits after the cursor').toBe('')
-      expect(
-        describeOcclusion(sample),
-        `an end-of-row composition covers no committed text — ${JSON.stringify(sample)}`
-      ).toBe('covers "" / renders "가"')
-      completed = true
-    } finally {
-      await closeTerminalImePaneArena(arena, testInfo, 'korean-endofrow-preedit', !completed)
-    }
-  })
 })

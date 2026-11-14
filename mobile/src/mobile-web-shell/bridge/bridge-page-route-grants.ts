@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   MOBILE_WEB_BUNDLE_MAX_GRANTED_ROUTE_GRANTS,
   MobileWebBundleGrantNameSchema

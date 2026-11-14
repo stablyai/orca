@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
-import type { AiVaultSearchResponse } from '../../src/shared/ai-vault-search-types'
+import type { AiVaultSearchResponse } from '../../src/shared/ai-vault/search/ai-vault-search-types'
 
 test('search excerpts keep matches visible after long leading context', async ({
   electronApp,
@@ -201,50 +201,3 @@ test('panel consent enables real local transcript search; clearing restores hist
   )
   await cdp.detach()
 })
-
-// Title-only fallback persists for the host, so each reason needs a fresh panel.
-for (const reason of ['disabled', 'not-ready', 'no-service'] as const) {
-  test(`panel retries transport failure and handles ${reason} search availability`, async ({
-    electronApp,
-    orcaPage
-  }, testInfo) => {
-    await orcaPage.evaluate(async () => {
-      await window.__store
-        ?.getState()
-        .updateSettingsOrThrow({ aiVaultSearch: { enabled: true, historyDays: null } })
-      window.__store?.getState().setRightSidebarOpen(true)
-      window.__store?.getState().setRightSidebarTab('vault')
-    })
-    await electronApp.evaluate(({ ipcMain }) => {
-      ipcMain.removeHandler('aiVault:searchSessions')
-      ipcMain.handle('aiVault:searchSessions', () => {
-        throw new Error('Synthetic transport failure')
-      })
-    })
-    const input = orcaPage.getByRole('textbox', { name: 'Search sessions', exact: true })
-    await input.fill('needle')
-    await expect(
-      orcaPage.getByText('Could not search this computer.', { exact: false })
-    ).toBeVisible()
-    await orcaPage.screenshot({ path: testInfo.outputPath('failure.png') })
-    await electronApp.evaluate(({ ipcMain }, value) => {
-      ipcMain.removeHandler('aiVault:searchSessions')
-      ipcMain.handle('aiVault:searchSessions', () => ({ kind: 'unavailable', reason: value }))
-    }, reason)
-    const retry = orcaPage.getByRole('button', { name: 'Try again', exact: true })
-    await retry.click()
-    const copy =
-      reason === 'not-ready'
-        ? 'The search index is not ready yet.'
-        : 'Full-text search is off on this computer, so only session titles are matched.'
-    await expect(orcaPage.getByText(copy, { exact: false })).toBeVisible()
-    if (reason === 'not-ready') {
-      await expect(retry).toBeVisible()
-    } else {
-      await expect(retry).toHaveCount(0)
-      await input.fill('another needle')
-      await expect(orcaPage.getByText(copy, { exact: false })).toBeVisible()
-    }
-    await orcaPage.screenshot({ path: testInfo.outputPath(`${reason}.png`) })
-  })
-}

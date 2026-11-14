@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 import type { DiscoveryStatusEmitted } from './onboarding-state-types'
-import type { PathSource, ShellHydrationFailureReason } from './shell-path-hydration-types'
+import type {
+  PathSource,
+  ShellHydrationFailureReason
+} from './shell/launch/shell-path-hydration-types'
 import { agentKindSchema, featureWallTourDepthStepSchema } from './telemetry-property-schemas'
 import {
   cohortSchema,
@@ -137,7 +140,7 @@ export const onboardingWindowsTerminalSnapshotSchema = z
 // Why: no `is_git_repo` here; the signal moved to `repo_added.is_git_repo`.
 export const onboardingCompletedSchema = z
   .object({
-    path: onboardingPathSchema,
+    path: onboardingPathSchema.or(z.literal('workspace')),
     total_duration_ms: z.number().int().nonnegative(),
     cohort: cohortSchema
   })

@@ -4,8 +4,8 @@ import { usePetUrl } from './usePetUrl'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
 import type { CustomPet } from '../../../../shared/pet-types'
 import { useAppStore } from '../../store'
-import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   selectPetAnimationName,
   type PetAnimationName,

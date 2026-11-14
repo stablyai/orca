@@ -3,20 +3,18 @@ import type {
   AgentStatusEntry,
   AgentStatusState,
   AgentType
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ActivityPortalReadinessStatus } from './activity-portal-readiness-oscillation'
 
-export type { ActivityGroupBy, ThreadReadFilter } from '../../../../shared/ui-chrome-types'
-
-export type ActivityEventState = AgentStatusState
+type ActivityEventState = AgentStatusState
 export type ActivityHookLiveAgentState = Extract<
   AgentStatusState,
   'working' | 'blocked' | 'waiting'
 >
-export type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring'
+export type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring' | 'unverifiable'
 export type ActivityEvent = {
   id: string
   state: ActivityEventState
@@ -42,6 +40,7 @@ export type ActivityLiveAgentSnapshot = {
   entry: AgentStatusEntry
   tab: TerminalTab
   agentType: AgentType
+  migrationUnsupportedPtyId?: string
 }
 
 // Why: keyed per agent pane (tab + leaf id), not per workspace, so the list shows one row per agent; paneKey is `${tabId}:${leafId}`.

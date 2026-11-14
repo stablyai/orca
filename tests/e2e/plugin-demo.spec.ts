@@ -129,7 +129,7 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
     await expect(consent).toBeVisible()
     await expect(orcaPage.getByRole('article')).toContainText('Local folder')
     await expect(consent).toContainText(
-      'Full access: runs as a normal program and can read your files, use the network and run other programs.'
+      'Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.'
     )
     await expect(orcaPage.getByRole('dialog')).toHaveCount(0)
     await orcaPage

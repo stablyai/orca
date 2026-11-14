@@ -1,7 +1,8 @@
 // Admit before sink binding, then sweep the old generation before deferred writes resolve.
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-dead-generation-settlement'
+import '../agent-session-wire/termination/structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,

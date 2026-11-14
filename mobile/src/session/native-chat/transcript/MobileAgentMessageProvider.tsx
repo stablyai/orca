@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo } from 'react'
 import { useNow } from '../../../hooks/use-now'
-import type { MobileSessionTab } from '../../mobile-session-route-types'
+import type { MobileSessionTab } from '../../tabs/mobile-session-tabs'
 import {
   MobileAgentMessageContext,
   MobileAgentMessageOpenContext,

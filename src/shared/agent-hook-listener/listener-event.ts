@@ -1,7 +1,10 @@
-import type { AgentProcessPresence } from '../agent-process-presence'
-import type { ParsedAgentStatusPayload, TurnEndDisposition } from '../agent-status-types'
-import type { AgentHookSource } from '../agent-hook-relay'
-import type { AgentProviderSessionMetadata } from '../agent-session-resume'
+import type { AgentProcessPresence } from '../agent-status/process/agent-process-presence'
+import type {
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
+} from '../agent-status/contracts/agent-status-types'
+import type { AgentHookSource } from './transport/agent-hook-relay'
+import type { AgentProviderSessionMetadata } from '../agent-session/lifecycle/agent-session-resume'
 import type { ClaudeSettledRequest } from './claude-settled-permission-requests'
 
 /** Execution-host turn record, saved with rows but private; turnEndedAt is the public fact. */
@@ -73,6 +76,8 @@ export type AgentHookEventPayload = {
   structuredHost?: StructuredHostStatus
   /** Rejoin moved pane rows by runtime terminal handle; never persist beyond its issuing runtime. */
   terminalHandle?: string
+  /** Full reply text this hook carried; main's ingest consumes it and never stores, relays or persists it. */
+  replyCandidate?: string
   /** Execution-host clock retained for age-preserving projection replay; never sent verbatim. */
   hostEvidenceObservedAt?: number
   payload: ParsedAgentStatusPayload

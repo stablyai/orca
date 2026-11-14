@@ -1,9 +1,9 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
-import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 import { useNewWorkspaceSetupScript } from './use-new-workspace-setup-script'
 
@@ -55,28 +55,6 @@ describe('new workspace setup choices', () => {
     expect(current().setupDecisionChoice).toBe('skip')
     expect(current().runSetup).toBe(false)
     expect(current().showAdvanced).toBe(false)
-  })
-  it('asks about orca.yaml default-tab commands when the repo has no setup script', async () => {
-    const client = new FakeSession('connected')
-    client.sendRequest.mockResolvedValue({
-      ...hooks,
-      result: {
-        hooks: null,
-        source: 'orca.yaml',
-        setupRunPolicy: 'ask',
-        setupConfig: {
-          source: 'yaml',
-          kind: 'default-tabs',
-          command: '# defaultTabs[1]\npnpm dev'
-        },
-        setupTrust: { contentHash: 'hash', scriptContent: '# defaultTabs[1]\npnpm dev' }
-      }
-    })
-    await act(async () => {
-      renderer = create(createElement(Harness, { client, selectedRepo: repo }))
-    })
-    expect(current().setupCommand).toBe('# defaultTabs[1]\npnpm dev')
-    expect(current().showAdvanced).toBe(true)
   })
   it('does not show another runtime’s setup script for a repository with the same id', async () => {
     const previous = new FakeSession('connected')

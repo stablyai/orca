@@ -3,7 +3,7 @@ import type { SessionOptionDescriptor } from '../../../../../src/shared/native-c
 import {
   nativeChatSessionChoiceLabel,
   selectedNativeChatChoice
-} from '../../../../../src/shared/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 
 /** The value a drill-in row shows beside its label; desktop lists the choices in place instead. */
@@ -18,6 +18,13 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
     return descriptor.id === 'permissionMode'
       ? translate('chat.sessionOptionCopy.permissions', 'Permissions')
       : translate('chat.sessionOptionCopy.notSet', 'Not set')
+  }
+  if (
+    descriptor.id === 'permissionMode' &&
+    descriptor.kind.type === 'select' &&
+    descriptor.kind.currentValue === 'own'
+  ) {
+    return translate('settings.agents.permissionOwnAll', "Agents' own settings")
   }
   const choice = selectedNativeChatChoice(descriptor)
   if (!choice) {

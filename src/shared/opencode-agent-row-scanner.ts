@@ -1,4 +1,4 @@
-import { createTerminalEscapeScanner } from './terminal-escape-scanner'
+import { createTerminalEscapeScanner } from './terminal/protocol/escape/terminal-escape-scanner'
 
 /** OpenCode drops Enter until its agent/model row loads. Detect · above bottom-left ╹ via alternate-screen cursor coordinates,
  * never names/colors: footer/tab separators are unrelated. OpenCode 2 paints corner before row; v1 paints row before corner within one synchronized frame.

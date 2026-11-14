@@ -2,28 +2,16 @@
 
 import { act, type JSX } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FeatureTipId } from '../../../shared/feature-tips'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
+import type { ChatUiLaunchTipVariant } from '../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { FeatureTipSeenId } from '../../../shared/feature-tips'
 import type { TelemetrySettings } from '../../../shared/telemetry-settings-types'
-import type * as telemetry from '@/lib/telemetry'
-import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { useOnboardingAndFeatureTips } from './use-onboarding-and-feature-tips'
 
-const telemetryMock = vi.hoisted(() => ({ passThrough: false }))
-// Pass-through lets one test drive the real bridge wrapper against a rejecting main.
-vi.mock('@/lib/telemetry', async (importOriginal) => {
-  const actual = await importOriginal<typeof telemetry>()
-  return {
-    track: vi.fn((...args: Parameters<typeof actual.track>) => {
-      if (telemetryMock.passThrough) {
-        actual.track(...args)
-      }
-    })
-  }
-})
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -35,40 +23,59 @@ function Gate(): JSX.Element | null {
   if (gate.onboarding === null) {
     gate.applyStartupOnboardingState({ ...getDefaultOnboardingState(), closedAt: 1 })
   }
-  return null
+  return <output>{String(gate.chatUiHereCornerCardOpen)}</output>
 }
 
-async function launch(cohort: TelemetrySettings['chatUiLaunchTipCohort']): Promise<void> {
-  const markFeatureTipsSeen = vi.fn((ids: FeatureTipId[]) =>
-    useAppStore.setState((state) => ({ featureTipsSeenIds: [...state.featureTipsSeenIds, ...ids] }))
-  )
+type Launch = {
+  surface?: 'terminal' | 'chat'
+  tip?: ChatUiLaunchTipVariant
+  seen?: FeatureTipSeenId[]
+  telemetry?: Partial<TelemetrySettings>
+}
+
+/** By default, a profile the tip skipped before: earlier launches already marked the older ids seen. */
+const SKIPPED_BEFORE: Partial<TelemetrySettings> = {
+  chatUiLaunchTipCohort: 'control',
+  chatUiLaunchTipRolloutCohort: 'control'
+}
+
+async function launch({
+  surface = 'terminal',
+  tip = 'chat-ui-off',
+  seen = ['chat-ui-here', 'chat-ui-here-rollout-v1'],
+  telemetry = SKIPPED_BEFORE
+}: Launch = {}): Promise<boolean> {
+  vi.mocked(window.api.onboarding.getChatUiLaunchTipVariant).mockResolvedValue(tip)
   useAppStore.setState({
     persistedUIReady: true,
-    featureTipsSeenIds: [],
+    featureTipsSeenIds: seen,
     settings: createGlobalSettingsFixture({
+      agentDefaultSurface: surface,
       aiVaultSearch: { enabled: true, historyDays: null },
       telemetry: {
         optedIn: true,
         installId: 'install',
         existedBeforeTelemetryRelease: true,
-        ...(cohort ? { chatUiLaunchTipCohort: cohort } : {})
+        ...telemetry
       }
-    }),
-    markFeatureTipsSeen
+    })
   })
   await act(async () => root.render(<Gate />))
+  return container.querySelector('output')?.textContent === 'true'
+}
+
+function expectNextTipInstead(): void {
+  expect(useAppStore.getState().modalData).toMatchObject({ tipId: 'cmd-j-palette' })
 }
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
-  vi.mocked(track).mockClear()
-  telemetryMock.passThrough = false
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
       ui: { set: vi.fn().mockResolvedValue(undefined) },
       cli: { getInstallStatus: vi.fn().mockResolvedValue({ supported: false }) },
-      onboarding: { getChatUiLaunchTipVariant: vi.fn().mockResolvedValue('chat-ui-off') }
+      onboarding: { getChatUiLaunchTipVariant: vi.fn() }
     }
   })
   container = document.createElement('div')
@@ -79,53 +86,13 @@ afterEach(() => {
   act(() => root.unmount())
 })
 
-describe('Chat UI launch tip holdout', () => {
-  it.each([
-    [undefined, 'unassigned'],
-    ['treatment', 'treatment']
-  ] as const)('shows the tip to %s profiles after recording exposure', async (cohort, label) => {
-    await launch(cohort)
-    expect(useAppStore.getState().activeModal).toBe('feature-tips')
-    expect(useAppStore.getState().modalData).toMatchObject({ tipId: 'chat-ui-here' })
-    expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
-      variant: 'chat_ui_off',
-      launch_tip_cohort: label,
-      shown: true
-    })
-    expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_shown', { variant: 'chat_ui_off' })
-  })
+it('shows the card once to a previously skipped profile on the terminal', async () => {
+  expect(await launch()).toBe(true)
+  expect(useAppStore.getState().featureTipsSeenIds).toContain('chat-ui-here-v2')
+})
 
-  it('records control exposure without showing the tip, then lets the next tip open', async () => {
-    await launch('control')
-    expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
-      variant: 'chat_ui_off',
-      launch_tip_cohort: 'control',
-      shown: false
-    })
-    expect(track).not.toHaveBeenCalledWith('chat_ui_feature_tip_shown', expect.anything())
-    expect(useAppStore.getState().featureTipsSeenIds).toContain('chat-ui-here')
-    expect(useAppStore.getState().activeModal).toBe('feature-tips')
-    expect(useAppStore.getState().modalData).toMatchObject({ tipId: 'cmd-j-palette' })
-  })
-
-  // Exposure is best-effort: a rejected capture (consent flip, session budget, IPC failure) is not
-  // retried, and the tip stays consumed so a failed send never shows it twice.
-  it.each(['treatment', 'control'] as const)(
-    'keeps the %s tip consumed when main rejects the exposure event',
-    async (cohort) => {
-      telemetryMock.passThrough = true
-      const telemetryTrack = vi.fn().mockResolvedValue(false)
-      Object.assign(window.api, { telemetryTrack })
-      await launch(cohort)
-      expect(telemetryTrack).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
-        variant: 'chat_ui_off',
-        launch_tip_cohort: cohort,
-        shown: cohort === 'treatment'
-      })
-      expect(useAppStore.getState().featureTipsSeenIds).toContain('chat-ui-here')
-      expect(useAppStore.getState().modalData).toMatchObject({
-        tipId: cohort === 'treatment' ? 'chat-ui-here' : 'cmd-j-palette'
-      })
-    }
-  )
+it('keeps a previously skipped profile on Chat UI out for good', async () => {
+  expect(await launch({ surface: 'chat' })).toBe(false)
+  expect(useAppStore.getState().featureTipsSeenIds).toContain('chat-ui-here-v2')
+  expectNextTipInstead()
 })

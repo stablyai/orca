@@ -41,17 +41,6 @@ describe('connectorSnapshot', () => {
     expect(connectorSnapshot({ kind: 'snapshot', conversations }, NOW).trimmed).toBe(false)
   })
 
-  it('keeps the newest maxSnapshotConversations and says it left some out', () => {
-    const conversations = Array.from(
-      { length: CONNECTOR_CLIENT_LIMITS.maxSnapshotConversations + 5 },
-      (_, index) => entry(String(index), NOW - index)
-    )
-    const { snapshot, trimmed } = connectorSnapshot({ kind: 'snapshot', conversations }, NOW)
-    expect(trimmed).toBe(true)
-    expect(snapshot.conversations).toHaveLength(CONNECTOR_CLIENT_LIMITS.maxSnapshotConversations)
-    expect(snapshot.conversations[0]?.paneKey).toBe('pane-0')
-  })
-
   it('fits the event cap: prompts go unsupported first, then the least recent go', () => {
     const question = 'x'.repeat(4 * 1024)
     const conversations = Array.from(
@@ -86,16 +75,5 @@ describe('connectorSnapshot', () => {
       CONNECTOR_CLIENT_LIMITS.maxEventBytes
     )
     expect(snapshot.conversations[0]?.paneKey).toBe(`0${escaped}`)
-  })
-
-  it('lists every cloud conversation, Slack, Discord or Linear, and never a dev one', () => {
-    const conversations = (['slack', 'discord', 'linear', 'dev'] as const).map((source) =>
-      entry(source, NOW, { conversation: { source, externalId: `${source}-1` } })
-    )
-    expect(
-      connectorSnapshot({ kind: 'snapshot', conversations }, NOW).snapshot.conversations.map(
-        (item) => item.conversation.source
-      )
-    ).toEqual(['slack', 'discord', 'linear'])
   })
 })

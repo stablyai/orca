@@ -4,8 +4,8 @@ import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
-} from '../../../../../src/shared/native-chat-launch-draft-resolution'
-import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-launch-draft-resolution'
+import { normalizedNativeChatUserMessageText } from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { mobileNativeChatLaunchDraftSeeds } from './mobile-native-chat-draft-store'
 import { mobileNativeChatDraftDestination } from './mobile-native-chat-draft-inputs'
 
@@ -22,7 +22,7 @@ function launchDraftResolved(
 ): boolean {
   // Old hosts send no creation time, so any user turn retires the draft.
   if (createdAt === null) {
-    return messages.some((message) => normalizedUserText(message) !== null)
+    return messages.some((message) => normalizedNativeChatUserMessageText(message) !== null)
   }
   return launchDraftResolvedByTranscript({ createdAt }, messages, baseline)
 }

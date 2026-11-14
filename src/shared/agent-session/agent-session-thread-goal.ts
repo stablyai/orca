@@ -1,7 +1,7 @@
 // Derive the current goal solely from the latest journal transition.
 
 import { isRootAgentJournalItem } from './journal/agent-session-journal-producer'
-import { isAgentSessionContextClear } from '../agent-session-context-clear'
+import { isAgentSessionContextClear } from './agent-session-context-clear'
 import {
   AGENT_JOURNAL_THREAD_GOAL_STATUSES,
   type AgentJournalItemBody,

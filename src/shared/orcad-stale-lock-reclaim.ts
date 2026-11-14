@@ -1,6 +1,6 @@
 /** Explicit lock recovery for cases automatic startup cannot judge, such as shared-home reboot (#32177).
  * Dependency-free so clients, CLI and launcher share the command/result. */
-import { quotePosixShellUnlessPlain } from './shell-argument-quoting'
+import { quotePosixShellUnlessPlain } from './shell/launch/shell-argument-quoting'
 
 export const ORCAD_RECLAIM_STALE_LOCK_FLAG = '--reclaim-stale-lock'
 export const ORCAD_STALE_LOCK_DATA_ROOT_FLAG = '--data-root'

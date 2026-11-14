@@ -1,24 +1,21 @@
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
-import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
-import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
-import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
+import { shouldShowWorktreeHistoryControls } from './chrome/titlebar-worktree-history-controls'
+import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
 import {
   getRenderedLineageChipKeys,
   resolveChildWorkspacesToggleGroupKey
-} from '../components/sidebar/child-workspaces-toggle-target'
+} from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
-import {
-  deleteHoveredWorkspaceImmediately,
-  resolveHoveredWorkspaceDeleteTarget
-} from '../components/sidebar/hovered-workspace-delete'
-import { useAppStore } from '../store'
-import type { usePluginCommands } from '@/store/plugin-panels'
+import { useAppStore } from '../store/index'
+import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import { openPluginsSettings } from '@/lib/open-plugins-settings'
+import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
@@ -75,7 +72,9 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
 export function createAppCommandHandlers(
   state: AppShortcutState,
   input?: ShortcutDispatchInput,
-  keybindingContext: KeybindingContext = 'app'
+  keybindingContext: KeybindingContext = 'app',
+  /** A plugin's `commands.run`: Orca's own action, never a plugin replacement (no loops). */
+  builtInOnly = false
 ): Map<KeybindingActionId, () => boolean> {
   const {
     activeView,
@@ -104,7 +103,12 @@ export function createAppCommandHandlers(
         keybindings
       })
     }
-    run()
+    // A plugin command may replace the action; it falls back to `run`.
+    if (builtInOnly) {
+      run()
+    } else {
+      runBuiltInOrReplacement(actionId, run)
+    }
     return true
   }
   const revealRightSidebarTab = (
@@ -216,22 +220,6 @@ export function createAppCommandHandlers(
       }
     ],
     [
-      'workspace.delete',
-      () => {
-        if (floatingWorkspaceFocused) {
-          return false
-        }
-        const store = useAppStore.getState()
-        const target = resolveHoveredWorkspaceDeleteTarget(store)
-        if (!target) {
-          return false
-        }
-        return claim('workspace.delete', () => {
-          deleteHoveredWorkspaceImmediately(store, target)
-        })
-      }
-    ],
-    [
       'workspace.openBoard',
       () => {
         if (activeView === 'settings') {
@@ -262,7 +250,7 @@ export function createAppCommandHandlers(
     [
       'sidebar.right.toggle',
       () =>
-        canRevealRightSidebar
+        canShowRightSidebarForView(activeView)
           ? claim('sidebar.right.toggle', () => actions.toggleRightSidebar())
           : false
     ],

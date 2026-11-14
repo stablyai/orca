@@ -1,7 +1,7 @@
 // Run current outbox-built sends against a real release; both schema admission and operation fingerprints must preserve the user’s message.
 
 import { beforeAll, describe, expect, it } from 'vitest'
-import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
+import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import { installableHost, structuredHostStub } from './structured-agent-session-host-fixture'
 import {

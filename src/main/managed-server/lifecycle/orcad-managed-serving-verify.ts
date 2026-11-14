@@ -1,4 +1,4 @@
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { OrcadManagedServing } from './orcad-managed-serving'
 import { verifyManagedTunnelServing } from './orcad-managed-tunnel'
 

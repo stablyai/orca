@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import { StarNagService } from './service'
 

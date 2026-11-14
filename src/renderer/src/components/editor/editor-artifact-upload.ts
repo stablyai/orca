@@ -1,9 +1,12 @@
-import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
-import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
+import {
+  fileArtifactSourceKey,
+  type FileArtifactOwner
+} from '@/lib/files/artifacts/file-artifact-source-key'
 import { basename } from '@/lib/path'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
-import { flushPendingEditorBuffer } from './editor-pending-flush'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { flushPendingEditorBuffer } from './save/flush/editor-pending-flush'
 
 export type ShareableFileContentType = ArtifactWriteRequest['contentType']
 

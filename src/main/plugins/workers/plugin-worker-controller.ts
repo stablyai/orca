@@ -3,14 +3,18 @@ import type { PluginHostCallOutcome } from '../../../shared/plugins/frames/plugi
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import { resolveContainedPluginArtifact } from '../plugin-artifact-validation'
 import type { PluginContentVerifier } from '../plugin-content-integrity'
+import { PluginWorkerManager } from './plugin-worker-manager'
+import type {
+  PluginWorkerFactory,
+  PluginWorkerSpawnSpec
+} from './worker-supervision/plugin-worker-startup'
 import {
-  PluginWorkerManager,
-  type PluginWorkerFactory,
-  type PluginWorkerSpawnSpec
-} from './plugin-worker-manager'
-import { buildPluginWorkerSpawnSpec, pluginWorkerSpawnSpecsEqual } from './plugin-worker-spawn-spec'
-import type { PluginWorkerHandle } from './plugin-host-process'
-import type { PluginRunState } from './plugin-supervisor'
+  buildPluginWorkerSpawnSpec,
+  pluginWorkerSpawnSpecsEqual
+} from './worker-admission/plugin-worker-spawn-spec'
+import type { PluginWorkerHandle } from './parent-process/plugin-host-process-types'
+import type { PluginRunState } from './worker-supervision/plugin-supervisor'
+import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 export type PluginWorkerControllerOptions = {
   entryPath: string
@@ -25,8 +29,10 @@ export type PluginWorkerControllerOptions = {
   executeHostCall: (
     pluginKey: string,
     method: string,
-    params: unknown
+    params: unknown,
+    signal?: AbortSignal
   ) => Promise<PluginHostCallOutcome>
+  onPanelPost?: (pluginKey: string, post: PluginWorkerPanelPost) => void
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onStateChanged: (pluginKey: string) => void
 }
@@ -44,9 +50,14 @@ export class PluginWorkerController {
       idleReapMs: options.idleReapMs,
       workerFactory: options.workerFactory,
       executeHostCall: options.executeHostCall,
+      onPanelPost: options.onPanelPost,
       log: options.log,
       onWorkerStateChange: options.onStateChanged
     })
+  }
+
+  runningHandle(pluginKey: string): PluginWorkerHandle | null {
+    return this.manager.runningHandle(pluginKey)
   }
 
   state(pluginKey: string): { state: PluginRunState; restarts: number } {
@@ -85,7 +96,8 @@ export class PluginWorkerController {
           this.options.contentVerifier.verifyNow({
             pluginKey: plugin.pluginKey,
             rootDir: plugin.rootDir,
-            contentHash: spec.reviewedContentHash ?? null
+            contentHash: spec.reviewedContentHash ?? null,
+            devFolder: plugin.isDev
           })
       })
       if (!this.options.isCurrentApproved(spec)) {

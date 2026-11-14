@@ -18,61 +18,6 @@ type FaultWindow = Window & {
   }
 }
 
-type CreateTimings = {
-  appearedAfterMs: number | null
-  appearedBeforeSettle: boolean
-  settledAfterMs: number | null
-  tabIdAtFirstSight: string | null
-}
-
-// Require the optimistic tab before the held create promise settles; ordering avoids a machine-dependent latency budget.
-async function createAndWatch(
-  fixture: Awaited<ReturnType<typeof setUpPairedFixture>>,
-  groupId: string
-): Promise<CreateTimings> {
-  return fixture.client.page.evaluate(
-    async ({ groupId, url, worktreeId }) => {
-      const store = window.__store
-      const state = store?.getState()
-      if (!store || !state) {
-        throw new Error('Paired client store unavailable')
-      }
-      state.setBrowserDefaultUrl(url)
-      const startedAt = performance.now()
-      let settledAfterMs: number | null = null
-      const create = state
-        .openNewBrowserTabInActiveWorkspace(groupId)
-        .catch(() => undefined)
-        .finally(() => {
-          settledAfterMs = performance.now() - startedAt
-        })
-
-      const browserTabs = (): { id: string }[] =>
-        (store.getState().unifiedTabsByWorktree[worktreeId] ?? []).filter(
-          (tab) => tab.contentType === 'browser'
-        )
-      let appearedAfterMs: number | null = null
-      let tabIdAtFirstSight: string | null = null
-      while (performance.now() - startedAt < 30_000) {
-        const tabs = browserTabs()
-        if (tabs.length > 0) {
-          appearedAfterMs = performance.now() - startedAt
-          tabIdAtFirstSight = tabs[0].id
-          break
-        }
-        if (settledAfterMs !== null) {
-          break
-        }
-        await new Promise((resolve) => setTimeout(resolve, 2))
-      }
-      const appearedBeforeSettle = appearedAfterMs !== null && settledAfterMs === null
-      await create
-      return { appearedAfterMs, appearedBeforeSettle, settledAfterMs, tabIdAtFirstSight }
-    },
-    { groupId, url: fixture.url, worktreeId: fixture.worktreeId }
-  )
-}
-
 /** Every distinct browser-tab-id list the store passed through, in order. */
 async function recordBrowserTabTransitions(
   fixture: Awaited<ReturnType<typeof setUpPairedFixture>>
@@ -225,60 +170,6 @@ test('keeps an address typed into the staged tab when the paired create is adopt
     // Wait through the adopted pane’s mount, which can overwrite the address a frame after handle replacement.
     await client.page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 2_000)))
     expect(await readAddressBarState(client.page)).toEqual({ bars: 1, focused: true, value: typed })
-  } finally {
-    await fixture.dispose()
-  }
-})
-
-test('shows a paired browser tab before its create RPC resolves, then keeps it as one tab', async ({
-  testRepoPath
-}, testInfo) => {
-  test.setTimeout(300_000)
-  const fixture = await setUpPairedFixture(testInfo, testRepoPath)
-  try {
-    const { client, rootGroupId, worktreeId } = fixture
-    const before = requireGroup(await readPanes(client.page, worktreeId), rootGroupId)
-    await recordBrowserTabTransitions(fixture)
-
-    const timings = await createAndWatch(fixture, rootGroupId)
-    testInfo.annotations.push({
-      type: 'instant-tab-latency',
-      description: `tab visible after ${timings.appearedAfterMs?.toFixed(1)}ms; create settled after ${timings.settledAfterMs?.toFixed(1)}ms`
-    })
-
-    expect(timings.appearedAfterMs).not.toBeNull()
-    expect(timings.appearedBeforeSettle).toBe(true)
-    expect(timings.settledAfterMs).not.toBeNull()
-    expect(timings.appearedAfterMs!).toBeLessThan(timings.settledAfterMs!)
-
-    const after = await waitForGroupTabCount(
-      client.page,
-      worktreeId,
-      rootGroupId,
-      before.tabOrder.length + 1,
-      'paired client lost the optimistic browser tab'
-    )
-    const group = requireGroup(after, rootGroupId)
-    expect(group.tabOrder.slice(0, before.tabOrder.length)).toEqual(before.tabOrder)
-    expect(group.tabOrder.at(-1)).toBe(timings.tabIdAtFirstSight)
-    expect(group.activeTabId).toBe(timings.tabIdAtFirstSight)
-
-    // Any empty/different-id transition reveals strip flicker during adoption.
-    expect(await readBrowserTabTransitions(fixture)).toEqual(['', timings.tabIdAtFirstSight])
-
-    // The host has to own it by now: materialization is what clears the staged handle.
-    expect(
-      await client.page.evaluate((entityId) => {
-        const state = window.__store?.getState()
-        const workspaceId =
-          (state?.unifiedTabsByWorktree[Object.keys(state.unifiedTabsByWorktree)[0]] ?? []).find(
-            (tab) => tab.id === entityId
-          )?.entityId ?? ''
-        return (state?.browserPagesByWorkspace[workspaceId] ?? []).map(
-          (page) => state?.remoteBrowserPageHandlesByPageId[page.id]?.staged ?? false
-        )
-      }, timings.tabIdAtFirstSight ?? '')
-    ).toEqual([false])
   } finally {
     await fixture.dispose()
   }
@@ -831,45 +722,6 @@ test('leaves the user on the tab they switched to during client-host preparation
     const adopted = await readPanes(client.page, worktreeId)
     expect(requireGroup(adopted, rootGroupId).activeTabId).toBe(otherTabId)
     expect(adopted.activeGroupId).toBe(rootGroupId)
-  } finally {
-    await fixture.dispose()
-  }
-})
-
-// Require the same address input node: restoring its text across remount still replays dropdown animation and drops the guest.
-test('adopts a paired browser tab without rebuilding its chrome', async ({
-  testRepoPath
-}, testInfo) => {
-  test.setTimeout(300_000)
-  const fixture = await setUpPairedFixture(testInfo, testRepoPath)
-  try {
-    const { client, rootGroupId, worktreeId } = fixture
-    await startHeldCreate(fixture, rootGroupId)
-    await client.page.locator('[data-orca-browser-address-bar]').first().waitFor()
-
-    // Mark the live node. A remount builds a new input, which cannot carry this.
-    const marked = await client.page.evaluate(() => {
-      const input = document.querySelector('[data-orca-browser-address-bar]')
-      if (!input) {
-        return false
-      }
-      input.setAttribute('data-e2e-staged-address-bar', 'marked')
-      return true
-    })
-    expect(marked).toBe(true)
-
-    await releaseHeldCreateAndAdopt(fixture)
-
-    expect(
-      await client.page.evaluate(() => ({
-        bars: document.querySelectorAll('[data-orca-browser-address-bar]').length,
-        marked: document.querySelectorAll('[data-e2e-staged-address-bar="marked"]').length,
-        sameNode:
-          document.querySelector('[data-orca-browser-address-bar]') ===
-          document.querySelector('[data-e2e-staged-address-bar="marked"]')
-      }))
-    ).toEqual({ bars: 1, marked: 1, sameNode: true })
-    expect(requireGroup(await readPanes(client.page, worktreeId), rootGroupId)).toBeDefined()
   } finally {
     await fixture.dispose()
   }

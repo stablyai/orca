@@ -1,4 +1,3 @@
-// Generate paced PTY agent load and sidecar echo arrivals for terminal-multi-workspace-typing-latency.spec.ts.
 // Split driver→PTY receipt from receipt→polled xterm-buffer detection.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'

@@ -5,10 +5,10 @@ import {
   orcadSlotDir,
   resolveOrcadSlotIdentity,
   type OrcadSlotOptions
-} from '../../ssh/orcad-recovery-slot'
-import { probeActiveOrcadReadiness } from '../../ssh/orcad-active-readiness'
+} from '../activation/orcad-recovery-slot'
+import { probeActiveOrcadReadiness } from '../activation/orcad-active-readiness'
 import { gcOldOrcadVersions } from '../install/orcad-remote-gc'
-import { nodeRuntimeStorePins } from '../../ssh/pinned-runtime-host-target'
+import { nodeRuntimeStorePins } from '../install/pinned-runtime-host-target'
 
 /** null proves no daemon; undefined means its version is unknown. */
 export function provenLiveDaemonVersion(readiness: ServeReadiness): string | null | undefined {
@@ -68,11 +68,7 @@ export async function pruneSupersededOrcadCandidates(
     if (!active) {
       return
     }
-    const identity = await resolveOrcadSlotIdentity(slot, active)
-    readiness = await probeActiveOrcadReadiness(
-      { ...slot, remoteInstallDir: identity.remoteDir },
-      { buildHash: identity.buildHash, fullVersion: identity.version }
-    )
+    readiness = await probeOrcadSlotReadiness(slot, active)
   } catch (error) {
     // Without the incumbent's daemon version a staged tree may still be executing.
     console.warn('[orcad-gc] Skipped pruning staged orcad versions:', error)
@@ -85,6 +81,18 @@ export async function pruneSupersededOrcadCandidates(
     readiness,
     keepStagedWithinDays: STAGED_BUILD_KEEP_DAYS
   })
+}
+
+/** Readiness of the orcad serving `version`, which names its live terminal daemon's build. */
+export async function probeOrcadSlotReadiness(
+  slot: OrcadSlotOptions,
+  version: string
+): Promise<ServeReadiness> {
+  const identity = await resolveOrcadSlotIdentity(slot, version)
+  return probeActiveOrcadReadiness(
+    { ...slot, remoteInstallDir: identity.remoteDir },
+    { buildHash: identity.buildHash, fullVersion: identity.version }
+  )
 }
 
 // Desktops on different releases share hosts; without a grace period each re-uploads what the other pruned.

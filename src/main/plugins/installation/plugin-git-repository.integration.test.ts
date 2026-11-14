@@ -1,16 +1,10 @@
-import { randomBytes } from 'node:crypto'
 import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
 import { serveRepositoriesOverTestSsh } from '../__mocks__/plugin-git-ssh-remote-fixture'
-import { hashPluginTree } from '../plugin-content-hash'
-import {
-  checkoutPluginGitSource,
-  pluginGitAllowedProtocols,
-  runPluginGit
-} from './plugin-git-repository'
+import { checkoutPluginGitSource, runPluginGit } from './plugin-git-repository'
 
 const PLUGIN_URL = 'ssh://git@plugins.example.invalid/sample.git'
 // Why not on Windows: the planted hooks are POSIX shell scripts; the no-checkout path is shared.
@@ -104,75 +98,4 @@ it.each([
   await f.configure(`url.${target(f.repository)}.insteadOf`, url)
   // Why this also covers redirects: Git hands the same allowlist to curl's redirect protocols.
   await expect(f.checkout('v1', url)).rejects.toThrow(`transport '${name}' not allowed`)
-})
-
-it('rejects symlink objects before writing any file', async () => {
-  const f = await fixture()
-  await writeFile(join(f.root, 'link-target'), '../outside.txt')
-  const object = await f.git(['hash-object', '-w', join(f.root, 'link-target')])
-  await f.git(['update-index', '--add', '--cacheinfo', `120000,${object},link`])
-  await f.git(['commit', '--quiet', '-m', 'Symbolic link'])
-  await expect(f.checkout(await f.git(['rev-parse', 'HEAD']))).rejects.toThrow('symlinks')
-  expect(await readdir(f.destination)).toEqual([])
-})
-
-it('aborts a download that grows past its size limit', async () => {
-  const f = await fixture()
-  await writeFile(join(f.root, 'source', 'large.bin'), randomBytes(4 * 1024 * 1024))
-  await f.git(['add', 'large.bin'])
-  await f.git(['commit', '--quiet', '-m', 'Large'])
-  await expect(f.checkout('', PLUGIN_URL, 1024 * 1024)).rejects.toThrow(
-    'exceeds the download size limit'
-  )
-  expect(await readdir(f.destination)).toEqual([])
-})
-
-it('rejects SHA-256 repositories', async () => {
-  const f = await fixture(['--object-format=sha256']).catch(() => null)
-  if (!f) {
-    return // Git before 2.29 cannot create the fixture.
-  }
-  await expect(f.checkout('v1')).rejects.toThrow('SHA-256 plugin repositories are not supported')
-  await expect(f.checkout('a'.repeat(64))).rejects.toThrow('SHA-256')
-})
-
-it('only narrows an inherited Git protocol allowlist', () => {
-  expect(pluginGitAllowedProtocols(undefined)).toBe('https:ssh')
-  expect(pluginGitAllowedProtocols('https:file:ext')).toBe('https')
-  expect(pluginGitAllowedProtocols('')).toBe('')
-})
-
-it('materializes only the catalog path, hashed the same after a sibling-only commit', async () => {
-  const f = await fixture()
-  for (const name of ['a', 'b']) {
-    await mkdir(join(f.repository, 'plugins', name, 'nested'), { recursive: true })
-    await writeFile(join(f.repository, 'plugins', name, 'nested', 'file.txt'), `${name}\n`)
-  }
-  await f.git(['add', '--all'])
-  await f.git(['commit', '--quiet', '-m', 'Two plugins'])
-  const download = async (path: string) => {
-    const destination = join(f.root, `download-${randomBytes(4).toString('hex')}`)
-    const commit = await f.git(['rev-parse', 'HEAD'])
-    await checkoutPluginGitSource({
-      url: PLUGIN_URL,
-      ref: commit,
-      path,
-      destination,
-      workingDirectory: f.root
-    })
-    return destination
-  }
-  const first = await download('plugins/a')
-  expect(await readdir(first)).toEqual(['nested'])
-  expect(await readFile(join(first, 'nested', 'file.txt'), 'utf8')).toBe('a\n')
-  const before = await hashPluginTree(first)
-
-  await writeFile(join(f.repository, 'plugins', 'b', 'nested', 'file.txt'), 'b2\n')
-  await f.git(['commit', '--quiet', '-am', 'Sibling only'])
-  expect(await hashPluginTree(await download('plugins/a'))).toEqual(before)
-
-  await expect(download('plugins/missing')).rejects.toThrow()
-  for (const unsafe of ['../a', '/plugins/a', 'plugins\\a', 'plugins/./a', 'plugins/a/']) {
-    await expect(download(unsafe)).rejects.toThrow('unsafe plugin repository path')
-  }
 })

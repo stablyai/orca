@@ -74,8 +74,8 @@ export function createMainLocaleSubsetPlugin(): Plugin {
       // Runtime URLs keep the CLI scripts (top-level await) out of the CommonJS config bundle.
       const [catalogScript, extractionScript]: [CatalogScript, ExtractionScript] =
         await Promise.all([
-          import(scriptUrl('verify-localization-catalog.mjs')),
-          import(scriptUrl('verify-localization-extraction.mjs'))
+          import(scriptUrl('localization/catalog-validation/verify-localization-catalog.mjs')),
+          import(scriptUrl('localization/source-extraction/verify-localization-extraction.mjs'))
         ])
       collectKeyLiterals = extractionScript.collectKeyLiterals
       const collected: KeyEvidence = { literals: new Set(), dynamicPrefixes: new Set() }

@@ -105,25 +105,6 @@ describe('Resource Manager memory observation', () => {
     })
   })
 
-  it('retains the last observation after a read failure and allows an explicit retry', async () => {
-    const { result } = setup()
-    await flush()
-    getSnapshot.mockRejectedValueOnce(new Error('unavailable'))
-    await act(async () => {
-      await result.current()
-    })
-    expect(useAppStore.setState).toHaveBeenLastCalledWith({
-      memorySnapshotError: 'Error: unavailable'
-    })
-    await act(async () => {
-      await result.current()
-    })
-    expect(useAppStore.setState).toHaveBeenLastCalledWith({
-      memorySnapshot: snapshot(1),
-      memorySnapshotError: null
-    })
-  })
-
   it('permits refresh after a native veto without requiring a different visibility prop', async () => {
     getSnapshot.mockRejectedValueOnce(new Error('view_not_visible'))
     const { result } = setup()

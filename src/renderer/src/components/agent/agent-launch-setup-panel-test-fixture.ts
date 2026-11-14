@@ -1,7 +1,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, vi } from 'vitest'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/native-chat-draft-reset'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 export const entry: AgentPickerEntry = {
   agent: 'claude',
@@ -15,11 +16,10 @@ export const entry: AgentPickerEntry = {
   catalog: { origin: 'unknown' }
 }
 export let root: Root
-export let host: HTMLDivElement
-export const onUse = vi.fn<(draft: AgentPickerDraft) => void>()
+let host: HTMLDivElement
 beforeEach(() => {
+  clearNativeChatComposerDraftsForTests()
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  onUse.mockClear()
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)

@@ -2,7 +2,25 @@ import {
   createRawMarkdownCodeSpanScanner,
   type MarkdownCodeSpanScanner
 } from '../../../../src/shared/markdown-code-span-runs'
-import { escapeAttr, escapeHtml, escapeLiteralHtml, isSafeUrl } from './markdown-escaping'
+import {
+  decodeMarkdownEntities,
+  escapeAttr,
+  escapeHtml,
+  escapeLiteralHtml,
+  isSafeUrl
+} from './markdown-escaping'
+import { routeMarkdownHref } from '../markdown-href-routing'
+
+/** Holds a workspace image's markdown path; the page resolves it, so the host loads `src` instead. */
+export const WORKSPACE_IMAGE_PATH_ATTRIBUTE = 'data-workspace-path'
+
+function imageSourceAttribute(href: string): string {
+  const name =
+    routeMarkdownHref(decodeMarkdownEntities(href)).kind === 'file'
+      ? WORKSPACE_IMAGE_PATH_ATTRIBUTE
+      : 'src'
+  return `${name}="${escapeAttr(href)}"`
+}
 
 // Build global exec regex per recursive call: shared lastIndex would leak between nested parses. Escape text between recognized inline forms.
 // Table cells and list items opt in to attribute-free `<br>` tokens, the only way they hold a line break.
@@ -21,7 +39,7 @@ export function renderInline(text: string, allowLineBreaks = false): string {
     if (token.startsWith('<')) {
       output += allowLineBreaks ? '<br />' : escapeHtml(token)
     } else if (image && isSafeUrl(image[2])) {
-      output += `<img src="${escapeAttr(image[2]!)}" alt="${escapeAttr(image[1] ?? '')}" />`
+      output += `<img ${imageSourceAttribute(image[2]!)} alt="${escapeAttr(image[1] ?? '')}" />`
     } else if (link && isSafeUrl(link[2])) {
       output += `<a href="${escapeAttr(link[2]!)}">${renderInline(link[1]!, allowLineBreaks)}</a>`
     } else if (/^https?:\/\//i.test(token)) {

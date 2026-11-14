@@ -1,8 +1,9 @@
 import type React from 'react'
-import type { SourceControlAiSettings } from '../../../../../../shared/source-control-ai-types'
+import type { SourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type RepositorySourceControlAiEnablementProps = {
   value: boolean | undefined
@@ -20,10 +21,10 @@ function enablementValue(value: boolean | undefined): 'inherit' | 'on' | 'off' {
   return 'inherit'
 }
 
-function visibilityLabel(value: boolean): string {
+function visibilityLabel(value: boolean, t: Translate = translate): string {
   return value
-    ? translate('auto.components.settings.RepositorySourceControlAiEnablement.show', 'Show')
-    : translate('auto.components.settings.RepositorySourceControlAiEnablement.hide', 'Hide')
+    ? t('auto.components.settings.RepositorySourceControlAiEnablement.show', 'Show')
+    : t('auto.components.settings.RepositorySourceControlAiEnablement.hide', 'Hide')
 }
 
 export function RepositorySourceControlAiEnablement({
@@ -31,20 +32,24 @@ export function RepositorySourceControlAiEnablement({
   source,
   onChange
 }: RepositorySourceControlAiEnablementProps): React.JSX.Element {
+  const t = useTranslate()
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      data-settings-row=""
+      className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+    >
       <div className="min-w-0 space-y-0.5">
         <Label className="text-xs font-medium">
-          {translate(
+          {t(
             'auto.components.settings.RepositorySourceControlAiEnablement.showActionsLabel',
             'Show Source Control AI actions'
           )}
         </Label>
         <p className="text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositorySourceControlAiEnablement.visibilityHelper',
             "Controls whether Source Control AI buttons are shown for this repository. Generation used by separate features follows those features' settings. Global default is {{value0}}.",
-            { value0: visibilityLabel(source.enabled) }
+            { value0: visibilityLabel(source.enabled, t) }
           )}
         </p>
       </div>
@@ -59,16 +64,16 @@ export function RepositorySourceControlAiEnablement({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="inherit">
-            {translate(
+            {t(
               'auto.components.settings.RepositorySourceControlAiEnablement.62511a575d',
               'Use global'
             )}
           </SelectItem>
           <SelectItem value="on">
-            {translate('auto.components.settings.RepositorySourceControlAiEnablement.show', 'Show')}
+            {t('auto.components.settings.RepositorySourceControlAiEnablement.show', 'Show')}
           </SelectItem>
           <SelectItem value="off">
-            {translate('auto.components.settings.RepositorySourceControlAiEnablement.hide', 'Hide')}
+            {t('auto.components.settings.RepositorySourceControlAiEnablement.hide', 'Hide')}
           </SelectItem>
         </SelectContent>
       </Select>

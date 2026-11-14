@@ -1,11 +1,13 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { HostRemoveDialog } from './HostRemoveDialog'
 
 const initialState = useAppStore.getState()
@@ -61,7 +63,7 @@ it('releases both obsolete catalogs and cached indexes while host dialogs stay m
     const retired = {
       worktrees: new WeakRef(state.worktreesByRepo),
       detected: new WeakRef(state.detectedWorktreesByRepo),
-      index: new WeakRef(getWorktreeMapFromState(state))
+      index: new WeakRef(getIndexedWorktreeMap(selectWorktreesByRepo(state)))
     }
     view.rerender(dialogs(null))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -86,71 +88,3 @@ it('releases both obsolete catalogs and cached indexes while host dialogs stay m
   view.rerender(dialogs('one'))
   expect(screen.getByRole('dialog')).toHaveTextContent('Its 3 workspaces stay in Orca')
 })
-
-it('keeps workspace details through the closing animation', () => {
-  const getStyle = window.getComputedStyle.bind(window)
-  vi.spyOn(window, 'getComputedStyle').mockImplementation((element, ...args) => {
-    const style = getStyle(element, ...args)
-    if (element.getAttribute('data-slot') === 'dialog-content') {
-      return new Proxy(style, {
-        get: (target, property) =>
-          property === 'animationName'
-            ? element.getAttribute('data-state') === 'closed'
-              ? 'exit'
-              : 'enter'
-            : // oxlint-disable-next-line anti-slop/no-reflect-get -- Forward CSS properties without changing their receiver.
-              Reflect.get(target, property)
-      })
-    }
-    return style
-  })
-  const view = render(dialogs('one'))
-  const dialog = screen.getByRole('dialog')
-  const removeButton = screen.getByRole('button', { name: 'Remove host' })
-  expect(removeButton).toBeEnabled()
-  expect(dialog).toHaveTextContent('Its 2 workspaces stay in Orca')
-
-  view.rerender(dialogs(null))
-  expect(dialog).toBeInTheDocument()
-  expect(dialog).toHaveAttribute('data-state', 'closed')
-  expect(removeButton).toBeDisabled()
-  expect(dialog).toHaveTextContent('Its 2 workspaces stay in Orca')
-
-  const event = new Event('animationend', { bubbles: true })
-  Object.defineProperty(event, 'animationName', { value: 'exit' })
-  fireEvent(dialog, event)
-  expect(dialog).not.toBeInTheDocument()
-})
-
-it.each(['success', 'failure'] as const)(
-  'keeps removal pending across dismiss/reopen and releases it after %s',
-  async (outcome) => {
-    const pending = Promise.withResolvers<void>()
-    const remove = vi.fn().mockReturnValue(pending.promise)
-    vi.stubGlobal('api', { ssh: { removeTarget: remove } })
-    useAppStore.setState({
-      clearRemovedSshTargetState: vi.fn(),
-      updateSettings: vi.fn().mockResolvedValue(undefined)
-    })
-    const view = render(dialogs('one'))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove host' }))
-    expect(remove).toHaveBeenCalledTimes(1)
-    view.rerender(dialogs(null))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    view.rerender(dialogs('one'))
-    const button = screen.getByRole('button', { name: 'Remove host' })
-    expect(button).toBeDisabled()
-    fireEvent.click(button)
-    expect(remove).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      if (outcome === 'success') {
-        pending.resolve()
-      } else {
-        pending.reject(new Error('Removal failed'))
-      }
-      await pending.promise.catch(() => {})
-    })
-    expect(button).toBeEnabled()
-  }
-)

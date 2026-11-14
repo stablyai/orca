@@ -12,7 +12,7 @@ Open a local, SSH, or paired-runtime `.html` file with **Open in Orca Browser** 
 
 The preview asks before reading additional folders, and grants only the folders you approve for that tab. External HTTP(S) links require confirmation and open in a normal Orca browser tab; downloads are disabled inside document previews. Use **Preview options** to reload from disk, open the source file, or copy its full or workspace-relative path.
 
-On paired runtimes, the HTML file must be inside the worktree. Very old paired servers may render the document without binary assets; update the server if remote images do not load.
+On paired runtimes, HTML links can also preview files outside registered workspaces. Orca uses the server's per-file access grants; no project registration or web server is needed. For these documents, the preview initially reads only the opened file and asks before loading other files from its directory. Update an older paired server if it cannot grant the file. Very old paired servers may render documents without binary assets; update the server if remote images do not load.
 
 ## Mermaid
 

@@ -2,7 +2,7 @@ import {
   QuickOpenPathRanker,
   rankQuickOpenFiles,
   type QuickOpenIndexedFile
-} from '../quick-open-search'
+} from '../../../../shared/quick-open/quick-open-path-search'
 
 export type ExistingFileMatch = {
   kind: 'existing-file'

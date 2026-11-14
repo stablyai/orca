@@ -1,10 +1,12 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useState } from 'react'
-import { Pressable, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
-import { colors, pressedStyle } from '../theme/mobile-theme'
+import { pressedStyle } from '../theme/mobile-theme'
 import { automationStyles as styles } from './automation-styles'
+import { FieldTextInput } from '../components/composer-input/FieldTextInput'
 
 export function AutomationButton(props: {
   label: string
@@ -53,10 +55,9 @@ export function AutomationField(props: {
   return (
     <View style={styles.field}>
       <Text style={styles.meta}>{props.label}</Text>
-      <TextInput
+      <FieldTextInput
         accessibilityLabel={props.label}
         style={[styles.input, props.multiline && styles.multiline]}
-        placeholderTextColor={colors.textMuted}
         value={props.value}
         onChangeText={props.onChange}
         multiline={props.multiline}
@@ -113,5 +114,28 @@ export function AutomationMetadata({ label, value }: { label: string; value: str
         {value}
       </Text>
     </View>
+  )
+}
+// The bar's Automations / Runs switch, inset like Source Control's.
+export function AutomationTabs(props: {
+  selected: 'automations' | 'runs'
+  onSelect: (tab: 'automations' | 'runs') => void
+  disabled: boolean
+}) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  return (
+    <MobileSegmentedControl
+      fill
+      tabs
+      style={styles.tabs}
+      segments={[
+        { value: 'automations', label: t('automations.mobile.automations', 'Automations') },
+        { value: 'runs', label: t('automations.mobile.runs', 'Runs') }
+      ]}
+      selected={props.selected}
+      onSelect={props.onSelect}
+      disabled={props.disabled}
+    />
   )
 }

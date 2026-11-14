@@ -1,4 +1,4 @@
-import type { MobileSessionTab } from '../../mobile-session-route-types'
+import type { MobileSessionTab } from '../../tabs/mobile-session-tabs'
 
 export type DraftTabOwnership = { scope: string; hostListed: Set<string>; phoneOwned: Set<string> }
 

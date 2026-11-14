@@ -1,5 +1,5 @@
 import { Ellipsis, FolderCog, Globe } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
   DropdownMenu,
@@ -34,7 +34,8 @@ export function PluginSettingsMenu({
   onSources: () => void
   onDevelopment: () => void
 }): React.JSX.Element {
-  const label = translate('auto.components.settings.PluginSettingsMenu.label', 'Plugin settings')
+  const t = useTranslate()
+  const label = t('auto.components.settings.PluginSettingsMenu.label', 'Plugin settings')
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <Tooltip>
@@ -55,7 +56,7 @@ export function PluginSettingsMenu({
           onCheckedChange={onToggleSuggestions}
           onSelect={(event) => event.preventDefault()}
         >
-          {translate(
+          {t(
             'auto.components.settings.PluginsSettingsSection.fileTypeSuggestionsLabel',
             'Suggest plugins for unknown files'
           )}
@@ -69,13 +70,13 @@ export function PluginSettingsMenu({
         >
           <span className="min-w-0">
             <span className="block">
-              {translate(
+              {t(
                 'auto.components.settings.PluginSettingsMenu.autoUpdateLabel',
                 'Update plugins automatically'
               )}
             </span>
             <span className="block text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.PluginSettingsMenu.autoUpdateHint',
                 'Asks again only for new access'
               )}
@@ -85,14 +86,11 @@ export function PluginSettingsMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!featureEnabled} onSelect={onSources}>
           <Globe />
-          {translate('auto.components.settings.PluginAddMenu.sources', 'Catalog sources…')}
+          {t('auto.components.settings.PluginAddMenu.sources', 'Catalog sources…')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onDevelopment}>
           <FolderCog />
-          {translate(
-            'auto.components.settings.PluginSettingsMenu.development',
-            'Development folders…'
-          )}
+          {t('auto.components.settings.PluginSettingsMenu.development', 'Development folders…')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

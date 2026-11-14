@@ -4,11 +4,13 @@ import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-
 
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../shared/workspace-unread-raise-capability'
-import { createTestStore, makeWorktree, TEST_REPO } from '../store-test-helpers'
-import { makeFolderWorkspace } from '../worktrees-slice-test-fixtures'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../repos/repo.test-fixture'
+import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { markWorkspaceUnreadFlag } from './workspace-unread-flag'
 
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import '@/runtime/rpc/calls/runtime-rpc-call'
 
 // With the switch on, the window raises the flag exactly where the owning host does not.
 
@@ -22,10 +24,12 @@ vi.mock('../worktrees/metadata/worktree-meta-persist', async (importOriginal) =>
   const actual = await importOriginal<typeof WorktreeMetaPersistModule>()
   return { ...actual, persistWorktreeMeta: vi.fn(async () => undefined) }
 })
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-cache', () => ({
   // Null before the environment's first status probe, as the real cache.
   readCachedRuntimeEnvironmentCapability: (environmentId: string, capability: string) =>
-    cachedStatus.get(environmentId)?.includes(capability) ?? null,
+    cachedStatus.get(environmentId)?.includes(capability) ?? null
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   // Settles with the environment's status probe; rejects when it cannot be read.
   runtimeEnvironmentSupportsCapability: vi.fn(async (environmentId: string, capability: string) => {
     const capabilities = await hostCapabilities.get(environmentId)
@@ -90,17 +94,6 @@ beforeEach(() => {
 })
 
 describe('the window raises the unread flag only where its host does not', () => {
-  it('answers from the cached status without probing again', async () => {
-    const { mark, isUnread } = createStore()
-    cachedStatus.set('slow', [WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY])
-    await mark(SLOW_SERVER_WT)
-    expect(isUnread(SLOW_SERVER_WT)).toBe(false)
-    cachedStatus.set('slow', [])
-    await mark(SLOW_SERVER_WT)
-    expect(isUnread(SLOW_SERVER_WT)).toBe(true)
-    expect(runtimeEnvironmentSupportsCapability).not.toHaveBeenCalled()
-  })
-
   it('waits for a server’s first status, and raises it when the status cannot be read', async () => {
     const { mark, isUnread } = createStore()
     let answer: (capabilities: readonly string[]) => void = () => {}

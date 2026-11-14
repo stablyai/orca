@@ -1,5 +1,6 @@
 import { attachMutationRecovery } from './client-error-recovery'
 import { RuntimeClientError, RuntimeRpcFailureError } from './types'
+import { PLUGIN_HOOK_DENIED_CODE } from '../../shared/plugins/contributions/plugin-hook-contribution'
 
 const INSPECT_STEP = 'Inspect the terminal output and agent state without sending input.'
 
@@ -9,6 +10,10 @@ export function attachDurableMutationRecovery(
   originalCommand: string[] | undefined,
   method: string
 ): unknown {
+  // A plugin's refusal is final: retrying sends the same refused input.
+  if (error instanceof RuntimeClientError && error.code === PLUGIN_HOOK_DENIED_CODE) {
+    return error
+  }
   if (method !== 'terminal.send' || !requestId || !(error instanceof RuntimeClientError)) {
     return attachMutationRecovery(error, requestId, originalCommand)
   }

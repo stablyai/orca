@@ -2,26 +2,35 @@ import { OrcaRuntimeWithStateFields } from '../construction/runtime-construction
 import {
   persistClientHostedBrowserPages,
   rehydrateClientHostedBrowserPages
-} from '../client-hosted-browser-page-persistence'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+} from '../browser/client-pages/client-hosted-browser-page-persistence'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { LOCAL_EXECUTION_HOST_ID, getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
-import { killAllProcessesForWorktree } from '../worktree-teardown'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+
+import {
+  type ExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  getRepoExecutionHostId
+} from '../../../shared/execution-host'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
+import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { FeatureInteractionId } from '../../../shared/feature-interactions'
-import type { RuntimeClientSettingsUpdate } from '../runtime-client-settings-shape'
-import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch-settings'
-import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
-import type { TerminalQuickCommandMutation } from '../../../shared/terminal-quick-commands'
+import { isDeepStrictEqual } from 'node:util'
+import type {
+  AgentListPublication,
+  AgentPaneActivityChange
+} from '../../../shared/agent-status/presentation/agent-list-status'
+import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
+import type { RuntimeClientSettingsUpdate } from './settings/runtime-client-settings-shape'
+import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
+import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import type { TerminalQuickCommandMutation } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
-import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
-import type { Automation } from '../../../shared/automations-types'
+import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import type { Automation } from '../../../shared/automations/automation-definition'
 
 export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithStateFields {
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
@@ -184,6 +193,29 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     }
     this.store.updateUI(updates)
     return this.store.getUI()
+  }
+
+  /** The live desktop window's Agents-list verdicts; null with no window, so worktree.ps claims none. */
+  private agentListPublication: AgentListPublication | null = null
+
+  readAgentListPublication(): AgentListPublication | null {
+    return this.agentListPublication
+  }
+
+  setAgentListPublication(next: AgentListPublication | null): void {
+    const changed = !isDeepStrictEqual(this.agentListPublication?.verdicts, next?.verdicts)
+    this.agentListPublication = next
+    if (changed) {
+      this.emitClientEvent({ type: 'agentListChanged' })
+    }
+  }
+
+  /** Applies through the window's own Activity actions and keeps the verdicts it answers with, so the next worktree.ps already shows them. */
+  async applyAgentPaneActivity(change: AgentPaneActivityChange): Promise<void> {
+    if (!this.notifier?.applyAgentPaneActivity) {
+      throw new Error('agent_activity_needs_desktop_window')
+    }
+    this.setAgentListPublication(await this.notifier.applyAgentPaneActivity(change))
   }
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedUIState {

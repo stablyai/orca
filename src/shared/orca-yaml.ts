@@ -12,6 +12,8 @@ import {
   MAX_ORCA_YAML_ALIAS_COUNT,
   MAX_ORCA_YAML_COLLECTION_ENTRIES
 } from './orca-yaml-file-limit'
+import { parseEphemeralVmRecipeTimeoutSeconds } from './ephemeral-vm-recipe-timeouts'
+import { parseRecipePassEnv } from './ephemeral-vm-recipe-env'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -172,6 +174,27 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
       const resume = asTrimmedString(record.resume)
       const destroyValue = asTrimmedString(record.destroy) ?? asTrimmedString(record.cleanup)
       const destroyDisabled = destroyValue === 'none'
+      const timeouts = parseEphemeralVmRecipeTimeoutSeconds(record.timeoutSeconds)
+      if (!timeouts.ok) {
+        // A bad limit should not hide the recipe; its steps stay unlimited.
+        diagnostics.push({
+          index,
+          field: 'timeoutSeconds',
+          message: `Recipe "${id}" ${timeouts.message} Steps keep no time limit.`
+        })
+      }
+      const parsedPassEnv =
+        record.passEnv === undefined ? undefined : parseRecipePassEnv(record.passEnv)
+      if (parsedPassEnv === null) {
+        // Why: a typo must not widen the environment back to everything, and dropping the recipe
+        // would let a same-id plugin recipe or a stored snapshot run with the full environment.
+        diagnostics.push({
+          index,
+          field: 'passEnv',
+          message: `Recipe "${id}" passEnv must be a list of environment variable names (a trailing * matches a prefix). Scripts only receive basic variables until it is fixed.`
+        })
+      }
+      const passEnv = parsedPassEnv === null ? [] : parsedPassEnv
       return {
         id,
         name,
@@ -181,7 +204,11 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
         ...(suspend ? { suspend } : {}),
         ...(resume ? { resume } : {}),
         ...(destroyValue && !destroyDisabled ? { destroy: destroyValue } : {}),
-        ...(destroyDisabled ? { destroyDisabled: true } : {})
+        ...(destroyDisabled ? { destroyDisabled: true } : {}),
+        ...(timeouts.ok && timeouts.timeoutSeconds
+          ? { timeoutSeconds: timeouts.timeoutSeconds }
+          : {}),
+        ...(passEnv ? { passEnv } : {})
       }
     })
     .filter((entry): entry is OrcaVmRecipe => entry !== null)

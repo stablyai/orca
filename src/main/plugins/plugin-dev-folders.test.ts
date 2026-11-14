@@ -78,7 +78,7 @@ async function harness(raw: Record<string, unknown>, enabled = true) {
 }
 
 describe('plugin development folders over the CLI', () => {
-  it('keeps code inert without --approve and grants with the shown fingerprint', async () => {
+  it('keeps code inert without --approve, then the approved load owns the folder it added', async () => {
     const { folder, service, writes, applyConsent, devPaths } = await harness(PANEL)
     const refusal = await loadPluginDevFolder({
       service,
@@ -102,7 +102,36 @@ describe('plugin development folders over the CLI', () => {
         approvalFingerprint: fingerprint,
         caller: { kind: 'local-cli' }
       })
-    ).resolves.toMatchObject({ added: false, approval: 'approve-flag' })
+    ).resolves.toMatchObject({ added: true, approval: 'approve-flag' })
     expect(devPaths()).toEqual([folder])
+    // Only the first load after the refusal owns the folder.
+    await expect(
+      loadPluginDevFolder({ service, writes, path: folder, caller: { kind: 'local-cli' } })
+    ).resolves.toMatchObject({ added: false, approval: 'already-approved' })
+  })
+
+  it('does not claim a folder that was loaded before a refused reload', async () => {
+    const { folder, service, writes } = await harness(PANEL)
+    writes.setDevPluginPaths([folder])
+    const refusal = await loadPluginDevFolder({
+      service,
+      writes,
+      path: folder,
+      caller: { kind: 'local-cli' }
+    }).catch((error: unknown) => error)
+    expect(refusal).toBeInstanceOf(PluginApprovalRequiredError)
+    const fingerprint = pluginCliApprovalRequest(
+      devPlugin(folder, PANEL),
+      'dev-load'
+    ).approvalFingerprint
+    await expect(
+      loadPluginDevFolder({
+        service,
+        writes,
+        path: folder,
+        approvalFingerprint: fingerprint,
+        caller: { kind: 'local-cli' }
+      })
+    ).resolves.toMatchObject({ added: false })
   })
 })

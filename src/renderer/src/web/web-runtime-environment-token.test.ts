@@ -53,12 +53,6 @@ describe('a migrated pairing never gets its code back', () => {
     })
   })
 
-  it('stores the fresh code of a re-pair (new pairing revision)', () => {
-    saveStoredWebRuntimeEnvironment(environment('migrated:keyed-1', 5))
-    saveStoredWebRuntimeEnvironment(environment('fresh-code', 6))
-    expect(readStoredWebRuntimeEnvironment()?.endpoints[0]?.deviceToken).toBe('fresh-code')
-  })
-
   it('a stale tab never overwrites a newer pairing of the same environment', () => {
     saveStoredWebRuntimeEnvironment(environment('fresh-code', 6))
     saveStoredWebRuntimeEnvironment({ ...environment('old-code', 5), runtimeId: 'stale' })

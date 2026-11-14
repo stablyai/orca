@@ -1,17 +1,15 @@
 import { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal } from '../launch/mobile-terminal-owned-create'
 import type { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
-import type {
-  RuntimeMobileSessionCreateTerminalResult,
-  RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-types'
-import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from '../../orca-runtime-core'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from './terminal-surface-deadlines'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type {
   RuntimePtyTabCloseAuthority,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal {
   protected abstract resolveTerminalSplitSourceAuthority(

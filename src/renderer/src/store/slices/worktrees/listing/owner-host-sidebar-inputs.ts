@@ -1,9 +1,7 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../../shared/workspace-unread-raise-capability'
-import {
-  readCachedRuntimeEnvironmentCapability,
-  runtimeEnvironmentSupportsCapability
-} from '@/runtime/runtime-rpc-client'
+import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { AppState } from '../../../types'
 import { tryRuntimeTargetForWorktreeOwner } from './worktree-owner-target'
 

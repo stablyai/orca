@@ -3,7 +3,7 @@ import {
   FEATURE_TIPS,
   isFeatureTipId,
   type FeatureTip,
-  type FeatureTipId
+  type FeatureTipSeenId
 } from '../../../../shared/feature-tips'
 import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import { getPendingFeatureTips, type FeatureTipSettings } from './feature-tip-startup-gate'
@@ -11,7 +11,7 @@ import { getPendingFeatureTips, type FeatureTipSettings } from './feature-tip-st
 export function getFeatureTipForModal(args: {
   cliInstalled: boolean
   modalData: Record<string, unknown>
-  seenTipIds: readonly FeatureTipId[]
+  seenTipIds: readonly FeatureTipSeenId[]
   featureInteractions: FeatureInteractionState
   chatUiLaunchTipVariant: ChatUiLaunchTipVariant
   settings: FeatureTipSettings | null | undefined

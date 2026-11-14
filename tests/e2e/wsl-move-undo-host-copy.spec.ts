@@ -20,7 +20,8 @@ import { createMovedRepo } from './helpers/wsl-moved-host-profile'
 import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
-import { getEnvironmentStorePath } from '../../src/shared/runtime-environment-store-file'
+import '../../src/shared/remote-runtime/host-store/runtime-environment-store-file'
+import { getEnvironmentStorePath } from '../../src/shared/remote-runtime/host-store/runtime-environment-store-records'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-terminal-contracts'
 
 const GATE = { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' }

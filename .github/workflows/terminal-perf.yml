@@ -86,7 +86,9 @@ jobs:
           const action = fs.existsSync(actionPath) ? fs.readFileSync(actionPath, 'utf8') : ''
           const inputs = action.split(/^inputs:[ \t]*\r?$/m)[1]?.split(/^\S/m)[0] ?? ''
           const supportedPostinstalls = [
+            'node config/scripts/native-build/node-addons/rebuild-native-deps.mjs',
             'node config/scripts/rebuild-native-deps.mjs',
+            'pnpm run build:packages && node config/scripts/native-build/node-addons/rebuild-native-deps.mjs',
             'pnpm run build:packages && node config/scripts/rebuild-native-deps.mjs'
           ]
           const supportedRunner = process.env.RUNNER_KIND === 'github-hosted' ||
@@ -98,7 +100,7 @@ jobs:
             supportedPostinstalls.includes(manifest.scripts?.postinstall) &&
             /^  native-runtime:/m.test(inputs) && /^  cache-pnpm-store-lookup-only:/m.test(inputs) &&
             fs.existsSync('.github/actions/prepare-native-runtime/action.yml') &&
-            fs.existsSync('config/scripts/ensure-native-runtime.mjs')
+            (fs.existsSync('config/scripts/native-build/node-addons/ensure-native-runtime.mjs') || fs.existsSync('config/scripts/ensure-native-runtime.mjs'))
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `shared=${shared}\n`)
           NODE
 

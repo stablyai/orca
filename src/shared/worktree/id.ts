@@ -1,8 +1,6 @@
 import { normalizeRuntimePathForComparison } from '../cross-platform-path'
-import { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
+import { WORKTREE_ID_SEPARATOR } from '../terminal/pty/lifecycle/pty-session-id-format'
 import type { Repo } from '../repo-types'
-
-export { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
 
 export type ParsedWorktreeId = {
   repoId: string

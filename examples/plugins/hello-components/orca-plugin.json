@@ -2,7 +2,6 @@
   "manifestVersion": 2,
   "execution": "sandboxed-ui",
   "id": "hello-components",
-  "publisher": "samples",
   "name": "Hello Components",
   "version": "1.0.0",
   "description": "Sample components panel: persisted state, a list, an input, a switch and buttons drawn with Orca's own controls.",

@@ -6,9 +6,9 @@ import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspac
 import type {
   RuntimeEditorFileOpen,
   RuntimeEditorTabReveal
-} from '../../../shared/runtime-file-contracts'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
-import type { RuntimeNotifier } from '../runtime-notifier-contract'
+} from '../../../shared/file-access/runtime-editor-file-open'
+import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
+import type { RuntimeNotifier } from '../client/events/runtime-notifier-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import { isChatScratchWorktreeId } from './chat-scratch-file-root'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'

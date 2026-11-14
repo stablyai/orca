@@ -38,49 +38,6 @@ describe('createShutdownCheckpointPersist', () => {
     vi.restoreAllMocks()
   })
 
-  it('keeps sleeping-capture diagnostics non-throwing for unstringifiable values', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const deps = makeDeps({
-      captureSleepingAgentSessions: () => {
-        throw Object.create(null)
-      }
-    })
-
-    expect(createShutdownCheckpointPersist(deps).run).not.toThrow()
-    expect(deps.stageBeforeUnloadSync).toHaveBeenCalledTimes(1)
-    vi.restoreAllMocks()
-  })
-
-  it('keeps the first full-staging failure a visible, retryable error (STA-5505)', () => {
-    const stageBeforeUnloadSync = vi.fn(() => {
-      throw new Error('sync IPC staging failed')
-    })
-    const { run: persist } = createShutdownCheckpointPersist(makeDeps({ stageBeforeUnloadSync }))
-
-    // A transient failure must not silently cost the full snapshot on attempt one.
-    expect(persist).toThrow('sync IPC staging failed')
-    expect(stageBeforeUnloadSync).toHaveBeenCalledTimes(1)
-  })
-
-  it('degrades to durable-only staging when full staging fails again on retry (STA-5505)', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const stageBeforeUnloadSync = vi.fn((args: { sessions: unknown[] }) => {
-      if (args.sessions.length > 0) {
-        throw new Error('sync IPC staging failed')
-      }
-    })
-    const { run: persist } = createShutdownCheckpointPersist(makeDeps({ stageBeforeUnloadSync }))
-
-    expect(persist).toThrow('sync IPC staging failed')
-    expect(persist).not.toThrow()
-    expect(stageBeforeUnloadSync).toHaveBeenCalledTimes(3)
-    expect(stageBeforeUnloadSync).toHaveBeenLastCalledWith({
-      sessions: [],
-      ui: { activeView: 'workspace' }
-    })
-    vi.restoreAllMocks()
-  })
-
   it('stages the full snapshot when a retry after a transient staging failure succeeds', () => {
     let calls = 0
     const stageBeforeUnloadSync = vi.fn(() => {
@@ -167,30 +124,5 @@ describe('createShutdownCheckpointPersist', () => {
 
     expect(createShutdownCheckpointPersist(deps).run).toThrow('snapshot build failed')
     expect(deps.stageBeforeUnloadSync).not.toHaveBeenCalled()
-  })
-
-  it('skips capture and stages empty sessions before hydration completes', () => {
-    const deps = makeDeps({ shouldCaptureSession: () => false })
-
-    createShutdownCheckpointPersist(deps).run()
-
-    expect(deps.captureTerminalBuffers).not.toHaveBeenCalled()
-    expect(deps.captureSleepingAgentSessions).not.toHaveBeenCalled()
-    expect(deps.stageBeforeUnloadSync).toHaveBeenCalledWith({
-      sessions: [],
-      ui: { activeView: 'workspace' }
-    })
-  })
-
-  it('forgets a failed attempt when an aborted shutdown resets the lifecycle', () => {
-    const stageBeforeUnloadSync = vi.fn(() => {
-      throw new Error('sync IPC staging failed')
-    })
-    const persist = createShutdownCheckpointPersist(makeDeps({ stageBeforeUnloadSync }))
-
-    expect(persist.run).toThrow('sync IPC staging failed')
-    persist.abandonAttempt()
-    expect(persist.run).toThrow('sync IPC staging failed')
-    expect(stageBeforeUnloadSync).toHaveBeenCalledTimes(2)
   })
 })

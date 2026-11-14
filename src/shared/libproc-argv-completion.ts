@@ -129,7 +129,8 @@ export async function completeCommands(
   ctype: string,
   env: NodeJS.ProcessEnv,
   deadline: number,
-  background: boolean
+  background: boolean,
+  notBeforeMs = Number.NEGATIVE_INFINITY
 ): Promise<void> {
   const byPid = new Map(rows.map((row) => [row.pid, row]))
   const now = monotonicNow()
@@ -145,14 +146,22 @@ export async function completeCommands(
     if (known && known.command === undefined && now - known.settledAtMs < UNRECOVERED_TTL_MS) {
       continue
     }
-    if (known?.command !== undefined && now - known.readAtMs < RECOVERED_TTL_MS) {
+    if (
+      known?.command !== undefined &&
+      known.readAtMs >= notBeforeMs &&
+      now - known.readAtMs < RECOVERED_TTL_MS
+    ) {
       row.command = known.command
       row.commandReadAtMs = known.readAtMs
       continue
     }
     // A run begun too long ago reads argv older than this caller may reuse.
     const inFlight = recovering.get(key)
-    if (inFlight && now - inFlight.startedAtMs < RECOVERED_TTL_MS) {
+    if (
+      inFlight &&
+      inFlight.startedAtMs >= notBeforeMs &&
+      now - inFlight.startedAtMs < RECOVERED_TTL_MS
+    ) {
       pending.push({ row, answer: inFlight.answer })
     } else {
       missing.push({ row, key })

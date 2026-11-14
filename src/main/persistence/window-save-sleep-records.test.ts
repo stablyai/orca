@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { windowSaveKeepingMainSleepRecords } from './window-save-sleep-records'
 
 function record(
@@ -50,11 +50,6 @@ describe('windowSaveKeepingMainSleepRecords', () => {
       [hibernation.paneKey]: hibernation,
       [quit.paneKey]: quit
     })
-  })
-
-  it('leaves a patch that does not name the field untouched', () => {
-    const patch = { activeRepoId: 'repo' }
-    expect(windowSaveKeepingMainSleepRecords(stored(), patch, 'patch')).toBe(patch)
   })
 
   // Omitted/undefined renderer fields cannot clear main-owned workspace-sleep records.

@@ -6,7 +6,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
   type TerminalStreamFrame
-} from '../../src/shared/terminal-stream-protocol'
+} from '../../src/shared/terminal/stream/terminal-stream-protocol'
 import {
   createHostTerminalRuntimeStub,
   type HostTerminalRuntimeStub

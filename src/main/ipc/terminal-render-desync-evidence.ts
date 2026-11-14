@@ -5,7 +5,7 @@ import {
   TERMINAL_RENDER_DESYNC_CAPTURE_ID_PATTERN,
   type WriteTerminalRenderDesyncEvidenceArgs,
   type WriteTerminalRenderDesyncEvidenceResult
-} from '../../shared/terminal-render-desync-evidence'
+} from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import { isTrustedUIRenderer } from './ui'
 
 const EVIDENCE_DIRECTORY = 'terminal-render-desync-evidence'

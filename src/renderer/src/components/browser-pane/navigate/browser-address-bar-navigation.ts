@@ -5,7 +5,7 @@ import {
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import { parseChromeExtensionUrl } from '../../../../../shared/browser-extension-url'
+import { parseChromeExtensionUrl } from '../../../../../shared/browser/extensions/browser-extension-url'
 
 export type BrowserAddressBarSubmission =
   | { status: 'navigate'; url: string }

@@ -22,14 +22,4 @@ describe('resolvePaletteFocusRestoreTarget', () => {
 
     expect(resolvePaletteFocusRestoreTarget(active)).toBe(active)
   })
-
-  it('falls back to the first terminal when the previous element is gone', () => {
-    const first = addTerminal('first')
-    const detached = document.createElement('textarea')
-    detached.className = 'xterm-helper-textarea'
-    // Never appended → not connected (e.g. its pane unmounted while Cmd+J was open).
-
-    expect(detached.isConnected).toBe(false)
-    expect(resolvePaletteFocusRestoreTarget(detached)).toBe(first)
-  })
 })

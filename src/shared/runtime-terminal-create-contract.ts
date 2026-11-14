@@ -1,4 +1,4 @@
-import type { TerminalLaunchResult } from './agent-session-resume'
+import type { TerminalLaunchResult } from './agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from './execution-host'
 import type { StartupCwdFallback } from './startup-cwd-fallback'
 

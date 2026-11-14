@@ -1,7 +1,7 @@
 import React from 'react'
 
 import { Badge } from '@/components/ui/badge'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function LinearProjectPropertyRow({
   label,
@@ -32,6 +32,7 @@ export function LinearProjectMetadataList({
   label: string
   items: string[]
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-2">
       <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
@@ -48,7 +49,7 @@ export function LinearProjectMetadataList({
         </div>
       ) : (
         <div className="mt-1 text-sm text-muted-foreground">
-          {translate('auto.components.linear.project.view.surfaces.8bbecb2510', 'None')}
+          {t('auto.components.linear.project.view.surfaces.8bbecb2510', 'None')}
         </div>
       )}
     </div>

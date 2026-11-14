@@ -4,7 +4,7 @@ This Node package owns subprocess spawning, forked children, bounded output, can
 
 Import `runProcess`, `runProcessSync`, and `spawnProcess` from `@orca/process-host`. Import their contracts and default limits from `@orca/process-host/process-spec`. Other explicit subpaths expose forking, termination, Windows arguments, and bounded output. Application code must use public exports.
 
-`spawnProcess` guarantees three stream pipes when `stdio` is omitted, is `'pipe'`, or starts with `['pipe', 'pipe', 'pipe']`. Other specifications return a child with nullable streams. Use `PipedProcessSpec` and `PipedChildProcess` when a stream-owning interface requires pipes.
+`spawnProcess` guarantees three stream pipes when `stdio` is omitted, is `'pipe'`, or starts with `['pipe', 'pipe', 'pipe']`. Other specifications return a child with nullable streams. Use `PipedProcessSpec` from `@orca/process-host/process-spec` and `ChildProcessWithoutNullStreams` from `node:child_process` when a stream-owning interface requires pipes.
 
 The application supplies policy through `process-tree-kill-gate` and diagnostics through `spawn-observer`. Register these before starting managed children. Each process must load one package instance so registration and execution share state. The production exports use one CommonJS output for both import and require callers. The `orca-source` condition supports tests, dependency analysis, and Node tooling that runs TypeScript through `tsx`. Source tooling runs in a separate process and must use that condition for every package import; mixing source and compiled output would split the registration state.
 

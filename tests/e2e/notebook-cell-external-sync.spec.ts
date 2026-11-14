@@ -5,7 +5,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { getActiveWorktreeContext } from './helpers/markdown-editor-fixture'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { parseIpynb } from '../../src/renderer/src/components/editor/ipynb-parse'
+import { parseIpynb } from '../../src/renderer/src/components/editor/notebook/document/ipynb-parse'
 
 const FIRST = { id: 'first', source: 'print("original")' }
 const SECOND = { id: 'second', source: 'print("other")' }
@@ -96,7 +96,16 @@ for (const reload of ['source', 'reorder'] as const) {
     const editedFirst = { ...updatedFirst, source: `${updatedFirst.source}!` }
     await expect
       .poll(async () => {
-        const saved = parseIpynb(await readFile(filePath, 'utf8'))
+        // Saves overwrite in place, so a read can land mid-write; expect.poll aborts on a throw.
+        let saved: ReturnType<typeof parseIpynb>
+        try {
+          saved = parseIpynb(await readFile(filePath, 'utf8'))
+        } catch (error) {
+          if (error instanceof SyntaxError) {
+            return null
+          }
+          throw error
+        }
         return saved.cells.map(({ id, source }) => ({ id, source }))
       })
       .toEqual(reload === 'source' ? [editedFirst, updatedSecond] : [updatedSecond, editedFirst])

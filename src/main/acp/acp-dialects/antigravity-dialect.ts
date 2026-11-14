@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session-question-answer'
-import { AcpRpcError } from '../acp-errors'
-import { readAcpPermissionRequest } from '../acp-permission-requests'
-import { acpPermissionPresentation, pendingAcpResolution } from '../acp-timeline-requests'
+import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session/agent-session-question-answer'
+import { AcpRpcError, acpErrorDataWords, type AcpAgentError } from '../transport/acp-errors'
+import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
+import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
-import type { AcpDialect, AcpRequestPresentation } from './acp-dialect'
+import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 
 // interaction_ permissions are questions, even in yolo mode; never auto-approve them.
 function questionRequest(method: string, params: unknown): AcpRequestPresentation | undefined {
@@ -107,9 +107,28 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
+const cloudCodeErrorSchema = z.object({
+  error: z.object({ message: z.string().trim().min(1) })
+})
+
+function promptErrorDetail(error: AcpAgentError): string | undefined {
+  const text = acpErrorDataWords(error.data) ?? error.message
+  const prefix = /^Cloud Code Assist API error \(\d{3}\):\s*/.exec(text)
+  if (!prefix) {
+    return undefined
+  }
+  try {
+    return cloudCodeErrorSchema.safeParse(JSON.parse(text.slice(prefix[0].length))).data?.error
+      .message
+  } catch {
+    return undefined
+  }
+}
+
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   request: (method, params) => questionRequest(method, params) ?? warnedApproval(method, params),
   normalizeToolUpdate,
+  promptErrorDetail,
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.

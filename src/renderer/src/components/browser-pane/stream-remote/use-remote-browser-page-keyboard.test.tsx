@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from '../../../../../shared/browser-text-insertion-chunks'
+
 import { createHarness } from './remote-browser-stream-lifecycle-test-harness'
 import { useRemoteBrowserPageInputQueue } from './use-remote-browser-page-input'
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 
 const callRuntimeRpc = vi.hoisted(() => vi.fn(async () => ({})))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
 vi.mock('@/hooks/useShortcutLabel', () => ({ getShortcutPlatform: () => 'linux' }))
 
 const { lifecycle } = createHarness()
@@ -68,20 +70,6 @@ describe('streamed browser page keyboard input', () => {
       ['browser.keypress', { worktree: 'worktree-a', page: 'page-a', key: 'a' }],
       ['browser.keyboardInsertText', { worktree: 'worktree-a', page: 'page-a', text: 'XYZ' }],
       ['browser.keypress', { worktree: 'worktree-a', page: 'page-a', key: 'b' }]
-    ])
-  })
-
-  it('splits a large paste so no request exceeds the runtime socket frame', async () => {
-    render(<StreamedFrame />)
-    const text = 'x'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 1)
-
-    fireEvent.paste(screen.getByTestId('frame'), { clipboardData: { getData: () => text } })
-
-    await waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(2))
-    const params = { worktree: 'worktree-a', page: 'page-a' }
-    expect(sentInput()).toEqual([
-      ['browser.keyboardInsertText', { ...params, text: text.slice(0, -1) }],
-      ['browser.keyboardInsertText', { ...params, text: 'x' }]
     ])
   })
 

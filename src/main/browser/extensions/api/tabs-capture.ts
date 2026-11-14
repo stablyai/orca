@@ -1,17 +1,23 @@
 import { z } from 'zod'
-import { browserManager } from '../../browser-manager'
-import { consumeBrowserExtensionCaptureQuota } from '../browser-extension-capture-quota'
-import { parseChromeExtensionUrl } from '../../../../shared/browser-extension-url'
-import { isChromeWebStoreUrl } from '../../../../shared/browser-extension-webstore'
-import { hasBrowserExtensionActiveTab } from '../browser-extension-active-tab'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { consumeBrowserExtensionCaptureQuota } from '../api-runtime/browser-extension-capture-quota'
+import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
+import { isChromeWebStoreUrl } from '../../../../shared/browser/extensions/browser-extension-webstore'
+import { hasBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
-import { listBrowserExtensionTabs, resolveCallerWindowId } from '../browser-extension-tab-model'
-import { WINDOW_ID_CURRENT, getBrowserExtensionWindow } from '../browser-extension-window-model'
-import { browserExtensionHostPatternsInSession } from './permissions'
+} from '../api-runtime/browser-extension-namespace-registry'
+import {
+  listBrowserExtensionTabs,
+  resolveCallerWindowId
+} from '../tabs-and-windows/browser-extension-tab-model'
+import {
+  WINDOW_ID_CURRENT,
+  getBrowserExtensionWindow
+} from '../tabs-and-windows/browser-extension-window-model'
+import { browserExtensionHostPatternsInSession } from '../permissions/browser-extension-session-permissions'
 
 // Chrome's default JPEG quality for tabs.captureVisibleTab.
 const DEFAULT_JPEG_QUALITY = 90

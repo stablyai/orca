@@ -7,6 +7,7 @@ import {
 } from './orcad-migration/orcad-migration-dormant-session-validation'
 import {
   assertOrcadMigrationDormantAutomationReferences,
+  parseOrcadMigrationAutomationRunHistoryRef,
   parseOrcadMigrationDormantAutomationRuns,
   parseOrcadMigrationDormantAutomations
 } from './orcad-migration/orcad-migration-dormant-automation-validation'
@@ -85,9 +86,19 @@ export function parseOrcadMigrationDormantState(value: unknown): OrcadMigrationD
     ...(record.automationRuns === undefined
       ? {}
       : { automationRuns: parseOrcadMigrationDormantAutomationRuns(record.automationRuns) }),
+    ...(record.automationRunHistory === undefined
+      ? {}
+      : {
+          automationRunHistory: parseOrcadMigrationAutomationRunHistoryRef(
+            record.automationRunHistory
+          )
+        }),
     ...(record.clientState === undefined
       ? {}
       : { clientState: parseOrcadMigrationClientState(record.clientState) })
+  }
+  if (payload.automationRuns && payload.automationRunHistory) {
+    throw new Error('orcad_migration_dormant_automation_run_history_conflict')
   }
   assertUnique(payload.worktreeMeta, (entry) => entry.worktreeId, 'worktree_meta')
   assertUnique(payload.worktreeMeta, (entry) => entry.sourceKey, 'worktree_meta_source')

@@ -1,0 +1,176 @@
+{
+  "version": "2.1.310",
+  "accounts": {
+    "signedOut": {
+      "tokenSource": "none",
+      "apiProvider": "firstParty"
+    },
+    "apiKey": {
+      "tokenSource": "none",
+      "apiKeySource": "ANTHROPIC_API_KEY",
+      "apiProvider": "firstParty"
+    },
+    "bearer": {
+      "tokenSource": "ANTHROPIC_AUTH_TOKEN",
+      "apiProvider": "firstParty"
+    },
+    "bedrock": {
+      "apiProvider": "bedrock"
+    }
+  },
+  "models": {
+    "models": [
+      {
+        "value": "default",
+        "resolvedModel": "claude-opus-5-5",
+        "displayName": "Default (recommended)",
+        "description": "Use the default model (currently Opus 5.5) · $4/$20 per Mtok",
+        "supportsEffort": true,
+        "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+        "supportsAdaptiveThinking": true,
+        "supportsFastMode": true,
+        "supportsAutoMode": true,
+        "supportsThinkingOff": false
+      },
+      {
+        "value": "opus",
+        "resolvedModel": "claude-opus-5-5",
+        "displayName": "Opus",
+        "description": "Opus 5.5 · Best for everyday, complex tasks · $4/$20 per Mtok",
+        "supportsEffort": true,
+        "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+        "supportsAdaptiveThinking": true,
+        "supportsFastMode": true,
+        "supportsAutoMode": true,
+        "supportsThinkingOff": false
+      },
+      {
+        "value": "fable",
+        "resolvedModel": "claude-fable-5-1",
+        "displayName": "Fable",
+        "description": "Fable 5.1 · Most capable for your hardest and longest-running tasks · $10/$50 per Mtok",
+        "supportsEffort": true,
+        "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+        "supportsAdaptiveThinking": true,
+        "supportsAutoMode": true,
+        "supportsThinkingOff": false
+      },
+      {
+        "value": "sonnet",
+        "resolvedModel": "claude-sonnet-5-5",
+        "displayName": "Sonnet",
+        "description": "Sonnet 5.5 · Efficient for routine tasks · $2/$10 per Mtok",
+        "supportsEffort": true,
+        "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+        "supportsAdaptiveThinking": true,
+        "supportsAutoMode": true,
+        "supportsThinkingOff": false
+      },
+      {
+        "value": "haiku",
+        "resolvedModel": "claude-haiku-5-5",
+        "displayName": "Haiku",
+        "description": "Haiku 5.5 · Fastest for quick answers · $0.10/$0.50 per Mtok ($0.50/$2.50 for prompts over 100k)",
+        "supportsEffort": true,
+        "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],
+        "supportsAdaptiveThinking": true,
+        "supportsAutoMode": true,
+        "supportsThinkingOff": false
+      }
+    ]
+  },
+  "settings": {
+    "effective": {
+      "disableAllHooks": true
+    },
+    "sources": [
+      {
+        "source": "flagSettings",
+        "settings": {
+          "disableAllHooks": true
+        }
+      }
+    ],
+    "applied": {
+      "model": "claude-opus-5-5",
+      "effort": "medium",
+      "advisor": null,
+      "ultracode": false,
+      "ultracodeRequested": false,
+      "ultracodeAvailable": true
+    }
+  },
+  "endpointSettings": {
+    "effective": {
+      "env": {
+        "ANTHROPIC_BASE_URL": "https://gateway.example.invalid"
+      },
+      "disableAllHooks": true
+    },
+    "sources": [
+      {
+        "source": "userSettings",
+        "settings": {
+          "env": {
+            "ANTHROPIC_BASE_URL": "https://gateway.example.invalid"
+          }
+        }
+      },
+      {
+        "source": "projectSettings",
+        "settings": {
+          "env": {
+            "ANTHROPIC_BASE_URL": "https://gateway.example.invalid"
+          }
+        }
+      },
+      {
+        "source": "flagSettings",
+        "settings": {
+          "disableAllHooks": true
+        }
+      }
+    ],
+    "applied": {
+      "model": "claude-opus-5-5",
+      "effort": "medium",
+      "advisor": null,
+      "ultracode": false,
+      "ultracodeRequested": false,
+      "ultracodeAvailable": true
+    }
+  },
+  "commandFrames": {
+    "error": {
+      "type": "control_response",
+      "response": {
+        "subtype": "error",
+        "request_id": "orca-command-discovery",
+        "error": "Unsupported control request subtype: orca_unknown_subtype"
+      }
+    },
+    "initialize": {
+      "type": "control_response",
+      "response": {
+        "subtype": "success",
+        "request_id": "orca-command-discovery",
+        "response": {
+          "commands": [
+            {
+              "name": "deep-research",
+              "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+              "argumentHint": "",
+              "builtin": true
+            },
+            {
+              "name": "design",
+              "description": "Grant or revoke Claude agent access to your Design projects",
+              "argumentHint": "consent | revoke",
+              "builtin": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}

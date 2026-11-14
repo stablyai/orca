@@ -1,13 +1,13 @@
 // Target claims preserve environment identity so interrupted deploys resume the same registration.
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { randomUUID } from 'node:crypto'
-import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/runtime-environment-reconciliation-record'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
-import { addManagedOrcadEnvironment } from '../../../shared/runtime-environment-managed-orcad-store'
+import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import {
   getOrcadSshDeployment,
   redactRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   ORCAD_MANAGED_REMOTE_PORT,
   type OrcadManagedDeferral,
@@ -15,29 +15,29 @@ import {
 } from '../../../shared/orcad-managed-runtime'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { runTargetLifecycle } from '../../ipc/ssh/ssh-target-lifecycle-queue'
-import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
+import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import {
   closeOrcadManagedTunnel,
   ensureOrcadManagedTunnel,
   startOrcadManagedTunnel
 } from './orcad-managed-tunnel'
 import { recoverInterruptedOrcadActivation } from '../activation/orcad-activation-recovery'
-import { wakeAlreadyActiveOrcad } from '../../ssh/orcad-already-active-wake'
+import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
-import { deployOrcad } from '../../ssh/orcad-remote-deploy'
+import { deployOrcad } from '../install/orcad-remote-deploy'
 import {
   adoptRunningOrcadVersion,
   type OrcadRunningAdoption
-} from '../../ssh/orcad-running-version-adoption'
+} from '../activation/orcad-running-version-adoption'
 import { readLocalFullVersion } from '../install/remote-versioned-install'
-import { sshOrcadHostTransport } from '../../ssh/orcad-ssh-host-transport'
-import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../ssh/orcad-installed-activation'
+
+import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../activation/orcad-installed-activation'
 import { pruneManagedOrcadVersions } from './orcad-managed-version-gc'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
-import { resolveOrcadMigrationFence } from '../../ssh/orcad-migration-source-fence'
+import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
+import { resolveOrcadMigrationFence } from '../../ssh/migration-source/orcad-migration-source-fence'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { findCollidingEnvironmentName } from '../../../shared/runtime-environment-name-collision'
+import { findCollidingEnvironmentName } from '../../../shared/remote-runtime/host-catalog/runtime-environment-name-collision'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
 import {
   isForceableOrcadDeferral,
@@ -97,11 +97,7 @@ export async function createManagedOrcadEnvironment(
     let environmentRegistered = false
     try {
       const connection = await connectionManager.connect(claimed)
-      let context = await resolveOrcadRemoteContext(
-        claimed,
-        sshOrcadHostTransport(connection),
-        args.signal
-      )
+      let context = await resolveOrcadRemoteContext(claimed, connection, args.signal)
       const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT, args.signal)
       const recovery = await recoverInterruptedOrcadActivation(slot)
       if (recovery.outcome === 'pending' || recovery.outcome === 'refused') {

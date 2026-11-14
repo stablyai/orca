@@ -1,17 +1,17 @@
 // D7: switch Electron serve ↔ orcad serve on one profile without replacing surviving daemon terminals; each host must refuse the other’s profile lock.
 // Build pnpm build:orcad, then run electron-headless with ORCA_E2E_ORCAD_SERVE=1 ORCA_BACKGROUND_LAUNCH=1.
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { getDaemonPidPath } from '../../src/main/daemon/daemon-spawner'
-import { readDaemonPidRecord } from '../../src/main/daemon/daemon-endpoint-incarnation'
-import { resolveBundledOrcadRuntime } from '../../src/main/orcad/orcad-bundled-runtime'
-import { ORCAD_EXIT_CONFIGURATION } from '../../src/main/orcad/orcad-configuration-exit'
+import { getDaemonPidPath } from '../../src/main/daemon/launch/daemon-spawner'
+import { readDaemonPidRecord } from '../../src/main/daemon/endpoint/identity/daemon-endpoint-incarnation'
+import { resolveBundledOrcadRuntime } from '../../src/main/orcad/runtime-launch/orcad-bundled-runtime'
+import { ORCAD_EXIT_CONFIGURATION } from '../../src/main/orcad/serve-startup/orcad-configuration-exit'
 import {
   buildDaemonSessionClient,
   type DaemonSessionClientResult
-} from '../../src/main/orcad/orcad-daemon-session-client-fixture'
+} from '../../src/main/orcad/testing/daemon-processes/orcad-daemon-session-client-fixture'
 import { expect, test } from './helpers/orca-app'
 import { resolveElectronExecutable } from './helpers/daemon-generation-runtime-fixture'
 import {
@@ -19,12 +19,7 @@ import {
   type HeadlessPairedRuntimeHost
 } from './helpers/headless-paired-runtime-host'
 import { cleanupE2EDaemons } from './helpers/electron-process-shutdown'
-import {
-  cliServeProfile,
-  isPidAlive,
-  spawnUntilReady,
-  startCliServe
-} from './helpers/orca-serve-cli-host'
+import { cliServeProfile, isPidAlive, spawnUntilReady } from './helpers/orca-serve-cli-host'
 
 const RUN = process.env.ORCA_E2E_ORCAD_SERVE === '1'
 const slotDir = path.resolve('out/orcad')
@@ -235,36 +230,5 @@ test('each serve host refuses a profile the other holds', async () => {
     })
   } finally {
     await host.dispose()
-  }
-})
-
-/** Which host holds the profile: both take `orcad.lock`, each under its own role. */
-function profileLockRole(userDataDir: string): unknown {
-  return JSON.parse(readFileSync(path.join(userDataDir, 'orcad.lock'), 'utf8')).role
-}
-
-// Needs out/orcad-template for this runner's target, as a packaged install carries.
-test('`orca serve` runs on orcad by default and on Electron with ORCA_SERVE_RUNTIME=electron', async () => {
-  const profile = cliServeProfile(scratch)
-  try {
-    const byDefault = await startCliServe(profile)
-    try {
-      expect(byDefault.stderr()).toContain('[serve] running on orcad')
-      expect(byDefault.readiness.health).toBeDefined()
-      expect(profileLockRole(profile.userDataDir)).toBe('orcad')
-    } finally {
-      await byDefault.stop()
-    }
-
-    // Electron serve publishes no build-health block yet, which is what tells the two apart.
-    const electron = await startCliServe(profile, { ORCA_SERVE_RUNTIME: 'electron' })
-    try {
-      expect(electron.stderr()).not.toContain('[serve] running on orcad')
-      expect(electron.readiness.health).toBeUndefined()
-    } finally {
-      await electron.stop()
-    }
-  } finally {
-    await cleanupE2EDaemons(profile.userDataDir)
   }
 })

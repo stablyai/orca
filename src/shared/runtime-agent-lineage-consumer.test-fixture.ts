@@ -1,4 +1,4 @@
-import type { AgentStatusOrchestrationContext } from './agent-status-types'
+import type { AgentStatusOrchestrationContext } from './agent-status/contracts/agent-status-types'
 import type { OrcaSessionId } from './orca-session-address'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { RuntimeWorktreePsSummary } from './runtime-types'

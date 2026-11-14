@@ -1,0 +1,217 @@
+import type { MutableRefObject } from 'react'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { SpeechModelState } from '../../../../../shared/speech-types'
+import type { SourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { getDefaultVoiceSettings } from '../../../../../shared/constants'
+import type {
+  SettingsNavSection,
+  SettingsNavTarget
+} from '@/components/settings/navigation/settings-navigation-types'
+import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
+import { parseSettingsTitleTargetId } from '../section-layout/settings-target-highlight'
+
+export const SETTINGS_NAV_GROUPS = [
+  {
+    id: 'capabilities',
+    titleKey: 'auto.components.settings.Settings.23c6874fdf',
+    titleDefault: 'AI Capabilities'
+  },
+  { id: 'setup', titleKey: 'auto.components.settings.Settings.9abb9be3bc', titleDefault: 'Set Up' },
+  {
+    id: 'workflows',
+    titleKey: 'auto.components.settings.Settings.e1578cd4bc',
+    titleDefault: 'Workflows'
+  },
+  {
+    id: 'interface',
+    titleKey: 'auto.components.settings.Settings.8bd117d669',
+    titleDefault: 'Interface'
+  },
+  {
+    id: 'remote',
+    titleKey: 'auto.components.settings.Settings.23931df7e8',
+    titleDefault: 'Remote Hosts'
+  },
+  {
+    id: 'security',
+    titleKey: 'auto.components.settings.Settings.084d8fac5b',
+    titleDefault: 'Privacy & Security'
+  },
+  {
+    id: 'advanced',
+    titleKey: 'auto.components.settings.Settings.1c87f8d024',
+    titleDefault: 'Advanced'
+  },
+  {
+    id: 'experimental',
+    titleKey: 'auto.components.settings.Settings.8b017f2506',
+    titleDefault: 'Experimental'
+  }
+] as const
+
+export type SettingsNavGroupDefinition = (typeof SETTINGS_NAV_GROUPS)[number]
+
+const SETTINGS_NAV_GROUP_BY_ID = new Map<string, SettingsNavGroupDefinition>(
+  SETTINGS_NAV_GROUPS.map((group) => [group.id, group])
+)
+
+export const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
+export const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
+export const SETTINGS_TARGET_HIGHLIGHT_MS = 3_000
+
+export function getSettingsSectionId(
+  pane: SettingsNavTarget,
+  repoId: string | null,
+  repoIdToRepresentative: Map<string, string>
+): string {
+  if (pane === 'repo' && repoId) {
+    // Each project has one pane; map every host’s repo ID to its representative.
+    return `repo-${repoIdToRepresentative.get(repoId) ?? repoId}`
+  }
+  return pane
+}
+
+export function getFallbackVisibleSection(
+  sections: SettingsNavSection[]
+): SettingsNavSection | undefined {
+  return sections.at(0)
+}
+
+export function getSettingsNavGroupDefinitionsForSearch(
+  sections: readonly SettingsNavSection[],
+  query: string
+): readonly SettingsNavGroupDefinition[] {
+  if (query.trim() === '') {
+    return SETTINGS_NAV_GROUPS
+  }
+  const seenGroupIds = new Set<string>()
+  return sections.flatMap((section) => {
+    if (section.id.startsWith('repo-') || seenGroupIds.has(section.group)) {
+      return []
+    }
+    const group = SETTINGS_NAV_GROUP_BY_ID.get(section.group)
+    if (!group) {
+      return []
+    }
+    seenGroupIds.add(section.group)
+    return [group]
+  })
+}
+
+export function hasReadyVoiceModel(
+  settings: GlobalSettings,
+  modelStates: readonly SpeechModelState[]
+): boolean {
+  const voiceSettings = settings.voice ?? getDefaultVoiceSettings()
+  if (
+    voiceSettings.sttModel !== '' &&
+    modelStates.some((state) => state.id === voiceSettings.sttModel && state.status === 'ready')
+  ) {
+    return true
+  }
+  return modelStates.some((state) => state.status === 'ready')
+}
+
+export function getSettingsScrollTarget(
+  sectionId: string,
+  container?: HTMLElement | null
+): HTMLElement | null {
+  const title = parseSettingsTitleTargetId(sectionId)
+  if (title !== null) {
+    return (
+      (container ?? document).querySelector<HTMLElement>(
+        `[data-settings-search-title="${CSS.escape(title)}"]`
+      ) ?? (container ? findSettingsRowByVisibleTitle(title, container) : null)
+    )
+  }
+  return (
+    container?.querySelector<HTMLElement>(`[data-settings-section="${CSS.escape(sectionId)}"]`) ??
+    document.getElementById(sectionId)
+  )
+}
+
+// Rows not wrapped in SearchableSetting are found by the label they render.
+function findSettingsRowByVisibleTitle(title: string, root: HTMLElement): HTMLElement | null {
+  const wanted = title.trim().toLowerCase()
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const element = node.parentElement
+    // The pane's own h2 heading is not a setting row.
+    if (node.textContent?.trim().toLowerCase() !== wanted || !element || element.closest('h2')) {
+      continue
+    }
+    // A group title stands for its whole card, not the heading text.
+    const groupCard = element
+      .closest('[data-settings-group-heading]')
+      ?.closest('[data-settings-group]')
+      ?.querySelector<HTMLElement>('[data-settings-group-card]')
+    // Free-form card content has no row; the card stands in rather than the bare label.
+    return (
+      groupCard ??
+      element.closest<HTMLElement>('[data-settings-row]') ??
+      element.closest<HTMLElement>('[data-settings-group-card]') ??
+      element
+    )
+  }
+  return null
+}
+
+function hasNestedScroller(target: HTMLElement, container: HTMLElement): boolean {
+  for (let node = target.parentElement; node && node !== container; node = node.parentElement) {
+    const overflowY = getComputedStyle(node).overflowY
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return true
+    }
+  }
+  return false
+}
+
+export function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | null): void {
+  // Whole-pane swaps need inner scrolling only when the pane exceeds the viewport.
+  const target = getSettingsScrollTarget(targetId, container)
+  if (!target) {
+    return
+  }
+  // A target inside its own scroll area (the Shortcuts list) needs every scroller moved, not just the page.
+  if (!container || hasNestedScroller(target, container)) {
+    target.scrollIntoView({ block: container ? 'center' : 'start' })
+    return
+  }
+  const containerRect = container.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const targetTop = targetRect.top - containerRect.top + container.scrollTop
+  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+  container.scrollTo({ top: Math.min(Math.max(0, targetTop - 16), maxScrollTop) })
+}
+
+export function readSourceControlAiSettings(settings: GlobalSettings): SourceControlAiSettings {
+  return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
+}
+
+export function cancelPendingSettingsSubsectionScrollFrame(
+  frameRef: MutableRefObject<number | null>
+): void {
+  if (frameRef.current !== null) {
+    cancelAnimationFrame(frameRef.current)
+    frameRef.current = null
+  }
+}
+
+export function cancelPendingSettingsDeepLinkTargetWatch(
+  watchRef: MutableRefObject<SettingsDeepLinkTargetWatch | null>
+): void {
+  watchRef.current?.cancel()
+  watchRef.current = null
+}
+
+export function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  if (target.isContentEditable) {
+    return true
+  }
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}

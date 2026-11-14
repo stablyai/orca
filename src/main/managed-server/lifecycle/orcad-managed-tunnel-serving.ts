@@ -1,5 +1,5 @@
 // Reread readiness after unanswered tunnels: another desktop may have restarted orcad on a new port.
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { OrcadManagedServing } from './orcad-managed-serving'
 import type { OrcadManagedServingCheck } from './orcad-managed-tunnel-resume'
 import type { ActiveOrcadTunnel } from './orcad-managed-tunnel-active'

@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
@@ -11,17 +11,18 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
-import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import type {
-  ImportedWorktreesCardCandidate,
-  NewExternalWorktreesInboxCandidate,
-  PendingCreationRef,
-  PinnedWorktreeDisplayPolicy,
-  Row,
-  WorktreeGroupBy
+import {
+  getPinnedWorktreeDisplayPolicy,
+  type ImportedWorktreesCardCandidate,
+  type NewExternalWorktreesInboxCandidate,
+  type PendingCreationRef,
+  type PinnedWorktreeDisplayPolicy,
+  type Row,
+  type WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
+
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
-import type { PRCacheView } from '../../../../../../shared/sidebar-list/workspace-review-facts'
+import type { PRCacheView } from '../../../../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 import { createSidebarPRGroupReader } from './pr-group-key'
 
 /** Test-only positional entry to the shared row builder, with the window's defaults. */
@@ -55,6 +56,7 @@ export function buildSidebarRowPlan(
 ) {
   return planSidebarRows({
     groupBy,
+    sortBy: 'smart',
     worktrees,
     repoMap,
     prGroupOf: createSidebarPRGroupReader(repoMap, prCache),

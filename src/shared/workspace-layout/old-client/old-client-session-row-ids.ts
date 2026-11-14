@@ -1,6 +1,6 @@
 // Preserve published session.tabs row IDs so older clients retain keys and selections (wire rule 3).
 
-import { isReopenedChatTabId } from '../../structured-agent-session-host-tab-id'
+import { isReopenedChatTabId } from '../../agent-session/view/structured-agent-session-host-tab-id'
 import type { LayoutTab } from '../workspace-layout-model'
 
 export const TERMINAL_ROW_SEPARATOR = '::'

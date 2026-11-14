@@ -9,15 +9,15 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
-import type { AgentPaneWorkspace } from '../agent-hooks/agent-transition-detector'
+import type { AgentPaneWorkspace } from '../agent-hooks/observations/agent-transition-detector'
 import {
   readWorkspaceRecord,
   writeWorkspaceRecord,
   type WorkspaceRecordStore
-} from '../runtime/sidebar-inputs/sort-stamp-records'
+} from '../runtime/workspaces/metadata/workspace-activity-records'
 import { CONNECTOR_AGENTS } from './connector-agents'
 import type { ConversationKey } from './external-conversation-types'
 

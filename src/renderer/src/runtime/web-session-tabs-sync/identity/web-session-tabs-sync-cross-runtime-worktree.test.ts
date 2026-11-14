@@ -1,0 +1,157 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import { applyWebSessionTabsSnapshot } from '../snapshot-api'
+import type { WebSessionTabsSyncState } from '../state'
+
+import {
+  LEAF_ID,
+  NOW,
+  WT,
+  makeSnapshot,
+  makeState,
+  resetWebSessionTabsSyncTestState
+} from '../testing/web-session-tabs-sync.test-fixture'
+
+vi.mock('../../../store/index', () => ({
+  useAppStore: {
+    setState: vi.fn()
+  }
+}))
+
+// #31983: desktop B mirrors one SSH workspace from two paired runtimes — the host's server, which
+// runs its terminals, and desktop A's app, which hosts a browser tab A opened there.
+const SERVER_ENV = 'server-env'
+const DESKTOP_A_ENV = 'desktop-a-env'
+
+function apply(
+  state: WebSessionTabsSyncState,
+  snapshot: RuntimeMobileSessionTabsResult,
+  environmentId: string,
+  now: number
+): WebSessionTabsSyncState {
+  return { ...state, ...applyWebSessionTabsSnapshot(state, snapshot, environmentId, now) }
+}
+
+function serverTerminal(
+  hostTabId: string,
+  ready: boolean
+): RuntimeMobileSessionTabsResult['tabs'][number] {
+  return ready
+    ? {
+        type: 'terminal',
+        id: `${hostTabId}::${LEAF_ID}`,
+        title: 'claude',
+        parentTabId: hostTabId,
+        leafId: LEAF_ID,
+        isActive: true,
+        status: 'ready',
+        terminal: `pty-${hostTabId}`
+      }
+    : {
+        type: 'terminal',
+        id: `${hostTabId}::${LEAF_ID}`,
+        title: 'claude',
+        parentTabId: hostTabId,
+        leafId: LEAF_ID,
+        isActive: true,
+        status: 'pending-handle',
+        terminal: null
+      }
+}
+
+function desktopABrowserSnapshot(
+  tabs: RuntimeMobileSessionTabsResult['tabs'],
+  version: number
+): RuntimeMobileSessionTabsResult {
+  return makeSnapshot(tabs, {
+    publicationEpoch: 'desktop-a-epoch',
+    snapshotVersion: version,
+    activeGroupId: `headless-terminals:${WT}`,
+    activeTabId: tabs[0]?.id ?? null,
+    activeTabType: 'browser'
+  })
+}
+
+const desktopAPage: RuntimeMobileSessionTabsResult['tabs'][number] = {
+  type: 'browser',
+  id: 'a-browser-tab',
+  title: 'Example Domain',
+  browserWorkspaceId: 'a-browser-workspace',
+  browserPageId: 'a-browser-page',
+  url: 'https://example.com/',
+  loading: true,
+  canGoBack: false,
+  canGoForward: false,
+  placement: {
+    kind: 'client',
+    browserHostClientId: 'desktop-a',
+    browserHostGeneration: 1,
+    pageHostGeneration: 1
+  },
+  isActive: true
+}
+
+function terminalIds(state: WebSessionTabsSyncState): string[] {
+  return (state.tabsByWorktree[WT] ?? []).map((tab) => tab.id).sort()
+}
+
+function unifiedTerminalIds(state: WebSessionTabsSyncState): string[] {
+  return (state.unifiedTabsByWorktree[WT] ?? [])
+    .filter((tab) => tab.contentType === 'terminal')
+    .map((tab) => tab.entityId)
+    .sort()
+}
+
+function groupedTabIds(state: WebSessionTabsSyncState): Set<string> {
+  return new Set((state.groupsByWorktree[WT] ?? []).flatMap((group) => group.tabOrder))
+}
+
+describe('a workspace mirrored from two paired runtimes', () => {
+  beforeEach(resetWebSessionTabsSyncTestState)
+
+  it.each([
+    ['ready', true],
+    ['still waiting for a stream handle', false]
+  ])(
+    "keeps the server's %s terminals when the other runtime opens and closes a browser tab",
+    (_label, ready) => {
+      let state = apply(
+        makeState(),
+        makeSnapshot([serverTerminal('agent-1', ready), serverTerminal('agent-2', ready)]),
+        SERVER_ENV,
+        NOW
+      )
+      const before = terminalIds(state)
+      expect(before).toHaveLength(2)
+      const createdAt = new Map(
+        (state.tabsByWorktree[WT] ?? []).map((tab) => [tab.id, tab.createdAt])
+      )
+
+      state = apply(state, desktopABrowserSnapshot([desktopAPage], 1), DESKTOP_A_ENV, NOW + 1000)
+      expect(terminalIds(state)).toEqual(before)
+      expect(unifiedTerminalIds(state)).toEqual(before)
+      expect(state.browserTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['a-browser-workspace'])
+
+      state = apply(state, desktopABrowserSnapshot([], 2), DESKTOP_A_ENV, NOW + 2000)
+      expect(terminalIds(state)).toEqual(before)
+      expect(unifiedTerminalIds(state)).toEqual(before)
+      const grouped = groupedTabIds(state)
+      for (const tab of state.unifiedTabsByWorktree[WT] ?? []) {
+        expect(grouped.has(tab.id)).toBe(true)
+      }
+
+      // The server's next frame rebuilds its rows in place rather than re-creating dropped ones.
+      state = apply(
+        state,
+        makeSnapshot([serverTerminal('agent-1', ready), serverTerminal('agent-2', ready)], {
+          snapshotVersion: 2
+        }),
+        SERVER_ENV,
+        NOW + 3000
+      )
+      for (const tab of state.tabsByWorktree[WT] ?? []) {
+        expect(tab.createdAt).toBe(createdAt.get(tab.id))
+      }
+    }
+  )
+})

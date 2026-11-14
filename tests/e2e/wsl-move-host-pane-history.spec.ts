@@ -29,8 +29,8 @@ import {
 } from './helpers/paired-host-terminal'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { createMovedRepo, MOVED_TAB, seedImportedMovedTab } from './helpers/wsl-moved-host-profile'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-moved-history-'))
 const fixturePath = path.join(scratch, 'history-terminal.mjs')

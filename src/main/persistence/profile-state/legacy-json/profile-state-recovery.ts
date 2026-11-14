@@ -1,23 +1,23 @@
-import { profileStateDatabaseFiles } from '../profile-state-storage-classification'
+import { profileStateDatabaseFiles } from '../database/profile-state-storage-classification'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { parseProfileStateRoot } from '../profile-state-document-validation'
-import { durableWriteTempPath, writeFileDurableSync } from '../../../durable-file-write'
-import { bestEffortFsyncDirectorySync } from '../../../../shared/secure-file'
+import { parseProfileStateRoot } from '../documents/profile-state-document-validation'
+import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
+import { bestEffortFsyncDirectorySync } from '../../../../shared/secure-storage/secure-file'
 import {
   quarantineProfileStateDatabase,
   type ProfileStateDatabaseQuarantine
-} from '../profile-state-database-quarantine'
+} from '../recovery/profile-state-database-quarantine'
 import { profileStateJsonExportPaths } from './profile-state-export-path'
-import { profileStateDatabaseBackupFiles } from '../profile-state-backup-path'
+import { profileStateDatabaseBackupFiles } from '../backup/profile-state-backup-path'
 import {
   hasProfileStateAuthorityMarker,
   profileStateAuthorityMarkerPath
-} from '../profile-state-authority-marker'
+} from '../database/profile-state-authority-marker'
 import {
   assertProfileStateMaintenance,
   type ProfileStateMaintenance
-} from '../profile-state-access'
+} from '../access/profile-state-access'
 
 export type ProfileStateJsonRecoveryOptions = {
   maintenance: ProfileStateMaintenance

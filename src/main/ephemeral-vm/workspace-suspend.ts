@@ -1,33 +1,35 @@
 import { app } from 'electron'
-import type { Store } from '../persistence'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import type { Store } from '../persistence/loading-store/store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
 import { suspendEphemeralVmRuntime } from './runtime-service'
 import { disconnectRuntimeOwnedSshTarget } from './runtime-ssh'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
+import {
+  EphemeralVmFailureError,
+  pickEphemeralVmFailureCode
+} from '../../shared/ephemeral-vm-failure-copy'
 
 export async function suspendEphemeralVmWorkspace(
   store: Store,
   workspaceId: string
 ): Promise<void> {
   const userDataPath = app.getPath('userData')
-  const runtime = listEphemeralVmRuntimes(userDataPath).find(
-    (entry) =>
-      entry.workspaceId === workspaceId &&
-      entry.status !== 'cleaned' &&
-      entry.status !== 'cleanup_pending'
-  )
-  if (!runtime?.repoId) {
+  const runtime = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
+  if (!runtime) {
     return
   }
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
   const result = await suspendEphemeralVmRuntime({
     userDataPath,
-    repoPath: recipeContext.repo.repo.path,
+    repoPath: recipeContext.repoPath,
     recipe: recipeContext.recipe,
     runtimeId: runtime.id
   })
   if (!result.ok) {
-    throw new Error(result.error)
+    throw new EphemeralVmFailureError({
+      error: result.error,
+      ...pickEphemeralVmFailureCode(result)
+    })
   }
   // A skipped suspend leaves the VM running, so its SSH connection must remain live.
   if (runtime.connectionMode === 'ssh' && !result.skipped) {

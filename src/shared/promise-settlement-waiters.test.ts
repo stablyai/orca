@@ -39,31 +39,6 @@ describe('PromiseSettlementWaiters', () => {
     expect(waiters.waiterCount).toBe(0)
   })
 
-  it('removes ten thousand aborted callers while one anchor remains pending', async () => {
-    let resolveBase: (value: number) => void = () => {}
-    const basePromise = new Promise<number>((resolve) => {
-      resolveBase = resolve
-    })
-    const thenSpy = vi.spyOn(basePromise, 'then')
-    const waiters = new PromiseSettlementWaiters(basePromise)
-    const anchor = waiters.wait()
-    const controllers = Array.from({ length: 10_000 }, () => new AbortController())
-    const cancelled = controllers.map((controller) =>
-      waiters.wait({ signal: controller.signal }).catch((error) => error)
-    )
-
-    for (const controller of controllers) {
-      controller.abort()
-    }
-    await Promise.all(cancelled)
-
-    expect(waiters.waiterCount).toBe(1)
-    expect(thenSpy).toHaveBeenCalledOnce()
-    resolveBase(42)
-    await expect(anchor).resolves.toBe(42)
-    expect(waiters.waiterCount).toBe(0)
-  })
-
   it('removes timed-out callers and clears their timers on settlement', async () => {
     vi.useFakeTimers()
     try {

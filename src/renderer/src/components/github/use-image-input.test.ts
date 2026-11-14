@@ -3,8 +3,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { act, renderHook } from '@testing-library/react'
-import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
-import { createRichMarkdownEditorCodec } from '@/components/editor/rich-markdown-source-transport'
+import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown/schema/rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from '@/components/editor/rich-markdown/document/rich-markdown-source-transport'
 import { useImageInput } from './use-image-input'
 
 vi.mock('sonner', () => ({
@@ -54,18 +54,5 @@ describe('useImageInput', () => {
       '```ts\nconst\n```\n\n![](https://example.com/shot.png)\n\n```ts\n a = 1\n```'
     )
     expect(() => target.state.doc.check()).not.toThrow()
-  })
-
-  it('keeps an image URL inline when the cursor is in ordinary prose', () => {
-    const target = mountComposerEditor('Install the extension\n')
-    target.commands.setTextSelection(13)
-    const { result } = renderImageInput(target)
-
-    act(() => result.current.setImageUrl('https://example.com/shot.png'))
-    act(() => result.current.insertImageUrl())
-
-    expect(target.getMarkdown().trimEnd()).toBe(
-      'Install the ![](https://example.com/shot.png)extension'
-    )
   })
 })

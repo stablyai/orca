@@ -2,8 +2,8 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import {
   isAgentChatPermissionMode,
   publishedLegacyChatPermissionMode
-} from '../../../shared/agent-chat-permission-mode'
-import { applyAllAgentsPermission } from '../../../shared/tui-agent-permission-choice'
+} from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { applyAllAgentsPermission } from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 
 /** Old dropdown writes use the replacement control's reset; an explicit typed write wins. */
 export function legacyChatPermissionWrite(

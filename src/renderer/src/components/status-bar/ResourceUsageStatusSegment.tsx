@@ -1,7 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Activity, Terminal } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ResourcePtyPanel } from './ResourcePtyPanel'
 import React from 'react'
 import { Popover, PopoverContent } from '@/components/ui/popover'
@@ -30,6 +30,7 @@ export function ResourceUsageStatusSegment({
   compact?: boolean
   iconOnly: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const controller = useResourceUsageStatusController()
   const {
     open,
@@ -86,17 +87,20 @@ export function ResourceUsageStatusSegment({
         setOpen(nextOpen)
       }}
     >
-      {renderResourceUsageStatusTrigger({
-        daemonUnreachable,
-        resourceManagerAriaLabel,
-        spaceScanReady,
-        iconOnly,
-        commitToneClass,
-        memBadgeLabel,
-        triggerSessionCount,
-        orphanCount,
-        resourceManagerTooltipLines
-      })}
+      {renderResourceUsageStatusTrigger(
+        {
+          daemonUnreachable,
+          resourceManagerAriaLabel,
+          spaceScanReady,
+          iconOnly,
+          commitToneClass,
+          memBadgeLabel,
+          triggerSessionCount,
+          orphanCount,
+          resourceManagerTooltipLines
+        },
+        t
+      )}
 
       <PopoverContent
         side="top"
@@ -113,13 +117,16 @@ export function ResourceUsageStatusSegment({
           }
         }}
       >
-        {renderResourceUsagePopoverHeader({
-          daemonActions,
-          onRefresh:
-            controller.selectedTab === 'ptys'
-              ? () => void controller.localPtyInventory.refreshSessions()
-              : controller.refreshResources
-        })}
+        {renderResourceUsagePopoverHeader(
+          {
+            daemonActions,
+            onRefresh:
+              controller.selectedTab === 'ptys'
+                ? () => void controller.localPtyInventory.refreshSessions()
+                : controller.refreshResources
+          },
+          t
+        )}
         <Tabs
           value={controller.selectedTab}
           onValueChange={controller.setSelectedTab}
@@ -129,11 +136,11 @@ export function ResourceUsageStatusSegment({
             <TabsList variant="line" size="sm">
               <TabsTrigger value="resources">
                 <Activity aria-hidden="true" className="size-3" />
-                {translate('resourceManager.resources', 'Resources')}
+                {t('resourceManager.resources', 'Resources')}
               </TabsTrigger>
               <TabsTrigger value="ptys">
                 <Terminal aria-hidden="true" className="size-3" />
-                {translate('resourceManager.ptys', 'PTYs')}
+                {t('resourceManager.ptys', 'PTYs')}
                 {controller.localPtyInventory.observedAt !== null && (
                   <Badge variant="secondary">
                     {controller.localPtyInventory.sessionInventory.count}
@@ -151,44 +158,56 @@ export function ResourceUsageStatusSegment({
                 {controller.actionError}
               </p>
             )}
-            {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions })}
-            {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner()}
-            {resourceSnapshot &&
-              renderResourceUsageSummary({
-                totalCpu,
-                totalMemory,
+            {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions }, t)}
+            {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner(t)}
+            {resourceSnapshot && (
+              <div className="min-h-0 max-h-[40%] overflow-y-auto scrollbar-sleek">
+                {renderResourceUsageSummary(
+                  {
+                    totalCpu,
+                    totalMemory,
+                    memoryMetricCopy,
+                    commitBadgeLabel,
+                    commitMetricCopy,
+                    commitToneClass,
+                    orphanCount
+                  },
+                  t
+                )}
+              </div>
+            )}
+            {renderResourceUsagePopoverBody(
+              {
+                setPopoverBodyNode,
+                unifiedRepos,
+                resourceSnapshot,
+                sortOption,
+                setSortOption,
                 memoryMetricCopy,
-                commitBadgeLabel,
-                commitMetricCopy,
-                commitToneClass,
-                orphanCount
-              })}
-            {renderResourceUsagePopoverBody({
-              setPopoverBodyNode,
-              unifiedRepos,
-              resourceSnapshot,
-              sortOption,
-              setSortOption,
-              memoryMetricCopy,
-              collapsedRepos,
-              toggleRepo,
-              collapsedWorktrees,
-              activeWorktreeId,
-              toggleWorktree,
-              navigateToWorktree,
-              navigateToTab,
-              deleteWorktree,
-              handleKillSession,
-              appCollapsed,
-              setAppCollapsed,
-              daemonUnreachable,
-              runtimeHostNotices
-            })}
-            {renderResourceUsagePopoverFooter({
-              handleOpenWorkspaceCleanup,
-              orphanCount,
-              handleKillOrphans
-            })}
+                collapsedRepos,
+                toggleRepo,
+                collapsedWorktrees,
+                activeWorktreeId,
+                toggleWorktree,
+                navigateToWorktree,
+                navigateToTab,
+                deleteWorktree,
+                handleKillSession,
+                appCollapsed,
+                setAppCollapsed,
+                daemonUnreachable,
+                runtimeHostNotices
+              },
+              t
+            )}
+            {renderResourceUsagePopoverFooter(
+              {
+                handleOpenWorkspaceCleanup,
+                orphanCount,
+                handleKillOrphans
+              },
+              t
+            )}
             <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
           </TabsContent>
           <TabsContent value="ptys" className="min-h-0 data-[state=inactive]:hidden">
@@ -207,15 +226,18 @@ export function ResourceUsageStatusSegment({
         </Tabs>
       </PopoverContent>
       {/* Why: hoisted to a sibling of PopoverContent — nested, the Dialog unmounts with the popover mid-interaction and the kill-confirm flow disappears. */}
-      {renderResourceUsageKillDialog({
-        killConfirm,
-        setKillConfirm,
-        killing,
-        runKillConfirmed
-      })}
+      {renderResourceUsageKillDialog(
+        {
+          killConfirm,
+          setKillConfirm,
+          killing,
+          runKillConfirmed
+        },
+        t
+      )}
       <DaemonActionDialog
         api={daemonActions}
-        extraDescription={translate(
+        extraDescription={t(
           'resourceManager.localDaemonScope',
           'This affects terminals on this computer.'
         )}

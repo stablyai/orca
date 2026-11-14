@@ -20,6 +20,16 @@ export type UpdateCheckOptions = {
   /** Dev channel switching; `targetTag` pins an exact build, including older ones. */
   channel?: ReleaseChannel
   targetTag?: string
+  /** One-off "install now" that skips the user's update delay. */
+  ignoreUpdateDelay?: boolean
+}
+
+/** A newer release withheld by the user's update delay; ISO timestamps survive IPC/RPC. */
+export type DelayedUpdate = {
+  version: string
+  releasedAt: string
+  availableAt: string
+  delayDays: number
 }
 
 /** Derive nonrelease origins from dev channels so new dedicated repos cannot be mislabeled ordinary releases. */
@@ -52,6 +62,13 @@ export type LinuxPackageInstallInstructions =
   | { ok: true; command: string; packageFileName: string }
   | { ok: false; reason: LinuxPackageCommandUnavailableReason; message: string }
 
+/** A newer release this Mac's macOS is too old to run; the updater keeps the current build. */
+export type UnsupportedSystemUpdate = {
+  version: string
+  /** Major macOS release the update needs, e.g. "13". */
+  minimumMacosVersion: string
+}
+
 export type UpdateInstallBlocker = {
   pid: number
   kind: 'window' | 'server' | 'browser' | 'unknown'
@@ -77,7 +94,14 @@ export type UpdateStatus = (
        *  Additive and optional — older clients simply keep offering their own download. */
       externallyManaged?: boolean
     }
-  | { state: 'not-available'; userInitiated?: boolean }
+  | {
+      state: 'not-available'
+      userInitiated?: boolean
+      /** Optional so older paired clients keep rendering "up to date". */
+      delayedUpdate?: DelayedUpdate
+      /** Optional so older paired clients keep rendering "up to date". */
+      unsupportedSystemUpdate?: UnsupportedSystemUpdate
+    }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | {
       state: 'downloaded'

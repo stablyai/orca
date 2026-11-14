@@ -1,7 +1,11 @@
+import {
+  captureBrowserInitializationDelivery,
+  recordBrowserInitializationReceipt
+} from './browser-initialization-presentation'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '../../store'
-import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import {
   isSessionTabsListAllResult,
@@ -21,6 +25,7 @@ import {
 } from './state'
 import { applyWebSessionTabsSnapshots } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
+import { applyReceivedAgentSenderPublications } from './received-agent-sender-publications'
 import { isHostMirroredWorktree } from './visibility-types'
 
 export type InitialSessionTabsLoadArgs = {
@@ -40,6 +45,7 @@ export function loadInitialWebSessionTabs({
 }: InitialSessionTabsLoadArgs): void {
   // Why: listAll is bootstrap fallback; a stream received after this boundary owns the result.
   const requestReceivedFrame = nextReceivedSessionTabsFrame()
+  const delivery = captureBrowserInitializationDelivery(environmentId)
   let settleHydration: (() => void) | null = null
   void window.api.runtimeEnvironments
     .call({
@@ -76,6 +82,9 @@ export function loadInitialWebSessionTabs({
         return
       }
       recordReceivedWebSessionTabsEnvironmentFrame(environmentId, requestReceivedFrame)
+      for (const snapshot of result.snapshots) {
+        recordBrowserInitializationReceipt(environmentId, snapshot, requestReceivedFrame, delivery)
+      }
       const receivedFrames = result.snapshots.map((snapshot) =>
         recordReceivedWebSessionTabsSnapshot(
           environmentId,
@@ -85,6 +94,7 @@ export function loadInitialWebSessionTabs({
           'bootstrap'
         )
       )
+      applyReceivedAgentSenderPublications(environmentId, result.snapshots, runtimeId)
       const recovered = await Promise.all(
         result.snapshots.map((snapshot) =>
           recoverMirroredTerminalOrphansBeforeApply(

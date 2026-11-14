@@ -1,44 +1,36 @@
-import { randomInt } from 'node:crypto'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { resolveConsent } from './consent'
+import { getFeatureTipSeenId } from '../../shared/feature-tips'
+import type { ChatUiLaunchTipCohort } from '../../shared/telemetry-settings-types'
 
-export type ChatUiLaunchTipCohort = 'control' | 'treatment'
+export type { ChatUiLaunchTipCohort }
 
-// Decided once per launch with the cohort, so the tip and its enrollment read the same consent; contributor builds never set it.
+// Decided once per launch, so the tip and its telemetry read the same consent; contributor builds never set it.
 let deferredForConsent = false
 
 /**
- * Enrolls once, only profiles still due the tip whose events can be measured. While the telemetry
- * banner is unresolved the tip waits, so the exposure is never spent unmeasured; opted-out and
- * contributor builds stay unenrolled and see the tip as before.
+ * Only reads back a saved assignment; nothing new is assigned. While the telemetry banner is
+ * unresolved for a profile still due the tip, the tip waits.
  */
 export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort | undefined {
   deferredForConsent = false
   try {
     const settings = store.getSettings()
     const telemetry = settings.telemetry
-    const saved = telemetry?.chatUiLaunchTipCohort
-    if (saved === 'control' || saved === 'treatment') {
-      return saved
-    }
+    const saved = telemetry?.chatUiLaunchTipRolloutCohort ?? telemetry?.chatUiLaunchTipCohort
     if (
-      !telemetry ||
-      store.getChatUiLaunchTipVariant() === 'none' ||
-      store.getUI().featureTipsSeenIds?.includes('chat-ui-here')
+      telemetry &&
+      resolveConsent(settings).effective === 'pending_banner' &&
+      store.getChatUiLaunchTipVariant() !== 'none' &&
+      // Why: some profiles carry the generic id without having seen the tip; check the id that applies.
+      !store.getFeatureTipsSeenIds().includes(getFeatureTipSeenId('chat-ui-here', telemetry))
     ) {
-      return undefined
+      deferredForConsent = true
     }
-    const consent = resolveConsent(settings).effective
-    if (consent !== 'enabled') {
-      deferredForConsent = consent === 'pending_banner'
-      return undefined
-    }
-    const cohort: ChatUiLaunchTipCohort = randomInt(2) === 0 ? 'control' : 'treatment'
-    store.updateSettings({ telemetry: { ...telemetry, chatUiLaunchTipCohort: cohort } })
-    return cohort
+    return saved
   } catch (err) {
-    // Startup must not fail over an experiment; unenrolled profiles see the tip as before.
-    console.warn('[telemetry] chat UI launch tip cohort assignment failed', err)
+    // Startup must not fail over this read; the tip still follows the saved settings.
+    console.warn('[telemetry] chat UI launch tip settings read failed', err)
     return undefined
   }
 }

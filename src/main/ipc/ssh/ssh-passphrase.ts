@@ -2,7 +2,7 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { SSH_CREDENTIAL_TIMEOUT_MS } from '../../ssh/connection/ssh-connection-timing'
 import type { SshCredentialKind } from '../../ssh/connection/ssh-connection-callbacks'
-import { recordSshCredentialDeclined } from '../../ssh/ssh-credential-decline'
+import { recordSshCredentialDeclined } from '../../ssh/authentication/ssh-credential-decline'
 const pendingRequests = new Map<
   string,
   { targetId: string; resolve: (value: string | null) => void; close: () => void }

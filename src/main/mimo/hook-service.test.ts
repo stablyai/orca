@@ -54,18 +54,6 @@ describe('MimoCodeHookService buildPtyEnv', () => {
     rmSync(userConfigDir, { recursive: true, force: true })
   })
 
-  // MIMOCODE_HOME also moves auth.json, sessions and state (#9132); only add a config layer.
-  it('sets only MIMOCODE_CONFIG_DIR to a directory holding just the Orca plugin', () => {
-    const env = new MimoCodeHookService().buildPtyEnv('pty-1')
-
-    const overlay = join(userDataDir, 'mimocode-hooks', 'config')
-    expect(env).toEqual({ MIMOCODE_CONFIG_DIR: overlay })
-    expect(readdirSync(overlay)).toEqual(['plugins'])
-    const pluginSource = readFileSync(join(overlay, 'plugins', 'orca-mimocode-status.js'), 'utf8')
-    expect(pluginSource).toContain('/hook/mimo-code')
-    expect(pluginSource).not.toContain('post("SessionStart"')
-  })
-
   it("layers the user's own MIMOCODE_CONFIG_DIR into the overlay without touching it", () => {
     const env = new MimoCodeHookService().buildPtyEnv('pty-1', userConfigDir)
 

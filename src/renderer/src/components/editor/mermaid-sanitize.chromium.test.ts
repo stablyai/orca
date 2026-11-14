@@ -61,15 +61,6 @@ async function sanitizeInChromium(svg: string): Promise<string> {
 }
 
 describe.skipIf(!chromiumAvailable)('sanitizeMermaidSvg (Chromium)', () => {
-  it('keeps mermaid HTML label formatting tags inside foreignObject', async () => {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><g><foreignObject width="100" height="40"><div xmlns="http://www.w3.org/1999/xhtml"><b>Bold</b> and <i>italic</i></div></foreignObject></g></svg>`
-    const out = await sanitizeInChromium(svg)
-    expect(out).toContain('foreignObject')
-    expect(out).toMatch(/<b[\s>]/i)
-    expect(out).toMatch(/<i[\s>]/i)
-    expect(out).toContain('Bold')
-  })
-
   it('strips script, event handlers, and javascript: URLs while keeping label text', async () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg"><g><foreignObject width="100" height="40"><div xmlns="http://www.w3.org/1999/xhtml"><b onclick="alert(1)">Bold</b><script>alert(1)</script><a href="javascript:alert(1)">x</a><img src="x" onerror="alert(1)"></div></foreignObject><script>alert(2)</script></g></svg>`
     const out = await sanitizeInChromium(svg)

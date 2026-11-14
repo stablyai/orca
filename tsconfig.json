@@ -2,7 +2,8 @@
   "files": [],
   "references": [
     { "path": "./config/tsconfig.node.json" },
-    { "path": "./config/tsconfig.web.json" }
+    { "path": "./config/tsconfig.web.json" },
+    { "path": "./config/tsconfig.test.pane-launch.json" }
   ],
   "compilerOptions": {
     "baseUrl": ".",

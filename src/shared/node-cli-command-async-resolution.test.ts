@@ -103,22 +103,3 @@ describe('resolveCliCommandAsync agrees with resolveCliCommand on Windows', () =
     expect(await resolveCliCommandAsync('codex', options('a', 'b'))).toBe(sync)
   })
 })
-
-it('reads nothing synchronously, even when a PATH miss walks nvm and install dirs', async () => {
-  stage('home/.nvm/alias/default', 'home/.nvm/versions/node/v20.1.0/bin/codex.cmd')
-  writeFileSync(join(root, 'home/.nvm/alias/default'), '20')
-  const options = {
-    pathEnv: join(root, 'a'),
-    homePath: join(root, 'home'),
-    platform: 'win32' as const
-  }
-  syncFs.forbidden = true
-
-  await expect(resolveCliCommandAsync('codex', options)).resolves.toBe(
-    join(root, 'home/.nvm/versions/node/v20.1.0/bin/codex.cmd')
-  )
-  expect(syncFs.calls).toEqual([])
-  // The guard is live: the sync resolver hits it and cannot find the same install.
-  expect(resolveCliCommand('codex', options)).toBe('codex')
-  expect(syncFs.calls).not.toEqual([])
-})

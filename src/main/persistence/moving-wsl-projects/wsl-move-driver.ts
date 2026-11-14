@@ -12,22 +12,25 @@
  */
 import type { WslMoveRequest, WslMoveResult } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
-import { removeWslMoveCutover, writeWslMoveCutover } from './wsl-move-cutover-journal'
-import { journalSleptWslMove } from './wsl-move-driver-journal'
-import type { WslMoveDriverDeps, WslMoveHost } from './wsl-move-driver-ports'
+import {
+  removeWslMoveCutover,
+  writeWslMoveCutover
+} from './cutover-recovery/wsl-move-cutover-journal'
+import { journalSleptWslMove } from './execution/wsl-move-driver-journal'
+import type { WslMoveDriverDeps, WslMoveHost } from './execution/wsl-move-driver-ports'
 import {
   readSleptScrollback,
   daemonHistoryLeafOf,
   type WslMoveSleptScrollback
-} from './wsl-move-slept-scrollback'
-import { reportWslMoveRunEnd } from './wsl-move-driver-run-end'
+} from './terminal-state/wsl-move-slept-scrollback'
+import { reportWslMoveRunEnd } from './execution/wsl-move-driver-run-end'
 import {
   exportRequestOf,
   isWslMoveScopeChanged,
   prepareWslMove,
   refusal,
   type WslMovePrepared
-} from './wsl-move-driver-plan'
+} from './execution/wsl-move-driver-plan'
 import {
   advanceWslMove,
   collectWslMoveBlobs,
@@ -35,21 +38,21 @@ import {
   sendWslMoveBlobs,
   stageWslMove,
   wslMoveCopyBytes
-} from './wsl-move-driver-transfer'
-import { pauseWslMoveScope } from './wsl-move-driver-pause'
-import { quiesceWslMove, type WslMoveQuiesceRefusalReason } from './wsl-move-quiesce'
-import { finishWslMove as finish } from './wsl-move-driver-finish'
-import { resetWslMoveToZero } from './wsl-move-reset'
+} from './execution/wsl-move-driver-transfer'
+import { pauseWslMoveScope } from './execution/wsl-move-driver-pause'
+import { quiesceWslMove, type WslMoveQuiesceRefusalReason } from './quiescence/wsl-move-quiesce'
+import { finishWslMove as finish } from './execution/wsl-move-driver-finish'
+import { resetWslMoveToZero } from './cutover-recovery/wsl-move-reset'
 import {
   claimWslMoveRun,
   releaseWslMoveRun,
   wslMoveClaimRefusal,
   type RunningWslMove
-} from './wsl-move-running-moves'
+} from './orchestration/wsl-move-running-moves'
 import {
   holdWslMoveWindowWritesForCommit,
   settleWslMoveWindowWriteHoldForCommit
-} from './wsl-move-window-write-hold'
+} from './quiescence/wsl-move-window-write-hold'
 
 class WslMoveStop extends Error {}
 
@@ -57,9 +60,6 @@ class WslMoveStop extends Error {}
 const WSL_MOVE_TERMINALS_STARTED = 'terminals-started-after-pause'
 /** The quiesce's own wording, so both proofs read alike in the result. */
 const WSL_MOVE_EXIT_UNVERIFIABLE = 'exit-unverifiable'
-
-export { cancelWslMove, isWslMoveRunning } from './wsl-move-running-moves'
-export { previewWslMove } from './wsl-move-driver-preview'
 
 export async function moveProjectsToWslHost(
   deps: WslMoveDriverDeps,
@@ -141,7 +141,7 @@ async function runMove(
         migrationId
       ).catch(() => {})
       if (!quiesced.fenceLifted) {
-        return putBack(deps, host, migrationId, `pause:${quiesced.reason}`)
+        return await putBack(deps, host, migrationId, `pause:${quiesced.reason}`)
       }
       return quiesced.reason === 'terminals-blocked'
         ? refusal('wsl_move_terminals_blocked', { blockers: quiesced.blockers ?? [] })
@@ -152,7 +152,7 @@ async function runMove(
     try {
       return await moveQuiesced(deps, host, quiesced.cutover, prepared, running, slept)
     } catch (error) {
-      return putBack(deps, host, migrationId, describe(error))
+      return await putBack(deps, host, migrationId, describe(error))
     }
   } finally {
     slept.dispose()

@@ -16,5 +16,24 @@
     "@types/node": "^24.19.2",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./apply-postgres-schema": {
+      "types": "./dist/apply-postgres-schema.d.ts",
+      "default": "./dist/apply-postgres-schema.js"
+    },
+    "./catalog-object-precheck": {
+      "types": "./dist/catalog-object-precheck.d.ts",
+      "default": "./dist/catalog-object-precheck.js"
+    },
+    "./schema-lock-target": {
+      "types": "./dist/schema-lock-target.d.ts",
+      "default": "./dist/schema-lock-target.js"
+    },
+    "./*": "./*"
   }
 }

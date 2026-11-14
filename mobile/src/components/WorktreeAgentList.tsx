@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
-import type { AgentChildRowModel } from '../../../src/shared/agent-child-row-model'
+import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import {
   buildAgentRowLineageTree,
@@ -17,15 +17,16 @@ import { agentDotState, type AgentDotState } from '../worktree/agent-row-display
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
+import { useSharedNow } from '../hooks/use-now'
 import { worktreeAgentChildRows } from '../worktree/worktree-agent-child-rows'
 
 type Props = {
   agents: RuntimeWorktreeAgentRow[]
-  now: number
   unvisited: boolean
   statusLive?: boolean
   isReadOnly?: boolean
   onAgentPress?: (paneKey: string) => void
+  onAgentLongPress?: () => void
   /** The desktop's "Full list" agent activity layout: every row, no summary. */
   fullList?: boolean
 }
@@ -42,13 +43,15 @@ const idleDisclosureKey = (paneKey: string) => `idle:${paneKey}`
 // Nest spawn lineage under its parent, matching desktop WorktreeCardAgents: children start collapsed.
 export function WorktreeAgentList({
   agents,
-  now,
   unvisited,
   statusLive = false,
   isReadOnly = false,
   onAgentPress,
+  onAgentLongPress,
   fullList = false
 }: Props) {
+  // Only lists that draw agent times tick, so the rest of the host list skips the 30 s clock.
+  const now = useSharedNow(30_000)
   const roots = useMemo(
     () => flattenAgentRowLineage(agents).filter((node) => node.depth === 0),
     [agents]
@@ -76,6 +79,7 @@ export function WorktreeAgentList({
       unvisited={unvisited}
       isReadOnly={isReadOnly}
       onPress={onAgentPress}
+      onLongPress={onAgentLongPress}
     />
   )
 
@@ -114,6 +118,9 @@ export function WorktreeAgentList({
           depth={node.depth}
           now={now}
           unvisited={unvisited}
+          isReadOnly={isReadOnly}
+          onPress={onAgentPress}
+          onLongPress={onAgentLongPress}
           trailing={
             children.length > 0 ? (
               <WorktreeAgentChildToggle

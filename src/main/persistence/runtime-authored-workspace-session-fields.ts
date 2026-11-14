@@ -1,5 +1,5 @@
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 
 // Renderer snapshots omit runtime-owned fields; Store must preserve them, including before-unload writes.
 function unionWriteOnceDefaultTerminalTabsApplied(

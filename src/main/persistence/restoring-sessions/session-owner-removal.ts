@@ -1,12 +1,12 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
-import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
+import '../../../shared/workspace-session/workspace-session-partition-owner'
+import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { cloneWorkspaceSessionState, deleteOwnerKeyedSessionFields } from './session-owner-fields'
 
 /** Frozen WSL sessions must survive pruning for downgrade. */
@@ -72,8 +72,6 @@ export function workspaceSessionPartitionIdsForHost(
     ? [LOCAL_EXECUTION_HOST_ID, parsed.id]
     : [LOCAL_EXECUTION_HOST_ID]
 }
-
-export const workspaceSessionOwnerPartitionForHost = workspaceSessionPartitionHostId
 
 /** Delete every partition copy or load may resurrect the workspace; folder host ownership can be inferred. */
 export function removeWorkspaceSessionOwnerEverywhere(

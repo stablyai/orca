@@ -1,12 +1,11 @@
-// Share whole English sentence pieces: the host interpolates them; desktop translates each with the same fallback.
-
 import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from '../../claude-profile-routing'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
-import type { AgentCliInstallationProblem } from '../../agent-cli-installation-problem'
-import { tuiAgentDisplayName } from '../../tui-agent-display-names'
+import type { AgentCliInstallationProblem } from '../../agent-launch/catalog/agent-cli-installation-problem'
+import { tuiAgentDisplayName } from '../../agent-launch/catalog/tui-agent-display-names'
+// Share whole English sentence pieces: the host interpolates them; desktop translates each with the same fallback.
 
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
@@ -21,7 +20,21 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
 /** Whole translatable pieces; the host fills agent (name or theAgent) and command (conversation command name) in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
+  forkOriginalMissing:
+    '{{agent}} could not find this response in the original chat. Open it and fork from there.',
+  forkOriginalUnavailable:
+    '{{agent}} cannot fork this response in the original chat. Open it and fork from there.',
+  forkOriginalMissingNamed:
+    '{{agent}} could not find this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalUnavailableNamed:
+    '{{agent}} cannot fork this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalLatestOnly:
+    '{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.',
+  forkOriginalLatestOnlyNamed:
+    '{{agent}} can only fork the latest response in "{{detail}}". Open that chat and fork its latest response once it has finished.',
+  unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
+  savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',
   sendAgainToTryOnceMore: 'Send your message again to try once more.',
@@ -50,6 +63,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
   antigravityNotSignedIn:
     "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+  antigravitySystemNotSignedIn:
+    "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
   agentCommandNotSignedIn:
     'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
   interactiveAgentNotSignedIn:
@@ -101,7 +116,20 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeEffortInvalid:
     'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.',
   modelUnavailable: "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+  selectedModel: 'the selected model',
+  providerUnavailable:
+    "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+  providerSafetyStopped:
+    '{{agent}} stopped this response after a safety check. Review your request and send again.',
+  providerResponseFailed:
+    "{{agent}} couldn't finish this response. Open Details for more information.",
+  modelNotSelected:
+    '{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.',
+  modelUnavailableUpdate:
+    "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
   providerRejected: "{{agent}} didn't accept this message.",
+  pluginInputRequired:
+    '{{agent}} stopped because the "{{plugin}}" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.',
   providerRejectedQuoted: "{{agent}} didn't accept this message: {{detail}}.",
   attachmentEmpty: 'An image on this message is empty, so the message was not sent.',
   attachmentTooLarge: 'An image on this message is too large, so the message was not sent.',
@@ -119,6 +147,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   attachmentNotAFile: "An image on this message isn't a file, so the message was not sent.",
   attachmentNoSource: 'An image on this message has no file to send, so the message was not sent.',
   attachmentInvalid: "An attachment on this message can't be sent to the agent.",
+  attachmentsExpired: '{{names}} expired.',
   attachmentUnreadable:
     "An attachment on this message couldn't be read, so the message was not sent.",
   emptyMessage: 'This message is empty, so it was not sent.',
@@ -180,6 +209,7 @@ export type AgentSessionFailureCopyValues = {
   installedVersion?: string
   minimumVersion?: string
   agent?: string
+  plugin?: string
   command?: string
   loginCommand?: string
   slashCommand?: string
@@ -198,6 +228,8 @@ export type AgentSessionFailureCopyValues = {
   /** A provider protocol method that got no answer, e.g. `thread/start`. */
   method?: string
   seconds?: string
+  /** Attachment file names, already listed for the sentence. */
+  names?: string
 }
 
 export type AgentSessionFailureSay = (
@@ -245,4 +277,33 @@ export const sayAgentSessionFailureEnglish: AgentSessionFailureSay = (id, values
     /\{\{(\w+)\}\}/g,
     (placeholder, name: string) => filled.get(name) ?? placeholder
   )
+}
+
+/** Translate authored original-chat refusals without changing other fork failures. */
+export function agentSessionForkSourceFailureWords(
+  message: string,
+  agent: string,
+  say: AgentSessionFailureSay
+): string | null {
+  for (const id of [
+    'forkOriginalMissing',
+    'forkOriginalUnavailable',
+    'forkOriginalMissingNamed',
+    'forkOriginalUnavailableNamed',
+    'forkOriginalLatestOnly',
+    'forkOriginalLatestOnlyNamed'
+  ] as const) {
+    const [prefix, suffix] = sayAgentSessionFailureEnglish(id, { agent }).split('{{detail}}')
+    if (
+      suffix === undefined
+        ? message === prefix
+        : message.startsWith(prefix) && message.endsWith(suffix)
+    ) {
+      return say(id, {
+        agent,
+        ...(suffix === undefined ? {} : { detail: message.slice(prefix.length, -suffix.length) })
+      })
+    }
+  }
+  return null
 }

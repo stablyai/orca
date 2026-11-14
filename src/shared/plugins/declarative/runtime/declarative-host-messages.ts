@@ -14,6 +14,9 @@ export type HostMessageFields = {
   panelId?: unknown
   plugin?: unknown
   workspace?: unknown
+  memory?: unknown
+  retain?: unknown
+  hydration?: unknown
 }
 
 export function readHostMessage(payload: unknown): HostMessageFields {
@@ -33,7 +36,10 @@ export function readHostMessage(payload: unknown): HostMessageFields {
     visible: 'visible' in payload ? payload.visible : undefined,
     panelId: typeof panel === 'object' && panel !== null && 'id' in panel ? panel.id : undefined,
     plugin: 'plugin' in payload ? payload.plugin : undefined,
-    workspace: 'workspace' in payload ? payload.workspace : undefined
+    workspace: 'workspace' in payload ? payload.workspace : undefined,
+    memory: 'memory' in payload ? payload.memory : undefined,
+    retain: 'retain' in payload ? payload.retain : undefined,
+    hydration: 'hydration' in payload ? payload.hydration : undefined
   }
 }
 

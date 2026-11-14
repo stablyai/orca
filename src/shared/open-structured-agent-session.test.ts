@@ -9,7 +9,7 @@ import { structuredSessionIdFromNotificationPane } from './structured-session-no
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from './structured-agent-session-projection'
+} from './agent-session/view/structured-agent-session-projection'
 
 const target = { sessionId: 'current', worktreeId: 'owner', agent: 'codex' }
 const row = { id: 'actual-issued-id', sessionId: 'current', agent: 'codex' }

@@ -1,6 +1,6 @@
 /**
  * What converting a UNC Windows-drive project to its drive path (D1c) does with each saved field;
- * src/main/wsl/wsl-drive-unc-state-rewrite.ts applies it.
+ * src/main/wsl/filesystem/wsl-drive-unc-state-rewrite.ts applies it.
  */
 import type { PersistedState } from './persisted-state-types'
 
@@ -9,6 +9,8 @@ type Disposition =
   | 'rewrite'
   /** Names no local project folder, or another host's. */
   | 'keep'
+  /** Only the record keys and `childWorkspaceKey` are re-keyed; the rest names another store. */
+  | 'rewrite-child-key'
 
 /** A new field fails to compile until it has a disposition. */
 export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
@@ -29,6 +31,7 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   worktreeIdentityAliases: 'rewrite',
   worktreeLineageById: 'rewrite',
   workspaceLineageByChildKey: 'rewrite',
+  crossStoreLineageByChildKey: 'rewrite-child-key',
   // Desktop-wide; a path here (the worktree folder) is not a project's.
   settings: 'keep',
   ui: 'rewrite',
@@ -37,6 +40,7 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   // Partitions of SSH and paired hosts; the local partition is `workspaceSession`.
   workspaceSessionsByHostId: 'keep',
   remoteLayoutSnapshots: 'keep',
+  hostRepoCatalogSnapshots: 'keep',
   sshTargets: 'keep',
   sshTargetGenerationCounter: 'keep',
   deletedSshConfigAliases: 'keep',

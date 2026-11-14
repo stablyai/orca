@@ -1,4 +1,4 @@
-import type { WorkerDispatchRow, WorkerDispatchState } from '../../types'
+import type { WorkerDispatchRow, WorkerDispatchState } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'

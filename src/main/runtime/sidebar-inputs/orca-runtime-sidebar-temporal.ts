@@ -1,7 +1,7 @@
 import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './orca-runtime-detected-checkouts-live-content'
-import type { OrcaRuntimeWithAgentTransitions } from '../orca-runtime-agent-transitions'
+import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './workspace-facts/orca-runtime-detected-checkouts-live-content'
+import type { OrcaRuntimeWithAgentTransitions } from '../construction/orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/constants'
 import {
@@ -11,17 +11,19 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/sidebar-temporal-snapshot'
-import type { WorkspaceRowsProducer } from './workspace-rows-producer'
-import { SidebarRetentionOwner, type SidebarRetentionCandidates } from './sidebar-retention-owner'
-import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
-import { SortStampsProducer } from './sort-stamps-producer'
-import { writeUnreadFlag } from './sort-stamp-records'
-import { WorkspaceViewers } from './workspace-viewers'
+import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/feed/sidebar-temporal-snapshot'
+import type { WorkspaceRowsProducer } from './workspace-rows/workspace-rows-producer'
+import {
+  SidebarRetentionOwner,
+  type SidebarRetentionCandidates
+} from './temporal/sidebar-retention-owner'
+import type { AgentStatusStoreView } from './workspace-facts/workspace-activity-facts-producer'
+import { SortStampsProducer } from './temporal/sort-stamps-producer'
+import { writeUnreadFlag } from '../workspaces/metadata/workspace-activity-records'
+import { WorkspaceViewers } from './temporal/workspace-viewers'
 import { clientRaisesUnreadFlagItself } from '../../../shared/workspace-unread-raise-capability'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
-import { TerminalUseProducer } from './terminal-use-producer'
-import { createKeyedTrailingEdgeCoalescer } from '../keyed-trailing-edge-coalescer'
+import { TerminalUseProducer } from './temporal/terminal-use-producer'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId, worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
@@ -29,12 +31,12 @@ import {
   parseWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { anySleepKeyNames } from '../terminal/stop/worktree-terminal-sleep-key'
-import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/restored-status-dead-terminal-sweep'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/observations/restored-status-dead-terminal-sweep'
+import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 /**
  * Feeds main's sleeping retention, and owns the host's sort stamps: clients sort by those, so main
@@ -57,11 +59,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     retentionCandidates: () => this.readSidebarRetentionCandidates()
   })
   readonly workspaceViewers = new WorkspaceViewers(Date.now)
-  // Coalesce streaming-title bursts into one re-list notice; store writes already landed.
-  private readonly sortStampNotices = createKeyedTrailingEdgeCoalescer(
-    (worktreeId) => this.notifySortStampsChanged(worktreeId),
-    { flushMs: 50, maxWaitMs: 250 }
-  )
   readonly sortStamps = new SortStampsProducer({
     store: () => this.store,
     isWriteFenced: (worktreeId) =>
@@ -112,7 +109,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     )
     // Every unread write (window, phone, CLI, activation) lands in a record; a Done may re-tier.
     this.store?.onStateWritten?.((domains) => {
-      if (domains === undefined || WORKTREE_METADATA_DOMAINS.some((d) => domains.includes(d))) {
+      if (domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))) {
         this.sortStamps.noteRecordsWritten()
       }
     })
@@ -211,16 +208,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
           getProjectGroups: () => store.getProjectGroups?.() ?? []
         })
       : null
-  }
-
-  // Metadata only: clients re-list the record, and the cached git scans stay.
-  private notifySortStampsChanged(worktreeId: string): void {
-    if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-      this.notifyFolderWorkspaceChanged()
-      return
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyWorktreesChanged(getRepoIdFromWorktreeId(worktreeId), { invalidateGitScans: false })
   }
 
   override attachAgentStatusStore(store: AgentStatusStoreView): () => void {

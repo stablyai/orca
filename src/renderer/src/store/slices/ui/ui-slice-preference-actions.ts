@@ -1,3 +1,7 @@
+import {
+  DEFAULT_STATUS_BAR_USAGE_FORMAT,
+  normalizeStatusBarUsageFormat
+} from '../../../../../shared/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
@@ -5,11 +9,13 @@ import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
+  normalizeAgentActivityDisplayMode
+} from '../../../../../shared/constants'
+import {
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeUpdates,
-  normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties
-} from '../../../../../shared/constants'
+} from '../../../../../shared/worktree/row-display/card-properties'
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
   normalizeUsagePercentageDisplay
@@ -26,7 +32,7 @@ import {
 import {
   ALL_AUTOMATION_HOSTS_FILTER,
   toPersistedAutomationHostFilter
-} from '../../../../../shared/automation-host-filter'
+} from '../../../../../shared/automations/ownership/automation-host-filter'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -39,6 +45,7 @@ import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-stat
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
+    gitGraphFiltersByWorktree: {},
     sidebarBody: 'workspaces',
     setSidebarBody: (body) => set({ sidebarBody: body }),
 
@@ -169,6 +176,10 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
         return { collapsedGroups: next }
       }),
+    setCollapsedGroups: (keys) => {
+      set({ collapsedGroups: keys })
+      window.api.ui.set({ collapsedGroups: [...keys] }).catch(console.error)
+    },
 
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     _worktreeCardModeDefaulted: true,
@@ -267,6 +278,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         usagePercentageDisplay: normalized,
         usagePercentageDisplayChangeNoticeDismissed: true
       })
+    },
+    statusBarUsageFormat: { ...DEFAULT_STATUS_BAR_USAGE_FORMAT },
+    setStatusBarUsageFormat: (format) => {
+      const normalized = normalizeStatusBarUsageFormat(format)
+      window.api.ui.set({ statusBarUsageFormat: normalized }).catch(console.error)
+      set({ statusBarUsageFormat: normalized })
     },
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {

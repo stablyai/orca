@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type * as GitRunner from '../git/runner'
-import type * as RepoModule from '../git/repo'
+import type * as GitSpawnModule from '../git/command-runner/git-spawn'
+import type * as RepoDetectionModule from '../git/repositories/discovery/repo-detection'
 
 /** Unconstrained spy; annotated explicitly so declaration emit never names @vitest/spy internals. */
 export type ReposIpcSpy = Mock<(...args: never[]) => unknown>
@@ -79,10 +79,24 @@ export function electronModuleMock(mocks: ReposIpcMocks): Record<string, unknown
   }
 }
 
+type GitRepoProbeMocks = {
+  isGitRepo: Mock<(path: string) => boolean>
+  getGitRepoRoot: Mock<(path: string) => string>
+}
+
 // Preserve pure Git helpers; mock process and filesystem boundaries.
-export function gitRepoModuleMock(actual: typeof RepoModule): Record<string, unknown> {
-  const isGitRepo = vi.fn().mockReturnValue(true)
-  const getGitRepoRoot = vi.fn((path: string) => path)
+export function createGitRepoProbeMocks(): GitRepoProbeMocks {
+  return {
+    isGitRepo: vi.fn().mockReturnValue(true),
+    getGitRepoRoot: vi.fn((path: string) => path)
+  }
+}
+
+export function repoDetectionModuleMock(
+  actual: typeof RepoDetectionModule,
+  probes: GitRepoProbeMocks = createGitRepoProbeMocks()
+): Record<string, unknown> {
+  const { isGitRepo, getGitRepoRoot } = probes
   return {
     ...actual,
     isGitRepo,
@@ -93,24 +107,17 @@ export function gitRepoModuleMock(actual: typeof RepoModule): Record<string, unk
       isRepo: isGitRepo(path),
       rootPath: getGitRepoRoot(path),
       mainRepoPath: null
-    })),
-    getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
-    getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
-    getRemoteCount: vi.fn().mockResolvedValue(1),
-    searchBaseRefs: vi.fn().mockResolvedValue([])
+    }))
   }
 }
 
 // Keep real environment builders so clone tests verify actual credential-prompt guards.
-export function gitRunnerModuleMock(
+export function gitSpawnModuleMock(
   mocks: ReposIpcMocks,
-  actual: typeof GitRunner
+  actual: typeof GitSpawnModule
 ): Record<string, unknown> {
   return {
     ...actual,
-    gitExecFileAsync: mocks.gitExecFileAsyncMock,
-    gitExecFileAsyncBuffer: vi.fn(),
-    gitStreamStdout: vi.fn(),
     gitSpawn: mocks.gitSpawnMock,
     gitSpawnAfterWindowsEnvironmentReady: mocks.gitSpawnAfterWindowsEnvironmentReadyMock
   }

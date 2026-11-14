@@ -10,6 +10,7 @@ import {
   Puzzle,
   SquareTerminal
 } from 'lucide-react'
+import { cn } from '@/lib/class-names'
 import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import type { PluginListEntry } from './plugin-list-entries'
 
@@ -87,15 +88,25 @@ function rowType(entry: PluginListEntry): PluginCatalogType | null {
 }
 
 /** A row's small picture: what kind of plugin it is, never initials beside a status switch. */
-export function PluginRowArt({ entry }: { entry: PluginListEntry }): React.JSX.Element {
+export function PluginRowArt({
+  entry,
+  size = 'row'
+}: {
+  entry: PluginListEntry
+  /** `page` is the plugin page's header tile, for plugins that ship no icon. */
+  size?: 'row' | 'page'
+}): React.JSX.Element {
   const type = rowType(entry)
   const Icon = type ? TYPE_ICON[type] : Puzzle
   return (
     <div
       aria-hidden="true"
-      className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted text-muted-foreground"
+      className={cn(
+        'flex shrink-0 items-center justify-center border border-border/60 bg-muted text-muted-foreground',
+        size === 'page' ? 'size-16 rounded-2xl' : 'size-8 rounded-lg'
+      )}
     >
-      <Icon className="size-4" />
+      <Icon className={size === 'page' ? 'size-7' : 'size-4'} />
     </div>
   )
 }

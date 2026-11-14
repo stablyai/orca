@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots
@@ -12,7 +12,7 @@ import {
   LEAF_ID,
   SECOND_LEAF_ID,
   resetWebSessionTabsSyncTestState
-} from '../../src/renderer/src/runtime/web-session-tabs-sync-test-harness'
+} from '../../src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 vi.mock('../../src/renderer/src/store', () => ({ useAppStore: { setState: vi.fn() } }))
 beforeEach(resetWebSessionTabsSyncTestState)

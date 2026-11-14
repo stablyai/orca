@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import type { SourceControlAiSettings } from '../../../../../../shared/source-control-ai-types'
+import type { SourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
@@ -8,7 +8,7 @@ import {
   CUSTOM_COMMAND_MODE_INHERIT,
   CUSTOM_COMMAND_MODE_REPO
 } from './repository-source-control-ai-labels'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type RepositorySourceControlAiCustomCommandProps = {
   value: string | undefined
@@ -28,23 +28,24 @@ export function RepositorySourceControlAiCustomCommand({
   onChange,
   onCommit
 }: RepositorySourceControlAiCustomCommandProps): React.JSX.Element {
+  const t = useTranslate()
   // Retain empty Repository command intent so selecting that mode cannot snap back before typing.
   const [forceRepoMode, setForceRepoMode] = useState(false)
   const hasRepoCommand = isRepoCommand(value)
   const mode =
     hasRepoCommand || forceRepoMode ? CUSTOM_COMMAND_MODE_REPO : CUSTOM_COMMAND_MODE_INHERIT
   return (
-    <div className="space-y-2 rounded-md border border-border px-3 py-3">
+    <div data-settings-row="" className="space-y-2 py-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-0.5">
           <Label className="text-xs font-medium">
-            {translate(
+            {t(
               'auto.components.settings.RepositorySourceControlAiCustomCommand.ebffc5a28c',
               'Custom command'
             )}
           </Label>
           <p className="text-[11px] text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RepositorySourceControlAiCustomCommand.fbb77e122a',
               'Repo fallback for text actions that select Custom command.'
             )}
@@ -76,13 +77,13 @@ export function RepositorySourceControlAiCustomCommand({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={CUSTOM_COMMAND_MODE_INHERIT}>
-              {translate(
+              {t(
                 'auto.components.settings.RepositorySourceControlAiCustomCommand.e56668c291',
                 'Use global'
               )}
             </SelectItem>
             <SelectItem value={CUSTOM_COMMAND_MODE_REPO}>
-              {translate(
+              {t(
                 'auto.components.settings.RepositorySourceControlAiCustomCommand.0704dd55cd',
                 'Repository command'
               )}
@@ -107,7 +108,7 @@ export function RepositorySourceControlAiCustomCommand({
         }}
         placeholder={
           source.customAgentCommand ||
-          translate(
+          t(
             'auto.components.settings.RepositorySourceControlAiCustomCommand.f9941f0caf',
             'e.g. ollama run llama3.1 {prompt}'
           )

@@ -6,11 +6,13 @@ import {
 import { useCallback } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
+import { STANDALONE_SESSION_PARAM } from '../../../../src/navigation/host-stack-navigation'
 import {
   shellScreenRoute,
   shellScreenRouteKey
 } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
+import type { BridgeClearableRouteParam } from '../../../../src/mobile-web-shell/bridge/bridge-route-update'
 import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
 
 // paneKey selects a tab within the current session, not a new identity; remounting on it reloads the page and loses repeated taps.
@@ -24,6 +26,7 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
     created?: string | string[]
     warning?: string | string[]
     paneKey?: string | string[]
+    standalone?: string | string[]
   }>()
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
@@ -32,7 +35,7 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   const paneKey = firstParam(params.paneKey) ?? ''
   // Clear only the paneKey the page applied; a newer tap must survive. Empty equals absent in the route builder (ruling 34).
   const erasePaneKey = useCallback(
-    (param: 'paneKey', value: string) => {
+    (param: BridgeClearableRouteParam, value: string) => {
       if (param !== 'paneKey' || paneKey === '' || value !== paneKey) {
         return
       }
@@ -44,7 +47,7 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   // Omit empty params: created=1 is one-shot, warning is host text, absent name derives a label, and empty paneKey marks a spent tap.
   const routeParams: Record<string, string> = {
     ...Object.fromEntries(
-      (['name', 'created', 'warning', 'paneKey'] as const)
+      (['name', 'created', 'warning', 'paneKey', STANDALONE_SESSION_PARAM] as const)
         .map((key) => [key, firstParam(params[key])] as const)
         .filter(([, value]) => value !== '')
     ),

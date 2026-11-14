@@ -2,17 +2,17 @@ import React from 'react'
 import { Loader, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitHubProjectSettings,
   GitHubProjectSummary
-} from '../../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
-import { isGitHubProjectRefInputTooLarge } from '../../../../shared/github/project-ref-input'
+} from '../../../../shared/github/projects/project-types'
+import type { GitHubProjectViewError } from '../../../../shared/github/projects/project-result-types'
+import { isGitHubProjectRefInputTooLarge } from '../../../../shared/github/projects/project-ref-input'
 import {
   githubProjectHost,
   githubProjectIdentityKey
-} from '../../../../shared/github/project-identity'
+} from '../../../../shared/github/projects/project-identity'
 import type { ProjectPickerChoice } from './project-picker-selection'
 import {
   ProjectPickerError,
@@ -44,6 +44,7 @@ type Props = {
 }
 
 export function ProjectPickerBrowse(props: Props): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-col">
       <div className="border-b border-border/50 p-2">
@@ -52,7 +53,7 @@ export function ProjectPickerBrowse(props: Props): React.JSX.Element {
           <Input
             value={props.query}
             onChange={(event) => props.onQueryChange(event.target.value)}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.github.project.ProjectPicker.f492e1b539',
               'Search projects'
             )}
@@ -73,12 +74,13 @@ export function ProjectPickerBrowse(props: Props): React.JSX.Element {
 }
 
 function ProjectBrowseRows(props: Props): React.JSX.Element {
+  const t = useTranslate()
   const { projectSettings } = props
   return (
     <div className="max-h-[340px] overflow-y-auto p-1 scrollbar-sleek">
       {projectSettings.pinned.length > 0 ? (
         <ProjectPickerSection
-          label={translate('auto.components.github.project.ProjectPicker.707843206c', 'Pinned')}
+          label={t('auto.components.github.project.ProjectPicker.707843206c', 'Pinned')}
         >
           {projectSettings.pinned.map((project) => {
             const key = githubProjectIdentityKey(project)
@@ -115,7 +117,7 @@ function ProjectBrowseRows(props: Props): React.JSX.Element {
       ) : null}
       {projectSettings.recent.length > 0 ? <RecentProjects {...props} /> : null}
       <ProjectPickerSection
-        label={translate(
+        label={t(
           props.browseLoading
             ? 'auto.components.github.project.ProjectPicker.ba0ab9a117'
             : 'auto.components.github.project.ProjectPicker.b787682111',
@@ -125,7 +127,7 @@ function ProjectBrowseRows(props: Props): React.JSX.Element {
         {props.browseLoading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
             <Loader className="size-3 animate-spin" />
-            {translate('auto.components.github.project.ProjectPicker.7b6d39627e', 'Loading…')}
+            {t('auto.components.github.project.ProjectPicker.7b6d39627e', 'Loading…')}
           </div>
         ) : null}
         {props.filteredBrowse.map((project) => (
@@ -150,6 +152,7 @@ function ProjectBrowseRows(props: Props): React.JSX.Element {
 }
 
 function RecentProjects(props: Props): React.JSX.Element {
+  const t = useTranslate()
   const { projectSettings } = props
   const projects = projectSettings.recent.filter(
     (recent) =>
@@ -159,7 +162,7 @@ function RecentProjects(props: Props): React.JSX.Element {
   )
   return (
     <ProjectPickerSection
-      label={translate('auto.components.github.project.ProjectPicker.b3044b7a25', 'Recent')}
+      label={t('auto.components.github.project.ProjectPicker.b3044b7a25', 'Recent')}
     >
       {projects.map((project) => {
         const key = githubProjectIdentityKey(project)
@@ -203,6 +206,7 @@ function RecentProjects(props: Props): React.JSX.Element {
 }
 
 function ProjectPasteInput(props: Props): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="border-t border-border/50 p-2">
       <div className="flex gap-2">
@@ -213,7 +217,7 @@ function ProjectPasteInput(props: Props): React.JSX.Element {
             props.onPasteInputChange(
               input,
               isGitHubProjectRefInputTooLarge(input)
-                ? translate(
+                ? t(
                     'projectViews.error.inputTooLarge',
                     'Project reference is too large to resolve.'
                   )
@@ -225,7 +229,7 @@ function ProjectPasteInput(props: Props): React.JSX.Element {
               void props.onPaste()
             }
           }}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.github.project.ProjectPicker.5113ecc298',
             'Add by URL or owner/number'
           )}
@@ -237,7 +241,7 @@ function ProjectPasteInput(props: Props): React.JSX.Element {
           disabled={!props.canSubmitPasteInput}
           className="h-8"
         >
-          {translate('auto.components.github.project.ProjectPicker.fce99a24a7', 'Add')}
+          {t('auto.components.github.project.ProjectPicker.fce99a24a7', 'Add')}
         </Button>
       </div>
       {props.pasteError ? (

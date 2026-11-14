@@ -18,8 +18,8 @@ import {
 } from '../lifecycle/orcad-decommission-transaction'
 import { errorMessage } from '../../../shared/error-message'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { RELAY_REMOTE_DIR } from '../install/remote-install-root'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 export const ORCAD_ACTIVATION_TRANSACTION_FILENAME = 'transaction.json'
 export const ORCAD_ACTIVATION_TRANSACTION_DIRNAME = '.orcad-activation-transaction'

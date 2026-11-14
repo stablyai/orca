@@ -1,4 +1,5 @@
-import { ensureNumber, extractString } from '../usage/usage-record-coercion'
+import { ensureNumber } from '../usage/source-input/usage-record-coercion'
+import { extractString } from '../../shared/trimmed-string'
 import type { OpenCodeUsageRow } from './opencode-usage-row-queries'
 import type { OpenCodeUsageParsedEvent } from './types'
 

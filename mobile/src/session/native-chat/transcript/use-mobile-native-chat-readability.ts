@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { getRepoIdFromWorktreeId } from '../../../../../src/shared/worktree/id'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   nativeChatRepoListRead,
   type MobileRuntimeRepoSummary
-} from '../../mobile-session-read-operations'
+} from '../../agent-launch/mobile-runtime-repo-operations'
 import { isFloatingWorkspaceWorktreeId } from '../../floating-workspace'
 import { resumeFolderWorkspaceListRead } from '../../../agent-history/mobile-agent-history-operations'
 import { isMobileFolderNativeChatReadable } from '../mobile-native-chat-eligibility'

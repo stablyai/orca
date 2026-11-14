@@ -1,13 +1,15 @@
-import { constants as fsConstants } from 'node:fs'
+import { constants as fsConstants, realpathSync } from 'node:fs'
 import { access, mkdir, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { resolveFloatingWorkspacePath } from '../persistence/restoring-sessions/floating-workspace-normalization'
 
 type FloatingTerminalSettings = Pick<GlobalSettings, 'floatingTerminalTrustedCwds'>
+type FloatingWorkspaceSettings = FloatingTerminalSettings &
+  Partial<Pick<GlobalSettings, 'floatingTerminalCwd'>>
 
 const FLOATING_WORKSPACE_DIRNAME = 'floating-workspace'
 
@@ -38,17 +40,6 @@ function getTrustedFloatingWorkspaceDirectories(settings: FloatingTerminalSettin
   )
 }
 
-async function getPreservedTrustedFloatingWorkspaceDirectories(
-  settings: GlobalSettings
-): Promise<Set<string>> {
-  const trustedDirectories = new Set<string>()
-  for (const trustedDir of getTrustedFloatingWorkspaceDirectories(settings)) {
-    const canonicalDir = await canonicalizeAccessibleDirectory(trustedDir)
-    trustedDirectories.add(canonicalDir ?? trustedDir)
-  }
-  return trustedDirectories
-}
-
 function isTrustedFloatingWorkspaceDirectory(
   canonicalDirPath: string,
   settings: FloatingTerminalSettings
@@ -60,6 +51,58 @@ function isTrustedFloatingWorkspaceDirectory(
 export function getDefaultFloatingWorkspacePath(): string {
   // Headless runtime uses this resolver too.
   return path.join(getAppEnvironment().getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
+}
+
+let resolvedHomeCache: { home: string; real: string } | null = null
+
+/** Home as spelled and as resolved through any link (e.g. /home -> /var/home), resolved once per home. */
+function resolvedHome(): { home: string; real: string } {
+  const home = path.resolve(getAppEnvironment().getPath('home'))
+  if (resolvedHomeCache?.home !== home) {
+    let real = home
+    try {
+      real = path.resolve(realpathSync.native(home))
+    } catch {
+      // An unreadable home keeps its spelled path.
+    }
+    resolvedHomeCache = { home, real }
+  }
+  return resolvedHomeCache
+}
+
+/** A folder above home (such as `/`) was never what trusting a cwd meant; home itself, trusted explicitly, is. */
+function isAboveHomeDirectory(dir: string): boolean {
+  const fold = (value: string): string =>
+    process.platform === 'linux' ? value : value.toLowerCase()
+  const { home: spelled, real } = resolvedHome()
+  return [spelled, real].some((home) => {
+    const rel = path.relative(fold(dir), fold(home))
+    return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
+  })
+}
+
+/** Roots the floating workspace owns for file access; an untrusted cwd, or one above home, adds none. */
+export function getFloatingWorkspaceFileRoots(store: {
+  getSettings(): FloatingWorkspaceSettings
+}): {
+  extraRoots: string[]
+  exactRoots: string[]
+} {
+  const settings = store.getSettings()
+  const configuredPath =
+    typeof settings.floatingTerminalCwd === 'string' ? settings.floatingTerminalCwd.trim() : ''
+  // Canonical home: trust entries are canonical, so `~` must expand to the spelling they store.
+  const cwd = configuredPath
+    ? resolveFloatingWorkspacePath(configuredPath, resolvedHome().real)
+    : null
+  return {
+    extraRoots: [getDefaultFloatingWorkspacePath()],
+    // Exact: trusted entries are canonical, so a trusted cwd later replaced by a link fails closed.
+    exactRoots:
+      cwd && isTrustedFloatingWorkspaceDirectory(cwd, settings) && !isAboveHomeDirectory(cwd)
+        ? [cwd]
+        : []
+  }
 }
 
 export async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
@@ -102,9 +145,8 @@ export async function trustFloatingWorkspaceDirectory(
   if (!canonicalDir) {
     return
   }
-  const trustedDirectories = await getPreservedTrustedFloatingWorkspaceDirectories(
-    store.getSettings()
-  )
+  // Why spelling only for existing entries: re-resolving them would re-point a trusted folder since swapped for a link.
+  const trustedDirectories = getTrustedFloatingWorkspaceDirectories(store.getSettings())
   trustedDirectories.add(canonicalDir)
   store.updateSettings({
     floatingTerminalTrustedCwds: [...trustedDirectories]

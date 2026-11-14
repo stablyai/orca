@@ -1,8 +1,8 @@
 import { stat } from 'node:fs/promises'
-import { isWslPath } from '../../../wsl'
+import { isWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { WATCHER_IGNORE_DIRS } from './filesystem-watcher-ignore'
 import { createWslWatcher, type WatchedRoot } from './filesystem-watcher-wsl'
-import { WatcherChildCapacityError } from '../watcher-process/parcel-watcher-child-registry'
+import { WatcherChildCapacityError } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
 import { isWatcherProcessFailure } from '../watcher-process/parcel-watcher-process-failure'
 import type {
   LocalWatcherInstallResult,
@@ -20,9 +20,9 @@ import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 import type { WaitForLocalWatcherRetry } from './filesystem-watcher-local-capacity'
 import {
   noteWslDistroMayHaveStopped,
-  blockedWslDistroForPath
-} from '../../../wsl/wsl-unc-access-gate'
-import { deferUntilWslDistroRunning } from '../../../wsl-background-distro-gate'
+  deferUntilWslDistroRunning
+} from '../../../wsl/discovery/wsl-background-distro-gate'
+import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import {
   clearWslRootStatRetry,
   nextWslRootStatRetry

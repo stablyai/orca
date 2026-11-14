@@ -1,12 +1,12 @@
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess,
   type ClaudeAgentTeamsMode
 } from '../../../../shared/claude-agent-teams-tmux-compat'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
-import { buildClaudeAgentTeamsLaunchPlan } from '../../claude-agent-teams-shim-env'
-import { inferCapturedClaudeAgentTeamsMode } from '../../runtime-agent-launch-resolution'
+import type { TerminalCreateOptions } from './terminal-create-options'
+import { buildClaudeAgentTeamsLaunchPlan } from './claude-agent-teams-shim-env'
+import { inferCapturedClaudeAgentTeamsMode } from './runtime-agent-launch-resolution'
 
 export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   launchConfig: TerminalCreateOptions['launchConfig']

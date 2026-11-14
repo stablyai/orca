@@ -1,4 +1,4 @@
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import type {
   WorkerThreadChildErrorPayload,
@@ -24,10 +24,13 @@ function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
 }
 
 export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): void {
-  const children = new Map<number, { child: PipedChildProcess; pendingOutputBytes: number }>()
+  const children = new Map<
+    number,
+    { child: ChildProcessWithoutNullStreams; pendingOutputBytes: number }
+  >()
 
   const spawnChild = ({ id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>): void => {
-    let child: PipedChildProcess
+    let child: ChildProcessWithoutNullStreams
     try {
       child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] })
     } catch (error) {

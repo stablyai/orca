@@ -12,7 +12,7 @@ export async function verifyDeclarativePluginContent(plugin: ValidDiscoveredPlug
   if (!plugin.consentContentHash) {
     throw new Error(`plugin ${plugin.pluginKey} has no declarative consent content identity`)
   }
-  const actual = await hashPluginTree(plugin.rootDir)
+  const actual = await hashPluginTree(plugin.rootDir, { devFolder: plugin.isDev })
   if (!actual.ok) {
     throw new Error(`plugin ${plugin.pluginKey} declarative content is unreadable: ${actual.error}`)
   }

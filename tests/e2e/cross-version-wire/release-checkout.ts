@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { selectLatestStableReleaseTag } from '../../../config/scripts/stable-release-tags.mjs'
+import { selectLatestStableReleaseTag } from '../../../config/scripts/release/versioning/stable-release-tags.mjs'
 import {
   populateReleaseCheckoutSource,
   resolveSharedReleaseCacheRoot
@@ -11,6 +11,8 @@ import {
   publishReleaseCheckout,
   type MaterializeReleaseCheckoutTestHooks
 } from './release-checkout-publication.ts'
+import { releaseModuleLocation } from './release-module-locations.ts'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 export type {
   CheckoutLockOptions,
   CheckoutLifecycleContext,
@@ -103,6 +105,10 @@ function resolveCommit(ref: string): string {
   }
 }
 
+export async function prepareReleaseCheckoutSnapshot(ref: string): Promise<void> {
+  await prepareReleaseSnapshotSource(REPO_ROOT, resolveCommit(ref))
+}
+
 function checkoutModulePath(root: string, rootRelativePath: string): string {
   const fromRoot = rootRelativePath.replace(/^[/\\]+/, '')
   const absolute = resolve(root, fromRoot)
@@ -121,13 +127,16 @@ function checkoutModulePath(root: string, rootRelativePath: string): string {
 }
 
 // Pass raw absolute forward-slash paths: CI vite-node treats file:// URLs as root-relative ids (run 33049571360).
+// A module main moved loads from wherever this release defines it.
 export function importReleaseCheckoutModule(
   checkout: ReleaseCheckout,
   rootRelativePath: string,
   importModule: (specifier: string) => Promise<Record<string, unknown>> = (specifier) =>
     import(/* @vite-ignore */ specifier) as Promise<Record<string, unknown>>
 ): Promise<Record<string, unknown>> {
-  return importModule(checkoutModulePath(checkout.root, rootRelativePath))
+  return importModule(
+    checkoutModulePath(checkout.root, releaseModuleLocation(checkout.root, rootRelativePath))
+  )
 }
 
 /** An export a release module must define; callers name the shape they use, so a changed one fails the test. */

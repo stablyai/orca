@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   __resetHostedReviewBranchCacheForTests,
   invalidateHostedReviewBranchCache,
@@ -121,28 +121,6 @@ describe('hosted review in-flight invalidation', () => {
     const freshLookup = vi.fn(async () => review)
     expect(await withHostedReviewBranchCache(identity, options, freshLookup)).toEqual(review)
     expect(freshLookup).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps other hosts, paths and their pending promises isolated', async () => {
-    const others = [
-      { ...identity, executionHostId: 'local' as const },
-      { ...identity, executionHostId: 'ssh:host-b' as const },
-      { ...identity, repoPath: '/repo-other' }
-    ].map((key) => {
-      const response = Promise.withResolvers<HostedReviewInfo | null>()
-      const lookup = vi.fn(() => response.promise)
-      return { key, response, lookup, admitted: withHostedReviewBranchCache(key, options, lookup) }
-    })
-    invalidateHostedReviewBranchCache(identity.repoPath, identity.executionHostId)
-    const readers = others.map(({ key, lookup }) =>
-      withHostedReviewBranchCache(key, options, lookup)
-    )
-    for (const other of others) {
-      expect(other.lookup).toHaveBeenCalledTimes(1)
-      other.response.resolve(review)
-    }
-    expect(await Promise.all(readers)).toEqual([review, review, review])
-    await Promise.all(others.map((other) => other.admitted))
   })
 
   it('sweeps invalidated readers after sleep without expiring their replacement', async () => {

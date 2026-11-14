@@ -10,10 +10,8 @@ import {
   testState,
   writeDataFile
 } from '../persistence-test-harness'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import { createProjectGroup } from '../../../shared/project-groups'
+
 import { normalizeRuntimePathSeparators } from '../../../shared/cross-platform-path'
-import { LoadedStateAdaptationOperations } from '../loading-store/loaded-state-adaptation'
 
 vi.mock('electron', () => ({
   app: {
@@ -44,34 +42,43 @@ describe('Flat folder-scan project groups adaptation', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('leaves unchanged group membership and manual order clean on load', () => {
-    const state = getDefaultPersistedState(testState.dir)
-    const parentPath = join(testState.dir, 'projects')
-    const group = createProjectGroup({
-      name: 'Projects',
-      parentPath,
-      createdFrom: 'folder-scan',
-      tabOrder: 0
+  it('retains old group defaults and locally configured hooks through restart', async () => {
+    const store = createStore()
+    const old = store.createProjectGroup({
+      name: 'Old',
+      parentPath: testState.dir,
+      createdFrom: 'folder-scan'
     })
-    state.projectGroups = [group]
-    state.repos = ['alpha', 'beta'].map((name, index) =>
-      makeRepo({
-        id: name,
-        path: join(parentPath, name),
-        projectGroupId: group.id,
-        projectGroupOrder: 1 - index
-      })
-    )
-    const operations = new LoadedStateAdaptationOperations({ state, loadNeedsSave: false })
-
-    expect(operations.adaptFlatFolderScanProjectGroups()).toBe(false)
-    expect(state.projectGroups).toEqual([group])
-    expect(state.repos.map((repo) => [repo.projectGroupId, repo.projectGroupOrder])).toEqual([
-      [group.id, 1],
-      [group.id, 0]
-    ])
+    const configured = store.createProjectGroup({
+      name: 'Configured',
+      parentPath: testState.dir,
+      createdFrom: 'folder-scan'
+    })
+    store.updateProjectGroup(configured.id, {
+      hookSettings: {
+        mode: 'auto',
+        scripts: { setup: 'echo setup', archive: 'echo archive' },
+        commandSourcePolicy: 'local-only',
+        setupRunPolicy: 'ask',
+        setupAgentStartupPolicy: 'wait-for-setup'
+      }
+    })
+    store.flush()
+    await closeTestStores()
+    const reloaded = createStore()
+    expect(
+      reloaded.getProjectGroups().find((group) => group.id === old.id)?.hookSettings
+    ).toBeUndefined()
+    expect(
+      reloaded.getProjectGroups().find((group) => group.id === configured.id)?.hookSettings
+    ).toEqual({
+      mode: 'auto',
+      scripts: { setup: 'echo setup', archive: 'echo archive' },
+      commandSourcePolicy: 'local-only',
+      setupRunPolicy: 'ask',
+      setupAgentStartupPolicy: 'wait-for-setup'
+    })
   })
-
   it.each([false, true])(
     'preserves saved order through a Store restart (folder repo: %s)',
     async (includeFolder) => {

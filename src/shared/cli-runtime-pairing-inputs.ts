@@ -22,7 +22,11 @@ export function isNativeExecutable(commandPath: string): boolean {
     return false
   } finally {
     if (fd !== null) {
-      closeSync(fd)
+      try {
+        closeSync(fd)
+      } catch {
+        // Advisory cleanup must not override the runtime pairing decision.
+      }
     }
   }
 }

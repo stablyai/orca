@@ -24,32 +24,56 @@ const THEME_COLOR_KEYS = new Set([
   'split-divider-color'
 ])
 
-function xdgThemeDirs(home: string): string[] {
-  if (process.env.XDG_CONFIG_HOME) {
-    return [path.posix.join(process.env.XDG_CONFIG_HOME, 'ghostty', 'themes')]
+function userThemeDirs(home: string, plat: NodeJS.Platform): string[] {
+  // Ghostty's XDG config lookup falls back to LOCALAPPDATA on Windows.
+  if (plat === 'win32') {
+    const configHome = process.env.XDG_CONFIG_HOME || process.env.LOCALAPPDATA || home
+    return [path.win32.join(configHome, 'ghostty', 'themes')]
   }
-  return [path.posix.join(home, '.config', 'ghostty', 'themes')]
+  const configHome = process.env.XDG_CONFIG_HOME || path.posix.join(home, '.config')
+  return [path.posix.join(configHome, 'ghostty', 'themes')]
 }
 
-function resourceThemeDirs(plat: 'darwin' | 'linux'): string[] {
+// Keeps lookups testable for every platform regardless of the host running the tests.
+function pathFor(plat: NodeJS.Platform): path.PlatformPath {
+  return plat === 'win32' ? path.win32 : path.posix
+}
+
+// Ghostty finds resources next to its executable; probe the install locations that layout produces.
+function resourceThemeDirs(home: string, plat: NodeJS.Platform): string[] {
   if (process.env.GHOSTTY_RESOURCES_DIR) {
-    return [path.posix.join(process.env.GHOSTTY_RESOURCES_DIR, 'themes')]
+    return [pathFor(plat).join(process.env.GHOSTTY_RESOURCES_DIR, 'themes')]
   }
-
   if (plat === 'darwin') {
-    return ['/Applications/Ghostty.app/Contents/Resources/ghostty/themes']
+    const bundled = path.posix.join('Ghostty.app', 'Contents', 'Resources', 'ghostty', 'themes')
+    return [
+      path.posix.join('/Applications', bundled),
+      path.posix.join(home, 'Applications', bundled)
+    ]
   }
-  return ['/usr/share/ghostty/themes', '/usr/local/share/ghostty/themes']
+  if (plat === 'linux') {
+    const dataDirs = (process.env.XDG_DATA_DIRS || '/usr/local/share:/usr/share')
+      .split(':')
+      .filter((dir) => path.posix.isAbsolute(dir))
+    const prefixes = [
+      ...dataDirs,
+      path.posix.join(home, '.local', 'share'),
+      '/snap/ghostty/current/share'
+    ]
+    return [...new Set(prefixes)].map((dir) => path.posix.join(dir, 'ghostty', 'themes'))
+  }
+  return []
 }
 
-// User themes shadow bundled themes, matching Ghostty lookup order.
-export function getGhosttyThemeSearchDirs(): string[] {
+// User themes shadow bundled themes, matching Ghostty lookup order; a picked config's sibling themes dir only fills gaps.
+export function getGhosttyThemeSearchDirs(pickedConfigDir?: string): string[] {
   const home = homedir()
   const plat = platform()
-  if (plat !== 'darwin' && plat !== 'linux') {
-    return []
-  }
-  return [...xdgThemeDirs(home), ...resourceThemeDirs(plat)]
+  return [
+    ...userThemeDirs(home, plat),
+    ...(pickedConfigDir ? [pathFor(plat).join(pickedConfigDir, 'themes')] : []),
+    ...resourceThemeDirs(home, plat)
+  ]
 }
 
 function isMissingThemeError(err: unknown): boolean {
@@ -90,8 +114,14 @@ async function readThemeColors(themePath: string): Promise<ThemeReadResult> {
   return { status: 'found', colors: themeColorsFromContent(content) }
 }
 
-export async function resolveGhosttyThemeColors(name: string): Promise<ThemeColors | null> {
-  if (path.isAbsolute(name)) {
+export async function resolveGhosttyThemeColors(
+  rawName: string,
+  pickedConfigDir?: string
+): Promise<ThemeColors | null> {
+  const paths = pathFor(platform())
+  // Ghostty expands a leading `~/` before deciding whether a theme value is absolute.
+  const name = rawName.startsWith('~/') ? paths.join(homedir(), rawName.slice(2)) : rawName
+  if (paths.isAbsolute(name)) {
     const result = await readThemeColors(name)
     return result.status === 'found' ? result.colors : null
   }
@@ -101,9 +131,8 @@ export async function resolveGhosttyThemeColors(name: string): Promise<ThemeColo
     return null
   }
 
-  for (const dir of getGhosttyThemeSearchDirs()) {
-    const themePath = path.posix.join(dir, name)
-    const result = await readThemeColors(themePath)
+  for (const dir of getGhosttyThemeSearchDirs(pickedConfigDir)) {
+    const result = await readThemeColors(paths.join(dir, name))
     if (result.status === 'found') {
       return result.colors
     }

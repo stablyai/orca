@@ -1,0 +1,86 @@
+import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
+import {
+  deferredStructuredAgentSessionLogger,
+  type StructuredAgentSessionLogger
+} from '../host/structured-agent-session-logger'
+import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
+
+import type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-session-status-feed-deps'
+import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
+import {
+  StructuredAgentSessionSubagentRows,
+  type StructuredAgentSessionSubagentRowsDeps
+} from './structured-agent-session-subagent-rows'
+import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
+import type { StructuredAgentSessionConversationNaming } from '../host/structured-agent-session-host-types'
+
+/** Resolve deps lazily because field initializers run before host constructor assignments. */
+export function createStructuredAgentSessionHostStatusFeed(args: {
+  sessions: StructuredAgentSessionStatusFeedDeps['sessions']
+  starting?: (sessionId: string) => boolean
+  readUsageLimitContinue?: StructuredAgentSessionStatusFeedDeps['readUsageLimitContinue']
+  now: () => number
+  currentWork: StructuredAgentSessionSubagentRowsDeps['currentWork']
+  deps: () => {
+    store: Pick<
+      AgentSessionRecordStore,
+      'getConversation' | 'replacedRuntime' | 'listConversations' | 'isSessionTabRetired'
+    >
+    logger: StructuredAgentSessionLogger
+    onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
+    statusSink?: StructuredAgentSessionStatusSink
+    conversationNaming?: StructuredAgentSessionConversationNaming
+  }
+  onPublished?: StructuredAgentSessionStatusFeedDeps['onPublished']
+  onAgentStarted?: (sessionId: string) => void
+  onChildWorkChanged?: (sessionId: string) => void
+}): StructuredAgentSessionStatusFeed {
+  const subagentRows = new StructuredAgentSessionSubagentRows({
+    journal: (sessionId) => args.sessions.get(sessionId)?.journal,
+    fence: (sessionId) => structuredAgentSessionConversationFence(args.deps().store, sessionId),
+    currentWork: args.currentWork,
+    readChildWork: (sessionId) => {
+      const records = new Map(
+        feed.readChildWorkRecords(sessionId)?.map((record) => [record.childWorkId, record])
+      )
+      return feed.readChildWork(sessionId)?.map((view) => {
+        const { residency, outcomeBasis } = records.get(view.id) ?? {}
+        return {
+          ...view,
+          ...(residency ? { residency } : {}),
+          ...(outcomeBasis ? { outcomeBasis } : {})
+        }
+      })
+    },
+    onWriteFailed: (sessionId, error) =>
+      args.deps().logger.warn('writing a subagent row failed', {
+        scope: 'subagent-rows',
+        sessionId,
+        error
+      })
+  })
+  const feed = new StructuredAgentSessionStatusFeed({
+    sessions: args.sessions,
+    starting: args.starting,
+    readUsageLimitContinue: args.readUsageLimitContinue,
+    onPublished: args.onPublished,
+    getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
+    listConversations: () => args.deps().store.listConversations(),
+    replacedRuntime: (sessionId) => args.deps().store.replacedRuntime(sessionId),
+    // A closed chat's agent can still run (a send, a worker); its row shows while it does.
+    rowRetired: (sessionId) =>
+      !args.sessions.get(sessionId)?.child && args.deps().store.isSessionTabRetired(sessionId),
+    now: args.now,
+    logger: deferredStructuredAgentSessionLogger(() => args.deps().logger),
+    onStatusChanged: (summary, options) => args.deps().onSessionStatusChanged?.(summary, options),
+    statusSink: () => args.deps().statusSink,
+    namingActiveSessionIds: () => args.deps().conversationNaming?.activeSessionIds() ?? [],
+    namingFailure: (sessionId) => args.deps().conversationNaming?.failure(sessionId),
+    ...(args.onAgentStarted ? { onAgentStarted: args.onAgentStarted } : {}),
+    onChildWorkChanged: (sessionId, producer) => {
+      subagentRows.changed(sessionId, producer)
+      args.onChildWorkChanged?.(sessionId)
+    }
+  })
+  return feed
+}

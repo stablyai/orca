@@ -1,6 +1,6 @@
-import { bulkStageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
+import { bulkStageRuntimeGitPaths } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { operationGitContext } from '../listing/operation-target'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   createPrIntentGitStatusMatchesToken,
   getCreatePrIntentStagePaths,

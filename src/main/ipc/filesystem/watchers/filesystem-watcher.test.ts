@@ -26,8 +26,8 @@ import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { createWslWatcher } from './filesystem-watcher-wsl'
-import { resetWatcherChildRegistryForTest } from '../watcher-process/parcel-watcher-child-registry'
-import { acquireWatcherRemovalGate } from '../../watcher-removal-gate'
+import { resetWatcherChildRegistryForTest } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
+import { acquireWatcherRemovalGate } from '../../../workspaces/removal/watcher-removal-gate'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 

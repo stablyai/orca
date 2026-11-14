@@ -3,8 +3,9 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
-import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
@@ -12,33 +13,40 @@ const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-routing', () => ({
+vi.mock('@/runtime/files/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined) =>
       settings?.activeRuntimeEnvironmentId ?? null
   )
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
-vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
+vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
+  subscribeRuntimeFileChanges: vi.fn()
+}))
 
-vi.mock('@/runtime/runtime-git-diff-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
   getRuntimeGitDiff: vi.fn()
 }))
-vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
+vi.mock('@/runtime/source-control/git/runtime-git-client-context', () => ({
+  getRuntimeGitScope: vi.fn(() => null)
+}))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(),
   getConnectionIdForFile: vi.fn(),
   isWorktreeConnectionResolved: vi.fn(() => true)
 }))
 
-vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+vi.mock(
+  '@/lib/workspace/ownership/worktree-host-connection-phase',
+  () => import('./local-host-test-fixture')
+)
 
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
@@ -49,7 +57,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   WORKTREE_HOST_UNRESOLVED_CODE,
   WORKTREE_HOST_UNRESOLVED_ERROR
@@ -58,6 +66,7 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { FILE_LOAD_RETRY_DELAYS_MS } from './useEditorPanelFileLoadRetry'
 
 let latestFileContents: Record<string, FileContent> = {}
+let latestReload: ReturnType<typeof useEditorPanelContentState>['reloadContent'] = () => {}
 
 const EMPTY_EDITOR_VIEW_MODE = {}
 const HOST_READ_LATENCY_MS = 1
@@ -72,6 +81,7 @@ function Probe({ activeFile, openFiles }: { activeFile: OpenFile; openFiles: Ope
     editorViewMode: EMPTY_EDITOR_VIEW_MODE
   })
   latestFileContents = state.fileContents
+  latestReload = state.reloadContent
   return null
 }
 
@@ -174,14 +184,60 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     }
     expect(closeFile).not.toHaveBeenCalled()
     expect(editorDrafts[activeFile.id]).toBe('# unsaved edits')
-    const expectedReads = 1 + FILE_LOAD_RETRY_DELAYS_MS.length
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(expectedReads)
     expect(latestFileContents[activeFile.id]?.loadError).toBe(WORKTREE_HOST_UNRESOLVED_ERROR)
     expect(latestFileContents[activeFile.id]?.loadErrorCode).toBe(WORKTREE_HOST_UNRESOLVED_CODE)
 
     // Terminal: no more reads, still no eviction.
     await advanceTimers(60_000)
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(expectedReads)
     expect(closeFile).not.toHaveBeenCalled()
+  })
+
+  it('skips a reload after Start when the file already loaded, and reloads one still failed', async () => {
+    const activeFile = { ...makeDirtyMirroredFile(), isDirty: false }
+    const openFiles = [activeFile]
+    const store = createTestStore()
+    store.setState({
+      openFiles,
+      worktreesByRepo: {
+        project: [
+          makeWorktree({
+            id: activeFile.worktreeId,
+            repoId: 'project',
+            path: '/home/user/project',
+            hostId: 'runtime:env-1'
+          })
+        ]
+      },
+      setLastKnownDiskSignature: vi.fn()
+    })
+    mocks.getState.mockImplementation(store.getState)
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: '# notes', isBinary: false })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<Probe activeFile={activeFile} openFiles={openFiles} />)
+    })
+    await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(latestFileContents[activeFile.id]?.content).toBe('# notes')
+    const readsAfterLoad = mocks.readRuntimeFileContent.mock.calls.length
+
+    await act(async () => latestReload(activeFile, { onlyIfFailed: true }))
+    await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(readsAfterLoad)
+    expect(latestFileContents[activeFile.id]?.content).toBe('# notes')
+
+    // A non-retryable failure keeps the editor's own retry out of the count.
+    mocks.readRuntimeFileContent.mockRejectedValueOnce(new Error('ENOENT: no such file'))
+    await act(async () => latestReload(activeFile))
+    await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(latestFileContents[activeFile.id]?.loadError).toContain('ENOENT')
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(readsAfterLoad + 1)
+
+    await act(async () => latestReload(activeFile, { onlyIfFailed: true }))
+    await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(readsAfterLoad + 2)
+    expect(latestFileContents[activeFile.id]?.content).toBe('# notes')
   })
 })

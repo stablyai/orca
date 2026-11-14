@@ -1,5 +1,5 @@
 /** orcadFence reserves a target for its managed tunnel and refuses direct relay access. Claim only empty targets; existing state requires catalog migration. */
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import {
   getManagedOrcadFenceEnvironmentId,
   isEphemeralRuntimeSshOwner

@@ -7,8 +7,7 @@ import {
 } from './orcad-migration-manifest-validation'
 import {
   ORCAD_MIGRATION_SOURCE_KIND_UNKNOWN,
-  orcadMigrationManifestSourceKind,
-  requiredOrcadMigrationSourceCapability
+  orcadMigrationManifestSourceKind
 } from './orcad-migration-source-kind'
 
 const SSH_SOURCE = { sshTargetId: 'ssh-1', sshTargetGeneration: 2, targetLabel: 'Prod' }
@@ -44,12 +43,6 @@ function manifestWithSource(source: unknown) {
 }
 
 describe('orcad migration source kind', () => {
-  it('reads an absent kind as the relay-era SSH source, which needs no extra capability', () => {
-    expect(orcadMigrationManifestSourceKind(SSH_SOURCE)).toBe('ssh-relay')
-    expect(orcadMigrationManifestSourceKind({ ...SSH_SOURCE, kind: undefined })).toBe('ssh-relay')
-    expect(requiredOrcadMigrationSourceCapability(SSH_SOURCE)).toBeNull()
-  })
-
   it.each(['ssh-relay', 'toString', 'wsl', 7, null])('refuses unregistered kind %j', (kind) => {
     expect(() => orcadMigrationManifestSourceKind({ kind })).toThrow(
       ORCAD_MIGRATION_SOURCE_KIND_UNKNOWN

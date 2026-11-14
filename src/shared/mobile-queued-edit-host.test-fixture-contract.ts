@@ -5,7 +5,7 @@ import type {
   AgentSessionSlashCommand,
   AgentSessionCommandsResult,
   AgentSessionSubscribeEvent
-} from './agent-session-wire'
+} from './agent-session/agent-session-wire'
 
 type StoredQueuedMessage = {
   messageId: string
@@ -25,8 +25,11 @@ export type MobileQueuedEditHostFixture = {
   dispose: () => Promise<void>
 }
 
+export type MobileQueuedEditHostClockFixtureModule = {
+  HOST_TEST_NOW: number
+}
+
 export type MobileQueuedEditHostFixtureModule = {
-  now: number
   createMobileQueuedEditHostFixture: () => Promise<MobileQueuedEditHostFixture>
 }
 

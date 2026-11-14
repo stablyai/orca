@@ -1,5 +1,5 @@
 import type { FileContent, InFlightContentRead } from './editor-panel-content-types'
-import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
+import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
 

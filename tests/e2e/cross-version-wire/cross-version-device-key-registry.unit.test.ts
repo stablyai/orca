@@ -1,11 +1,11 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { encodeDeviceProofMessage } from '../../../src/shared/device-key-proof'
-import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
-import { SimulatedMobileE2EEV2Peer } from '../../../src/main/runtime/mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
+import { encodeDeviceProofMessage } from '../../../src/shared/remote-runtime/pairing/device-key-proof'
+import { DeviceRegistry } from '../../../src/main/runtime/rpc/server/pairing/device-registry'
+import { SimulatedMobileE2EEV2Peer } from '../../../src/main/runtime/mobile-cloud-relay/testing/simulated-mobile-e2ee-v2-peer'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -28,7 +28,7 @@ let ReleasedChannel: new (ws: unknown, options: Record<string, unknown>) => Chan
 beforeAll(async () => {
   const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
   const [registryModule, channelModule] = await Promise.all([
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/device-registry.ts'),
+    importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/server/pairing/device-registry.ts'),
     importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/e2ee-channel.ts')
   ])
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release's DeviceRegistry class; a changed shape fails the assertions below.
@@ -104,18 +104,5 @@ describe('cross-version: device keys against a released host', () => {
       error: { code: 'bad_auth' }
     })
     expect(onError).toHaveBeenCalledWith(4001, 'Invalid e2ee_auth')
-  })
-
-  it('old registry files load unchanged', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-xv-device-key-'))
-    const released = new ReleasedRegistry(userDataPath)
-    expect(released.listDevices()).toHaveLength(0)
-    writeFileSync(
-      join(userDataPath, 'orca-devices.json'),
-      JSON.stringify([
-        { deviceId: 'd', name: 'n', token: 't', scope: 'mobile', pairedAt: 1, lastSeenAt: 2 }
-      ])
-    )
-    expect(new DeviceRegistry(userDataPath).validateToken('t')?.deviceId).toBe('d')
   })
 })

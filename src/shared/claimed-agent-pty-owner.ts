@@ -1,12 +1,12 @@
-import type { PtyCreationDisposition } from './pty-creation-disposition'
-export type { PtyCreationDisposition } from './pty-creation-disposition'
+import type { PtyCreationDisposition } from './terminal/pty/lifecycle/pty-creation-disposition'
+
 import { randomUUID } from 'node:crypto'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
   AgentSessionOwnerBinding,
   AgentSessionSurfaceBinding
-} from './agent-session-host-authority'
+} from './agent-session/agent-session-host-authority'
 import {
   agentSessionClaimKey,
   agentSessionClaimsEqual,

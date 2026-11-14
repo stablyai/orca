@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native'
+import { Platform, StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
@@ -16,69 +16,6 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   },
   iconButtonPressed: {
     backgroundColor: colors.borderSubtle
-  },
-  filterRow: {
-    flexGrow: 1,
-    gap: spacing.xs,
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs
-  },
-  fileHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    backgroundColor: colors.bgBase,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  fileTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  statusBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  statusBadgeText: {
-    fontSize: typography.metaSize,
-    fontWeight: '800'
-  },
-  fileTitleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  filePath: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  fileMeta: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    marginTop: 2
-  },
-  fileMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    flexWrap: 'wrap'
-  },
-  reviewedPill: {
-    color: colors.statusGreen,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  stalePill: {
-    color: colors.statusAmber,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
   },
   staleText: {
     color: colors.statusAmber,
@@ -105,29 +42,6 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     lineHeight: 17
   },
-  hunkRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm
-  },
-  hunkButton: {
-    minHeight: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgPanel
-  },
-  hunkButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  hunkButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
   actionError: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.sm,
@@ -142,9 +56,53 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.metaSize
   },
+  foldRow: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: colors.diffFoldBg
+  },
+  foldIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.diffFoldGutter
+  },
+  foldBody: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm
+  },
+  foldText: {
+    flexShrink: 0,
+    color: colors.diffFoldText,
+    fontSize: typography.metaSize
+  },
+  foldContext: {
+    flexShrink: 1,
+    color: colors.textMuted,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize
+  },
+  diffListFrame: {
+    flex: 1
+  },
+  threadRow: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.bgBase
+  },
   diffList: {
-    paddingBottom: 140,
-    backgroundColor: colors.editorSurface
+    flex: 1,
+    backgroundColor: colors.bgBase
+  },
+  // On the page the rows run as wide as the longest line and scroll sideways together. A sideways scroller inside
+  // the vertical list keeps each swipe on one axis, as nested scrollers do in WebKit.
+  diffListContent: {
+    ...(Platform.OS === 'web' ? { overflowX: 'auto' as const } : {}),
+    paddingBottom: 140
   },
   truncatedText: {
     color: colors.textMuted,

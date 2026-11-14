@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium } from 'playwright-core'
-import { buildMobileWebAppBundle } from '../../build-mobile-web-app-bundle.mjs'
+import { buildMobileWebAppBundle } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
@@ -12,7 +12,7 @@ import {
   readBridgeProtocolVersion,
   readShellCsp
 } from './mobile-web-app-render-harness.mjs'
-import { MOBILE_WEB_PAGE_ROUTES } from '../../mobile-web-page-routes.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from '../../build/mobile-web-app/mobile-web-page-routes.mjs'
 
 // viewBox only: browsers size this 300 x 60 unless the viewer reads the drawing's own extent.
 const SVG =

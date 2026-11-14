@@ -1,15 +1,15 @@
-import { WINDOW_LAUNCH_CASES } from '../../../shared/launch-parity-window-cases.test-fixture'
-import { PLUS_LAUNCH_CASES } from '../../../shared/launch-parity-plus-cases.test-fixture'
-import { WORKSPACE_START_LAUNCH_CASES } from '../../../shared/launch-parity-workspace-start-cases.test-fixture'
+import { WINDOW_LAUNCH_CASES } from '../../../shared/agent-launch/fixtures/launch-parity-window-cases.test-fixture'
+import { PLUS_LAUNCH_CASES } from '../../../shared/agent-launch/fixtures/launch-parity-plus-cases.test-fixture'
+import { WORKSPACE_START_LAUNCH_CASES } from '../../../shared/agent-launch/fixtures/launch-parity-workspace-start-cases.test-fixture'
 import {
   windowSpawnRequest,
   type LaunchWorkspace,
   type WindowProviderFacts
-} from '../../../shared/launch-parity-window-request.test-fixture'
+} from '../../../shared/agent-launch/fixtures/launch-parity-window-request.test-fixture'
 import {
   AUTOMATION_LAUNCH_CASES,
   automationSpawnRequest
-} from '../../../shared/launch-parity-automation-cases.test-fixture'
+} from '../../../shared/agent-launch/fixtures/launch-parity-automation-cases.test-fixture'
 
 type WindowLaneCase = {
   label: string

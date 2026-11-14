@@ -3,13 +3,15 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { CircleDot } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useRepoSlugIndex } from '@/lib/repo-slug-index'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
-import type { GitHubIssueType, GitHubProjectRow } from '../../../../shared/github/project-types'
-import type { ListIssueTypesBySlugResult } from '../../../../shared/github/project-result-types'
+import { useRepoSlugIndex } from '@/lib/workspace/catalog/repo-slug-index'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
+import { useAppStore } from '@/store/index'
+import { useTranslate } from '@/i18n/use-translate'
+import type {
+  GitHubIssueType,
+  GitHubProjectRow
+} from '../../../../shared/github/projects/project-types'
 import { chipStyle, colorHex, singleSelectChipColors } from './project-cell-chip-colors'
 
 export function ProjectIssueTypeCell({
@@ -25,6 +27,7 @@ export function ProjectIssueTypeCell({
   sourceTarget: RuntimeClientTarget
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const issueType = row.content.issueType
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState<GitHubIssueType[]>([])
@@ -46,19 +49,11 @@ export function ProjectIssueTypeCell({
     let cancelled = false
     setLoading(true)
     const target = ownerTarget ?? sourceTarget
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<ListIssueTypesBySlugResult>(
-            target,
-            'github.project.listIssueTypesBySlug',
-            { owner, repo, ...(sourceHost ? { host: sourceHost } : {}) },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.listIssueTypesBySlug({
-            owner,
-            repo,
-            ...(sourceHost ? { host: sourceHost } : {})
-          })
+    const request = gitHubSlugApiForTarget(target).listIssueTypesBySlug({
+      owner,
+      repo,
+      ...(sourceHost ? { host: sourceHost } : {})
+    })
     void request
       .then((result) => {
         if (!cancelled && result.ok) {
@@ -87,7 +82,7 @@ export function ProjectIssueTypeCell({
         </span>
       ) : (
         <span className="text-muted-foreground">
-          {translate('auto.components.github.project.ProjectCell.c5f949e489', 'Issue')}
+          {t('auto.components.github.project.ProjectCell.c5f949e489', 'Issue')}
         </span>
       )}
     </span>
@@ -100,10 +95,7 @@ export function ProjectIssueTypeCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={translate(
-            'auto.components.github.project.ProjectCell.c7b059cf07',
-            'Issue type'
-          )}
+          aria-label={t('auto.components.github.project.ProjectCell.c7b059cf07', 'Issue type')}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
           {trigger}
@@ -112,18 +104,18 @@ export function ProjectIssueTypeCell({
       <PopoverContent className="w-64 p-1" align="start">
         {!owner || !repo ? (
           <ProjectIssueTypeMessage
-            message={translate(
+            message={t(
               'auto.components.github.project.ProjectCell.54cac64427',
               'Row has no repo slug.'
             )}
           />
         ) : loading ? (
           <ProjectIssueTypeMessage
-            message={translate('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
+            message={t('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
           />
         ) : options.length === 0 ? (
           <ProjectIssueTypeMessage
-            message={translate(
+            message={t(
               'auto.components.github.project.ProjectCell.943b3dadc9',
               'This repo has no Issue Types.'
             )}
@@ -163,7 +155,7 @@ export function ProjectIssueTypeCell({
               setOpen(false)
             }}
           >
-            {translate('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
+            {t('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
           </button>
         ) : null}
       </PopoverContent>

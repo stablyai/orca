@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   encodeServeSimKeyboardFrame,
   type ServeSimKeyboardFrame
@@ -7,7 +7,7 @@ import {
   encodeServeSimTouchFrame,
   type ServeSimTouchFrame
 } from '../../../../shared/emulator-touch-frame'
-import { RotateOrientation } from '../../../../shared/rpc-contract/emulator-params'
+import { RotateOrientation } from '../../../../shared/rpc-contract/emulator/emulator-params'
 import type { EmulatorStreamOrientation } from './emulator-device-frame-layout'
 
 const RECONNECT_DELAY_MS = 750
@@ -35,9 +35,16 @@ function decodeServeSimOrientation(data: unknown): EmulatorStreamOrientation | u
   }
 }
 
+export type ScrcpyKeyboard = {
+  sendKey: (name: string, shift: boolean) => void
+  sendText: (text: string) => Promise<boolean>
+}
+
 export type EmulatorControlStream = {
   cancelKeyboardFrames: () => void
   connected: boolean
+  /** Android keys and text for main's scrcpy control socket; null for serve-sim sessions. */
+  scrcpyKeyboard: ScrcpyKeyboard | null
   reportedOrientation: EmulatorStreamOrientation | null
   sendKeyboardFrames: (frames: ServeSimKeyboardFrame[]) => boolean
   sendTouch: (touch: ServeSimTouchFrame) => boolean
@@ -50,6 +57,7 @@ export function useEmulatorControlStream(
   scrcpyDeviceId: string | null = null
 ): EmulatorControlStream {
   const wsRef = useRef<WebSocket | null>(null)
+  const lastTouchRef = useRef<ServeSimTouchFrame | null>(null)
   const keyboardTimerIdsRef = useRef<Set<number>>(new Set())
   const pressedKeyboardUsagesRef = useRef<Set<number>>(new Set())
   const [connected, setConnected] = useState(false)
@@ -148,14 +156,16 @@ export function useEmulatorControlStream(
       }
 
       ws.onerror = () => {
-        setConnected(false)
         ws.close()
       }
 
       ws.onclose = () => {
-        if (wsRef.current === ws) {
-          wsRef.current = null
+        // A replaced socket can close after its successor opens; it must not reset the live one.
+        if (wsRef.current !== ws) {
+          return
         }
+        wsRef.current = null
+        lastTouchRef.current = null
         clearKeyboardTimers()
         setConnected(false)
         if (!disposed) {
@@ -169,11 +179,16 @@ export function useEmulatorControlStream(
     return () => {
       disposed = true
       clearReconnectTimer()
-      // Why: delayed HID frames may leave a modifier/key down if the tab closes
-      // before the matching up frame runs. Release held usages while the socket
-      // is still open, then cancel the remaining delayed queue.
+      // Interrupted HID input can stay pressed after disconnect, so release keys and touches first.
       cancelKeyboardFrames()
       const ws = wsRef.current
+      const touch = lastTouchRef.current
+      if (ws?.readyState === WebSocket.OPEN && touch) {
+        try {
+          ws.send(encodeServeSimTouchFrame({ ...touch, type: 'end' }))
+        } catch {}
+      }
+      lastTouchRef.current = null
       if (ws) {
         wsRef.current = null
         ws.close()
@@ -200,6 +215,7 @@ export function useEmulatorControlStream(
       }
       try {
         ws.send(encodeServeSimTouchFrame(touch))
+        lastTouchRef.current = touch.type === 'end' ? null : touch
         return true
       } catch {
         return false
@@ -233,7 +249,31 @@ export function useEmulatorControlStream(
     [getOpenSocket, sendKeyboardFrameNow]
   )
 
+  const scrcpyKeyboard = useMemo<ScrcpyKeyboard | null>(
+    () =>
+      scrcpyDeviceId
+        ? {
+            sendKey: (key, shift) =>
+              void window.api.emulator
+                .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, key, shift })
+                .catch(() => false),
+            sendText: (text) =>
+              window.api.emulator
+                .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, text })
+                .catch(() => false)
+          }
+        : null,
+    [scrcpyDeviceId]
+  )
+
   const reportedOrientation =
     reportedConfig && reportedConfig.wsUrl === wsUrl ? reportedConfig.orientation : null
-  return { cancelKeyboardFrames, connected, reportedOrientation, sendKeyboardFrames, sendTouch }
+  return {
+    cancelKeyboardFrames,
+    connected,
+    reportedOrientation,
+    scrcpyKeyboard,
+    sendKeyboardFrames,
+    sendTouch
+  }
 }

@@ -1,20 +1,22 @@
-import type { RpcClient } from '../../../transport/rpc-client'
-import type { StructuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import type { StructuredAgentSessionHostSupport } from '../agent-session/mobile-structured-agent-session-host-support'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatSkills } from './use-mobile-native-chat-skills'
 
 /** The workspace's files for `@` and its disk-scanned skills for `/` and `$`. */
 export function useMobileNativeChatWorkspaceCatalog(
   scope: {
+    hostId: string
     client: RpcClient | null
     worktreeId: string
     agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
   },
   agent: string | null
 ): ReturnType<typeof useMobileNativeChatFileSearch> & ReturnType<typeof useMobileNativeChatSkills> {
-  const { client, worktreeId } = scope
+  const { hostId, client, worktreeId } = scope
   const files = useMobileNativeChatFileSearch({ client, worktreeId })
   const skills = useMobileNativeChatSkills({
+    hostId,
     client,
     worktreeId,
     agent,

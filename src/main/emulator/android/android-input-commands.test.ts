@@ -36,7 +36,7 @@ describe.runIf(process.platform !== 'win32')('Android text shell boundary', () =
     }
     await androidTypeText(
       runner,
-      { sdkRoot: 'sdk', adb: 'adb', emulator: 'emulator', avdmanager: 'avdmanager' },
+      { sdkRoot: 'sdk', adb: 'adb', emulator: 'emulator' },
       'emulator-5558',
       text
     )

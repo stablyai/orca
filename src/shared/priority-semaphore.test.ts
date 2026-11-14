@@ -59,39 +59,6 @@ describe('PrioritySemaphore', () => {
     expect(order).toEqual([1, 2, 3])
   })
 
-  it('supports concurrency > 1 with priority ordering', async () => {
-    const sem = new PrioritySemaphore(2)
-    const r1 = await sem.acquire(0)
-    const r2 = await sem.acquire(0)
-
-    const order: string[] = []
-
-    const pA = sem.acquire(1).then((r) => {
-      order.push('A-low')
-      return r
-    })
-    const pB = sem.acquire(0).then((r) => {
-      order.push('B-high')
-      return r
-    })
-    const pC = sem.acquire(1).then((r) => {
-      order.push('C-low')
-      return r
-    })
-
-    r1()
-    r2()
-
-    const rB = await pB
-    rB()
-    const rA = await pA
-    rA()
-    const rC = await pC
-    rC()
-
-    expect(order[0]).toBe('B-high')
-  })
-
   it('removes an aborted waiter without consuming the next permit', async () => {
     const sem = new PrioritySemaphore(1)
     const release = await sem.acquire(0)

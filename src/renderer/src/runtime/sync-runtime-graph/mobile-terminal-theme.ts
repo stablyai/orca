@@ -1,7 +1,11 @@
-import { getSystemPrefersDark, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import {
+  getSystemPrefersDark,
+  resolveEffectiveTerminalAppearance
+} from '@/lib/terminal/appearance/terminal-theme'
+import '../../../../shared/terminal-themes/terminal-contrast-correction'
+import { normalizeTerminalMinimumContrastRatio } from '../../../../shared/terminal-themes/terminal-minimum-contrast-settings'
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-types'
-import { normalizeTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
+import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')

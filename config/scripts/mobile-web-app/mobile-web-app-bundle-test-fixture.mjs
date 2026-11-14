@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { deserialize, serialize } from 'node:v8'
-import { bundleMobileWebApp, buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
+import {
+  bundleMobileWebApp,
+  buildMobileWebAppBundle
+} from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 
 export async function withScratch(run) {
   const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-test-'))

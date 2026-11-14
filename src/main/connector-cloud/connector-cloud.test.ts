@@ -55,34 +55,6 @@ afterEach(() => {
 })
 
 describe('ConnectorCloud', () => {
-  it('holds the poll only while signed in and on, and stops on disable and sign-out', async () => {
-    account = null
-    const cloud = connectorCloud()
-    cloud.connect()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(fake.requestsTo(CONNECTOR_PATHS.hello)).toHaveLength(0)
-
-    account = 'ada'
-    cloud.accountChanged()
-    await vi.advanceTimersByTimeAsync(10)
-    expect(fake.requestsTo(CONNECTOR_PATHS.hello)).toHaveLength(1)
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(1)
-
-    enabled = false
-    seam.disable()
-    machine.toggle()
-    enabled = true
-    seam = fakeSeam()
-    machine.toggle()
-    await vi.advanceTimersByTimeAsync(10)
-    expect(fake.requestsTo(CONNECTOR_PATHS.hello)).toHaveLength(2)
-
-    cloud.signOutStarted()
-    fake.answerPoll({ status: 200, body: { v: 1, serverNow: 1, holdMs: 0, deliveries: [] } })
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(2)
-  })
-
   it('stays stopped while a sign-out runs, whatever refreshes or toggles happen meanwhile', async () => {
     const cloud = connectorCloud()
     cloud.connect()

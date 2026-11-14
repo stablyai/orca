@@ -5,8 +5,8 @@ import { Client, Server as Ssh2Server, utils, type Connection, type SFTPWrapper 
 import { expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { SshConnection } from './ssh-connection'
-import type { SftpNamespacePathMapping } from '../sftp-namespace-resolution'
-import { getRemoteHostPlatform } from '../ssh-remote-platform'
+import type { SftpNamespacePathMapping } from '../file-transfer/sftp/sftp-namespace-resolution'
+import { getRemoteHostPlatform } from '../remote-host/ssh-remote-platform'
 
 const SHELL_HOME = '/var/services/homes/alice'
 const SFTP_HOME = '/homes/alice'

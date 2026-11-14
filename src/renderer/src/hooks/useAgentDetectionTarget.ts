@@ -1,10 +1,10 @@
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentDetectionTarget } from './useDetectedAgents'
@@ -107,6 +107,6 @@ export function parseAgentDetectionTargetKey(
 export function useAgentDetectionTargetForWorktree(
   worktreeId: string | null
 ): AgentDetectionTarget | undefined {
-  const key = useAppStore((s) => getAgentDetectionTargetKeyForWorktree(s, worktreeId))
+  const key = useAppStateValue((s) => getAgentDetectionTargetKeyForWorktree(s, worktreeId))
   return useMemo(() => parseAgentDetectionTargetKey(key), [key])
 }

@@ -20,7 +20,7 @@ const {
   writeCookieIdentityMock: vi.fn()
 }))
 
-vi.mock('../browser-session-registry', () => ({
+vi.mock('../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
@@ -60,14 +60,13 @@ vi.mock('./browser-cookie-clear-store', () => ({
     dispose: () => undefined
   })
 }))
-
-import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
+import { importCookiesFromBrowser } from './browser-cookie-import'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 
 function chromeBrowser(cookiesPath: string): DetectedBrowser {
   return {
@@ -96,242 +95,6 @@ const unreachableCookieSet = vi.fn(async (details: { name: string }) => {
   if (details.name !== '__init') {
     throw new Error(`cookies.set was called for user cookie ${details.name}`)
   }
-})
-
-describe('validated import partition fidelity', () => {
-  let tmpDir: string
-  let cookieWriteMock: ReturnType<typeof vi.fn>
-
-  beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'orca-partition-fidelity-file-'))
-    cookieWriteMock = writeCookieIdentityMock
-    cookieWriteMock.mockReset()
-    cookieWriteMock.mockResolvedValue(undefined)
-    setPendingCookieImportMock.mockClear()
-    clearPendingCookieImportMock.mockClear()
-    sessionFromPartitionMock.mockReset()
-    sessionFromPartitionMock.mockReturnValue({
-      cookies: {
-        get: vi.fn().mockResolvedValue([]),
-        remove: vi.fn().mockResolvedValue(undefined),
-        set: unreachableCookieSet
-      }
-    })
-  })
-
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true })
-  })
-
-  function writeCookieFile(cookies: unknown[]): string {
-    const filePath = join(tmpDir, 'cookies.json')
-    writeFileSync(filePath, JSON.stringify(cookies))
-    return filePath
-  }
-
-  it('reports the unreadable cookie and imports its readable sibling', async () => {
-    const filePath = writeCookieFile([
-      { domain: 'example.com', name: 'readable', value: 'synthetic' },
-      {
-        domain: 'sub.example.com',
-        name: 'unreadable',
-        value: 'synthetic',
-        partitionKey: { topLevelSite: 'https://top.example' }
-      }
-    ])
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error('Synthetic cookie import failed')
-    }
-    expect(result.summary).toMatchObject({
-      importedCookies: 1,
-      partitionSkippedCookies: 1,
-      partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 0 }
-    })
-    expect(cookieWriteMock).toHaveBeenCalledOnce()
-  })
-
-  it('carries a complete partitionKey from a JSON export through to the write', async () => {
-    const filePath = writeCookieFile([
-      {
-        domain: '.app.example',
-        name: 'chips-auth',
-        value: 'keep-me',
-        secure: true,
-        sameSite: 'None',
-        partitionKey: { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
-      }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok).toBe(true)
-    expect(cookieWriteMock).toHaveBeenCalledTimes(1)
-    expect(cookieWriteMock.mock.calls[0][0]).toMatchObject({
-      name: 'chips-auth',
-      partitionKey: { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
-    })
-    expect(result.ok && result.summary.partitionSkippedCookies).toBeUndefined()
-  })
-
-  it('skips and reports a cookie whose partitionKey cannot be read faithfully', async () => {
-    const filePath = writeCookieFile([
-      {
-        domain: '.app.example',
-        name: 'chips-auth',
-        value: 'keep-me',
-        secure: true,
-        partitionKey: { topLevelSite: 'https://top.example' }
-      },
-      { domain: '.plain.example', name: 'plain', value: 'ok' }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok).toBe(true)
-    expect(cookieWriteMock).toHaveBeenCalledTimes(1)
-    expect(cookieWriteMock.mock.calls[0][0].name).toBe('plain')
-    expect(result.ok && result.summary.partitionSkippedCookies).toBe(1)
-    expect(result.ok && result.summary.importedCookies).toBe(1)
-    expect(result.ok && result.summary.skippedCookies).toBe(1)
-    expect(result.ok && result.summary.domains).toEqual(['plain.example'])
-  })
-
-  it('preserves a populated family and creates no staged replay for an opaque JSON partition', async () => {
-    const targetJar = [
-      {
-        name: 'live-session',
-        value: 'must-survive',
-        domain: '.preserved.example',
-        path: '/',
-        secure: true,
-        sameSite: 'lax'
-      }
-    ]
-    const remove = vi.fn(async (_url: string, name: string) => {
-      const index = targetJar.findIndex((cookie) => cookie.name === name)
-      if (index !== -1) {
-        targetJar.splice(index, 1)
-      }
-    })
-    sessionFromPartitionMock.mockReturnValue({
-      cookies: { get: vi.fn(async () => targetJar), remove, set: unreachableCookieSet }
-    })
-    const filePath = writeCookieFile([
-      {
-        domain: '.preserved.example',
-        name: 'opaque-session',
-        value: 'do-not-downgrade',
-        secure: true,
-        partitionKeyOpaque: true
-      },
-      { domain: 'sub.preserved.example', name: 'sibling', value: 'do-not-write', secure: true }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok && result.summary).toMatchObject({
-      importedCookies: 1,
-      skippedCookies: 1,
-      partitionSkippedCookies: 1
-    })
-    expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
-    expect(remove).not.toHaveBeenCalled()
-    expect(cookieWriteMock).toHaveBeenCalledOnce()
-    expect(setPendingCookieImportMock).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['null', null],
-    ['empty string', '']
-  ])('preserves a populated family for a present %s partitionKey', async (_label, partitionKey) => {
-    const targetJar = [
-      {
-        name: 'apex-session',
-        value: 'apex-live',
-        domain: '.preserved.example',
-        path: '/',
-        secure: true,
-        sameSite: 'lax'
-      },
-      {
-        name: 'sub-session',
-        value: 'sub-live',
-        domain: 'sub.preserved.example',
-        path: '/',
-        secure: true,
-        sameSite: 'lax'
-      },
-      {
-        name: 'stale-plain',
-        value: 'replace-me',
-        domain: '.plain.example',
-        path: '/',
-        secure: true,
-        sameSite: 'lax'
-      }
-    ]
-    const remove = vi.fn(async (_url: string, name: string) => {
-      const index = targetJar.findIndex((cookie) => cookie.name === name)
-      if (index !== -1) {
-        targetJar.splice(index, 1)
-      }
-    })
-    sessionFromPartitionMock.mockReturnValue({
-      cookies: {
-        get: vi.fn(async () => targetJar),
-        remove,
-        set: unreachableCookieSet
-      }
-    })
-    const filePath = writeCookieFile([
-      {
-        domain: '.preserved.example',
-        name: 'malformed-partition',
-        value: 'do-not-write',
-        secure: true,
-        partitionKey
-      },
-      {
-        domain: 'deep.sub.preserved.example',
-        name: 'readable-sibling',
-        value: 'do-not-write-either',
-        secure: true
-      },
-      { domain: '.plain.example', name: 'plain', value: 'write-me', secure: true }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    expect(targetJar).toEqual([
-      expect.objectContaining({ name: 'apex-session', value: 'apex-live' }),
-      expect.objectContaining({ name: 'sub-session', value: 'sub-live' }),
-      expect.objectContaining({ name: 'stale-plain' })
-    ])
-    expect(remove).not.toHaveBeenCalled()
-    expect(cookieWriteMock).toHaveBeenCalledTimes(2)
-    expect(cookieWriteMock).toHaveBeenCalledWith(expect.objectContaining({ name: 'plain' }))
-    expect(cookieWriteMock).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'readable-sibling' })
-    )
-    expect(result.summary).toMatchObject({
-      totalCookies: 3,
-      importedCookies: 2,
-      skippedCookies: 1,
-      partitionSkippedCookies: 1,
-      partitionSkipBreakdown: { unreadableCookies: 1, preservedRelatedCookies: 0 },
-      domains: ['deep.sub.preserved.example', 'plain.example']
-    })
-    expect(result.summary.totalCookies).toBe(
-      result.summary.importedCookies + result.summary.skippedCookies
-    )
-    expect(setPendingCookieImportMock).not.toHaveBeenCalled()
-  })
 })
 
 describe('native Chromium import partition fidelity', () => {
@@ -371,36 +134,6 @@ describe('native Chromium import partition fidelity', () => {
   })
 
   // Verify the outgoing identity here; the Electron success fixture checks Chromium’s stored cookie.
-  it('carries a partitioned source row through to the write with both partition halves', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    createChromiumCookieTestDatabase(sourceCookiesPath, [
-      {
-        domain: '.app.acme-chips.test',
-        name: 'chips-auth',
-        value: 'keep-me',
-        isSecure: 1,
-        sameSite: 1,
-        topFrameSiteKey: 'https://top.example',
-        hasCrossSiteAncestor: 1
-      },
-      { domain: '.plain.example', name: 'plain', value: 'plain-ok', isSecure: 1 }
-    ]).close()
-    createChromiumCookieTestDatabase(
-      join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies'),
-      []
-    ).close()
-
-    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
-
-    expect(result.ok).toBe(true)
-    expect(cookieWriteMock).toHaveBeenCalledTimes(2)
-    const written = cookieWriteMock.mock.calls.map((call) => call[0])
-    expect(written.find((cookie) => cookie.name === 'chips-auth')).toMatchObject({
-      partitionKey: { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
-    })
-    expect(written.find((cookie) => cookie.name === 'plain')).not.toHaveProperty('partitionKey')
-    expect(result.ok && result.summary?.partitionSkippedCookies).toBeUndefined()
-  })
 
   it('never stages a partitioned row whose ancestor bit is unreadable', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
@@ -460,69 +193,6 @@ describe('native Chromium import partition fidelity', () => {
     expect(result.ok && result.summary?.importedCookies).toBe(0)
     expect(result.ok && result.summary?.skippedCookies).toBe(2)
     // New imports never produce replay, including readable siblings.
-    expect(setPendingCookieImportMock).not.toHaveBeenCalled()
-  })
-
-  it('preserves a populated family when the partition site is malformed', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    createChromiumCookieTestDatabase(sourceCookiesPath, [
-      {
-        domain: '.preserved.example',
-        name: 'invalid-partition',
-        value: 'source-value',
-        topFrameSiteKey: 'https://top.example/not-a-site',
-        hasCrossSiteAncestor: 1
-      },
-      { domain: '.plain.example', name: 'plain', value: 'plain-ok' }
-    ]).close()
-    createChromiumCookieTestDatabase(
-      join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies'),
-      []
-    ).close()
-    const targetJar = [
-      {
-        name: 'live-session',
-        value: 'must-survive',
-        domain: '.preserved.example',
-        path: '/',
-        secure: true,
-        httpOnly: true,
-        sameSite: 'lax'
-      }
-    ]
-    const clearData = vi.fn(async () => targetJar.splice(0))
-    const remove = vi.fn(async (_url: string, name: string) => {
-      const index = targetJar.findIndex((cookie) => cookie.name === name)
-      if (index !== -1) {
-        targetJar.splice(index, 1)
-      }
-    })
-    sessionFromPartitionMock.mockReturnValue({
-      cookies: {
-        get: vi.fn(async () => targetJar),
-        set: unreachableCookieSet,
-        remove,
-        flushStore: vi.fn().mockResolvedValue(undefined)
-      },
-      clearData,
-      setUserAgent: vi.fn(),
-      getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'test')
-    })
-
-    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
-
-    expect(result.ok).toBe(true)
-    expect(clearData).not.toHaveBeenCalled()
-    expect(remove).not.toHaveBeenCalledWith(expect.any(String), 'live-session')
-    expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
-    expect(cookieWriteMock).toHaveBeenCalledTimes(1)
-    expect(cookieWriteMock).toHaveBeenCalledWith(expect.objectContaining({ name: 'plain' }))
-    expect(result.ok && result.summary).toMatchObject({
-      totalCookies: 2,
-      importedCookies: 1,
-      skippedCookies: 1,
-      partitionSkippedCookies: 1
-    })
     expect(setPendingCookieImportMock).not.toHaveBeenCalled()
   })
 })

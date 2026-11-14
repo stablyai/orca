@@ -1,74 +1,95 @@
-import { describe, expect, it } from 'vitest'
-import {
-  parseExtensionShortcut,
-  readBrowserExtensionCommands,
-  shortcutMatchesInput
-} from './browser-extension-commands'
+import { mkdtemp, mkdir, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type {
+  BrowserExtensionActionResult,
+  InstalledBrowserExtension
+} from '../../../shared/browser/extensions/browser-extension-types'
 
-// Bitwarden's manifest commands.
-const manifest = {
-  commands: {
-    _execute_action: {
-      suggested_key: { default: 'Ctrl+Shift+Y', linux: 'Ctrl+Shift+U' },
-      description: '__MSG_commandOpenPopup__'
-    },
-    autofill_login: { suggested_key: { default: 'Ctrl+Shift+L' }, description: 'Fill login' },
-    autofill_card: { description: 'Fill card' },
-    generate_password: { suggested_key: { default: 'Ctrl+Shift+9' } }
-  }
-}
-
-function key(input: Partial<Electron.Input>): Electron.Input {
+const mocks = vi.hoisted(() => {
+  const installed: InstalledBrowserExtension[] = []
   return {
-    type: 'keyDown',
-    key: '',
-    code: '',
-    isAutoRepeat: false,
-    isComposing: false,
-    shift: false,
-    control: false,
-    alt: false,
-    meta: false,
-    location: 0,
-    modifiers: [],
-    ...input
+    installed,
+    reload: vi.fn(async (): Promise<BrowserExtensionActionResult> => ({ ok: true }))
+  }
+})
+vi.mock('../sessions/profiles/browser-session-registry', () => ({ browserSessionRegistry: {} }))
+vi.mock('./installation/browser-extension-install-store', () => ({
+  getBrowserExtensionInstallStore: () => ({ list: () => mocks.installed })
+}))
+vi.mock('./browser-extension-management', () => ({
+  reloadUnpackedBrowserExtension: mocks.reload
+}))
+import { desktopBrowserExtensions } from './browser-extension-commands'
+
+const ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+let directory: string
+
+function extension(overrides: Partial<InstalledBrowserExtension> = {}): InstalledBrowserExtension {
+  return {
+    id: ID,
+    name: 'Dev',
+    version: '1',
+    path: directory,
+    source: 'unpacked',
+    iconPath: null,
+    permissions: [],
+    hostPermissions: [],
+    optionsPage: null,
+    ...overrides
   }
 }
 
-describe('manifest commands', () => {
-  it('uses the platform key, Command for Ctrl on macOS, and Chrome shortcut strings', () => {
-    expect(
-      readBrowserExtensionCommands(manifest, 'darwin').map((c) => [c.name, c.shortcut])
-    ).toEqual([
-      ['_execute_action', '⇧⌘Y'],
-      ['autofill_login', '⇧⌘L'],
-      ['autofill_card', ''],
-      ['generate_password', '⇧⌘9']
-    ])
-    expect(readBrowserExtensionCommands(manifest, 'linux')[0].shortcut).toBe('Ctrl+Shift+U')
-    expect(readBrowserExtensionCommands(manifest, 'win32')[1].shortcut).toBe('Ctrl+Shift+L')
-  })
+beforeEach(async () => {
+  vi.clearAllMocks()
+  mocks.installed = []
+  directory = await mkdtemp(join(tmpdir(), 'orca-extension-command-'))
+})
+afterEach(async () => rm(directory, { recursive: true, force: true }))
 
-  it('refuses shortcuts without Ctrl, Command or Alt', () => {
-    expect(parseExtensionShortcut('Shift+Y', 'win32')).toBeNull()
-    expect(parseExtensionShortcut('MacCtrl+Shift+Y', 'darwin')).toMatchObject({
-      control: true,
-      meta: false
+describe('desktop extension reload', () => {
+  it('reloads the installed unpacked extension whose source folder matches through an alias', async () => {
+    const source = join(directory, 'source')
+    const alias = join(directory, 'alias')
+    await mkdir(source)
+    await symlink(source, alias, 'junction')
+    mocks.installed = [extension({ path: source })]
+    await expect(desktopBrowserExtensions.reload({ path: alias })).resolves.toEqual({
+      extensionId: ID
     })
+    expect(mocks.reload).toHaveBeenCalledWith(ID)
   })
 
-  it('matches the physical key so Option and Shift variants still fire', () => {
-    const [openPopup] = readBrowserExtensionCommands(manifest, 'darwin')
-    const binding = openPopup.binding
-    expect(binding).not.toBeNull()
-    if (!binding) {
-      return
-    }
-    expect(
-      shortcutMatchesInput(binding, key({ key: 'Y', code: 'KeyY', meta: true, shift: true }))
-    ).toBe(true)
-    expect(
-      shortcutMatchesInput(binding, key({ key: 'Y', code: 'KeyY', control: true, shift: true }))
-    ).toBe(false)
+  it('rejects a source folder shared by two installs without reloading either', async () => {
+    mocks.installed = [extension(), extension({ id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' })]
+    await expect(desktopBrowserExtensions.reload({ path: directory })).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    expect(mocks.reload).not.toHaveBeenCalled()
+  })
+
+  it('never installs or reloads a folder that is not installed', async () => {
+    await expect(desktopBrowserExtensions.reload({ path: directory })).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    expect(mocks.reload).not.toHaveBeenCalled()
+  })
+
+  it('refuses Web Store extensions', async () => {
+    mocks.installed = [extension({ source: 'webstore' })]
+    await expect(desktopBrowserExtensions.reload({ extensionId: ID })).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    expect(mocks.reload).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a manager failure instead of reporting success', async () => {
+    mocks.installed = [extension()]
+    mocks.reload.mockResolvedValueOnce({ ok: false, error: 'Extensions disabled' })
+    await expect(desktopBrowserExtensions.reload({ extensionId: ID })).rejects.toMatchObject({
+      code: 'runtime_error',
+      message: 'Extensions disabled'
+    })
   })
 })

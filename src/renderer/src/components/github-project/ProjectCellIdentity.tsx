@@ -1,8 +1,11 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import React from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
-import type { GitHubIssueType, GitHubProjectRow } from '../../../../shared/github/project-types'
+import { useTranslate } from '@/i18n/use-translate'
+import type {
+  GitHubIssueType,
+  GitHubProjectRow
+} from '../../../../shared/github/projects/project-types'
 import { ProjectIssueTypeCell } from './ProjectCellIssueType'
 
 export function ProjectTitleCell({
@@ -12,12 +15,13 @@ export function ProjectTitleCell({
   row: GitHubProjectRow
   onOpenDialog?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (row.itemType === 'REDACTED') {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
         <Lock className="size-3.5" />
         <span className="italic">
-          {translate('auto.components.github.project.ProjectCell.af5d8c912a', 'Restricted item')}
+          {t('auto.components.github.project.ProjectCell.af5d8c912a', 'Restricted item')}
         </span>
       </div>
     )
@@ -60,6 +64,7 @@ export function ProjectTypeCell({
   sourceTarget: RuntimeClientTarget
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (row.itemType === 'ISSUE') {
     return (
       <ProjectIssueTypeCell
@@ -75,16 +80,16 @@ export function ProjectTypeCell({
     row.itemType === 'PULL_REQUEST'
       ? {
           Icon: GitPullRequest,
-          label: translate('auto.components.github.project.ProjectCell.d0d0e13a5a', 'PR')
+          label: t('auto.components.github.project.ProjectCell.d0d0e13a5a', 'PR')
         }
       : row.itemType === 'DRAFT_ISSUE'
         ? {
             Icon: FileText,
-            label: translate('auto.components.github.project.ProjectCell.6efdc0d920', 'Draft')
+            label: t('auto.components.github.project.ProjectCell.6efdc0d920', 'Draft')
           }
         : {
             Icon: Lock,
-            label: translate('auto.components.github.project.ProjectCell.8d669084f6', 'Restricted')
+            label: t('auto.components.github.project.ProjectCell.8d669084f6', 'Restricted')
           }
   const { Icon, label } = meta
   return (

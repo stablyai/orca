@@ -13,8 +13,10 @@ function createEditor(initialContent: string): {
   models.push(model)
   return {
     model,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this editor double delegates model edits and undo to a real Monaco model.
     editorInstance: {
       getModel: () => model,
+      saveViewState: () => null,
       pushUndoStop: () => {
         model.pushStackElement()
         return true

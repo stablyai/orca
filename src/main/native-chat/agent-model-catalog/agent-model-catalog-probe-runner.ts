@@ -1,5 +1,7 @@
 import type { ClaudeBackgroundFailedExit } from '../../../shared/claude-background-run-isolation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { StringDecoder } from 'node:string_decoder'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
@@ -52,12 +54,16 @@ export type AgentModelCatalogListingLaunch = ProviderProcessLaunch & {
 
 export type AgentModelCatalogRunnerOptions = {
   site: string
-  timeoutMs?: number
+  timeoutMs?: number | null
   maxOutputBytes?: number
   signal?: AbortSignal
   spawnImpl?: PipedProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
+  /** Finish required replies even when an optional control request never completes. */
+  partialOutput?: { ready: (stdout: string) => boolean; timeoutMs: number }
+  onOutput?: (chunk: string) => void
+  completeOutput?: () => boolean
 }
 
 /** Bound the listing and await child teardown before success, failure or cancellation settles. */
@@ -65,7 +71,8 @@ export async function runAgentModelCatalogListing(
   launch: AgentModelCatalogListingLaunch,
   options: AgentModelCatalogRunnerOptions
 ): Promise<string> {
-  const timeoutMs = options.timeoutMs ?? AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS
+  const timeoutMs =
+    options.timeoutMs === undefined ? AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS : options.timeoutMs
   throwIfStopped(options.signal, launch.command)
   const managed = spawnManagedProviderProcess(launch, {
     site: options.site,
@@ -76,6 +83,7 @@ export async function runAgentModelCatalogListing(
     ...(options.platform ? { platform: options.platform } : {}),
     ...(options.inheritedEnv ? { inheritedEnv: options.inheritedEnv } : {})
   })
+  const progressDecoder = options.onOutput ? new StringDecoder('utf8') : undefined
   const { child } = managed
   const output = createOutputSink(
     options.maxOutputBytes ?? AGENT_MODEL_CATALOG_PROBE_MAX_OUTPUT_BYTES
@@ -83,6 +91,7 @@ export async function runAgentModelCatalogListing(
   const stderrDetail = (): string =>
     providerStderrForDisplay(managed.stderrTail()).trim().slice(0, STDERR_DETAIL_MAX_CHARS)
   let timer: ReturnType<typeof setTimeout> | undefined
+  let partialTimer: ReturnType<typeof setTimeout> | undefined
   let onAbort = (): void => {}
   try {
     return await new Promise<string>((resolve, reject) => {
@@ -99,16 +108,50 @@ export async function runAgentModelCatalogListing(
             failedExit
           )
         )
-      onAbort = () => fail(`${launch.command} listing stopped`, 'stopped')
+      // Required replies already in hand outlive an optional reply that runs out of time or room.
+      const failUnlessReady = (message: string, reason: AgentModelCatalogProbeFailure): void =>
+        partialTimer === undefined ? fail(message, reason) : resolve(output.text())
+      onAbort = () =>
+        isAgentModelCatalogWorkTimeout(options.signal)
+          ? failUnlessReady(`${launch.command} listing timed out`, 'timeout')
+          : fail(`${launch.command} listing stopped`, 'stopped')
       options.signal?.addEventListener('abort', onAbort, { once: true })
-      timer = setTimeout(
-        () => fail(`${launch.command} did not list models within ${timeoutMs}ms`, 'timeout'),
-        timeoutMs
-      )
+      timer =
+        timeoutMs === null
+          ? undefined
+          : setTimeout(
+              () =>
+                failUnlessReady(
+                  `${launch.command} did not list models within ${timeoutMs}ms`,
+                  'timeout'
+                ),
+              timeoutMs
+            )
       child.stdout.on('data', (chunk: Buffer | string) => {
         output.write(chunk)
         if (output.truncated()) {
-          fail(`${launch.command} listed more than the model catalog reads`, 'output-overflow')
+          failUnlessReady(
+            `${launch.command} listed more than the model catalog reads`,
+            'output-overflow'
+          )
+        } else {
+          try {
+            if (progressDecoder) {
+              options.onOutput?.(
+                progressDecoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+              )
+            }
+            if (options.completeOutput?.()) {
+              resolve(output.text())
+            } else if (partialTimer === undefined && options.partialOutput?.ready(output.text())) {
+              partialTimer = setTimeout(
+                () => resolve(output.text()),
+                options.partialOutput.timeoutMs
+              )
+            }
+          } catch (error) {
+            reject(error)
+          }
         }
       })
       child.stdout.on('error', () => {})
@@ -142,6 +185,7 @@ export async function runAgentModelCatalogListing(
     })
   } finally {
     clearTimeout(timer)
+    clearTimeout(partialTimer)
     options.signal?.removeEventListener('abort', onAbort)
     await managed.close()
   }
@@ -153,38 +197,66 @@ function throwIfStopped(signal: AbortSignal | undefined, label: string): void {
   }
 }
 
+export function isAgentModelCatalogWorkTimeout(signal?: AbortSignal): boolean {
+  return (
+    signal?.aborted === true &&
+    signal.reason instanceof AgentModelCatalogProbeError &&
+    signal.reason.reason === 'timeout'
+  )
+}
+
+export type AgentModelCatalogReady<T> = (cleanup: () => Promise<unknown>, partial?: () => T) => void
+
 export type AgentModelCatalogProbeConnection = { close(): Promise<unknown> }
 
 export async function runAgentModelCatalogSession<C extends AgentModelCatalogProbeConnection, T>(
   open: () => C,
-  body: (connection: C) => Promise<T>,
-  options: { label: string; timeoutMs?: number; signal?: AbortSignal }
+  body: (connection: C, ready: AgentModelCatalogReady<T>) => Promise<T>,
+  options: { label: string; timeoutMs?: number | null; signal?: AbortSignal }
 ): Promise<T> {
-  const timeoutMs = options.timeoutMs ?? AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS
+  const timeoutMs =
+    options.timeoutMs === undefined ? AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS : options.timeoutMs
   throwIfStopped(options.signal, options.label)
   const connection = open()
   let timer: ReturnType<typeof setTimeout> | undefined
+  let cleanup: (() => Promise<unknown>) | undefined
+  let partial: (() => T) | undefined
+  let settled = false
+  const ready: AgentModelCatalogReady<T> = (closeSession, readPartial) => {
+    if (!settled) {
+      cleanup = closeSession
+      partial = readPartial
+    }
+  }
   let onAbort = (): void => {}
-  const deadline = new Promise<never>((_resolve, reject) => {
-    onAbort = () =>
-      reject(new AgentModelCatalogProbeError(`${options.label} listing stopped`, 'stopped'))
+  const deadline = new Promise<T>((resolve, reject) => {
+    const expire = (): void => {
+      settled = true
+      if (partial) {
+        resolve(partial())
+      } else {
+        reject(new AgentModelCatalogProbeError(`${options.label} listing timed out`, 'timeout'))
+      }
+    }
+    onAbort = () => {
+      if (isAgentModelCatalogWorkTimeout(options.signal)) {
+        expire()
+      } else {
+        reject(new AgentModelCatalogProbeError(`${options.label} listing stopped`, 'stopped'))
+      }
+    }
     options.signal?.addEventListener('abort', onAbort, { once: true })
-    timer = setTimeout(
-      () =>
-        reject(
-          new AgentModelCatalogProbeError(
-            `${options.label} did not list models within ${timeoutMs}ms`,
-            'timeout'
-          )
-        ),
-      timeoutMs
-    )
+    timer = timeoutMs === null ? undefined : setTimeout(expire, timeoutMs)
   })
   try {
-    return await Promise.race([body(connection), deadline])
+    return await Promise.race([body(connection, ready), deadline])
   } finally {
+    settled = true
     clearTimeout(timer)
     options.signal?.removeEventListener('abort', onAbort)
+    if (cleanup) {
+      await withTimeout(cleanup(), 1_000, undefined)
+    }
     await connection.close().catch(() => undefined)
   }
 }

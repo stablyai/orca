@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { setBranchLineTotalMergeBase } from '../../branch-line-total-request-gate'
+import { setBranchLineTotalMergeBase } from './branch-line-total-request-gate'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 
 export function useSourceControlBranchLineTotalGate({

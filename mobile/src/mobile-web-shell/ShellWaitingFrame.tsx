@@ -7,7 +7,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 export const SHELL_OPENING_LABEL = 'Opening workspace'
 
 // Ease in to hold opacity while the compositor catches up with the reported renderer paint; linear fade exposed two bare-surface frames.
-export const SHELL_PAGE_COVER_FADE_MS = 220
+export const SHELL_PAGE_COVER_FADE_MS = 100
 
 // Keep indicator and caption layout fixed so waiting screens share the same label height.
 export function ShellWaitingFrame({
@@ -78,7 +78,7 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
 
 const styles = themedStyleSheet(() => ({
   cover: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgBase,

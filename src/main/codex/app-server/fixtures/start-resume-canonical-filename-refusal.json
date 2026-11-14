@@ -1,0 +1,6 @@
+{
+  "capture": "Wire response from codex-cli 0.166.0 thread/resume captured in an isolated QA home on 2026-11-02; paths sanitized; the response has no error.data",
+  "method": "thread/resume",
+  "code": -32600,
+  "message": "paginated rollout path `/qa-home/userdata/codex-runtime-home/home/sessions/2026/11/01/rollout-2026-11-01T20-18-12.123Z-01a19a7a-a7b8-7790-9e1d-73d9040a7f14.jsonl` does not have a canonical rollout filename"
+}

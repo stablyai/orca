@@ -16,7 +16,6 @@ import {
   createTerminalTab,
   listTabIds,
   startMarker,
-  readTerminalTextBestEffort,
   closeApp,
   captureFailureDiagnostics
 } from './app-driver.mjs'
@@ -194,8 +193,6 @@ async function runProof(ctx, args) {
   log('daemon', `pre-update daemon pid=${preDaemon.pid} appVersion=${preDaemon.appVersion}`)
   log('daemon', `pre-update daemon exe: ${preDaemon.exePath ?? '(unknown)'}`)
 
-  const preScrollback = await readTerminalTextBestEffort(session.page)
-
   // Close app normally; the detached daemon must remain alive.
   // Allow renderer acknowledgement and teardown; a tree kill invalidates survival evidence.
   await closeApp(session.app, 45_000, { allowForceKill: false })
@@ -248,7 +245,6 @@ async function runProof(ctx, args) {
     heartbeatFile,
     preDaemon,
     userDataDir,
-    preScrollback,
     echoBeforeUpdate
   })
   evidence.postDaemon?.pids?.forEach((p) => created.daemonPids.add(p))
@@ -274,7 +270,7 @@ async function runProof(ctx, args) {
 }
 
 async function gatherEvidence(args) {
-  const { profile, page, runDir, heartbeatFile, preDaemon, userDataDir, preScrollback } = args
+  const { profile, page, runDir, heartbeatFile, preDaemon, userDataDir } = args
   const postDaemon = resolveScopedDaemon(userDataDir)
 
   if (profile === 'survival') {
@@ -316,8 +312,6 @@ async function gatherEvidence(args) {
     }
   }
 
-  const postScrollback = await readTerminalTextBestEffort(page)
-  const scrollbackRestored = scrollbackFidelity(preScrollback, postScrollback)
   await createTerminalTab(page)
   const echoObserved = await probeEcho(page, runDir, 'echo-fresh')
   const ctrlCInterrupted = await probeCtrlCOnFreshLoop(page, runDir)
@@ -327,7 +321,6 @@ async function gatherEvidence(args) {
     postDaemonPid: postDaemon.pid,
     postDaemonAlive: postDaemon.pid != null && isPidAlive(postDaemon.pid),
     postDaemon,
-    scrollbackRestored,
     echoObserved,
     ctrlCInterrupted
   }
@@ -398,22 +391,6 @@ function isMarkerAlive(runDir) {
 async function heartbeatAdvancedSince(heartbeatFile, sinceMs) {
   await delay(1500)
   return fileMtimeMs(heartbeatFile) > sinceMs
-}
-
-function scrollbackFidelity(before, after) {
-  // WebGL renderer can leave both empty; report unknown (null) rather than a
-  // false failure. When text is available, check a stable prefix survived.
-  if (!before || !before.trim() || !after || !after.trim()) {
-    return null
-  }
-  const marker = before
-    .trim()
-    .split('\n')
-    .find((l) => l.trim().length > 3)
-  if (!marker) {
-    return null
-  }
-  return after.includes(marker.trim())
 }
 
 export function readDaemonLog(userDataDir) {

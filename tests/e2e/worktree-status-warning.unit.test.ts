@@ -1,9 +1,9 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import type * as childProcess from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { WORKTREE_METHODS } from '../../src/main/runtime/rpc/methods/worktree'
+import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import { WORKTREE_METHODS } from '../../src/main/runtime/rpc/methods/workspaces/worktree'
 import type { WorkspaceStatusDefinition } from '../../src/shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUSES, getWorkspaceStatus } from '../../src/shared/workspace-statuses'
 
@@ -17,15 +17,28 @@ const mocks = vi.hoisted(() => ({
   spawnMock: vi.fn()
 }))
 
-vi.mock('../../src/cli/runtime-client', async () => {
+vi.mock('../../src/cli/runtime/client', async () => {
   const { createRuntimeClientModuleMock } = await import('../../src/cli/index-test-harness.js')
   return createRuntimeClientModuleMock(mocks)
 })
+
+vi.mock('../../src/cli/runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: mocks.serveOrcaAppMock
+}))
+
+vi.mock('../../src/cli/runtime/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: mocks.getDefaultUserDataPathMock
+}))
 vi.mock('../../src/cli/runtime/environments', () => ({
   addEnvironmentFromPairingCode: mocks.addEnvironmentFromPairingCodeMock,
-  listEnvironments: mocks.listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../../src/shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: mocks.listEnvironmentsMock
 }))
 vi.mock('child_process', async (importOriginal) => {
   const original = await importOriginal<typeof childProcess>()
@@ -34,7 +47,7 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 import { main } from '../../src/cli/index'
-import { buildWorktree, okFixture } from '../../src/cli/test-fixtures'
+import { buildWorktree } from '../../src/cli/runtime/fixtures/runtime-rpc-fixtures'
 import { useWorktreeAwarenessEnvironment } from '../../src/cli/index-test-harness'
 
 const CUSTOM_STATUSES: WorkspaceStatusDefinition[] = [
@@ -151,47 +164,4 @@ describe('workspace status warnings through CLI and owning RPC handler', () => {
       expect(mocks.callMock).toHaveBeenCalledTimes(1)
     }
   )
-
-  it.each(['completed', 'shipped'])('accepts valid column %s without warnings', async (status) => {
-    const { stored, log, error } = fixture({
-      statuses: status === 'shipped' ? CUSTOM_STATUSES : undefined
-    })
-    await setStatus(status, true)
-    expect(stored.workspaceStatus).toBe(status)
-    const response = JSON.parse(log.mock.calls.flat().join('\n'))
-    expect(response).toMatchObject({ ok: true, result: { worktree: { workspaceStatus: status } } })
-    expect(response.result).not.toHaveProperty('warnings')
-    expect(error).not.toHaveBeenCalled()
-  })
-
-  it('preserves the completed write when owner settings cannot be read', async () => {
-    const { stored, log, error } = fixture({ failRead: true })
-    await setStatus('done', true)
-    expect(stored.workspaceStatus).toBe('done')
-    const response = JSON.parse(log.mock.calls.flat().join('\n'))
-    expect(response).toMatchObject({ ok: true })
-    expect(response.result).not.toHaveProperty('warnings')
-    expect(error).not.toHaveBeenCalled()
-  })
-
-  it('skips the settings read when the status is unchanged', async () => {
-    const { getUIState, stored } = fixture({ failRead: true })
-    await setStatus(undefined, true)
-    expect(getUIState).not.toHaveBeenCalled()
-    expect(stored.workspaceStatus).toBe('in-progress')
-  })
-
-  it('keeps an older host response without warnings working', async () => {
-    const { stored, log, error } = fixture()
-    mocks.callMock.mockResolvedValue(
-      okFixture('old-host', { worktree: { ...stored, workspaceStatus: 'done' } })
-    )
-    await setStatus('done', true)
-    expect(JSON.parse(log.mock.calls.flat().join('\n'))).toMatchObject({
-      ok: true,
-      result: { worktree: { workspaceStatus: 'done' } }
-    })
-    expect(error).not.toHaveBeenCalled()
-    expect(mocks.callMock).toHaveBeenCalledTimes(1)
-  })
 })

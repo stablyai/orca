@@ -47,7 +47,7 @@ precedence. Process-table command recognition still treats the waiting shell
 as a shell.
 
 Callers use shared launch-token and launch-recognition APIs. Prefix handling is
-contained in `src/shared/agent-command-line-intent.ts`; the setup-sequence resolver
+contained in `src/shared/agent-launch/startup/agent-command-line-intent.ts`; the setup-sequence resolver
 continues to return its supplied command. Launch recognition reuses the existing
 agent registry and headless filters without changing strict process recognition.
 

@@ -1,6 +1,8 @@
 import { unpairedToolResultIndices } from './native-chat-tool-pairs'
 import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
 
+export type NativeChatOrphanOrigin = { row: NativeChatMessage; sourceId: string }
+
 type ToolContribution = {
   source: NativeChatMessage
   blocks: readonly NativeChatBlock[]
@@ -13,7 +15,11 @@ type ToolContribution = {
 export class FoldedToolResultSources {
   private readonly contributions = new Map<number, ToolContribution[]>()
 
-  constructor(private readonly sourceMessages: readonly NativeChatMessage[]) {}
+  constructor(
+    private readonly sourceMessages: readonly NativeChatMessage[],
+    private readonly allocatedIds?: ReadonlySet<string>,
+    private readonly recordOrphan?: (origin: NativeChatOrphanOrigin) => void
+  ) {}
 
   append(
     row: number,
@@ -82,7 +88,7 @@ export class FoldedToolResultSources {
         const sourceStillDraws =
           contribution.sourceRow !== undefined && retained[contribution.sourceRow] !== null
         const id = sourceStillDraws
-          ? orphanRowId(contribution.source.id, allocatedIds, occurrences)
+          ? orphanRowId(contribution.source.id, allocatedIds, occurrences, this.allocatedIds)
           : contribution.source.id
         allocatedIds.add(id)
         const orphan: NativeChatMessage = {
@@ -91,6 +97,9 @@ export class FoldedToolResultSources {
           role: 'tool',
           blocks: orphanBlocks,
           unpairedToolResults: true
+        }
+        if (sourceStillDraws) {
+          this.recordOrphan?.({ row: orphan, sourceId: contribution.source.id })
         }
         const at = orphans.get(contribution.insertAt)
         if (at) {
@@ -112,16 +121,24 @@ export class FoldedToolResultSources {
   }
 }
 
-function orphanRowId(
+const ORPHAN_ROW_ID_PREFIX = 'unpaired-tool-results:'
+
+/** Whether the row id has the shape `orphanRowId` mints. */
+export function isOrphanRowId(id: string): boolean {
+  return id.startsWith(ORPHAN_ROW_ID_PREFIX)
+}
+
+export function orphanRowId(
   sourceId: string,
   allocated: ReadonlySet<string>,
-  occurrences: Map<string, number>
+  occurrences: Map<string, number>,
+  reserved?: ReadonlySet<string>
 ): string {
   let occurrence = occurrences.get(sourceId) ?? 0
-  let id = `unpaired-tool-results:${JSON.stringify([sourceId, occurrence])}`
-  while (allocated.has(id)) {
+  let id = `${ORPHAN_ROW_ID_PREFIX}${JSON.stringify([sourceId, occurrence])}`
+  while (allocated.has(id) || reserved?.has(id)) {
     occurrence += 1
-    id = `unpaired-tool-results:${JSON.stringify([sourceId, occurrence])}`
+    id = `${ORPHAN_ROW_ID_PREFIX}${JSON.stringify([sourceId, occurrence])}`
   }
   occurrences.set(sourceId, occurrence + 1)
   return id

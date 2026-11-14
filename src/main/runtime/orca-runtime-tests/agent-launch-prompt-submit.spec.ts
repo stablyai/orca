@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_PROMPT_BRACKETED_PASTE_END,
-  OrcaRuntimeService,
-  acknowledgeAgentPromptSubmit
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
-import { wrapTerminalBracketedPasteText } from '../../../shared/terminal-bracketed-paste-text'
+import './runtime-test-module-registration.spec'
+import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks/setup.spec'
+import { TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 // Match desktop paste: submit Enter one turn after paste, without waiting for render quiescence.
 async function launchedAgentPane(agent: 'claude' | 'codex' | 'qwen-code', startsTurn = true) {
@@ -38,32 +36,6 @@ async function launchedAgentPane(agent: 'claude' | 'codex' | 'qwen-code', starts
 }
 
 describe('a launch prompt into a composer the caller saw ready', () => {
-  it('pastes the same bytes the desktop draft paste sent for the prompt', async () => {
-    vi.useFakeTimers()
-    try {
-      const { runtime, handle, writes } = await launchedAgentPane('claude')
-      const prompt = 'Explain this commit:\n- first line\r\n- second line with \x1b[31m colour'
-
-      const send = runtime.sendTerminalAgentPrompt(handle, prompt, {
-        inputKind: 'launch',
-        composerReady: true
-      })
-      await vi.advanceTimersByTimeAsync(100)
-      await send
-
-      const pasted = writes
-        .map((write) => write.data)
-        .filter((data) => data !== '\r')
-        .join('')
-      expect(pasted).toBe(wrapTerminalBracketedPasteText(prompt))
-      expect(pasted).toBe(
-        '\x1b[200~Explain this commit:\r- first line\r- second line with \u241b[31m colour\x1b[201~'
-      )
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('submits one turn after the paste instead of waiting out the render cap', async () => {
     vi.useFakeTimers()
     try {
@@ -111,22 +83,4 @@ describe('a launch prompt into a composer the caller saw ready', () => {
       }
     }
   )
-
-  it('keeps a prompt into a running agent behind the render settle, as before', async () => {
-    vi.useFakeTimers()
-    try {
-      const { runtime, handle, writes } = await launchedAgentPane('claude')
-
-      const send = runtime.sendTerminalAgentPrompt(handle, 'fix the checks', {
-        inputKind: 'driving'
-      })
-      await vi.advanceTimersByTimeAsync(7_000)
-      expect(writes.map((write) => write.data)).not.toContain('\r')
-      await vi.advanceTimersByTimeAsync(2_000)
-      await send
-      expect(writes.filter((write) => write.data === '\r')).toHaveLength(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
 })

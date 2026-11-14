@@ -1,10 +1,8 @@
 import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { AppState } from '@/store/types'
-import type {
-  RuntimeMobileSessionSnapshotTab,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type {
   BrowserPagesProjectionCache,
   BrowserWorkspacesProjectionCache,

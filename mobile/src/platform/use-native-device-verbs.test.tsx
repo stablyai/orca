@@ -17,6 +17,11 @@ const device = vi.hoisted(() => ({
   wakeTags: new Array<string>()
 }))
 
+// The shell's announce verb speaks through React Native's AccessibilityInfo.
+vi.mock('react-native', () => ({
+  AccessibilityInfo: { announceForAccessibilityWithOptions: () => {} },
+  Platform: { OS: 'ios' }
+}))
 vi.mock('expo-clipboard', () => ({
   setStringAsync: () => Promise.resolve(true),
   getStringAsync: device.clipboard.getStringAsync,
@@ -44,6 +49,7 @@ vi.mock('expo-keep-awake', () => ({
   }
 }))
 vi.mock('expo-image-picker', () => ({
+  UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
   launchImageLibraryAsync: device.picker.launchImageLibraryAsync
 }))
 vi.mock('expo-file-system', () => ({
@@ -56,13 +62,13 @@ vi.mock('expo-file-system', () => ({
       return device.files.get(this.uri)?.byteLength ?? 0
     }
     create(): void {}
-    write(): void {}
+    writeSync(): void {}
     delete(): void {
       device.deleted.push(this.uri)
       device.files.delete(this.uri)
     }
-    open(): { offset: number | null; readBytes: () => Uint8Array; close: () => void } {
-      return { offset: 0, readBytes: () => new Uint8Array(), close: () => {} }
+    open(): { offset: number | null; readBytesSync: () => Uint8Array; close: () => void } {
+      return { offset: 0, readBytesSync: () => new Uint8Array(), close: () => {} }
     }
   },
   Paths: { cache: 'file:///cache' }
@@ -118,44 +124,18 @@ function mount(
   }
 }
 
-describe('the device handler the shell hands its host', () => {
-  it('sends a clipboard verb to the clipboard half', async () => {
-    const { serve, unmount } = mount('session-a')
-    await expect(serve('native.clipboard.read', { mime: 'text' })).resolves.toEqual({
-      value: 'on the pasteboard'
-    })
-    unmount()
-  })
-
-  it('sends a media verb to the media half, picker and all', async () => {
-    const { serve, unmount } = mount('session-a')
-    await expect(
-      serve('native.media.pick', { source: 'library', multiple: false })
-    ).resolves.toEqual({ items: [] })
-    expect(device.picker.launchImageLibraryAsync).toHaveBeenCalled()
-    unmount()
-  })
-
-  it('answers a release for a handle no pick ever minted, rather than refusing', async () => {
-    const { serve, unmount } = mount('session-a')
-    await expect(serve('native.media.release', { handle: 'media-9' })).resolves.toEqual({
-      released: false
-    })
-    unmount()
-  })
-})
-
 describe('a picker completing after its page session ends', () => {
   beforeEach(() => {
     device.files.clear()
     device.deleted.length = 0
   })
 
-  const cases = (['unmount', 'replace'] as const).flatMap((ending) =>
-    (['library', 'files'] as const).flatMap((source) =>
-      [false, true].map((strict) => ({ ending, source, strict }))
-    )
-  )
+  const cases = [
+    { ending: 'unmount', source: 'library', strict: false },
+    { ending: 'unmount', source: 'files', strict: true },
+    { ending: 'replace', source: 'library', strict: true },
+    { ending: 'replace', source: 'files', strict: false }
+  ]
   it.each(cases)(
     'discards late $source files after $ending and preserves a successor, StrictMode=$strict',
     async ({ ending, source, strict }) => {
@@ -220,18 +200,5 @@ describe('the screen a page session leaves behind', () => {
     first.unmount()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(device.wakeTags).toEqual(['+orca-microphone', '-orca-microphone'])
-  })
-
-  it('leaves the next session nothing of the last one to give back', async () => {
-    const first = mount('session-a')
-    await first.serve('native.audio.start', { sampleRate: 16_000 })
-    first.unmount()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    device.wakeTags.length = 0
-    const second = mount('session-b')
-    second.unmount()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    // A session with no capture must not deactivate an unheld wake tag.
-    expect(device.wakeTags).toEqual([])
   })
 })

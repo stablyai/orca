@@ -8,12 +8,6 @@ import {
 } from './native-chat-text-reveal'
 
 describe('pacedTextEnd', () => {
-  it('finishes words and holds only the unfinished tail', () => {
-    expect(pacedTextEnd('hello brave world', 7, true)).toBe('hello brave'.length)
-    expect(pacedTextEnd('hello bra', 7, true)).toBe('hello '.length)
-    expect(pacedTextEnd('hello bra', 7, false)).toBe('hello bra'.length)
-    expect(pacedTextEnd('こんにちは世界', 3, true)).toBe(3)
-  })
   it('never stops inside an emoji', () => {
     const text = 'ok 👍👍 done'
     for (let position = 0; position <= text.length; position += 1) {

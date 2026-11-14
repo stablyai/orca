@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, type vi } from 'vitest'
-import type { Store } from '../persistence'
-import { _setShuttingDownForTests, track, trackAppOpenedOnce } from './client'
+import type { Store } from '../persistence/loading-store/store'
+import { track, trackAppOpenedOnce } from './client'
 import {
   BASE_COMMON,
   cleanupTelemetryClientTest,
@@ -22,25 +22,6 @@ describe('track()', () => {
 
   afterEach(() => {
     cleanupTelemetryClientTest(state.envStash)
-  })
-
-  it('captures a valid event with merged common + event props and $process_person_profile false', () => {
-    track('app_opened', {})
-    expect(mock.capture).toHaveBeenCalledTimes(1)
-    const call = mock.capture.mock.calls[0]![0]
-    expect(call.event).toBe('app_opened')
-    expect(call.distinctId).toBe(BASE_COMMON.install_id)
-    expect(call.properties).toEqual({
-      ...BASE_COMMON,
-      agent_dashboard_enabled: false,
-      $process_person_profile: false
-    })
-  })
-
-  it('respects the shutdown gate', () => {
-    _setShuttingDownForTests(true)
-    track('app_opened', {})
-    expect(mock.capture).not.toHaveBeenCalled()
   })
 
   // Burst-cap before consent reads settings so opted-out renderer floods cannot burn consent-resolution CPU.

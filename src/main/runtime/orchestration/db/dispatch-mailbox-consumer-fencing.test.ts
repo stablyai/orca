@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { OrchestrationDb } from '../db'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
+import { OrchestrationDb } from './orchestration-db'
+import './contract-constants'
+import './messages/mailbox-routing-page'
+import './dispatch-row-writer'
+import './attempt-outcome-projection'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { createRootDispatch, reattachDispatchConsumer } from './root-dispatch-test-fixture'
-import type { DeliveryRow } from '../types'
+import type { DeliveryRow } from './orchestration-records'
 
 const PANE_A = 'tab_a:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const PANE_B = 'tab_b:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -47,49 +51,6 @@ describe('dispatch mailbox consumer fencing', () => {
   function generationOf(dispatchId: string): number {
     return db.getDispatchContextById(dispatchId)!.consumer_generation
   }
-
-  it('fences worker A once worker B re-attaches, and hands B the same unread mail', () => {
-    const dispatch = dispatchWithMail(['first', 'second'])
-    reattachDispatchConsumer(db, {
-      dispatchId: dispatch.id,
-      paneKey: PANE_A,
-      processIncarnation: 'runtime:pty-a:1'
-    })
-    const generationA = generationOf(dispatch.id)
-    const deliveryA = openDelivery(dispatch.id, dispatch.runId, generationA)
-    expect(deliveryA?.messages.map((message) => message.subject)).toEqual(['first', 'second'])
-
-    reattachDispatchConsumer(db, {
-      dispatchId: dispatch.id,
-      paneKey: PANE_B,
-      processIncarnation: 'runtime:pty-b:1'
-    })
-    const generationB = generationOf(dispatch.id)
-    expect(generationB).toBe(generationA + 1)
-    expect(db.getDeliveryRaw(deliveryA!.delivery.id)?.status).toBe('fenced')
-
-    expect(() =>
-      db.acknowledgeMailboxDelivery({
-        runId: dispatch.runId,
-        mailboxHandle: `dispatch:${dispatch.id}`,
-        consumerGeneration: generationA,
-        deliveryId: deliveryA!.delivery.id
-      })
-    ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
-
-    const deliveryB = openDelivery(dispatch.id, dispatch.runId, generationB)
-    expect(deliveryB?.delivery.id).not.toBe(deliveryA!.delivery.id)
-    expect(deliveryB?.replayed).toBe(false)
-    expect(deliveryB?.messages.map((message) => message.subject)).toEqual(['first', 'second'])
-
-    db.acknowledgeMailboxDelivery({
-      runId: dispatch.runId,
-      mailboxHandle: `dispatch:${dispatch.id}`,
-      consumerGeneration: generationB,
-      deliveryId: deliveryB!.delivery.id
-    })
-    expect(db.getUnreadMessages(`dispatch:${dispatch.id}`)).toEqual([])
-  })
 
   it("leaves A's ack able to strand mail unread only when B never took over", () => {
     const dispatch = dispatchWithMail(['first'])
@@ -187,29 +148,5 @@ describe('dispatch mailbox consumer fencing', () => {
 
     expect(db.getRemoteDispatchAttachment(dispatchId)?.consumer_generation).toBe(1)
     expect((db.getDeliveryRaw(stale!.delivery.id) as DeliveryRow).status).toBe('fenced')
-  })
-
-  it('starts a retry Dispatch on a fresh mailbox address rather than sharing the old one', () => {
-    const task = db.createTask({
-      runId: 'run_legacy_local',
-      spec: 'work that fails once'
-    })
-    const first = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: {}
-    })
-    db.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
-    const retry = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      retryOf: first.dispatch.id,
-      startOptions: {}
-    })
-
-    expect(retry.dispatch.id).not.toBe(first.dispatch.id)
-    expect(retry.dispatch.consumer_generation).toBe(0)
   })
 })

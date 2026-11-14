@@ -1,4 +1,4 @@
-import { stripCredentialsFromMessage } from './git-remote-error'
+import { stripCredentialsFromMessage } from './git/remotes/git-remote-error'
 import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 
 export function getProvisionedRootRecipeRepoUrl(

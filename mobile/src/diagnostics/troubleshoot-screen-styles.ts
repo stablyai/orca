@@ -3,34 +3,8 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING } from '../components/list/ListGroup'
 
 export const troubleshootScreenStyles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
   scroll: {
     flex: 1
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl
   },
   diagnosticButton: {
     flexDirection: 'row',

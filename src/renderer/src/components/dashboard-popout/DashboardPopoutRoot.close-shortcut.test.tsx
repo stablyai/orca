@@ -8,29 +8,37 @@ import type { KeybindingFileSnapshot } from '../../../../shared/keybindings'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 
 const platform = vi.hoisted(() => ({ value: 'darwin' }))
-vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => platform.value }))
-vi.mock('@/hooks/useAppMenuPaste', () => ({ useAppMenuPaste: () => {} }))
-vi.mock('@/hooks/useAppMenuSelectionActions', () => ({ useAppMenuSelectionActions: () => {} }))
-vi.mock('./use-agent-dashboard-telemetry', () => ({ useAgentDashboardTelemetry: () => {} }))
-vi.mock('./AgentKanbanBoard', () => ({ AgentKanbanBoard: () => null }))
-vi.mock('./useDashboardSnapshot', () => ({ useDashboardSnapshot: () => null }))
-vi.mock('@/lib/react-devtools-commit-hook-shim', () => ({}))
-vi.mock('@/lib/react-commit-cascade-observer', () => ({}))
-vi.mock('@/lib/crash-diagnostics', () => ({
-  installRendererCrashDiagnostics: () => {},
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({ getShortcutPlatform: () => platform.value }))
+vi.mock('@/hooks/clipboard/menu/useAppMenuPaste', () => ({ useAppMenuPaste: () => {} }))
+vi.mock('@/hooks/app-commands/useAppMenuSelectionActions', () => ({
+  useAppMenuSelectionActions: () => {}
+}))
+vi.mock('../dashboard/board/use-agent-dashboard-telemetry', () => ({
+  useAgentDashboardTelemetry: () => {}
+}))
+vi.mock('../dashboard/board/AgentKanbanBoard', () => ({ AgentKanbanBoard: () => null }))
+vi.mock('./snapshot/useDashboardSnapshot', () => ({ useDashboardSnapshot: () => null }))
+vi.mock('@/diagnostics/react-commits/react-devtools-commit-hook-shim', () => ({}))
+vi.mock('@/diagnostics/react-commits/react-commit-cascade-observer', () => ({}))
+vi.mock('@/diagnostics/crash-reporting/crash-diagnostics', () => ({
+  installRendererCrashDiagnostics: () => {}
+}))
+vi.mock('@/diagnostics/crash-reporting/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: () => {}
 }))
-vi.mock('@/lib/react-commit-cascade-telemetry', () => ({
+vi.mock('@/diagnostics/react-commits/react-commit-cascade-telemetry', () => ({
   setReactCommitCascadeRendererSurface: () => {}
 }))
-vi.mock('@/lib/os-file-drop-cancellation-guard', () => ({
+vi.mock('@/lib/files/drop/os-file-drop-cancellation-guard', () => ({
   installOsFileDropCancellationGuard: () => () => {}
 }))
-vi.mock('@/lib/body-overlay-attributes', () => ({ installBodyOverlayAttributes: () => () => {} }))
+vi.mock('@/lib/overlay-interaction/body-overlay-attributes', () => ({
+  installBodyOverlayAttributes: () => () => {}
+}))
 vi.mock('@/i18n/I18nProvider', () => ({
   I18nProvider: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('@/lib/react-renderer-root', () => ({
+vi.mock('@/app-shell/startup/react-renderer-root', () => ({
   getOrCreateRendererRoot: () => ({ render: (node: ReactNode) => render(node) })
 }))
 

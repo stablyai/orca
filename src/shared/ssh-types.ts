@@ -323,6 +323,8 @@ export type SshManagedServerStatus =
       kind: 'relay'
       reason: SshManagedServerRelayReason
       detail?: string
+      /** The deferral code a stopped setup ended on; absent for thrown errors and older hosts. */
+      code?: string
       /** Relay terminals still running, when that is what keeps the host on the relay. */
       terminals?: number
       /** Those terminals belong to another Orca desktop or session, so this one offers no move. */

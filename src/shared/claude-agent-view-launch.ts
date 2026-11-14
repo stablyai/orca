@@ -1,9 +1,9 @@
-import { findClaudeExecutableIndex } from './agent-resume-launch-command'
+import { findClaudeExecutableIndex } from './agent-launch/startup/agent-resume-launch-command'
 import {
   quoteStartupArg,
   tokenizeStartupCommand,
   type AgentStartupShell
-} from './tui-agent-startup-shell'
+} from './agent-launch/startup/tui-agent-startup-shell'
 
 export function withClaudeAgentViewPlugin(
   command: string,

@@ -2,8 +2,8 @@ import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentCapability,
   isCustomAgentId
-} from '../../../../../../shared/commit-message-agent-spec'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control-ai'
+} from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 export type CommitMessageGenerationAgentChoice =

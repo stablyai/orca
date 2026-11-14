@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ProcessTableRow } from './process-table-snapshot'
 import {
+  isTmuxPaneShownElsewhere,
   parseTmuxAttachedClients,
   readTmuxHookPane,
+  readTmuxHookPaneHint,
   resolveTmuxClientAttachment
 } from './tmux-client-attachment'
 
@@ -27,6 +29,38 @@ const CLIENT: ProcessTableRow = {
 }
 
 describe('execution-host tmux client attachment', () => {
+  // A tmux client in another app's terminal: its lineage ends at launchd without this pane's root.
+  const ITERM: ProcessTableRow = { ...ROOT, pid: 300, ppid: 1, tty: 'ttys200', tpgid: 301 }
+  const ITERM_CLIENT: ProcessTableRow = { ...CLIENT, pid: 301, ppid: 300, tty: 'ttys200' }
+  const stoppedHere: ProcessTableRow = { ...CLIENT, stat: 'T' }
+
+  it.each<[string, { pid: number; pane: string }[], ProcessTableRow[], boolean]>([
+    [
+      'shown only in another terminal',
+      [{ pid: 301, pane: '%1' }],
+      [ROOT, ITERM, ITERM_CLIENT],
+      true
+    ],
+    [
+      'shown by a client whose lineage is unread',
+      [{ pid: 301, pane: '%1' }],
+      [ROOT, ITERM_CLIENT],
+      false
+    ],
+    ['shown by this pane’s own client', [{ pid: 101, pane: '%1' }], [ROOT, stoppedHere], false],
+    ['shown by no client', [{ pid: 301, pane: '%2' }], [ROOT, ITERM, ITERM_CLIENT], false]
+  ])('tells whether a pane %s is shown elsewhere', (_name, clients, rows, elsewhere) => {
+    expect(isTmuxPaneShownElsewhere(100, '%1', clients, rows)).toBe(elsewhere)
+  })
+
+  it('reads no hint from Orca’s agent-teams compat TMUX', () => {
+    expect(readTmuxHookPaneHint('%1 /tmp/orca-claude-agent-teams/team-x')).toBeNull()
+    expect(readTmuxHookPaneHint('%1 /private/tmp/tmux-501/default')).toEqual({
+      socket: '/private/tmp/tmux-501/default',
+      pane: '%1'
+    })
+  })
+
   it('selects by the outer foreground client, independently of another attached client', () => {
     const clients = [
       { pid: 101, pane: '%0' },

@@ -2,19 +2,18 @@ import {
   planManagedOrcadAutoUpdate,
   type ManagedOrcadAutoUpdateSkip
 } from './orcad-managed-update-decision'
-import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
+import { OrcadCrashLoopError } from './orcad-managed-crash-loop'
+import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import {
   OrcadArtifactsUnavailableError,
   OrcadHostUnsupportedError
-} from '../../orcad/orcad-host-unavailable'
+} from '../../orcad/diagnostics/orcad-host-unavailable'
 import { findIncompleteManagedOrcadMigration } from './orcad-managed-migration-status'
 import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../activation/orcad-activation-fence-hold'
 import { resolveLinkedOrcadContext } from './orcad-managed-runtime-context'
-import {
-  runManagedOrcadUpdate,
-  withManagedOrcadLifecycle
-} from '../../ssh/orcad-runtime-maintenance'
-import type { OrcadUpdateDeferCode } from '../../ssh/orcad-update-plan'
+import { runManagedOrcadUpdate } from './orcad-runtime-maintenance'
+import { withManagedOrcadLifecycle } from './orcad-managed-lifecycle'
+import type { OrcadUpdateDeferCode } from '../activation/orcad-update-plan'
 import { readLocalFullVersion } from '../install/remote-versioned-install'
 
 export type ManagedOrcadAutoUpdateOutcome =
@@ -95,6 +94,10 @@ export function autoUpdateManagedOrcadEnvironment(
         ? { outcome: 'deferred', code: result.code, reason: result.reason }
         : { outcome: 'failed', reason: result.reason }
     } catch (error) {
+      // The host already runs this build; the brake's reason shows on its server status instead.
+      if (error instanceof OrcadCrashLoopError) {
+        return { outcome: 'skipped', reason: 'current' }
+      }
       return { outcome: 'failed', reason: error instanceof Error ? error.message : String(error) }
     }
   })

@@ -1,6 +1,4 @@
-import { addFanoutListeners, type FanoutEventSource } from '../event-listener-fanout'
-
-export type RendererLifetimeSender = FanoutEventSource
+import { addFanoutListeners, type FanoutEventSource } from '../runtime/events/event-listener-fanout'
 
 export const RENDERER_GONE_MESSAGE = 'The window that started this upload went away'
 
@@ -8,7 +6,7 @@ export const RENDERER_GONE_MESSAGE = 'The window that started this upload went a
 const RENDERER_GONE_EVENTS = ['destroyed', 'render-process-gone', 'did-navigate'] as const
 
 /** Bind main-process work to its requesting renderer; dispose in finally to release WebContents listeners. */
-export function abortWhenRendererGone(sender: RendererLifetimeSender): {
+export function abortWhenRendererGone(sender: FanoutEventSource): {
   signal: AbortSignal
   dispose: () => void
 } {

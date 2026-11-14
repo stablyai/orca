@@ -1,10 +1,10 @@
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { renewAgentSessionLease } from './agent-session-lease-transitions'
 import {
   requireWritableAgentSessionRecord,
   type AgentSessionStoreState
-} from '../../agent-session-store-state'
+} from '../records/agent-session-store-state'
 
 export type AgentSessionLeaseRenewal = {
   sessionId: string

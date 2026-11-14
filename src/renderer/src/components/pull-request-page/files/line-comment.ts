@@ -1,11 +1,11 @@
 import { toast } from 'sonner'
 import { addPRReviewCommentForRepo } from '@/components/github/github-work-item-comment-mutations'
 import { translate } from '@/i18n/i18n'
-import type { DiffSection } from '@/components/editor/diff-section-types'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export async function addPullRequestLineComment(args: {
   headSha: string | undefined

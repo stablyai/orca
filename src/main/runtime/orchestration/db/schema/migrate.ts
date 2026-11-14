@@ -1,4 +1,4 @@
-import { resolveOrchestrationMigrationStartVersion } from '../../orchestration-schema-version-skew'
+import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { SCHEMA_VERSION } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
 import { applySchemaMigrationsV13ToV30 } from './migrate-v13-v30'

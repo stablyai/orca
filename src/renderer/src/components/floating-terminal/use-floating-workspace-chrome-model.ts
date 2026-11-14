@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useTabGroupWorkspaceModel } from '@/components/tab-group/useTabGroupWorkspaceModel'

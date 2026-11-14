@@ -1,4 +1,4 @@
-import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status-terminal-owner'
+import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { structuralValuesEqualIgnoringUndefined } from '../../../shared/structural-value-equality'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
@@ -50,6 +50,22 @@ function semanticRowsEqual(
 }
 
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
+  /** Set only for the direct applyNormalizedStatus call of applyRestatedStatus. */
+  protected restatingStatus = false
+
+  /** Orca's own restatement of a row (an inferred settle, a timer or poll republish) carries the
+   *  row's evidence; only the agent's own events may name or replace the pane's owner. */
+  protected applyRestatedStatus(
+    incoming: AgentHookEventPayload
+  ): EnrichedAgentHookEventPayload | undefined {
+    this.restatingStatus = true
+    try {
+      return this.applyNormalizedStatus(incoming)
+    } finally {
+      this.restatingStatus = false
+    }
+  }
+
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
   }
@@ -120,6 +136,24 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
       return
     }
     this.onAgentStatus?.({ ...this.programStatusFacets.stitch(row), programStatusOnly: true })
+    const identity = toMutationIdentity(row)
+    this.notifyStatusRowMutationListeners({ before: identity, after: identity })
+  }
+
+  protected publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void {
+    // An id is no provider event: drop the row's last hook signals so no reader re-acts on them.
+    const {
+      hookEventName: _hookEventName,
+      hasExplicitPrompt: _hasExplicitPrompt,
+      promptInteractionKey: _promptInteractionKey,
+      authorityRestartId: _authorityRestartId,
+      ...projection
+    } = row
+    this.onAgentStatus?.({
+      ...this.programStatusFacets.stitch(projection),
+      isReplay: true,
+      identityOnly: true
+    })
     const identity = toMutationIdentity(row)
     this.notifyStatusRowMutationListeners({ before: identity, after: identity })
   }

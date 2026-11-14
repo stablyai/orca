@@ -8,15 +8,15 @@ import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 // Reuse BottomDrawer’s anchor-independent mount-before-commit gate.
-import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
+import { resolveBottomDrawerMounted } from './bottom-drawer/bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
 import {
   bottomDrawerOffset,
   bottomDrawerScrim,
   bottomDrawerTravel
-} from './bottom-drawer-drag-motion'
-import { hideDrawer, showDrawer, useDrawerDrag } from './use-bottom-drawer-drag'
-import { useDrawerReducedMotion } from './bottom-drawer-constants'
+} from './bottom-drawer/bottom-drawer-drag-motion'
+import { hideDrawer, showDrawer, useDrawerDrag } from './bottom-drawer/use-bottom-drawer-drag'
+import { useDrawerReducedMotion } from './bottom-drawer/bottom-drawer-constants'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 type Props = {
@@ -169,14 +169,14 @@ function MountedRightDrawer({
 
 const styles = themedStyleSheet(() => ({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000
   },
   root: {
     flex: 1
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)'
   },
   anchor: {

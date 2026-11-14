@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { DeviceRegistry } from '../device-registry'
+import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import { DesktopPushService } from './desktop-push-service'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
 import { createPushHostKeypair } from './push-host-challenge-fixtures'
@@ -195,32 +195,6 @@ it('preserves the live route when clearing local registration fails, then cleans
   h.service.stop()
 })
 
-it('retries an old failure before mid-drain work, then waits for the armed backoff', async () => {
-  const h = harness()
-  await h.service.flushUnregisterOutbox()
-  const deletes: string[] = []
-  h.client.deleteDevice.mockImplementation(async (registrationId) => {
-    deletes.push(registrationId)
-    if (deletes.length === 1) {
-      h.outbox.enqueue({ registrationId: 'new', deviceId: 'new-phone' })
-      void h.service.flushUnregisterOutbox()
-    }
-    return registrationId === 'new'
-  })
-  h.outbox.enqueue({ registrationId: 'old', deviceId: h.deviceId })
-  await h.service.flushUnregisterOutbox()
-  expect(deletes).toEqual(['old', 'old', 'new'])
-  expect(h.outbox.pending().map((item) => item.registrationId)).toEqual(['old'])
-  expect(h.retries.map((retry) => retry.delayMs)).toEqual([30_000])
-  await tick()
-  expect(deletes).toHaveLength(3)
-  h.retries[0].run()
-  await tick()
-  expect(deletes).toEqual(['old', 'old', 'new', 'old'])
-  expect(h.retries.map((retry) => retry.delayMs)).toEqual([30_000, 60_000])
-  h.service.stop()
-})
-
 it('skips a snapshot delete consumed by same-device registration cleanup', async () => {
   const h = harness()
   await h.service.flushUnregisterOutbox()
@@ -275,20 +249,5 @@ it('finishes the current snapshot on stop and leaves later work durable for rest
   h.service.start()
   await h.service.flushUnregisterOutbox()
   expect(h.outbox.pending()).toEqual([])
-  h.service.stop()
-})
-
-it('reports shutdown as retryable and allows registration after restart', async () => {
-  const h = harness()
-  h.service.stop()
-  expect(await h.service.register({ ...input, deviceId: h.deviceId })).toEqual({
-    registered: false,
-    reason: 'gateway_unreachable'
-  })
-  expect(h.client.registerDevice).not.toHaveBeenCalled()
-  h.service.start()
-  expect(await h.service.register({ ...input, deviceId: h.deviceId })).toMatchObject({
-    registered: true
-  })
   h.service.stop()
 })

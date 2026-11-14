@@ -12,17 +12,17 @@ import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
 } from '../../runtime-session-contracts'
-import type { TerminalLayoutSnapshot } from '../../terminal-tab-types'
-import { pruneGroupLayout } from '../../workspace-session-terminal-tab-close'
+import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
+import { pruneGroupLayout } from '../../workspace-session/workspace-session-terminal-tab-close'
 import { diffTabRow, editorTabRow } from './old-client-session-editor-rows'
 import { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
-import { collectLayoutLeafIdsInOrder } from '../terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../terminal-topology/terminal-pane-tree'
 import { groupsInLayoutOrder } from './old-client-group-order'
 import {
   BLANK_BROWSER_TAB_STATE,
   type DesktopLayoutView,
   type LayoutContentFacts
-} from '../workspace-layout-beside'
+} from '../persistence/workspace-layout-beside'
 import type {
   LayoutContentTab,
   LayoutTab,
@@ -154,6 +154,7 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
       return row ? [row] : []
     }
     case 'conflict-review':
+    case 'git-graph':
     case 'check-details':
       // Virtual views have no file to read and no compatible session.tabs kind.
       return []

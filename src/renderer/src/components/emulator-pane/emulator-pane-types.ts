@@ -1,11 +1,16 @@
-import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator-tab-label'
+import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator/tabs/simulator-tab-label'
 
 export type SimulatorDeviceRow = {
   name: string
+  backend?: 'ios' | 'android'
   udid: string
   state: string
   runtime?: string
   isAvailable?: boolean
+  lastUsedAt?: string
+  availabilityError?: string
+  osVersion?: string
+  apiLevel?: string
 }
 
 export type EmulatorStreamInfo = {
@@ -21,6 +26,12 @@ export type EmulatorStreamInfo = {
 export type EmulatorPaneSession = {
   attached: boolean
   info?: EmulatorStreamInfo
+}
+
+export type UseEmulatorPaneSessionArgs = {
+  worktreeId: string
+  tabId?: string
+  autoAttachOnMount: boolean
 }
 
 export function deviceLabel(
@@ -56,18 +67,4 @@ export function simulatorPreviewStreamUrl(info?: EmulatorStreamInfo): string | u
     return `${base}/stream.mjpeg`
   }
   return undefined
-}
-
-export function pickDefaultDevice(devices: SimulatorDeviceRow[]): SimulatorDeviceRow | null {
-  const available = devices.filter((d) => d.isAvailable !== false)
-  const booted = available.filter((d) => d.state === 'Booted')
-  const bootedIphone = booted.find((d) => /iPhone/i.test(d.name || ''))
-  return (
-    bootedIphone ||
-    booted[0] ||
-    available.find((d) => /iPhone/i.test(d.name || '')) ||
-    available[0] ||
-    devices[0] ||
-    null
-  )
 }

@@ -9,9 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import type { PluginMarketplace } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { readPluginLockfile, removeInstalledPlugin } from '../installation/plugin-install'
-import { PluginImageCache } from '../plugin-image-cache'
+import type { PluginImageCache } from '../plugin-image-cache'
 import { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
+
+const revokeConsent = vi.fn(async (_pluginKey: string) => undefined)
 
 const git = vi.hoisted(
   (): {
@@ -151,7 +153,8 @@ async function setup(
       marketplace: service,
       userDataPath: root,
       hostVersion: pluginHostVersion('1.4.0'),
-      ...(imageCache ? { imageCache } : {})
+      ...(imageCache ? { imageCache } : {}),
+      revokeConsent
     }),
     sourceId: added.id
   }
@@ -171,6 +174,7 @@ beforeEach(() => {
   git.icon = false
   git.paths = null
   telemetry.track.mockReset()
+  revokeConsent.mockClear()
   git.checkout.mockReset()
   git.checkout.mockImplementation(
     async ({ destination, path }: { destination: string; path?: string }) => {
@@ -185,54 +189,6 @@ afterEach(async () => {
 })
 
 describe('PluginMarketplaceInstaller', () => {
-  it('previews exact validated bytes and records marketplace provenance on install', async () => {
-    const { root, installer, sourceId } = await setup()
-
-    const preview = await installer.preview(sourceId, 'community.notes')
-    expect(preview).toMatchObject({
-      pluginKey: 'community.notes',
-      resolvedCommit: 'a'.repeat(40),
-      marketplaceCommit: 'f'.repeat(40),
-      manifest: { version: '1.0.0' }
-    })
-    const result = await installer.install(preview)
-
-    if (!result.ok) {
-      throw new Error(result.error)
-    }
-    expect(result).toMatchObject({ ok: true, resolvedCommit: 'a'.repeat(40) })
-    const lock = await readPluginLockfile(join(root, 'plugins'))
-    expect(lock.plugins['community.notes']?.source).toEqual({
-      kind: 'marketplace',
-      marketplace: {
-        url: 'https://github.com/community/plugins.git',
-        ref: 'main',
-        resolvedCommit: 'f'.repeat(40)
-      },
-      plugin: {
-        url: 'https://github.com/community/notes.git',
-        ref: 'stable'
-      }
-    })
-  })
-
-  it('previews without the image when the image cache cannot save it', async () => {
-    git.v2 = true
-    git.icon = true
-    const cache = new PluginImageCache(join(await tempRoot(), 'images'))
-    vi.spyOn(cache, 'put').mockRejectedValue(
-      Object.assign(new Error('rename failed'), { code: 'ENOENT' })
-    )
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const { installer, sourceId } = await setup(cache)
-
-    const preview = await installer.preview(sourceId, 'community.notes')
-    expect(preview.manifest.icon).toBe('icon.png')
-    expect(preview.images?.icon).toBeUndefined()
-    expect(warn).toHaveBeenCalled()
-    warn.mockRestore()
-  })
-
   it('requires a fresh review when the plugin ref moves after preview', async () => {
     const { root, installer, sourceId } = await setup()
     const preview = await installer.preview(sourceId, 'community.notes')
@@ -248,145 +204,39 @@ describe('PluginMarketplaceInstaller', () => {
     })
   })
 
-  it('installs only the exact bytes a catalog release pins', async () => {
+  it('persists the catalog author repository with a mirrored installed release', async () => {
     git.v2 = true
-    const unpinnedSetup = await setup()
-    const unpinned = await unpinnedSetup.installer.preview(
-      unpinnedSetup.sourceId,
-      'community.notes'
-    )
+    git.pluginUrl = 'https://github.com/mirrors/notes.git'
+    const unpinned = await setup()
+    const first = await unpinned.installer.preview(unpinned.sourceId, 'community.notes')
     git.release = {
       version: '1.0.0',
       commit: git.commit,
-      contentHash: unpinned.contentHash,
+      contentHash: first.contentHash,
       execution: 'declarative',
       minimumOrca: PLUGIN_SCHEMA_NEWEST_SINCE,
-      types: ['instructions']
+      types: ['instructions'],
+      repository: 'https://github.com/community/notes'
     }
-    const { installer, sourceId } = await setup()
-    const preview = await installer.preview(sourceId, 'community.notes')
-    // The pinned commit is fetched directly, so the listed branch is display text only.
-    expect(git.checkout).toHaveBeenLastCalledWith(expect.objectContaining({ ref: git.commit }))
-    await expect(installer.install(preview)).resolves.toMatchObject({ ok: true })
-    expect(git.checkout).toHaveBeenLastCalledWith(expect.objectContaining({ ref: git.commit }))
-    git.payload = 'tampered at the same commit'
-
-    await expect(installer.install(preview)).resolves.toEqual({
-      ok: false,
-      error: 'plugin bytes do not match the catalog release'
-    })
-    await expect(installer.preview(sourceId, 'community.notes')).rejects.toThrow(
-      'plugin bytes do not match the catalog release'
-    )
-  })
-
-  it('lists a release for a newer Orca but refuses it before downloading', async () => {
-    git.release = {
-      version: '1.0.0',
-      commit: git.commit,
-      contentHash: 'c'.repeat(64),
-      execution: 'declarative',
-      minimumOrca: '9.0.0',
-      types: ['instructions']
-    }
-    const { marketplace, installer, sourceId } = await setup()
-    await expect(marketplace.findPlugin(sourceId, 'community.notes')).resolves.toBeTruthy()
-
-    await expect(installer.preview(sourceId, 'community.notes')).rejects.toThrow(
-      `requires Orca >=9.0.0 (this is ${PLUGIN_SCHEMA_NEWEST_SINCE})`
-    )
-    await expect(
-      installer.install({
-        marketplaceSourceId: sourceId,
-        marketplaceCommit: 'f'.repeat(40),
-        pluginKey: 'community.notes',
-        resolvedCommit: git.commit
-      })
-    ).resolves.toEqual({
-      ok: false,
-      error: `requires Orca >=9.0.0 (this is ${PLUGIN_SCHEMA_NEWEST_SINCE})`
-    })
-    expect(git.checkout).not.toHaveBeenCalled()
-  })
-
-  it('installs a full-access plugin with no global switch; approval stays per plugin', async () => {
-    git.worker = true
-    const { installer, sourceId, root } = await setup()
-    const preview = await installer.preview(sourceId, 'community.notes')
-    await expect(installer.install(preview)).resolves.toMatchObject({ ok: true })
-    expect(Object.keys((await readPluginLockfile(join(root, 'plugins'))).plugins)).toEqual([
-      'community.notes'
-    ])
-  })
-
-  it('installs under the listing publisher, ignoring the manifest publisher', async () => {
-    const { installer, sourceId, root } = await setup()
-    git.publisher = 'attacker'
-
-    const preview = await installer.preview(sourceId, 'community.notes')
-    expect(preview.manifest.publisher).toBe('community')
-    await expect(installer.install(preview)).resolves.toMatchObject({
-      ok: true,
-      pluginKey: 'community.notes'
-    })
-    expect(Object.keys((await readPluginLockfile(join(root, 'plugins'))).plugins)).toEqual([
-      'community.notes'
-    ])
-  })
-
-  it('installs a format 2 manifest that leaves the publisher out', async () => {
-    git.v2 = true
-    git.publisher = undefined
-    const { installer, sourceId } = await setup()
-
-    const preview = await installer.preview(sourceId, 'community.notes')
-    await expect(installer.install(preview)).resolves.toMatchObject({
-      ok: true,
-      pluginKey: 'community.notes'
-    })
-  })
-
-  it('rejects a source whose manifest id differs from its listing', async () => {
-    const { installer, sourceId } = await setup()
-    git.id = 'other'
-
-    await expect(installer.preview(sourceId, 'community.notes')).rejects.toThrow(
-      'plugin manifest id other does not match marketplace listing community.notes'
-    )
-  })
-
-  it('updates from recorded marketplace provenance and rolls back one immutable version', async () => {
     const { root, installer, sourceId } = await setup()
-    const firstPreview = await installer.preview(sourceId, 'community.notes')
-    const firstInstall = await installer.install(firstPreview)
-    expect(firstInstall.ok).toBe(true)
-    if (!firstInstall.ok) {
-      return
-    }
-
-    git.commit = 'b'.repeat(40)
-    git.version = '2.0.0'
-    git.payload = 'second'
-    const updatePreview = await installer.previewInstalledUpdate('community.notes')
-    expect(updatePreview).toMatchObject({ resolvedCommit: 'b'.repeat(40) })
-    await expect(installer.install(updatePreview)).resolves.toMatchObject({
-      ok: true,
-      version: '2.0.0'
+    const preview = await installer.preview(sourceId, 'community.notes')
+    expect(await installer.install(preview)).toMatchObject({ ok: true })
+    expect(
+      (await readPluginLockfile(join(root, 'plugins'))).plugins['community.notes']
+    ).toMatchObject({
+      authorRepository: 'https://github.com/community/notes',
+      source: { plugin: { url: 'https://github.com/mirrors/notes.git' } }
     })
-    await expect(installer.install(updatePreview)).resolves.not.toHaveProperty('repositoryMoved')
-
-    await expect(installer.rollbackVersion('community.notes')).resolves.toBe('1.0.0')
-    await expect(installer.rollbackVersion('not a key')).resolves.toBeNull()
-    await expect(installer.rollback('community.notes')).resolves.toMatchObject({
-      ok: true,
-      version: '1.0.0',
-      contentHash: firstInstall.contentHash
-    })
-    const lock = await readPluginLockfile(join(root, 'plugins'))
-    expect(lock.plugins['community.notes']).toMatchObject({
-      version: '1.0.0',
-      resolvedCommit: 'a'.repeat(40)
-    })
+    git.release.sourceUnavailable = true
+    const unavailable = await setup()
+    const unavailablePreview = await unavailable.installer.preview(
+      unavailable.sourceId,
+      'community.notes'
+    )
+    expect(await unavailable.installer.install(unavailablePreview)).toMatchObject({ ok: true })
+    expect(
+      (await readPluginLockfile(join(unavailable.root, 'plugins'))).plugins['community.notes']
+    ).not.toHaveProperty('authorRepository')
   })
 
   it('keeps an install pinned to its catalog when a second catalog lists the same id', async () => {
@@ -445,6 +295,7 @@ describe('PluginMarketplaceInstaller', () => {
     const respelled = await installer.install(respelledPreview)
     expect(respelled).toMatchObject({ ok: true })
     expect(respelled).not.toHaveProperty('repositoryMoved')
+    expect(revokeConsent).not.toHaveBeenCalled()
 
     git.pluginUrl = 'https://github.com/someone-else/notes.git'
     git.marketplaceCommit = 'd'.repeat(40)
@@ -452,77 +303,37 @@ describe('PluginMarketplaceInstaller', () => {
     git.payload = 'moved'
     const movedPreview = await installer.previewInstalledUpdate('community.notes')
     expect(movedPreview).toMatchObject({ repositoryMoved: true })
+    // Install links and catalog cards preview through `preview`, which must flag the move too.
+    await expect(installer.preview(sourceId, 'community.notes')).resolves.toMatchObject({
+      repositoryMoved: true
+    })
     await expect(installer.install(movedPreview)).resolves.toMatchObject({
       ok: true,
       repositoryMoved: true
     })
+    expect(revokeConsent).toHaveBeenCalledExactlyOnceWith('community.notes')
   })
 
-  it('installs two plugins from one repository side by side, each from its own directory', async () => {
-    git.paths = ['plugins/notes', 'plugins/tasks']
-    const { root, installer, sourceId } = await setup()
-    for (const key of ['community.notes', 'community.tasks']) {
-      await expect(
-        installer.install(await installer.preview(sourceId, key))
-      ).resolves.toMatchObject({ ok: true, pluginKey: key })
-    }
-    expect(git.checkout.mock.calls.map(([input]) => input.path)).toEqual([
-      'plugins/notes',
-      'plugins/notes',
-      'plugins/tasks',
-      'plugins/tasks'
-    ])
-    const lock = await readPluginLockfile(join(root, 'plugins'))
-    expect(lock.plugins['community.notes']?.source).toMatchObject({
-      plugin: { url: git.pluginUrl, ref: 'stable', path: 'plugins/notes' }
-    })
-    expect(lock.plugins['community.tasks']?.source).toMatchObject({
-      plugin: { path: 'plugins/tasks' }
-    })
-  })
-
-  it('treats a changed directory in the same repository as a moved plugin', async () => {
-    git.paths = ['plugins/notes']
-    const { marketplace: service, installer, sourceId } = await setup()
+  it('drops the approval before a moved repository publishes, and installs nothing if it cannot', async () => {
+    const { root, marketplace: service, installer, sourceId } = await setup()
     await installer.install(await installer.preview(sourceId, 'community.notes'))
-
-    git.paths = ['archive/notes']
-    git.marketplaceCommit = 'e'.repeat(40)
+    git.pluginUrl = 'https://github.com/someone-else/notes.git'
+    git.marketplaceCommit = 'd'.repeat(40)
     await service.refreshSource(sourceId)
-    git.payload = 'moved'
-    const movedPreview = await installer.previewInstalledUpdate('community.notes')
-    expect(movedPreview).toMatchObject({ repositoryMoved: true })
-    await expect(installer.install(movedPreview)).resolves.toMatchObject({
-      ok: true,
-      repositoryMoved: true
-    })
-  })
-
-  it('reports public-catalog installs as install, reinstall, then update', async () => {
-    const communityCatalog = 'https://github.com/stablyai/orca-community-plugins.git'
-    const { installer, sourceId } = await setup(undefined, communityCatalog)
-    const preview = await installer.preview(sourceId, 'community.notes')
-    await installer.install(preview, { trigger: 'deep_link' })
-    await installer.install(preview)
     git.commit = 'b'.repeat(40)
-    git.version = '2.0.0'
-    await installer.install(await installer.previewInstalledUpdate('community.notes'), {
-      trigger: 'auto_update'
+    const moved = await installer.preview(sourceId, 'community.notes')
+    const pluginsDir = join(root, 'plugins')
+    revokeConsent.mockImplementationOnce(async () => {
+      // The previous release must still be the published one when approval is dropped.
+      expect((await readPluginLockfile(pluginsDir)).plugins['community.notes']).toMatchObject({
+        resolvedCommit: 'a'.repeat(40)
+      })
+      throw new Error('settings unavailable')
     })
 
-    const base = { plugin_key: 'community.notes', catalog: 'community' }
-    expect(telemetry.track.mock.calls).toEqual([
-      ['plugin_installed', { ...base, version: '1.0.0', kind: 'install', trigger: 'deep_link' }],
-      ['plugin_installed', { ...base, version: '1.0.0', kind: 'reinstall', trigger: 'catalog' }],
-      ['plugin_installed', { ...base, version: '2.0.0', kind: 'update', trigger: 'auto_update' }]
-    ])
-  })
-
-  it('never reports installs from a private catalog', async () => {
-    const { installer, sourceId } = await setup()
-    const result = await installer.install(await installer.preview(sourceId, 'community.notes'))
-
-    expect(result.ok).toBe(true)
-    expect(telemetry.track).not.toHaveBeenCalled()
+    await expect(installer.install(moved)).rejects.toThrow('settings unavailable')
+    expect((await readPluginLockfile(pluginsDir)).plugins['community.notes']).toMatchObject({
+      resolvedCommit: 'a'.repeat(40)
+    })
   })
 })

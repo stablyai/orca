@@ -1,0 +1,133 @@
+name: Server-only Linux artifact
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'config/scripts/orcad-distribution/server-artifact/**'
+      - '.github/workflows/orca-server-artifact.yml'
+      # The launcher relies on how the CLI picks and starts its serve runtime.
+      - 'src/cli/runtime/launch.ts'
+      - 'src/cli/runtime/orca-app-executable.ts'
+      - 'src/cli/runtime/serve-orcad-launch.ts'
+      - 'src/shared/orcad-local-serve-selection.ts'
+      - 'src/shared/orcad-artifacts.ts'
+  # Catch serve regressions on main between releases.
+  schedule:
+    - cron: '45 11 * * *'
+  workflow_dispatch:
+  # Releases pass the qualified template this run already built, so the tarball ships its exact bytes.
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to check out, e.g. the release tag
+        type: string
+        required: true
+      template_artifact:
+        description: Name of this run's qualified orcad-template artifact; blank builds the host slot
+        type: string
+        default: ''
+    outputs:
+      packed:
+        description: "'true' when both tarballs were packed and passed the smoke"
+        value: ${{ jobs.package.outputs.packed }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orca-server-artifact-${{ inputs.ref && format('run-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !inputs.ref }}
+
+jobs:
+  package:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      TARGET: linux-${{ matrix.arch }}-glibc
+    outputs:
+      packed: ${{ steps.smoke.outcome == 'success' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      # A release cut from a ref older than this workflow has nothing to pack; skip instead of failing.
+      - name: Check the ref can pack the tarball
+        id: supported
+        run: |
+          if [ -f config/scripts/orcad-distribution/server-artifact/pack-orcad-server-artifact.mjs ]; then
+            echo 'supported=true' >> "$GITHUB_OUTPUT"
+          else
+            echo '::notice::This ref predates the server-only tarball; skipping it.'
+          fi
+      - uses: ./.github/actions/install-node-dependencies
+        if: steps.supported.outputs.supported == 'true'
+        with:
+          cache-pnpm-store: ${{ !inputs.ref }}
+      - name: Use the qualified release template
+        if: steps.supported.outputs.supported == 'true' && inputs.template_artifact != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.template_artifact }}
+          path: out/orcad-template
+      # Without a release template, build this runner's slot the way the desktop template does.
+      - uses: ./.github/actions/build-mobile-web-bundle
+        if: steps.supported.outputs.supported == 'true' && inputs.template_artifact == ''
+      - name: Build this runner's template slot
+        if: steps.supported.outputs.supported == 'true' && inputs.template_artifact == ''
+        run: pnpm build:orcad-template --targets "$TARGET"
+      - name: Pack the tarball
+        if: steps.supported.outputs.supported == 'true'
+        run: |
+          pnpm build:packages
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" node config/scripts/orcad-distribution/server-artifact/pack-orcad-server-artifact.mjs --template out/orcad-template --target "$TARGET" --out-dir out/orca-server
+          {
+            echo "### orca-server-linux-${{ matrix.arch }}"
+            echo '```'
+            ls -l out/orca-server
+            cat out/orca-server/*.sha256
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Start and pair on the runner
+        if: steps.supported.outputs.supported == 'true'
+        run: node config/scripts/orcad-distribution/server-artifact/smoke-orcad-server-artifact.mjs --archive "out/orca-server/orca-server-linux-${{ matrix.arch }}.tar.gz"
+      # Bare images with no Node, display, GTK or X11: the tarball's own Node runs the smoke.
+      - name: Start and pair on minimal images
+        id: smoke
+        if: steps.supported.outputs.supported == 'true'
+        run: |
+          for image in ubuntu:24.04 debian:12-slim; do
+            echo "::group::$image"
+            docker run --rm --init \
+              -v "$PWD/out/orca-server:/artifacts:ro" \
+              -v "$PWD/config/scripts/orcad-distribution/server-artifact:/smoke:ro" \
+              "$image" sh -ec '
+                mkdir -p /tmp/runtime
+                tar -xzf /artifacts/orca-server-linux-${{ matrix.arch }}.tar.gz -C /tmp/runtime --strip-components=1
+                /tmp/runtime/runtimes/node-*/bin/node /smoke/smoke-orcad-server-artifact.mjs --archive /artifacts/orca-server-linux-${{ matrix.arch }}.tar.gz
+              '
+            echo '::endgroup::'
+          done
+      - uses: actions/upload-artifact@v7
+        if: steps.supported.outputs.supported == 'true'
+        with:
+          name: orca-server-linux-${{ matrix.arch }}
+          path: |
+            out/orca-server/orca-server-linux-${{ matrix.arch }}.tar.gz
+            out/orca-server/orca-server-linux-${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7

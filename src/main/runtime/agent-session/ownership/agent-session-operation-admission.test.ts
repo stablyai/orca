@@ -4,7 +4,7 @@ import {
   agentSessionOperationExpiry,
   pruneAgentSessionOperationRows,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   admitAgentSessionGlobalOperationRow,
   admitAgentSessionOperationRow,

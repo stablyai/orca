@@ -1,8 +1,9 @@
-import { deriveAiVaultScopeSessionPaths } from '../../../src/shared/ai-vault-scope-paths'
+import { deriveAiVaultScopeSessionPaths } from '../../../src/shared/ai-vault/scanning/ai-vault-scope-paths'
 import {
-  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  boundedAiVaultScopeArgs,
+  type AiVaultListArgs,
   type AiVaultScope
-} from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 
 type ScopeWorktree = Pick<Worktree, 'worktreeId' | 'path' | 'repoId' | 'priorWorktreeIds'>
@@ -23,9 +24,12 @@ export function deriveMobileAiVaultScopePaths(
   )
 }
 
-/** The scan hints sent to the host; older hosts reject oversized scopePaths, and hints only widen discovery. */
-export function mobileAiVaultScanScopePaths(scopePaths: readonly string[]): string[] {
-  return scopePaths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT)
+/** The scope sent to the host: capped because older hosts reject oversized scopePaths; All keeps the recency scan. */
+export function mobileAiVaultScanScopeArgs(
+  scope: AiVaultScope,
+  scopePaths: readonly string[]
+): Pick<AiVaultListArgs, 'scopePaths' | 'scopeOnly'> {
+  return boundedAiVaultScopeArgs(scopePaths, scope !== 'all')
 }
 
 function toScopePathWorktree(worktree: ScopeWorktree) {

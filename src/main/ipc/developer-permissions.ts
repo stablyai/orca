@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import dgram from 'node:dgram'
 import { ipcMain, shell, systemPreferences } from 'electron'
-import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
-import { getTerminalHostsFullDiskAccessStatus } from '../daemon/daemon-full-disk-access-status'
+import { getMacosFullDiskAccessStatus } from '../macos-permissions/macos-full-disk-access-status'
+import { getTerminalHostsFullDiskAccessStatus } from '../daemon/permissions/daemon-full-disk-access-status'
 import { testLocalNetworkConnection } from './local-network-connection-test'
 import type {
   DeveloperPermissionId,

@@ -2,13 +2,14 @@ import type React from 'react'
 import { AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function RemoteServerUpdateStatusSegment({
   iconOnly
 }: {
   iconOnly: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const entryMap = useAppStore((state) => state.remoteServerUpdates)
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
@@ -28,12 +29,12 @@ export function RemoteServerUpdateStatusSegment({
   const segment = running
     ? {
         icon: <RefreshCw className="size-3 animate-spin text-muted-foreground" />,
-        label: translate(
+        label: t(
           'auto.components.status.bar.RemoteServerUpdateStatusSegment.updating',
           'Updating {{value0}}/{{value1}}',
           { value0: updated + failed, value1: updateCohort.length }
         ),
-        tooltip: translate(
+        tooltip: t(
           'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatingTooltip',
           'Remote Orca Server updates are in progress'
         )
@@ -41,24 +42,24 @@ export function RemoteServerUpdateStatusSegment({
     : failed > 0
       ? {
           icon: <AlertCircle className="size-3 text-destructive" />,
-          label: translate(
+          label: t(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedCount',
             '{{count}} server updates failed',
             { count: failed, defaultValue_one: '{{count}} server update failed' }
           ),
-          tooltip: translate(
+          tooltip: t(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedTooltip',
             'Open Remote Orca Server updates to review and retry'
           )
         }
       : {
           icon: <CheckCircle2 className="size-3 text-muted-foreground" />,
-          label: translate(
+          label: t(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedCount',
             '{{count}} servers updated',
             { count: updated, defaultValue_one: '{{count}} server updated' }
           ),
-          tooltip: translate(
+          tooltip: t(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedTooltip',
             'Remote Orca Server updates completed'
           )

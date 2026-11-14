@@ -1,19 +1,22 @@
-import { withGitHubRepoExecution } from '../github/github-repository-identity'
+import { withGitHubRepoExecution } from '../github/repositories/github-repository-identity'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
-import { getHostedReviewLocalGitOptions } from './hosted-review-git-options'
+import {
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from './hosted-review-git-options'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   CreateStackedHostedReviewInput,
   CreateStackedHostedReviewResult,
   HostedReviewSummary
-} from '../../shared/hosted-review'
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   prepareGitHubStackedPullRequest,
   registerGitHubStackedPullRequest
-} from '../github/stacked-pr-creation'
+} from '../github/pull-requests/stacks/stacked-pr-creation'
 import { createHostedReview } from './hosted-review-creation'
-import type { HostedReviewExecutionOptions } from './hosted-review-git-options'
-import { stackedReviewFailure } from '../../shared/stacked-hosted-review-failure-copy'
+
+import { stackedReviewFailure } from '../../shared/source-control/hosted-review/stacked-hosted-review-failure-copy'
 
 export async function createStackedHostedReview(
   repoPath: string,

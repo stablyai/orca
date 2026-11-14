@@ -1,12 +1,12 @@
 import React from 'react'
 import { GitPullRequest, Lock } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { chipStyle, labelChipColors, singleSelectChipColors } from './project-cell-chip-colors'
 import { formatRoadmapSpan } from './roadmap-tick-format'
-import type { RoadmapSpan } from '../../../../shared/github/project-roadmap-timeline'
-import type { GitHubProjectRow } from '../../../../shared/github/project-types'
+import type { RoadmapSpan } from '../../../../shared/github/projects/project-roadmap-timeline'
+import type { GitHubProjectRow } from '../../../../shared/github/projects/project-types'
 
 const MIN_BAR_WIDTH_PX = 24
 
@@ -30,20 +30,21 @@ export default function ProjectRoadmapBar({
   locale,
   onOpen
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const colors = chipColor ? singleSelectChipColors(chipColor) : labelChipColors('')
   const interactive = row.itemType !== 'REDACTED' && row.itemType !== 'DRAFT_ISSUE'
   const dates = formatRoadmapSpan(span, locale)
   // Share the restricted-item fallback across visible text and accessible labels.
   const title =
     row.itemType === 'REDACTED'
-      ? translate('auto.components.github.project.ProjectRoadmapBar.7d1220d979', 'Restricted item')
+      ? t('auto.components.github.project.ProjectRoadmapBar.7d1220d979', 'Restricted item')
       : row.content.title
   const bar = (
     <button
       type="button"
       aria-disabled={interactive ? undefined : true}
       onClick={interactive ? onOpen : undefined}
-      aria-label={translate(
+      aria-label={t(
         'auto.components.github.project.ProjectRoadmapBar.cd68ccc17a',
         '{{value0}} — {{value1}}',
         { value0: title, value1: dates }

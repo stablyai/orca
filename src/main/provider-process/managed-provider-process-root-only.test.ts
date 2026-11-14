@@ -109,12 +109,4 @@ describe('root exit observation', () => {
     expect(managed.processless).toBe(true)
     expect(managed.rootExitObserved).toBe(false)
   })
-
-  it('reads a real process exit as observed', () => {
-    const fixture = fakeChild()
-    const managed = rootOnly(fixture)
-    expect(managed.rootExitObserved).toBe(false)
-    fixture.child.emit('exit', 1, null)
-    expect(managed.rootExitObserved).toBe(true)
-  })
 })

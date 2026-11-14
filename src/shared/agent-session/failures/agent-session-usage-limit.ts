@@ -46,11 +46,15 @@ export function readAgentSessionUsageLimit(value: unknown): AgentSessionUsageLim
 }
 
 /** A reset time in the reader's own clock: the time alone today, else with its day. */
-export function formatUsageLimitResetClock(resetsAt: number, now: number = Date.now()): string {
+export function formatUsageLimitResetClock(
+  resetsAt: number,
+  now: number = Date.now(),
+  locale?: string
+): string {
   const at = new Date(resetsAt)
   const today = at.toDateString() === new Date(now).toDateString()
   return new Intl.DateTimeFormat(
-    undefined,
+    locale,
     today
       ? { hour: 'numeric', minute: '2-digit' }
       : { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }

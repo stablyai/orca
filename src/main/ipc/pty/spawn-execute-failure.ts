@@ -1,5 +1,5 @@
-import type { PtyRegistrationClaim } from '../../runtime/runtime-terminal-state-records'
-import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtyRegistrationClaim } from '../../runtime/terminal/records/runtime-terminal-state-records'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { classifyError } from '../../telemetry/classify-error'
 import { track } from '../../telemetry/client'

@@ -1,0 +1,110 @@
+import {
+  remoteSessionContentLines,
+  type RemoteSessionContent
+} from '../../transcripts/remote-session-content-lines'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { createInterface } from 'node:readline'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type {
+  FileWithMtime,
+  ResumableSessionParseState,
+  SessionAccumulator
+} from '../../session-scanner-types'
+import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
+import {
+  accumulatorFoldResumeState,
+  createAccumulator,
+  sessionIdFromFileName,
+  updateTimeline
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
+import { asRecord } from '../../parsing/session-record-fields'
+import {
+  extractContentText,
+  extractMessageText
+} from '../../parsing/session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+
+type ParserSessionOptions = {
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+}
+
+export async function parseCursorSessionFile(
+  file: FileWithMtime,
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
+): Promise<AiVaultSession | null> {
+  const lines = createInterface({
+    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
+    crlfDelay: Infinity
+  })
+  return parseCursorSessionLines({ file, lines, platform, messages })
+}
+
+export async function parseCursorSessionContent(
+  file: FileWithMtime,
+  content: RemoteSessionContent,
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions = {},
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  return parseCursorSessionLines({
+    file,
+    lines: remoteSessionContentLines(content, signal),
+    platform,
+    options
+  })
+}
+
+function consumeCursorRecordLine(accumulator: SessionAccumulator, line: string): void {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return
+  }
+  updateTimeline(accumulator, extractString(record.timestamp))
+  const role = extractString(record.role)
+  if (role === 'user' || role === 'assistant') {
+    accumulator.messageCount++
+    if (role === 'user') {
+      accumulator.title ??= extractMessageText(record.message) ?? extractContentText(record.content)
+    }
+    addSessionContent(
+      accumulator,
+      role,
+      asRecord(record.message)?.content ?? record.content,
+      record.timestamp
+    )
+  }
+}
+
+export function createCursorSessionResumeState(
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
+): ResumableSessionParseState {
+  return accumulatorFoldResumeState(
+    createAccumulator({
+      agent: 'cursor',
+      file,
+      sessionId: sessionIdFromFileName(file.path),
+      messages
+    }),
+    consumeCursorRecordLine
+  )
+}
+
+async function parseCursorSessionLines(args: {
+  file: FileWithMtime
+  lines: AsyncIterable<string> | Iterable<string>
+  platform: NodeJS.Platform
+  options?: ParserSessionOptions
+  messages?: TranscriptMessageSink
+}): Promise<AiVaultSession | null> {
+  const state = createCursorSessionResumeState(args.file, args.messages)
+  for await (const line of args.lines) {
+    state.consumeLine(line)
+  }
+  return state.finalize(args.platform, args.options)
+}

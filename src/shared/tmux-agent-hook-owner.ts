@@ -1,27 +1,20 @@
-import { normalizeHookPayload } from './agent-hook-listener'
+import type { TmuxManagedPty, TmuxAgentHookOwnerOptions } from './tmux-agent-hook-contract'
+import { normalizeHookPayload } from './agent-hook-listener/normalization/normalize-hook-payload'
 import {
   createHookListenerState,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
-import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
-import type { AgentHookSource } from './agent-hook-relay'
-import type { AgentStatusStore } from './agent-status-store'
-import { continueMainAgentStatus } from './agent-lead-status-fold'
+import type { AgentHookSource } from './agent-hook-listener/transport/agent-hook-relay'
+import { continueMainAgentStatus } from './agent-status/lifecycle/agent-lead-status-fold'
 import { tmuxCanonicalStatusEvent, tmuxInnerSubject } from './tmux-selected-status'
-import type { AgentStatusExecutionScope, AgentStatusPtySubject } from './agent-status-subject'
+import type { AgentStatusPtySubject } from './agent-status/contracts/agent-status-subject'
 import {
   readTmuxHookPane,
   resolveTmuxClientAttachment,
   type TmuxHookPane
 } from './tmux-client-attachment'
 import { probeTmuxHostAttachments } from './tmux-host-attachment-probe'
-export { isTmuxInnerSubject } from './tmux-selected-status'
 
-export type TmuxManagedPty = {
-  pid: number
-  incarnation: string
-  scope: AgentStatusExecutionScope
-}
 type OuterPane = {
   paneKey: string
   socket: string
@@ -39,26 +32,7 @@ export class TmuxAgentHookOwner {
   private lastRefreshAt = -Infinity
   private socketCursor = 0
 
-  constructor(
-    private readonly options: {
-      store: () => AgentStatusStore
-      getRoot: (paneKey: string) => Promise<TmuxManagedPty | null>
-      publish: (
-        event: AgentHookEventPayload,
-        observedAt: number,
-        subject: AgentStatusPtySubject,
-        stateStartedAt: number
-      ) => void
-      unavailable: (
-        paneKey: string,
-        subject?: AgentStatusPtySubject,
-        identity?: AgentHookEventPayload
-      ) => void
-      probe?: typeof probeTmuxHostAttachments
-      isRetired?: (paneKey: string) => boolean
-      now?: () => number
-    }
-  ) {}
+  constructor(private readonly options: TmuxAgentHookOwnerOptions) {}
 
   private now(): number {
     return this.options.now?.() ?? Date.now()

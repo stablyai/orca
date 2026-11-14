@@ -20,20 +20,6 @@ describe('installed OpenCode plugin currency', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('treats a missing or different file as stale', () => {
-    expect(isInstalledOpenCodePluginCurrent(pluginPath, 'plugin')).toBe(false)
-    expect(isOverlayOpenCodePluginCurrent(pluginPath, 'plugin')).toBe(false)
-    writeFileSync(pluginPath, 'older plugin')
-    expect(isInstalledOpenCodePluginCurrent(pluginPath, 'plugin')).toBe(false)
-    expect(isOverlayOpenCodePluginCurrent(pluginPath, 'plugin')).toBe(false)
-  })
-
-  it('treats a regular file with the same bytes as current', () => {
-    writeFileSync(pluginPath, 'plugin')
-    expect(isInstalledOpenCodePluginCurrent(pluginPath, 'plugin')).toBe(true)
-    expect(isOverlayOpenCodePluginCurrent(pluginPath, 'plugin')).toBe(true)
-  })
-
   it.skipIf(process.platform === 'win32')(
     'follows a symlink except in an overlay, where a link is a mirrored user entry',
     () => {

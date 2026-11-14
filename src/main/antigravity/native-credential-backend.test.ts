@@ -1,22 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { credential } from './native-account-test-fixtures'
-import {
-  createAntigravityFileCredentialBackend,
-  createAntigravityHostCredentialBackend,
-  isAntigravityFileStorageHost
-} from './native-credential-backend'
+import { createAntigravityFileCredentialBackend } from './native-credential-backend'
 
 vi.mock('./native-macos-credentials', () => ({
   readAntigravityMacOSCredential: vi.fn(),
   writeAntigravityMacOSCredential: vi.fn()
 }))
-afterEach(() => {
-  vi.restoreAllMocks()
-  vi.unstubAllEnvs()
-})
 
 describe('execution-host native credential authority', () => {
   it('performs a real isolated file write/readback and detects a stale before-write credential', async () => {
@@ -41,36 +33,4 @@ describe('execution-host native credential authority', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
-
-  it.each(['SSH_TTY', 'SSH_CLIENT', 'SSH_CONNECTION', 'WSL_DISTRO_NAME', 'WSL_INTEROP'])(
-    'uses the owning-host file bypass detector %s',
-    (key) => {
-      expect(isAntigravityFileStorageHost({ [key]: 'present' })).toBe(true)
-      expect(isAntigravityFileStorageHost({ [key]: '' })).toBe(false)
-    }
-  )
-
-  it('recognizes WSL kernel evidence and never guesses file mode from Linux alone', () => {
-    expect(isAntigravityFileStorageHost({}, '6.6-microsoft-standard-WSL2')).toBe(true)
-    expect(isAntigravityFileStorageHost({}, '6.8-linux')).toBe(false)
-  })
-
-  it.each(['linux'] as const)(
-    'capability-refuses unverified native %s without mutating client credentials',
-    (platform) => {
-      for (const key of [
-        'SSH_TTY',
-        'SSH_CLIENT',
-        'SSH_CONNECTION',
-        'WSL_DISTRO_NAME',
-        'WSL_INTEROP'
-      ]) {
-        vi.stubEnv(key, '')
-      }
-      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      expect(() => createAntigravityHostCredentialBackend('/task-home')).toThrow(
-        'not supported on this host yet'
-      )
-    }
-  )
 })

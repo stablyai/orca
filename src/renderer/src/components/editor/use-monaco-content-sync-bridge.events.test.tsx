@@ -9,7 +9,9 @@ import {
   endProgrammaticContentSync
 } from './monaco-programmatic-sync'
 
-vi.mock('./editor-stale-mount-guard', () => ({ mayPushTabTextIntoModel: () => true }))
+vi.mock('./model-lifetime/buffer-text/editor-stale-mount-guard', () => ({
+  mayPushTabTextIntoModel: () => true
+}))
 
 afterEach(() => {
   cleanup()
@@ -26,6 +28,8 @@ function mountBridge(model: editor.ITextModel) {
     getValue: () => model.getValue(),
     onDidChangeModelContent: (listener: (event: editor.IModelContentChangedEvent) => void) =>
       model.onDidChangeContent(listener),
+    saveViewState: () => null,
+    restoreViewState: () => {},
     pushUndoStop: () => {
       model.pushStackElement()
       return true

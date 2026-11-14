@@ -1,36 +1,16 @@
 import type {
   GitHubPRMergeMethod,
-  PRInfo,
-  PRState
-} from '../../../../src/shared/github/pull-request-types'
+  PRInfo
+} from '../../../../src/shared/github/pull-requests/pull-request-types'
 import {
   resolveGitHubPRMergeState,
   type GitHubPRMergeStateKind
-} from '../../../../src/shared/github/pull-request-merge-state'
+} from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-state'
 import {
   resolveGitHubPRStackMergeDecision,
   type GitHubPRStackMergeBlocker
-} from '../../../../src/shared/github/pull-request-stack-merge'
+} from '../../../../src/shared/github/pull-requests/merge/pull-request-stack-merge'
 import { translate } from '../../i18n/mobile-i18n'
-
-// Match desktop: drafts offer Ready for review and Close, never Merge; merged PRs only unlink.
-export type PrActionAvailability = {
-  canMerge: boolean
-  canMarkReady: boolean
-  canClose: boolean
-  canReopen: boolean
-  canUnlink: boolean
-}
-
-export function resolvePrActionAvailability(state: PRState): PrActionAvailability {
-  return {
-    canMerge: state === 'open',
-    canMarkReady: state === 'draft',
-    canClose: state === 'open' || state === 'draft',
-    canReopen: state === 'closed',
-    canUnlink: true
-  }
-}
 
 // Copy for desktop’s merge-state kinds; the shared rule decides which one applies.
 function prMergeStateCopy(): Record<GitHubPRMergeStateKind, { label: string; hint: string }> {

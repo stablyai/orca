@@ -2,12 +2,12 @@ import { ipcMain } from 'electron'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import { gitExecFileAsync } from '../../../git/runner'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import {
   getLocalProjectGhExecOptions,
   getLocalProjectGitExecOptions,
   getWorktreeCreatePrefetchGitOptions
-} from '../../../project-runtime-git-options'
+} from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   SSH_GIT_RECONNECT_MESSAGE,
   SshHostNotServedError
@@ -15,10 +15,10 @@ import {
 import {
   fetchPrHeadTrackingRef,
   fetchGitHubPullRequestHeadRef
-} from '../../../github/pr-head-tracking-ref'
-import { resolveGitHubPrStartPoint } from '../../../github/pr-start-point'
-import { resolvePrStartPointUnlessWslStopped } from '../../../github/pr-start-point-wsl-gate'
-import { resolveGitHubReviewHeadRemote } from '../../../github/review-head-remote'
+} from '../../../github/pull-requests/start-points/pr-head-tracking-ref'
+import { resolveGitHubPrStartPoint } from '../../../github/pull-requests/start-points/pr-start-point'
+import { resolvePrStartPointUnlessWslStopped } from '../../../github/pull-requests/start-points/pr-start-point-wsl-gate'
+import { resolveGitHubReviewHeadRemote } from '../../../github/pull-requests/start-points/review-head-remote'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
 

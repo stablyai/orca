@@ -1,4 +1,5 @@
-import { parseWslPath, toLinuxPath } from '../wsl'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
+import { toLinuxPath } from '../../shared/wsl-paths'
 
 export function resolveLocalDroppedPathsForAgent(paths: string[], worktreePath: string): string[] {
   // Local WSL shells need dropped Windows paths rewritten into their Linux namespace.

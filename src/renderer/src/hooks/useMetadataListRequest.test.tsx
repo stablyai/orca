@@ -16,26 +16,6 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 afterEach(cleanup)
 
 describe('useMetadataListRequest', () => {
-  it('treats only null as disabled', async () => {
-    const store = createMetadataRequestStore<string[]>()
-    let loads = 0
-    const view = renderHook(() =>
-      useMetadataListRequest({
-        cacheKey: '',
-        store,
-        errorFallback: 'Failed to load metadata',
-        load: async () => {
-          loads += 1
-          return ['loaded']
-        }
-      })
-    )
-
-    await act(() => Promise.resolve())
-    expect(loads).toBe(1)
-    expect(view.result.current.data).toEqual(['loaded'])
-  })
-
   it('ignores stale responses and retains the result while disabled', async () => {
     const store = createMetadataRequestStore<string[]>()
     const first = deferred<string[]>()

@@ -1,4 +1,4 @@
-import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   validRecord,
   parseStructuredLaunchSurfaceAddress,
@@ -178,6 +178,24 @@ export function writeStructuredAgentLaunchRecord(
   writeRecords()
 }
 
+export function updateStructuredAgentLaunchRecords(
+  changes: Iterable<readonly [string, StructuredAgentLaunchPersistedRecord | null]>
+): void {
+  load()
+  let changed = false
+  for (const [sessionId, record] of changes) {
+    if (record) {
+      records.set(sessionId, record)
+      changed = true
+    } else if (records.delete(sessionId)) {
+      changed = true
+    }
+  }
+  if (changed) {
+    writeRecords()
+  }
+}
+
 export function deleteStructuredAgentLaunchRecord(sessionId: string): void {
   load()
   if (records.delete(sessionId)) {
@@ -232,20 +250,20 @@ export function retireStructuredAgentLaunchCancellationTombstonePersisted(
 export function retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted(
   publishedSessionIds: ReadonlySet<string>,
   executionHostId: ExecutionHostId
-): boolean {
+): string[] {
   load()
-  let changed = false
+  const retired: string[] = []
   for (const [sessionId, owner] of tombstones) {
     if (owner === executionHostId && !publishedSessionIds.has(sessionId)) {
       tombstones.delete(sessionId)
       remoteTombstoneCancelledAt.delete(sessionId)
-      changed = true
+      retired.push(sessionId)
     }
   }
-  if (changed) {
+  if (retired.length) {
     writeTombstones()
   }
-  return changed
+  return retired
 }
 
 export function resetStructuredAgentLaunchPersistenceForTests(): void {

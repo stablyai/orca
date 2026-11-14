@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { cn } from '@/lib/utils'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import '@/lib/workspace/ownership/connection-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { useAppStore } from '@/store/index'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
 import { getLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import { getBrowserViewportPreset } from '../../../../../shared/browser-viewport-presets'
@@ -19,11 +20,7 @@ import { getShareableBrowserArtifactFile } from '../describe-page/browser-artifa
 import { useGrabMode } from '../annotate/useGrabMode'
 import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
-import type {
-  BrowserChromeShortcutScope,
-  BrowserPageUrlSetter,
-  BrowserTabPageState
-} from '../describe-page/browser-page-types'
+import type { BrowserPagePaneProps } from '../describe-page/browser-page-types'
 import { BrowserPageChromeHeader } from './browser-page-chrome-header'
 import { BrowserPageContextMenu } from './browser-page-context-menu'
 import { BrowserPageViewportOverlays } from './browser-page-viewport-overlays'
@@ -60,21 +57,7 @@ export function BrowserPagePane({
   inputLocked,
   onUpdatePageState,
   onSetUrl
-}: {
-  browserTab: BrowserPageState
-  workspaceId: string
-  worktreeId: string
-  sessionProfileId: string | null
-  sessionPartition: string | null
-  isActive: boolean
-  chromeShortcutScope: BrowserChromeShortcutScope
-  isAutomationVisible: boolean
-  isMobileDriven: boolean
-  isRemotelyViewed: boolean
-  inputLocked: boolean
-  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
-  onSetUrl: BrowserPageUrlSetter
-}): React.JSX.Element {
+}: BrowserPagePaneProps): React.JSX.Element {
   const isPaintable = isBrowserPagePanePaintable({
     isActive,
     isAutomationVisible,
@@ -102,7 +85,8 @@ export function BrowserPagePane({
   )
   useEffect(() => {
     const subscribe = window.api.ui.onScrollBrowserPage
-    if (!subscribe || !pageViewportScroller || !browserTab.viewportPresetId) {
+    // Main sends these only while a preset or an agent's viewport outsizes the pane.
+    if (!subscribe || !pageViewportScroller) {
       return
     }
     return subscribe((event) => {
@@ -111,7 +95,7 @@ export function BrowserPagePane({
       }
       scrollBrowserPageViewport(browserTab.id, event.deltaX, event.deltaY)
     })
-  }, [browserTab.id, browserTab.viewportPresetId, pageViewportScroller])
+  }, [browserTab.id, pageViewportScroller])
   const chromeHeaderRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
@@ -249,7 +233,7 @@ export function BrowserPagePane({
   useBrowserPageWebviewUrlSync({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
-    browserTabLoading: browserTab.loading,
+    workspaceId,
     isActive,
     isPaintable,
     slotViewport,
@@ -258,9 +242,6 @@ export function BrowserPagePane({
     lastKnownWebviewUrlRef,
     keepAddressBarFocusRef,
     addressBarInputRef,
-    browserTabUrlRef,
-    addressBarValueRef,
-    onUpdatePageStateRef,
     focusWebviewNow
   })
   const reload = useBrowserPageReloadActions({
@@ -360,6 +341,7 @@ export function BrowserPagePane({
         grab={grab}
         grabAnnotations={grabAnnotations}
         annotationSend={annotationSend}
+        onOpenFind={() => setFindOpen(true)}
         markupIsActive={markup.isActive}
         markupStart={markup.start}
         markupCancel={markup.cancel}
@@ -374,6 +356,7 @@ export function BrowserPagePane({
       {pageViewport?.container
         ? createPortal(
             <BrowserPageViewportOverlays
+              isActive={isActive}
               markup={markup}
               feedbackBadgeRef={zoom.feedbackBadgeRef}
               findOpen={findOpen}
@@ -400,6 +383,7 @@ export function BrowserPagePane({
               }
               browserOverlayViewport={browserOverlayViewport}
               worktreeId={worktreeId}
+              importProfileId={sessionProfileId}
               grab={grab}
               annotationSend={annotationSend}
               grabAnnotations={grabAnnotations}

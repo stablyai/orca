@@ -1,14 +1,14 @@
 import React, { useState } from 'react'
 import { ChevronRight, Plus } from 'lucide-react'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import type { PortForwardEntry, UnrestoredPortForward } from '../../../../shared/ssh-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SshForwardedPortRow } from './ssh-forwarded-port-row'
 import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
-import { browserUrlForPortForwardEntry } from '@/lib/workspace-port-urls'
+import { browserUrlForPortForwardEntry } from '@/lib/workspace-ports/workspace-port-urls'
 
 const NO_FORWARDS: readonly PortForwardEntry[] = []
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
@@ -18,6 +18,7 @@ export function SshForwardedPortsSection({
 }: {
   connectionId: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const forwards = useAppStore((s) => s.portForwardsByConnection[connectionId] ?? NO_FORWARDS)
   const unrestored = useAppStore(
     (s) => s.unrestoredPortForwardsByConnection[connectionId] ?? NO_UNRESTORED
@@ -43,7 +44,7 @@ export function SshForwardedPortsSection({
             className={cn('text-muted-foreground transition-transform', !collapsed && 'rotate-90')}
           />
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {translate('auto.components.right.sidebar.PortsPanel.ddbe58d74e', 'Forwarded')}
+            {t('auto.components.right.sidebar.PortsPanel.ddbe58d74e', 'Forwarded')}
           </span>
           {count > 0 && <span className="ml-1 text-[10px] text-muted-foreground/60">{count}</span>}
         </button>
@@ -55,7 +56,7 @@ export function SshForwardedPortsSection({
           onClick={() => setDialogState({ mode: 'add', defaults: { targetId: connectionId } })}
         >
           <Plus />
-          {translate('auto.components.right.sidebar.PortsPanel.a103dae837', 'Add')}
+          {t('auto.components.right.sidebar.PortsPanel.a103dae837', 'Add')}
         </Button>
       </div>
       {!collapsed &&
@@ -82,7 +83,7 @@ export function SshForwardedPortsSection({
           </>
         ) : (
           <p className="py-1 text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.right.sidebar.PortsPanel.04efd3dad4',
               'Forward a port to access remote services on your local machine.'
             )}

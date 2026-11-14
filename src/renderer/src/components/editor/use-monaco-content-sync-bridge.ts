@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
 import { syncContentUpdate, type MonacoContentSyncMode } from './monaco-content-sync'
-import { mayPushTabTextIntoModel } from './editor-stale-mount-guard'
+import { mayPushTabTextIntoModel } from './model-lifetime/buffer-text/editor-stale-mount-guard'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync,

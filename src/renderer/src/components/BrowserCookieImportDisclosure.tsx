@@ -1,8 +1,9 @@
 import { Info } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 
 export function BrowserCookieImportDisclosure(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <DropdownMenuSeparator />
@@ -10,13 +11,13 @@ export function BrowserCookieImportDisclosure(): React.JSX.Element {
         <Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />
         <span className="min-w-0">
           <span className="block font-medium leading-4 text-foreground">
-            {translate(
+            {t(
               'auto.components.BrowserCookieImportDisclosure.title',
               "Google logins aren't imported"
             )}
           </span>
           <span className="block leading-4 text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.BrowserCookieImportDisclosure.description',
               'Sign in to Google directly in Orca.'
             )}

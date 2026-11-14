@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../orchestration-error'
-import type { RunRow } from '../types'
+import type { RunRow } from './orchestration-records'
 import type { RunListCursor } from './run-list-page'
 
 export function encodeRunListCursor(run: RunRow): string {

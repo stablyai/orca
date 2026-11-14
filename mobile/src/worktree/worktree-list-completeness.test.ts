@@ -52,21 +52,10 @@ function visibleWorktreeIds(
     state.workspaceStatuses,
     new Set(state.collapsedGroups)
   )
-  return sections.flatMap((section) => section.data.map((w) => w.worktreeId)).sort()
+  return sections.flatMap((section) => section.data.map((item) => item.row.worktreeId)).sort()
 }
 
 describe('every worktree stays visible regardless of repo.list contents', () => {
-  it('shows worktrees whose repoId is missing from repo.list', () => {
-    const worktrees = [
-      worktree('orca-local', 'a'),
-      worktree('orca-local', 'b'),
-      worktree('orca-runtime', 'c')
-    ]
-    const catalogRepos = [['orca-runtime', 'orca-runtime']] as const
-
-    expect(visibleWorktreeIds(worktrees, catalogRepos)).toEqual(['a', 'b', 'c'])
-  })
-
   it('shows every worktree when the same repo name maps to two host-specific ids', () => {
     // Same-name local/runtime repos expose any name-keyed map that discards an owner id.
     const worktrees = [

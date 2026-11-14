@@ -1,10 +1,10 @@
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type {
   GitLabDiscussionResolveResult,
   GitLabWorkItemDetails
 } from '../../../../../shared/gitlab-types'
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
-import type { ChecksPanelReview } from '../checks-panel-review'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
+import type { ChecksPanelReview } from './checks-panel-review'
 
 export function isGitLabChecksPanelReview(
   review: ChecksPanelReview | null

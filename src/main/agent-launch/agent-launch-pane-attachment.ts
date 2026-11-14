@@ -1,8 +1,8 @@
 /** Use process-local launch state; after restart, ordinary pane attachment handles recovery. */
 
-import type { AgentLaunchPaneVerdict } from '../../shared/agent-launch-pane-verdict'
-import { parsePaneKey } from '../../shared/stable-pane-id'
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { AgentLaunchPaneVerdict } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 
 const PROCEED: AgentLaunchPaneVerdict = { kind: 'proceed' }
 

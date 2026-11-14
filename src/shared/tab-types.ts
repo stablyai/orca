@@ -1,5 +1,5 @@
-import type { AiVaultSessionTitle } from './ai-vault-session-title'
-import type { AgentType } from './agent-status-types'
+import type { AiVaultSessionTitle } from './ai-vault/contracts/ai-vault-session-title'
+import type { AgentType } from './agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 
 export type TabGroupSplitDirection = 'horizontal' | 'vertical'
@@ -21,6 +21,7 @@ export type TabContentType =
   | 'diff'
   | 'conflict-review'
   | 'check-details'
+  | 'git-graph'
   | 'agent-session'
   | 'browser'
   | 'simulator'

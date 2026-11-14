@@ -4,6 +4,7 @@ import {
   PLUGIN_DECLARATIVE_ICON_SET,
   PLUGIN_DECLARATIVE_INLINE_COMPONENTS,
   PLUGIN_DECLARATIVE_INTERACTIVE_COMPONENTS,
+  PLUGIN_DECLARATIVE_SLOT_CHILDREN,
   isPluginDeclarativeComponentName,
   type PluginDeclarativeChild,
   type PluginDeclarativeChildPolicy,
@@ -23,6 +24,18 @@ const NODE_OVERHEAD_BYTES = 32
 const TEXT_OVERHEAD_BYTES = 8
 const UNKNOWN_COMPONENT_NAME = /^[A-Z][A-Za-z0-9]{0,63}$/
 const MAX_WARNINGS = 20
+/** Each slot child, the policy it needs from its parent, and that parent. */
+const SLOT_CHILD_POLICY: ReadonlyMap<string, PluginDeclarativeChildPolicy> = new Map([
+  [PLUGIN_DECLARATIVE_SLOT_CHILDREN.items, 'items'],
+  [PLUGIN_DECLARATIVE_SLOT_CHILDREN.tabs, 'tabs']
+])
+const SLOT_PARENT: Record<string, string> = { ListItem: 'List', Tab: 'Tabs' }
+
+function slotChild(policy: PluginDeclarativeChildPolicy): string | undefined {
+  return policy === 'items' || policy === 'tabs'
+    ? PLUGIN_DECLARATIVE_SLOT_CHILDREN[policy]
+    : undefined
+}
 
 type Pending = {
   raw: unknown
@@ -123,7 +136,7 @@ export function parsePluginDeclarativeTree(raw: unknown): PluginDeclarativeTreeR
     for (let next = stack.pop(); next; next = stack.pop()) {
       const { raw: item, depth, parentType, policy, inPressable, siblingKeys, out, path } = next
       if (typeof item === 'string' || typeof item === 'number') {
-        if (policy === 'none' || policy === 'items' || parentType === null) {
+        if (policy === 'none' || slotChild(policy) || parentType === null) {
           fail(path, `${parentType ?? 'the root'} does not accept text`)
         }
         if (typeof item === 'number' && !Number.isFinite(item)) {
@@ -156,10 +169,15 @@ export function parsePluginDeclarativeTree(raw: unknown): PluginDeclarativeTreeR
         fail(path, `${parentType} accepts only text`)
       }
       if (policy === 'inline' && known && !PLUGIN_DECLARATIVE_INLINE_COMPONENTS.has(type)) {
-        fail(path, `${parentType} accepts only text, Text, Link, Code and Badge`)
+        fail(path, `${parentType} accepts only text, Text, Link, Code, Badge and RelativeTime`)
       }
-      if ((policy === 'items') !== (type === 'ListItem')) {
-        fail(path, 'ListItem must be a direct child of List, and List holds only ListItem')
+      const slot = slotChild(policy)
+      const ownSlot = typeof type === 'string' ? SLOT_CHILD_POLICY.get(type) : undefined
+      if (slot !== undefined && type !== slot) {
+        fail(path, `${parentType} holds only ${slot}`)
+      }
+      if (ownSlot !== undefined && ownSlot !== policy) {
+        fail(path, `${type} must be a direct child of ${SLOT_PARENT[type] ?? 'its container'}`)
       }
       if (inPressable && PLUGIN_DECLARATIVE_INTERACTIVE_COMPONENTS.has(type)) {
         fail(path, `a ListItem with onPress cannot contain a ${type}`)

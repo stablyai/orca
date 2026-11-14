@@ -2,7 +2,7 @@ import type {
   AgentSessionExecutionClaim,
   AgentSessionOwnerBinding,
   AgentSessionSurfaceBinding
-} from './agent-session-host-authority'
+} from './agent-session/agent-session-host-authority'
 
 export type LiveAgentSessionOwner = AgentSessionOwnerBinding & { phase: 'live' }
 

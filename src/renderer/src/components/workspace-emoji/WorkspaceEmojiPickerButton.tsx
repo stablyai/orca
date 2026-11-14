@@ -2,11 +2,11 @@ import { memo, useRef, useState, type RefObject } from 'react'
 import { Smile } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { lazyWithPreload } from '@/lib/lazy-with-retry'
-import { insertWorkspaceEmojiAtSelection } from '@/lib/workspace-emoji-shortcodes'
-import { cn } from '@/lib/utils'
+import { lazyWithPreload } from '@/app-shell/startup/lazy-with-retry'
+import { insertWorkspaceEmojiAtSelection } from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import { cn } from '@/lib/class-names'
 
 // Why: keeps the picker out of the boot bundle; preloaded on hover/focus so the first open is instant.
 const WorkspaceEmojiPickerPanel = lazyWithPreload(
@@ -24,6 +24,8 @@ type WorkspaceEmojiPickerButtonProps = {
   onOpenChange?: (open: boolean) => void
   onValueChange: (value: string) => void
   portalContainer?: HTMLElement | null
+  /** Keep the button out of the Tab order when the field already supports `:` shortcodes. */
+  skipTabStop?: boolean
 }
 
 /**
@@ -36,8 +38,10 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
   inputRef,
   onOpenChange,
   onValueChange,
-  portalContainer
+  portalContainer,
+  skipTabStop = false
 }: WorkspaceEmojiPickerButtonProps): React.JSX.Element {
+  const t = useTranslate()
   // Why: memo would otherwise keep the label and tooltip in the previous UI language.
   useUiLanguageRevision()
   const [open, setOpen] = useState(false)
@@ -74,7 +78,7 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
     onOpenChange?.(false)
   }
 
-  const label = translate('workspace.links.addEmoji', 'Add emoji')
+  const label = t('workspace.links.addEmoji', 'Add emoji')
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -85,6 +89,7 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
               type="button"
               aria-label={label}
               disabled={disabled}
+              tabIndex={skipTabStop ? -1 : undefined}
               onPointerEnter={WorkspaceEmojiPickerPanel.preload}
               onFocus={WorkspaceEmojiPickerPanel.preload}
               onKeyDown={(event) => event.stopPropagation()}
@@ -98,7 +103,7 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top">
-          {translate('workspace.links.addEmojiTooltip', 'Add emoji (or type :)')}
+          {t('workspace.links.addEmojiTooltip', 'Add emoji (or type :)')}
         </TooltipContent>
       </Tooltip>
       <PopoverContent

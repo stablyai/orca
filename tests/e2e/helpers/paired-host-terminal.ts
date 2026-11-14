@@ -1,10 +1,10 @@
 // Map a host terminal to its paired client’s mirrored surface without re-deriving ids in every spec.
-import type { Page } from '@stablyai/playwright-test'
-import { expect } from '@stablyai/playwright-test'
+
+import { type Page, expect } from '@stablyai/playwright-test'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
-} from '../../../src/shared/terminal-surface-id'
+} from '../../../src/shared/workspace-layout/terminal-surface-id'
 
 export type PairedHostTerminal = {
   /** The host's own tab id, for host-side RPCs. */

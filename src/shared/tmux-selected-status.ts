@@ -1,14 +1,15 @@
 import { createHash } from 'node:crypto'
 import type { TmuxHookPane } from './tmux-client-attachment'
-import { normalizeAgentStatusPayload, type AgentStatusIpcPayload } from './agent-status-types'
+import { normalizeAgentStatusPayload } from './agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from './agent-status/contracts/agent-status-ipc-payload'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
-import type { AgentStatusStore } from './agent-status-store'
-import type { AgentHookUnavailableEnvelope } from './agent-hook-relay'
+import type { AgentStatusStore } from './agent-status/store/agent-status-store'
+import type { AgentHookUnavailableEnvelope } from './agent-hook-listener/transport/agent-hook-relay'
 import {
   serializeAgentStatusSubject,
   type AgentStatusExecutionScope,
   type AgentStatusPtySubject
-} from './agent-status-subject'
+} from './agent-status/contracts/agent-status-subject'
 
 /** Commit the attachment projection in its owner's store, retaining the inner observation clock. */
 export function commitTmuxSelectedStatus(

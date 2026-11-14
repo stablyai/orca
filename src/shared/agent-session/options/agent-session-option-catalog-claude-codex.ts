@@ -3,7 +3,7 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
+import { agentChoiceCliApply } from '../../agent-launch/choices/agent-choice-cli-apply'
 import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
@@ -74,6 +74,7 @@ function parseClaudeCatalogModels(stdout: string): CatalogModel[] {
       id: model.id,
       label: model.label,
       ...(model.description ? { description: model.description } : {}),
+      ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
       options: createClaudeCatalogOptions({
         effortLevelIds: model.effortLevels,
         supportsFastMode: model.supportsFastMode

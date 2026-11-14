@@ -37,6 +37,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Release signing is enforced once ORCA_ANDROID_RELEASE_CERT_SHA256 (or ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true)
+      # is set as a repository variable. Until then the build keeps the Expo debug key, with a warning.
+      - name: Check release signing configuration
+        id: signing
+        env:
+          ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
+          ORCA_ANDROID_RELEASE_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
+          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: ${{ vars.ORCA_ANDROID_REQUIRE_RELEASE_SIGNING }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ORCA_ANDROID_RELEASE_CERT_SHA256:-}" ] && [ "${ORCA_ANDROID_REQUIRE_RELEASE_SIGNING:-}" != 'true' ]; then
+            message="Android release signing is not enabled, so this APK is signed with the Expo debug key as before. Set the ORCA_ANDROID_RELEASE_CERT_SHA256 repository variable to enable it; see the Android Release Signing section of mobile/README.md."
+            echo "::warning::$message"
+            printf '### Android release signing not enabled\n\n%s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
+            echo "mode=debug" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          missing=()
+          for name in ORCA_ANDROID_KEYSTORE_BASE64 ORCA_ANDROID_KEYSTORE_PASSWORD ORCA_ANDROID_KEY_ALIAS ORCA_ANDROID_KEY_PASSWORD ORCA_ANDROID_RELEASE_CERT_SHA256; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Android release signing is enabled but not fully configured. Missing secrets or variables: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
+            exit 1
+          fi
+          echo "mode=release" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -67,8 +99,53 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
 
+      - name: Decode release keystore
+        if: steps.signing.outputs.mode == 'release'
+        env:
+          ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$ORCA_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/orca-release.keystore"
+
       - name: Build Android release APK
+        env:
+          # Empty in debug mode, which leaves Gradle on the debug key exactly as before.
+          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: ${{ steps.signing.outputs.mode == 'release' && 'true' || '' }}
+          ORCA_ANDROID_KEYSTORE_PATH: ${{ steps.signing.outputs.mode == 'release' && format('{0}/orca-release.keystore', runner.temp) || '' }}
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEYSTORE_PASSWORD || '' }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEY_ALIAS || '' }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEY_PASSWORD || '' }}
         run: cd android && ./gradlew assembleRelease
+
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/orca-release.keystore"
+
+      # Why pin the certificate: a regenerated or swapped key would make every installed copy refuse the update.
+      - name: Verify APK signing certificate
+        id: signer
+        if: steps.signing.outputs.mode == 'release'
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          # Expo template debug keystore, public in expo-template-bare-minimum.
+          debug_cert="fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          apks=(android/app/build/outputs/apk/release/*.apk)
+          certs="$("$apksigner" verify --print-certs "${apks[0]}" | sed -n 's/^Signer #[0-9]* certificate SHA-256 digest: //p' | sort -u)"
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')"
+          if [ "$certs" = "$debug_cert" ]; then
+            echo "::error::The APK is signed with the public Expo debug key."
+            exit 1
+          fi
+          if [ "$certs" != "$expected" ]; then
+            echo "::error::The APK signing certificate ($certs) does not match ORCA_ANDROID_RELEASE_CERT_SHA256 ($expected)."
+            exit 1
+          fi
+          echo "cert_sha256=$(printf '%s' "$certs" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')" >> "$GITHUB_OUTPUT"
+          echo "APK signing certificate SHA-256: $certs"
 
       # Publish size/digest to distinguish truncated downloads (missing tail signature block) from bad APK builds.
       - name: Checksum the APK
@@ -129,9 +206,14 @@ jobs:
 
           # printf rather than a heredoc: YAML block indentation would leak into the Markdown.
           # Both platforms' commands are named because a reader on macOS has no sha256sum.
+          # Only release-signed builds list a certificate, since only they are pinned.
+          signer_line=''
+          if [ -n '${{ steps.signer.outputs.cert_sha256 }}' ]; then
+            signer_line='- Signing certificate SHA-256: `${{ steps.signer.outputs.cert_sha256 }}`\n'
+          fi
           verification_section() {
-            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
-              '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}'
+            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n%b\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
+              '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}' "$signer_line"
           }
 
           # Verification is last; replace from heading to EOF, accepting API-roundtripped CRLFs.
@@ -144,7 +226,7 @@ jobs:
           write_notes_with_verification() {
             NOTES_FILE="$notes_file" \
             NOTES_RESERVE="$(verification_section | wc -c | tr -d ' ')" \
-            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/create-draft-release.mjs" \
+            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/release/publication/create-draft-release.mjs" \
             node --input-type=module -e '
               const { readFileSync, writeFileSync } = await import("node:fs")
               const { pathToFileURL } = await import("node:url")
@@ -202,10 +284,22 @@ jobs:
               "${{ steps.apk.outputs.checksum }}"
           fi
 
-  # Keep site bump advisory after publication; failure only leaves its download link on the prior APK.
-  bump-apk-download:
+  # Advisory like the site bump: a failed mirror only leaves orca.dev's "mirror link" on the prior APK.
+  release-mirror-r2:
     needs: android-build
     if: needs.android-build.outputs.publish_release == 'true'
+    uses: ./.github/workflows/release-mirror-r2.yml
+    with:
+      tag: mobile-android-v${{ needs.android-build.outputs.version }}
+      assets: app-release.apk
+    secrets: inherit
+
+  # Keep site bump advisory after publication; failure only leaves its download link on the prior APK.
+  # Why after the mirror: the site's mirror link uses the bumped version, so upload the APK first
+  # (success not required, so a mirror outage never blocks the bump).
+  bump-apk-download:
+    needs: [android-build, release-mirror-r2]
+    if: ${{ !cancelled() && needs.android-build.outputs.publish_release == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
@@ -246,7 +340,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-          node ../config/scripts/bump-android-apk-download-version.mjs src/lib/downloadTargets.ts "$VERSION"
+          node ../config/scripts/release/versioning/bump-android-apk-download-version.mjs src/lib/downloadTargets.ts "$VERSION"
           if git diff --quiet; then
             echo "The site's main branch already has Android APK $VERSION or newer." >> "$GITHUB_STEP_SUMMARY"
             exit 0

@@ -17,6 +17,8 @@ export type ScrcpyVideoFrameMessage = {
 export type ScrcpyVideoEvent =
   | { type: 'meta'; meta: ScrcpyVideoMeta }
   | { type: 'frame'; frame: ScrcpyVideoFrameMessage }
+  // The scrcpy session is gone; subscribers must restart it rather than wait for frames.
+  | { type: 'end' }
 
 export type ScrcpyVideoSubscriber = (event: ScrcpyVideoEvent) => void
 
@@ -83,6 +85,7 @@ class ScrcpyVideoRegistry {
   subscribe(deviceId: string, subscriber: ScrcpyVideoSubscriber): () => void {
     const entry = this.entries.get(deviceId)
     if (!entry) {
+      subscriber({ type: 'end' })
       return () => {}
     }
     if (entry.meta) {
@@ -103,9 +106,12 @@ class ScrcpyVideoRegistry {
     if (!entry) {
       return
     }
-    entry.close()
-    entry.subscribers.clear()
     this.entries.delete(deviceId)
+    entry.close()
+    for (const subscriber of entry.subscribers) {
+      subscriber({ type: 'end' })
+    }
+    entry.subscribers.clear()
   }
 
   has(deviceId: string): boolean {

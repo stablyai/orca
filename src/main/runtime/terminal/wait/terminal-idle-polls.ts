@@ -1,24 +1,21 @@
-import { isShellProcess } from '../../../../shared/agent-detection'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/runtime-terminal-contracts'
-import { detectTerminalWaitBlockedReason } from '../../terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult
-} from '../../terminal-wait-results'
-import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
-import {
-  evaluateTuiIdle,
-  type QuietForegroundLane,
-  type TuiIdleVerdict
-} from '../../tui-idle-evidence'
+} from './terminal-wait-results'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { settlesForMidTurnInput } from './terminal-delivery-refusal'
+import { evaluateTuiIdle, type QuietForegroundLane, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
   outputClockOf,
   ptyTuiIdleEvidence,
   type TuiIdleEvidenceSource
-} from '../../tui-idle-evidence-source'
+} from './tui-idle-evidence-source'
 
 /** Open lanes accept missing clocks as uncorroborated quiet for unseen daemon output; caller timeouts remain and delivery cannot use this lane.
  * Known agents on after-paint lanes must first paint their own command output, excluding shell prompts/echo. */
@@ -36,8 +33,8 @@ function isQuietForQuiescence(
   }
   return Date.now() - lastOutputAt >= quiescenceMs
 }
-import type { TerminalWaiter } from '../../runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { TerminalWaiter } from './terminal-waiter'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   intervalMs: number
@@ -60,6 +57,8 @@ type IdlePollEntry = {
 /** One reading of a waiter's pane, and the results it would settle with. */
 type IdlePollSample = {
   verdict: TuiIdleVerdict
+  /** A mid-turn agent that takes input settles a waiter that accepts it. */
+  takesInputNow: boolean
   ptyId: string
   ready(): RuntimeTerminalWait
   blocked(reason: RuntimeTerminalWaitBlockedReason): RuntimeTerminalWait
@@ -120,11 +119,12 @@ export class RuntimeTerminalIdlePolls {
     const { pty } = entry
     const readWaitText = () =>
       buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    const evidence = ptyTuiIdleEvidence(this.deps, pty, readWaitText)
+    const verdict = evaluateTuiIdle({ ...evidence, launchReadiness: entry.waiter.launchReadiness })
     return {
-      verdict: evaluateTuiIdle({
-        ...ptyTuiIdleEvidence(this.deps, pty, readWaitText),
-        launchReadiness: entry.waiter.launchReadiness
-      }),
+      verdict,
+      takesInputNow:
+        !!entry.waiter.acceptsMidTurnInput && settlesForMidTurnInput(verdict, pty.ptyId, this.deps),
       ptyId: pty.ptyId,
       ready: () => buildPtyTerminalWaitResult(handle, 'tui-idle', pty),
       blocked: (reason) => buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, reason),
@@ -148,7 +148,7 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       // Strong readiness outranks unscoped dialog wording elsewhere on the screen.
-      if (verdict.kind === 'ready-strong') {
+      if (verdict.kind === 'ready-strong' || sample.takesInputNow) {
         this.settle(entry, sample.ready())
         return
       }

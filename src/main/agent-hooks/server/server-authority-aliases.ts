@@ -3,9 +3,9 @@ import {
   admitLegacyAgentStatus,
   movePaneCacheState
 } from '../../../shared/agent-hook-listener/listener-state'
-import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from '../../../shared/pane-key-alias'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { PANE_KEY_ALIASES_MAX } from './server-constants'
 import type { EnrichedAgentHookEventPayload, PaneKeyAliasPersistenceListener } from './server-types'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'

@@ -14,6 +14,11 @@ import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 export type ScrcpyTouchPhase = EmulatorGesturePoint['type']
 
+// KEYCODE_SHIFT_LEFT and AMETA_SHIFT_ON | AMETA_SHIFT_LEFT_ON. Text fields select only while a
+// SHIFT key is held, so Shift+key presses SHIFT_LEFT around the key like a hardware keyboard.
+const KEYCODE_SHIFT_LEFT = 59
+const META_SHIFT = 0x41
+
 const TOUCH_ACTION: Record<ScrcpyTouchPhase, ScrcpyTouchAction> = {
   begin: 'down',
   move: 'move',
@@ -95,10 +100,22 @@ export function sendScrcpyText(control: ScrcpyControlTarget, text: string): bool
   return splitScrcpyInjectText(text).every((chunk) => control.sendControl(encodeInjectText(chunk)))
 }
 
-export function sendScrcpyButton(control: ScrcpyControlTarget, name: string): boolean {
+export function sendScrcpyButton(
+  control: ScrcpyControlTarget,
+  name: string,
+  modifiers: { shift?: boolean } = {}
+): boolean {
   const keycode = androidButtonKeycode(name)
+  const metaState = modifiers.shift ? META_SHIFT : 0
+  const press = (action: 'down' | 'up', code: number, meta = metaState) =>
+    control.sendControl(encodeInjectKeycode({ action, keycode: code, metaState: meta }))
+  if (!modifiers.shift) {
+    return press('down', keycode) && press('up', keycode)
+  }
   return (
-    control.sendControl(encodeInjectKeycode({ action: 'down', keycode })) &&
-    control.sendControl(encodeInjectKeycode({ action: 'up', keycode }))
+    press('down', KEYCODE_SHIFT_LEFT) &&
+    press('down', keycode) &&
+    press('up', keycode) &&
+    press('up', KEYCODE_SHIFT_LEFT, 0)
   )
 }

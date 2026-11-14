@@ -1,5 +1,5 @@
 // Parse fake-client host frames with the page’s real reader so both halves meet in these tests.
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 import { afterEach } from 'vitest'
 import {
   bridgeId,

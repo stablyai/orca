@@ -1,8 +1,8 @@
-import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '@/components/editor/large-diff-render-limit'
+import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '../../../../shared/large-diff-render-limit'
 import type {
   GitHubPRFile,
   GitHubPRFileContents
-} from '../../../../shared/github/pull-request-types'
+} from '../../../../shared/github/pull-requests/pull-request-types'
 import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 export const PR_FILE_CONTENT_CACHE_MAX_BYTES = MAX_RENDERED_DIFF_COMBINED_CHARACTERS * 4

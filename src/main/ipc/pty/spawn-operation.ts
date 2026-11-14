@@ -15,7 +15,7 @@ import {
 } from './pane/spawn-reservation'
 import { restoreProvisionalPtySize } from './spawn-options-assembly'
 import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { releaseStoppedPaneBinding } from './pane/pane-owner-replacement'
 import {
   admitColdRestoreReattach,
@@ -247,7 +247,7 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       return inherit(early)
     }
     if (adapter.adoption?.().completed?.materialized) {
-      return acquire(resolveEarlyPaneKey(args)!, fresh)
+      return await acquire(resolveEarlyPaneKey(args)!, fresh)
     }
     const paneKey = resolveEarlyPaneKey(args)
     return await (paneKey && !ctx.paneSpawnOperation

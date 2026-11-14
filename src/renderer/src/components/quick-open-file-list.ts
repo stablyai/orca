@@ -13,31 +13,31 @@ import {
   useQuickOpenRecentCache
 } from './quick-open-recent-validation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 export { isNestedWorktreePath, getNestedWorktreeExcludePaths } from './quick-open-nested-worktrees'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { isQuickOpenRemoteQueryTooLarge } from '@/components/quick-open-search'
-import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
+import { isQuickOpenRemoteQueryTooLarge } from '../../../shared/quick-open/quick-open-path-search'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open/quick-open-listing-limits'
 import {
   cancelRuntimeFileList,
   listRuntimeFiles,
   searchRuntimeFilePaths
-} from '@/runtime/runtime-file-search-client'
-import { debounceRuntimeFileRequest } from '@/runtime/runtime-file-request-debounce'
-import { splitFileNameFilterTokens } from '../../../shared/file-name-filter-tokens'
+} from '@/runtime/files/search/runtime-file-search-client'
+import { debounceRuntimeFileRequest } from '@/runtime/files/runtime-file-request-debounce'
+import { splitFileNameFilterTokens } from '../../../shared/file-listing/file-name-filter-tokens'
 import {
   nextCappedLocalListing,
   type CappedLocalListing
 } from '@/components/quick-open-capped-local-listing'
 import { useAppStore } from '@/store'
-import { useKnownWorktreeById, useWorktreesForRepo } from '@/store/selectors'
-import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
+import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useWorktreesForRepo } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
 import {
-  getFileExplorerOperationOwnerFromState,
   getFileExplorerOwnerUnresolvedMessage,
-  getFileExplorerOperationRoute
-} from '@/components/right-sidebar/file-explorer-operation-owner'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+  getFileExplorerOperationRoute,
+  useFileListOperationOwner
+} from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export type RuntimeFileListState = {
   files: string[]
@@ -78,7 +78,7 @@ export function useRuntimeFileListForWorktree({
   hostFilterWhenCapped?: boolean
 }): RuntimeFileListState {
   // Why: folder workspaces live in the known-worktree catalog, not worktreesByRepo.
-  const worktree = useKnownWorktreeById(worktreeId)
+  const worktree = useFileListWorktree(worktreeId)
   const worktreePath = worktree?.path ?? null
   const repoWorktrees = useWorktreesForRepo(worktree?.repoId ?? null)
   const [listing, setListing] = useState(NO_LISTING)
@@ -95,21 +95,7 @@ export function useRuntimeFileListForWorktree({
   )
   const excludeRequest = useKeyedExcludeRequest(target.excludeRequest)
 
-  const operationOwnerState = useAppStore(
-    useShallow((state) => ({
-      settings: state.settings,
-      repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
-      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-      folderWorkspaces: state.folderWorkspaces,
-      projectGroups: state.projectGroups,
-      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
-    }))
-  )
-  const operationOwner = useMemo(
-    () => getFileExplorerOperationOwnerFromState(operationOwnerState, worktreeId),
-    [operationOwnerState, worktreeId]
-  )
+  const operationOwner = useFileListOperationOwner(worktreeId)
   const operationOwnerKey = JSON.stringify(operationOwner)
   const operationOwnerRef = useRef(operationOwner)
   operationOwnerRef.current = operationOwner

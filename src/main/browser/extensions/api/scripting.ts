@@ -3,16 +3,11 @@ import {
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   runBrowserExtensionContentScriptMethod,
   type ContentScriptMethod
-} from '../browser-extension-content-scripts'
-
-export {
-  forgetBrowserExtensionContentScriptRestore,
-  restoreBrowserExtensionContentScripts
-} from '../browser-extension-content-scripts'
+} from '../api-runtime/browser-extension-content-scripts'
 
 const scriptSchema = z.object({ id: z.string().min(1) }).loose()
 const filterSchema = z

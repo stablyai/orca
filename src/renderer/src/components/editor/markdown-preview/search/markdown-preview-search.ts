@@ -1,0 +1,77 @@
+import '../../../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
+import type { KeybindingOverrides } from '../../../../../../shared/keybindings/types'
+import {
+  createDomTextSearchHighlights,
+  findDomTextSearchRanges,
+  type DomTextSearchInstance,
+  type DomTextSearchScope
+} from '../../../../lib/text-search/dom-text-search-highlights'
+
+export function isMarkdownPreviewFindShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
+): boolean {
+  return keybindingMatchesAction('editor.find', event, platform, keybindings)
+}
+
+export function isMarkdownPreviewReplaceShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
+): boolean {
+  return keybindingMatchesAction('editor.replace', event, platform, keybindings)
+}
+
+// Paint CSS highlights without mutating React-owned DOM; names must match markdown-preview.css selectors.
+const previewHighlights = createDomTextSearchHighlights({
+  match: 'markdown-preview-search-match',
+  active: 'markdown-preview-search-active-match'
+})
+
+/** Per-preview identity for the highlight maps; only compared by reference. */
+export type MarkdownPreviewSearchInstance = DomTextSearchInstance
+
+const DOCUMENT_ONLY_SCOPE: DomTextSearchScope = {
+  rejectElement: (element) =>
+    element.closest(
+      '.markdown-annotation-controls,[data-orca-export-hide],.code-block-copy-btn,.mermaid-block'
+    ) !== null,
+  joinedTextSelector: 'code'
+}
+
+export function clearMarkdownPreviewSearchHighlights(
+  instanceId: MarkdownPreviewSearchInstance
+): void {
+  previewHighlights.clear(instanceId)
+}
+
+export function applyMarkdownPreviewSearchHighlights(
+  instanceId: MarkdownPreviewSearchInstance,
+  root: HTMLElement,
+  query: string,
+  options: { documentOnly?: boolean } = {}
+): Range[] {
+  const ranges = findDomTextSearchRanges(
+    root,
+    query,
+    options.documentOnly ? DOCUMENT_ONLY_SCOPE : {}
+  )
+  previewHighlights.setMatches(instanceId, ranges)
+  return ranges
+}
+
+export function setActiveMarkdownPreviewSearchMatch(
+  instanceId: MarkdownPreviewSearchInstance,
+  matches: readonly Range[],
+  activeIndex: number,
+  options: { scrollIntoView?: boolean } = {}
+): void {
+  const active = activeIndex >= 0 ? matches[activeIndex] : undefined
+  previewHighlights.setActive(instanceId, active)
+
+  if (active && options.scrollIntoView !== false) {
+    active.startContainer.parentElement?.scrollIntoView({ block: 'center', inline: 'nearest' })
+  }
+}

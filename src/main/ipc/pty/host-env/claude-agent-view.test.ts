@@ -4,7 +4,7 @@ import { applyClaudeAgentViewEnv } from './claude-agent-view'
 import type { BuildPtyHostEnvOptions } from './types'
 
 const read = vi.hoisted(() => vi.fn())
-vi.mock('../../../claude/agent-view-service', () => ({
+vi.mock('../../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ read })
 }))
 

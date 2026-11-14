@@ -1,4 +1,4 @@
-import { agentSessionCurrentContextRows } from './agent-session-context-clear'
+import { agentSessionCurrentContextRows } from './agent-session/agent-session-context-clear'
 import type { AgentJournalSnapshot } from './agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session/journal/agent-session-journal-producer'

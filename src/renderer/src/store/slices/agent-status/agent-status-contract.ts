@@ -1,21 +1,23 @@
 import type { AppState } from '../../types'
+import type { PtyExecutionHost } from '../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentType,
   ParsedAgentStatusPayload,
   TurnEndDisposition
-} from '../../../../../shared/agent-status-types'
-import type { AgentStatusObservation } from '../../../../../shared/agent-status-observation'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusObservation } from '../../../../../shared/agent-status/contracts/agent-status-observation'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
   SleepingAgentLaunchConfig
-} from '../../../../../shared/agent-session-resume'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 export type RetainedAgentEntry = {
+  executionHostId?: PtyExecutionHost
   entry: AgentStatusEntry
   worktreeId: string
   /** Snapshot of the tab at retention time; kept full (not just an id) because the tab may be gone from `tabsByWorktree` by render time. */
@@ -106,7 +108,9 @@ export type AgentStatusMetadata = {
   /** Structured status rows remain fresh while the host owns the session; cleared on feed loss. */
   structuredHostOwned?: true
   providerSession?: AgentProviderSessionMetadata
-  launchConfig?: SleepingAgentLaunchConfig
+  orcaSessionId?: string | null
+  /** Null is a host statement that no Orca launch runs; absent says nothing. */
+  launchConfig?: SleepingAgentLaunchConfig | null
   launchToken?: string
   terminalResumeEligible?: false
   paneOwner?: { agent: AgentType; session: string }
@@ -130,7 +134,10 @@ export type AgentProviderSessionRouting = {
   connectionId?: string | null
 }
 
-export type AgentProviderSessionRecordMetadata = { launchToken?: string }
+export type AgentProviderSessionRecordMetadata = {
+  launchToken?: string
+  launchConfig?: SleepingAgentLaunchConfig | null
+}
 
 export type AgentProviderSessionUpdate = {
   kind: 'providerSession'

@@ -1,10 +1,26 @@
-import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { StructuredAgentResolutionOperation } from '../agent-launch/structured-agent-command-resolution'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
+
+export type AgentModelCatalogProgress = ((
+  success: AgentModelCatalogSuccess,
+  accountKnown?: boolean
+) => void) & {
+  /** Retain the latest accumulator; only real reads or settlement materialize it. */
+  defer?: (read: () => AgentModelCatalogSuccess, known: (model: string) => boolean) => void
+  demanded?: () => ReadonlySet<string>
+}
 
 export type AgentModelCatalogResolvedProbe = {
   identity: unknown
-  run: (signal?: AbortSignal) => Promise<AgentModelCatalogSuccess>
+  inputStamp?: string
+  /** `operation` owns the run; it defaults to the one the invocation was resolved under. */
+  run: (
+    signal?: AbortSignal,
+    operation?: StructuredAgentResolutionOperation,
+    selectedModels?: readonly string[],
+    publish?: AgentModelCatalogProgress
+  ) => Promise<AgentModelCatalogSuccess>
 }
 
 /** Recover reruns shell lookup after a miss; snapshot and saved never do. */
@@ -16,22 +32,25 @@ export type AgentModelCatalogProbe = ((
     signal?: AbortSignal
     workspacePath?: string
     cwd?: string
+    selectedModels?: readonly string[]
     operation?: StructuredAgentResolutionOperation
+    publish?: AgentModelCatalogProgress
   }
 ) => Promise<AgentModelCatalogSuccess>) & {
   resolveLegacy?: (
     home: AgentSessionAccountHome,
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    lookup?: AgentModelCatalogLookup
   ) => Promise<AgentModelCatalogResolvedProbe>
   resolve?: (
     home: AgentSessionAccountHome,
     cwd: string,
     lookup?: AgentModelCatalogLookup,
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    /** Where a chat would launch, for resolving the executable; the listing still runs in `cwd`. */
+    launchDirectory?: string
   ) => Promise<AgentModelCatalogResolvedProbe>
 }
-
-export { independentAgentModelCatalog } from '../../../shared/agent-model-catalog-ownership'
 
 /** Agents supply probes or opt out; the service owns caching, refresh and publication. */
 export type AgentModelCatalogDiscovery =

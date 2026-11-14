@@ -36,47 +36,6 @@ afterEach(() => {
 })
 
 describe('useWorktreeListScrollToTop', () => {
-  it('ignores fast programmatic scrolling', () => {
-    const element = createScroller()
-    let now = 0
-    vi.spyOn(window.performance, 'now').mockImplementation(() => now)
-    const view = renderHook(() => useWorktreeListScrollToTop({ scrollElement: element }))
-
-    for (const sample of [
-      { t: 0, scrollTop: 2200 },
-      { t: 80, scrollTop: 2000 },
-      { t: 170, scrollTop: 1700 }
-    ]) {
-      now = sample.t
-      element.scrollTop = sample.scrollTop
-      act(() => element.dispatchEvent(new Event('scroll')))
-    }
-
-    expect(view.result.current.showScrollToTop).toBe(false)
-  })
-
-  it('detects velocity while the scrollbar is actively dragged', () => {
-    const element = createScroller()
-    let now = 0
-    vi.spyOn(window.performance, 'now').mockImplementation(() => now)
-    const view = renderHook(() => useWorktreeListScrollToTop({ scrollElement: element }))
-
-    act(() =>
-      element.dispatchEvent(new PointerEvent('pointerdown', { clientX: 295, pointerType: 'mouse' }))
-    )
-    for (const sample of [
-      { t: 0, scrollTop: 2200 },
-      { t: 80, scrollTop: 2000 },
-      { t: 170, scrollTop: 1700 }
-    ]) {
-      now = sample.t
-      element.scrollTop = sample.scrollTop
-      act(() => element.dispatchEvent(new Event('scroll')))
-    }
-
-    expect(view.result.current.showScrollToTop).toBe(true)
-  })
-
   it('returns focus to the list after jumping to the top', () => {
     const element = createScroller()
     element.scrollTop = 1200

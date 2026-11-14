@@ -10,7 +10,7 @@ import type {
 } from '../../../../../shared/browser-workspace-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { findWorkspace } from '@/store/slices/browser-page-records'
+import { findWorkspace } from '@/store/slices/browser/pages/browser-page-records'
 import {
   BROWSER_GUEST_RECOVERY_ERROR_CODE,
   createBrowserPageGuestRecovery,
@@ -22,6 +22,10 @@ import {
   webviewRegistry
 } from './webview-registry'
 import { browserPageExists } from '../describe-page/browser-page-load-error'
+import {
+  setBrowserPageAgentViewportSize,
+  setBrowserPageViewportPresetSize
+} from './browser-page-viewport'
 import type {
   BrowserPageRecoveryNavigationValidation,
   BrowserTabPageState
@@ -45,7 +49,6 @@ export type BrowserPageWebviewGuestSessionArgs = {
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   setGuestRecoveryGeneration: Dispatch<SetStateAction<number>>
   focusAddressBarNow: () => boolean
-  syncNavigationState: (webview: Electron.WebviewTag) => void
   syncBrowserAnnotationViewportBridge: () => void
 }
 
@@ -74,7 +77,6 @@ export function createBrowserPageWebviewGuestSession({
   onUpdatePageStateRef,
   setGuestRecoveryGeneration,
   focusAddressBarNow,
-  syncNavigationState,
   syncBrowserAnnotationViewportBridge
 }: BrowserPageWebviewGuestSessionArgs): BrowserPageWebviewGuestSession {
   let registrationInFlight: {
@@ -88,12 +90,12 @@ export function createBrowserPageWebviewGuestSession({
       return null
     }
   }
-  const ownsGuest = (webContentsId: number | null): boolean =>
-    webContentsId !== null &&
+  const ownsWebview = (): boolean =>
     !guestRecovery.isDisposed() &&
     webviewRef.current === webview &&
-    webviewRegistry.get(browserTabId) === webview &&
-    readWebContentsId() === webContentsId
+    webviewRegistry.get(browserTabId) === webview
+  const ownsGuest = (webContentsId: number | null): boolean =>
+    webContentsId !== null && ownsWebview() && readWebContentsId() === webContentsId
   const registerGuest = (webContentsId: number | null): Promise<boolean | null> => {
     if (webContentsId === null || !ownsGuest(webContentsId)) {
       return Promise.resolve(null)
@@ -231,7 +233,8 @@ export function createBrowserPageWebviewGuestSession({
       liveWebContentsId === null || registeredWebContentsIds.get(browserTabId) !== liveWebContentsId
     if (queuedAnnotationViewportBridgeSync) {
       void registerGuest(liveWebContentsId).then((registered) => {
-        if (!ownsGuest(liveWebContentsId)) {
+        // Why: an unreadable ID has no owner to fence; validation must still retry until it reads.
+        if (liveWebContentsId === null ? !ownsWebview() : !ownsGuest(liveWebContentsId)) {
           return
         }
         const completedRecovery = guestRecovery.finish()
@@ -250,7 +253,6 @@ export function createBrowserPageWebviewGuestSession({
         guestRecovery.validateAfterResume()
       }
     }
-    syncNavigationState(webview)
     if (keepAddressBarFocusRef.current) {
       focusAddressBarNow()
     }
@@ -261,6 +263,12 @@ export function createBrowserPageWebviewGuestSession({
     const presetId = viewportPresetIdRef.current
     const preset = getBrowserViewportPreset(presetId)
     // Why: reapply even null so CDP matches store state; setDeviceMetricsOverride persists across same-origin nav and would leave a stale viewport.
+    // The box resets with it, dropping an agent's viewport the reset clears.
+    setBrowserPageAgentViewportSize(browserTabId, null)
+    setBrowserPageViewportPresetSize(
+      browserTabId,
+      preset ? { width: preset.width, height: preset.height } : null
+    )
     void window.api.browser.setViewportOverride({
       browserPageId: browserTabId,
       override: preset ? browserViewportPresetToOverride(preset) : null

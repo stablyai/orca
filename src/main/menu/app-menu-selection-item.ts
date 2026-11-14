@@ -1,5 +1,5 @@
 import { BrowserWindow, Menu, webContents } from 'electron'
-import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
+import { isNativeBrowserPopupWindow } from '../browser/guest-lifecycle/popups/presentation/native-browser-popup-windows'
 
 export type AppMenuSelectionAction = 'copy' | 'select-all'
 

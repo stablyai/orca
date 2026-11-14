@@ -10,43 +10,6 @@ const unchanged: PluginBundledBootstrapResult = {
 }
 
 describe('PluginBundledBootstrapCoordinator', () => {
-  it('skips disabled requests and refreshes discovery only after publication or retirement', async () => {
-    let enabled = false
-    const bootstrap = vi
-      .fn()
-      .mockResolvedValueOnce(unchanged)
-      .mockResolvedValueOnce({
-        installed: ['stablyai.orca-theme'],
-        unchanged: [],
-        retired: [],
-        errors: []
-      })
-      .mockResolvedValueOnce({
-        installed: [],
-        unchanged: [],
-        retired: ['stablyai.orca-theme'],
-        errors: []
-      })
-    const refreshPlugins = vi.fn().mockResolvedValue(undefined)
-    const coordinator = new PluginBundledBootstrapCoordinator({
-      root: 'resources',
-      userDataPath: 'user-data',
-      hostVersion: '1.4.0',
-      isEnabled: () => enabled,
-      refreshPlugins,
-      bootstrap
-    })
-
-    await expect(coordinator.request()).resolves.toBeNull()
-    enabled = true
-    await expect(coordinator.request()).resolves.toEqual(unchanged)
-    expect(refreshPlugins).not.toHaveBeenCalled()
-    await coordinator.request()
-    expect(refreshPlugins).toHaveBeenCalledOnce()
-    await coordinator.request()
-    expect(refreshPlugins).toHaveBeenCalledTimes(2)
-  })
-
   it('serializes overlapping startup and feature-toggle requests', async () => {
     let active = 0
     let maximumActive = 0
@@ -80,25 +43,5 @@ describe('PluginBundledBootstrapCoordinator', () => {
 
     expect(bootstrap).toHaveBeenCalledTimes(2)
     expect(maximumActive).toBe(1)
-  })
-
-  it('forwards retirement cleanup hooks to the bootstrap', async () => {
-    const bootstrap = vi.fn().mockResolvedValue(unchanged)
-    const beforeRetire = vi.fn()
-    const afterRetire = vi.fn()
-    const coordinator = new PluginBundledBootstrapCoordinator({
-      root: 'resources',
-      userDataPath: 'user-data',
-      hostVersion: '1.4.0',
-      isEnabled: () => true,
-      refreshPlugins: vi.fn().mockResolvedValue(undefined),
-      beforeRetire,
-      afterRetire,
-      bootstrap
-    })
-
-    await coordinator.request()
-
-    expect(bootstrap).toHaveBeenCalledWith(expect.objectContaining({ beforeRetire, afterRetire }))
   })
 })

@@ -1,4 +1,4 @@
-import { percentile } from '../relay-observability.js'
+import { percentile } from '../observability/relay-observability.js'
 import { classifyAssignmentLease, type AssignmentLeaseClass } from './assignment-lease.js'
 
 // Compare enforce’s hypothetical lease verdict with the authoritative DB answer; agree/disagree exposes valid leases the DB refuses before lease-only admission.

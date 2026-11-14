@@ -1,4 +1,4 @@
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 /** Null segments use canonical .agents/skills without a separate placement; IDs match detected Orca agents. */
 type SkillInstallProviderEntry = {

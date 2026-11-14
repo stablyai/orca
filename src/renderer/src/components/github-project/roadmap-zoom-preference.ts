@@ -1,5 +1,5 @@
 // Keep per-device zoom local instead of syncing cosmetic state or writing debounced settings.
-import type { RoadmapZoom } from '../../../../shared/github/project-roadmap-timeline'
+import type { RoadmapZoom } from '../../../../shared/github/projects/project-roadmap-timeline'
 
 const STORAGE_KEY = 'orca.githubProject.roadmapZoom'
 const DEFAULT_ZOOM: RoadmapZoom = 'month'

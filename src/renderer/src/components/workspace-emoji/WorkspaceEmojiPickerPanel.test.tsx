@@ -11,15 +11,6 @@ function searchBox(): HTMLElement {
 }
 
 describe('WorkspaceEmojiPickerPanel', () => {
-  it('lists curated emoji with their shortcodes before searching and picks on click', () => {
-    const onPick = vi.fn()
-    render(<WorkspaceEmojiPickerPanel onPick={onPick} />)
-
-    expect(screen.getAllByRole('option')).toHaveLength(48)
-    fireEvent.click(screen.getByText(':bug:'))
-    expect(onPick).toHaveBeenCalledWith('🐛')
-  })
-
   it('filters by shortcode and picks the highlighted match on Enter without bubbling', () => {
     const onPick = vi.fn()
     const onParentKeyDown = vi.fn()

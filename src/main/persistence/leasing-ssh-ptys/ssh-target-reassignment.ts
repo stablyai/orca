@@ -6,16 +6,16 @@ import {
   migrateUiHostScopeSshTargetId,
   migrateWorkspaceSessionSshTargetId
 } from '../../ssh/targets/ssh-target-id-migration'
-import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
-import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
+import type { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
+import { sshPtyOwnerLeaseSecretSlot } from '../../credentials/protected-secret-persistence'
 import {
   migrateRetirementNamespaceHostIdentity,
   sshHostIdentity
-} from '../../worktree-retirement-namespace'
+} from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   migrateAutomationHostFilterSshTargetId,
   migrateAutomationsForSshReadoption
-} from '../../automations/automation-ssh-readoption-migration'
+} from '../../automations/ownership/automation-ssh-readoption-migration'
 import { automationIdsPinnedToSshTarget } from '../scheduling-automations/automation-owner-projection'
 import { reassignCanonicalWorktreeMetadataHost } from './canonical-worktree-host-reassignment'
 

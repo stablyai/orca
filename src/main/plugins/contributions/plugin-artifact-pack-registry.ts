@@ -22,11 +22,12 @@ export class PluginArtifactPackRegistry<Contribution, Entry> {
       contentVerifier: PluginContentVerifier
       contributions: (plugin: ValidDiscoveredPlugin) => readonly Contribution[]
       load: (plugin: ValidDiscoveredPlugin, contribution: Contribution) => Promise<Entry>
+      overlay?(entries: readonly Entry[]): readonly Entry[]
     }
   ) {}
 
   list(): readonly Entry[] {
-    return this.entries
+    return this.options.overlay?.(this.entries) ?? this.entries
   }
 
   error(pluginKey: string): string | null {

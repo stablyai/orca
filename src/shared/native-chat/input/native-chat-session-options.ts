@@ -1,4 +1,4 @@
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 
 export type SessionOptionValue = string | boolean
 
@@ -6,6 +6,10 @@ export type SessionOptionSelectChoice = {
   value: string
   label: string
   description?: string
+  /** Folded under More models; a matching search still lists it. */
+  legacy?: true
+  /** Listed only by a matching search; never set on the current choice. */
+  hidden?: true
 }
 
 /** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.
@@ -30,6 +34,8 @@ export type SessionOptionDescriptor = {
         type: 'select'
         currentValue?: string
         choices: SessionOptionSelectChoice[]
+        /** Presentation when no value is known; never an input selection. */
+        placeholder?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {
@@ -106,6 +112,8 @@ export type NativeChatSessionOptionSettingsMutation =
 
 export type SessionOptionsSurface = {
   demandModelCatalog?: () => void
+  /** Live local admission for a structured action, before consuming its composer trigger. */
+  admits?: (id: string, value: SessionOptionValue) => boolean
   getSnapshot(): SessionOptionDescriptor[]
   /** Apply an absolute target; known flip-only options use their tracked baseline. */
   setOption(id: string, value: SessionOptionValue): Promise<SessionOptionSetResult>

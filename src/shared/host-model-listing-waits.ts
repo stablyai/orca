@@ -1,4 +1,4 @@
-import type { AgentSessionModelCatalogResult } from './agent-session-wire'
+import type { AgentSessionModelCatalogResult } from './agent-session/agent-session-wire'
 
 // Coalesce picker reads per chat across mounts/effects: sent remote requests cannot be withdrawn.
 // Continue bounded reads while interested joiners remain.

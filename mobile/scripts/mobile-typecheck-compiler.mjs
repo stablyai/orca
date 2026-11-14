@@ -4,7 +4,7 @@ import {
   resolveTypecheckBunExecutable,
   resolveTypecheckCommand,
   selectTypecheckCompiler
-} from '../../config/scripts/run-typecheck-projects-in-parallel.mjs'
+} from '../../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 

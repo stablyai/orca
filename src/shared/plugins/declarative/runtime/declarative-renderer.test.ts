@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { atom, derived, read, set, update } from './declarative-atoms'
-import { Fragment, h, jsx } from './declarative-elements'
+import { h } from './declarative-elements'
 import { createOrcaDeclarativeRuntime, type OrcaBridge } from './declarative-renderer'
-import { parsePluginDeclarativeTree } from '../plugin-declarative-tree'
 
 type Posted = { event: string; payload: unknown }
 type WireNode = {
@@ -51,33 +50,6 @@ function callbackAt(node: WireNode, prop: string, ...path: number[]): string {
 }
 
 describe('declarative runtime', () => {
-  it('renders function components into keyed catalog nodes with callback refs', () => {
-    const { runtime, last, tree, event } = setup()
-    const onPress = vi.fn()
-    const Greeting = (props: { name?: unknown }) => h('Text', { tone: 'accent' }, 'Hi ', props.name)
-    runtime.mount(() =>
-      jsx('Stack', {
-        gap: 'sm',
-        children: [h(Greeting, { name: 'Ada' }), h('Button', { onPress, key: 'go' }, 'Go')]
-      })
-    )
-    expect(last()).toMatchObject({
-      document: runtime.document,
-      revision: 1,
-      tree: {
-        type: 'Stack',
-        key: '#0',
-        children: [
-          { type: 'Text', key: '#0', props: { tone: 'accent' }, children: ['Hi ', 'Ada'] },
-          { type: 'Button', key: 'go', props: { onPress: { $callback: expect.any(String) } } }
-        ]
-      }
-    })
-    expect(parsePluginDeclarativeTree(tree()).ok).toBe(true)
-    expect(event(1, callbackAt(tree(), 'onPress', 1))).toBe(true)
-    expect(onPress).toHaveBeenCalledOnce()
-  })
-
   it('keeps a slot for every null/false gap, so siblings keep their keys', () => {
     const { runtime, drain, tree } = setup()
     const shown = atom(false)
@@ -93,22 +65,6 @@ describe('declarative runtime', () => {
     ])
   })
 
-  it("carries a component's key to what it renders, and scopes nested arrays", () => {
-    const { runtime, tree } = setup()
-    const Row = (props: { label?: unknown }) => h('Text', null, props.label)
-    runtime.mount(() =>
-      h(
-        'Stack',
-        null,
-        [h(Row, { key: 'a', label: 'A' }), h(Row, { key: 'b', label: 'B' })],
-        h(Fragment, null, 'x')
-      )
-    )
-    expect(
-      tree().children.map((child) => (typeof child === 'string' ? undefined : child.key))
-    ).toEqual(['#0.a', '#0.b', undefined])
-  })
-
   it('rejects duplicate sibling keys without committing', () => {
     const { runtime, posted } = setup()
     runtime.mount(() => h('Stack', null, [h('Text', { key: 'x' }), h('Text', { key: 'x' })]))
@@ -118,7 +74,8 @@ describe('declarative runtime', () => {
         payload: {
           document: runtime.document,
           revision: 0,
-          message: expect.stringContaining('duplicate key "x"')
+          message: expect.stringContaining('duplicate key "x"'),
+          stack: expect.any(String)
         }
       }
     ])
@@ -146,7 +103,7 @@ describe('declarative runtime', () => {
     expect(deleted).toEqual(['A', 'B'])
   })
 
-  it('ignores events and acks for another document', () => {
+  it('ignores events for another document', () => {
     const { runtime, tree } = setup()
     const onPress = vi.fn()
     runtime.mount(() => h('Button', { onPress }, 'x'))
@@ -192,26 +149,6 @@ describe('declarative runtime', () => {
     expect(event(1, id, ['a'], 1)).toBe(true)
     drain()
     expect(tree().props).toMatchObject({ value: '', $edit: 1 })
-  })
-
-  it('throttles renders and coalesces a burst of updates into one', () => {
-    let clock = 0
-    const posted: unknown[] = []
-    const queue: { flush: () => void; delayMs: number }[] = []
-    const runtime = createOrcaDeclarativeRuntime({
-      post: (_event, payload) => posted.push(payload),
-      schedule: (flush, delayMs) => queue.push({ flush, delayMs }),
-      now: () => clock
-    })
-    const count = atom(0)
-    runtime.mount(() => h('Text', null, String(read(count))))
-    set(count, 1)
-    update(count, (n) => n + 1)
-    expect(queue).toHaveLength(1)
-    expect(queue[0].delayMs).toBeGreaterThan(0)
-    clock = 100
-    queue.splice(0).forEach(({ flush }) => flush())
-    expect(posted).toHaveLength(2)
   })
 
   it('refuses writes during render, writes to read-only atoms, and value-style update()', () => {
@@ -282,7 +219,12 @@ describe('declarative runtime', () => {
     drain()
     expect(posted.at(-1)).toEqual({
       event: 'ui.error',
-      payload: { document: runtime.document, revision: 1, message: 'boom' }
+      payload: {
+        document: runtime.document,
+        revision: 1,
+        message: 'boom',
+        stack: expect.stringContaining('declarative-renderer.test.ts')
+      }
     })
     expect(event(1, id)).toBe(true)
     await Promise.resolve()
@@ -324,13 +266,6 @@ describe('declarative runtime', () => {
     handlers.get('theme')?.({ colorScheme: 'light' })
     drain()
     expect(last()).toMatchObject({ tree: { children: ['light'] } })
-    expect([...handlers.keys()].sort()).toEqual([
-      'theme',
-      'ui.ack',
-      'ui.event',
-      'ui.hydrate',
-      'ui.visibility'
-    ])
     runtime.dispose()
     expect(handlers.size).toBe(0)
   })

@@ -1,9 +1,9 @@
-import type { Automation } from '../../../shared/automations-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   latestAutomationOccurrenceAtOrBefore,
   nextAutomationOccurrenceAfter
-} from '../../../shared/automation-schedule-occurrences'
+} from '../../../shared/automations/scheduling/automation-schedule-occurrences'
 
 export function advanceAutomationNextRun(
   state: PersistedState,

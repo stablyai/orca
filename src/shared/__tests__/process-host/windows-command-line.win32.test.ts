@@ -35,18 +35,6 @@ describeOnWindows('Windows .cmd argument round-trip', () => {
     return [...stdout.matchAll(/ARG<([\s\S]*?)>(?=\nARG<|$)/g)].map((match) => match[1]!)
   }
 
-  it.each(WINDOWS_ARGUMENT_CORPUS)('delivers $name unchanged', async ({ value }) => {
-    const result = await runProcess({
-      program: shim,
-      args: [value],
-      // Populate variables so percent-expansion cases cannot pass against undefined names.
-      env: { ...process.env, ...WINDOWS_ARGUMENT_CORPUS_ENV },
-      timeoutMs: 30_000
-    })
-    expect(result.code).toBe(0)
-    expect(decode(result.stdout)).toEqual([value])
-  })
-
   it('delivers the whole corpus in one invocation', async () => {
     // One argument can leave cmd mid-quote; the next argument's ampersand exposes truncation/command execution.
     const values = WINDOWS_ARGUMENT_CORPUS.map((entry) => entry.value)

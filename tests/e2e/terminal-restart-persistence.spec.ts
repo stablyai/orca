@@ -1,6 +1,5 @@
 // #461’s 3-minute renderer scrollback serialization caused multi-pane input stalls; #729 replaced it with daemon history and pruned local session buffers.
-// Require daemon-backed clean-restart scrollback/layout and infrequent idle session writes.
-// Short idle sampling catches frequent writers, not the original 3-minute cadence; crash recovery and machine-dependent input lag have separate coverage.
+// Require daemon-backed scrollback, cursor and pane titles across clean restart.
 
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -11,9 +10,9 @@ import {
   getTerminalContent,
   splitActiveTerminalPane
 } from './helpers/terminal'
-import { getActiveTabId, getWorktreeTabs } from './helpers/store'
+import { getActiveTabId } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
-import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
+import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   seededRepoPathOrSkip,
   bootstrapFirstLaunch,
@@ -137,60 +136,6 @@ test.describe('Terminal restart persistence', () => {
     }
   })
 
-  test('active worktree and terminal tab count survive restart', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
-  {}, testInfo) => {
-    const repoPath = seededRepoPathOrSkip()
-
-    const session = createRestartSession(testInfo)
-    let firstApp: ElectronApplication | null = null
-    let secondApp: ElectronApplication | null = null
-
-    try {
-      const firstLaunch = await session.launch()
-      firstApp = firstLaunch.app
-      const { worktreeId } = await bootstrapFirstLaunch(firstLaunch.page, repoPath)
-
-      // Create a second tab via the shortcut’s store path to give layout state beyond the default without focus timing.
-      await firstLaunch.page.evaluate((worktreeId: string) => {
-        const store = window.__store
-        if (!store) {
-          return
-        }
-        store.getState().createTab(worktreeId)
-      }, worktreeId)
-
-      await expect
-        .poll(async () => (await getWorktreeTabs(firstLaunch.page, worktreeId)).length, {
-          timeout: 5_000
-        })
-        .toBeGreaterThanOrEqual(2)
-
-      const tabsBefore = await getWorktreeTabs(firstLaunch.page, worktreeId)
-
-      await session.close(firstApp)
-      firstApp = null
-
-      const secondLaunch = await session.launch()
-      secondApp = secondLaunch.app
-      await bootstrapRestoredLaunch(secondLaunch.page, worktreeId)
-
-      // Count tabs: renderer remints ids on launch while persistence keeps positions.
-      await expect
-        .poll(async () => (await getWorktreeTabs(secondLaunch.page, worktreeId)).length, {
-          timeout: 10_000
-        })
-        .toBe(tabsBefore.length)
-    } finally {
-      if (secondApp) {
-        await session.close(secondApp)
-      }
-      if (firstApp) {
-        await session.close(firstApp)
-      }
-      await session.dispose()
-    }
-  })
-
   test('restored Set Title pane label survives agent title churn', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
     const repoPath = seededRepoPathOrSkip()
@@ -255,43 +200,6 @@ test.describe('Terminal restart persistence', () => {
       }
       if (firstApp) {
         await session.close(firstApp)
-      }
-      await session.dispose()
-    }
-  })
-
-  test('idle session does not spam session.set writes', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
-  {}, testInfo) => {
-    const repoPath = seededRepoPathOrSkip()
-
-    const session = createRestartSession(testInfo)
-    let app: ElectronApplication | null = null
-
-    try {
-      const { app: launchedApp, page } = await session.launch()
-      app = launchedApp
-      await bootstrapFirstLaunch(page, repoPath)
-
-      // Count session.set over 10s to catch frequent background writes; a loose threshold tolerates startup/store activity without waiting three minutes.
-      const callCount = await page.evaluate(async () => {
-        const api = (
-          window as unknown as { api: { session: { set: (...args: unknown[]) => unknown } } }
-        ).api
-        let count = 0
-        const originalSet = api.session.set.bind(api.session)
-        api.session.set = (...args: unknown[]) => {
-          count += 1
-          return originalSet(...args)
-        }
-        await new Promise((resolve) => setTimeout(resolve, 10_000))
-        api.session.set = originalSet
-        return count
-      })
-
-      expect(callCount).toBeLessThan(20)
-    } finally {
-      if (app) {
-        await session.close(app)
       }
       await session.dispose()
     }

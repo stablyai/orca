@@ -9,7 +9,18 @@ export const PLUGIN_DECLARATIVE_LIMITS = {
   maxPropsPerNode: 32,
   maxSelectOptions: 500,
   maxEventArgs: 8,
-  maxCallbackIdLength: 64
+  maxCallbackIdLength: 64,
+  maxRadioOptions: 50,
+  maxTableColumns: 32,
+  maxTableRows: 5000,
+  /** Items across every level of one Tree, and how deep it nests. */
+  maxTreeItems: 2000,
+  maxTreeItemDepth: 16,
+  maxKeyValueItems: 200,
+  /** Markdown and CodeView text: more than one text child, still inside the tree byte budget. */
+  maxDocumentLength: 64 * 1024,
+  /** Keys or values in one object-shaped event argument (Table selection, sort). */
+  maxEventArgItems: 5000
 } as const
 
 /** Host lane for `ui.render`/`ui.persist`; the guest preload's render lane mirrors it. */

@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 
-import type { AgentHookSource } from '../agent-hook-relay'
+import type { AgentHookSource } from './transport/agent-hook-relay'
 import {
   buildGrokChatHistoryPathCandidates,
   findGrokChatHistoryBySessionId,
@@ -16,7 +16,7 @@ import { parseAgentHookJson } from './request-body'
 import { GROK_HOME_ENVELOPE_MAX_LENGTH, GROK_SESSION_CWD_MAX_LENGTH } from './listener-limits'
 import { readLastAssistantFromTranscriptOnce } from './transcript-reader'
 import { isGrokEvent } from './provider-event-names'
-import { isAntigravityStopStillBusy } from './providers/antigravity-event-rules'
+import { isAntigravityStopStillBusy } from './providers/antigravity/antigravity-event-rules'
 
 export function parseHookBodyPayloadRecord(body: unknown): Record<string, unknown> | null {
   if (typeof body !== 'object' || body === null) {

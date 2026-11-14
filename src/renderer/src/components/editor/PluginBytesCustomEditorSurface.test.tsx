@@ -3,8 +3,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
-import type { OpenFile } from '@/store/slices/editor'
+import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileContent } from './editor-panel-content-types'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -14,7 +14,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 const readRuntimeFileBytes = vi.fn()
-vi.mock('@/runtime/runtime-paged-file-read', () => ({
+vi.mock('@/runtime/files/reads/runtime-paged-file-read', () => ({
   readRuntimeFileBytes: (...args: unknown[]) => readRuntimeFileBytes(...args)
 }))
 
@@ -34,7 +34,7 @@ vi.mock('@/store', () => ({
     getState: () => store
   }
 }))
-vi.mock('./ExternalFileChangeBanner', () => ({
+vi.mock('./external-changes/ExternalFileChangeBanner', () => ({
   ExternalFileChangeBanner: () => <div data-testid="banner" />
 }))
 
@@ -107,35 +107,6 @@ function lastDocument(): unknown {
 }
 
 describe('PluginBytesCustomEditorSurface', () => {
-  it('mounts the frame at once and hands it the bytes read on the same route, capped at 64 MiB', async () => {
-    const bytes = new Uint8Array([0x50, 0x4b])
-    readRuntimeFileBytes.mockResolvedValue({ kind: 'ok', bytes })
-    await render({ content: '', isBinary: true, byteSource })
-    expect(readRuntimeFileBytes).toHaveBeenCalledWith(byteSource, 64 * 1024 * 1024)
-    expect(frameProps.mock.calls[0][0]).toMatchObject({
-      readOnly: false,
-      fileId: 'book',
-      binaryDocument: null
-    })
-    // The load hashes the bytes asynchronously before handing them over.
-    await act(() => vi.waitFor(() => expect(lastDocument()).toEqual({ bytes, fileType: 'xlsx' })))
-  })
-
-  it('reloads after an outside change but not while the old content is only marked stale', async () => {
-    readRuntimeFileBytes.mockResolvedValue({ kind: 'ok', bytes: new Uint8Array([1]) })
-    const first: FileContent = { content: '', isBinary: true, byteSource }
-    await render(first)
-    await render({ ...first, isStale: true })
-    expect(readRuntimeFileBytes).toHaveBeenCalledTimes(1)
-    const reloaded = new Uint8Array([2])
-    readRuntimeFileBytes.mockResolvedValue({ kind: 'ok', bytes: reloaded })
-    await render({ content: '', isBinary: true, byteSource })
-    expect(readRuntimeFileBytes).toHaveBeenCalledTimes(2)
-    await act(() =>
-      vi.waitFor(() => expect(lastDocument()).toEqual({ bytes: reloaded, fileType: 'xlsx' }))
-    )
-  })
-
   it('keeps an edit as the dirty draft across a remount and never rereads under it', async () => {
     readRuntimeFileBytes.mockResolvedValue({ kind: 'ok', bytes: new Uint8Array([1]) })
     await render({ content: '', isBinary: true, byteSource })

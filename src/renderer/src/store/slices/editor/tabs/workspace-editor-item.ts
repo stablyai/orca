@@ -1,10 +1,11 @@
+import { editorContentIsReferenced } from './workspace-editor-files'
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
 import { areEditorPreviewTabsEnabled } from './editor-preview-tab-setting'
 import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
-import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import type { Tab } from '../../../../../../shared/tab-types'
 import {
@@ -24,6 +25,15 @@ export function openWorkspaceEditorItem(
   /** Where in its group a reopened tab goes back to. */
   index?: number
 ): string {
+  const graphTab =
+    contentType === 'git-graph'
+      ? state.unifiedTabsByWorktree?.[worktreeId]?.find((tab) => tab.contentType === 'git-graph')
+      : undefined
+  if (graphTab) {
+    state.activateTab?.(graphTab.id, { worktreeId })
+    return graphTab.id
+  }
+  const fixedTabId = contentType === 'git-graph' ? `${worktreeId}::git-graph` : undefined
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
     const existing = state.findTabForEntityInGroup?.(
@@ -48,17 +58,18 @@ export function openWorkspaceEditorItem(
     }
   }
   const drawHere = (id?: string): Tab | undefined => {
-    const file =
-      contentType === 'editor'
-        ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
-        : undefined
+    const file = isEditorTabContentType(contentType)
+      ? state.openFiles.find((entry) => entry.id === fileId)
+      : undefined
     return state.createUnifiedTab?.(worktreeId, contentType, {
       ...(id ? { id } : {}),
       entityId: fileId,
       label,
       isPreview,
-      // The tab follows the captured file owner even when another host has UI focus.
-      ...(file ? { executionHostId: getOpenFileExecutionHostId(file) } : {}),
+      // Cross-workspace views use the placement host; the file retains its content host.
+      ...(file?.worktreeId === worktreeId
+        ? { executionHostId: getOpenFileExecutionHostId(file) }
+        : {}),
       ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
       ...(selection === 'none' ? { activate: false } : {}),
       ...(selection === 'background' ? { recordFocus: false } : {})
@@ -68,6 +79,7 @@ export function openWorkspaceEditorItem(
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     const sent = openEditorTabThroughLayoutOwner(state, {
       fileId,
+      fixedTabId,
       worktreeId,
       contentType,
       isPreview: isPreview === true,
@@ -80,7 +92,7 @@ export function openWorkspaceEditorItem(
       return sent
     }
   }
-  return drawHere()?.id ?? fileId
+  return drawHere(fixedTabId)?.id ?? fileId
 }
 export function getReplaceablePreviewFileId(
   state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'>,
@@ -92,34 +104,15 @@ export function getReplaceablePreviewFileId(
     return null
   }
   const tabsForWorktree = state.unifiedTabsByWorktree?.[worktreeId] ?? []
-  if (targetGroupId) {
-    const previewTab = tabsForWorktree.find(
-      (tab) =>
-        tab.groupId === targetGroupId && tab.isPreview && isEditorTabContentType(tab.contentType)
-    )
-    if (!previewTab) {
-      return null
-    }
-    // Split groups share OpenFile records; scoped preview replacement must not mutate files still shown elsewhere.
-    const isSharedEntity = tabsForWorktree.some(
-      (tab) =>
-        tab.id !== previewTab.id &&
-        tab.entityId === previewTab.entityId &&
-        isEditorTabContentType(tab.contentType)
-    )
-    if (isSharedEntity) {
-      return null
-    }
-    return (
-      state.openFiles.find(
-        (file) =>
-          file.id === previewTab.entityId && file.worktreeId === worktreeId && file.isPreview
-      )?.id ?? null
-    )
-  }
-  return (
-    state.openFiles.find((file) => file.worktreeId === worktreeId && file.isPreview)?.id ?? null
+  const previewTab = tabsForWorktree.find(
+    (tab) =>
+      (!targetGroupId || tab.groupId === targetGroupId) &&
+      tab.isPreview &&
+      isEditorTabContentType(tab.contentType)
   )
+  return previewTab && !editorContentIsReferenced(state, previewTab.entityId, previewTab.id)
+    ? (state.openFiles.find((file) => file.id === previewTab.entityId)?.id ?? null)
+    : null
 }
 
 export function removeEditorStateForReplacedPreview(

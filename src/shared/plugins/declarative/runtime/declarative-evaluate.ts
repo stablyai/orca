@@ -1,6 +1,6 @@
 import {
   PLUGIN_DECLARATIVE_EDIT_PROP,
-  PLUGIN_DECLARATIVE_VALUE_CONTROLS
+  pluginDeclarativeValueControl
 } from '../plugin-declarative-message-names'
 import { Fragment, isOrcaElement, type OrcaComponent } from './declarative-elements'
 
@@ -15,7 +15,8 @@ export type OrcaEvaluation = { tree: OrcaWireNode | null; callbacks: Map<string,
 
 // Why: a clean error beats a guest stack overflow from a self-rendering component.
 const MAX_EVALUATION_DEPTH = 512
-const MAX_PROP_DEPTH = 16
+// Why 40: a Tree's items nest 16 levels, two JSON levels (array, object) each.
+const MAX_PROP_DEPTH = 40
 const IGNORED_PROPS: ReadonlySet<string> = new Set([
   'children',
   'ref',
@@ -53,12 +54,37 @@ export function assertPlainJson(value: unknown, where: string, depth = 0): void 
     const prototype: unknown = Object.getPrototypeOf(value)
     if (prototype === Object.prototype || prototype === null) {
       for (const [name, item] of Object.entries(value)) {
-        assertPlainJson(item, `${where}.${name}`, depth + 1)
+        // An absent optional field (`children: loaded ?? undefined`), as JSON would drop it.
+        if (item !== undefined) {
+          assertPlainJson(item, `${where}.${name}`, depth + 1)
+        }
       }
       return
     }
   }
   throw new TypeError(`${where} must be plain JSON data, not ${describe(value)}`)
+}
+
+/** A checked copy without absent (`undefined`) object fields, which the host's schemas refuse. */
+function plainJsonCopy(value: unknown, where: string): unknown {
+  assertPlainJson(value, where)
+  return withoutUndefined(value)
+}
+
+function withoutUndefined(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(withoutUndefined)
+  }
+  if (value === null || typeof value !== 'object') {
+    return value
+  }
+  const copy: Record<string, unknown> = {}
+  for (const [name, item] of Object.entries(value)) {
+    if (item !== undefined) {
+      copy[name] = withoutUndefined(item)
+    }
+  }
+  return copy
 }
 
 function assertUniqueKeys(children: (OrcaWireNode | string)[], parent: string): void {
@@ -95,7 +121,6 @@ export function evaluateOrcaTree(
   /** Newest edit id processed per value control's onChange callback. */
   editsSeen: ReadonlyMap<string, number> = new Map()
 ): OrcaEvaluation {
-  const valueControls: ReadonlySet<string> = new Set(PLUGIN_DECLARATIVE_VALUE_CONTROLS)
   const callbacks = new Map<string, OrcaCallback>()
 
   function callbackId(path: string, prop: string): string {
@@ -130,12 +155,12 @@ export function evaluateOrcaTree(
         callbacks.set(id, value)
         wireProps[name] = { $callback: id }
       } else {
-        assertPlainJson(value, `<${type}> prop "${name}"`)
-        wireProps[name] = value
+        wireProps[name] = plainJsonCopy(value, `<${type}> prop "${name}"`)
       }
     }
-    const onChange = wireProps.onChange
-    if (valueControls.has(type) && typeof onChange === 'object' && onChange !== null) {
+    const control = pluginDeclarativeValueControl(type)
+    const onChange = control ? wireProps[control.change] : undefined
+    if (typeof onChange === 'object' && onChange !== null) {
       // Why: the host keeps typing that this render has not seen yet; see the edit protocol.
       const id = '$callback' in onChange ? onChange.$callback : undefined
       wireProps[PLUGIN_DECLARATIVE_EDIT_PROP] =

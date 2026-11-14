@@ -1,0 +1,185 @@
+import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
+import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
+import { mergeCapturedLeafState } from './merge-captured-leaf-state'
+import { collectLeafIds } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
+import { resolveTerminalLayoutActiveLeafId } from '../layout/ownership/terminal-layout-active-leaf'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../../shared/terminal/replay/terminal-scrollback-limits'
+import { serializeWithAbsoluteCursor } from '../../../../../shared/terminal/replay/terminal-serialize-absolute-cursor'
+import {
+  getUtf8ByteLength,
+  isUtf8ByteLengthWithinLimit
+} from '../../../../../shared/utf8-byte-limits'
+
+const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+
+type ShutdownPane = Pick<ManagedPane, 'id' | 'leafId' | 'terminal' | 'serializeAddon'>
+
+type ShutdownPaneManager = {
+  getPanes(): ShutdownPane[]
+}
+
+type CaptureTerminalShutdownLayoutArgs = {
+  manager: ShutdownPaneManager
+  paneTransports: ReadonlyMap<number, Pick<PtyTransport, 'getPtyId'>>
+  /** The tab's stored layout; its structure is kept as is, never re-read from the DOM. */
+  existingLayout: TerminalLayoutSnapshot
+  /** Merge prior for buffers, resolved across both scrollback homes; defaults to the shared layout's. */
+  priorBuffersByLeafId?: Record<string, string>
+  captureBuffers?: boolean
+  clearedScrollbackLeafIds?: ReadonlySet<string>
+}
+
+function omitClearedLeafState(
+  record: Record<string, string> | undefined,
+  clearedLeafIds: ReadonlySet<string> | undefined
+): Record<string, string> | undefined {
+  if (!record || !clearedLeafIds || clearedLeafIds.size === 0) {
+    return record
+  }
+  const next = Object.fromEntries(
+    Object.entries(record).filter(([leafId]) => !clearedLeafIds.has(leafId))
+  )
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
+function fitsSessionScrollbackByteLimit(serialized: string): boolean {
+  return isUtf8ByteLengthWithinLimit(serialized, MAX_BUFFER_BYTES)
+}
+
+// Bound full-serialize probes because force-park pays their scrollback-sized cost synchronously per pane.
+const MAX_SCROLLBACK_FIT_PROBES = 4
+
+/** Largest tail of `pane` that fits the session byte cap, found in a few interpolation probes. */
+function serializeWithinSessionScrollbackByteLimit(
+  pane: ShutdownPane,
+  oversized: string,
+  scrollback: number
+): string {
+  let overRows = scrollback
+  let overBytes = getUtf8ByteLength(oversized)
+  let fitRows = 0
+  let fitBytes = 0
+  let best: string | null = null
+  // Geometrically shrinking pre-fit probes avoid dropping all history without bisection’s repeated large serializes.
+  for (let probe = 0; probe < MAX_SCROLLBACK_FIT_PROBES || best === null; probe += 1) {
+    const anchorRows = best === null ? overRows : fitRows
+    const anchorBytes = best === null ? overBytes : fitBytes
+    // Secant fits uniform density quickly; midpoint floor prevents creeping on dense tails above sparse history.
+    const estimate = Math.floor((anchorRows * MAX_BUFFER_BYTES) / Math.max(anchorBytes, 1))
+    const midpoint = Math.floor((fitRows + overRows) / 2)
+    const rows = Math.min(Math.max(Math.min(estimate, midpoint), fitRows + 1), overRows - 1)
+    if (rows <= fitRows || rows >= overRows) {
+      break
+    }
+    const attempt = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
+      scrollback: rows
+    })
+    if (fitsSessionScrollbackByteLimit(attempt)) {
+      best = attempt
+      fitRows = rows
+      fitBytes = getUtf8ByteLength(attempt)
+    } else {
+      overRows = rows
+      overBytes = getUtf8ByteLength(attempt)
+    }
+  }
+  return best ?? ''
+}
+
+export function captureTerminalShutdownLayout({
+  manager,
+  paneTransports,
+  existingLayout,
+  priorBuffersByLeafId = existingLayout.buffersByLeafId,
+  captureBuffers = true,
+  clearedScrollbackLeafIds
+}: CaptureTerminalShutdownLayoutArgs): TerminalLayoutSnapshot {
+  const panes = manager.getPanes()
+  const buffers: Record<string, string> = {}
+
+  if (captureBuffers) {
+    for (const pane of panes) {
+      try {
+        // Drain throttled output before capture so hidden/nonfocused panes retain queued bytes.
+        flushTerminalOutput(pane.terminal)
+        const leafId = pane.leafId
+        let scrollback = pane.terminal.options.scrollback ?? 10_000
+        // Absolute cursor restore avoids SerializeAddon’s one-column-short relative restore after wrap-pending rows.
+        let serialized = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
+          scrollback
+        })
+        // Cap persisted SSH sleep history by UTF-8 bytes so non-ASCII cannot bypass the limit.
+        if (!fitsSessionScrollbackByteLimit(serialized) && scrollback > 1) {
+          serialized = serializeWithinSessionScrollbackByteLimit(pane, serialized, scrollback)
+        }
+        if (serialized.length > 0) {
+          buffers[leafId] = serialized
+        }
+      } catch {
+        // Serialization failure for one pane should not block others.
+      }
+    }
+  }
+
+  // Why the stored tree, not the mounted panes: reconciliation can leave a stored leaf unmounted.
+  const currentLeafIds = new Set(collectLeafIds(existingLayout.root))
+  const livePtyIdsByLeafId: Record<string, string> = {}
+  const preservedPtyIdsByLeafId: Record<string, string> = {}
+  const mountedLeafIds = new Set<string>(panes.map((p) => p.leafId))
+  for (const leafId of currentLeafIds) {
+    const priorPtyId = existingLayout.ptyIdsByLeafId?.[leafId]
+    // Why: reconciliation inserts an unmounted leaf only while it still has its binding.
+    if (!mountedLeafIds.has(leafId) && priorPtyId) {
+      preservedPtyIdsByLeafId[leafId] = priorPtyId
+    }
+  }
+  for (const pane of panes) {
+    const transport = paneTransports.get(pane.id)
+    const livePtyId = transport?.getPtyId() ?? null
+    if (livePtyId) {
+      livePtyIdsByLeafId[pane.leafId] = livePtyId
+      continue
+    }
+    const priorPtyId = existingLayout.ptyIdsByLeafId?.[pane.leafId]
+    if (transport && priorPtyId) {
+      // Retain prior PTY IDs during post-remount attach gaps where transports exist but IDs are pending.
+      preservedPtyIdsByLeafId[pane.leafId] = priorPtyId
+    }
+  }
+
+  const mergedBuffers = captureBuffers
+    ? mergeCapturedLeafState({
+        prior: omitClearedLeafState(priorBuffersByLeafId, clearedScrollbackLeafIds),
+        fresh: buffers,
+        currentLeafIds
+      })
+    : {}
+  const mergedScrollbackRefs = mergeCapturedLeafState({
+    prior: omitClearedLeafState(existingLayout.scrollbackRefsByLeafId, clearedScrollbackLeafIds),
+    fresh: {},
+    currentLeafIds
+  })
+  const ptyIdsByLeafId = { ...preservedPtyIdsByLeafId, ...livePtyIdsByLeafId }
+  const {
+    buffersByLeafId: _buffers,
+    scrollbackRefsByLeafId: _scrollbackRefs,
+    ptyIdsByLeafId: _ptyIds,
+    ...structure
+  } = existingLayout
+  return {
+    ...structure,
+    // Do not persist focus on exited/reconnecting cleared transports; only live attach gaps preserve prior PTY bindings.
+    activeLeafId: resolveTerminalLayoutActiveLeafId({
+      root: structure.root,
+      activeLeafId: structure.activeLeafId,
+      ptyIdsByLeafId
+    }),
+    ...(Object.keys(mergedBuffers).length > 0 ? { buffersByLeafId: mergedBuffers } : {}),
+    ...(Object.keys(mergedScrollbackRefs).length > 0
+      ? { scrollbackRefsByLeafId: mergedScrollbackRefs }
+      : {}),
+    ...(Object.keys(ptyIdsByLeafId).length > 0 ? { ptyIdsByLeafId } : {})
+  }
+}

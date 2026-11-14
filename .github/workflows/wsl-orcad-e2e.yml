@@ -3,7 +3,7 @@ name: WSL orcad E2E
 # WSL via orcad (step C10) on real WSL2 distros: a GitHub-hosted windows-2025 runner imports a
 # pinned Ubuntu 24.04 rootfs twice (systemd off and on), plus Debian 12 and Fedora 41 (systemd off,
 # rootfs exported from their container images), and runs
-# src/main/wsl/wsl-orcad-real-distro-lane.test.ts against both: deploy and launch, the wsl.exe
+# src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts against both: deploy and launch, the wsl.exe
 # stdio bridge, runtime RPC, liveness recovery, holder survival, structured chat and teardown. Not a required check.
 # Hosted WSL2 was proven in #27783: WSL 2.7.14, import 13-18 s, cold boot 8-14 s.
 on:
@@ -27,15 +27,15 @@ on:
       - 'config/scripts/*orcad*'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - 'src/main/ssh/orcad-*'
+      - 'src/main/ssh/migration-source/**'
+      - 'src/main/persistence/migrating-orcad-catalog/**'
       - 'src/main/managed-server/**'
       - 'src/packages/process-host/**'
       # Unit tests never run in this lane; only the real distro test below does.
       - '!**/*.test.ts'
       - '!**/*.test.tsx'
-      - 'src/main/wsl/wsl-orcad-real-distro-lane.test.ts'
-      - 'src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts'
-      - 'src/main/wsl/wsl-orcad-real-distro-idle-release-lane.test.ts'
+      - 'src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts'
+      - 'src/main/wsl/orcad/wsl-orcad-real-distro-idle-release-lane.test.ts'
       - '.github/workflows/wsl-orcad-e2e.yml'
       - 'config/ci/wsl-lifecycle/**'
       - 'config/ci/windows-lifecycle-receipt.ps1'
@@ -99,14 +99,14 @@ jobs:
           fi
           git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/wsl-changed"
           git diff --name-only --no-renames --diff-filter=M -z HEAD^1 HEAD > "$RUNNER_TEMP/wsl-modified"
-          node config/scripts/wsl-orcad-qualification.mjs "$RUNNER_TEMP/wsl-changed" "$RUNNER_TEMP/wsl-modified"
+          node config/scripts/orcad-distribution/qualification/wsl-orcad-qualification.mjs "$RUNNER_TEMP/wsl-changed" "$RUNNER_TEMP/wsl-modified"
 
       - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the template
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
-          node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          node config/scripts/orcad-distribution/template/build-orcad-template.mjs --targets linux-x64-glibc
       - uses: actions/upload-artifact@v7
         with:
           name: wsl-orcad-template
@@ -330,7 +330,7 @@ jobs:
           ORCA_ORCAD_TEMPLATE_PATH: ${{ runner.temp }}/orcad-template
         run: |
           New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
-          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'launch.log')
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'launch.log')
           if ($global:LASTEXITCODE -ne 0) { throw "launch phase failed: $global:LASTEXITCODE" }
       # A new process: the holders must have kept both distros Running since phase 1 exited.
       - name: 'Phase 2: holders survive, chat, mid-reply stop and Continue, teardown'
@@ -340,29 +340,17 @@ jobs:
           ORCA_WSL_ORCAD_LANE_PHASE: survive
           ORCA_ORCAD_TEMPLATE_PATH: ${{ runner.temp }}/orcad-template
         run: |
-          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'survive.log')
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'survive.log')
           if ($global:LASTEXITCODE -ne 0) { throw "survive phase failed: $global:LASTEXITCODE" }
-      # The WSL move's pause on real distro shells: Sleep ends them, the daemon proves the exit,
-      # the journal keeps each pane's folder, and a new shell opens there.
-      - name: 'WSL move: pause real distro terminals'
-        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
-        timeout-minutes: 10
-        env:
-          ORCA_WSL_MOVE_REAL_PAUSE_DISTRO: ${{ env.PLAIN_DISTRO }}
-        run: |
-          New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
-          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'wsl-move-real-pause.log')
-          if ($global:LASTEXITCODE -ne 0) { throw "WSL move real pause failed: $global:LASTEXITCODE" }
-          wsl.exe --terminate $env:PLAIN_DISTRO
       # R40: with no terminal left, orcad idle-exits and the holder lets the distro stop on its own.
-      - name: 'Phase 3: idle orcad releases the distro; distro restart to first output baseline'
+      - name: 'Phase 3: idle orcad releases the distro'
         timeout-minutes: 30
         env:
           ORCA_RUN_WSL_ORCAD_LANE: '1'
           ORCA_WSL_ORCAD_LANE_PHASE: idle-release
           ORCA_ORCAD_TEMPLATE_PATH: ${{ runner.temp }}/orcad-template
         run: |
-          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-idle-release-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'idle-release.log')
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/orcad/wsl-orcad-real-distro-idle-release-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'idle-release.log')
           if ($global:LASTEXITCODE -ne 0) { throw "idle-release phase failed: $global:LASTEXITCODE" }
       - name: Real desktop agent configuration is unchanged
         if: always()

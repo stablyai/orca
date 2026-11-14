@@ -1,5 +1,5 @@
 import {
-  TERMINAL_SHORTCUT_STORAGE_KEYS,
+  TERMINAL_SETTINGS_STORAGE_KEYS,
   isHostWorkspaceStorageKey,
   isPageStorageKeyForRoute,
   PAGE_STORAGE_MAX_VALUE_CHARS
@@ -59,13 +59,13 @@ export function publishPageStorage(
   readWorkspaceKey = forWorkspaceKeyReader
 }
 
-/** Apply native shortcut settings without replacing page-owned drafts or pending journals. */
-export function refreshPageTerminalShortcuts(
+/** Apply native terminal settings without replacing page-owned drafts or pending journals. */
+export function refreshPageTerminalSettings(
   entries: Readonly<Record<string, string>>,
   oversize: readonly string[]
 ): void {
   const nextOversize = new Set(oversizeKeys)
-  for (const key of TERMINAL_SHORTCUT_STORAGE_KEYS) {
+  for (const key of TERMINAL_SETTINGS_STORAGE_KEYS) {
     const value = entries[key]
     if (value === undefined) {
       values.delete(key)

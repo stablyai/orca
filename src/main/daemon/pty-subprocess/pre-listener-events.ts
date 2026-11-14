@@ -1,7 +1,7 @@
 import {
   resolveProcessExitCause,
   type TerminalExitCause
-} from '../../../shared/terminal-exit-cause'
+} from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 

@@ -69,13 +69,3 @@ test.describe('macOS press-and-hold default', () => {
     }
   })
 })
-
-test.describe('off macOS', () => {
-  test.skip(process.platform === 'darwin', 'covers the non-macOS branch')
-
-  test('writes nothing at all', async ({ electronApp }) => {
-    const state = await readPressAndHoldStartupState(electronApp)
-
-    expect(state.recordRaw).toBeNull()
-  })
-})

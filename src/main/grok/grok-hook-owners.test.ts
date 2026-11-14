@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { hasLivePeer, hasRegisteredGrokHookOwner } from './grok-hook-owners'
+import { hasLivePeer } from './grok-hook-owners'
 
 describe('Grok hook owners', () => {
   const directories: string[] = []
@@ -52,13 +52,5 @@ describe('Grok hook owners', () => {
     await expect(
       hasLivePeer(directory, 'self', vi.fn().mockResolvedValue(undefined))
     ).resolves.toBe(true)
-  })
-
-  it('detects a new owner record without another liveness probe', async () => {
-    const directory = await makeDirectory()
-    const peer = { token: '55555555-5555-4555-8555-555555555555', pid: 45 }
-    await writeFile(join(directory, `owner-${peer.token}.json`), JSON.stringify(peer))
-
-    await expect(hasRegisteredGrokHookOwner(directory)).resolves.toBe(true)
   })
 })

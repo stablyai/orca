@@ -1,7 +1,7 @@
-import { pruneAgentSessionOperationRows } from '../../../../shared/agent-session-operation-ledger'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
-import type { AgentSessionStoreState } from '../../agent-session-store-state'
+import { pruneAgentSessionOperationRows } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStoreState } from '../records/agent-session-store-state'
 import { agentSessionReconciliationTargetMatches } from './agent-session-reconciliation-target'
 import { applyAgentSessionRestartAdjudication } from './agent-session-restart-lease-transitions'
 

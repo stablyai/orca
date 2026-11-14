@@ -10,4 +10,4 @@
 1 src/main/ipc/pty/provider/ownership-state.ts # deletePtyOwnership, test-only caller
 1 src/main/ipc/pty/provider/state-cleanup.ts # clearPtyOwnershipForConnection, test-only caller
 3 src/main/ipc/pty/runtime/kill.ts # 2x SSH provider unregistered (R4-4); unconfirmed follow-up stop of a rejected spawn
-1 src/main/ssh/legacy-relay/legacy-relay-pane-stops.ts # COMPAT(legacy-relay-bridge): deleted with the folder
+1 src/main/ssh/legacy-relay/bridge/legacy-relay-pane-stops.ts # COMPAT(legacy-relay-bridge): deleted with the folder

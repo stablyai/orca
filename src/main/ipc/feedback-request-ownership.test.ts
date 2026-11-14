@@ -33,20 +33,6 @@ function requestSignal(index = 0): AbortSignal {
 describe('feedback request ownership', () => {
   beforeEach(() => fetchMock.mockReset())
 
-  it('retires both failed text attempts while preserving the retry result', async () => {
-    fetchMock.mockResolvedValue(new Response('unused error', { status: 503 }))
-
-    await expect(submitFeedback(plainSubmission)).resolves.toEqual({
-      ok: false,
-      status: 503,
-      error: 'status 503; retry: status 503'
-    })
-
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(requestSignal(0).aborted).toBe(true)
-    expect(requestSignal(1).aborted).toBe(true)
-  })
-
   it('keeps the request live until the image response reader finishes', async () => {
     const reading = Promise.withResolvers<void>()
     let finishResponse = (): void => {

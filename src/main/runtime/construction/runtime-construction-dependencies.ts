@@ -1,26 +1,26 @@
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 import type {
   RuntimeTerminalAgentStatusEvent,
   RuntimeTerminalProgramStatusFacetEvent
-} from '../runtime-terminal-contracts'
-import type { TerminalSideEffectBatch } from '../../../shared/terminal-side-effect-facts'
+} from '../terminal/output/terminal-agent-status-events'
+import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ClaudeTerminalEvidence } from '../../../shared/claude-terminal-interrupt'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
-import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import type { ObservedAgentStatusPaneIdentity } from '../../ipc/agent-status-ipc-boundary'
-import type { AgentHookAuthorityAttestation } from '../../agent-hooks/server'
+import type { AgentHookAuthorityAttestation } from '../../agent-hooks/server/server-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault-resume-preparation'
-import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-types'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-session-contracts'
 import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
-import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
-import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
-import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
+import type { OrchestrationEnvironmentTransport } from '../orchestration/federation/environment-transport'
+import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
+import type { SessionSearchSettingsApply } from '../integrations/ai-vault/runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {
   getSetupTerminalTitle?: () => string
@@ -33,10 +33,13 @@ export type RuntimeConstructionDependencies = {
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
+  getPublicAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   structuredAgentStatusSink?: StructuredAgentSessionStatusSink
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
-  getAgentProviderSessionSnapshot?: () => AgentStatusIpcPayload[]
+  getAgentProviderSessionSnapshot?: (tabId?: string) => AgentStatusIpcPayload[]
   getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
+  getAcceptedAgentReply?: (paneKey: string, leadTurnKey: number) => string | undefined
+  subscribeAgentStatusRowChanges?: (listener: (paneKey: string) => void) => () => void
   subscribeAgentProviderSessionChanges?: (
     listener: (sessions: readonly { paneKey: string; sessionId: string }[]) => void
   ) => () => void
