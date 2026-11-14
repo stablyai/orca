@@ -1,16 +1,13 @@
-import {
-  isResumableTuiAgent,
-  normalizeAgentProviderSession,
-  type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { AgentProcessVerdict } from '../../../../shared/agent-status/process/agent-process-presence'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 import { launchStatement, type PtyLaunchFacts } from '../launch/launch-evidence'
+import { hookRowResumeSource, savedCheckpointResumeSource } from './worktree-sleep-resume-source'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
@@ -39,8 +36,12 @@ export async function captureWorktreeSleepResumeRecords(args: {
   paneKeysByPtyId: ReadonlyMap<string, Iterable<string>>
   /** Each PTY's launch facts; only a launch main still holds supplies its recipe. */
   launchByPtyId: ReadonlyMap<string, PtyLaunchFacts | undefined>
+  /** The agent main knows each PTY runs; a saved checkpoint naming another one is stale. */
+  agentByPtyId: ReadonlyMap<string, TerminalAgent | null>
   /** Read after each presence probe, so a conversation started during it is the one captured. */
   readRows: () => readonly AgentStatusIpcPayload[]
+  /** The pane's saved resume record, consulted only when the hook store has no row for it. */
+  readSavedRecord: (paneKey: string) => SleepingAgentSessionRecord | undefined
   checkAgentPresence:
     | ((paneKey: string, exitedSince?: number) => Promise<AgentProcessVerdict | null>)
     | null
@@ -63,34 +64,34 @@ export async function captureWorktreeSleepResumeRecords(args: {
         continue
       }
       const row = args.readRows().find((candidate) => candidate.paneKey === paneKey)
-      const agent = row?.agentType
-      const providerSession = normalizeAgentProviderSession(row?.providerSession)
-      if (!row) {
+      // Why: an idle agent's hook row can expire while it runs; its saved live checkpoint still names it.
+      const source = row
+        ? hookRowResumeSource(row)
+        : savedCheckpointResumeSource(
+            args.readSavedRecord(paneKey),
+            args.worktreeId,
+            args.agentByPtyId.get(ptyId) ?? null
+          )
+      if (!source) {
+        if (row) {
+          // Why: the hook store names another agent here now, so an older capture no longer applies.
+          retiredPaneKeys.push(paneKey)
+        }
         continue
       }
-      if (!isResumableTuiAgent(agent) || !providerSession) {
-        // Why: the hook store names another agent here now, so an older capture no longer applies.
-        retiredPaneKeys.push(paneKey)
-        continue
-      }
-      const statement = launchStatement(launch, agent)
+      const statement = launchStatement(launch, source.agent)
       launchUnknown ||= statement === undefined
       const launchConfig = statement ?? undefined
       records.push({
         paneKey,
         tabId,
         worktreeId: args.worktreeId,
-        agent,
-        providerSession,
-        prompt: row.prompt,
+        ...source,
         // Why done: a pane-owned capture whose `--resume` waits for the tab open (#11598).
         state: 'done',
         capturedAt: args.capturedAt,
-        updatedAt: row.receivedAt,
         origin: 'worktree-sleep',
         restoreOnTabOpenOnly: true,
-        // Why: the SSH host boundary keeps the id off another machine; a WSL relay tag is local transport.
-        connectionId: isLocalHookConnectionId(row.connectionId) ? null : row.connectionId,
         ...(launchConfig ? { launchConfig } : {})
       })
     }
