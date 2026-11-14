@@ -1,64 +1,227 @@
+diff --git a/src/common/buffer/Buffer.ts b/src/common/buffer/Buffer.ts
+index b3ad14ee041fac933a7f90bf66fe7985eef4beed..64228f1054c9540850b7048c580b78b37ad3133c 100644
+--- a/src/common/buffer/Buffer.ts
++++ b/src/common/buffer/Buffer.ts
+@@ -9,7 +9,7 @@ import { IdleTaskQueue } from '../TaskQueue';
+ import { ICharset } from '../Types';
+ import { IAttributeData, IBuffer, IBufferLine, ICellData } from './Types';
+ import { ExtendedAttrs } from './AttributeData';
+-import { BufferLine, DEFAULT_ATTR_DATA } from './BufferLine';
++import { BufferLine, DEFAULT_ATTR_DATA, bindBufferLineMutationObserver, type IBufferLineMutationObserver } from './BufferLine';
+ import { getWrappedLineTrimmedLength, reflowLargerApplyNewLayout, reflowLargerCreateNewLayout, reflowLargerGetLinesToRemove, reflowSmallerGetNewLineLengths } from './BufferReflow';
+ import { CellData } from './CellData';
+ import { NULL_CELL_CHAR, NULL_CELL_CODE, NULL_CELL_WIDTH, WHITESPACE_CELL_CHAR, WHITESPACE_CELL_CODE, WHITESPACE_CELL_WIDTH } from './Constants';
+@@ -28,6 +28,7 @@ export const MAX_BUFFER_SIZE = 4294967295; // 2^32 - 1
+  */
+ export class Buffer extends Disposable implements IBuffer {
+   public lines: CircularList<IBufferLine>;
++  declare private _mutationObserver?: IBufferLineMutationObserver;
+   public ydisp: number = 0;
+   public ybase: number = 0;
+   public y: number = 0;
+@@ -56,9 +57,11 @@ export class Buffer extends Disposable implements IBuffer {
+     private _hasScrollback: boolean,
+     private _optionsService: IOptionsService,
+     private _bufferService: IBufferService,
+-    private readonly _logService: ILogService
++    private readonly _logService: ILogService,
++    observer?: IBufferLineMutationObserver
+   ) {
+     super();
++    if (observer) this._mutationObserver = observer;
+     this._cols = this._bufferService.cols;
+     this._rows = this._bufferService.rows;
+     this.lines = new CircularList<IBufferLine>(this._getCorrectBufferLength(this._rows));
+@@ -70,6 +73,13 @@ export class Buffer extends Disposable implements IBuffer {
+     this._register(toDisposable(() => this.clearAllMarkers()));
+   }
+ 
++  public installMutationObserver(observer: IBufferLineMutationObserver): void {
++    this._mutationObserver = observer;
++    for (let i = 0; i < this.lines.length; i++) {
++      bindBufferLineMutationObserver(this.lines.get(i)! as BufferLine, observer);
++    }
++  }
++
+   public getNullCell(attr?: IAttributeData): ICellData {
+     if (attr) {
+       this._nullCell.fg = attr.fg;
+@@ -97,7 +107,7 @@ export class Buffer extends Disposable implements IBuffer {
+   }
+ 
+   public getBlankLine(attr: IAttributeData, isWrapped?: boolean): IBufferLine {
+-    return new BufferLine(this._bufferService.cols, this.getNullCell(attr), isWrapped);
++    return new BufferLine(this._bufferService.cols, this.getNullCell(attr), isWrapped, this._mutationObserver);
+   }
+ 
+   public get hasScrollback(): boolean {
+@@ -147,6 +157,7 @@ export class Buffer extends Disposable implements IBuffer {
+    * Clears the buffer to its initial state, discarding all previous data.
+    */
+   public clear(): void {
++    this._mutationObserver?.beforeBufferChange();
+     this.ydisp = 0;
+     this.ybase = 0;
+     this.y = 0;
+@@ -155,6 +166,7 @@ export class Buffer extends Disposable implements IBuffer {
+     this.scrollTop = 0;
+     this.scrollBottom = this._rows - 1;
+     this.setupTabStops();
++    this._mutationObserver?.afterBufferChange();
+   }
+ 
+   /**
+@@ -199,7 +211,7 @@ export class Buffer extends Disposable implements IBuffer {
+             if (this._optionsService.rawOptions.windowsPty.backend !== undefined || this._optionsService.rawOptions.windowsPty.buildNumber !== undefined) {
+               // Just add the new missing rows on Windows as conpty reprints the screen with its
+               // view of the world. Once a line enters scrollback for conpty it remains there
+-              this.lines.push(new BufferLine(newCols, nullCell, false));
++              this.lines.push(new BufferLine(newCols, nullCell, false, this._mutationObserver));
+             } else {
+               if (this.ybase > 0 && this.lines.length <= this.ybase + this.y + addToY + 1) {
+                 // There is room above the buffer and there are no empty elements below the line,
+@@ -213,7 +225,7 @@ export class Buffer extends Disposable implements IBuffer {
+               } else {
+                 // Add a blank line if there is no buffer left at the top to scroll to, or if there
+                 // are blank lines after the cursor
+-                this.lines.push(new BufferLine(newCols, nullCell, false));
++                this.lines.push(new BufferLine(newCols, nullCell, false, this._mutationObserver));
+               }
+             }
+           }
+@@ -354,7 +366,7 @@ export class Buffer extends Disposable implements IBuffer {
+         }
+         if (this.lines.length < newRows) {
+           // Add an extra row at the bottom of the viewport
+-          this.lines.push(new BufferLine(newCols, nullCell, false));
++          this.lines.push(new BufferLine(newCols, nullCell, false, this._mutationObserver));
+         }
+       } else {
+         if (this.ydisp === this.ybase) {
 diff --git a/src/common/buffer/BufferLine.ts b/src/common/buffer/BufferLine.ts
-index d21032f31175f9f6d738b5724e4365e85a2e2a54..369f2ba98bd2e96a4051e2f5e34e7b5241f22deb 100644
+index d21032f31175f9f6d738b5724e4365e85a2e2a54..3db40d40f8fe7261677ac9dcf16296d5552c59f1 100644
 --- a/src/common/buffer/BufferLine.ts
 +++ b/src/common/buffer/BufferLine.ts
-@@ -66,7 +66,15 @@ const $extended = DEFAULT_ATTR_DATA.extended.clone() as IExtendedAttrsExt;
+@@ -66,7 +66,30 @@ const $extended = DEFAULT_ATTR_DATA.extended.clone() as IExtendedAttrsExt;
   * (if only one particular value is needed) or `loadCell`. For `loadCell` in a loop
   * memory allocs / GC pressure can be greatly reduced by reusing the CellData object.
   */
++export type BufferLineEditKind = 'insert' | 'delete' | 'replace' | 'fill' | 'resize';
++export type BufferLineMutationMethods = Pick<BufferLine, 'loadCell' | 'setCell' | 'set' | 'insertCells' | 'deleteCells' | 'replaceCells' | 'fill' | 'resize' | 'copyFrom' | 'clone' | 'copyCellsFrom'>;
 +export interface IBufferLineMutationObserver {
-+  glyphNotificationsEnabled?: boolean;
-+  materialize(): void;
 +  codepointWritten(line: BufferLine, column: number, codepoint: number, width: number): void;
 +  codepointCombined(line: BufferLine, column: number, beforeUtf16Length: number, afterUtf16Length: number): void;
++  lineCreated(line: BufferLine): void;
++  lineAdmitted(line: BufferLine, methods: Readonly<BufferLineMutationMethods>, prototype: object): void;
++  beforeLoad(line: BufferLine): void;
++  loaded(line: BufferLine, column: number, cell: ICellData): void;
++  beforeSet(line: BufferLine, cell: ICellData): unknown;
++  cellSet(line: BufferLine, column: number, snapshot: unknown): void;
++  legacySet(line: BufferLine, column: number): void;
++  beforeEdit(line: BufferLine, kind: BufferLineEditKind, position: number, count: number): unknown;
++  afterEdit(line: BufferLine, frame: unknown): void;
++  beforeCopy(source: BufferLine, blank?: boolean): unknown;
++  beforeCells(line: BufferLine, source: BufferLine, from: number, to: number, count: number): unknown;
++  copied(line: BufferLine, frame: unknown): void;
++  beforeBufferChange(): void;
++  afterBufferChange(): void;
 +}
 +
  export class BufferLine implements IBufferLine {
 +  declare mutationObserver?: IBufferLineMutationObserver;
++  declare structuralObserver?: IBufferLineMutationObserver;
    protected _data: Uint32Array;
    /** Sparse cache; only read when `IS_COMBINED_MASK` is set in `_data`. */
    protected _combined: {[index: number]: string} = {};
-@@ -273,6 +281,17 @@ export class BufferLine implements IBufferLine {
-    * it gets an optimized access method.
-    */
-   public setCellFromCodepoint(index: number, codePoint: number, width: number, attrs: IAttributeData): void {
-+    const observer = this.mutationObserver;
-+    if (observer?.glyphNotificationsEnabled === false) {
-+      const content = this._data[index * Constants.CELL_INDICIES + Cell.CONTENT];
-+      const previous = index ? this._data[(index - 1) * Constants.CELL_INDICIES + Cell.CONTENT] : 0;
-+      if ((content & Content.HAS_CONTENT_MASK) || (content >> Content.WIDTH_SHIFT) !== 1 ||
-+          (codePoint !== 0 && width !== 1 && width !== 2) ||
-+          (codePoint === 0 && width !== 0 && width !== 1 && width !== 2) ||
-+          (codePoint === 0 && width > 0 && (previous >> Content.WIDTH_SHIFT) === 2)) {
-+        observer.materialize();
-+      }
-+    }
-     this._cacheValid = false;
-     if (attrs.bg & BgFlags.HAS_EXTENDED) {
-       this._extendedAttrs[index] = attrs.extended;
-@@ -281,6 +300,9 @@ export class BufferLine implements IBufferLine {
-     this._data[$idx + Cell.CONTENT] = codePoint | (width << Content.WIDTH_SHIFT);
-     this._data[$idx + Cell.FG] = attrs.fg;
-     this._data[$idx + Cell.BG] = attrs.bg;
-+    if (observer && observer.glyphNotificationsEnabled !== false) {
-+      observer.codepointWritten(this, index, codePoint, width);
+@@ -90,7 +113,8 @@ export class BufferLine implements IBufferLine {
+   constructor(
+     cols: number,
+     fillCellData?: ICellData,
+-    isWrapped: boolean = false
++    isWrapped: boolean = false,
++    observer?: IBufferLineMutationObserver
+   ) {
+     this._data = new Uint32Array(cols * Constants.CELL_INDICIES);
+     const cell = fillCellData ?? CellData.fromCharData([0, NULL_CELL_CHAR, NULL_CELL_WIDTH, NULL_CELL_CODE]);
+@@ -99,6 +123,11 @@ export class BufferLine implements IBufferLine {
+     }
+     this.length = cols;
+     this._isWrapped = isWrapped;
++    if (observer) {
++      this.mutationObserver = observer;
++      this.structuralObserver = observer;
++      observer.lineCreated(this);
 +    }
    }
  
    /**
-@@ -292,6 +314,19 @@ export class BufferLine implements IBufferLine {
+@@ -125,6 +154,8 @@ export class BufferLine implements IBufferLine {
+    * @deprecated
+    */
+   public set(index: number, value: CharData): void {
++    const observer = this.structuralObserver;
++    observer?.beforeLoad(this);
+     this._cacheValid = false;
+     this._data[index * Constants.CELL_INDICIES + Cell.FG] = value[CHAR_DATA_ATTR_INDEX];
+     if (value[CHAR_DATA_CHAR_INDEX].length > 1) {
+@@ -133,6 +164,7 @@ export class BufferLine implements IBufferLine {
+     } else {
+       this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] = value[CHAR_DATA_CHAR_INDEX].charCodeAt(0) | (value[CHAR_DATA_WIDTH_INDEX] << Content.WIDTH_SHIFT);
+     }
++    observer?.legacySet(this, index);
+   }
+ 
+   /**
+@@ -208,6 +240,8 @@ export class BufferLine implements IBufferLine {
+    * to GC as it significantly reduced the amount of new objects/references needed.
+    */
+   public loadCell(index: number, cell: ICellData): ICellData {
++    const observer = this.structuralObserver;
++    observer?.beforeLoad(this);
+     $startIndex = index * Constants.CELL_INDICIES;
+     cell.content = this._data[$startIndex + Cell.CONTENT];
+     cell.fg = this._data[$startIndex + Cell.FG];
+@@ -218,7 +252,9 @@ export class BufferLine implements IBufferLine {
+       cell.combinedData = '';
+     }
+     cell.extended = this.getExtended(index);
++    observer?.loaded(this, index, cell);
+     return cell;
++
+   }
+ 
+   /**
+@@ -255,6 +291,8 @@ export class BufferLine implements IBufferLine {
+    * Set data at `index` to `cell`.
+    */
+   public setCell(index: number, cell: ICellData): void {
++    const observer = this.structuralObserver;
++    const snapshot = observer?.beforeSet(this, cell);
+     this._cacheValid = false;
+     if (cell.content & Content.IS_COMBINED_MASK) {
+       this._combined[index] = cell.combinedData;
+@@ -265,6 +303,7 @@ export class BufferLine implements IBufferLine {
+     this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] = cell.content;
+     this._data[index * Constants.CELL_INDICIES + Cell.FG] = cell.fg;
+     this._data[index * Constants.CELL_INDICIES + Cell.BG] = cell.bg;
++    observer?.cellSet(this, index, snapshot);
+   }
+ 
+   /**
+@@ -281,6 +320,7 @@ export class BufferLine implements IBufferLine {
+     this._data[$idx + Cell.CONTENT] = codePoint | (width << Content.WIDTH_SHIFT);
+     this._data[$idx + Cell.FG] = attrs.fg;
+     this._data[$idx + Cell.BG] = attrs.bg;
++    this.mutationObserver?.codepointWritten(this, index, codePoint, width);
+   }
+ 
+   /**
+@@ -292,6 +332,12 @@ export class BufferLine implements IBufferLine {
    public addCodepointToCell(index: number, codePoint: number, width: number): void {
      this._cacheValid = false;
      let content = this._data[index * Constants.CELL_INDICIES + Cell.CONTENT];
 +    const observer = this.mutationObserver;
-+    if (observer?.glyphNotificationsEnabled === false) {
-+      const effectiveWidth = width || ((content & Content.HAS_CONTENT_MASK) ? content >> Content.WIDTH_SHIFT : 1);
-+      if (effectiveWidth !== (content >> Content.WIDTH_SHIFT)) {
-+        observer.materialize();
-+      }
-+    }
-+    const enabled = observer && observer.glyphNotificationsEnabled !== false;
-+    const beforeLength = enabled
++    const beforeLength = observer
 +      ? (content & Content.IS_COMBINED_MASK)
 +        ? this._combined[index].length
 +        : (content & Content.CODEPOINT_MASK) ? ((content & Content.CODEPOINT_MASK) > 0xffff ? 2 : 1) : 0
@@ -66,11 +229,11 @@ index d21032f31175f9f6d738b5724e4365e85a2e2a54..369f2ba98bd2e96a4051e2f5e34e7b52
      if (content & Content.IS_COMBINED_MASK) {
        // we already have a combined string, simply add
        this._combined[index] += stringFromCodePoint(codePoint);
-@@ -314,6 +349,12 @@ export class BufferLine implements IBufferLine {
+@@ -314,93 +360,117 @@ export class BufferLine implements IBufferLine {
        content |= width << Content.WIDTH_SHIFT;
      }
      this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] = content;
-+    if (enabled) {
++    if (observer) {
 +      const afterLength = (content & Content.IS_COMBINED_MASK)
 +        ? this._combined[index].length
 +        : (content & Content.CODEPOINT_MASK) ? ((content & Content.CODEPOINT_MASK) > 0xffff ? 2 : 1) : 0;
@@ -79,3 +242,487 @@ index d21032f31175f9f6d738b5724e4365e85a2e2a54..369f2ba98bd2e96a4051e2f5e34e7b52
    }
  
    public insertCells(pos: number, n: number, fillCellData: ICellData): void {
+-    this._cacheValid = false;
+-    pos %= this.length;
+-
+-    // handle fullwidth at pos: reset cell one to the left if pos is second cell of a wide char
+-    if (pos && this.getWidth(pos - 1) === 2) {
+-      this.setCellFromCodepoint(pos - 1, 0, 1, fillCellData);
+-    }
+-
+-    if (n < this.length - pos) {
+-      for (let i = this.length - pos - n - 1; i >= 0; --i) {
+-        this.setCell(pos + n + i, this.loadCell(pos + i, $workCell));
++    const observer = this.structuralObserver;
++    const frame = observer?.beforeEdit(this, 'insert', pos, n);
++    try {
++      this._cacheValid = false;
++      pos %= this.length;
++  
++      // handle fullwidth at pos: reset cell one to the left if pos is second cell of a wide char
++      if (pos && this.getWidth(pos - 1) === 2) {
++        this.setCellFromCodepoint(pos - 1, 0, 1, fillCellData);
+       }
+-      for (let i = 0; i < n; ++i) {
+-        this.setCell(pos + i, fillCellData);
++  
++      if (n < this.length - pos) {
++        for (let i = this.length - pos - n - 1; i >= 0; --i) {
++          this.setCell(pos + n + i, this.loadCell(pos + i, $workCell));
++        }
++        for (let i = 0; i < n; ++i) {
++          this.setCell(pos + i, fillCellData);
++        }
++      } else {
++        for (let i = pos; i < this.length; ++i) {
++          this.setCell(i, fillCellData);
++        }
+       }
+-    } else {
+-      for (let i = pos; i < this.length; ++i) {
+-        this.setCell(i, fillCellData);
++  
++      // handle fullwidth at line end: reset last cell if it is first cell of a wide char
++      if (this.getWidth(this.length - 1) === 2) {
++        this.setCellFromCodepoint(this.length - 1, 0, 1, fillCellData);
+       }
+-    }
+-
+-    // handle fullwidth at line end: reset last cell if it is first cell of a wide char
+-    if (this.getWidth(this.length - 1) === 2) {
+-      this.setCellFromCodepoint(this.length - 1, 0, 1, fillCellData);
++    } finally {
++      observer?.afterEdit(this, frame);
+     }
+   }
+ 
+   public deleteCells(pos: number, n: number, fillCellData: ICellData): void {
+-    this._cacheValid = false;
+-    pos %= this.length;
+-    if (n < this.length - pos) {
+-      for (let i = 0; i < this.length - pos - n; ++i) {
+-        this.setCell(pos + i, this.loadCell(pos + n + i, $workCell));
++    const observer = this.structuralObserver;
++    const frame = observer?.beforeEdit(this, 'delete', pos, n);
++    try {
++      this._cacheValid = false;
++      pos %= this.length;
++      if (n < this.length - pos) {
++        for (let i = 0; i < this.length - pos - n; ++i) {
++          this.setCell(pos + i, this.loadCell(pos + n + i, $workCell));
++        }
++        for (let i = this.length - n; i < this.length; ++i) {
++          this.setCell(i, fillCellData);
++        }
++      } else {
++        for (let i = pos; i < this.length; ++i) {
++          this.setCell(i, fillCellData);
++        }
+       }
+-      for (let i = this.length - n; i < this.length; ++i) {
+-        this.setCell(i, fillCellData);
++  
++      // handle fullwidth at pos:
++      // - reset pos-1 if wide char
++      // - reset pos if width==0 (previous second cell of a wide char)
++      if (pos && this.getWidth(pos - 1) === 2) {
++        this.setCellFromCodepoint(pos - 1, 0, 1, fillCellData);
+       }
+-    } else {
+-      for (let i = pos; i < this.length; ++i) {
+-        this.setCell(i, fillCellData);
++      if (this.getWidth(pos) === 0 && !this.hasContent(pos)) {
++        this.setCellFromCodepoint(pos, 0, 1, fillCellData);
+       }
+-    }
+-
+-    // handle fullwidth at pos:
+-    // - reset pos-1 if wide char
+-    // - reset pos if width==0 (previous second cell of a wide char)
+-    if (pos && this.getWidth(pos - 1) === 2) {
+-      this.setCellFromCodepoint(pos - 1, 0, 1, fillCellData);
+-    }
+-    if (this.getWidth(pos) === 0 && !this.hasContent(pos)) {
+-      this.setCellFromCodepoint(pos, 0, 1, fillCellData);
++    } finally {
++      observer?.afterEdit(this, frame);
+     }
+   }
+ 
+   public replaceCells(start: number, end: number, fillCellData: ICellData, respectProtect: boolean = false): void {
+-    this._cacheValid = false;
+-    // full branching on respectProtect==true, hopefully getting fast JIT for standard case
+-    if (respectProtect) {
+-      if (start && this.getWidth(start - 1) === 2 && !this.isProtected(start - 1)) {
++    const observer = this.structuralObserver;
++    const frame = observer?.beforeEdit(this, 'replace', start, end);
++    try {
++      this._cacheValid = false;
++      // full branching on respectProtect==true, hopefully getting fast JIT for standard case
++      if (respectProtect) {
++        if (start && this.getWidth(start - 1) === 2 && !this.isProtected(start - 1)) {
++          this.setCellFromCodepoint(start - 1, 0, 1, fillCellData);
++        }
++        if (end < this.length && this.getWidth(end - 1) === 2 && !this.isProtected(end)) {
++          this.setCellFromCodepoint(end, 0, 1, fillCellData);
++        }
++        while (start < end  && start < this.length) {
++          if (!this.isProtected(start)) {
++            this.setCell(start, fillCellData);
++          }
++          start++;
++        }
++        return;
++      }
++  
++      // handle fullwidth at start: reset cell one to the left if start is second cell of a wide char
++      if (start && this.getWidth(start - 1) === 2) {
+         this.setCellFromCodepoint(start - 1, 0, 1, fillCellData);
+       }
+-      if (end < this.length && this.getWidth(end - 1) === 2 && !this.isProtected(end)) {
++      // handle fullwidth at last cell + 1: reset to empty cell if it is second part of a wide char
++      if (end < this.length && this.getWidth(end - 1) === 2) {
+         this.setCellFromCodepoint(end, 0, 1, fillCellData);
+       }
++  
+       while (start < end  && start < this.length) {
+-        if (!this.isProtected(start)) {
+-          this.setCell(start, fillCellData);
+-        }
+-        start++;
++        this.setCell(start++, fillCellData);
+       }
+-      return;
+-    }
+-
+-    // handle fullwidth at start: reset cell one to the left if start is second cell of a wide char
+-    if (start && this.getWidth(start - 1) === 2) {
+-      this.setCellFromCodepoint(start - 1, 0, 1, fillCellData);
+-    }
+-    // handle fullwidth at last cell + 1: reset to empty cell if it is second part of a wide char
+-    if (end < this.length && this.getWidth(end - 1) === 2) {
+-      this.setCellFromCodepoint(end, 0, 1, fillCellData);
+-    }
+-
+-    while (start < end  && start < this.length) {
+-      this.setCell(start++, fillCellData);
++    } finally {
++      observer?.afterEdit(this, frame);
+     }
+   }
+ 
+@@ -412,50 +482,56 @@ export class BufferLine implements IBufferLine {
+    * excess memory (true after shrinking > Constants.CLEANUP_THRESHOLD).
+    */
+   public resize(cols: number, fillCellData: ICellData): boolean {
+-    this._cacheValid = false;
+-    if (cols === this.length) {
+-      return this._data.length * 4 * Constants.CLEANUP_THRESHOLD < this._data.buffer.byteLength;
+-    }
+-    const uint32Cells = cols * Constants.CELL_INDICIES;
+-    if (cols > this.length) {
+-      if (this._data.buffer.byteLength >= uint32Cells * 4) {
+-        // optimization: avoid alloc and data copy if buffer has enough room
+-        this._data = new Uint32Array(this._data.buffer, 0, uint32Cells);
+-      } else {
+-        // slow path: new alloc and full data copy
+-        const data = new Uint32Array(uint32Cells);
+-        data.set(this._data);
+-        this._data = data;
++    const observer = this.structuralObserver;
++    const frame = observer?.beforeEdit(this, 'resize', cols, 0);
++    try {
++      this._cacheValid = false;
++      if (cols === this.length) {
++        return this._data.length * 4 * Constants.CLEANUP_THRESHOLD < this._data.buffer.byteLength;
+       }
+-      for (let i = this.length; i < cols; ++i) {
+-        this.setCell(i, fillCellData);
+-      }
+-    } else {
+-      // optimization: just shrink the view on existing buffer
+-      this._data = this._data.subarray(0, uint32Cells);
+-      // Remove any cut off combined data
+-      const keys = Object.keys(this._combined);
+-      for (let i = 0; i < keys.length; i++) {
+-        const key = parseInt(keys[i], 10);
+-        if (key >= cols) {
+-          delete this._combined[key];
++      const uint32Cells = cols * Constants.CELL_INDICIES;
++      if (cols > this.length) {
++        if (this._data.buffer.byteLength >= uint32Cells * 4) {
++          // optimization: avoid alloc and data copy if buffer has enough room
++          this._data = new Uint32Array(this._data.buffer, 0, uint32Cells);
++        } else {
++          // slow path: new alloc and full data copy
++          const data = new Uint32Array(uint32Cells);
++          data.set(this._data);
++          this._data = data;
+         }
+-      }
+-      // remove any cut off extended attributes
+-      const extKeys = Object.keys(this._extendedAttrs);
+-      for (let i = 0; i < extKeys.length; i++) {
+-        const key = parseInt(extKeys[i], 10);
+-        if (key >= cols) {
+-          delete this._extendedAttrs[key];
++        for (let i = this.length; i < cols; ++i) {
++          this.setCell(i, fillCellData);
++        }
++      } else {
++        // optimization: just shrink the view on existing buffer
++        this._data = this._data.subarray(0, uint32Cells);
++        // Remove any cut off combined data
++        const keys = Object.keys(this._combined);
++        for (let i = 0; i < keys.length; i++) {
++          const key = parseInt(keys[i], 10);
++          if (key >= cols) {
++            delete this._combined[key];
++          }
++        }
++        // remove any cut off extended attributes
++        const extKeys = Object.keys(this._extendedAttrs);
++        for (let i = 0; i < extKeys.length; i++) {
++          const key = parseInt(extKeys[i], 10);
++          if (key >= cols) {
++            delete this._extendedAttrs[key];
++          }
++        }
++        // handle fullwidth at line end: reset last cell if it is first cell of a wide char
++        if (cols && this.getWidth(cols - 1) === 2) {
++          this.setCellFromCodepoint(cols - 1, 0, 1, fillCellData);
+         }
+       }
+-      // handle fullwidth at line end: reset last cell if it is first cell of a wide char
+-      if (cols && this.getWidth(cols - 1) === 2) {
+-        this.setCellFromCodepoint(cols - 1, 0, 1, fillCellData);
+-      }
++      this.length = cols;
++      return uint32Cells * 4 * Constants.CLEANUP_THRESHOLD < this._data.buffer.byteLength;
++    } finally {
++      observer?.afterEdit(this, frame);
+     }
+-    this.length = cols;
+-    return uint32Cells * 4 * Constants.CLEANUP_THRESHOLD < this._data.buffer.byteLength;
+   }
+ 
+   /**
+@@ -476,25 +552,33 @@ export class BufferLine implements IBufferLine {
+ 
+   /** fill a line with fillCharData */
+   public fill(fillCellData: ICellData, respectProtect: boolean = false): void {
+-    this._cacheValid = false;
+-    // full branching on respectProtect==true, hopefully getting fast JIT for standard case
+-    if (respectProtect) {
+-      for (let i = 0; i < this.length; ++i) {
+-        if (!this.isProtected(i)) {
+-          this.setCell(i, fillCellData);
++    const observer = this.structuralObserver;
++    const frame = observer?.beforeEdit(this, 'fill', 0, 0);
++    try {
++      this._cacheValid = false;
++      // full branching on respectProtect==true, hopefully getting fast JIT for standard case
++      if (respectProtect) {
++        for (let i = 0; i < this.length; ++i) {
++          if (!this.isProtected(i)) {
++            this.setCell(i, fillCellData);
++          }
+         }
++        return;
+       }
+-      return;
+-    }
+-    this._combined = {};
+-    this._extendedAttrs = {};
+-    for (let i = 0; i < this.length; ++i) {
+-      this.setCell(i, fillCellData);
++      this._combined = {};
++      this._extendedAttrs = {};
++      for (let i = 0; i < this.length; ++i) {
++        this.setCell(i, fillCellData);
++      }
++    } finally {
++      observer?.afterEdit(this, frame);
+     }
+   }
+ 
+   /** alter to a full copy of line  */
+   public copyFrom(line: BufferLine, blank?: boolean): void {
++    const observer = this.structuralObserver;
++    const frame = observer?.beforeCopy(line, blank);
+     if (this.length !== line.length) {
+       this._data = new Uint32Array(line._data);
+     } else {
+@@ -513,11 +597,14 @@ export class BufferLine implements IBufferLine {
+     this._cache = '';
+     this._cacheValid = false;
+     this._isWrapped = line._isWrapped;
++    observer?.copied(this, frame);
+   }
+ 
+   /** create a new clone */
+   public clone(blank?: boolean): IBufferLine {
+-    const newLine = new BufferLine(0, undefined, false);
++    const observer = this.structuralObserver;
++    const frame = observer?.beforeCopy(this, blank);
++    const newLine = new BufferLine(0, undefined, false, this.mutationObserver);
+     newLine._data = new Uint32Array(this._data);
+     newLine.length = this.length;
+     if (!blank) {
+@@ -526,7 +613,9 @@ export class BufferLine implements IBufferLine {
+       newLine._copySparseMapsFrom(this);
+     }
+     newLine._isWrapped = this._isWrapped;
++    observer?.copied(newLine, frame);
+     return newLine;
++
+   }
+ 
+   public getTrimmedLength(): number {
+@@ -548,6 +637,8 @@ export class BufferLine implements IBufferLine {
+   }
+ 
+   public copyCellsFrom(src: BufferLine, srcCol: number, destCol: number, length: number, applyInReverse: boolean): void {
++    const observer = this.structuralObserver;
++    const frame = observer?.beforeCells(this, src, srcCol, destCol, length);
+     this._cacheValid = false;
+     const srcData = src._data;
+     if (applyInReverse) {
+@@ -565,6 +656,7 @@ export class BufferLine implements IBufferLine {
+         this._copyCellMapsFrom(src, srcCol + cell, destCol + cell);
+       }
+     }
++    observer?.copied(this, frame);
+   }
+ 
+   /**
+@@ -639,3 +731,19 @@ export class BufferLine implements IBufferLine {
+     }
+   }
+ }
++
++// Capture only native method values, never rows or observer lifetimes.
++const MUTATION_METHODS = Object.freeze({
++  loadCell: BufferLine.prototype.loadCell, setCell: BufferLine.prototype.setCell,
++  set: BufferLine.prototype.set, insertCells: BufferLine.prototype.insertCells,
++  deleteCells: BufferLine.prototype.deleteCells, replaceCells: BufferLine.prototype.replaceCells,
++  fill: BufferLine.prototype.fill, resize: BufferLine.prototype.resize,
++  copyFrom: BufferLine.prototype.copyFrom, clone: BufferLine.prototype.clone,
++  copyCellsFrom: BufferLine.prototype.copyCellsFrom
++});
++
++export function bindBufferLineMutationObserver(line: BufferLine, observer: IBufferLineMutationObserver): void {
++  line.mutationObserver = observer;
++  line.structuralObserver = observer;
++  observer.lineAdmitted(line, MUTATION_METHODS, BufferLine.prototype);
++}
+diff --git a/src/common/buffer/BufferSet.ts b/src/common/buffer/BufferSet.ts
+index 4ea2cee8dc8ae75e5086e8af2ea87d03a70e7ccd..689958816575024205ca3bbcb4744b9b8cdb8f13 100644
+--- a/src/common/buffer/BufferSet.ts
++++ b/src/common/buffer/BufferSet.ts
+@@ -5,6 +5,7 @@
+ 
+ import { Disposable, MutableDisposable } from '../Lifecycle';
+ import { Buffer } from './Buffer';
++import type { IBufferLineMutationObserver } from './BufferLine';
+ import { IAttributeData, IBuffer, IBufferSet } from './Types';
+ import { IBufferService, ILogService, IOptionsService } from '../services/Services';
+ import { Emitter } from '../Event';
+@@ -14,6 +15,7 @@ import { Emitter } from '../Event';
+  * provides also utilities for working with them.
+  */
+ export class BufferSet extends Disposable implements IBufferSet {
++  declare private _mutationObserver?: IBufferLineMutationObserver;
+   private _normal!: Buffer;
+   private _alt!: Buffer;
+   private _activeBuffer!: Buffer;
+@@ -37,14 +39,21 @@ export class BufferSet extends Disposable implements IBufferSet {
+     this._register(this._optionsService.onSpecificOptionChange('tabStopWidth', () => this.setupTabStops()));
+   }
+ 
++  public installMutationObserver(observer: IBufferLineMutationObserver): void {
++    this._mutationObserver = observer;
++    this._normal.installMutationObserver(observer);
++    this._alt.installMutationObserver(observer);
++  }
++
+   public reset(): void {
+-    this._normal = new Buffer(true, this._optionsService, this._bufferService, this._logService);
++    this._mutationObserver?.beforeBufferChange();
++    this._normal = new Buffer(true, this._optionsService, this._bufferService, this._logService, this._mutationObserver);
+     this._normalBuffer.value = this._normal;
+     this._normal.fillViewportRows();
+ 
+     // The alt buffer should never have scrollback.
+     // See http://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-The-Alternate-Screen-Buffer
+-    this._alt = new Buffer(false, this._optionsService, this._bufferService, this._logService);
++    this._alt = new Buffer(false, this._optionsService, this._bufferService, this._logService, this._mutationObserver);
+     this._altBuffer.value = this._alt;
+     this._activeBuffer = this._normal;
+     this._onBufferActivate.fire({
+@@ -53,6 +62,7 @@ export class BufferSet extends Disposable implements IBufferSet {
+     });
+ 
+     this.setupTabStops();
++    this._mutationObserver?.afterBufferChange();
+   }
+ 
+   /**
+@@ -80,6 +90,7 @@ export class BufferSet extends Disposable implements IBufferSet {
+    * Sets the normal Buffer of the BufferSet as its currently active Buffer
+    */
+   public activateNormalBuffer(): void {
++    this._mutationObserver?.beforeBufferChange();
+     if (this._activeBuffer === this._normal) {
+       return;
+     }
+@@ -95,12 +106,14 @@ export class BufferSet extends Disposable implements IBufferSet {
+       activeBuffer: this._normal,
+       inactiveBuffer: this._alt
+     });
++    this._mutationObserver?.afterBufferChange();
+   }
+ 
+   /**
+    * Sets the alt Buffer of the BufferSet as its currently active Buffer
+    */
+   public activateAltBuffer(fillAttr?: IAttributeData): void {
++    this._mutationObserver?.beforeBufferChange();
+     if (this._activeBuffer === this._alt) {
+       return;
+     }
+@@ -114,6 +127,7 @@ export class BufferSet extends Disposable implements IBufferSet {
+       activeBuffer: this._alt,
+       inactiveBuffer: this._normal
+     });
++    this._mutationObserver?.afterBufferChange();
+   }
+ 
+   /**
+diff --git a/src/common/services/BufferService.ts b/src/common/services/BufferService.ts
+index 3bd1f7e42df645b1a98af7feeb316784f06d754d..510ba5cbb48d11694ef4b55c240cf18f1273329a 100644
+--- a/src/common/services/BufferService.ts
++++ b/src/common/services/BufferService.ts
+@@ -5,7 +5,7 @@
+ 
+ import { Disposable } from '../Lifecycle';
+ import { IAttributeData, IBuffer, IBufferLine, IBufferSet } from '../buffer/Types';
+-import { BufferLine } from '../buffer/BufferLine';
++import { BufferLine, bindBufferLineMutationObserver, type IBufferLineMutationObserver } from '../buffer/BufferLine';
+ import { BufferSet } from '../buffer/BufferSet';
+ import { IBufferService, ILogService, IOptionsService, type IBufferResizeEvent } from './Services';
+ import { Emitter } from '../Event';
+@@ -47,6 +47,13 @@ export class BufferService extends Disposable implements IBufferService {
+     }));
+   }
+ 
++  public installMutationObserver(observer: IBufferLineMutationObserver): void {
++    (this.buffers as BufferSet).installMutationObserver(observer);
++    if (this._cachedBlankLine) {
++      bindBufferLineMutationObserver(this._cachedBlankLine as BufferLine, observer);
++    }
++  }
++
+   public resize(cols: number, rows: number): void {
+     const colsChanged = this.cols !== cols;
+     const rowsChanged = this.rows !== rows;

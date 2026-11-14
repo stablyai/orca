@@ -45,7 +45,17 @@ export function replaceOriginCells(
   }
 }
 
-/** Actual nested erasures stay on their row; outer edits own structural moves. */
+export type OriginEditKind = 'insert' | 'delete' | 'replace' | 'fill' | 'resize'
+export type OriginEditFrame = {
+  state: OriginLineAttachment
+  kind: OriginEditKind
+  start: number
+  count: number
+  width: number
+  source?: OriginLineState
+}
+
+/** Native events and custom wrappers share the same accounting. */
 export class HeadlessOriginLineEdits {
   constructor(
     private readonly read: (line: OriginBufferLine) => OriginLineAttachment,
@@ -62,48 +72,79 @@ export class HeadlessOriginLineEdits {
     }
   }
 
+  before(line: OriginBufferLine, kind: OriginEditKind, position = 0, count = 0): OriginEditFrame {
+    const state = this.read(line)
+    const shift = kind === 'insert' || kind === 'delete'
+    const frame = {
+      state,
+      kind,
+      start: position % line.length,
+      count,
+      width: line.length,
+      source: shift
+        ? {
+            runs: state.runs,
+            components: state.components?.size ? new Map(state.components) : undefined
+          }
+        : undefined
+    }
+    state.recordSets = !shift
+    state.editing = true
+    state.erased = undefined
+    return frame
+  }
+
+  after(line: OriginBufferLine, frame: OriginEditFrame): void {
+    const { state, kind, start, count, width, source } = frame
+    state.editing = false
+    try {
+      let next: OriginLineState = state
+      if (kind === 'insert' || kind === 'delete') {
+        next = replaceOriginCells(state, start, width)
+        if (count < width - start) {
+          next =
+            kind === 'insert'
+              ? replaceOriginCells(next, start + count, width, source, start)
+              : replaceOriginCells(next, start, width - count, source, start + count)
+        }
+      } else if (kind === 'resize') {
+        let components: OriginLineState['components']
+        if (state.components?.size) {
+          for (const [index, runs] of state.components) {
+            if (index < line.length) {
+              components ??= new Map()
+              components.set(index, runs)
+            }
+          }
+        }
+        next = { runs: sliceTerminalOrigins(state.runs, 0, line.length), components }
+      }
+      if (state.erased) {
+        for (const span of state.erased) {
+          next = replaceOriginCells(next, span.start, span.end)
+        }
+      }
+      this.assign(line, next)
+    } finally {
+      state.erased = undefined
+    }
+  }
+
   insert(line: OriginBufferLine, position: number, count: number, fill: OriginCell): void {
-    this.shift(line, position, count, fill, true)
+    const frame = this.before(line, 'insert', position, count)
+    try {
+      frame.state.originals!.insertCells.call(line, position, count, fill)
+    } finally {
+      this.after(line, frame)
+    }
   }
 
   remove(line: OriginBufferLine, position: number, count: number, fill: OriginCell): void {
-    this.shift(line, position, count, fill, false)
-  }
-
-  private shift(
-    line: OriginBufferLine,
-    position: number,
-    count: number,
-    fill: OriginCell,
-    insert: boolean
-  ): void {
-    const state = this.read(line)
-    const start = position % line.length
-    const width = line.length
-    const source = {
-      runs: state.runs,
-      components: state.components?.size ? new Map(state.components) : undefined
-    }
-    this.begin(state, false)
+    const frame = this.before(line, 'delete', position, count)
     try {
-      if (insert) {
-        state.originals.insertCells.call(line, position, count, fill)
-      } else {
-        state.originals.deleteCells.call(line, position, count, fill)
-      }
+      frame.state.originals!.deleteCells.call(line, position, count, fill)
     } finally {
-      state.editing = false
-      try {
-        let next = replaceOriginCells(state, start, width)
-        if (count < width - start) {
-          next = insert
-            ? replaceOriginCells(next, start + count, width, source, start)
-            : replaceOriginCells(next, start, width - count, source, start + count)
-        }
-        this.finish(line, state, next)
-      } finally {
-        state.erased = undefined
-      }
+      this.after(line, frame)
     }
   }
 
@@ -114,70 +155,29 @@ export class HeadlessOriginLineEdits {
     fill: OriginCell,
     protect?: boolean
   ): void {
-    const state = this.read(line)
-    this.begin(state)
+    const frame = this.before(line, 'replace')
     try {
-      state.originals.replaceCells.call(line, start, end, fill, protect)
+      frame.state.originals!.replaceCells.call(line, start, end, fill, protect)
     } finally {
-      this.end(line, state)
+      this.after(line, frame)
     }
   }
 
   fill(line: OriginBufferLine, cell: OriginCell, protect?: boolean): void {
-    const state = this.read(line)
-    this.begin(state)
+    const frame = this.before(line, 'fill')
     try {
-      state.originals.fill.call(line, cell, protect)
+      frame.state.originals!.fill.call(line, cell, protect)
     } finally {
-      this.end(line, state)
+      this.after(line, frame)
     }
   }
 
   resize(line: OriginBufferLine, cols: number, cell: OriginCell): boolean {
-    const state = this.read(line)
-    this.begin(state)
+    const frame = this.before(line, 'resize')
     try {
-      return state.originals.resize.call(line, cols, cell)
+      return frame.state.originals!.resize.call(line, cols, cell)
     } finally {
-      state.editing = false
-      try {
-        let components: OriginLineState['components']
-        if (state.components?.size) {
-          for (const [index, runs] of state.components) {
-            if (index < cols) {
-              components ??= new Map()
-              components.set(index, runs)
-            }
-          }
-        }
-        this.finish(line, state, { runs: sliceTerminalOrigins(state.runs, 0, cols), components })
-      } finally {
-        state.erased = undefined
-      }
+      this.after(line, frame)
     }
-  }
-
-  private begin(state: OriginLineAttachment, recordSets = true): void {
-    state.recordSets = recordSets
-    state.editing = true
-    state.erased = undefined
-  }
-
-  private end(line: OriginBufferLine, state: OriginLineAttachment): void {
-    state.editing = false
-    try {
-      this.finish(line, state, state)
-    } finally {
-      state.erased = undefined
-    }
-  }
-
-  private finish(line: OriginBufferLine, state: OriginLineAttachment, next: OriginLineState): void {
-    if (state.erased) {
-      for (const span of state.erased) {
-        next = replaceOriginCells(next, span.start, span.end)
-      }
-    }
-    this.assign(line, next)
   }
 }

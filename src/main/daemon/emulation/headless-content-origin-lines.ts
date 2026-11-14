@@ -1,5 +1,6 @@
 import type { IBufferCell, Terminal } from '@xterm/headless'
 import type { HeadlessContentOrigins } from './headless-content-origins'
+import type { OriginEditKind } from './headless-origin-line-edits'
 import {
   getTerminalLineOrigins,
   setTerminalLineOrigins,
@@ -12,10 +13,8 @@ import {
 export type OriginCell = IBufferCell
 type OriginCellAttributes = { fg?: number; bg?: number }
 export type OriginBufferLine = {
-  mutationObserver?: Pick<
-    HeadlessContentOrigins,
-    'codepointWritten' | 'codepointCombined' | 'glyphNotificationsEnabled' | 'materialize'
-  >
+  mutationObserver?: OriginMutationObserver
+  structuralObserver?: OriginMutationObserver
   length: number
   getString(index: number): string
   hasContent(index: number): number
@@ -67,6 +66,7 @@ export type OriginBuffer = {
 export type OriginTerminalCore = {
   buffers: { normal: OriginBuffer; alt: OriginBuffer; active: OriginBuffer }
   reset(...args: unknown[]): void
+  _bufferService?: { installMutationObserver(observer: OriginMutationObserver): void }
 }
 export function originTerminalCore(terminal: Terminal): OriginTerminalCore | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: optional installed-xterm instance seam, checked before use.
@@ -94,7 +94,7 @@ export type OriginLineMethods = Pick<
 >
 export type OriginLineAttachment = OriginLineState & {
   owner: HeadlessContentOrigins
-  originals: OriginLineMethods
+  originals?: OriginLineMethods
   editing: boolean
   recordSets: boolean
   erased?: { start: number; end: number }[]
@@ -118,7 +118,6 @@ export function readOriginScreenLines(terminal: Terminal, owner: HeadlessContent
   const buffer = terminal.buffer.active
   const lines: string[] = []
   const origins: TerminalOriginRuns[] = []
-  const uniform = owner.uniformOrigin
   for (let index = buffer.viewportY; index < buffer.viewportY + terminal.rows; index++) {
     const line = core?.buffers.active.lines.get(index)
     const columns: number[] = []
@@ -151,8 +150,6 @@ export function readOriginScreenLines(terminal: Terminal, owner: HeadlessContent
         for (const run of component) {
           append(at + run.start, Math.min(end, at + run.end), run.origin)
         }
-      } else if (uniform && state && line?.hasContent(column)) {
-        append(at, end, uniform)
       } else if (line?.hasContent(column)) {
         while (state?.runs[sourceIndex] && state.runs[sourceIndex]!.end <= column) {
           sourceIndex++
@@ -208,4 +205,33 @@ export function readOriginScreenCache(
     return cached
   }
   return { revision, scope, lines: readOriginScreenLines(terminal, owner) }
+}
+
+export type OriginMutationObserver = {
+  codepointWritten(line: OriginBufferLine, column: number, code: number, width: number): void
+  codepointCombined(line: OriginBufferLine, column: number, before: number, after: number): void
+  lineCreated(line: OriginBufferLine): void
+  lineAdmitted(
+    line: OriginBufferLine,
+    methods: Readonly<OriginLineMethods>,
+    prototype: Readonly<OriginLineMethods>
+  ): void
+  beforeLoad(line: OriginBufferLine): void
+  loaded(line: OriginBufferLine, column: number, cell: OriginCell): void
+  beforeSet(line: OriginBufferLine, cell: OriginCell): unknown
+  cellSet(line: OriginBufferLine, column: number, snapshot: unknown): void
+  legacySet(line: OriginBufferLine, column: number): void
+  beforeEdit(line: OriginBufferLine, kind: OriginEditKind, position: number, count: number): unknown
+  afterEdit(line: OriginBufferLine, frame: unknown): void
+  beforeCopy(source: OriginBufferLine, blank?: boolean): unknown
+  beforeCells(
+    line: OriginBufferLine,
+    source: OriginBufferLine,
+    from: number,
+    to: number,
+    count: number
+  ): unknown
+  copied(line: OriginBufferLine, frame: unknown): void
+  beforeBufferChange(): void
+  afterBufferChange(): void
 }

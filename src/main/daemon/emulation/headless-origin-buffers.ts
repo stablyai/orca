@@ -14,11 +14,7 @@ export class HeadlessOriginBuffers {
     private readonly terminal: Terminal,
     private readonly attachLine: (line: OriginBufferLine) => OriginBufferLine,
     private readonly changed: () => void,
-    private readonly beforeChange: () => void,
-    private readonly nativeFactory: (
-      buffer: OriginBuffer,
-      factory: OriginBuffer['getBlankLine']
-    ) => boolean
+    private readonly beforeChange: () => void
   ) {
     const core = originTerminalCore(terminal)
     if (core && typeof core.reset === 'function') {
@@ -40,13 +36,6 @@ export class HeadlessOriginBuffers {
     for (const buffer of [core.buffers.normal, core.buffers.alt]) {
       if (!this.buffers.has(buffer)) {
         this.buffers.add(buffer)
-        const blank = buffer.getBlankLine
-        buffer.getBlankLine = (...args) => {
-          if (!this.nativeFactory(buffer, blank)) {
-            this.beforeChange()
-          }
-          return this.attachLine(blank.apply(buffer, args))
-        }
         const clear = buffer.clear
         buffer.clear = (...args) => {
           this.beforeChange()
@@ -55,13 +44,6 @@ export class HeadlessOriginBuffers {
         }
       }
       this.attachList(buffer.lines)
-    }
-  }
-
-  private beforeInsert(list: OriginLineList, count: number): void {
-    const capacity = list.maxLength
-    if (capacity === undefined || !Number.isFinite(capacity) || list.length + count > capacity) {
-      this.beforeChange()
     }
   }
 
@@ -79,17 +61,12 @@ export class HeadlessOriginBuffers {
     }
     const push = list.push
     list.push = (line) => {
-      this.beforeInsert(list, 1)
       push.call(list, this.attachLine(line))
       this.changed()
     }
     const splice = list.splice
     list.splice = (start, count, ...lines) => {
-      if (count) {
-        this.beforeChange()
-      } else {
-        this.beforeInsert(list, lines.length)
-      }
+      this.beforeChange()
       splice.call(list, start, count, ...lines.map((line) => this.attachLine(line)))
       this.changed()
     }

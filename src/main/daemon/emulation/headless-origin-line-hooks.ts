@@ -28,8 +28,8 @@ export const ORIGIN_LINE_HOOKS: OriginLineMethods = {
   },
   set(this: OriginBufferLine, index, cell) {
     const state = readOriginLineAttachment(this)!
-    state.owner.materialize()
-    state.originals.set.call(this, index, cell)
+    state.owner.flush()
+    state.originals!.set.call(this, index, cell)
     state.owner.writeCell(this, index)
   },
   insertCells(this: OriginBufferLine, position, count, fill) {
@@ -61,7 +61,7 @@ export const { set: _optionalSetHook, ...REQUIRED_ORIGIN_LINE_HOOKS } = ORIGIN_L
 
 const hookPrototypes = new WeakMap<
   object,
-  { prototype: object; originals: Readonly<OriginLineMethods> }
+  { prototype: Readonly<OriginLineMethods>; originals: Readonly<OriginLineMethods> }
 >()
 
 export function prepareOriginLineHookPrototype(
@@ -140,4 +140,24 @@ export function captureOriginLineMethods(
     clone: line.clone,
     copyCellsFrom: line.copyCellsFrom
   }
+}
+
+export function isNativeOriginLine(
+  line: OriginBufferLine,
+  methods: Readonly<OriginLineMethods>,
+  nativePrototype: Readonly<OriginLineMethods>
+): boolean {
+  if (Object.getPrototypeOf(line) !== nativePrototype) {
+    return false
+  }
+  for (const name of LINE_METHOD_NAMES) {
+    if (Object.hasOwn(line, name)) {
+      return false
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(nativePrototype, name)
+    if (!descriptor || !('value' in descriptor) || descriptor.value !== methods[name]) {
+      return false
+    }
+  }
+  return true
 }

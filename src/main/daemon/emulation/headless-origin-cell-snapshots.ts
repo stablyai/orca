@@ -10,7 +10,7 @@ import {
   type TerminalOriginRuns
 } from '../../../shared/terminal/output/terminal-content-origin'
 
-type OriginCellSnapshot = {
+export type OriginCellSnapshot = {
   runs: TerminalOriginRuns
   index: number
   component?: TerminalOriginRuns
@@ -31,9 +31,18 @@ export class HeadlessOriginCellSnapshots {
   ) {}
 
   set(line: OriginBufferLine, index: number, cell: OriginCell): void {
-    const state = this.read(line)
-    const origin = this.get(cell)
-    state.originals.setCell.call(line, index, cell)
+    const origin = this.beforeSet(line, cell)
+    readOriginLineAttachment(line)!.originals!.setCell.call(line, index, cell)
+    this.afterSet(line, index, origin)
+  }
+
+  beforeSet(line: OriginBufferLine, cell: OriginCell): OriginCellSnapshot | undefined {
+    this.read(line)
+    return this.get(cell)
+  }
+
+  afterSet(line: OriginBufferLine, index: number, origin?: OriginCellSnapshot): void {
+    const state = readOriginLineAttachment(line)!
     if (state.editing) {
       if (state.recordSets) {
         this.erase(state, index)
@@ -53,11 +62,20 @@ export class HeadlessOriginCellSnapshots {
   }
 
   load(line: OriginBufferLine, index: number, cell: OriginCell): OriginCell {
-    const attached = readOriginLineAttachment(line)!
-    const state = this.read(line)
-    const result = attached.originals.loadCell.call(line, index, cell)
-    if (attached.editing) {
-      return result
+    this.beforeLoad(line)
+    const result = readOriginLineAttachment(line)!.originals!.loadCell.call(line, index, cell)
+    this.loaded(line, index, result)
+    return result
+  }
+
+  beforeLoad(line: OriginBufferLine): void {
+    this.read(line)
+  }
+
+  loaded(line: OriginBufferLine, index: number, result: OriginCell): void {
+    const state = readOriginLineAttachment(line)!
+    if (state.editing) {
+      return
     }
     const snapshot = this.cells.get(result)
     if (snapshot) {
@@ -67,6 +85,5 @@ export class HeadlessOriginCellSnapshots {
     } else {
       this.cells.set(result, { runs: state.runs, index, component: state.components?.get(index) })
     }
-    return result
   }
 }

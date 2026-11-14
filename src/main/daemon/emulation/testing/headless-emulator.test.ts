@@ -420,8 +420,16 @@ it('keeps loaded-cell snapshots and copied mixed glyphs independent of later sou
   const terminal = new Terminal({ cols: 12, rows: 2, allowProposedApi: true })
   const line = originTerminalCore(terminal)!.buffers.active.lines.get(0)!
   const originalSetCell = line.setCell
+  const originalClone = line.clone
+  let cellWrites = 0
+  let clones = 0
   line.setCell = function (index, cell) {
+    cellWrites++
     originalSetCell.call(this, index, cell)
+  }
+  line.clone = function (blank) {
+    clones++
+    return originalClone.call(this, blank)
   }
   const origins = new HeadlessContentOrigins(terminal)
   const owner = {}
@@ -440,12 +448,15 @@ it('keeps loaded-cell snapshots and copied mixed glyphs independent of later sou
     line.loadCell(1, cell)
     await write('\r\x1b[CZ', current)
     origins.begin(current)
+    cellWrites = 0
     line.setCell(4, cell)
     origins.end()
+    expect(cellWrites).toBe(1)
     expect(terminal.buffer.active.getLine(0)!.translateToString(true)).toBe('eZ  X')
     expect(eligible(4, 5)).toBe(false)
     await write('\r\x1b[C\u0301', current)
     const copy = line.clone()
+    expect(clones).toBe(1)
     await write('\rQ', current)
     line.copyFrom(copy)
     expect(eligible(0, 2)).toBe(false)
@@ -461,6 +472,12 @@ it('keeps loaded-cell snapshots and copied mixed glyphs independent of later sou
     line.copyFrom(copy)
     expect(eligible(0, 1)).toBe(true)
     expect(eligible(4, 5)).toBe(false)
+    copy.insertCells(0, 1, cell)
+    line.copyFrom(copy)
+    expect(line.translateToString(true)).toBe('XQ́  X')
+    expect(eligible(0, 1)).toBe(false)
+    expect(eligible(1, 3)).toBe(true)
+    expect(eligible(5, 6)).toBe(false)
   } finally {
     terminal.dispose()
   }

@@ -235,7 +235,6 @@ export class HeadlessEmulator {
     }
     this.restoredOscLinks = []
     const writeSync = this.partialEscapeTail ? null : (data: string) => void this.writeSync(data)
-    this.contentOrigins?.materialize()
     resizeLikeOwnPty(this.terminal, cols, rows, writeSync)
     this.contentOrigins?.resized()
   }
@@ -343,7 +342,6 @@ export class HeadlessEmulator {
 
   clearScrollback(): void {
     this.restoredOscLinks = []
-    this.contentOrigins?.materialize()
     this.terminal.clear()
   }
 
