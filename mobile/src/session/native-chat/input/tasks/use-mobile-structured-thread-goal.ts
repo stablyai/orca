@@ -18,7 +18,7 @@ import { mobileStructuredHostClockOffsetMs } from '../../agent-session/mobile-st
 import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile-native-chat-send'
 import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
 import { AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY } from '../../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
-import { useRouteRelaysCapability } from '../../../../worktree/workspace-server-context'
+import { useRouteRelaysCapability } from '../../../../worktree/execution-hosts/workspace-server-context'
 
 export type MobileStructuredThreadGoal = {
   /** Scopes the strip's expansion to the conversation. */

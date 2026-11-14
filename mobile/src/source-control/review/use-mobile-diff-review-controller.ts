@@ -3,7 +3,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { DiffComment } from '../../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { getWorktreeLabel } from '../../worktree/worktree-label'
+import { getWorktreeLabel } from '../../worktree/row-presentation/worktree-label'
 import { getUnsentMobileDiffComments } from './mobile-diff-comment-edit'
 import {
   buildMobileDiffReviewQueue,

@@ -4,7 +4,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, pressedStyle, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { AgentDotState } from '../worktree/agent-row-display'
+import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { AGENT_ROW_INDENT_PER_DEPTH } from './WorktreeAgentRow'
 

@@ -10,11 +10,11 @@ import { MobileSegmentedControl, type MobileSegment } from '../components/Mobile
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useSessionScreenHandlers } from '../session/session-screen-handlers'
-import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
-import { getWorktreeLabel } from '../worktree/worktree-label'
+import { worktreeCatalogRead } from '../worktree/catalog/worktree-catalog-operations'
+import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
@@ -25,7 +25,7 @@ import {
 import { prepareMobileAiVaultSessionResume } from './ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
 import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'

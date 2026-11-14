@@ -11,8 +11,8 @@ import {
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { buildWorktreeRemoveRequest } from './worktree-remove-request'
-import { removeWorktreeRow } from '../../worktree/worktree-host-row-identity'
-import type { Worktree } from '../../worktree/workspace-list-types'
+import { removeWorktreeRow } from '../../worktree/row-presentation/worktree-host-row-identity'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { worktreeArchiveHookTrustRead, worktreeRemove } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 

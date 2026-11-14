@@ -2,8 +2,8 @@ import type { MountAdapter } from '../recording-scenario'
 import { hookMount } from '../hook-mount'
 import { projectObservable } from '../observable-model'
 import type { operationModuleLoader } from '../operation-module-loader'
-import type * as HomeWorktreeFetch from '../../../worktree/home-host-worktree-fetch'
-import type * as HomeWorktreeInfo from '../../../worktree/home-worktree-info'
+import type * as HomeWorktreeFetch from '../../../worktree/catalog/home-host-worktree-fetch'
+import type * as HomeWorktreeInfo from '../../../worktree/catalog/home-worktree-info'
 
 const HOST = 'host-1'
 const REPO = 'repo-1'
@@ -14,10 +14,10 @@ export function worktreeCatalogMountAdapters(
   return {
     'worktree.home-catalog': (context) => {
       const { homeWorktreeCountsQuery } = modules.load<typeof HomeWorktreeFetch>(
-        'mobile/src/worktree/home-host-worktree-fetch.ts'
+        'mobile/src/worktree/catalog/home-host-worktree-fetch.ts'
       )
       const { homeWorktreeInfo } = modules.load<typeof HomeWorktreeInfo>(
-        'mobile/src/worktree/home-worktree-info.ts'
+        'mobile/src/worktree/catalog/home-worktree-info.ts'
       )
       type Counts = Parameters<typeof homeWorktreeInfo>[1]['data']
       let info: Record<string, unknown> = {}
@@ -72,8 +72,10 @@ export function worktreeCatalogMountAdapters(
     'worktree.catalog-snapshot': (context) => {
       const { client } = context
       const SnapshotClient = modules.load<
-        typeof import('../../../worktree/worktree-catalog-snapshot-client')
-      >('mobile/src/worktree/worktree-catalog-snapshot-client.ts').WorktreeCatalogSnapshotClient
+        typeof import('../../../worktree/catalog/worktree-catalog-snapshot-client')
+      >(
+        'mobile/src/worktree/catalog/worktree-catalog-snapshot-client.ts'
+      ).WorktreeCatalogSnapshotClient
       const snapshots = new SnapshotClient()
       let fetched: unknown = 'unfetched'
       let admitted: unknown = 'unadmitted'
@@ -95,8 +97,8 @@ export function worktreeCatalogMountAdapters(
     },
     'worktree.retired-names': ({ client }) => {
       const useRetired = modules.load<
-        typeof import('../../../worktree/use-retired-worktree-names')
-      >('mobile/src/worktree/use-retired-worktree-names.ts').useRetiredWorktreeNames
+        typeof import('../../../worktree/catalog/use-retired-worktree-names')
+      >('mobile/src/worktree/catalog/use-retired-worktree-names.ts').useRetiredWorktreeNames
       let registry: unknown
       let refreshKey = 1
       const hook = hookMount(() => {

@@ -46,7 +46,7 @@ import {
 import {
   mobileAgentChildRowName,
   mobileAgentChildRowText
-} from '../../../../worktree/mobile-agent-child-row-text'
+} from '../../../../worktree/agent-lineage/mobile-agent-child-row-text'
 import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
 
 type TaskKind = AgentSessionBackgroundTask['kind']

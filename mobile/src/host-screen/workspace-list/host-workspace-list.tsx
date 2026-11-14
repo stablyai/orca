@@ -22,13 +22,20 @@ import { WorktreeListRow } from '../../components/WorktreeListRow'
 import { WORKTREE_ROW_LAYOUT } from '../../components/worktree-list-row-layout'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
+import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
 import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
-} from '../../worktree/host-workspace-list-states'
-import { getWorktreeDotStatus, hasWorktreeAgentState } from '../../worktree/workspace-list-ordering'
-import type { Section, WorkspaceListItem, Worktree } from '../../worktree/workspace-list-types'
+} from '../../worktree/execution-hosts/host-workspace-list-states'
+import {
+  getWorktreeDotStatus,
+  hasWorktreeAgentState
+} from '../../worktree/workspace-list/workspace-list-ordering'
+import type {
+  Section,
+  WorkspaceListItem,
+  Worktree
+} from '../../worktree/workspace-list/workspace-list-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../../src/shared/worktree/row-display/card-properties'
 import { hostScreenStyles as styles } from '../host-screen-styles'
@@ -37,7 +44,7 @@ import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { useHostMutationDrafts } from '../../query/host-mutation-drafts'
 import { workspaceRenameDraftKey } from '../workspace-actions/workspace-rename-sheet'
-import { projectGroupHeaderIndent } from '../../worktree/project-group-indent'
+import { projectGroupHeaderIndent } from '../../worktree/project-sections/project-group-indent'
 import type { HostScreenController } from '../use-host-screen-controller'
 
 export function HostWorkspaceList({

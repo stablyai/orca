@@ -4,7 +4,7 @@ import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TaskProviderLogo } from './TaskProviderLogo'
-import type { WorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
+import type { WorktreeMetaGlyphPresence } from '../worktree/row-presentation/worktree-meta-glyph-presence'
 import { prStateToken } from './pr-state-token'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
 

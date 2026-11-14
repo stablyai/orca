@@ -3,8 +3,8 @@ import { TextInputSheetContent } from '../../components/TextInputModal'
 import { useDraftRenameSheet } from '../../components/use-draft-rename-sheet'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { HostMutationPhase } from '../../query/host-mutation'
-import type { Worktree } from '../../worktree/workspace-list-types'
-import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
+import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
 
 export function workspaceRenameDraftKey(hostId: string, row: Worktree): string {
   return `workspace-rename:${hostId}:${getWorktreeRowIdentity(row)}`

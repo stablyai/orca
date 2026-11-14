@@ -7592,7 +7592,7 @@
       "id": "live-worktree-name-stream",
       "operation": "session.live-worktree-name",
       "family": "live-worktree-name",
-      "sites": ["mobile/src/worktree/use-live-worktree-name.ts"],
+      "sites": ["mobile/src/worktree/row-presentation/use-live-worktree-name.ts"],
       "schedules": [],
       "steps": [
         {

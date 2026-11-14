@@ -7,14 +7,14 @@ import { colors, feedback, radii, spacing, typography } from '../theme/mobile-th
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { WorkspaceListItem, Worktree, WorktreeRowView } from '../worktree/workspace-list-types'
+import type * as WorkspaceRows from '../worktree/workspace-list/workspace-list-types'
 import type { WorktreeCardDetails } from '../../../src/shared/worktree/row-display/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
-import { areStructurallyEqual } from '../worktree/structural-equality'
-import { projectGroupRowIndent } from '../worktree/project-group-indent'
-import { getWorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
+import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
+import { projectGroupRowIndent } from '../worktree/project-sections/project-group-indent'
+import { getWorktreeMetaGlyphPresence } from '../worktree/row-presentation/worktree-meta-glyph-presence'
 import { AgentSpinner } from './AgentSpinner'
 import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
@@ -25,8 +25,8 @@ import { WorktreeUnsavedName } from './WorktreeUnsavedName'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
 type Props = {
-  item: Worktree
-  view: WorktreeRowView
+  item: WorkspaceRows.Worktree
+  view: WorkspaceRows.WorktreeRowView
   isReadOnly: boolean
   repoColor: string
   repoIcon?: MobileRenderableRepoIcon | null
@@ -37,11 +37,11 @@ type Props = {
   agentActivityDisplayMode: AgentActivityDisplayMode
   /** Null until a live read says (rows from the phone's store carry no agent state). */
   status: WorktreeStatus | null
-  onPress: (item: Worktree) => void
-  onAgentPress?: (item: Worktree, paneKey: string) => void
+  onPress: (item: WorkspaceRows.Worktree) => void
+  onAgentPress?: (item: WorkspaceRows.Worktree, paneKey: string) => void
   statusLive?: boolean
-  onLongPress?: (item: Worktree) => void
-  onToggleLineage?: (item: WorkspaceListItem) => void
+  onLongPress?: (item: WorkspaceRows.Worktree) => void
+  onToggleLineage?: (item: WorkspaceRows.WorkspaceListItem) => void
   /** A rename the desktop hasn't taken yet; the row keeps its real name and points to this one. */
   unsavedName?: string
 }
