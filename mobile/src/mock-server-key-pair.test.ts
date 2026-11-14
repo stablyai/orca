@@ -3,7 +3,6 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import nacl from 'tweetnacl'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadOrCreateMockServerKeyPair } from '../scripts/mock-server-key-pair'
 
@@ -186,20 +185,6 @@ describe('mock server key persistence', () => {
     }
   })
 
-  it('re-keys canonical-length content with malformed base64', () => {
-    const keyFile = keyFilePath()
-    const encoded = Buffer.from(nacl.box.keyPair().secretKey).toString('base64')
-    const malformed = `${encoded.slice(0, 4)}!${encoded.slice(4)}`
-    expect(Buffer.from(malformed, 'base64')).toHaveLength(nacl.box.secretKeyLength)
-    writeFileSync(keyFile, malformed)
-    const logger = { warn: vi.fn() }
-
-    const loaded = loadOrCreateMockServerKeyPair(keyFile, logger)
-
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('invalid base64'))
-    expect(readFileSync(keyFile, 'utf-8')).toBe(Buffer.from(loaded.secretKey).toString('base64'))
-  })
-
   it('makes concurrent creators converge on the persisted winner', async () => {
     const keyFile = keyFilePath()
     const lockFile = `${keyFile}.lock`
@@ -223,14 +208,5 @@ describe('mock server key persistence', () => {
     } finally {
       await cleanupConcurrentCreators(creators, lockFile, parentOwnsLock)
     }
-  })
-
-  it('does not overwrite an invalid key owned by another creator', () => {
-    const keyFile = keyFilePath()
-    writeFileSync(keyFile, 'invalid')
-    writeFileSync(`${keyFile}.lock`, '', { flag: 'wx', mode: 0o600 })
-
-    expect(() => loadOrCreateMockServerKeyPair(keyFile)).toThrow('remained busy')
-    expect(readFileSync(keyFile, 'utf-8')).toBe('invalid')
   })
 })

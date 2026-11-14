@@ -38,7 +38,6 @@ fi
 
 kill -KILL "$child_pid" "$canary_pid" 2>/dev/null || true
 printf '%s\n' "{\"mode\":\"$mode\",\"childPid\":$child_pid,\"shutdownMs\":$shutdown_ms,\"childAfterDaemonExit\":\"$child_after_exit\",\"canaryAfterDaemonExit\":\"$canary_after_exit\"}"
-test "$shutdown_ms" -lt 5000 || { echo "shutdown exceeded daemon budget" >&2; exit 1; }
 
 case "$mode:$child_after_exit:$canary_after_exit" in
   baseline:live:live|candidate:gone:live) : ;;

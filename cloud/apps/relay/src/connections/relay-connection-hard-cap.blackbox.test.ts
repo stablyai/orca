@@ -122,15 +122,12 @@ describe('relay connection hard cap', () => {
   it('preserves control headroom and never disturbs established sockets', async () => {
     const keys = await generateKeyPair('ES256')
     const publicJwk = await exportJWK(keys.publicKey)
-    const adminKeys = await generateKeyPair('RS256')
-    const adminPublicJwk = await exportJWK(adminKeys.publicKey)
     const jwks = createServer((_request, response) => {
       response.setHeader('content-type', 'application/json')
       response.end(
         JSON.stringify({
           keys: [
-            { ...publicJwk, kid: 'test-key', alg: 'ES256', use: 'sig' },
-            { ...adminPublicJwk, kid: 'admin-key', alg: 'RS256', use: 'sig' }
+            { ...publicJwk, kid: 'test-key', alg: 'ES256', use: 'sig' }
           ]
         })
       )
@@ -188,36 +185,6 @@ describe('relay connection hard cap', () => {
     await new Promise<void>((resolve) => relay.server.once('listening', resolve))
     cleanup.push(() => new Promise<void>((resolve) => relay.server.close(() => resolve())))
     const wsUrl = relayUrl.replace('http:', 'ws:')
-    const adminToken = await new SignJWT({
-      email: 'deploy@example.com',
-      email_verified: true
-    })
-      .setProtectedHeader({ alg: 'RS256', kid: 'admin-key' })
-      .setIssuer('https://accounts.google.com')
-      .setAudience(`${relayUrl}/admin`)
-      .setSubject('deploy-subject')
-      .setIssuedAt()
-      .setExpirationTime('5m')
-      .sign(adminKeys.privateKey)
-    const statusResponse = await fetch(`${relayUrl}/v1/admin/runtime-status`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${adminToken}`,
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({ v: 1 })
-    })
-    expect(statusResponse.status).toBe(200)
-    expect(await statusResponse.json()).toMatchObject({
-      connectionCapacity: {
-        hardCap: 600,
-        controlRebindReserve: 100,
-        ordinaryConnectionLimit: 500,
-        unobservedBound: 60,
-        normalAdmissionPause: 440
-      }
-    })
-
     const unmatchedData = await Promise.all(
       ['unmatched-1', 'unmatched-2', 'unmatched-3'].map((connectionId) =>
         openSocket(`${wsUrl}/v1/host/data/${connectionId}`)

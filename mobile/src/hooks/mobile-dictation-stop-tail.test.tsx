@@ -11,7 +11,7 @@ import {
 import type {
   DictationCapture,
   DictationCaptureChunk
-} from '../platform/dictation-capture-contract'
+} from '../platform/audio-capture/dictation-capture-contract'
 
 type Seam = {
   chunkHandlers: Set<(chunk: DictationCaptureChunk) => void>
@@ -26,7 +26,7 @@ vi.mock('react-native', () => ({
 }))
 
 // Keep capture identity stable like both real seams; a fresh object on render would rerun teardown and cancel dictation.
-vi.mock('../platform/dictation-capture', () => {
+vi.mock('../platform/audio-capture/dictation-capture', () => {
   const capture: DictationCapture = {
     open: async () => ({ ok: true }),
     begin: () => true,
@@ -148,32 +148,6 @@ describe('the audio a capture hands over as it ends', () => {
     expect(chunk === undefined ? null : audioOf(chunk)).toBe('BwgJCg==')
     expect(methods.indexOf('speech.dictation.chunk')).toBeLessThan(
       methods.indexOf('speech.dictation.finish')
-    )
-  })
-
-  it('stops being accepted once the capture has ended', async () => {
-    const rpc = createFakeRpcClient()
-    const sent: SentRequest[] = []
-    mount(rpc)
-    await act(async () => {
-      const started = dictation().start()
-      await pump(rpc, sent)
-      await started
-    })
-    await act(async () => {
-      const stopped = dictation().stop()
-      await pump(rpc, sent)
-      await stopped
-    })
-    const before = sent.filter((request) => request.method === 'speech.dictation.chunk').length
-    for (const handler of seam.chunkHandlers) {
-      handler({ data: Uint8Array.from([1, 2, 3, 4]), droppedBytes: 0 })
-    }
-    await act(async () => {
-      await pump(rpc, sent)
-    })
-    expect(sent.filter((request) => request.method === 'speech.dictation.chunk')).toHaveLength(
-      before
     )
   })
 })

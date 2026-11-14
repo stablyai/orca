@@ -1,5 +1,5 @@
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { replaceRecordEntries } from '../../keyed-record-transitions'
+import { linkRecordWrite, replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -91,6 +91,9 @@ export function reduceAgentStatusLiveUpdate(
     nextLiveCount
   )
   noteLiveAgentStatusCount(nextLive, nextLiveCount - evictedPaneKeys.length)
+  // Why: per-workspace readers skip status updates for panes they don't read; the cap protects
+  // `paneKey`, so this write and its evictions are exactly the changed keys.
+  linkRecordWrite(nextLive, previousLive, [paneKey, ...evictedPaneKeys])
   const evictedOrphans = evictedPaneKeys.length > 0
   const evictedEntries: AgentStatusEntry[] = []
   if (evictedOrphans) {

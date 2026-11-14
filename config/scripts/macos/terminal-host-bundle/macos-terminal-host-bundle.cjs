@@ -14,9 +14,13 @@ const {
 const { builtinModules } = require('node:module')
 const { basename, dirname, join, relative, resolve, sep } = require('node:path')
 const { pathToFileURL } = require('node:url')
+const {
+  assertMacExecutableUuid,
+  giveMacExecutableUniqueUuid
+} = require('../../desktop-distribution/macos/macos-executable-uuid.cjs')
 
-const MAC_TERMINAL_HOST_NAME = 'Orca Terminal Host'
-const MAC_TERMINAL_HOST_EXECUTABLE = 'orca-terminal-host'
+const MAC_TERMINAL_HOST_NAME = 'Orca Agents'
+const MAC_TERMINAL_HOST_EXECUTABLE = 'Orca Agents'
 const macTerminalHostSignIgnore = [`/Contents/Helpers/${MAC_TERMINAL_HOST_NAME}\\.app(/|$)`]
 const NODE_PTY_FILES = [
   'package.json',
@@ -38,6 +42,20 @@ const LOAD_CALL = /\b(?:require|import)\(/g
 // The whole argument must be one plain string literal; anything else is a computed name.
 const LITERAL_ARGUMENT = /^\s*([`'"])([^`'"$]+)\1\s*\)/
 const LIPO_ARCH_TO_NODE_ARCH = { x86_64: 'x64', arm64: 'arm64' }
+
+// electron-builder names the app bundle and its main executable after productFilename.
+function macAppExecutableName(appPath) {
+  return basename(appPath, '.app')
+}
+
+/** Throws unless the helper executable carries the app's main-executable UUID for every CPU type. */
+function assertMacTerminalHostUuid(appPath, appId) {
+  assertMacExecutableUuid(
+    macTerminalHostPaths(appPath).executable,
+    appId,
+    macAppExecutableName(appPath)
+  )
+}
 
 function macTerminalHostPaths(appPath) {
   const bundle = join(appPath, 'Contents', 'Helpers', `${MAC_TERMINAL_HOST_NAME}.app`)
@@ -194,8 +212,8 @@ function buildMacTerminalHostInfo({ appInfo, usageDescriptions, minimumOs }) {
   return {
     ...usageDescriptions,
     CFBundleIdentifier: appInfo.CFBundleIdentifier,
-    CFBundleName: 'Orca',
-    CFBundleDisplayName: 'Orca',
+    CFBundleName: MAC_TERMINAL_HOST_NAME,
+    CFBundleDisplayName: MAC_TERMINAL_HOST_NAME,
     CFBundleExecutable: MAC_TERMINAL_HOST_EXECUTABLE,
     CFBundlePackageType: 'APPL',
     CFBundleInfoDictionaryVersion: '6.0',
@@ -210,6 +228,15 @@ function buildMacTerminalHostInfo({ appInfo, usageDescriptions, minimumOs }) {
 
 function findMacTerminalHostInfoProblems(info, { appId, usageDescriptions, minimumOs }) {
   const problems = []
+  for (const [key, expected] of Object.entries({
+    CFBundleName: MAC_TERMINAL_HOST_NAME,
+    CFBundleDisplayName: MAC_TERMINAL_HOST_NAME,
+    CFBundleExecutable: MAC_TERMINAL_HOST_EXECUTABLE
+  })) {
+    if (info[key] !== expected) {
+      problems.push(`${key} is ${info[key]}, expected ${expected}`)
+    }
+  }
   if (info.CFBundleIdentifier !== appId) {
     problems.push(`CFBundleIdentifier is ${info.CFBundleIdentifier}, expected ${appId}`)
   }
@@ -271,6 +298,13 @@ function assembleMacTerminalHost({ appPath, nodeExecutable, iconPath, info }) {
   mkdirSync(join(paths.bundle, 'Contents', 'MacOS'), { recursive: true })
   cpSync(nodeExecutable, paths.executable)
   chmodSync(paths.executable, 0o755)
+  // Terminals' responsible process is this helper, and stock Node's UUID is shared by every install of that build (#21988).
+  // Local Network caches one UUID per bundle id, so the helper carries the app's: its own would flip that cache.
+  giveMacExecutableUniqueUuid(
+    paths.executable,
+    info.CFBundleIdentifier,
+    macAppExecutableName(appPath)
+  )
   cpSync(iconPath, paths.icon)
   cpSync(join(daemonOut, 'main'), join(paths.daemon, 'out', 'main'), { recursive: true })
   // Pins out/ to CommonJS so a stray parent package.json cannot change the loader.
@@ -375,6 +409,11 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
       minimumOs
     })
   )
+  try {
+    assertMacTerminalHostUuid(appPath, appId)
+  } catch (error) {
+    problems.push(error.message)
+  }
   const minos = parseBuildVersionMinos(
     spawnChecked('/usr/bin/otool', ['-l', paths.executable]).stdout
   )
@@ -415,6 +454,7 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
 module.exports = {
   MAC_TERMINAL_HOST_NAME,
   assembleMacTerminalHost,
+  assertMacTerminalHostUuid,
   buildMacTerminalHost,
   buildMacTerminalHostInfo,
   daemonBareRequires,

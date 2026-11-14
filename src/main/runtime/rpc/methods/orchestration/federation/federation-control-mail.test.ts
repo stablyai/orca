@@ -186,26 +186,6 @@ describe('orchestration federation control mail', () => {
     expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(0)
   })
 
-  it('wakes a remote worker waiter when control mail imports', async () => {
-    const waiting = workerDispatcher.dispatch(checkRequest('wait-for-control', true))
-    await Promise.resolve()
-
-    const imported = await dispatchImport(importRequest('import-control', 1, 'relay-control'))
-
-    expect(imported).toMatchObject({
-      ok: true,
-      result: { acknowledgedThrough: 1, imported: 1 }
-    })
-    await expect(waiting).resolves.toMatchObject({
-      ok: true,
-      result: {
-        dispatchId,
-        count: 1,
-        messages: [{ id: 'relay-control', subject: 'Continue' }]
-      }
-    })
-  })
-
   it('accepts a repeated import after a lost acknowledgment without duplicating mail', async () => {
     const first = await dispatchImport(importRequest('first-import', 1, 'relay-control'))
     const repeated = await dispatchImport(

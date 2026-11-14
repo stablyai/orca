@@ -110,12 +110,7 @@ export function ProjectGroupDeleteDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {t(
-              'auto.components.sidebar.ProjectGroupDeleteDialog.591f330288',
-              'Delete Project Group'
-            )}
-          </DialogTitle>
+          <DialogTitle size="compact">{t('common.delete', 'Delete')}</DialogTitle>
           <DialogDescription className="text-xs">
             <Trans
               i18n={i18n}
@@ -214,7 +209,7 @@ export function ProjectGroupDeleteDialog({
           >
             {deleting
               ? t('auto.components.sidebar.ProjectGroupDeleteDialog.2c14ce677a', 'Deleting...')
-              : t('auto.components.sidebar.ProjectGroupDeleteDialog.fec7e9c8ae', 'Delete Group')}
+              : t('common.delete', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>

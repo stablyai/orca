@@ -69,8 +69,14 @@ export const createRefreshEventActions = (
           nextSequences[alias.cacheKey] ?? 0,
           prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)?.sequence ?? 0
         )
+        const completesOwnedRequest =
+          event.status === 'skipped' &&
+          event.sequence === previousSequence &&
+          nextStates[alias.cacheKey]?.status === 'in-flight'
         if (
-          event.outcome ? event.sequence < previousSequence : event.sequence <= previousSequence
+          event.outcome
+            ? event.sequence < previousSequence
+            : event.sequence <= previousSequence && !completesOwnedRequest
         ) {
           if (event.outcome || event.status !== 'in-flight') {
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)

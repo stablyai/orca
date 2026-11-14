@@ -1,7 +1,7 @@
 import type {
   SidebarInputsChangedEvent,
   SidebarInputsReadResult
-} from '../../../../../shared/sidebar-list/sidebar-inputs-feed-contract'
+} from '../../../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import {
   INITIAL_SIDEBAR_INPUTS_FEED_STATE,
   refreshSidebarInputs,
@@ -10,7 +10,7 @@ import {
   type SidebarInputsFeedRequest,
   type SidebarInputsFeedState,
   type SidebarInputsFeedStep
-} from '../../../../../shared/sidebar-list/sidebar-inputs-feed-installer'
+} from '../../../../../shared/sidebar-list/feed/sidebar-inputs-feed-installer'
 import type {
   SidebarInputsFeed,
   SidebarInputsFeedChange,

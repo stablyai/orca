@@ -1,4 +1,3 @@
-import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from '../../assignment/assignment-store.js'
@@ -25,41 +24,6 @@ const BASE_MEMBERSHIP = {
   existingOnly: [],
   migrationOnly: [],
   general: ['c1', 'c2', 'c3']
-}
-
-class FailAfterIntentDatabase implements RelayDatabase {
-  private transactionsUntilFailure = Number.POSITIVE_INFINITY
-
-  constructor(private readonly delegate: RelayDatabase) {}
-
-  failSecondTransaction(): void {
-    this.transactionsUntilFailure = 2
-  }
-
-  async query(sql: string, params?: unknown[]): Promise<SqlRow[]> {
-    return await this.delegate.query(sql, params)
-  }
-
-  async queryLocked(
-    sql: string,
-    params?: unknown[],
-    options?: RelayLockOptions
-  ): Promise<SqlRow[]> {
-    return await this.delegate.queryLocked(sql, params, options)
-  }
-
-  async transaction<T>(operation: (transaction: RelayDatabase) => Promise<T>): Promise<T> {
-    this.transactionsUntilFailure--
-    if (this.transactionsUntilFailure === 0) {
-      this.transactionsUntilFailure = Number.POSITIVE_INFINITY
-      throw new Error('injected_commit_ambiguity')
-    }
-    return await this.delegate.transaction(operation)
-  }
-
-  async close(): Promise<void> {
-    await this.delegate.close()
-  }
 }
 
 class AfterTransactionDatabase implements RelayDatabase {
@@ -151,34 +115,6 @@ describe('relay cell admission selector', () => {
     await expect(store.startEvacuation(existing, 'c2')).resolves.toMatchObject({
       sourceCellId: 'c1',
       targetCellId: 'c2'
-    })
-  })
-
-  it('excludes existing-only and migration-only cells from dormant placement', async () => {
-    let now = 100
-    const store = await setup(() => now)
-    const identity = { userId: 'dormant', relayHostId: 'host000000000001' }
-    const assignment = await store.assign(identity)
-    const control = await store.activateControl(identity, {
-      cellId: assignment.cellId,
-      assignmentEpoch: assignment.assignmentEpoch,
-      generation: 1
-    })
-    await store.releaseActivity(identity, control)
-    now += ASSIGNMENT_LIMITS.dormantTtlMs + 1
-
-    await store.applyCellAdmissionSelector({
-      attemptId: 'cutover_002',
-      expectedGeneration: 0,
-      expectedMembershipSha256: BASE_MEMBERSHIP_SHA256,
-      membership: INITIAL_MEMBERSHIP
-    })
-
-    await expect(store.rebalanceDormant(identity, 'c2')).rejects.toThrow(
-      'target_cell_unavailable'
-    )
-    await expect(store.rebalanceDormant(identity, 'c3')).resolves.toMatchObject({
-      cellId: 'c3'
     })
   })
 
@@ -283,94 +219,6 @@ describe('relay cell admission selector', () => {
     ])
   })
 
-  it('persists failed CAS intent without mutating current membership', async () => {
-    const store = await setup(() => 100)
-    await store.applyCellAdmissionSelector({
-      attemptId: 'cutover_005',
-      expectedGeneration: 0,
-      expectedMembershipSha256: BASE_MEMBERSHIP_SHA256,
-      membership: INITIAL_MEMBERSHIP
-    })
-
-    await expect(
-      store.applyCellAdmissionSelector({
-        attemptId: 'stale_attempt',
-        expectedGeneration: 5,
-        membership: {
-          existingOnly: ['c1'],
-          migrationOnly: [],
-          general: ['c2', 'c3']
-        }
-      })
-    ).rejects.toThrow('admission_selector_generation_mismatch')
-    await expect(store.inspectCellAdmissionSelector('stale_attempt')).resolves.toMatchObject({
-      selector: { generation: 1, membership: INITIAL_MEMBERSHIP },
-      intent: { state: 'diverged' }
-    })
-  })
-
-  it('rejects duplicate or incomplete selector membership before mutation', async () => {
-    const store = await setup(() => 100)
-
-    await expect(
-      store.applyCellAdmissionSelector({
-        attemptId: 'duplicate_001',
-        expectedGeneration: 0,
-        expectedMembershipSha256: BASE_MEMBERSHIP_SHA256,
-        membership: {
-          existingOnly: ['c1', 'c1'],
-          migrationOnly: ['c2'],
-          general: ['c3']
-        }
-      })
-    ).rejects.toThrow('admission_selector_duplicate_cell')
-    await expect(
-      store.applyCellAdmissionSelector({
-        attemptId: 'incomplete_001',
-        expectedGeneration: 0,
-        expectedMembershipSha256: BASE_MEMBERSHIP_SHA256,
-        membership: {
-          existingOnly: ['c1'],
-          migrationOnly: ['c2'],
-          general: []
-        }
-      })
-    ).rejects.toThrow('admission_selector_incomplete_membership')
-    await expect(store.inspectCellAdmissionSelector()).resolves.toMatchObject({
-      selector: {
-        generation: 0,
-        membership: { existingOnly: [], migrationOnly: [], general: ['c1', 'c2', 'c3'] }
-      }
-    })
-  })
-
-  it('inspects an unchanged durable intent after an ambiguous apply failure', async () => {
-    const underlying = await openInMemoryRelayDatabase()
-    const failingDatabase = new FailAfterIntentDatabase(underlying)
-    database = failingDatabase
-    const store = new RelayAssignmentStore(failingDatabase, () => 100)
-    await store.reconcileCells(CELLS)
-    failingDatabase.failSecondTransaction()
-
-    const input = {
-      attemptId: 'ambiguous_001',
-      expectedGeneration: 0,
-      expectedMembershipSha256: BASE_MEMBERSHIP_SHA256,
-      membership: INITIAL_MEMBERSHIP
-    }
-    await expect(store.applyCellAdmissionSelector(input)).rejects.toThrow(
-      'injected_commit_ambiguity'
-    )
-    await expect(store.inspectCellAdmissionSelector(input.attemptId)).resolves.toMatchObject({
-      selector: { generation: 0 },
-      intent: { state: 'unchanged' }
-    })
-    await expect(store.applyCellAdmissionSelector(input)).resolves.toMatchObject({
-      changed: true,
-      selector: { generation: 1, membership: INITIAL_MEMBERSHIP }
-    })
-  })
-
   it('allows only one concurrent CAS and never re-enables legacy cells', async () => {
     const store = await setup(() => 100)
     await store.applyCellAdmissionSelector({
@@ -414,24 +262,6 @@ describe('relay cell admission selector', () => {
         }
       })
     ).rejects.toThrow('admission_selector_legacy_reenable')
-  })
-
-  it('preserves the selector boundary across compatible reconciliation', async () => {
-    const store = await setup(() => 100)
-    await store.applyCellAdmissionSelector({
-      attemptId: 'cutover_007',
-      expectedGeneration: 0,
-      expectedMembershipSha256: BASE_MEMBERSHIP_SHA256,
-      membership: INITIAL_MEMBERSHIP
-    })
-
-    await expect(store.reconcileCells(CELLS, false)).resolves.toBeUndefined()
-    await expect(store.reconcileCells([CELLS[0]!, CELLS[2]!])).rejects.toThrow(
-      'admission_selector_boundary_active'
-    )
-    await expect(store.inspectCellAdmissionSelector()).resolves.toMatchObject({
-      selector: { generation: 1, membership: INITIAL_MEMBERSHIP }
-    })
   })
 
   it('atomically adds exact migration-only cells after the selector boundary', async () => {

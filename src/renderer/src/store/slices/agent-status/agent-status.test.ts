@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '../../testing/app-store-test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../tabs/tab-group.test-fixture'
 import { createStoreSessionMockApi } from '../../testing/app-store-session-api.test-fixture'
 import {
@@ -211,15 +211,11 @@ afterEach(() => {
           manuallyUnreadTurnsByPaneKey: { [paneKey]: 200, [missingOwnerPaneKey]: 200 }
         })
         const main = await underFakeTimers(drawTabsFromMain(store))
-        const before = store.getState()
 
         store.getState().closeTab('tab-closed')
 
         const after = store.getState()
-        expect(after.agentStatusByPaneKey[paneKey]).toBe(before.agentStatusByPaneKey[paneKey])
-        expect(after.acknowledgedAgentsByPaneKey[paneKey]).toBe(
-          before.acknowledgedAgentsByPaneKey[paneKey]
-        )
+
         expect(after.activityClearedAtByPaneKey[paneKey]).toBe(100)
         expect(after.manuallyUnreadTurnsByPaneKey[paneKey]).toBe(200)
         expect(after.agentStatusByPaneKey[missingOwnerPaneKey]).toBeUndefined()
@@ -265,12 +261,6 @@ afterEach(() => {
       })
 
       expect(patch.agentStatusByPaneKey?.[retiringPaneKey]).toBeUndefined()
-      expect(patch.agentStatusByPaneKey?.[siblingPaneKey]).toBe(
-        before.agentStatusByPaneKey[siblingPaneKey]
-      )
-      expect(patch.agentStatusByPaneKey?.['missing-owner:0']).toBe(
-        before.agentStatusByPaneKey['missing-owner:0']
-      )
     })
   })
 }

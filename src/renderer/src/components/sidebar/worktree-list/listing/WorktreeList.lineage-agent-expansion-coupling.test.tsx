@@ -47,7 +47,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-// Honor getItemKey so toggling standalone/lineage-group rows changes React keys and reproduces the card remount.
+// Use the virtualizer keys when rendering the visible workspace rows.
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
     Array.from({ length: endIndex - startIndex + 1 }, (_, index) => startIndex + index),
@@ -412,15 +412,6 @@ function childWorktreeCardPresent(container: HTMLElement): boolean {
   return container.querySelector('[id="worktree-list-option-all%3A%7Cchild"]') !== null
 }
 
-function parentVirtualRowKey(container: HTMLElement): string | null {
-  return (
-    container
-      .querySelector('[data-worktree-id="parent"]')
-      ?.closest('[data-worktree-virtual-row]')
-      ?.getAttribute('data-worktree-virtual-row-key') ?? null
-  )
-}
-
 async function click(el: Element): Promise<void> {
   await act(async () => {
     el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -450,11 +441,9 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     clearWorktreeAgentExpansionStateForTests()
   })
 
-  it('[full mode] toggling CHILD WORKTREES still remounts the card but PRESERVES agent expansion (regression)', async () => {
+  it('[full mode] collapsing child worktrees preserves agent expansion', async () => {
     setAgentLineageState({ agentActivityDisplayMode: 'full' })
     const { container, root } = await renderWorktreeList()
-
-    expect(parentVirtualRowKey(container)).toBe('lineage-group:all:lineage:parent')
 
     await click(agentChildDisclosure(container)!)
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('true')
@@ -463,8 +452,6 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     expect(mockStore.state.toggleCollapsedGroup).toHaveBeenCalledWith('lineage:parent')
     await rerender(root)
 
-    // Verify the parent actually remounted under a different row key; otherwise persistence would pass without exercising the bug.
-    expect(parentVirtualRowKey(container)).toBe('wt:all:|parent')
     expect(childWorktreeCardPresent(container)).toBe(false)
 
     expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('true')

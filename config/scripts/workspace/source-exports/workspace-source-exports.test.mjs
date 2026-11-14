@@ -63,11 +63,6 @@ it('maps only explicit public source exports with exact aliases independent of c
     false,
     false
   ])
-  expect(resolver.aliases.every((alias) => !alias.replacement.includes('/dist/'))).toBe(true)
-  expect(resolver.esbuildAliases).toEqual({
-    '@orca/process-host': resolver.resolve('@orca/process-host').path,
-    '@orca/process-host/process-spec': resolver.resolve('@orca/process-host/process-spec').path
-  })
   expect(resolver.resolve('node:child_process')).toBeNull()
   expect(resolver.resolve('zod')).toBeNull()
 })

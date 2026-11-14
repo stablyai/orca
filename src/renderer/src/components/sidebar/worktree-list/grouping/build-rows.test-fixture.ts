@@ -22,7 +22,7 @@ import {
 } from '../../../../../../shared/sidebar-list/row-types'
 
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
-import type { PRCacheView } from '../../../../../../shared/sidebar-list/workspace-review-facts'
+import type { PRCacheView } from '../../../../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 import { createSidebarPRGroupReader } from './pr-group-key'
 
 /** Test-only positional entry to the shared row builder, with the window's defaults. */

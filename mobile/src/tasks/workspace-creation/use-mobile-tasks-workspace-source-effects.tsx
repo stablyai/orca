@@ -3,7 +3,7 @@ import type { WorkspaceCreateProjectionModel } from '../project-board/use-mobile
 import type { SparsePreset } from '../../../../src/shared/worktree/create-types'
 import { useEffect } from 'react'
 import { repoSparsePresetListRead } from '../../new-workspace/creation/mobile-workspace-source-operations'
-import { repoBaseRefSearchRead } from '../../source-control/mobile-repo-base-ref-operations'
+import { repoBaseRefSearchRead } from '../../source-control/branches/mobile-repo-base-ref-operations'
 
 export type WorkspaceSourceEffectsInput = Pick<
   WorkspaceCreateProjectionModel,

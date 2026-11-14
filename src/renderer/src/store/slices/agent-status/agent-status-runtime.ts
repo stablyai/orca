@@ -16,7 +16,7 @@ import type {
   AgentStatusChangeListener
 } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
-import type { GeneratedTabTitleUpdate } from '../../terminals/terminal-tab-title-batch'
+import type { GeneratedTabTitleUpdate } from '../../terminals/tabs/presentation/terminal-tab-title-batch'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
 export type AgentStatusStateUpdate =

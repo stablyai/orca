@@ -7,7 +7,7 @@ import {
   type SidebarInputsChangedEvent,
   type SidebarInputsReadParams,
   type SidebarInputsReadResult
-} from '../../../../shared/sidebar-list/sidebar-inputs-feed-contract'
+} from '../../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import {
   feedEntityFromJson,
   paginateFeedChanges,

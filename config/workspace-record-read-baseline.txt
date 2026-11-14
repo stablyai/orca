@@ -49,13 +49,13 @@
 2 src/renderer/src/runtime/sync-runtime-graph/sync-key.ts # reads a passed-in copy
 3 src/renderer/src/store/folder-workspaces/folder-workspace-catalog-actions.ts # store writer
 7 src/renderer/src/store/folder-workspaces/folder-workspace-catalog.ts # store writer
-5 src/renderer/src/store/folder-workspaces/folder-workspace-mutations.ts # store writer
+4 src/renderer/src/store/folder-workspaces/folder-workspace-mutations.ts # store writer
 1 src/renderer/src/store/project-groups/project-group-removal-state.ts # store writer
 4 src/renderer/src/store/repos/converted-ssh-host-rows.ts # store writer
 5 src/renderer/src/store/repos/repo-catalog-merge.ts # store writer
 5 src/renderer/src/store/repos/repo-removal.ts # store writer
 6 src/renderer/src/store/slices/diff-comments/diff-comment-persistence.ts # store writer
-12 src/renderer/src/store/slices/workspace-attention/workspace-unread-flag.ts # store writer
+10 src/renderer/src/store/slices/workspace-attention/workspace-unread-flag.ts # store writer
 2 src/renderer/src/store/slices/worktrees/create/created-worktree-state-merge.ts # store writer
 1 src/renderer/src/store/slices/worktrees/listing/detected-worktree-meta.ts # P5b-2 must clear: feeds an existing row-type cast
 3 src/renderer/src/store/slices/worktrees/listing/fetch-detected-worktrees.ts # store writer
@@ -69,4 +69,4 @@
 6 src/renderer/src/store/slices/worktrees/teardown/host-qualified-worktree-row-removal.ts # store writer
 8 src/renderer/src/store/slices/worktrees/teardown/purge-stale-runtime-host-state.ts # store writer
 1 src/renderer/src/store/slices/worktrees/teardown/remove-worktree-store-cleanup.ts # store writer
-8 src/renderer/src/store/terminals/workspace-terminal-hydration.ts # store writer
+8 src/renderer/src/store/terminals/hydration/workspace-terminal-hydration.ts # store writer

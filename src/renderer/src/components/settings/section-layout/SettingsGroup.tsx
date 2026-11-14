@@ -11,13 +11,14 @@ export const SETTINGS_GROUP_ROW_BLEED_CLASS = '-mx-5 px-5'
 export const SETTINGS_GROUP_NESTED_INSET_CLASS = 'pl-5'
 
 type SettingsGroupProps = {
-  id?: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: React.ReactNode
   children?: React.ReactNode
   className?: string
   bodyClassName?: string
+  /** Anchors the card, the same element a search for the group title lands on. */
+  id?: string
   onHeaderClick?: (event: React.MouseEvent<HTMLDivElement>) => void
 }
 
@@ -34,6 +35,8 @@ export function SettingsGroup({
 }: SettingsGroupProps): React.JSX.Element {
   const card = (
     <div
+      id={id}
+      data-settings-group-card=""
       className={cn(
         // Search can filter out every row; hide the empty card but keep the header and its action.
         'overflow-hidden rounded-xl border border-border bg-card/50 shadow-xs has-[>[data-settings-group-body]:empty]:hidden',
@@ -51,7 +54,7 @@ export function SettingsGroup({
     </div>
   )
   return (
-    <section id={id} className={cn('space-y-3', className)}>
+    <section data-settings-group="" className={cn('space-y-3', className)}>
       {title ? (
         <SettingsGroupHeader
           title={title}

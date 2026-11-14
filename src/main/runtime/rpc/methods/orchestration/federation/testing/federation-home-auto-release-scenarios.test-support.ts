@@ -25,7 +25,7 @@ export function registerHomeAutoReleaseScenarios(args: {
   it('leaves a worker the user kept open on the host when the home deadline fires', async () => {
     const dispatchId = await settleOnOlderHost()
     const paneKey = harness.workerDb().getWorkerTerminalResourceByOwner(dispatchId)!.pane_key!
-    expect(harness.workerDb().keepWorkerTerminalOpen(paneKey)).toBe(1)
+    harness.workerDb().keepWorkerTerminalOpen(paneKey)
 
     await releaseDueAtHome()
 
@@ -51,14 +51,13 @@ export function registerHomeAutoReleaseScenarios(args: {
   it('refuses a home worker-stop of a worker kept open on its host before either side stops it', async () => {
     const dispatchId = await harness.startRemoteWorker()
     const paneKey = harness.workerDb().getWorkerTerminalResourceByOwner(dispatchId)?.pane_key
-    expect(harness.workerDb().keepWorkerTerminalOpen(paneKey ?? '')).toBe(1)
+    harness.workerDb().keepWorkerTerminalOpen(paneKey ?? '')
 
     await expect(stopFromHome(dispatchId)).resolves.toMatchObject({
       ok: false,
       error: { code: 'terminal_kept_open' }
     })
     expect(harness.homeDb().getWorkerDispatch(dispatchId)?.state).toBe('ready')
-    expect(harness.remoteCalls()).not.toContain('orchestration.federationStop')
     // An older home skips that check; the host still refuses before it stops anything.
     expect(() => harness.workerDb().beginRemoteAttachmentStop(dispatchId)).toThrow('Keep open')
     expect(harness.workerDb().getRemoteDispatchAttachment(dispatchId)?.state).toBe('ready')

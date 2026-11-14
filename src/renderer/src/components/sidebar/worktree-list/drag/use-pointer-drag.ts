@@ -8,7 +8,6 @@ import {
   isSidebarPointerDragBlocked,
   setSidebarPointerDragDocumentStyles
 } from './worktree-sidebar-pointer-drag-dom'
-import { getWorktreeSidebarDragRectsForGroup } from './worktree-sidebar-drag-autoscroll'
 import { getWorktreeSidebarDragGrab } from './worktree-sidebar-drag-geometry'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from './drop-commit-context'
 import type {
@@ -174,12 +173,13 @@ export function useWorktreePointerDrag(args: {
       if (!sourceGroupKey || !container) {
         return
       }
-      const rects = getWorktreeSidebarDragRectsForGroup(container, sourceGroupKey)
+      const rects = session.getRects(sourceGroupKey)
       const canPreviewWorkspaceBoardOnDrag =
         !workspaceBoardOpen &&
         onWorkspaceBoardDragPreviewStart !== NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
       if (
-        rects.length <= 1 &&
+        (session.worktreeDragGroups.find((group) => group.key === sourceGroupKey)?.worktreeIds
+          .length ?? 0) <= 1 &&
         !hasWorkspaceKanbanSidebarDropBoard() &&
         !canPreviewWorkspaceBoardOnDrag
       ) {

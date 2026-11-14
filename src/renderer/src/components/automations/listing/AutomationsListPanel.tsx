@@ -56,10 +56,11 @@ import { useTranslate } from '@/i18n/use-translate'
 import { AutomationTemplateEmptyState } from '../authoring/AutomationTemplateEmptyState'
 import { AutomationListTableHeader } from './AutomationListTableHeader'
 import { AutomationListToolbar } from './AutomationListToolbar'
+import { AutomationListGroupSection } from './AutomationListGroupSection'
+import { useAutomationListGroups } from './use-automation-list-groups'
 
 const TEMPLATE_EMPTY_STATES: ReadonlySet<string> = new Set(['host-empty', 'all-hosts-empty'])
 const EMPTY_AUTOMATION_RUNS: ReadonlyMap<string, AutomationRun> = new Map()
-
 export type AutomationsListPanelProps = {
   hasListItems: boolean
   hasFilteredListItems: boolean
@@ -112,11 +113,9 @@ export type AutomationsListPanelProps = {
     scope: ExternalAutomationScope
   ) => void
   openCreateDialog: (template?: AutomationTemplate) => void
-  canCreateAutomation: boolean
   onOpenDetail: () => void
   onRefresh: () => void
   isRefreshing: boolean
-  onOpenRuns: () => void
 }
 
 export function AutomationsListPanel(props: AutomationsListPanelProps): React.JSX.Element {
@@ -163,24 +162,28 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     requestDeleteAutomation,
     requestExternalAction,
     openCreateDialog,
-    canCreateAutomation,
     onOpenDetail,
     onRefresh,
-    isRefreshing,
-    onOpenRuns
+    isRefreshing
   } = props
   const listRef = useRef<HTMLDivElement>(null)
   // Use the Filters toolbar as focus fallback now that it owns host controls.
   const toolbarRef = useRef<HTMLDivElement>(null)
   const pendingKeyboardScrollRef = useRef(false)
-  // Why: keyboard traversal and focus recovery read render order, which the sort owns.
+  const { groups, showHost, orderedItems } = useAutomationListGroups({
+    sortedListItems,
+    needsMigration,
+    repoForRow,
+    repoMap,
+    hostLabelById
+  })
   const rowKeys = React.useMemo(
-    () => sortedListItems.filter((item) => item.kind === 'local').map((item) => item.id),
-    [sortedListItems]
+    () => orderedItems.filter((item) => item.kind === 'local').map((item) => item.id),
+    [orderedItems]
   )
   const visibleItems = React.useMemo(
-    () => sortedListItems.map((item) => ({ kind: item.kind, id: item.id })),
-    [sortedListItems]
+    () => orderedItems.map((item) => ({ kind: item.kind, id: item.id })),
+    [orderedItems]
   )
   useAutomationListFocusRecovery({
     rowKeys,
@@ -283,6 +286,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     hostLabelById,
     isActionEnabled,
     needsMigration,
+    showHost,
     onSelect: (rowKey: string) => {
       selectExternalKey(null)
       selectAutomationRow(rowKey)
@@ -297,7 +301,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
 
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-4 md:px-5"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden pt-4"
       data-contextual-tour-target="automations-list"
     >
       <AutomationListToolbar
@@ -312,9 +316,6 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
         hostEntries={hostCatalog.entries}
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
-        onOpenRuns={onOpenRuns}
-        openCreateDialog={openCreateDialog}
-        canCreateAutomation={canCreateAutomation}
       />
 
       {listFilterActive || legacyScopeStableKey !== null ? (
@@ -348,30 +349,40 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
       >
         {hasFilteredListItems ? (
           <div className="min-w-full w-fit">
-            <AutomationListTableHeader sort={listSort} onSort={onListSortChange} />
-            <div className="divide-y divide-border/50">
-              {sortedListItems.map((item) =>
-                item.kind === 'local' ? (
-                  <AutomationListLocalRow key={item.id} {...rowProps} row={item.row} />
-                ) : (
-                  <AutomationListExternalRow
-                    key={item.id}
-                    entry={item.entry}
-                    selectedExternalKey={selectedExternalKey}
-                    relativeNow={relativeNow}
-                    sshConnectionStates={sshConnectionStates}
-                    externalActionKey={externalActionKey}
-                    onSelect={(entryKey) => {
-                      selectAutomationRow(null)
-                      selectExternalKey(entryKey)
-                      setActivePaneTab('overview')
-                      onOpenDetail()
-                    }}
-                    onRequestAction={requestExternalAction}
-                  />
-                )
-              )}
-            </div>
+            <AutomationListTableHeader
+              sort={listSort}
+              onSort={onListSortChange}
+              showHost={showHost}
+            />
+            {groups.map((group, groupIndex) => (
+              <AutomationListGroupSection
+                key={group.id}
+                group={group}
+                isFirst={groupIndex === 0}
+                renderItem={(item) =>
+                  item.kind === 'local' ? (
+                    <AutomationListLocalRow key={item.id} {...rowProps} row={item.row} />
+                  ) : (
+                    <AutomationListExternalRow
+                      key={item.id}
+                      entry={item.entry}
+                      showHost={showHost}
+                      selectedExternalKey={selectedExternalKey}
+                      relativeNow={relativeNow}
+                      sshConnectionStates={sshConnectionStates}
+                      externalActionKey={externalActionKey}
+                      onSelect={(entryKey) => {
+                        selectAutomationRow(null)
+                        selectExternalKey(entryKey)
+                        setActivePaneTab('overview')
+                        onOpenDetail()
+                      }}
+                      onRequestAction={requestExternalAction}
+                    />
+                  )
+                }
+              />
+            ))}
           </div>
         ) : (
           <AutomationListEmptyView

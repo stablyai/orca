@@ -7,6 +7,7 @@ import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-run
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
+import { CLI_AGENT_CALLER_CLIENT_CAPABILITY } from '../../shared/remote-runtime/cli-agent-caller-capability'
 import { sendRemoteRuntimeRequestOnSocket } from '../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
@@ -15,7 +16,8 @@ import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 const CLI_CLIENT_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
-  AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY
+  AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,
+  CLI_AGENT_CALLER_CLIENT_CAPABILITY
 ] as const
 
 export async function sendWebSocketRequest<TResult>(

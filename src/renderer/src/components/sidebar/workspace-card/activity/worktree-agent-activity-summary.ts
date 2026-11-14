@@ -17,6 +17,7 @@ import {
 
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { applyAgentPaneActivityFlags } from '../../../../../../shared/worktree-status-rollup'
+import { getTabIdToWorktreeId } from '@/lib/workspace/tabs/tab-worktree-index'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
@@ -94,13 +95,7 @@ function getWorktreeAgentActivitySummaries(
     return agentActivityCache.summaries
   }
 
-  // Index tabs once per snapshot so per-card summaries cost O(worktrees + agents).
-  const tabIdToWorktreeId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    for (const tab of tabs) {
-      tabIdToWorktreeId.set(tab.id, worktreeId)
-    }
-  }
+  const tabIdToWorktreeId = getTabIdToWorktreeId(state.tabsByWorktree)
 
   const summaries = new Map<string, WorktreeAgentActivitySummary>()
   const summaryForWorktree = (worktreeId: string): WorktreeAgentActivitySummary => {

@@ -35,7 +35,7 @@ type LiveAgentGeneration = {
 let liveAgentGeneration: LiveAgentGeneration | null = null
 
 // Cache the whole-store live-agent scan across cards by relevant snapshots and freshness epoch.
-function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<string> {
+export function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<string> {
   const agentStatusNow = getAgentStatusEpochNow(state.agentStatusEpoch ?? 0)
   if (
     liveAgentGeneration &&

@@ -14,7 +14,7 @@ import {
   listEnvironments,
   resolveEnvironment
 } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
