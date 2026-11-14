@@ -1,3 +1,4 @@
+import { sessionSearchPrefixUpperBound } from './session-search-prefix-range'
 import type { SessionSearchCatalogBaseCommand } from './session-search-catalog-types'
 import type { SessionSearchCatalog } from './session-search-catalog'
 
@@ -53,7 +54,12 @@ export function releaseSessionSearchCatalog(
       .prepare(`SELECT scope FROM temp.search_catalog_counts
       WHERE n>0 AND (scope=? OR (scope>=? AND scope<?))
       ORDER BY CASE WHEN scope=? THEN 1 ELSE 0 END,scope LIMIT 1`)
-      .get(command.scope, `${command.scope}:`, `${command.scope}:\uffff`, receipts)
+      .get(
+        command.scope,
+        `${command.scope}:`,
+        sessionSearchPrefixUpperBound(`${command.scope}:`),
+        receipts
+      )
     if (!next) {
       if (command.kind === 'release-scopes-page' && count > 0) {
         break
@@ -63,7 +69,12 @@ export function releaseSessionSearchCatalog(
         .prepare(`DELETE FROM temp.search_inventory_sources WHERE scope=?
         AND NOT EXISTS (SELECT 1 FROM temp.search_catalog_counts
           WHERE n>0 AND (scope=? OR (scope>=? AND scope<?)))`)
-        .run(command.scope, command.scope, `${command.scope}:`, `${command.scope}:\uffff`)
+        .run(
+          command.scope,
+          command.scope,
+          `${command.scope}:`,
+          sessionSearchPrefixUpperBound(`${command.scope}:`)
+        )
       break
     }
     const scope = String(next.scope)

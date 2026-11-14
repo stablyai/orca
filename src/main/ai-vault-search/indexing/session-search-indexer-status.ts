@@ -1,4 +1,7 @@
-import type { SessionSearchStateCounts } from '../storage/session-search-store-types'
+import type {
+  SessionSearchIndexStore,
+  SessionSearchStateCounts
+} from '../storage/session-search-store-types'
 import type { SessionSearchDegradedRoot } from '../discovery/session-search-degraded-roots'
 
 export type SessionSearchIndexPhase = 'idle' | 'indexing' | 'current' | 'degraded' | 'closed'
@@ -64,5 +67,18 @@ export function sessionSearchIndexStatus(
     lastReconcileAt: state.lastReconcileAt,
     lastSweepCompletedAt: state.lastSweepCompletedAt,
     sessionsByAgent: { ...settled.sessionsByAgent }
+  }
+}
+
+export function readSessionSearchCounts(
+  store: Pick<SessionSearchIndexStore, 'stateCounts'>,
+  previous: SessionSearchStateCounts | null,
+  onError: (error: unknown) => void
+): SessionSearchStateCounts | null {
+  try {
+    return store.stateCounts()
+  } catch (error) {
+    onError(error)
+    return previous
   }
 }

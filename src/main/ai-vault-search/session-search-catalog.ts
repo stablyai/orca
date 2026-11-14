@@ -1,3 +1,4 @@
+import { sessionSearchPrefixUpperBound } from './session-search-prefix-range'
 import {
   sessionSearchCatalogPageRows,
   readSessionSearchScopeCounts,
@@ -262,7 +263,7 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
           const prefix = `${base.prefix}${separator}`
           this.db
             .prepare('DELETE FROM temp.search_catalog WHERE scope = ? AND key >= ? AND key < ?')
-            .run(base.scope, prefix, `${prefix}\uffff`)
+            .run(base.scope, prefix, sessionSearchPrefixUpperBound(prefix))
           count += Number(this.db.prepare('SELECT changes() AS n').get()?.n ?? 0)
         }
         return { count }

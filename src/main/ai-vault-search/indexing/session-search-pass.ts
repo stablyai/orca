@@ -37,6 +37,7 @@ export type SessionSearchPassArgs = {
   previousRootsWithFiles?: ReadonlySet<string>
   purge?: boolean
   onPurged?: () => void
+  onDiscoveryBegin?: () => void
   startReadDeadline?: () => () => boolean
   discoveryOverdue?: () => boolean
   listings: SessionSearchDirectoryReader
@@ -73,6 +74,7 @@ export async function runSessionSearchPass(
   if (args.full) {
     state.needsRetirement = true
   }
+  args.onDiscoveryBegin?.()
   await wakeSessionSearchPassRetirements(args)
   return withCursorChatMetaScan(async () => {
     const accept = async (

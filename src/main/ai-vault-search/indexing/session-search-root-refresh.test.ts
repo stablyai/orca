@@ -1,12 +1,15 @@
+import { writeFile } from 'node:fs/promises'
 import '../worker/session-search-worker.test-fixture'
 import { join } from 'node:path'
 import { SessionSearchEngine } from '../query/session-search-engine'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import * as policy from '../session-search-filesystem'
 import { SessionSearchIndexer } from './session-search-indexer'
 import {
   openSessionSearchIndexerHarness,
   FakeSessionSearchClock,
   writeClaudeTranscript,
+  claudeLines,
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
 import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/session-parse-cache-store'
@@ -20,6 +23,7 @@ beforeEach(async () => {
   harness = await openSessionSearchIndexerHarness('search-root-refresh')
 })
 afterEach(async () => {
+  vi.restoreAllMocks()
   await indexer?.close()
   indexer = undefined
   resetSessionParseCacheForTests()
@@ -85,4 +89,41 @@ it('retries discovery after failure without silently sweeping stale roots', asyn
         .get()
     )
   ).toEqual({ n: 2 })
+})
+
+it('keeps an explicit full refresh after root lookup fails on settled history', async () => {
+  vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(false)
+  let unavailable = false
+  await writeClaudeTranscript(
+    join(harness.claudeProjectDir, 'seed.jsonl'),
+    ['seed conversation'],
+    'seed'
+  )
+  indexer = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
+    databasePath: harness.databasePath,
+    roots: harness.roots,
+    resolveRoots: async () => {
+      if (unavailable) {
+        throw new Error('unavailable')
+      }
+      return harness.roots
+    },
+    historyDays: null,
+    clock: new FakeSessionSearchClock(),
+    onError: () => undefined
+  })
+  await indexer.start()
+  expect(indexer.status().phase).toBe('current')
+  await writeFile(
+    join(harness.claudeProjectDir, 'missed.jsonl'),
+    `${claudeLines(['unnoticed conversation'], 'missed', 0).join('\n')}\n`
+  )
+  unavailable = true
+  await indexer.reconcile({ full: true })
+  unavailable = false
+  await indexer.reconcile()
+  expect(
+    harness.read((db) => new SessionSearchEngine(db).search({ query: 'unnoticed' }).hits)
+  ).toHaveLength(1)
 })

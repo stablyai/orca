@@ -17,6 +17,7 @@ import { SessionSearchWorkerStore } from '../worker/session-search-worker-store'
 import type { SessionSearchDegradedRoot } from '../discovery/session-search-degraded-roots'
 import {
   sessionSearchIndexStatus,
+  readSessionSearchCounts,
   type SessionSearchIndexStatus
 } from './session-search-indexer-status'
 export type {
@@ -183,14 +184,7 @@ export class SessionSearchIndexer {
   }
 
   private readCounts(): SessionSearchStateCounts | null {
-    try {
-      const counts = this.store.stateCounts()
-      this.lastCounts = counts
-      return counts
-    } catch (error) {
-      this.onError(error)
-      return this.lastCounts
-    }
+    return (this.lastCounts = readSessionSearchCounts(this.store, this.lastCounts, this.onError))
   }
 
   private tick(): Promise<void> {
@@ -260,6 +254,7 @@ export class SessionSearchIndexer {
     this.sweepNext = false
     this.maintenanceNext = maintenance
     this.sweepInProgress ||= full
+    let discoveryAccepted = false
     try {
       if (maintenance && this.options.resolveRoots) {
         const roots = await waitForAiVaultScan(this.options.resolveRoots(signal), signal)
@@ -275,6 +270,9 @@ export class SessionSearchIndexer {
         roots: this.roots,
         full,
         primaryWake,
+        onDiscoveryBegin: () => {
+          discoveryAccepted = true
+        },
         purge: maintenance,
         onPurged: () => {
           this.maintenanceNext = false
@@ -316,6 +314,8 @@ export class SessionSearchIndexer {
       if (!signal.aborted) {
         throw error
       }
+    } finally {
+      this.sweepNext ||= full && !discoveryAccepted
     }
   }
 

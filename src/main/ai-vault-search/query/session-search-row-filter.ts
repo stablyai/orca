@@ -1,3 +1,4 @@
+import { sessionSearchPrefixUpperBound } from '../session-search-prefix-range'
 import { cwdKey } from '../storage/session-search-file-records'
 import type { SessionSearchFilters } from './session-search-engine-types'
 
@@ -91,10 +92,5 @@ function childPrefix(key: string): string {
 
 function scopeRange(scopeKey: string): [string, string, string] {
   const children = childPrefix(scopeKey)
-  return [scopeKey, children, nextAfterPrefix(children)]
-}
-
-/** Upper bound for every string starting with prefix. */
-function nextAfterPrefix(prefix: string): string {
-  return prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1)
+  return [scopeKey, children, sessionSearchPrefixUpperBound(children)]
 }

@@ -1,3 +1,4 @@
+import { sessionSearchPrefixUpperBound } from './session-search-prefix-range'
 import type SyncDatabase from '../sqlite/sync-database'
 import type {
   SessionSearchCatalogBaseCommand,
@@ -39,8 +40,13 @@ export function sessionSearchCatalogPageRows(
     values.push(command.after)
   }
   if (command.prefix !== undefined) {
-    conditions.push(`${column('key')} >= ?`, `${column('key')} < ?`)
-    values.push(command.prefix, `${command.prefix}\uffff`)
+    conditions.push(`${column('key')} >= ?`)
+    values.push(command.prefix)
+    const upper = sessionSearchPrefixUpperBound(command.prefix)
+    if (upper) {
+      conditions.push(`${column('key')} < ?`)
+      values.push(upper)
+    }
   }
   for (const [column, value] of [
     ['parent', command.parent],
