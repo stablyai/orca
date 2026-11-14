@@ -53,6 +53,7 @@ function activityItemAriaLabel(
       : base
 }
 
+/** Marks portaled menu content as sidebar-owned so it cannot replace the remembered pane focus. */
 export function TopActivityOverflowMenu({
   items,
   activeTab,
@@ -105,7 +106,7 @@ export function TopActivityOverflowMenu({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
+      <DropdownMenuContent data-right-sidebar-menu align="end" side="bottom" sideOffset={6}>
         {items.map((item) => {
           const Icon = item.icon
           const active = item.id === activeTab

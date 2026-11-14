@@ -163,7 +163,7 @@ export function FileExplorerToolbar({
             )}
           </TooltipContent>
         </Tooltip>
-        <DropdownMenuContent align="end" className="min-w-[12rem]">
+        <DropdownMenuContent data-right-sidebar-menu align="end" className="min-w-[12rem]">
           <DropdownMenuCheckboxItem checked={showDotfiles} onCheckedChange={onToggleDotfiles}>
             {t('auto.components.right.sidebar.FileExplorerToolbar.78f133232c', 'Show Dotfiles')}
           </DropdownMenuCheckboxItem>
