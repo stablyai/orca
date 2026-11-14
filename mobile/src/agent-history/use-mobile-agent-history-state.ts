@@ -39,16 +39,17 @@ const noSubscription = () => () => {}
 const noNames = () => EMPTY_NAMES
 const noRevision = () => 0
 
+/** A history row; `forked` when its host says the chat is a fork, so its title follows the mark. */
+export type MobileAgentHistorySession = AiVaultSession & { forked?: true }
+
 export type AgentHistoryScreenState =
   | { kind: 'loading' }
   | { kind: 'unsupported' }
   | { kind: 'error'; message: string }
   | {
       kind: 'ready'
-      sessions: AiVaultSession[]
+      sessions: MobileAgentHistorySession[]
       issues: AiVaultScanIssue[]
-      /** Sessions whose host says the chat is a fork; their titles follow the fork mark. */
-      forkedSessionIds: ReadonlySet<string>
     }
 
 // Rows keep the scope paths they were scanned for, so a revisit filters them before worktree.ps lands.
@@ -245,17 +246,19 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       return read
     }
     if (read) {
-      const forkedSessionIds = new Set<string>()
-      const sessions = read.sessions.map((session) => {
+      const sessions = read.sessions.map((session): MobileAgentHistorySession => {
         const id = session.structuredSession?.sessionId
         const note = id ? names.get(id) : undefined
-        if (note?.forkedFrom) {
-          forkedSessionIds.add(session.id)
-        }
         const title = note ? mobileChatShownName(names, note, session.agent) : null
-        return title ? { ...session, title } : session
+        return title || note?.forkedFrom
+          ? {
+              ...session,
+              ...(title ? { title } : {}),
+              ...(note?.forkedFrom ? { forked: true } : {})
+            }
+          : session
       })
-      return { kind: 'ready', issues: read.issues, sessions, forkedSessionIds }
+      return { kind: 'ready', issues: read.issues, sessions }
     }
     switch (hostScreenState({ data: read, error, isFetching }, connState)) {
       case 'empty-error':

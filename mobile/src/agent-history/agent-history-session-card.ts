@@ -38,10 +38,9 @@ export function isSessionInActiveWorktree(
 }
 
 export function buildMobileAgentHistoryCard(
-  session: AiVaultSession,
+  session: AiVaultSession & { forked?: true },
   activeWorktreePath: string | null,
-  now: number,
-  forked = false
+  now: number
 ): MobileAgentHistoryCard {
   const latestTurn = latestSessionConversationTurn(session)
   const updatedAtMs = Date.parse(session.updatedAt ?? session.modifiedAt)
@@ -51,7 +50,7 @@ export function buildMobileAgentHistoryCard(
     agentLabel: aiVaultAgentLabel(session.agent),
     title:
       session.title || translate('agentHistory.sessionCard.untitledSession', 'Untitled session'),
-    forked,
+    forked: session.forked === true,
     lastMessage: latestTurn?.text.trim() ?? '',
     messageCount: session.messageCount,
     timeAgo: Number.isFinite(updatedAtMs) ? formatTimeAgo(updatedAtMs, now) : '',

@@ -30,7 +30,6 @@ export function buildMobileAgentHistorySections(
     scopeFilterPaths: readonly string[]
     activeWorktreePath: string | null
     now: number
-    forkedSessionIds?: ReadonlySet<string>
   }
 ): MobileAgentHistorySection[] {
   // Until worktree.ps supplies prefixes, leave scoped tabs unfiltered rather than flash empty; memo reruns when paths arrive.
@@ -49,12 +48,7 @@ export function buildMobileAgentHistorySections(
     key: group.key,
     label: group.label,
     data: group.sessions.map((session) =>
-      buildMobileAgentHistoryCard(
-        session,
-        options.activeWorktreePath,
-        options.now,
-        options.forkedSessionIds?.has(session.id) ?? false
-      )
+      buildMobileAgentHistoryCard(session, options.activeWorktreePath, options.now)
     )
   }))
 }
