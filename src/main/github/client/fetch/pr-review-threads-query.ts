@@ -19,7 +19,7 @@ export function reviewConversationQuery(source?: PRConversationSource): string {
     const fields =
       name === 'reviewThreads'
         ? THREAD_FIELDS
-        : `${COMMENT_FIELDS}${name === 'reviews' ? ' submittedAt' : ''}`
+        : `${COMMENT_FIELDS}${name === 'reviews' ? ' submittedAt state' : ''}`
     return `${name}(first: 100${source ? ', after: $cursor' : ''}) { ${PAGE_INFO} nodes { ${fields} } }`
   }
   return `query($owner: String!, $repo: String!, $pr: Int!${source ? ', $cursor: String!' : ''}) {

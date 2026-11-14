@@ -173,6 +173,13 @@ export const PRCommentCard = memo(function PRCommentCard({
         >
           {comment.author}
         </Text>
+        {comment.reviewState ? (
+          <Text style={styles.time}>
+            {comment.reviewState === 'APPROVED'
+              ? t('pullRequest.commentCard.approved', 'approved')
+              : t('pullRequest.commentCard.changesRequested', 'requested changes')}
+          </Text>
+        ) : null}
         <Text style={styles.time}>· {commentRelativeTime(comment.createdAt, now, t)}</Text>
         {fileLabel ? (
           <Text style={styles.path} numberOfLines={1}>

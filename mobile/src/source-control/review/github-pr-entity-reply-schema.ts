@@ -207,7 +207,8 @@ const prCommentSchema = z
     line: prCount('line'),
     startLine: prCount('startLine'),
     diffHunk: prText('diffHunk'),
-    isBot: prFlag('isBot')
+    isBot: prFlag('isBot'),
+    reviewState: salvagedOptional('reviewState', z.enum(['APPROVED', 'CHANGES_REQUESTED']))
   })
   .transform((comment): PRComment => ({
     id: comment.id,
@@ -225,7 +226,8 @@ const prCommentSchema = z
     startLine: comment.startLine,
     // Newer hosts only; absent keeps the comment's shape unchanged for older ones.
     ...(comment.diffHunk ? { diffHunk: comment.diffHunk } : {}),
-    isBot: comment.isBot
+    isBot: comment.isBot,
+    ...(comment.reviewState ? { reviewState: comment.reviewState } : {})
   }))
 
 // Preserve upstream order because timeline thread grouping depends on it.

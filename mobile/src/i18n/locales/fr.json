@@ -1822,7 +1822,9 @@
       "unresolve": "Marquer comme non résolu",
       "yearsAgo_many": "il y a {{count}} ans",
       "yearsAgo_one": "il y a {{count}} an",
-      "yearsAgo_other": "il y a {{count}} ans"
+      "yearsAgo_other": "il y a {{count}} ans",
+      "approved": "a approuvé",
+      "changesRequested": "a demandé des modifications"
     },
     "commentsSection": {
       "comment": "Commenter",

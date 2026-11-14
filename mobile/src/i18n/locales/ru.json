@@ -1868,7 +1868,9 @@
       "yearsAgo_few": "{{count}} года назад",
       "yearsAgo_many": "{{count}} лет назад",
       "yearsAgo_one": "{{count}} год назад",
-      "yearsAgo_other": "{{count}} года назад"
+      "yearsAgo_other": "{{count}} года назад",
+      "approved": "одобрено",
+      "changesRequested": "запрошены изменения"
     },
     "commentsSection": {
       "comment": "Добавить комментарий",

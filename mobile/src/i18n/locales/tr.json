@@ -1776,7 +1776,9 @@
       "resolve": "Çöz",
       "unresolve": "Çözümü geri al",
       "yearsAgo_one": "{{count}} yıl önce",
-      "yearsAgo_other": "{{count}} yıl önce"
+      "yearsAgo_other": "{{count}} yıl önce",
+      "approved": "onayladı",
+      "changesRequested": "değişiklik istedi"
     },
     "commentsSection": {
       "comment": "Yorum yap",

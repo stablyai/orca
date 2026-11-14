@@ -1776,7 +1776,9 @@
       "resolve": "Erledigen",
       "unresolve": "Als ungelöst markieren",
       "yearsAgo_one": "vor {{count}} Jahr",
-      "yearsAgo_other": "vor {{count}} Jahren"
+      "yearsAgo_other": "vor {{count}} Jahren",
+      "approved": "hat genehmigt",
+      "changesRequested": "hat Änderungen angefordert"
     },
     "commentsSection": {
       "comment": "Kommentieren",

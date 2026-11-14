@@ -1772,7 +1772,9 @@
       "resolve": "해결",
       "unresolve": "해결 취소",
       "yearsAgo_one": "{{count}}년 전",
-      "yearsAgo_other": "{{count}}년 전"
+      "yearsAgo_other": "{{count}}년 전",
+      "approved": "승인함",
+      "changesRequested": "변경 요청함"
     },
     "commentsSection": {
       "comment": "댓글",

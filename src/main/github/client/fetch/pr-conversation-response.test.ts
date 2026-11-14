@@ -18,7 +18,39 @@ const visibleBodies = [
   '`<!-- inline example -->`'
 ]
 
+type ReviewNode = {
+  id: string
+  databaseId: number
+  author: { login: string; avatarUrl: string }
+  body: string | null
+  createdAt: string
+  url: string
+  state?: string
+}
+
 describe.each(['GraphQL', 'REST'] as const)('%s review summaries', (source) => {
+  const parseReviews = (comments: ReviewNode[]) =>
+    source === 'GraphQL'
+      ? parsePRConversationResponse(
+          JSON.stringify({
+            data: { repository: { pullRequest: { reviews: { nodes: comments } } } }
+          })
+        ).reviewSummaries
+      : parseRestPRComments(
+          JSON.stringify(
+            comments.map((comment) => ({
+              id: comment.databaseId,
+              user: { login: comment.author.login, avatar_url: '' },
+              body: comment.body,
+              submitted_at: comment.createdAt,
+              state: comment.state,
+              html_url: comment.url
+            }))
+          ),
+          true,
+          null
+        )
+
   it('omits empty and HTML-comment-only reviews while preserving visible bodies', () => {
     const bodies = [
       null,
@@ -38,28 +70,35 @@ describe.each(['GraphQL', 'REST'] as const)('%s review summaries', (source) => {
       url: `https://github.com/acme/widgets/pull/7#pullrequestreview-${id}`
     }))
 
-    const reviews =
-      source === 'GraphQL'
-        ? parsePRConversationResponse(
-            JSON.stringify({
-              data: { repository: { pullRequest: { reviews: { nodes: comments } } } }
-            })
-          ).reviewSummaries
-        : parseRestPRComments(
-            JSON.stringify(
-              comments.map((comment) => ({
-                id: comment.databaseId,
-                user: { login: comment.author.login, avatar_url: '' },
-                body: comment.body,
-                submitted_at: comment.createdAt,
-                html_url: comment.url
-              }))
-            ),
-            true,
-            null
-          )
+    expect(parseReviews(comments)?.map((review) => review.body)).toEqual(visibleBodies)
+  })
 
-    expect(reviews?.map((review) => review.body)).toEqual(visibleBodies)
+  it('keeps bodyless approvals and change requests, blanking metadata-only bodies', () => {
+    const states = [
+      'APPROVED',
+      'CHANGES_REQUESTED',
+      'COMMENTED',
+      'DISMISSED',
+      'PENDING',
+      'APPROVED'
+    ]
+    const comments = states.map((state, id) => ({
+      id: `PRR_${id}`,
+      databaseId: id,
+      author: { login: 'alice', avatarUrl: '' },
+      body: id === 5 ? metadataOnlyBody : '',
+      createdAt: '2026-11-02T08:18:39Z',
+      url: `https://github.com/acme/widgets/pull/7#pullrequestreview-${id}`,
+      state
+    }))
+
+    expect(
+      parseReviews(comments)?.map((review) => [review.id, review.reviewState, review.body])
+    ).toEqual([
+      [0, 'APPROVED', ''],
+      [1, 'CHANGES_REQUESTED', ''],
+      [5, 'APPROVED', '']
+    ])
   })
 })
 

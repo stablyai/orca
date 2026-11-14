@@ -1772,7 +1772,9 @@
       "resolve": "解決",
       "unresolve": "未解決に戻す",
       "yearsAgo_one": "{{count}} 年前",
-      "yearsAgo_other": "{{count}} 年前"
+      "yearsAgo_other": "{{count}} 年前",
+      "approved": "承認しました",
+      "changesRequested": "変更をリクエストしました"
     },
     "commentsSection": {
       "comment": "コメント",
