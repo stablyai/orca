@@ -1,7 +1,7 @@
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../../browser/extensions/api-runtime/browser-extension-api-scheme'
 import { JIRA_IMAGE_CUSTOM_SCHEME } from '../../jira/attachments/image-protocol'
 import { MEDIA_PREVIEW_CUSTOM_SCHEME } from '../../media/media-preview-protocol'
-import { PLUGIN_IMAGE_CUSTOM_SCHEME } from '../../plugins/plugin-image-scheme'
+import { PLUGIN_IMAGE_CUSTOM_SCHEME } from '../../plugins/media/plugin-image-scheme'
 import { PLUGIN_FRAME_CUSTOM_SCHEME } from '../../plugins/panels/guest-isolation/plugin-frame-scheme'
 
 /** Registered with doc preview's in one call: each registerSchemesAsPrivileged call replaces the last. */

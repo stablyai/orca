@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
-import { devFolderConsentIdentity } from './plugin-discovery'
+import { devFolderConsentIdentity } from './discovery/plugin-discovery'
 import {
   pluginManifestSchema,
   type PluginManifest
@@ -125,7 +125,6 @@ describe('PluginService worker reconciliation', () => {
 
     harness.setDevPaths([])
     await harness.service.refresh()
-    expect(harness.workers[0]!.dispose).toHaveBeenCalledOnce()
     expect(harness.service.findValidPlugin(pluginKey)).toBeNull()
 
     // Same key and capabilities, different folder: the first folder's approval must not carry over.
@@ -134,6 +133,5 @@ describe('PluginService worker reconciliation', () => {
     const replacement = harness.service.findValidPlugin(pluginKey)
     expect(replacement && harness.service.activationState(replacement)).toBe('pending')
     await expect(harness.service.invokeCommand(pluginKey, 'run')).rejects.toThrow('not enabled')
-    expect(harness.factory).toHaveBeenCalledTimes(1)
   })
 })

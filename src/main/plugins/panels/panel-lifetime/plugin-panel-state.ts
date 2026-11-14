@@ -7,7 +7,7 @@ import {
   pluginPanelStateRequestSchema,
   type PluginPanelStateResult
 } from '../../../../shared/plugins/declarative/plugin-declarative-panel-state'
-import { PluginKvStore } from '../../plugin-storage-store'
+import { PluginKvStore } from '../../storage/plugin-storage-store'
 
 /**
  * Persisted atoms of components panels, in the plugin's own data folder (`panel-state.json`).

@@ -1,5 +1,5 @@
 import type { PluginCapabilityKind } from '../../../../shared/plugins/capabilities/plugin-capabilities'
-import type { ValidDiscoveredPlugin } from '../../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../../discovery/plugin-discovery'
 import type { PluginWorkerSpawnSpec } from '../worker-supervision/plugin-worker-startup'
 import { pluginNeedsResidentWorker } from './plugin-resident-worker'
 
