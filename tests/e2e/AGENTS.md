@@ -23,7 +23,7 @@
 - Terminal-topology refactors must preserve behavior or fix a named bug. Run
   `ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e:terminal-layout-parity` to compare the working
   tree with its merge-base on `origin/main`. See the
-  [runner](../../config/scripts/run-terminal-layout-parity.mjs) for commit comparisons
+  [runner](../../config/scripts/runtime-verification/terminal-e2e/run-terminal-layout-parity.mjs) for commit comparisons
   and scenario filters. The head's journeys must work against both builds.
 - Declare intended fixes in [declared differences](terminal-layout-parity-declared-differences.ts)
   with scenario, bug ID, and report path prefixes; undeclared or unmatched declarations fail.
@@ -37,4 +37,4 @@
   `ORCA_LAYOUT_ORACLE_REPEAT=<n>` for repeats and `ORCA_LAYOUT_ORACLE_REPORT_DIR` for JSON
   reports. `ORCA_LAYOUT_ORACLE_RECORD=1` records without failing; do not use it as a passing gate.
 - Inspect any profile with
-  `node config/scripts/check-workspace-layout-rules.mjs <userDataDir>`.
+  `node config/scripts/static-analysis/repository-layout/check-workspace-layout-rules.mjs <userDataDir>`.
