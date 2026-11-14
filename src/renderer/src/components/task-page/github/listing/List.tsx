@@ -37,6 +37,7 @@ export function TaskPageGitHubList({
     pendingGithubScrollRestoreRef,
     githubListRestoreWriteRef,
     loadingTargetPage,
+    tasksRefreshing,
     taskListPositionRef,
     perRepoSourceState,
     unresolvedSourceRepos,
@@ -310,6 +311,8 @@ export function TaskPageGitHubList({
             currentPage={currentPage}
             totalPages={totalPages}
             loadingTarget={loadingTargetPage}
+            // Why: a forced refresh replaces every page when it lands, so a page opened meanwhile would snap back to page 1.
+            disabled={tasksRefreshing}
             onPageChange={(page) => {
               pendingGithubScrollRestoreRef.current = null
               githubListScrollTopRef.current = 0

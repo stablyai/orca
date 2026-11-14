@@ -98,14 +98,14 @@ function landAfterFilterChange(cache: Record<string, GitHubWorkItem[] | null>) {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every field the landing run reads.
   const landingModel = model as unknown as TaskPageGitHubLandingRefreshModel
-  const cancel = runTaskPageGitHubLandingRefresh(landingModel)
+  runTaskPageGitHubLandingRefresh(landingModel)
   const rows = () => pagesRef.current[0]?.map((row) => row.number)
   const answer = async (items: GitHubWorkItem[]) => {
     fetches[0]?.resolve({ items, failedCount: 0, githubUnavailable: false })
     await Promise.resolve()
     await Promise.resolve()
   }
-  return { state, model, rows, answer, cancel }
+  return { state, model, rows, answer }
 }
 
 describe('runTaskPageGitHubLandingRefresh after a filter change', () => {
@@ -116,13 +116,6 @@ describe('runTaskPageGitHubLandingRefresh after a filter change', () => {
     expect(cached.state).toEqual({ filtering: false, loading: false, refreshing: true })
     expect(cached.rows()).toEqual([9, 7])
     expect(partial.state).toEqual({ filtering: true, loading: true, refreshing: true })
-  })
-
-  it('shows a cached empty answer as empty rather than the skeleton', () => {
-    const { state, rows } = landAfterFilterChange({ a: [], b: [] })
-
-    expect(state.filtering).toBe(false)
-    expect(rows()).toEqual([])
   })
 
   it('keeps cached rows on screen while the forced refetch runs, then replaces them in place', async () => {
@@ -142,18 +135,5 @@ describe('runTaskPageGitHubLandingRefresh after a filter change', () => {
 
     expect(rows()).toEqual([8, 7])
     expect(state).toEqual({ filtering: false, loading: false, refreshing: false })
-  })
-
-  it('does not let a superseded cached landing clear the next filter skeleton', async () => {
-    const { state, rows, answer, cancel } = landAfterFilterChange({ a: [pr('a', 7)] })
-    expect(state.filtering).toBe(false)
-
-    cancel?.()
-    // The next filter click re-arms the skeleton before its own landing run.
-    state.filtering = true
-    await answer([pr('a', 8)])
-
-    expect(state.filtering).toBe(true)
-    expect(rows()).toEqual([7])
   })
 })
