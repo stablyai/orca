@@ -3,7 +3,6 @@ import { dirname } from 'node:path'
 import { z } from 'zod'
 import {
   THEME_STUDIO_MODES,
-  themeStudioDraftSchema,
   type ThemeStudioDraft,
   type ThemeStudioMode
 } from '../../shared/theme-studio/theme-studio-draft'
@@ -15,9 +14,16 @@ import type {
   ThemeStudioPreview,
   ThemeStudioReport
 } from '../../shared/theme-studio/theme-studio-protocol'
+import {
+  MAX_THEME_STUDIO_HISTORY,
+  ThemeStudioHistory,
+  themeStudioEntrySchema,
+  type ThemeStudioEntry,
+  type ThemeStudioHistoryRow,
+  type ThemeStudioSaved
+} from './theme-studio-history'
 
-const MAX_HISTORY = 100
-// Why a frame: an agent's burst of edits paints once, not once per command.
+// Why a frame: steps inside one command (start, change, fix rounds) paint once.
 const PUSH_COALESCE_MS = 16
 const PERSIST_DEBOUNCE_MS = 250
 const MAX_WAITERS = 64
@@ -25,13 +31,8 @@ const MAX_WAITERS = 64
 const persistedSessionSchema = z.object({
   version: z.literal(1),
   cursor: z.number().int().nonnegative(),
-  history: z
-    .array(z.object({ label: z.string().max(256), draft: themeStudioDraftSchema }))
-    .min(1)
-    .max(MAX_HISTORY)
+  history: z.array(themeStudioEntrySchema).min(1).max(MAX_THEME_STUDIO_HISTORY)
 })
-
-type HistoryEntry = { label: string; draft: ThemeStudioDraft }
 
 export type ThemeStudioStatus = {
   active: boolean
@@ -41,7 +42,7 @@ export type ThemeStudioStatus = {
   undo: number
   redo: number
   /** Oldest first; `current` marks where undo and redo stand. */
-  history: { label: string; current: boolean }[]
+  history: ThemeStudioHistoryRow[]
 }
 
 export type ThemeStudioSessionDeps = {
@@ -54,15 +55,15 @@ export type ThemeStudioSessionDeps = {
 /** The draft being edited, its undo history, and the coalesced preview pushed to the window.
  *  Idle costs nothing: no timers run unless an edit is waiting to paint or persist. */
 export class ThemeStudioSession {
-  private history: HistoryEntry[] = []
-  private cursor = -1
+  private readonly history = new ThemeStudioHistory()
   private revision = 0
   private pushTimer: ReturnType<typeof setTimeout> | null = null
   private persistTimer: ReturnType<typeof setTimeout> | null = null
+  private persisting: Promise<void> = Promise.resolve()
   private latestReport: ThemeStudioReport | null = null
   private waiters: { revision: number; resolve: (report: ThemeStudioReport | null) => void }[] = []
-
-  private persisting: Promise<void> = Promise.resolve()
+  /** Set when the person ended the draft; the next agent change is refused once. */
+  private endedByUser: string | null = null
   /** Settles once a session a restart interrupted is restored; edits wait for it. */
   readonly ready: Promise<void>
 
@@ -70,7 +71,6 @@ export class ThemeStudioSession {
     this.ready = this.restore()
   }
 
-  /** Restores a session a restart interrupted; a damaged file is dropped. */
   private async restore(): Promise<void> {
     let raw: string
     try {
@@ -80,8 +80,7 @@ export class ThemeStudioSession {
     }
     try {
       const parsed = persistedSessionSchema.parse(JSON.parse(raw))
-      this.history = parsed.history
-      this.cursor = Math.min(parsed.cursor, parsed.history.length - 1)
+      this.history.restore(parsed.history, parsed.cursor)
       this.revision += 1
       this.schedulePush()
     } catch (error) {
@@ -90,8 +89,19 @@ export class ThemeStudioSession {
     }
   }
 
+  /** The draft being previewed; null when none is open or the current step is a save. */
   get draft(): ThemeStudioDraft | null {
-    return this.history[this.cursor]?.draft ?? null
+    const entry = this.history.current
+    return entry && !entry.saved ? entry.draft : null
+  }
+
+  /** The current step, previewed or saved. */
+  get current(): ThemeStudioEntry | null {
+    return this.history.current
+  }
+
+  get start(): ThemeStudioDraft | null {
+    return this.history.entries[0]?.draft ?? null
   }
 
   get currentRevision(): number {
@@ -110,59 +120,61 @@ export class ThemeStudioSession {
     return draft
   }
 
+  /** Returns, once, why the person ended the last draft. */
+  takeEndedByUser(): string | null {
+    const reason = this.endedByUser
+    this.endedByUser = null
+    return reason
+  }
+
   status(): ThemeStudioStatus {
     const draft = this.draft
+    const { cursor, entries } = this.history
     return {
       active: draft !== null,
-      name: draft?.name ?? null,
+      name: this.history.current?.draft.name ?? null,
       revision: this.revision,
       modes: draft ? THEME_STUDIO_MODES.filter((mode) => draft[mode] !== null) : [],
-      undo: Math.max(0, this.cursor),
-      redo: Math.max(0, this.history.length - 1 - this.cursor),
-      history: this.history.map((entry, index) => ({
-        label: entry.label,
-        current: index === this.cursor
-      }))
+      undo: Math.max(0, cursor),
+      redo: Math.max(0, entries.length - 1 - cursor),
+      history: this.history.rows()
     }
   }
 
-  /** Starts a new session whose first step is `draft`. */
-  begin(draft: ThemeStudioDraft, label: string): void {
-    this.history = [{ label, draft }]
-    this.cursor = 0
+  begin(draft: ThemeStudioDraft, label: string, by?: string): void {
+    this.endedByUser = null
+    this.history.begin(entry(draft, label, by))
     this.changed()
   }
 
-  /** Records `draft` as the next step; anything that was undone is dropped. */
-  commit(draft: ThemeStudioDraft, label: string): void {
-    this.requireDraft()
-    this.history = [...this.history.slice(0, this.cursor + 1), { label, draft }].slice(-MAX_HISTORY)
-    this.cursor = this.history.length - 1
+  commit(draft: ThemeStudioDraft, label: string, by?: string): void {
+    this.history.push(entry(draft, label, by))
     this.changed()
   }
 
-  step(direction: 'undo' | 'redo'): string {
-    this.requireDraft()
-    const target = direction === 'undo' ? this.cursor - 1 : this.cursor + 1
-    const entry = this.history[target]
-    if (!entry) {
-      throw new ThemeStudioError(
-        THEME_STUDIO_ERROR_CODES.historyEnd,
-        direction === 'undo' ? 'Nothing to undo.' : 'Nothing to redo.',
-        { nextSteps: ['Run `orca theme show --json` to see the history.'] }
-      )
-    }
-    // Why the step's own label: undo names what it took back, redo what it put back.
-    const label = direction === 'undo' ? (this.history[this.cursor]?.label ?? '') : entry.label
-    this.cursor = target
+  /** Folds automatic fixes into the current step, so one change stays one undo. */
+  amend(draft: ThemeStudioDraft, autoFixed: number): void {
+    this.history.amend(draft, autoFixed)
     this.changed()
-    return label
   }
 
-  /** Ends the session: the preview stops and nothing is kept. */
-  end(): void {
-    this.history = []
-    this.cursor = -1
+  /** Records a save as a step; the preview ends while the saved theme is in use. */
+  markSaved(label: string, saved: ThemeStudioSaved, by?: string): void {
+    const draft = this.requireDraft()
+    this.history.push({ ...entry(draft, label, by), saved })
+    this.changed()
+  }
+
+  step(direction: 'undo' | 'redo'): { from: ThemeStudioEntry; to: ThemeStudioEntry } {
+    const moved = this.history.step(direction)
+    this.changed()
+    return moved
+  }
+
+  /** Ends the session: the preview stops and nothing more is kept. */
+  end(by: 'agent' | 'user', reason = 'Discarded'): void {
+    this.history.clear()
+    this.endedByUser = by === 'user' ? reason : null
     this.latestReport = null
     if (this.persistTimer) {
       clearTimeout(this.persistTimer)
@@ -204,7 +216,7 @@ export class ThemeStudioSession {
         }
       }
       const timer = setTimeout(() => {
-        this.waiters = this.waiters.filter((entry) => entry !== waiter)
+        this.waiters = this.waiters.filter((other) => other !== waiter)
         resolve(null)
       }, timeoutMs)
       timer.unref?.()
@@ -212,11 +224,9 @@ export class ThemeStudioSession {
     })
   }
 
-  /** Re-sends the current draft, e.g. to a window that just loaded. */
+  /** Re-sends the current preview, e.g. after a failed Keep closed the notice. */
   repaint(): void {
-    if (this.draft) {
-      this.schedulePush()
-    }
+    this.schedulePush()
   }
 
   private settleWaiters(report: ThemeStudioReport | null): void {
@@ -236,14 +246,31 @@ export class ThemeStudioSession {
     this.schedulePersist()
   }
 
+  private preview(): ThemeStudioPreview {
+    const draft = this.draft
+    const current = this.history.current
+    if (!draft || !current) {
+      return null
+    }
+    return {
+      revision: this.revision,
+      draft,
+      last: {
+        label: current.label,
+        ...(current.by ? { by: current.by } : {}),
+        ...(current.autoFixed ? { autoFixed: current.autoFixed } : {})
+      },
+      canUndo: this.history.cursor > 0
+    }
+  }
+
   private schedulePush(): void {
     if (this.pushTimer) {
       return
     }
     this.pushTimer = setTimeout(() => {
       this.pushTimer = null
-      const draft = this.draft
-      this.deps.push(draft ? { revision: this.revision, draft } : null)
+      this.deps.push(this.preview())
     }, PUSH_COALESCE_MS)
   }
 
@@ -264,11 +291,15 @@ export class ThemeStudioSession {
   }
 
   private async writeSession(): Promise<void> {
-    if (!this.draft) {
+    if (!this.history.current) {
       return
     }
     const file = this.deps.sessionFile
-    const body = JSON.stringify({ version: 1, cursor: this.cursor, history: this.history })
+    const body = JSON.stringify({
+      version: 1,
+      cursor: this.history.cursor,
+      history: this.history.entries
+    })
     try {
       await mkdir(dirname(file), { recursive: true })
       await writeFile(`${file}.tmp`, body, 'utf8')
@@ -277,4 +308,8 @@ export class ThemeStudioSession {
       console.warn('[theme-studio] could not save the session:', error)
     }
   }
+}
+
+function entry(draft: ThemeStudioDraft, label: string, by: string | undefined): ThemeStudioEntry {
+  return { label: label.slice(0, 256), ...(by ? { by } : {}), at: Date.now(), draft }
 }

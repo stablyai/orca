@@ -5,6 +5,8 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
+import { AgentThemeEditsSetting } from './AgentThemeEditsSetting'
+import { getAgentThemeEditsEntries } from './appearance-agent-theme-edits-search'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
 import { useAppStore } from '../../../store/index'
@@ -106,6 +108,7 @@ export function AppearanceInterfaceSection({
   const advancedEntries = [
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
+    ...getAgentThemeEditsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
@@ -314,6 +317,7 @@ export function AppearanceInterfaceSection({
             enabled={settings.reduceVisualEffects === true}
             updateSettings={updateSettings}
           />
+          <AgentThemeEditsSetting settings={settings} updateSettings={updateSettings} />
 
           {isDesktopWindows ? (
             <SearchableSetting

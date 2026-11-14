@@ -262,6 +262,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     keys: [
       'theme show',
       'theme tokens',
+      'theme history',
+      'theme reset',
       'theme edit',
       'theme set',
       'theme adjust',

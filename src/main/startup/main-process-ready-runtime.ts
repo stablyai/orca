@@ -78,7 +78,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       serveMode: state.isServeMode,
       userDataPath: app.getPath('userData'),
       pluginService: state.pluginService,
-      getMainWindow: () => state.mainWindow
+      getMainWindow: () => state.mainWindow,
+      agentEditsAllowed: () => state.store?.getSettings().allowAgentThemeEdits !== false
     })
   }
   state.starNag = new StarNagService(store, state.stats!)

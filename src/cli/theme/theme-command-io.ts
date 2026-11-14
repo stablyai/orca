@@ -24,7 +24,9 @@ export type Mutation = {
   label: string
   changed?: Partial<Record<ThemeStudioMode, string[]>>
   skipped?: Partial<Record<ThemeStudioMode, string[]>>
+  autoFixed?: number
   report: ThemeStudioReport | null
+  paint?: { status: string; mode?: ThemeStudioMode; dropped: string[]; editor?: string }
 }
 
 export function print(ctx: HandlerContext, result: unknown, text: string): void {
@@ -106,18 +108,26 @@ export function formatReport(report: ThemeStudioReport | null): string[] {
   if (!report) {
     return ['Contrast: not checked (the window did not paint in time).']
   }
-  return report.modes.flatMap(({ mode, shown, issues }) => [
-    `${mode}${shown ? ' (shown)' : ''}: ${issues.length === 0 ? 'passes the contrast check' : `${issues.length} contrast issue(s)`}`,
-    ...issues.map((issue) => {
-      const pair =
-        issue.text && issue.surface ? `${issue.text} on ${issue.surface}` : issue.tokens.join(', ')
+  return report.modes.flatMap(({ mode, shown, findings }) => [
+    `${mode}${shown ? ' (shown)' : ''}: ${findings.length === 0 ? 'passes the contrast check' : `${findings.length} finding(s)`}`,
+    ...findings.flatMap((finding) => {
       const ratio =
-        issue.ratio === undefined ? '' : issue.ratio === null ? ' translucent' : ` ${issue.ratio}:1`
-      const min = issue.min === undefined ? '' : ` (min ${issue.min})`
-      const fix = issue.fix
-        ? ` -> fix ${issue.fix.token.replace(/^--/, '')}=${issue.fix.value}`
-        : ''
-      return `  ${issue.problem}: ${pair}${ratio}${min}; unpainted ${issue.tokens.join(', ')}${fix}`
+        finding.ratio === undefined
+          ? ''
+          : finding.ratio === null
+            ? ', translucent'
+            : `, ${finding.ratio}:1 (min ${finding.min})`
+      const best = finding.fixes[0]
+      return [
+        `  ${finding.id}${ratio}: ${finding.effect}`,
+        ...(best
+          ? [
+              `    fix: ${Object.entries(best.set)
+                .map(([token, value]) => `${token.replace(/^--/, '')}=${value}`)
+                .join(' ')}${finding.command ? `  (${finding.command})` : ''}`
+            ]
+          : [])
+      ]
     })
   ])
 }
@@ -136,11 +146,31 @@ function formatMutation(result: Mutation): string {
     `${result.label} - ${result.name ?? 'no draft'} (revision ${result.revision}, undo ${result.undo}, redo ${result.redo})`,
     ...(changed.length ? ['Changed:', ...changed] : []),
     ...skipped,
+    ...(result.autoFixed ? [`Fixed ${result.autoFixed} contrast issue(s) in the same step.`] : []),
+    ...(result.paint
+      ? [
+          `Paint: ${result.paint.status}${result.paint.mode ? ` (${result.paint.mode})` : ''}${result.paint.dropped.length ? `; left unpainted: ${result.paint.dropped.join(', ')}` : ''}${result.paint.editor === 'pinned' ? '; the editor keeps its own theme' : ''}`
+        ]
+      : []),
     ...formatReport(result.report)
   ].join('\n')
 }
 
-export async function mutate(ctx: HandlerContext, method: string, params?: unknown): Promise<void> {
-  const result = await call<Mutation>(ctx, method, params)
+/** Who is asking and the revision they read, sent with every change. */
+export function callerParams(ctx: HandlerContext): { terminal?: string; ifRevision?: number } {
+  const terminal = process.env.ORCA_TERMINAL_HANDLE?.trim()
+  const ifRevision = numberFlag(ctx, 'if-revision')
+  return {
+    ...(terminal ? { terminal } : {}),
+    ...(ifRevision === undefined ? {} : { ifRevision })
+  }
+}
+
+export async function mutate(
+  ctx: HandlerContext,
+  method: string,
+  params: Record<string, unknown> = {}
+): Promise<void> {
+  const result = await call<Mutation>(ctx, method, { ...params, ...callerParams(ctx) })
   print(ctx, result, formatMutation(result))
 }

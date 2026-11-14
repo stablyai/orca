@@ -146,7 +146,7 @@ const toLinear = (channel: number): number => {
 const fromLinear = (channel: number): number =>
   255 * (channel <= 0.0031308 ? 12.92 * channel : 1.055 * channel ** (1 / 2.4) - 0.055)
 
-function rgbToOklab([r, g, b]: Rgba): { l: number; a: number; b: number } {
+export function rgbToOklab([r, g, b]: Rgba): { l: number; a: number; b: number } {
   const [lr, lg, lb] = [toLinear(r), toLinear(g), toLinear(b)]
   const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
   const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)

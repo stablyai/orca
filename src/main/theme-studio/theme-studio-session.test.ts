@@ -31,16 +31,18 @@ describe('ThemeStudioSession', () => {
     session.commit(draftWith('#111111'), 'One')
     session.commit(draftWith('#222222'), 'Two')
     vi.advanceTimersByTime(20)
-    expect(pushes).toEqual([{ revision: 3, draft: draftWith('#222222') }])
+    expect(pushes).toEqual([
+      { revision: 3, draft: draftWith('#222222'), last: { label: 'Two' }, canUndo: true }
+    ])
   })
 
   it('undoes and redoes, and a new edit drops what was undone', () => {
     session.begin(draftWith('#000000'), 'Start')
     session.commit(draftWith('#111111'), 'One')
     session.commit(draftWith('#222222'), 'Two')
-    expect(session.step('undo')).toBe('Two')
+    expect(session.step('undo').from.label).toBe('Two')
     expect(session.draft).toEqual(draftWith('#111111'))
-    expect(session.step('redo')).toBe('Two')
+    expect(session.step('redo').to.label).toBe('Two')
     session.step('undo')
     session.commit(draftWith('#333333'), 'Three')
     expect(session.status()).toMatchObject({ undo: 2, redo: 0 })
@@ -65,7 +67,7 @@ describe('ThemeStudioSession', () => {
     await restored.ready
     expect(restored.draft).toEqual(draftWith('#111111'))
     expect(restored.status().undo).toBe(1)
-    restored.end()
+    restored.end('agent')
     expect(restored.draft).toBeNull()
     await vi.waitFor(() => expect(readFile(sessionFile, 'utf8')).rejects.toThrow())
   })

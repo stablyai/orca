@@ -57,14 +57,30 @@ export function assignmentsPatch(ctx: HandlerContext, modes: ThemeStudioMode[]):
   return patch
 }
 
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+/** --patch <json|@file>, or --patch-stdin: the quoting-safe path, Windows shells included. */
 export async function patchFlag(ctx: HandlerContext): Promise<unknown> {
   const value = stringFlag(ctx, 'patch')
-  if (value === undefined) {
+  const fromStdin = ctx.flags.has('patch-stdin')
+  if (value === undefined && !fromStdin) {
     return undefined
   }
-  const text = value.startsWith('@')
-    ? await readFile(localPath(ctx, value.slice(1), 'set'), 'utf8')
-    : value
+  if (value !== undefined && fromStdin) {
+    throw new RuntimeClientError('invalid_argument', 'Pass --patch or --patch-stdin, not both.')
+  }
+  const text =
+    value === undefined
+      ? await readStdin()
+      : value.startsWith('@')
+        ? await readFile(localPath(ctx, value.slice(1), 'set'), 'utf8')
+        : value
   try {
     return JSON.parse(text)
   } catch {

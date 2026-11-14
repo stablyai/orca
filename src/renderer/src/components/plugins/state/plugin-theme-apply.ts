@@ -120,6 +120,13 @@ export async function applyPluginAppThemeToSlot(
  * switches the app to that mode, since most themes ship one mode and must still show.
  */
 export async function applyPluginThemesNow(pluginKey: string): Promise<boolean> {
+  return (await applyPluginThemes(pluginKey)) !== null
+}
+
+/** applyPluginThemesNow, returning the settings it replaced (null when nothing applied). */
+export async function applyPluginThemes(
+  pluginKey: string
+): Promise<Partial<GlobalSettings> | null> {
   const [apps, icons, terminals] = await Promise.all([
     usePluginThemeStore.getState().fetchEntries(),
     usePluginIconThemeStore.getState().fetchEntries(),
@@ -132,7 +139,7 @@ export async function applyPluginThemesNow(pluginKey: string): Promise<boolean> 
   const icon = own(icons)[0]
   const ownTerminals = own(terminals)
   if (!settings || (ownApps.length === 0 && !icon && ownTerminals.length === 0)) {
-    return false
+    return null
   }
   const currentlyDark = resolveDocumentTheme(settings.theme)
   const appFor = (base: 'light' | 'dark'): PluginThemeRegistration | undefined =>
@@ -201,5 +208,5 @@ export async function applyPluginThemesNow(pluginKey: string): Promise<boolean> 
       }
     }
   )
-  return true
+  return previous
 }

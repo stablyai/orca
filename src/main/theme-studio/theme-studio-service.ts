@@ -1,95 +1,40 @@
 import type { z } from 'zod'
 import {
-  adjustThemeStudioVariant,
   applyThemeStudioPatch,
-  THEME_STUDIO_MODES,
-  type ThemeStudioDraft,
   type ThemeStudioMode,
   type ThemeStudioPatch
 } from '../../shared/theme-studio/theme-studio-draft'
-import {
-  THEME_STUDIO_ERROR_CODES,
-  ThemeStudioError
-} from '../../shared/theme-studio/theme-studio-errors'
-import type {
-  ThemeStudioReport,
-  ThemeStudioResolveResult
-} from '../../shared/theme-studio/theme-studio-protocol'
 import type {
   ThemeStudioAdjustParams,
   ThemeStudioEditParams
 } from '../../shared/rpc-contract/theme-studio/theme-studio-params'
-import type { OrcaChromeCapture } from '../plugins/view/plugin-view-chrome-shot'
-import type { ThemeStudioSession, ThemeStudioStatus } from './theme-studio-session'
 import {
-  draftFromInstalled,
-  draftFromResolved,
-  withName,
-  type InstalledThemes,
-  type StartedDraft
-} from './theme-studio-draft-sources'
-import { writeThemeStudioPlugin } from './theme-studio-plugin-save'
+  assertAgentEditsAllowed,
+  assertRevision,
+  draftEndedByUser,
+  ThemeStudioRateLimit
+} from './theme-studio-guards'
+import {
+  createThemeStudioCore,
+  REPORT_TIMEOUT_MS,
+  THEME_STUDIO_CAPABILITIES,
+  type ThemeStudioCaller,
+  type ThemeStudioServiceDeps
+} from './theme-studio-core'
+import { adjustDraft, applyDraft, checkDraft, editDraft, stepDraft } from './theme-studio-changes'
 
-// Why 2.5s: a paint and two contrast checks take milliseconds; this only covers a busy window.
-const REPORT_TIMEOUT_MS = 2_500
-const MAX_FIX_ROUNDS = 4
+export type {
+  ThemeStudioCaller,
+  ThemeStudioMutation,
+  ThemeStudioServiceDeps,
+  ThemeStudioWindow
+} from './theme-studio-core'
 
-export type ThemeStudioWindow = {
-  resolve(): Promise<ThemeStudioResolveResult>
-  /** Selects an installed theme plugin's themes as the user's, with a toast to switch back. */
-  select(pluginKey: string): Promise<boolean>
-  capture(mode: ThemeStudioMode | undefined): Promise<OrcaChromeCapture>
-}
-
-export type ThemeStudioServiceDeps = {
-  session: ThemeStudioSession
-  /** Null on a host without a window, such as `orca serve`. */
-  window: () => ThemeStudioWindow | null
-  installedThemes: () => Promise<InstalledThemes>
-  /** The folder an installed plugin came from, or null when it is not installed from one. */
-  installedFrom: (pluginKey: string) => Promise<string | null>
-  /** Installs a theme plugin folder like `orca plugin install <dir>`. */
-  installFolder: (path: string) => Promise<{ pluginKey: string; version: string }>
-  pluginsRoot: string
-}
-
-export type ThemeStudioMutation = ThemeStudioStatus & {
-  label: string
-  changed?: Partial<Record<ThemeStudioMode, string[]>>
-  skipped?: Partial<Record<ThemeStudioMode, string[]>>
-  report: ThemeStudioReport | null
-}
-
-function needsDesktop(): ThemeStudioError {
-  return new ThemeStudioError(
-    THEME_STUDIO_ERROR_CODES.needsDesktop,
-    'This Orca has no window to paint a theme in.',
-    {
-      nextSteps: [
-        'Run `orca theme` from a terminal of the Orca desktop app you look at, or pass `--environment` for an Orca desktop server.'
-      ]
-    }
-  )
-}
-
-function fixesFrom(report: ThemeStudioReport | null): ThemeStudioPatch {
-  const edit: ThemeStudioPatch = {}
-  for (const { mode, issues } of report?.modes ?? []) {
-    const set: Record<string, string> = {}
-    for (const { fix } of issues) {
-      if (fix && !(fix.token in set)) {
-        set[fix.token] = fix.value
-      }
-    }
-    if (Object.keys(set).length) {
-      edit[mode] = { set }
-    }
-  }
-  return edit
-}
-
+/** `orca theme` on this host: every change is queued, guarded, undoable and reported. */
 export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
-  const { session } = deps
+  const core = createThemeStudioCore(deps)
+  const { session, requireWindow } = core
+  const rateLimit = new ThemeStudioRateLimit()
   // Why one queue: two agents (or a burst) must not both start a draft or interleave a fix loop.
   let queue: Promise<unknown> = session.ready
   const exclusive = <T>(work: () => Promise<T>): Promise<T> => {
@@ -97,136 +42,27 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
     queue = next.catch(() => undefined)
     return next
   }
-  const requireWindow = (): ThemeStudioWindow => {
-    const window = deps.window()
-    if (!window) {
-      throw needsDesktop()
-    }
-    return window
-  }
-  const currentDraft = async (name?: string): Promise<StartedDraft> =>
-    draftFromResolved(await requireWindow().resolve(), name)
-
-  async function mutation(
-    label: string,
-    extra: Partial<ThemeStudioMutation> = {}
-  ): Promise<ThemeStudioMutation> {
-    const report = await session.waitForReport(REPORT_TIMEOUT_MS)
-    return { ...session.status(), label, ...extra, report }
-  }
-
-  /** Applies `change` to the open draft, or to one started from what Orca paints now; a refused
-   *  change leaves no draft behind. */
-  async function commitChange<T>(
-    label: string,
-    change: (draft: ThemeStudioDraft) => { draft: ThemeStudioDraft } & T
-  ): Promise<T> {
-    requireWindow()
-    const open = session.draft
-    const started = open ? null : await currentDraft()
-    const result = change(open ?? started?.draft ?? session.requireDraft())
-    if (started) {
-      session.begin(started.draft, started.label)
-    }
-    session.commit(result.draft, label)
-    return result
-  }
-
-  async function edit(params: z.infer<typeof ThemeStudioEditParams>): Promise<ThemeStudioMutation> {
-    requireWindow()
-    const { from } = params
-    const started =
-      from.kind === 'current'
-        ? await currentDraft(params.name)
-        : from.kind === 'installed'
-          ? draftFromInstalled(await deps.installedThemes(), from.target, params.name)
-          : { draft: withName(from.draft, params.name), label: `Start from ${from.draft.name}` }
-    if (!started.draft.light && !started.draft.dark) {
-      throw new ThemeStudioError(
-        THEME_STUDIO_ERROR_CODES.invalid,
-        'The theme has no light or dark variant.',
-        { nextSteps: ['Pass a theme plugin folder or a theme JSON file with `base` and `tokens`.'] }
-      )
-    }
-    session.begin(started.draft, started.label)
-    return mutation(started.label)
-  }
-
-  async function patch(change: ThemeStudioPatch, label: string): Promise<ThemeStudioMutation> {
-    const { changed } = await commitChange(label, (draft) => applyThemeStudioPatch(draft, change))
-    return mutation(label, { changed })
-  }
-
-  async function adjust(
-    params: z.infer<typeof ThemeStudioAdjustParams>
-  ): Promise<ThemeStudioMutation> {
-    const label = `Adjust ${Object.entries(params.adjustment)
-      .map(([key, value]) => `${key} ${value}`)
-      .join(', ')}`
-    const { changed, skipped } = await commitChange(label, (draft) => {
-      const next: ThemeStudioDraft = { ...draft }
-      const changedKeys: Partial<Record<ThemeStudioMode, string[]>> = {}
-      const skippedKeys: Partial<Record<ThemeStudioMode, string[]>> = {}
-      for (const mode of params.modes) {
-        const variant = draft[mode]
-        if (variant) {
-          const adjusted = adjustThemeStudioVariant(variant, params.adjustment, params.only)
-          next[mode] = adjusted.variant
-          changedKeys[mode] = adjusted.changed
-          if (adjusted.skipped.length) {
-            skippedKeys[mode] = adjusted.skipped
-          }
+  /** Every agent change: allowed, within its rate, on the revision it read, not ended by the user. */
+  const agentChange = <T>(
+    caller: ThemeStudioCaller,
+    work: () => Promise<T>,
+    options: { starts?: boolean } = {}
+  ): Promise<T> =>
+    exclusive(async () => {
+      assertAgentEditsAllowed(deps.agentEditsAllowed())
+      requireWindow()
+      rateLimit.take(caller.key)
+      if (!options.starts) {
+        const ended = session.takeEndedByUser()
+        if (ended) {
+          throw draftEndedByUser(ended)
+        }
+        if (session.draft) {
+          assertRevision(caller.ifRevision, session.currentRevision)
         }
       }
-      return { draft: next, changed: changedKeys, skipped: skippedKeys }
+      return work()
     })
-    return mutation(label, { changed, ...(Object.keys(skipped).length ? { skipped } : {}) })
-  }
-
-  async function check(fix: boolean): Promise<ThemeStudioMutation> {
-    requireWindow()
-    session.requireDraft()
-    if (!fix) {
-      return mutation('Check')
-    }
-    const fixed: Partial<Record<ThemeStudioMode, string[]>> = {}
-    // Why rounds: a fixed color can expose the next pair the check had not reached yet.
-    for (let round = 0; round < MAX_FIX_ROUNDS; round += 1) {
-      const fixes = fixesFrom(await session.waitForReport(REPORT_TIMEOUT_MS))
-      if (Object.keys(fixes).length === 0) {
-        break
-      }
-      for (const mode of THEME_STUDIO_MODES) {
-        const keys = Object.keys(fixes[mode]?.set ?? {})
-        if (keys.length) {
-          fixed[mode] = [...new Set([...(fixed[mode] ?? []), ...keys])]
-        }
-      }
-      session.commit(applyThemeStudioPatch(session.requireDraft(), fixes).draft, 'Fix contrast')
-    }
-    return mutation('Fix contrast', { changed: fixed })
-  }
-
-  async function apply(name: string | undefined) {
-    const window = requireWindow()
-    const draft = withName(session.requireDraft(), name)
-    const { folder, replaced } = await writeThemeStudioPlugin(
-      draft,
-      deps.pluginsRoot,
-      deps.installedFrom
-    )
-    const installed = await deps.installFolder(folder)
-    const selected = await window.select(installed.pluginKey)
-    session.end()
-    return {
-      ...installed,
-      name: draft.name,
-      folder,
-      replaced,
-      selected,
-      modes: THEME_STUDIO_MODES.filter((mode) => draft[mode] !== null)
-    }
-  }
 
   return {
     async status(options: { resolved: boolean; report: boolean }) {
@@ -243,6 +79,8 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
         ...status,
         draft,
         hasWindow: window !== null,
+        agentEditsAllowed: deps.agentEditsAllowed(),
+        capabilities: THEME_STUDIO_CAPABILITIES,
         ...(resolved ? { resolved } : {}),
         // Why the revision check: an edit that landed meanwhile has its own report.
         ...(report !== undefined
@@ -250,45 +88,70 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
           : {})
       }
     },
-    edit: (params: z.infer<typeof ThemeStudioEditParams>) => exclusive(() => edit(params)),
-    patch: (change: ThemeStudioPatch, label: string) => exclusive(() => patch(change, label)),
-    adjust: (params: z.infer<typeof ThemeStudioAdjustParams>) => exclusive(() => adjust(params)),
-    check: (fix: boolean) => exclusive(() => check(fix)),
-    step: (direction: 'undo' | 'redo') =>
-      exclusive(async () => {
-        requireWindow()
-        const label = session.step(direction)
-        return mutation(`${direction === 'undo' ? 'Undo' : 'Redo'} ${label}`)
+    edit: (params: z.infer<typeof ThemeStudioEditParams>, caller: ThemeStudioCaller) =>
+      agentChange(caller, () => editDraft(core, params, caller), { starts: true }),
+    patch: (change: ThemeStudioPatch, label: string, caller: ThemeStudioCaller) =>
+      agentChange(caller, async () => {
+        const { changed } = await core.commitChange(caller, label, (draft) =>
+          applyThemeStudioPatch(draft, change)
+        )
+        return core.mutation(label, { changed })
+      }),
+    adjust: (params: z.infer<typeof ThemeStudioAdjustParams>, caller: ThemeStudioCaller) =>
+      agentChange(caller, () => adjustDraft(core, params, caller)),
+    check: (fix: boolean, ids: readonly string[] | undefined, caller: ThemeStudioCaller) =>
+      agentChange(caller, () => checkDraft(core, fix, ids, caller)),
+    step: (direction: 'undo' | 'redo', caller: ThemeStudioCaller) =>
+      agentChange(caller, () => stepDraft(core, direction)),
+    reset: (caller: ThemeStudioCaller) =>
+      agentChange(caller, async () => {
+        const start = session.start
+        session.requireDraft()
+        if (!start) {
+          return core.mutation('Reset')
+        }
+        session.commit(start, 'Reset to the start', caller.by)
+        return core.mutation('Reset to the start')
       }),
     shot: (mode: ThemeStudioMode | undefined) =>
       exclusive(async () => {
-        const window = requireWindow()
+        const window = core.requireWindow()
         if (session.draft) {
           await session.waitForReport(REPORT_TIMEOUT_MS)
         }
         return { draft: session.draft !== null, ...(await window.capture(mode)) }
       }),
-    apply: (name: string | undefined) => exclusive(() => apply(name)),
-    discard: () =>
-      exclusive(async () => {
+    apply: (name: string | undefined, caller: ThemeStudioCaller) =>
+      agentChange(caller, () => applyDraft(core, name, caller.by)),
+    discard: (caller: ThemeStudioCaller) =>
+      agentChange(caller, async () => {
         const status = session.status()
-        session.end()
+        session.end('agent')
         return { discarded: status.active, name: status.name }
       }),
-    /** The user pressed Keep or Discard on the notice for `revision`; a newer draft is left alone,
-     *  and a failed Keep shows the notice again. */
-    actFromWindow: (action: 'keep' | 'discard', revision: number): Promise<void> =>
+    /** The person acted on the notice for `revision`, or picked a theme in Settings; a newer
+     *  draft is left alone, and a failed Keep shows the notice again. */
+    actFromWindow: (
+      action: 'keep' | 'undo' | 'discard' | 'ended',
+      revision: number
+    ): Promise<void> =>
       exclusive(async () => {
-        if (revision !== session.currentRevision) {
+        if (revision !== session.currentRevision || !session.draft) {
           return
         }
-        if (action === 'discard') {
-          session.end()
-          return
+        if (action === 'undo') {
+          await stepDraft(core, 'undo')
+        } else if (action === 'keep') {
+          await applyDraft(core, undefined, 'you')
+          session.end('user', 'kept it')
+        } else {
+          session.end(
+            'user',
+            action === 'discard' ? 'discarded it' : 'picked another theme in Settings'
+          )
         }
-        await apply(undefined)
       }).catch((error: unknown) => {
-        console.warn('[theme-studio] could not keep the draft:', error)
+        console.warn('[theme-studio] could not act on the draft:', error)
         session.repaint()
       })
   }

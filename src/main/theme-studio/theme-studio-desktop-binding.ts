@@ -52,6 +52,7 @@ export function bindThemeStudio(options: {
   userDataPath: string
   pluginService: PluginService
   getMainWindow: () => BrowserWindow | null
+  agentEditsAllowed: () => boolean
 }): void {
   if (options.serveMode) {
     setThemeStudioForRpc(null)
@@ -80,8 +81,13 @@ export function bindThemeStudio(options: {
         }
         return reply.resolved
       },
-      select: async (pluginKey) =>
-        (await ask(target, { kind: 'select', pluginKey })).selected === true,
+      select: async (pluginKey) => {
+        const reply = await ask(target, { kind: 'select', pluginKey })
+        return { selected: reply.selected === true, previous: reply.previous ?? {} }
+      },
+      restore: async (settings) => {
+        await ask(target, { kind: 'restore', settings })
+      },
       capture: (mode) =>
         captureOrcaChrome(target, isPluginShotWindowShown(mainWindow), {
           region: 'window',
@@ -107,6 +113,8 @@ export function bindThemeStudio(options: {
       return source ? (source.kind === 'local-path' ? source.path : pluginKey) : null
     },
     installFolder: installHostWrittenPluginFolder,
+    // Why default on: the setting is new, so a profile that never saw it allows edits.
+    agentEditsAllowed: () => options.agentEditsAllowed(),
     pluginsRoot: join(root, 'plugins')
   })
   const fromMainWindow = (sender: WebContents): boolean => sender === contents()

@@ -7,7 +7,10 @@ import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from './appearance/document-theme'
 import { applyThemeBackground } from './appearance/theme-background'
-import { useThemeStudioAppTheme } from './appearance/use-theme-studio-app-theme'
+import {
+  reportThemeStudioPaint,
+  useThemeStudioAppTheme
+} from './appearance/use-theme-studio-app-theme'
 import { syncThemeBackgroundVideo } from './appearance/theme-background-video'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import { useWindowActive } from '../hooks/use-window-active'
@@ -82,7 +85,7 @@ export function useDocumentAppearance(): void {
   const pluginTheme =
     pluginThemes.find((entry) => entry.id === selected && (entry.base === 'dark') === dark) ?? null
   // An `orca theme` draft paints over the selected theme without touching settings.
-  const draftTheme = useThemeStudioAppTheme(dark)
+  const { paint: draftTheme, preview: draftPreview } = useThemeStudioAppTheme(dark)
   const appTheme = draftTheme ?? (matchTerminal ? terminalTheme : pluginTheme)
   const editorTheme = findCodeEditorTheme(
     useAppStore((s) => (dark ? s.settings?.editorThemeDark : s.settings?.editorThemeLight)),
@@ -136,8 +139,17 @@ export function useDocumentAppearance(): void {
     if (ready && theme) {
       // Why no cache for a draft: a launch paints the user's own theme until main re-sends it.
       appPainted.current = applyPluginAppTheme(appTheme, draftTheme ? { storage: null } : {})
+      if (draftPreview) {
+        reportThemeStudioPaint(
+          draftPreview,
+          dark ? 'dark' : 'light',
+          draftTheme?.tokens ?? null,
+          appPainted.current,
+          editorTheme !== null
+        )
+      }
     }
-  }, [appTheme, draftTheme, ready, theme, dark])
+  }, [appTheme, draftTheme, draftPreview, editorTheme, ready, theme, dark])
 
   const sidebarTint = useAppStore(
     useShallow((s) =>

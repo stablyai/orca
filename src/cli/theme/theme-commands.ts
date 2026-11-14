@@ -1,18 +1,15 @@
 import { existsSync } from 'node:fs'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/types'
-import { pluginThemeTokenReference } from '../../shared/plugins/artifacts/plugin-theme-token-reference-doc'
-import { TERMINAL_COLOR_KEYS } from '../../shared/terminal-themes/terminal-custom-themes'
 import {
   THEME_STUDIO_MODES,
-  THEME_STUDIO_TERMINAL_PREFIX,
   type ThemeStudioMode
 } from '../../shared/theme-studio/theme-studio-draft'
-import type { ThemeStudioReport } from '../../shared/theme-studio/theme-studio-protocol'
 import {
   call,
-  formatReport,
+  callerParams,
   listFlag,
+  numberFlag,
   localPath,
   modesFlag,
   mutate,
@@ -29,6 +26,7 @@ import {
 } from './theme-command-args'
 import { draftFromLocal } from './theme-local-draft'
 import { exportDraft, shot } from './theme-file-commands'
+import { history, show, tokens } from './theme-read-commands'
 
 async function edit(ctx: HandlerContext): Promise<void> {
   const from = stringFlag(ctx, 'from') ?? 'current'
@@ -74,65 +72,22 @@ async function shownMode(ctx: HandlerContext): Promise<ThemeStudioMode> {
 
 async function adjust(ctx: HandlerContext): Promise<void> {
   const adjustment = adjustmentFlags(ctx)
-  if (Object.keys(adjustment).length === 0) {
+  const separate = numberFlag(ctx, 'separate')
+  if (Object.keys(adjustment).length === 0 && separate === undefined) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Pass at least one of --warmth, --hue, --saturation, --lightness or --contrast.'
+      'Pass at least one of --warmth, --hue, --saturation, --lightness, --contrast or --separate.'
     )
   }
   const only = onlyPrefixes(ctx)
   await mutate(ctx, 'themeStudio.adjust', {
     modes: modesFlag(ctx) ?? [...THEME_STUDIO_MODES],
     adjustment,
-    ...(only ? { only } : {})
+    ...(only ? { only } : {}),
+    ...(separate === undefined
+      ? {}
+      : { separate: { scope: stringFlag(ctx, 'scope') ?? 'sidebar', amount: separate } })
   })
-}
-
-async function show(ctx: HandlerContext): Promise<void> {
-  const result = await call<{
-    active: boolean
-    name: string | null
-    revision: number
-    modes: ThemeStudioMode[]
-    undo: number
-    redo: number
-    history: { label: string; current: boolean }[]
-    report?: ThemeStudioReport | null
-    resolved?: { shownMode: ThemeStudioMode; modes: { mode: string; themeLabel: string | null }[] }
-  }>(ctx, 'themeStudio.status', { resolved: ctx.flags.has('resolved') })
-  const lines = result.active
-    ? [
-        `Previewing ${result.name} (${result.modes.join(' and ')}; revision ${result.revision}, undo ${result.undo}, redo ${result.redo})`,
-        ...result.history.map((entry) => `  ${entry.current ? '>' : ' '} ${entry.label}`),
-        ...formatReport(result.report ?? null)
-      ]
-    : ['No theme draft is open; `orca theme edit` starts one.']
-  if (result.resolved) {
-    lines.push(
-      `Shown: ${result.resolved.shownMode}`,
-      ...result.resolved.modes.map(
-        (mode) => `  ${mode.mode}: ${mode.themeLabel ?? 'Orca built-in'}`
-      )
-    )
-  }
-  print(ctx, result, lines.join('\n'))
-}
-
-async function tokens(ctx: HandlerContext): Promise<void> {
-  const reference = pluginThemeTokenReference()
-  const terminal = TERMINAL_COLOR_KEYS.map((key) => `${THEME_STUDIO_TERMINAL_PREFIX}${key}`)
-  print(
-    ctx,
-    { tokens: reference, terminal },
-    [
-      ...reference.map(
-        ({ token, paints, required }) =>
-          `${token.replace(/^--/, '')}${required ? ' (required)' : ''}: ${paints}`
-      ),
-      '',
-      `Terminal: ${terminal.join(', ')}`
-    ].join('\n')
-  )
 }
 
 async function apply(ctx: HandlerContext): Promise<void> {
@@ -144,7 +99,7 @@ async function apply(ctx: HandlerContext): Promise<void> {
     folder: string
     selected: boolean
     modes: ThemeStudioMode[]
-  }>(ctx, 'themeStudio.apply', name ? { name } : {})
+  }>(ctx, 'themeStudio.apply', { ...(name ? { name } : {}), ...callerParams(ctx) })
   print(
     ctx,
     result,
@@ -155,10 +110,18 @@ async function apply(ctx: HandlerContext): Promise<void> {
 export const THEME_HANDLERS: Record<string, CommandHandler> = {
   'theme show': show,
   'theme tokens': tokens,
+  'theme history': history,
+  'theme reset': (ctx) => mutate(ctx, 'themeStudio.reset'),
   'theme edit': edit,
   'theme set': set,
   'theme adjust': adjust,
-  'theme check': (ctx) => mutate(ctx, 'themeStudio.check', { fix: ctx.flags.has('fix') }),
+  'theme check': (ctx) => {
+    const findings = listFlag(ctx, 'finding')
+    return mutate(ctx, 'themeStudio.check', {
+      fix: ctx.flags.has('fix') || findings.length > 0,
+      ...(findings.length ? { findings } : {})
+    })
+  },
   'theme undo': (ctx) => mutate(ctx, 'themeStudio.step', { direction: 'undo' }),
   'theme redo': (ctx) => mutate(ctx, 'themeStudio.step', { direction: 'redo' }),
   'theme shot': shot,
@@ -166,7 +129,8 @@ export const THEME_HANDLERS: Record<string, CommandHandler> = {
   'theme discard': async (ctx) => {
     const result = await call<{ discarded: boolean; name: string | null }>(
       ctx,
-      'themeStudio.discard'
+      'themeStudio.discard',
+      callerParams(ctx)
     )
     print(ctx, result, result.discarded ? `Discarded ${result.name}.` : 'No theme draft was open.')
   },

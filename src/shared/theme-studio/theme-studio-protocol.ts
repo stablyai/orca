@@ -1,10 +1,6 @@
 import { z } from 'zod'
 import { tokenColorsSchema } from '../plugins/artifacts/plugin-theme-artifact'
-import {
-  THEME_STUDIO_MODES,
-  themeStudioDraftSchema,
-  type ThemeStudioDraft
-} from './theme-studio-draft'
+import { THEME_STUDIO_MODES, themeStudioDraftSchema } from './theme-studio-draft'
 
 /** Main → renderer: the draft to paint (null ends the preview). Coalesced to one per frame. */
 export const THEME_STUDIO_PREVIEW_CHANNEL = 'themeStudio:preview'
@@ -14,43 +10,16 @@ export const THEME_STUDIO_CURRENT_CHANNEL = 'themeStudio:current'
 export const THEME_STUDIO_REPORT_CHANNEL = 'themeStudio:report'
 export const THEME_STUDIO_REQUEST_CHANNEL = 'themeStudio:request'
 export const THEME_STUDIO_REPLY_CHANNEL = 'themeStudio:reply'
-/** Renderer → main: the user pressed Keep or Discard on the preview toast. */
+/** Renderer → main: the user acted on the preview notice, or picked a theme in Settings. */
 export const THEME_STUDIO_USER_ACTION_CHANNEL = 'themeStudio:userAction'
-
-export type ThemeStudioPreview = { revision: number; draft: ThemeStudioDraft } | null
 
 const modeSchema = z.enum(THEME_STUDIO_MODES)
 
-const themeStudioIssueSchema = z.object({
-  problem: z.enum(['contrast', 'ring', 'border-alpha', 'invalid']),
-  /** The theme tokens the check left unpainted; they show Orca's built-in colors instead. */
-  tokens: z.array(z.string()).max(64),
-  /** For contrast: the text and surface tokens that failed together. */
-  text: z.string().optional(),
-  surface: z.string().optional(),
-  /** Null when a side is translucent, which never passes. */
-  ratio: z.number().nullable().optional(),
-  min: z.number().optional(),
-  /** One value that passes this check; `orca theme check --fix` applies it. */
-  fix: z.object({ token: z.string(), value: z.string(), ratio: z.number().optional() }).optional()
-})
-export type ThemeStudioIssue = z.infer<typeof themeStudioIssueSchema>
-
-export const themeStudioReportSchema = z.object({
-  revision: z.number().int().nonnegative(),
-  modes: z
-    .array(
-      z.object({
-        mode: modeSchema,
-        /** Whether Orca shows this mode now; the other mode is checked without painting it. */
-        shown: z.boolean(),
-        issues: z.array(themeStudioIssueSchema).max(256)
-      })
-    )
-    .max(2)
-})
-export type ThemeStudioReport = z.infer<typeof themeStudioReportSchema>
-export type ThemeStudioModeReport = ThemeStudioReport['modes'][number]
+export {
+  themeStudioReportSchema,
+  type ThemeStudioReport,
+  type ThemeStudioModeReport
+} from './theme-studio-findings'
 
 const tokenSourceSchema = z.enum(['theme', 'derived', 'built-in'])
 export type ThemeStudioTokenSource = z.infer<typeof tokenSourceSchema>
@@ -78,7 +47,11 @@ const resolveResultSchema = z.object({
 })
 export type ThemeStudioResolveResult = z.infer<typeof resolveResultSchema>
 
-export type ThemeStudioRequestBody = { kind: 'resolve' } | { kind: 'select'; pluginKey: string }
+export type ThemeStudioRequestBody =
+  | { kind: 'resolve' }
+  | { kind: 'select'; pluginKey: string }
+  /** Puts back the settings a `select` replaced, for an undo right after saving. */
+  | { kind: 'restore'; settings: Record<string, unknown> }
 export type ThemeStudioRequest = ThemeStudioRequestBody & { requestId: string }
 
 export const themeStudioReplySchema = z.discriminatedUnion('ok', [
@@ -86,18 +59,34 @@ export const themeStudioReplySchema = z.discriminatedUnion('ok', [
     requestId: z.string(),
     ok: z.literal(true),
     resolved: resolveResultSchema.optional(),
-    selected: z.boolean().optional()
+    selected: z.boolean().optional(),
+    /** The settings `select` replaced, so an undo can put them back. */
+    previous: z.record(z.string(), z.unknown()).optional()
   }),
   z.object({ requestId: z.string(), ok: z.literal(false), message: z.string().max(2048) })
 ])
 export type ThemeStudioReply = z.infer<typeof themeStudioReplySchema>
 
 export const themeStudioPreviewSchema = z
-  .object({ revision: z.number().int().nonnegative(), draft: themeStudioDraftSchema })
+  .object({
+    revision: z.number().int().nonnegative(),
+    draft: themeStudioDraftSchema,
+    /** The change on screen, for the notice: its label, who made it and what was fixed with it. */
+    last: z
+      .object({
+        label: z.string().max(256),
+        by: z.string().max(256).optional(),
+        autoFixed: z.number().int().nonnegative().optional()
+      })
+      .optional(),
+    canUndo: z.boolean().optional()
+  })
   .nullable()
+export type ThemeStudioPreview = z.infer<typeof themeStudioPreviewSchema>
 
 export const themeStudioUserActionSchema = z.object({
-  action: z.enum(['keep', 'discard']),
+  /** `ended`: the user picked a theme in Settings, which ends the draft like Discard. */
+  action: z.enum(['keep', 'undo', 'discard', 'ended']),
   revision: z.number().int().nonnegative()
 })
 export type ThemeStudioUserAction = z.infer<typeof themeStudioUserActionSchema>

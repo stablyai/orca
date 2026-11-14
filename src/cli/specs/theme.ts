@@ -6,6 +6,10 @@ const RESULT_NOTE =
   'Every change returns the draft revision, what changed, and `report`: per mode, the `issues` the contrast check found (tokens it leaves unpainted, the failing pair, `ratio` and `min`) with a `fix` value that passes. `report` is null when the window did not paint in time.'
 const MODE_NOTE =
   '--mode light|dark|both picks the variants to change; without it, the mode Orca shows now.'
+const CONCURRENCY_NOTE =
+  '--if-revision <n> refuses with draft_conflict when the draft moved past revision n (another agent, or the person). After the person presses Keep or Discard, or picks a theme in Settings, the next change fails once with draft_ended_by_user: ask them before starting again. Changes are limited to about 3 a second per terminal (rate_limited with retryAfterMs); batch tokens into one command. When "Let agents edit the theme" is off in Settings → Appearance, changes fail with theme_edits_disabled.'
+const PAINT_NOTE =
+  '`paint` says how the change reached the screen: painted, other-variant (the mode you changed is not the one shown; use `orca theme shot --mode`), no-viewer, coalesced or timeout, with `dropped` (tokens the window actually left unpainted) and `editor` (follows-app, or pinned when the user chose a fixed editor theme, so syntax colors do not show).'
 const DESKTOP_NOTE =
   'Needs the Orca desktop app (local, or a desktop server with --environment); a headless `orca serve` fails with theme_needs_desktop.'
 
@@ -37,7 +41,7 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Start a theme draft and preview it live, from the current theme or another',
     usage:
       'orca theme edit [--from current|<theme-id>|<plugin-key>|<dir>|<file.json>] [--name <name>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'from', 'name'],
+    allowedFlags: [...GLOBAL_FLAGS, 'if-revision', 'from', 'name'],
     notes: [
       "A draft paints over the user's theme without changing any setting; `orca theme apply` keeps it and `orca theme discard` drops it. Starting a new draft replaces the open one.",
       '--from current (the default) starts from exactly what Orca paints now in both modes, including the terminal palette and syntax colors. An installed theme id or plugin key starts from that theme. A theme plugin folder or theme JSON file on this machine is read as data only; its code never runs.',
@@ -55,17 +59,28 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
     path: ['theme', 'set'],
     summary: 'Change draft tokens, terminal colors or syntax colors; previews at once',
     usage:
-      'orca theme set <token>=<color>... [--mode light|dark|both] [--unset <token>]... [--patch <json|@file>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'assignment', 'mode', 'unset', 'patch'],
+      'orca theme set <token>=<color>... [--mode light|dark|both] [--unset <token>]... [--patch <json|@file> | --patch-stdin] [--if-revision <n>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'if-revision',
+      'assignment',
+      'mode',
+      'unset',
+      'patch',
+      'patch-stdin'
+    ],
     positionalArgs: ['assignment'],
     variadicPositional: true,
     repeatableFlags: ['assignment', 'unset'],
     notes: [
       'Write tokens without the leading dashes (`sidebar=#20160f`); the shell would read `--sidebar` as a flag. Colors are hex, rgb(), hsl() or oklch(); terminal colors are hex.',
+      '--patch-stdin reads the same JSON from standard input: the quoting-safe way to send many tokens, Windows shells included.',
       '--patch takes JSON (or @file) shaped `{"dark":{"set":{"background":"#1b1410"},"unset":["chart-2"],"tokenColors":[...]},"light":{...}}`; `tokenColors` uses the plugin theme shape and replaces the list (null removes it).',
       'Opens a draft from the current theme first when none is open. An unknown token fails with the nearest names.',
       MODE_NOTE,
-      RESULT_NOTE
+      RESULT_NOTE,
+      PAINT_NOTE,
+      CONCURRENCY_NOTE
     ],
     examples: [
       'orca theme set background=#1b1410 foreground=#f3e6d8 --mode dark --json',
@@ -77,7 +92,7 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
     path: ['theme', 'adjust'],
     summary: 'Shift the whole draft warmer, cooler, brighter or more saturated',
     usage:
-      'orca theme adjust [--warmth <-100..100>] [--hue <deg>] [--saturation <%>] [--lightness <%>] [--contrast <%>] [--only <prefix,...>] [--mode light|dark|both] [--json]',
+      'orca theme adjust [--warmth <-100..100>] [--hue <deg>] [--saturation <%>] [--lightness <%>] [--contrast <%>] [--separate <ΔL> [--scope sidebar|tabs|cards|editor]] [--only <prefix,...>] [--mode light|dark|both] [--if-revision <n>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'warmth',
@@ -86,12 +101,15 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
       'lightness',
       'contrast',
       'only',
-      'mode'
+      'mode',
+      'separate',
+      'scope'
     ],
     notes: [
       'Works in OKLCH, so lightness and readability move evenly across hues. --warmth tints greys and turns hues toward amber (positive) or blue (negative); --contrast moves the lightness of each color away from (positive) or toward (negative) the background it sits on (terminal colors from the terminal background), so `--contrast 20 --only worktree-sidebar` sets the sidebar further apart and keeps its text readable. Percentages run -100 to 100.',
       'Applies to app tokens, terminal colors and syntax colors; --only limits it to keys starting with any listed prefix (`sidebar,worktree-sidebar,terminal.`). Colors it cannot read are listed under `skipped`.',
-      'Without --mode it changes both modes.',
+      '--separate <ΔL> steps an area\'s surfaces that much OKLCH lightness away from the canvas, keeping hue and chroma (0.03 to 0.06 reads as a clear step; negative brings them closer). --scope picks the area: sidebar (both sidebars with their hover and selected rows, the default), tabs, cards or editor. Use it for "make the sidebar more distinct".',
+      'Without --mode it changes both modes. Contrast issues the change causes are fixed in the same step with the smallest lightness moves; `autoFixed` says how many.',
       RESULT_NOTE
     ],
     examples: [
@@ -103,27 +121,51 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
     path: ['theme', 'check'],
     summary: "Check the draft's contrast in both modes, and optionally fix it",
     usage: 'orca theme check [--fix] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'fix'],
+    allowedFlags: [...GLOBAL_FLAGS, 'if-revision', 'if-revision', 'fix'],
     notes: [
       "The same check Orca runs before painting any theme: text keeps 4.5:1 on its surface (3:1 for file status colors), focus rings 2:1, borders stay visible. A token that fails shows Orca's built-in color instead, so a draft with issues looks different from what you set.",
-      '--fix applies every suggested fix, re-checks, and repeats (up to 4 rounds); each round is one undo step.',
+      'Each finding has a stable `id`, the `effect` the person will see, up to two `fixes` (text-side and surface-side, each with `set`, `ratio` and `deltaE`, smallest change first, lightness only) and a ready `command`.',
+      '--fix applies the smallest fix of every finding, re-checks and repeats (up to 4 rounds) as one undo step; --finding <id> fixes only those findings.',
       RESULT_NOTE
     ],
-    examples: ['orca theme check --json', 'orca theme check --fix --json']
+    examples: [
+      'orca theme check --json',
+      'orca theme check --fix --json',
+      'orca theme check --fix --finding dark-text-worktree-sidebar-foreground-on-worktree-sidebar --json'
+    ]
+  },
+  {
+    path: ['theme', 'history'],
+    summary: "List the draft's steps, who made each, and where undo stands",
+    usage: 'orca theme history [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Each step has its label, who made it (agent and pane, or "you" for the notice\'s buttons), how many issues were fixed with it, and whether it saved the theme.'
+    ],
+    examples: ['orca theme history --json']
+  },
+  {
+    path: ['theme', 'reset'],
+    summary: 'Go back to where the draft started, as one undoable step',
+    usage: 'orca theme reset [--if-revision <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'if-revision'],
+    examples: ['orca theme reset --json']
   },
   {
     path: ['theme', 'undo'],
     summary: 'Undo the last draft change',
     usage: 'orca theme undo [--json]',
-    allowedFlags: [...GLOBAL_FLAGS],
-    notes: ['History holds the last 100 changes of the open draft.'],
+    allowedFlags: [...GLOBAL_FLAGS, 'if-revision'],
+    notes: [
+      'History holds the last 100 changes of the open draft. Undo right after `apply` puts back the themes the user had and reopens the draft.'
+    ],
     examples: ['orca theme undo --json']
   },
   {
     path: ['theme', 'redo'],
     summary: 'Redo a draft change that was undone',
     usage: 'orca theme redo [--json]',
-    allowedFlags: [...GLOBAL_FLAGS],
+    allowedFlags: [...GLOBAL_FLAGS, 'if-revision'],
     examples: ['orca theme redo --json']
   },
   {
@@ -142,9 +184,10 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
     path: ['theme', 'apply'],
     summary: 'Keep the draft: save it as a theme and use it',
     usage: 'orca theme apply [--name <name>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'name'],
+    allowedFlags: [...GLOBAL_FLAGS, 'if-revision', 'name'],
     notes: [
       'Saves the draft as a content-only theme plugin installed from a folder (`local.<id>`, no approval needed), selects it for each mode it has, app and terminal, and closes the draft. Orca shows a notice with Switch back. Applying again under the same name replaces that theme.',
+      'Saving is itself a history step: `orca theme undo` right after it restores the previous themes.',
       'Needs plugins turned on (Settings → Plugins).'
     ],
     examples: ['orca theme apply --json', 'orca theme apply --name "Ember" --json']
@@ -153,7 +196,7 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
     path: ['theme', 'discard'],
     summary: 'Close the draft without keeping it',
     usage: 'orca theme discard [--json]',
-    allowedFlags: [...GLOBAL_FLAGS],
+    allowedFlags: [...GLOBAL_FLAGS, 'if-revision'],
     notes: ["Orca paints the user's own theme again; nothing was changed."],
     examples: ['orca theme discard --json']
   },

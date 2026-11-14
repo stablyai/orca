@@ -22,12 +22,21 @@ it('reports an unreadable pair with a fix that passes the check', () => {
     builtIns: () => ({}),
     probe: parseThemeColor
   })
-  const issue = report.modes[0].issues.find(
+  const finding = report.modes[0].findings.find(
     (entry) => entry.text === '--worktree-sidebar-foreground'
   )
-  expect(issue).toMatchObject({ problem: 'contrast', surface: '--worktree-sidebar', min: 4.5 })
-  expect(issue?.fix?.token).toBe('--worktree-sidebar-foreground')
-  const fixed = parseThemeColor(issue?.fix?.value ?? '')
+  expect(finding).toMatchObject({
+    id: 'dark-text-worktree-sidebar-foreground-on-worktree-sidebar',
+    rule: 'text',
+    surface: '--worktree-sidebar',
+    min: 4.5
+  })
+  expect(finding?.fixes.map((fix) => fix.strategy).sort()).toEqual([
+    'surface-lightness',
+    'text-lightness'
+  ])
+  const textFix = finding?.fixes.find((fix) => fix.strategy === 'text-lightness')
   const surface = parseThemeColor('#202020')
-  expect(fixed && surface && contrastRatio(fixed, surface)).toBeGreaterThanOrEqual(4.5)
+  const fixedText = parseThemeColor(textFix?.set['--worktree-sidebar-foreground'] ?? '')
+  expect(fixedText && surface && contrastRatio(fixedText, surface)).toBeGreaterThanOrEqual(4.5)
 })
