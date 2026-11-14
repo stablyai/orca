@@ -6,6 +6,7 @@ import {
 import {
   IssuesList,
   RateLimit,
+  RepoSlug,
   WorkItem,
   WorkItemByOwnerRepo,
   WorkItemDetails,
@@ -17,8 +18,12 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.repoSlug',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.getRepoSlug(params.repo)
+    params: RepoSlug,
+    /** Honor verified SSH-origin requests without changing the default slug lookup for existing clients. */
+    handler: async (params, { runtime }) =>
+      params.requireVerifiedSshProbe
+        ? runtime.getRepoSlug(params.repo, { requireVerifiedSshProbe: true })
+        : runtime.getRepoSlug(params.repo)
   }),
   defineMethod({
     name: 'github.repoUpstream',

@@ -1,4 +1,5 @@
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
+import { TaskPageActions } from './github/actions/TaskPageActions'
 import PullRequestPage from '@/components/PullRequestPage'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import { useTranslate } from '@/i18n/use-translate'
@@ -7,6 +8,7 @@ import { TaskPageGitHubList } from './github/listing/List'
 import { TaskPageGitLabTodoList } from './gitlab/TodoList'
 import { TaskPageGitLabItemList } from './gitlab/ItemList'
 import { TaskPageJiraContent } from './jira/Content'
+/** Route the GitHub Actions mode separately from item lists and project views. */
 export function TaskPageContent({
   model
 }: {
@@ -60,6 +62,8 @@ export function TaskPageContent({
         onClose={closeTaskDetailPage}
       />
     )
+  ) : taskSource === 'github' && githubMode === 'actions' ? (
+    <TaskPageActions selectedRepoIds={repoSelection} />
   ) : taskSource === 'github' && githubMode === 'project' ? (
     <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
       <ProjectViewWrapper

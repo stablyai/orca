@@ -9,6 +9,7 @@ import { getRepoSlug, getRepoUpstream } from '../../github/client/fetch/repo-slu
 import { resolveReviewThread } from '../../github/client/update/resolve-review-thread'
 import { setPRCommentReaction } from '../../github/client/update/pr-comment-reaction'
 import type { Store } from '../../persistence/loading-store/store'
+import { getRepoSshConnectionId } from '../../../shared/execution-host'
 import {
   assertRegisteredGitHubRepo,
   getGitHubLocalGitOptionArgs,
@@ -16,16 +17,26 @@ import {
   readGitHubRepoUnlessWslStopped
 } from './github-repo-routing'
 
+/** Register PR and Actions reads using the existing account-aware repository routing boundary. */
 export function registerGitHubPRReadHandlers(store: Store): void {
-  ipcMain.handle('gh:repoSlug', (_event, args: { repoPath: string }) => {
-    const repo = assertRegisteredGitHubRepo(args, store)
-    const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)[0]
-    return localGitOptions
-      ? getRepoSlug(repo.path, getGitHubRepoConnectionId(repo), {
-          localGitExecOptions: localGitOptions
+  ipcMain.handle(
+    'gh:repoSlug',
+    (_event, args: { repoPath: string; requireVerifiedSshProbe?: boolean }) => {
+      const repo = assertRegisteredGitHubRepo(args, store)
+      const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)[0]
+      if (args.requireVerifiedSshProbe) {
+        return getRepoSlug(repo.path, getRepoSshConnectionId(repo), {
+          localGitExecOptions: localGitOptions,
+          requireVerifiedSshProbe: true
         })
-      : getRepoSlug(repo.path, getGitHubRepoConnectionId(repo))
-  })
+      }
+      return localGitOptions
+        ? getRepoSlug(repo.path, getGitHubRepoConnectionId(repo), {
+            localGitExecOptions: localGitOptions
+          })
+        : getRepoSlug(repo.path, getGitHubRepoConnectionId(repo))
+    }
+  )
 
   ipcMain.handle('gh:repoUpstream', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredGitHubRepo(args, store)

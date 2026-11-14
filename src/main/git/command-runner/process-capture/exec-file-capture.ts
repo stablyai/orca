@@ -1,4 +1,9 @@
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
+import {
+  assertCaptureEncoding,
+  capturesOutputBytes,
+  decodeCapturedOutput
+} from './capture-output-encoding'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
 import { endSubprocessStdin } from '../../../../shared/subprocess-stdin-write'
 import { runProcess } from '@orca/process-host'
@@ -39,6 +44,7 @@ export async function execFileCaptureToTermination(
   // runProcess already reports spawn cost through spawnProcess.
   let program: string
   try {
+    assertCaptureEncoding(options.encoding)
     program = resolveSelectedLocalCommand(command, {
       env: options.env,
       cwd: typeof options.cwd === 'string' ? options.cwd : undefined
@@ -47,7 +53,7 @@ export async function execFileCaptureToTermination(
     options.onChildTerminated?.()
     throw error
   }
-  const captureBytes = options.encoding === 'buffer'
+  const captureBytes = capturesOutputBytes(options.encoding)
   const pending = runProcess({
     program,
     args,
@@ -63,14 +69,10 @@ export async function execFileCaptureToTermination(
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   const result = await pending
-  const stdout = captureBytes ? (result.stdoutBytes ?? Buffer.alloc(0)) : result.stdout
-  const stderrBytes = result.stderrBytes ?? Buffer.alloc(0)
-  const stderr = captureBytes
-    ? termination
-      ? // Why: Latin-1 strips ASCII control markers without changing arbitrary bytes.
-        Buffer.from(termination.stripControlOutput(stderrBytes.toString('latin1')), 'latin1')
-      : stderrBytes
-    : (termination?.stripControlOutput(result.stderr) ?? result.stderr)
+  const stripControl = termination && ((text: string) => termination.stripControlOutput(text))
+  const { stdout, stderr } = captureBytes
+    ? decodeCapturedOutput(result, options.encoding, stripControl)
+    : { stdout: result.stdout, stderr: stripControl?.(result.stderr) ?? result.stderr }
   if (
     result.code === 0 &&
     !result.timedOut &&

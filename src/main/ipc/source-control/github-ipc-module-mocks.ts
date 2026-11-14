@@ -3,6 +3,9 @@ import { type Mock, vi } from 'vitest'
 // Build hoisted module shapes for each route test's vi.mock factories.
 
 const CLIENT_EXPORTS = [
+  'listActionsRuns',
+  'listActionsWorkflows',
+  'getWorkflowRunDetails',
   'getPRForBranch',
   'getIssue',
   'getWorkItem',

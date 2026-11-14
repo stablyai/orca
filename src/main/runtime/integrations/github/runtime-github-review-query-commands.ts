@@ -1,3 +1,28 @@
+import {
+  listActionsArtifacts,
+  startActionsArtifactDownload
+} from '../../../github/client/actions/actions-artifacts'
+import {
+  artifactSessionOwner,
+  readArtifactSession,
+  releaseArtifactSession
+} from '../../../github/client/actions/artifact-download-sessions'
+import {
+  listActionsRuns,
+  listActionsWorkflows
+} from '../../../github/client/actions/list-actions-pages'
+import { getWorkflowRunDetails } from '../../../github/client/actions/get-workflow-run-details'
+import type {
+  ActionsArtifactsQuery,
+  ActionsArtifactDownloadQuery,
+  ActionsArtifactTransferQuery
+} from '../../../../shared/github/actions/actions-artifact-types'
+import type {
+  ActionsRunsQuery,
+  ActionsWorkflowsQuery,
+  ActionsDetailsQuery
+} from '../../../../shared/github/actions/actions-types'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { GitHubPRFile } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -7,7 +32,10 @@ import { getPRCheckDetails } from '../../../github/client/check/get-pr-check-det
 import { getPRChecks } from '../../../github/client/check/get-pr-checks'
 import { getPRComments } from '../../../github/client/fetch/get-pr-comments'
 import { getPRFileContents } from '../../../github/pull-requests/files/pull-request-file-contents'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import {
+  getRepoSshConnectionId,
+  getRepoRoutingConnectionId
+} from '../../../../shared/execution-host'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
@@ -18,6 +46,114 @@ type RuntimeGitHubReviewQueryCommandsDeps = {
 
 export class RuntimeGitHubReviewQueryCommands {
   constructor(private readonly deps: RuntimeGitHubReviewQueryCommandsDeps) {}
+
+  /** Resolve an execution-host repository selector and reject folder-only workspaces for GitHub Actions. */
+  private async resolveActionsRepo(selector: string): Promise<Repo> {
+    const repo = await this.deps.resolveRepo(selector)
+    if (isFolderRepo(repo)) {
+      throw new Error('Select a registered Git repository for Actions')
+    }
+    return repo
+  }
+  /** Read runs with the resolved repository’s SSH/WSL route and the caller’s cancellation signal. */
+  async getRepoActionsRuns(selector: string, args: ActionsRunsQuery, signal?: AbortSignal) {
+    const repo = await this.resolveActionsRepo(selector)
+    return listActionsRuns(
+      repo.path,
+      args,
+      getRepoSshConnectionId(repo),
+      this.deps.getLocalGitArgs(repo)[0],
+      signal
+    )
+  }
+  /** Read workflow pages with the resolved repository’s account and execution route. */
+  async getRepoActionsWorkflows(
+    selector: string,
+    args: ActionsWorkflowsQuery,
+    signal?: AbortSignal
+  ) {
+    const repo = await this.resolveActionsRepo(selector)
+    return listActionsWorkflows(
+      repo.path,
+      args,
+      getRepoSshConnectionId(repo),
+      this.deps.getLocalGitArgs(repo)[0],
+      signal
+    )
+  }
+  /** Read attempt-specific jobs using the resolved repository’s route, preserving caller cancellation. */
+  async getRepoActionsRunDetails(
+    selector: string,
+    args: ActionsDetailsQuery,
+    signal?: AbortSignal
+  ) {
+    const repo = await this.resolveActionsRepo(selector)
+    return getWorkflowRunDetails(
+      repo.path,
+      args,
+      getRepoSshConnectionId(repo),
+      this.deps.getLocalGitArgs(repo)[0],
+      signal
+    )
+  }
+
+  /** List artifacts on the resolved Git repository’s execution route rather than the active UI host. */
+  async getRepoActionsArtifacts(
+    selector: string,
+    args: ActionsArtifactsQuery,
+    signal?: AbortSignal
+  ) {
+    const repo = await this.resolveActionsRepo(selector)
+    return listActionsArtifacts(
+      repo.path,
+      args,
+      getRepoSshConnectionId(repo),
+      this.deps.getLocalGitArgs(repo)[0],
+      signal
+    )
+  }
+  /** Acquire an owner-bound archive while retaining the caller lifetime beyond the initiating request. */
+  async startRepoActionsArtifactDownload(
+    selector: string,
+    args: ActionsArtifactDownloadQuery,
+    signal?: AbortSignal,
+    onRelease?: () => void
+  ) {
+    const repo = await this.resolveActionsRepo(selector)
+    return startActionsArtifactDownload(
+      repo.path,
+      args,
+      getRepoSshConnectionId(repo),
+      this.deps.getLocalGitArgs(repo)[0],
+      signal,
+      onRelease
+    )
+  }
+  /** Recompute the repository/host/account owner before reading a retained transfer chunk. */
+  async readRepoActionsArtifactChunk(selector: string, args: ActionsArtifactTransferQuery) {
+    const repo = await this.resolveActionsRepo(selector)
+    return readArtifactSession(
+      args.transferId,
+      artifactSessionOwner(
+        repo.path,
+        getRepoSshConnectionId(repo),
+        this.deps.getLocalGitArgs(repo)[0]
+      ),
+      args.offset ?? 0
+    )
+  }
+  /** Recompute transfer ownership before releasing bytes and retained caller-lifetime listeners. */
+  async releaseRepoActionsArtifactDownload(selector: string, args: ActionsArtifactTransferQuery) {
+    const repo = await this.resolveActionsRepo(selector)
+    releaseArtifactSession(
+      args.transferId,
+      artifactSessionOwner(
+        repo.path,
+        getRepoSshConnectionId(repo),
+        this.deps.getLocalGitArgs(repo)[0]
+      )
+    )
+  }
 
   async getRepoIssue(
     repoSelector: string,

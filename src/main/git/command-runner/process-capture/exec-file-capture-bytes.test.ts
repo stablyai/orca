@@ -17,6 +17,15 @@ describe('termination-barrier binary output', () => {
     ).resolves.toEqual({ stdout, stderr })
   })
 
+  it('encodes raw subprocess bytes as base64 without a UTF-8 round trip', async () => {
+    await expect(
+      execFileCaptureToTermination(process.execPath, ['-e', writeBytes], {
+        encoding: 'base64',
+        timeout: 2_000
+      })
+    ).resolves.toEqual({ stdout: stdout.toString('base64'), stderr: stderr.toString('base64') })
+  })
+
   it('preserves bytes and the nonzero exit status on failure', async () => {
     await expect(
       execFileCaptureToTermination(process.execPath, ['-e', `${writeBytes}process.exitCode=7`], {

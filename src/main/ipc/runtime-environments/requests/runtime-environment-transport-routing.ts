@@ -12,6 +12,7 @@ import type * as Rpc from '../../../../shared/runtime-rpc-envelope'
 import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
+import { ACTIONS_ARTIFACT_TRANSFER_METHODS } from '../../../../shared/github/actions/actions-artifact-types'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
   sendRemoteRuntimeRequestAbortable
@@ -171,5 +172,10 @@ function markEnvironmentUsedFromResponse(
 }
 
 function shouldUseCachedRequestConnection(method: string): boolean {
-  return method === 'terminal.send' || method === 'terminal.updateViewport'
+  return (
+    method === 'terminal.send' ||
+    method === 'terminal.updateViewport' ||
+    // Artifact sessions retain disconnect cleanup, so every chunk must share the start socket.
+    ACTIONS_ARTIFACT_TRANSFER_METHODS.has(method)
+  )
 }
