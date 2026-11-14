@@ -1,6 +1,7 @@
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import { InFlightPromiseDedupe } from '../../../shared/in-flight-promise-dedupe'
+import { localBaseBranchInspectionOwner } from '../worktrees/creation/local-base-branch-inspection-owner'
 import {
   clearGitStatusLineStatsCache,
   clearGitStatusLineStatsCacheKey,
@@ -33,6 +34,7 @@ export const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>
 
 // Clear every read cache so post-mutation calls cannot join stale pre-mutation reads.
 export function invalidateGitReadCaches(): void {
+  localBaseBranchInspectionOwner.clear()
   gitDiffReadDedupe.clear()
   settledDiffCache.clear()
   settledNumstatCache.clear()
@@ -47,6 +49,8 @@ export function invalidateGitReadCaches(): void {
 // A change made outside Orca: later status reads must neither join a read begun before it nor reuse its line counts.
 // `null` means the changed checkouts are unknown.
 export function invalidateGitStatusReads(worktreePaths: readonly string[] | null): void {
+  // The inspected base owner can be a sibling of the caller's checkout.
+  localBaseBranchInspectionOwner.clear()
   if (worktreePaths === null) {
     statusReadLeaseOwner.invalidate()
     clearGitStatusLineStatsCache()

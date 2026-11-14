@@ -37,51 +37,51 @@ export async function performPreparedWorktreeFinalization(
     timeout: options.timeout ?? resolveWorktreeAddTimeoutMs()
   }
   try {
-    return await runWithGitReadCacheInvalidation(async () => {
-      const lockPath = await verifyWorktreePreparationLock(
-        preparedPath,
-        expectedLockReason,
-        finalizeGitOptions
-      )
-      captured.lockPath = lockPath
-      const verifyOwnership = (): Promise<void> =>
-        verifyWorktreePreparationLockAtPath(lockPath, expectedLockReason, finalizeGitOptions.signal)
-      const [targetResult, preparedResult] = await Promise.allSettled([
-        (async () => {
-          const baseContext = await resolveWorktreeAddBaseContext(
-            repoPath,
-            baseBranch,
-            refreshLocalBaseRef,
-            finalizeGitOptions,
-            branch
-          )
-          if (baseContext.pendingLocalBaseRefRefresh) {
-            operation.trackWriter(baseContext.pendingLocalBaseRefRefresh)
-          }
-          const targetHead =
-            baseContext.effectiveBaseOid ??
-            (
-              await gitExecFileAsync(
-                ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
-                gitExecOptions(repoPath, finalizeGitOptions)
-              )
-            ).stdout.trim()
-          return { baseContext, targetHead }
-        })(),
-        gitExecFileAsync(
-          ['rev-parse', '--verify', 'HEAD'],
-          gitExecOptions(preparedPath, finalizeGitOptions)
+    const lockPath = await verifyWorktreePreparationLock(
+      preparedPath,
+      expectedLockReason,
+      finalizeGitOptions
+    )
+    captured.lockPath = lockPath
+    const verifyOwnership = (): Promise<void> =>
+      verifyWorktreePreparationLockAtPath(lockPath, expectedLockReason, finalizeGitOptions.signal)
+    const [targetResult, preparedResult] = await Promise.allSettled([
+      (async () => {
+        const baseContext = await resolveWorktreeAddBaseContext(
+          repoPath,
+          baseBranch,
+          refreshLocalBaseRef,
+          finalizeGitOptions,
+          branch
         )
-      ])
-      // Settle both reads before failure cleanup can remove the prepared checkout.
-      if (targetResult.status === 'rejected') {
-        throw targetResult.reason
-      }
-      const { baseContext, targetHead } = targetResult.value
-      if (preparedResult.status === 'rejected') {
-        await baseContext.pendingLocalBaseRefRefresh
-        throw preparedResult.reason
-      }
+        if (baseContext.pendingLocalBaseRefRefresh) {
+          operation.trackWriter(baseContext.pendingLocalBaseRefRefresh)
+        }
+        const targetHead =
+          baseContext.effectiveBaseOid ??
+          (
+            await gitExecFileAsync(
+              ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
+              gitExecOptions(repoPath, finalizeGitOptions)
+            )
+          ).stdout.trim()
+        return { baseContext, targetHead }
+      })(),
+      gitExecFileAsync(
+        ['rev-parse', '--verify', 'HEAD'],
+        gitExecOptions(preparedPath, finalizeGitOptions)
+      )
+    ])
+    // Settle both reads before failure cleanup can remove the prepared checkout.
+    if (targetResult.status === 'rejected') {
+      throw targetResult.reason
+    }
+    const { baseContext, targetHead } = targetResult.value
+    if (preparedResult.status === 'rejected') {
+      await baseContext.pendingLocalBaseRefRefresh
+      throw preparedResult.reason
+    }
+    return await runWithGitReadCacheInvalidation(async () => {
       const preparedHeadReset = preparedResult.value.stdout.trim() !== targetHead
       if (preparedHeadReset) {
         await verifyOwnership()

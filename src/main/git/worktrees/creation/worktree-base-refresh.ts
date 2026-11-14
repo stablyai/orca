@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/worktree/base-refs/base-ref-drift-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { createCoalescingKeyedRunner } from '../../../../shared/coalescing-keyed-runner'
+import { stableInFlightKey } from '../../../../shared/in-flight-promise-dedupe'
 import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import {
   fastForwardLocalBaseBranch,
@@ -17,6 +18,9 @@ import { findGitSubcommandIndex } from '../../../../shared/git/commands/git-comm
 import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
+import { resolveGitAdmissionTier } from '../../command-runner/admission/git-operation-executor'
+import { localBaseBranchInspectionOwner } from './local-base-branch-inspection-owner'
+import { routeLocalGitOptions } from '../../command-runner/host-routing/local-git-runtime-route'
 
 // Bound the create's wait without cancelling the mutating refresh that still owns its checkout.
 export const LOCAL_BASE_REF_REFRESH_WAIT_MS = 30_000
@@ -98,11 +102,22 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
   if (!parsed) {
     return undefined
   }
-  const inspection = await inspectLocalBaseBranch(localBaseBranchGit(options), {
+  const admissionTier = resolveGitAdmissionTier(options.admissionTier)
+  const routedOptions = routeLocalGitOptions({ ...options, cwd: repoPath, admissionTier })
+  const key = stableInFlightKey([
+    routedOptions.wslDistro ?? '',
     repoPath,
-    fullRef: parsed.fullRef,
-    remoteTrackingRef
-  })
+    parsed.fullRef,
+    remoteTrackingRef,
+    admissionTier
+  ])
+  const inspection = await localBaseBranchInspectionOwner.run(key, () =>
+    inspectLocalBaseBranch(localBaseBranchGit(routedOptions), {
+      repoPath,
+      fullRef: parsed.fullRef,
+      remoteTrackingRef
+    })
+  )
   return inspection.status === 'behind'
     ? { baseRef: parsed.baseRef, localBranch: parsed.localBranch, behind: inspection.behind }
     : undefined

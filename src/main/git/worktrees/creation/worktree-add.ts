@@ -199,16 +199,14 @@ export async function addWorktree(
 ): Promise<AddWorktreeResult> {
   try {
     return await withRepoRefMaintenancePaused('worktree-add', () =>
-      runWithGitReadCacheInvalidation(() =>
-        performAddWorktree(
-          repoPath,
-          worktreePath,
-          branch,
-          baseBranch,
-          refreshLocalBaseRef,
-          noCheckout,
-          options
-        )
+      performAddWorktree(
+        repoPath,
+        worktreePath,
+        branch,
+        baseBranch,
+        refreshLocalBaseRef,
+        noCheckout,
+        options
       )
     )
   } finally {
@@ -263,57 +261,59 @@ async function performAddWorktree(
       args.push(effectiveBase)
     }
   }
-  // Read Git's existing stderr meter without requesting extra progress output.
-  const checkoutProgress =
-    options.onCheckoutProgress && !noCheckout
-      ? createWorktreeCheckoutProgressReader(options.onCheckoutProgress)
-      : null
-  try {
-    await gitExecFileAsync([...(await checkoutWorkersArgs), ...args], {
-      ...gitExecOptions(repoPath, options),
-      ...(!noCheckout ? { admissionClass: 'checkout' as const } : {}),
-      // Resolve per call so later environment overrides take effect.
-      timeout: resolveWorktreeAddTimeoutMs(),
-      ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})
-    })
-  } catch (error) {
-    // Settle the refresh before leaving the caller's maintenance pause on failure.
-    await pendingLocalBaseRefRefresh
-    if (error instanceof GitCommandTimeoutError) {
-      error.message = worktreeAddTimeoutMessage(error.timeoutMs)
+  return runWithGitReadCacheInvalidation(async () => {
+    // Read Git's existing stderr meter without requesting extra progress output.
+    const checkoutProgress =
+      options.onCheckoutProgress && !noCheckout
+        ? createWorktreeCheckoutProgressReader(options.onCheckoutProgress)
+        : null
+    try {
+      await gitExecFileAsync([...(await checkoutWorkersArgs), ...args], {
+        ...gitExecOptions(repoPath, options),
+        ...(!noCheckout ? { admissionClass: 'checkout' as const } : {}),
+        // Resolve per call so later environment overrides take effect.
+        timeout: resolveWorktreeAddTimeoutMs(),
+        ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})
+      })
+    } catch (error) {
+      // Settle the refresh before leaving the caller's maintenance pause on failure.
+      await pendingLocalBaseRefRefresh
+      if (error instanceof GitCommandTimeoutError) {
+        error.message = worktreeAddTimeoutMessage(error.timeoutMs)
+      }
+      throw error
+    } finally {
+      checkoutProgress?.close()
+      // Even late failures can rewrite .git; invalidate pre-create routing before follow-up commands.
+      invalidateWslLinkedWorktreeGitRouting(worktreePath)
     }
-    throw error
-  } finally {
-    checkoutProgress?.close()
-    // Even late failures can rewrite .git; invalidate pre-create routing before follow-up commands.
-    invalidateWslLinkedWorktreeGitRouting(worktreePath)
-  }
 
-  if (options.checkoutExistingBranch) {
-    return {}
-  }
-
-  let upstreamWarning: string | undefined
-  if (effectiveBase && baseBranch) {
-    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
-    const tracked = await trackSameNameRemoteBase(
-      worktreePath,
-      branch,
-      baseBranch,
-      effectiveBase,
-      options
-    )
-    if (options.trackRemoteBranch && !tracked) {
-      upstreamWarning = `Could not set ${effectiveBase} as the upstream of "${branch}". Check the push destination before pushing; Git may use a different remote.`
+    if (options.checkoutExistingBranch) {
+      return {}
     }
-  }
 
-  // Git >= 2.37 can set an upstream on first push; --local intentionally writes shared repo config.
-  await configurePushAutoSetupRemote(worktreePath, options)
-  const localBaseRefRefresh = await pendingLocalBaseRefRefresh
-  return {
-    ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
-    ...(upstreamWarning ? { upstreamWarning } : {}),
-    ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
-  }
+    let upstreamWarning: string | undefined
+    if (effectiveBase && baseBranch) {
+      await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
+      const tracked = await trackSameNameRemoteBase(
+        worktreePath,
+        branch,
+        baseBranch,
+        effectiveBase,
+        options
+      )
+      if (options.trackRemoteBranch && !tracked) {
+        upstreamWarning = `Could not set ${effectiveBase} as the upstream of "${branch}". Check the push destination before pushing; Git may use a different remote.`
+      }
+    }
+
+    // Git >= 2.37 can set an upstream on first push; --local intentionally writes shared repo config.
+    await configurePushAutoSetupRemote(worktreePath, options)
+    const localBaseRefRefresh = await pendingLocalBaseRefRefresh
+    return {
+      ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
+      ...(upstreamWarning ? { upstreamWarning } : {}),
+      ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
+    }
+  })
 }
