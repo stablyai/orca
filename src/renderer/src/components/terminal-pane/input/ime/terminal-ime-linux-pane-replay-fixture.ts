@@ -14,10 +14,17 @@ export type RecordedDomEvent = {
   code?: string
   keyCode?: number
   charCode?: number
+  shiftKey?: boolean
   isComposing?: boolean
   inputType?: string
   data?: string
   value?: string
+}
+
+export type LinuxPaneReplaySession = {
+  emit: (recorded: RecordedDomEvent) => boolean
+  emitted: () => string
+  dispose: () => void
 }
 
 export type LinuxPaneReplayResult = {
@@ -64,6 +71,7 @@ export function buildRecordedDomEvent(recorded: RecordedDomEvent): Event {
     const keyboard = new KeyboardEvent(recorded.type, {
       key: recorded.key,
       code: recorded.code,
+      shiftKey: recorded.shiftKey,
       isComposing: recorded.isComposing,
       bubbles: true,
       cancelable: true
@@ -85,9 +93,68 @@ export function buildRecordedDomEvent(recorded: RecordedDomEvent): Event {
     Object.defineProperty(input, 'composed', { value: true })
     return input
   }
+  if (recorded.type === 'blur' || recorded.type === 'focus') {
+    return new FocusEvent(recorded.type, { bubbles: false })
+  }
   const composition = new CompositionEvent(recorded.type, { bubbles: true })
   Object.defineProperty(composition, 'data', { value: recorded.data ?? '' })
   return composition
+}
+
+/**
+ * Opens a real xterm wired with the pane's full keyboard stack for synchronous or async DOM event dispatch.
+ * `kittyPush` is written as PTY output first, the way a TUI negotiates the protocol.
+ */
+export async function openLinuxPaneReplaySession(
+  kittyPush: string | null = null
+): Promise<LinuxPaneReplaySession> {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  // Matches the pane defaults that advertise kitty support (pane-terminal-options.ts).
+  const terminal = new Terminal({ cols: 40, rows: 8, vtExtensions: { kittyKeyboard: true } })
+  const imeCompositionDisposables = new Map<number, IDisposable>()
+  const imeNativeTextForwarderDisposables = new Map<number, IDisposable>()
+  const disposeImeHandlers = (): void => {
+    for (const disposable of imeCompositionDisposables.values()) {
+      disposable.dispose()
+    }
+    imeCompositionDisposables.clear()
+    for (const disposable of imeNativeTextForwarderDisposables.values()) {
+      disposable.dispose()
+    }
+    imeNativeTextForwarderDisposables.clear()
+  }
+  disposables.push(terminal, { dispose: disposeImeHandlers })
+  terminal.open(container)
+  const kittyModes = new TerminalKittyKeyboardModeTracker()
+  installTerminalPaneInputHandling({
+    pane: { id: 1, terminal },
+    managerRef: { current: null },
+    paneKittyKeyboardModesRef: { current: new Map([[1, kittyModes]]) },
+    settingsRef: { current: {} },
+    imeCompositionDisposablesRef: { current: imeCompositionDisposables },
+    imeNativeTextForwarderDisposablesRef: { current: imeNativeTextForwarderDisposables }
+  })
+  if (kittyPush) {
+    kittyModes.scan(kittyPush)
+    await new Promise<void>((resolve) => terminal.write(kittyPush, resolve))
+  }
+  const emitted: string[] = []
+  disposables.push(terminal.onData((data) => emitted.push(data)))
+  const textarea = terminal.textarea!
+  return {
+    emit: (recorded: RecordedDomEvent): boolean => {
+      if (recorded.value !== undefined) {
+        textarea.value = recorded.value
+        textarea.setSelectionRange(recorded.value.length, recorded.value.length)
+      }
+      const dispatched = buildRecordedDomEvent(recorded)
+      textarea.dispatchEvent(dispatched)
+      return dispatched.defaultPrevented
+    },
+    emitted: () => emitted.join(''),
+    dispose: disposeImeHandlers
+  }
 }
 
 /**
@@ -98,28 +165,7 @@ export async function replayThroughLinuxPane(
   events: readonly RecordedDomEvent[],
   kittyPush: string | null = null
 ): Promise<LinuxPaneReplayResult> {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  // Matches the pane defaults that advertise kitty support (pane-terminal-options.ts).
-  const terminal = new Terminal({ cols: 40, rows: 8, vtExtensions: { kittyKeyboard: true } })
-  disposables.push(terminal)
-  terminal.open(container)
-  const kittyModes = new TerminalKittyKeyboardModeTracker()
-  installTerminalPaneInputHandling({
-    pane: { id: 1, terminal },
-    managerRef: { current: null },
-    paneKittyKeyboardModesRef: { current: new Map([[1, kittyModes]]) },
-    settingsRef: { current: {} },
-    imeCompositionDisposablesRef: { current: new Map() },
-    imeNativeTextForwarderDisposablesRef: { current: new Map() }
-  })
-  if (kittyPush) {
-    kittyModes.scan(kittyPush)
-    await new Promise<void>((resolve) => terminal.write(kittyPush, resolve))
-  }
-  const emitted: string[] = []
-  disposables.push(terminal.onData((data) => emitted.push(data)))
-  const textarea = terminal.textarea!
+  const session = await openLinuxPaneReplaySession(kittyPush)
   const preventedKeydownCodes: string[] = []
   let keystrokeCancelled = false
   for (const recorded of events) {
@@ -133,14 +179,10 @@ export async function replayThroughLinuxPane(
     ) {
       continue
     }
-    if (recorded.value !== undefined) {
-      textarea.value = recorded.value
-    }
-    const dispatched = buildRecordedDomEvent(recorded)
-    textarea.dispatchEvent(dispatched)
+    const defaultPrevented = session.emit(recorded)
     if (recorded.type === 'keydown') {
-      keystrokeCancelled = dispatched.defaultPrevented
-      if (dispatched.defaultPrevented) {
+      keystrokeCancelled = defaultPrevented
+      if (defaultPrevented) {
         preventedKeydownCodes.push(recorded.code ?? '')
       }
     } else if (recorded.type === 'keyup') {
@@ -149,5 +191,5 @@ export async function replayThroughLinuxPane(
   }
   await nextEventLoop()
   await nextEventLoop()
-  return { emitted: emitted.join(''), preventedKeydownCodes }
+  return { emitted: session.emitted(), preventedKeydownCodes }
 }
