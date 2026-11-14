@@ -1,5 +1,5 @@
 import { createHash, randomUUID, type Hash } from 'node:crypto'
-import { createReadStream, rmSync } from 'node:fs'
+import { createReadStream } from 'node:fs'
 import { mkdir, open, rm, stat, type FileHandle } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-environment'
@@ -250,7 +250,8 @@ export class ChatForkTransferStore {
     return this.ready
   }
 
-  /** Closes every open upload and drops all staging; synchronous so it finishes before quit. */
+  /** Closes every open upload and drops all staging. Quit may not wait for the delete, so the next
+   *  run's prepare() wipes whatever is left. */
   dispose(): void {
     this.disposed = true
     for (const id of this.exports.keys()) {
@@ -260,11 +261,7 @@ export class ChatForkTransferStore {
     for (const id of this.imports.keys()) {
       void this.disposeImport(id)
     }
-    try {
-      rmSync(this.root, { recursive: true, force: true })
-    } catch {
-      // A file still held open (Windows) is wiped by the next run's prepare().
-    }
+    void rm(this.root, { recursive: true, force: true }).catch(() => {})
   }
 
   private async placeImport(

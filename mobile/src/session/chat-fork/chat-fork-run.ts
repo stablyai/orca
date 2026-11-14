@@ -159,7 +159,10 @@ function relayFailureMessage(error: unknown, host: string): string {
       return chatForkCopy.targetUnsupported()
     case 'chat_fork_source_unavailable':
       return chatForkCopy.sourceUnavailable()
-    default: {
+    case 'chat_fork_transfer_integrity_failed':
+    case 'chat_fork_transfer_not_found':
+    case 'chat_fork_transfer_offset_mismatch':
+    case null: {
       const detail = error instanceof Error ? error.message.trim() : ''
       return chatForkCopy.relayFailed(host, detail)
     }
