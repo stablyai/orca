@@ -30,6 +30,8 @@ export type MobileComposerStructuredCatalog = {
   reported: readonly AgentSessionSlashCommand[] | undefined
   conversationCommands: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
+  /** `/mcp` opens the chat's MCP sheet. */
+  mcpPanel?: boolean
 }
 
 export type MobileComposerCatalog = {
@@ -64,7 +66,8 @@ export function mobileComposerCatalog({
         structured.conversationCommands,
         reported,
         structured.compactInstructions,
-        interactionModeSupported
+        interactionModeSupported,
+        structured.mcpPanel
       )
     : getAgentAnsweredNativeChatCommands(agent)
   return {

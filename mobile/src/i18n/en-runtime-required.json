@@ -70,6 +70,12 @@
     }
   },
   "chat": {
+    "mcp": {
+      "status": {
+        "connectedTools_one": "Connected · {{count}} tool",
+        "connectedTools_other": "Connected · {{count}} tools"
+      }
+    },
     "notice": {
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
