@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { writeStdoutLine } from '../output/stdout-line'
 
 /** One `{ ok, result }` object on stdout for --json; plain text otherwise. */

@@ -36,7 +36,7 @@ vi.mock('../runtime/launch', async (importOriginal) => ({
   serveOrcaApp: vi.fn()
 }))
 
-vi.mock('../runtime/metadata', async (importOriginal) => ({
+vi.mock('../runtime/profile/metadata', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDefaultUserDataPath: vi.fn(() => '/tmp/orca-user-data')
 }))

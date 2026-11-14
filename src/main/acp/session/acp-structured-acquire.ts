@@ -10,11 +10,7 @@ import type {
 import { providerTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import { providerSpawnedProcessIdentity } from '../../provider-process/provider-spawned-process-identity'
 import { acpPrivateTempConnect } from '../launch/acp-private-temp'
-import {
-  assertAcpStartingSession,
-  isAcpReadySession,
-  type AcpStructuredChild
-} from './children/acp-structured-child'
+import * as childState from './children/acp-structured-child'
 import type { AcpSessionEvent } from '../protocol/acp-session-events'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import { acpAgentName } from './acp-structured-agent-definitions'
@@ -42,14 +38,14 @@ export async function acquireAcpStructuredSession(input: {
   /** Checked until spawn; afterward `track` gives cancellation the connection. */
   abandoned: () => boolean
   track: (connection: AcpStructuredConnection) => void
-  onExit: (session: AcpStructuredChild | null) => void
+  onExit: (session: childState.AcpStructuredChild | null) => void
   /** Protocol loss may precede process exit; null means startup has not produced a session. */
-  onConnectionLost: (session: AcpStructuredChild | null, error: Error) => void
+  onConnectionLost: (session: childState.AcpStructuredChild | null, error: Error) => void
   onSettled: AcpStructuredTurnsDeps['settle']
   forceClose: (sessionId: string, reason: string) => void
 }): Promise<{
   acquisition: AgentSessionAcquisition
-  session: AcpStructuredChild
+  session: childState.AcpStructuredChild
 }> {
   const { acquire, deps, generation } = input
   const agentName = acpAgentName(deps.spec.agent)
@@ -70,7 +66,7 @@ export async function acquireAcpStructuredSession(input: {
   const launch = await prepareAcpStructuredLaunch(deps, acquire, closedBeforeSpawn)
   // The chat's account home pins its backend.
   const { spec } = launch
-  let session: AcpStructuredChild | null = null
+  let session: childState.AcpStructuredChild | null = null
   // Use a slot so closure writes do not conflict with control-flow narrowing.
   const slot: {
     lane: AcpStructuredLane | null
@@ -81,7 +77,7 @@ export async function acquireAcpStructuredSession(input: {
   const permissionModes = acpLaunchPermissionModes(spec, launch.fullAccess)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
-    () => isAcpReadySession(session) && session.turns?.acceptsRequests === true
+    () => childState.isAcpReadySession(session) && session.turns?.acceptsRequests === true
   )
   const early: (() => void)[] = []
   const whenLane = (deliver: () => void): void => {
@@ -109,7 +105,7 @@ export async function acquireAcpStructuredSession(input: {
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {
-        if (!isAcpReadySession(session) || !session.turns?.acceptsRequests) {
+        if (!childState.isAcpReadySession(session) || !session.turns?.acceptsRequests) {
           // Nobody can answer during Stop, a steer or teardown.
           return { outcome: { outcome: 'cancelled' } }
         }
@@ -146,9 +142,15 @@ export async function acquireAcpStructuredSession(input: {
           message
         }),
       // Protocol loss may leave the process alive; stdout EOF alone does not trigger this.
-      onClose: (error) => input.onConnectionLost(session, error),
+      onClose: (error) => {
+        session?.historyCatchUp?.abort()
+        input.onConnectionLost(session, error)
+      },
       // Read final diagnostics at process exit, which may follow stdout EOF.
-      onExit: () => input.onExit(session)
+      onExit: () => {
+        session?.historyCatchUp?.abort()
+        input.onExit(session)
+      }
     }
   )
   if (!spec.permissionModeConfig) {
@@ -174,7 +176,7 @@ export async function acquireAcpStructuredSession(input: {
         }
       }
       if (
-        isAcpReadySession(session) &&
+        childState.isAcpReadySession(session) &&
         !session.ended &&
         event.kind === 'known' &&
         event.notification.update.sessionUpdate === 'config_option_update'
@@ -210,7 +212,7 @@ export async function acquireAcpStructuredSession(input: {
       ...acpLaneChildWorkDelivery(deps, sessionId, events),
       logger,
       onInputAccepted: (clientMessageId) => {
-        if (isAcpReadySession(session)) {
+        if (childState.isAcpReadySession(session)) {
           session.turns?.accept(clientMessageId)
         }
       },
@@ -250,7 +252,7 @@ export async function acquireAcpStructuredSession(input: {
   }
   await identity.onSpawned(pid)
   const process = await identity.read(pid)
-  const child: AcpStructuredChild = {
+  const child: childState.AcpStructuredChild = {
     events,
     sessionId,
     fence: acquire.fence,
@@ -298,12 +300,13 @@ export async function acquireAcpStructuredSession(input: {
         onSessionLost: (error) => input.onConnectionLost(child, error)
       }),
     dispose: () => {
+      child.historyCatchUp?.abort()
       slot.lane?.dispose()
       early.length = 0
     }
   }
   session = child
-  assertAcpStartingSession(child, input.abandoned)
+  childState.assertAcpStartingSession(child, input.abandoned)
   return {
     acquisition: { process, acquisitionGeneration: generation },
     session: child

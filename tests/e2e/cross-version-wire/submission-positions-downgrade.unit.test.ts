@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
@@ -12,8 +12,10 @@ import {
   createTrackedJournalOpener,
   type TrackedJournalOpener
 } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { projectJournalBatch } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-journal-batch'
-import { readAgentSessionHydrationPage } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import {
+  createAgentSessionCatchUpReader,
+  readAgentSessionHydrationPage
+} from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -68,8 +70,8 @@ async function journalWithRejections(directory: string, journals: TrackedJournal
       fence: 1
     })
   }
-  const before = readAgentSessionHydrationPage(journal, 1)
-  const seen = journal.snapshot().cursor
+  const before = await readAgentSessionHydrationPage(journal, 1)
+  const seen = journal.cursor()
   const cancelled = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
     surface: 'rejection'
   })
@@ -101,18 +103,22 @@ async function journalWithRejections(directory: string, journals: TrackedJournal
     ...agentSessionFailureWords(agentSessionFailureFact('queueFull'), { surface: 'rejection' }),
     fence: 1
   })
-  const since = journal.readSince(seen)
-  const batch = since.ok
-    ? projectJournalBatch({
-        rows: since.rows,
-        snapshot: journal.snapshot(),
-        afterSequence: seen.sequence
-      })
-    : null
-  if (!batch?.ok) {
+  // The batch a subscriber's catch-up sends from the page after what it had seen.
+  const { result: since } = await createAgentSessionCatchUpReader(journal)({
+    sessionId: IDENTITY.sessionId,
+    direction: 'after',
+    cursor: seen
+  })
+  if (!since.ok) {
     throw new Error('the batch did not project')
   }
-  return { before, after: readAgentSessionHydrationPage(journal, 1), batch: batch.batch }
+  const batch = {
+    cursor: since.page.window.nextCursor,
+    items: since.page.items,
+    removedItemIds: since.page.removedItemIds,
+    submissions: since.page.submissions
+  }
+  return { before, after: await readAgentSessionHydrationPage(journal, 1), batch }
 }
 
 // Loads real release checkouts, cold extraction and transforms included.

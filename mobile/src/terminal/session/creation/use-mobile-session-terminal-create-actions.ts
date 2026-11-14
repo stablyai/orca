@@ -22,7 +22,7 @@ import {
   requestMobileSessionTerminalCreate,
   type MobileSessionTerminalCreateOptions
 } from './mobile-session-terminal-create-request'
-import { isAgentSessionHandleProvider } from '../../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from '../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from '../../../session/native-chat/agent-session/mobile-structured-agent-session-launch'
 import {
   launchesThroughHost,

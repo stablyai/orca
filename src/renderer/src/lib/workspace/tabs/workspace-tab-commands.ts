@@ -20,8 +20,8 @@ import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
-} from '../../../components/floating-terminal/floating-workspace-terminal-actions'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/floating-terminal'
+} from '../../../components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/workspace/floating-workspace-open-intent'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
 

@@ -12,7 +12,7 @@ import {
   hostProjectGroupsRead,
   projectSectionsRead,
   readServedProjectSections
-} from '../../worktree/project-sections-operations'
+} from '../../worktree/project-sections/project-sections-operations'
 import { readHostMethodReply } from '../sidebar-feed/host-sidebar-feed-operations'
 import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from './host-list-queries'
 import type { HostScreenState } from '../use-host-screen-state'

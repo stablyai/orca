@@ -11,7 +11,7 @@ import type {
   PluginHostCallOutcome,
   PluginSurface
 } from '../../../../shared/plugins/frames/plugin-protocol'
-import type { PluginAuditLog } from '../../plugin-audit-log'
+import type { PluginAuditLog } from '../../logging/plugin-audit-log'
 import {
   PLUGIN_RUNTIME_FAILURE_CODES_SINCE,
   PluginHostCallError,

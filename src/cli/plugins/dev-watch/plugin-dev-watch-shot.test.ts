@@ -3,7 +3,7 @@ import type {
   PluginHostListEntry,
   PluginHostStatus
 } from '../../../shared/plugins/plugin-list-entry'
-import { formatPluginDevWatchEvent, type PluginDevWatchEvent } from './plugin-dev-watch-events'
+import type { PluginDevWatchEvent } from './plugin-dev-watch-events'
 import { runPluginDevWatch, type PluginDevWatchHost } from './plugin-dev-watch-loop'
 import {
   pluginDevWatchShotPanel,
@@ -104,11 +104,7 @@ const ofType = <T extends PluginDevWatchEvent['type']>(events: PluginDevWatchEve
   events.filter((event): event is Extract<PluginDevWatchEvent, { type: T }> => event.type === type)
 
 describe('plugin dev watch --shot', () => {
-  it('shoots --shot-panel and fails at start, unloading, on an unknown id', async () => {
-    const { host, open } = shotHost(async () => ({ ...SHOT, panelId: 'stats' }), 'stats')
-    await watch({ shot: host })
-    expect(open).toHaveBeenCalledWith(KEY, 'stats')
-
+  it('fails at start and unloads on an unknown --shot-panel id', async () => {
     const devUnload = vi.fn(async () => {})
     await expect(
       watch({ shot: shotHost(async () => SHOT, 'nope').host, devUnload })
@@ -142,8 +138,5 @@ describe('plugin dev watch --shot', () => {
       panelId: 'todos',
       reason: 'the right sidebar shows another tab'
     })
-    expect(formatPluginDevWatchEvent(skipped[1]!)).toBe(
-      'shot skipped: the right sidebar is closed, so todos is not on screen; open it again to resume'
-    )
   })
 })

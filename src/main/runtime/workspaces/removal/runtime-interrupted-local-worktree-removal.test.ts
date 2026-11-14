@@ -105,6 +105,7 @@ type FinishOutcome =
 async function finishAfterRestart(
   options: {
     repoGone?: boolean
+    repoRows?: Repo[]
     branch?: string
     head?: string
     force?: boolean
@@ -140,6 +141,11 @@ async function finishAfterRestart(
   const purged: string[] = []
   const remember = vi.fn()
   const host = removalHost(options.repoGone, options.stopPtys)
+  if (options.repoRows) {
+    const rows = options.repoRows
+    host.store.getRepos = () => rows
+    host.store.getRepo = (id) => rows.find((row) => row.id === id)
+  }
   host.purge = ({ worktreeId }) => {
     purged.push(worktreeId)
   }
@@ -250,3 +256,32 @@ describe('finishing an interrupted worktree removal after a restart', () => {
 })
 
 installRealWorkerThreadChildProcesses()
+
+it.each(['remote-first', 'local-first', 'missing-local'])(
+  'recovers only the local owner with a %s same-ID catalog',
+  async (order) => {
+    const remote: Repo = {
+      ...repo,
+      path: join(scratchDir, 'nonlocal-repo'),
+      connectionId: 'ssh-fixture'
+    }
+    const repoRows =
+      order === 'remote-first'
+        ? [remote, repo]
+        : order === 'local-first'
+          ? [repo, remote]
+          : [remote]
+    const { outcome, purged, records } = await finishAfterRestart({ repoRows })
+    expect(outcome.status).toBe('removed')
+    expect(records).toEqual([])
+    if (order === 'missing-local') {
+      expect(purged).toEqual([])
+      expect(existsSync(worktreePath)).toBe(true)
+      expect(await isRegistered(worktreePath)).toBe(true)
+    } else {
+      expect(purged).toEqual([`repo-1::${worktreePath}`])
+      expect(existsSync(worktreePath)).toBe(false)
+      expect(await isRegistered(worktreePath)).toBe(false)
+    }
+  }
+)

@@ -53,7 +53,7 @@ export function admitPreparedPRRead(
   }
   if (!next.watch && isBackground(next.reason) && !joinedRead) {
     if (next.bypassBackgroundBudget !== true && isBudgetedBackground(next.reason)) {
-      pacing.noteBackgroundStart(next)
+      pacing.noteBackgroundStart()
       watchJobs.noteBudgetedStart(next)
     }
     if (usesActiveRefreshPacing(next)) {

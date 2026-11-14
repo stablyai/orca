@@ -1,4 +1,4 @@
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { beforeEach, expect, it, vi, type Mock } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -6,7 +6,7 @@ import {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
@@ -14,13 +14,13 @@ import {
   CALLER,
   envelope,
   hostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -63,8 +63,8 @@ function journal() {
   return open
 }
 
-function promptBody(itemId: string): AgentJournalItemBody {
-  const body = journal().itemBody(itemId)
+async function promptBody(itemId: string): Promise<AgentJournalItemBody> {
+  const body = await journal().reads.itemBody(itemId)
   if (!body) {
     throw new Error(`no item ${itemId}`)
   }
@@ -126,14 +126,15 @@ it.each(['allow', 'deny'])(
     const prompt = page.ok ? page.page.items.find((item) => item.itemId === itemId)! : null
     expect(prompt).not.toBeNull()
     const params = answer(prompt!, opId(), choice)
-    const db = openTestJournalHostDatabase(root).db
-    db.exec(`CREATE TRIGGER fail_plan_record AFTER UPDATE ON agent_session_records
+    await withTestAgentSessionDatabase(root, (db) =>
+      db.exec(`CREATE TRIGGER fail_plan_record AFTER UPDATE ON agent_session_records
       WHEN json_extract(NEW.record_json, '$.options.interactionMode') = '${after}'
       BEGIN SELECT RAISE(ABORT, 'record unavailable'); END`)
+    )
     await expect(host.respondToPrompt(CALLER, params)).rejects.toThrow('record unavailable')
-    db.exec('DROP TRIGGER fail_plan_record')
-    expect(receipt(params.envelope.clientOperationId)).toEqual({ verdict: 'absent' })
-    expect(promptBody(itemId)).toMatchObject({ resolution: { state: 'pending' } })
+    await withTestAgentSessionDatabase(root, (db) => db.exec('DROP TRIGGER fail_plan_record'))
+    expect(await receipt(params.envelope.clientOperationId)).toEqual({ verdict: 'absent' })
+    expect(await promptBody(itemId)).toMatchObject({ resolution: { state: 'pending' } })
     expect(store.getRecord(SESSION)?.options).toEqual({
       model: 'opus[1m]',
       interactionMode: before

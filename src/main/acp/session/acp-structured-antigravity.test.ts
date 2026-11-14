@@ -2,7 +2,7 @@ import type { AntigravityChatAuthConfig } from '../../../shared/antigravity-chat
 import { afterEach, expect, it } from 'vitest'
 import fixture from '../fixtures/antigravity-v1.4.1-options.json'
 import { z } from 'zod'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   SESSION
@@ -46,8 +46,8 @@ async function nativeOptionsRig({
           resume: {
             sessionId: PROVIDER_SESSION,
             key: 'acp:antigravity:saved',
-            mayBeUnsaved: () => false,
-            unannouncedLosses: () => []
+            mayBeUnsaved: async () => false,
+            lossKeys: []
           }
         }
       : undefined,

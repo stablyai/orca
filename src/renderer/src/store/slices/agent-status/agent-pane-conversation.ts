@@ -1,3 +1,4 @@
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { replaceRecordEntries } from '../../keyed-record-transitions'
 import {
   classifyConversationContinuity,
@@ -5,10 +6,7 @@ import {
   type AgentConversationContinuity,
   type AgentConversationSource
 } from './agent-conversation-continuity'
-import {
-  type AgentProviderSessionMetadata,
-  agentProviderSessionsEqual
-} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentStatusEntry,
   AgentType

@@ -9,35 +9,35 @@ import {
   getMobileColorScheme,
   subscribeMobileColorScheme
 } from '../src/theme/mobile-theme'
-import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/bridge-rpc-client'
+import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
 import {
   bootstrapShellPage,
   createShellPageClient,
   stampPageMountState,
   type PageMountTarget
-} from '../src/mobile-web-shell/bridge/page-bootstrap'
-import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/bridge-native-verbs'
-import { BRIDGE_HOST_CATALOGS_GRANT } from '../src/mobile-web-shell/bridge/bridge-frame-fields'
+} from '../src/mobile-web-shell/bridge/page-lifecycle/page-bootstrap'
+import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
+import { BRIDGE_HOST_CATALOGS_GRANT } from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
 import {
   publishPageStorage,
   refreshPageTerminalSettings
-} from '../src/mobile-web-shell/bridge/page-async-storage'
+} from '../src/mobile-web-shell/bridge/page-storage/page-async-storage'
 import {
   createPageDeviceStore,
   publishPageDeviceStore
-} from '../src/mobile-web-shell/bridge/page-device-store'
+} from '../src/mobile-web-shell/bridge/page-storage/page-device-store'
 import {
   RouteScreenPaintProvider,
   createRouteScreenPaintReporter
-} from '../src/mobile-web-shell/bridge/page-first-paint'
-import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-boundary'
-import type { BridgeUiLocale } from '../src/mobile-web-shell/bridge/bridge-envelope'
-import { BRIDGE_OPEN_ROUTE_PARAM } from '../src/mobile-web-shell/bridge/bridge-route-update'
+} from '../src/mobile-web-shell/bridge/page-lifecycle/page-first-paint'
+import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-lifecycle/page-fault-boundary'
+import type { BridgeUiLocale } from '../src/mobile-web-shell/bridge/protocol/bridge-envelope'
+import { BRIDGE_OPEN_ROUTE_PARAM } from '../src/mobile-web-shell/bridge/page-lifecycle/bridge-route-update'
 import { activateMobileUiLocale, subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { startPageLocaleCatalogs } from '../src/i18n/page-locale-catalog-source'
 import { getUiIntlLocale } from '../src/i18n/ui-intl-locale'
 import { readDeviceUiLocaleTags, resolveUiLocaleFromTags } from '../src/i18n/system-ui-locale'
-import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host-profile'
+import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-lifecycle/page-host-profile'
 import { publishExternalLinkOpener } from '../src/platform/external-links/external-link.web'
 import { publishHapticsNotifier } from '../src/platform/haptics/haptics.web'
 import { startBlurringOnKeyboardClose } from '../src/platform/keyboard/keyboard-close-blur.web'

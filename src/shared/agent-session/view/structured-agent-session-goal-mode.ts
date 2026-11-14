@@ -1,5 +1,5 @@
-import type { NativeChatPickerItem } from '../../native-chat/input/native-chat-picker-items'
-import { applyPickerSuggestion } from '../../native-chat/input/native-chat-picker-triggers'
+import type { NativeChatPickerItem } from '../../native-chat/input/composer/native-chat-picker-items'
+import { applyPickerSuggestion } from '../../native-chat/input/composer/native-chat-picker-triggers'
 
 /** Without host goals only the provider's built-in /goal opens goal mode; a namesake keeps its invocation. */
 export function structuredAgentSessionPickEntersGoalMode(

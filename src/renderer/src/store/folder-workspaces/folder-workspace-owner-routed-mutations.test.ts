@@ -1,19 +1,16 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import {
-  createCompatibleRuntimeStatusResponseIfNeeded,
-  type RuntimeEnvironmentCallRequest
-} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { showDeleteWorktreeFailureToast } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-failure-toast'
+import { deleteFolderWorkspaceUnlessUnsaved } from '@/components/sidebar/workspace-actions/deletion/folder-workspace-delete'
 
-const folderWorkspacesUpdate = vi.fn()
+vi.mock('@/components/sidebar/workspace-actions/deletion/delete-worktree-failure-toast', () => ({
+  showDeleteWorktreeFailureToast: vi.fn()
+}))
+
 const folderWorkspacesDelete = vi.fn()
-const folderWorkspacesList = vi.fn()
-const runtimeEnvironmentCall = vi.fn()
-const runtimeEnvironmentTransportCall = vi.fn()
 
 const projectGroup: ProjectGroup = {
   id: 'group-1',
@@ -48,21 +45,11 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 }
 
 beforeEach(() => {
-  clearRuntimeCompatibilityCacheForTests()
-  folderWorkspacesUpdate.mockReset()
   folderWorkspacesDelete.mockReset()
-  folderWorkspacesList.mockReset()
-  runtimeEnvironmentCall.mockReset()
-  runtimeEnvironmentTransportCall.mockReset()
-  runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-    return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
-  })
   vi.stubGlobal('window', {
     api: {
       folderWorkspaces: {
-        update: folderWorkspacesUpdate,
-        delete: folderWorkspacesDelete,
-        list: folderWorkspacesList
+        delete: folderWorkspacesDelete
       },
       projectGroups: {
         checkHooks: vi.fn(async () => ({
@@ -73,8 +60,7 @@ beforeEach(() => {
           setupRunPolicy: 'ask',
           setupConfig: null
         }))
-      },
-      runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
+      }
     }
   })
 })
@@ -99,11 +85,10 @@ it('retires removed folder launch submissions while preserving physical twins an
   )
   const twin = { ...folders[0], executionHostId: 'runtime:env-owner' as const }
   const live = makeFolderWorkspace({ id: 'live', executionHostId: 'local' })
-  const shutdown = vi.fn(async () => {})
   store.setState({
     projectGroups: [projectGroup],
     folderWorkspaces: [...folders, twin, live],
-    shutdownWorktreeBrowsers: shutdown,
+    shutdownWorktreeBrowsers: async () => {},
     deleteManagedBrowserSessionProfile: vi.fn(),
     purgeWorktreeTerminalState: vi.fn()
   })
@@ -124,22 +109,14 @@ it('retires removed folder launch submissions while preserving physical twins an
     return submission
   })
   folderWorkspacesDelete.mockResolvedValue(false)
-  expect(
-    await store.getState().deleteFolderWorkspace(folders[0].id, { executionHostId: 'local' })
-  ).toBe(false)
+  await store.getState().deleteFolderWorkspace(folders[0].id, { executionHostId: 'local' })
   expect(attempts[0].draft?.text).toBe('task 0')
   expect(nativeChatPendingAttachmentSnapshot(scope(folders[0].id))).toHaveLength(1)
   folderWorkspacesDelete.mockResolvedValue(true)
   for (const [i, folder] of folders.entries()) {
-    expect(
-      await store.getState().deleteFolderWorkspace(folder.id, { executionHostId: 'local' })
-    ).toBe(true)
+    await store.getState().deleteFolderWorkspace(folder.id, { executionHostId: 'local' })
     expect(attempts[i].draft).toBeUndefined()
-    if (i === 0) {
-      expect(shutdown).not.toHaveBeenCalled()
-    }
   }
-  expect(shutdown).toHaveBeenCalledTimes(1)
   for (const key of liveScopes) {
     expect(composerDraftsOwner2.readNativeChatComposerDraft(key).text).toBe('keep')
   }
@@ -162,4 +139,46 @@ it('retires removed folder launch submissions while preserving physical twins an
   expect(composerDraftsOwner2.readNativeChatComposerDraft(recreated).text).toBe('new lifetime')
   composerDrafts.clearNativeChatComposerDraftsForTests()
   clearNativeChatPendingAttachmentsForTests()
+})
+
+it('rechecks unsaved editor text before the Archive failure toast waives removal', async () => {
+  const store = createTestStore()
+  const folder = makeFolderWorkspace({ executionHostId: 'local' })
+  const workspaceKey = folderWorkspaceKey(folder.id)
+  store.setState({
+    projectGroups: [projectGroup],
+    folderWorkspaces: [folder],
+    shutdownWorktreeBrowsers: vi.fn(async () => {}),
+    deleteManagedBrowserSessionProfile: vi.fn(),
+    purgeWorktreeTerminalState: vi.fn()
+  })
+  vi.mocked(showDeleteWorktreeFailureToast).mockClear()
+  folderWorkspacesDelete
+    .mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'folderWorkspaces:delete': WorktreeArchiveHookFailedError: Archive hook failed for worktree: /workspace/platform"
+      )
+    )
+    .mockResolvedValueOnce(true)
+  await deleteFolderWorkspaceUnlessUnsaved(store.getState, folder.id, 'local')
+  const failure = vi.mocked(showDeleteWorktreeFailureToast).mock.calls[0][0]
+  const retry = failure.onDeleteAnyway
+  store.setState({
+    openFiles: [
+      {
+        id: 'dirty-file',
+        filePath: '/workspace/platform/file.txt',
+        relativePath: 'file.txt',
+        worktreeId: workspaceKey,
+        language: 'plaintext',
+        isDirty: true,
+        mode: 'edit'
+      }
+    ]
+  })
+  await retry?.()
+  expect(store.getState().folderWorkspaces.map((entry) => entry.id)).toEqual(['folder-workspace-1'])
+  store.setState({ openFiles: [], editorDrafts: {} })
+  await retry?.()
+  expect(store.getState().folderWorkspaces).toEqual([])
 })

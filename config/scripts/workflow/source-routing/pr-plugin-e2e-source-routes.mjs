@@ -45,7 +45,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       `${UI}(?:state\\/plugin-preview-cache|presentation\\/plugin-(?:status-presentation|install-source|release-date|contributions|error-presentation))`,
       `${STORE}content-list-store`,
       'src\\/main\\/plugins\\/(?:installation\\/|catalog\\/plugin-(?:marketplace-|catalog-|one-click-enable|community-marketplace-seed|kill-list-))',
-      'src\\/main\\/plugins\\/plugin-(?:list-projection|client-list|image-)',
+      'src\\/main\\/plugins\\/(?:discovery\\/plugin-(?:list-projection|client-list)|media\\/plugin-image-)',
       'src\\/shared\\/plugins\\/(?:catalog\\/|installation\\/|images\\/|plugin-list-entry|contributions\\/plugin-contribution-(?:summary|points))'
     ].join('|'),
     'plugin-git-fixture|plugin-gleam-catalog-fixture'
@@ -54,7 +54,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.file-type-suggestion',
     ['plugin-file-type-suggestion'],
     [
-      'src\\/renderer\\/src\\/components\\/editor\\/PluginFileTypeSuggestion\\.tsx$',
+      'src\\/renderer\\/src\\/components\\/editor\\/plugin-editors\\/PluginFileTypeSuggestion\\.tsx$',
       `${UI}state\\/use-plugin-settings-writes`,
       'src\\/main\\/plugins\\/catalog\\/plugin-file-type-suggestion',
       'src\\/shared\\/plugins\\/contributions\\/plugin-(?:file-type|file-match|custom-editor-core-file-types)'
@@ -98,7 +98,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     [
       `${UI}page\\/PluginContributionActionNewFile`,
       `${STORE}(?:custom-editors|new-files)`,
-      'src\\/main\\/plugins\\/plugin-new-file-template',
+      'src\\/main\\/plugins\\/contributions\\/plugin-new-file-template',
       'src\\/shared\\/plugins\\/(?:contributions\\/plugin-(?:custom-editor-contribution|new-file-contribution)|frames\\/plugin-custom-editor-bridge)'
     ].join('|'),
     'plugin-smoke|plugin-frame-guest'
@@ -109,7 +109,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     [
       `${UI}(?:page\\/PluginContributionAction(?:Panel|Command|Events)|state\\/use-plugin-logs)`,
       `${STORE}panels`,
-      'src\\/main\\/plugins\\/(?:panels\\/|workers\\/|plugin-(?:command-|event-delivery|agent-status-event|storage-store|secrets-store|log-buffer))',
+      'src\\/main\\/plugins\\/(?:panels\\/|workers\\/|commands\\/plugin-command-|events\\/plugin-(?:event-delivery|agent-status-event)|storage\\/plugin-(?:storage-store|secrets-store)|logging\\/plugin-log-buffer)',
       'src\\/shared\\/plugins\\/(?:frames\\/|workers\\/|events\\/|capabilities\\/|contributions\\/plugin-(?:command-|event-|panel-|execution-profile))',
       'examples\\/plugins\\/(?:hello-orca|test-fixtures\\/hostile-panel)\\/'
     ].join('|'),
@@ -129,7 +129,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'config\\/build-plugins\\/main-build-entry-points',
       'src\\/main\\/browser\\/guest-lifecycle\\/input\\/browser-guest-shortcut-(?:forwarding|dispatch)',
       'src\\/renderer\\/src\\/components\\/(?:plugins\\/frames\\/|right-sidebar\\/plugin-panels\\/PluginPanel\\.tsx$)',
-      'src\\/renderer\\/src\\/components\\/editor\\/(?:PluginCustomEditorFrame\\.tsx$|plugin-custom-editor-host)'
+      'src\\/renderer\\/src\\/components\\/editor\\/plugin-editors\\/(?:PluginCustomEditorFrame\\.tsx$|plugin-custom-editor-host)'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),
@@ -163,7 +163,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ['plugin-buildless-tsx'],
     [
       'src\\/main\\/plugins\\/panels\\/(?:frame-serving\\/)?plugin-frame-(?:module-|source-serving|protocol\\.ts$)',
-      'src\\/main\\/plugins\\/plugin-content-hash',
+      'src\\/main\\/plugins\\/artifacts\\/plugin-content-hash',
       'src\\/shared\\/plugins\\/frames\\/plugin-frame-source-modules',
       'src\\/cli\\/plugins\\/authoring\\/plugin-(?:type-files|components-template)',
       'examples\\/plugins\\/hello-tsx\\/'
@@ -178,7 +178,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/shared\\/plugins\\/declarative\\/(?:plugin-declarative-message|runtime\\/declarative-(?:atoms|memory-retention|error-location|panel-context|renderer))',
       'src\\/shared\\/plugins\\/frames\\/plugin-(?:declarative-host-document|frame-bridge)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/plugin-panels\\/(?:PluginPanel\\.tsx$|declarative\\/(?:PluginDeclarativePanel|use-plugin-declarative-(?:state|tree)|plugin-declarative-retained-memory))',
-      'src\\/main\\/plugins\\/(?:plugin-dev-|panels\\/guest-isolation\\/plugin-frame-guest-sessions)',
+      'src\\/main\\/plugins\\/(?:development\\/plugin-dev-|panels\\/guest-isolation\\/plugin-frame-guest-sessions)',
       'resources\\/plugins\\/declarative\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
@@ -188,7 +188,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.panel-agents',
     ['plugin-panel-agents'],
     [
-      'src\\/main\\/plugins\\/(?:plugin-runtime-binding|plugin-agent-status-event|workers\\/host-api\\/plugin-workspace-projection)',
+      'src\\/main\\/plugins\\/(?:runtime\\/plugin-runtime-binding|events\\/plugin-agent-status-event|workers\\/host-api\\/plugin-workspace-projection)',
       'src\\/shared\\/plugins\\/events\\/plugin-events'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke|agent-hook-endpoint'
@@ -199,7 +199,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ['plugin-worker-panel'],
     [
       'src\\/main\\/plugins\\/panels\\/plugin-panel-bridge',
-      'src\\/main\\/plugins\\/(?:plugin-declared-settings|workers\\/(?:plugin-worker-orca-api|host-api\\/plugin-host-panel-method-bindings|parent-process\\/plugin-worker-requests))',
+      'src\\/main\\/plugins\\/(?:storage\\/plugin-declared-settings|workers\\/(?:plugin-worker-orca-api|host-api\\/plugin-host-panel-method-bindings|parent-process\\/plugin-worker-requests))',
       'src\\/main\\/ipc\\/plugin-(?:panel-push|settings)-ipc',
       'src\\/shared\\/plugins\\/(?:workers\\/plugin-panel-bridge-protocol|frames\\/plugin-panel-shell-facades|contributions\\/plugin-settings-)',
       'src\\/shared\\/plugins\\/declarative\\/runtime\\/declarative-(?:data-sdk|storage-sync)',
@@ -246,7 +246,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.startup-and-manifest',
     ['plugin-demo'],
     [
-      'src\\/main\\/plugins\\/plugin-(?:service|discovery|enablement|activation-policy|bundled-bootstrap|refresh-settlement|manifest-|content-|declarative-content-integrity|dev-)',
+      'src\\/main\\/plugins\\/(?:plugin-service|development\\/plugin-(?:service-housekeeping|dev-)|runtime\\/plugin-service-host-call|discovery\\/plugin-discovery|activation\\/plugin-(?:enablement|activation-policy|refresh-settlement)|bootstrap\\/plugin-bundled-bootstrap|media\\/plugin-manifest-images|artifacts\\/plugin-(?:manifest-|content-|declarative-content-integrity))',
       'src\\/shared\\/plugins\\/(?:manifest\\/|approval\\/plugin-consent-|plugin-system-settings)'
     ].join('|')
   )
