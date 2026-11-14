@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
+import type { ClaudeStatusLineRateLimits } from '../../../../shared/claude-statusline-rate-limits'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from '../structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -48,6 +49,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Required, and asserted at install time — an absent policy must not degrade to a guess. */
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
+  /** Live account usage from Claude chat streams, as the terminal statusline would post it. */
+  onClaudeLiveRateLimits?: (event: ClaudeStatusLineRateLimits) => void
   idleSweep?: StructuredAgentSessionHostDeps['idleSweep']
   /** What a chat saved before its agent had modes ran with; fills that chat's mode once. */
   resolveAgentFullAccess?: (agent: string) => boolean
