@@ -56,6 +56,11 @@ jobs:
     name: terminal scale perf
     # Presented-frame measurement only accepts GitHub-hosted Xvfb displays.
     runs-on: ubuntu-24.04
+    # Why: the daily run is this repo's regression tripwire and forks inherit it
+    # with the cron, burning runner minutes a day to mirror a result upstream
+    # already records. Manual dispatch stays open everywhere — the inputs exist
+    # so forks can measure their own branches.
+    if: github.event_name != 'schedule' || github.repository == 'stablyai/orca'
     timeout-minutes: 45
     env:
       NODE_OPTIONS: --max-old-space-size=4096
