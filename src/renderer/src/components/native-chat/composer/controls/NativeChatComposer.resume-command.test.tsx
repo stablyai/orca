@@ -9,7 +9,7 @@ import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../../..
 import { createStructuredSessionSelectionController } from '../../../../../../shared/agent-session/options/selection/structured-agent-session-selection-operations'
 import { createStructuredAgentSessionOptionState } from '../../../../../../shared/agent-session/options/structured-agent-session-options'
 import { structuredAgentSessionSeedCatalog } from '../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-seed-catalog'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { QueuedMessageInlineEditor } from '../../queue/editing/native-chat-queued-edit-session'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'

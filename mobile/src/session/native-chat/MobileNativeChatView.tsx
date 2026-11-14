@@ -1,7 +1,7 @@
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import { MobileStateView } from '../../components/MobileStateView'
 import { useCallback, useMemo, type ComponentProps } from 'react'
-import { nativeChatTaskListPredecessors } from '../../../../src/shared/native-chat/input/native-chat-task-list-history'
+import { nativeChatTaskListPredecessors } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
 import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
@@ -14,8 +14,8 @@ import type { NativeChatMessage } from '../../../../src/shared/native-chat/nativ
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
-} from '../../../../src/shared/native-chat/transcript/native-chat-turn-status'
-import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+} from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

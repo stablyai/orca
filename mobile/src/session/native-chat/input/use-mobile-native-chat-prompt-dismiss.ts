@@ -4,7 +4,7 @@ import {
   nativeChatCardDismissKey,
   nativeChatPromptDismissalMatches,
   nativeChatPromptOccurrenceKey
-} from '../../../../../src/shared/native-chat/input/native-chat-prompt-dismiss-key'
+} from '../../../../../src/shared/native-chat/input/approvals/native-chat-prompt-dismiss-key'
 import {
   mobileNativeChatPromptDismissals as dismissals,
   type MobileNativeChatPromptDismissal

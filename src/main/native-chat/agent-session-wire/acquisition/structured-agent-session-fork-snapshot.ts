@@ -12,9 +12,9 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import { turnMembership } from '../rewind/structured-rewind-cut'
-import { namedSubagents } from '../../../../shared/native-chat/transcript/native-chat-subagent-items'
-import { isTerminalSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
-import { isSettledBackgroundTaskState } from '../../../../shared/native-chat/input/native-chat-background-task-row'
+import { namedSubagents } from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
+import { isTerminalSubagentState } from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
+import { isSettledBackgroundTaskState } from '../../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import {
   providerTimelineKeyPart,
   providerTimelineTurnKeyPart

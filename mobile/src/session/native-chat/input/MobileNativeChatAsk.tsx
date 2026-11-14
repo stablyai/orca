@@ -6,8 +6,8 @@ import {
   type NativeChatAnswerOperation,
   type NativeChatAnswerSource,
   type AskAnswerSelection
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+} from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { AgentJournalFreeTextInput } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   askAcceptsEmptyAnswer,
@@ -16,7 +16,7 @@ import {
   askConfirmLabel,
   askTypedText,
   toggleAskOption
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-card-rules'
+} from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'

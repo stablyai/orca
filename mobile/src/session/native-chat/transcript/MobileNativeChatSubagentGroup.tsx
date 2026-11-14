@@ -4,15 +4,15 @@ import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader,
   subagentStateLabel
-} from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-group-header'
+} from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
 import { sayMobileNativeChatSubagentGroup as say } from './native-chat-subagent-group-copy'
 import { sayMobileNativeChatSessionOption as sayOption } from '../input/native-chat-session-option-copy'
-import { normalizeSubagentState } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
+import { normalizeSubagentState } from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import {
   subagentEntryDetail,
   subagentEntryRunsOn
-} from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-entry-detail'
-import { formatNativeChatDuration } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+} from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-entry-detail'
+import { formatNativeChatDuration } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type {
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState

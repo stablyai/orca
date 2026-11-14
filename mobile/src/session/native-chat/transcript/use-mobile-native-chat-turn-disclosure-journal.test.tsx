@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 
 import { Harness, Result } from './use-mobile-native-chat-turn-disclosure.test-fixture'
 

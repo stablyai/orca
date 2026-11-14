@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { primaryModifierKey } from '../../../platform/keyboard/primary-modifier-key'
-import { createNativeChatSteerChordPreviewHook } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
+import { createNativeChatSteerChordPreviewHook } from '../../../../../src/shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
 import type { MobileNativeChatSteerChordPreviewInput } from './use-mobile-native-chat-steer-chord-preview'
 
 const useNativeChatSteerChordPreview = createNativeChatSteerChordPreviewHook({

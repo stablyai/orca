@@ -2,8 +2,8 @@ import {
   clipboardEventImageFile,
   clipboardEventPromptText,
   type ClipboardEventDataLike
-} from '../../../../../src/shared/native-chat/input/native-chat-clipboard-event'
-import { isNativeChatLongPaste } from '../../../../../src/shared/native-chat/input/native-chat-long-paste'
+} from '../../../../../src/shared/native-chat/input/composer/native-chat-clipboard-event'
+import { isNativeChatLongPaste } from '../../../../../src/shared/native-chat/input/composer/native-chat-long-paste'
 import type { ClipboardReader } from '../../../platform/clipboard/clipboard'
 import type { PickedMobileImage } from '../../../platform/media-picking/media-picker-contract'
 import { encodeBase64Bytes } from '../../../transport/encryption/base64-byte-codec'

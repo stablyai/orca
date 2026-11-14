@@ -4,7 +4,7 @@ import {
   isNativeChatAgentAvailable,
   nativeChatAvailabilityAgent
 } from '../../../../src/shared/native-chat/native-chat-availability'
-import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-readability'
 
 export type MobileNativeChatResolution = {
   agent: string

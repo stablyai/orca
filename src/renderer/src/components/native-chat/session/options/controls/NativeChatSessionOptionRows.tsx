@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch'
 import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-snapshot'
 import {
   isReadOnlySessionOptionValue,
   type SessionOptionDescriptor,
@@ -19,11 +19,11 @@ import {
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { NativeChatSessionSpeedButton } from './NativeChatSessionSpeedButton'
-import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/native-chat-session-speed-tiers'
+import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-speed-tiers'
 
 type NativeChatSessionOptionRowsProps = {
   /** The current model's options, in display order. */

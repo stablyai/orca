@@ -4,7 +4,7 @@ import { structuredAgentSessionBlocksTooLarge } from '../../../../../../shared/r
 import { structuredAgentSessionSendBody } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteNoticeText } from '../../messages/notices/agent-session-write-notice-text'
-import { imageReferencesToPromptMarkers } from '../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { imageReferencesToPromptMarkers } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import type { StructuredAgentSessionCommandOutcome } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'

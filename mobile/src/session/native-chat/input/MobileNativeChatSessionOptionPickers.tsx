@@ -30,7 +30,7 @@ import {
   nativeChatOptionValuesLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
 import {
@@ -44,7 +44,7 @@ import {
   SessionOptionSegments,
   showsSessionOptionAsSegments
 } from './MobileNativeChatSessionOptionSegments'
-import { sortNativeChatSessionOptions } from '../../../../../src/shared/native-chat/input/native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-snapshot'
 import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
