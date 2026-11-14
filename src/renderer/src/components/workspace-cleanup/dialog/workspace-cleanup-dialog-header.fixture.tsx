@@ -79,6 +79,7 @@ function Top({
         <WorkspaceCleanupSortHeader
           sort={DEFAULT_WORKSPACE_CLEANUP_SORT}
           selectableCount={3}
+          selectedBulkCount={selected}
           selectedSelectableCount={selected}
           selectedCount={selected}
           deleteDisabled={false}
