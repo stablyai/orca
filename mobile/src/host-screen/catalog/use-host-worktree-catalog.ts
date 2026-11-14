@@ -236,7 +236,8 @@ export function useHostWorktreeCatalog(args: {
   // repo's default checkout; every other caller discards them.
   const fetchWorktrees = useCallback(
     async (options: { allowDuringModal?: boolean } = {}): Promise<Worktree[] | undefined> => {
-      if (!hostId) {
+      // An offline host cannot answer; the caller then stays put, same as a failed read below.
+      if (!hostId || !client || connState !== 'connected') {
         return undefined
       }
       const key = hostWorktreeCatalogKey(hostId)
@@ -260,10 +261,15 @@ export function useHostWorktreeCatalog(args: {
           { cancelRefetch: false }
         )
       }
+      // A failed read must not answer with the last good rows: they can predate the change this
+      // read was for, and the list still shows them anyway.
+      if (query.state.status === 'error') {
+        return undefined
+      }
       const snapshot = queryClient.getQueryData<WorktreeCatalogSnapshot>(key)
       return snapshot ? [...snapshot.worktrees] : undefined
     },
-    [hostId, queryClient]
+    [client, connState, hostId, queryClient]
   )
 
   const startWorktreeRefresh = useCallback(() => {
