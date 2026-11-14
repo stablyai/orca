@@ -1,6 +1,6 @@
 import { useAutomationSetupConsent } from './use-automation-setup-consent'
 import { describeLoadError } from '../components/load-error-description'
-import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
+import { OrcaHookTrustDrawer } from '../components/hook-trust/OrcaHookTrustDrawer'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useAutomationRuns, type AutomationRunScope } from './use-automation-runs'

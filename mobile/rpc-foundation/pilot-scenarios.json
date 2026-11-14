@@ -302,7 +302,7 @@
       "id": "settings-workspace-context-fulfilled",
       "operation": "settings.workspace-context",
       "family": "settings.workspace-context",
-      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "sites": ["mobile/src/new-workspace/creation/runtime/use-new-workspace-runtime-context.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -390,7 +390,7 @@
       "id": "settings-workspace-context-refused",
       "operation": "settings.workspace-context",
       "family": "settings.workspace-context",
-      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "sites": ["mobile/src/new-workspace/creation/runtime/use-new-workspace-runtime-context.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -1001,7 +1001,7 @@
       "id": "settings-workspace-submit-fulfilled",
       "operation": "settings.workspace-submit",
       "family": "settings.workspace-submit",
-      "sites": ["mobile/src/components/use-new-workspace-create-submit.ts"],
+      "sites": ["mobile/src/new-workspace/creation/runtime/use-new-workspace-create-submit.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -1611,7 +1611,7 @@
       "id": "settings-workspace-context-refuse-after-data",
       "operation": "settings.workspace-context",
       "family": "settings.workspace-context",
-      "sites": ["mobile/src/components/use-new-workspace-runtime-context.ts"],
+      "sites": ["mobile/src/new-workspace/creation/runtime/use-new-workspace-runtime-context.ts"],
       "schedules": ["success-then-refused"],
       "steps": [
         {
