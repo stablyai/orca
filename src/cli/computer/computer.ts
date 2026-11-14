@@ -1,5 +1,6 @@
 import type {
   ComputerActionResult,
+  ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
@@ -18,6 +19,7 @@ import { RuntimeClientError } from '../runtime/types'
 import {
   formatComputerAction,
   formatGetAppState,
+  formatLaunchApp,
   formatListApps,
   formatListWindows
 } from './computer-format'
@@ -78,6 +80,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
         .filter((line) => line !== null)
         .join('\n')
     })
+  },
+  'computer launch-app': async ({ flags, client, json }) => {
+    const result = await client.call<ComputerLaunchAppResult>('computer.launchApp', {
+      app: getRequiredStringFlag(flags, 'app'),
+      ...(flags.get('activate') === true ? { activate: true } : {})
+    })
+    printResult(result, json, formatLaunchApp)
   },
   'computer list-windows': async ({ flags, client, json }) => {
     const result = await client.call<ComputerListWindowsResult>('computer.listWindows', {
@@ -269,7 +278,7 @@ function getComputerPermissionSetupId(
 function formatComputerCapabilities(value: ComputerProviderCapabilities): string {
   return [
     `${value.provider} (${value.platform}, protocol ${value.protocolVersion})`,
-    `  Apps: list=${value.supports.apps.list} bundleIds=${value.supports.apps.bundleIds} pids=${value.supports.apps.pids}`,
+    `  Apps: list=${value.supports.apps.list} bundleIds=${value.supports.apps.bundleIds} pids=${value.supports.apps.pids} launch=${value.supports.apps.launch === true}`,
     `  Windows: list=${value.supports.windows.list} targetById=${value.supports.windows.targetById} targetByIndex=${value.supports.windows.targetByIndex}`,
     `  Observation: screenshot=${value.supports.observation.screenshot} elementFrames=${value.supports.observation.elementFrames} annotatedScreenshot=${value.supports.observation.annotatedScreenshot}`,
     `  Actions: ${Object.entries(value.supports.actions)

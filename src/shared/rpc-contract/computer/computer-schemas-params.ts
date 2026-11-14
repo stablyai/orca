@@ -63,6 +63,14 @@ export const ComputerObserveTarget = ComputerObserveTargetBase.extend({
 
 export const ListApps = z.object({}).strict()
 
+export const LaunchApp = z
+  .object({
+    app: requiredString('Missing app'),
+    // Only with the user's OK: the app comes to the front and takes the keyboard.
+    activate: z.boolean().optional()
+  })
+  .strict()
+
 export const ListWindows = z
   .object({
     app: requiredString('Missing app')
