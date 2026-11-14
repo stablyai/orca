@@ -85,6 +85,9 @@ export function authorityWorkingSet<T extends { path: string }>(
     }
     const physical = (table: SessionSearchPhysicalTable, path: string) => {
       const key = `${table}:${source}:${path}`
+      if (keys.has(key)) {
+        return true
+      }
       const row = Object.fromEntries(
         inventoryPhysicalColumns(table)
           .split(',')
