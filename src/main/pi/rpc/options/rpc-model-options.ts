@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { PI_THINKING_LEVELS } from '../../../../shared/agent-session/options/structured-agent-session-effective-effort'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
+import { isPiModelOptionId } from '../../../../shared/agent-session/options/agent-session-option-catalog-pi'
 import { piRpcModelSchema } from './rpc-model-schema'
 
 export type PiRpcRequester = {
@@ -26,10 +27,10 @@ export function piModelOptionId(provider: string, modelId: string): string {
 }
 
 export function parsePiModelOptionId(value: string): { provider: string; modelId: string } {
-  const slash = value.indexOf('/')
-  if (slash < 1 || slash === value.length - 1) {
+  if (!isPiModelOptionId(value)) {
     throw new Error('Pi model requires an explicit provider and model ID')
   }
+  const slash = value.indexOf('/')
   return { provider: value.slice(0, slash), modelId: value.slice(slash + 1) }
 }
 
