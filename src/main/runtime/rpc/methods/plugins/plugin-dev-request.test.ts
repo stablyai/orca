@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fingerprintPluginConsent } from '../../../../../shared/plugins/approval/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../../../../shared/plugins/manifest/plugin-manifest'
 
-import { devFolderConsentIdentity } from '../../../../plugins/plugin-discovery'
+import { devFolderConsentIdentity } from '../../../../plugins/discovery/plugin-discovery'
 import { PluginService } from '../../../../plugins/plugin-service'
 import type {
   PluginWorkerHandle,
