@@ -5,6 +5,8 @@ import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from '../../../composer/submit/native-chat-composer-target'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../../../shared/agent-launch/startup/agent-tui-input-clear'
+import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import {
   sendNativeChatMessageVerified,
   typeNativeChatCommand
@@ -76,6 +78,30 @@ export function useNativeChatSessionOptionCommand(args: {
             translate(
               'components.native-chat.sessionOption.commandCanceled',
               'Chat UI command was canceled because the composer closed.'
+            )
+          )
+        }
+        // Why: a verified command pastes onto whatever is already in the TUI.
+        // Ack the bounded clear before arming model confirmation, so that
+        // Ctrl+U cannot hide the dialog and a rejected clear never submits.
+        const clearAccepted = await sendRuntimePtyInputVerified(
+          target.ptyId,
+          AGENT_TUI_CLEAR_INPUT_MAX,
+          'driving'
+        )
+        if (!mountedRef.current || sendController.signal.aborted) {
+          throw new Error(
+            translate(
+              'components.native-chat.sessionOption.commandCanceled',
+              'Chat UI command was canceled because the composer closed.'
+            )
+          )
+        }
+        if (!clearAccepted) {
+          throw new Error(
+            translate(
+              'components.native-chat.sessionOption.commandRejected',
+              'The terminal did not accept the command.'
             )
           )
         }
