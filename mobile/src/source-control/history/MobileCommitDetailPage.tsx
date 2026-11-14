@@ -11,7 +11,7 @@ import { ChevronLeft, Copy, ExternalLink, MoreHorizontal } from 'lucide-react-na
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
-import type { ActionSheetAction } from '../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

@@ -1,7 +1,10 @@
 import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it } from 'vitest'
-import { createFakeRpcClient, rpcSuccess } from '../../mobile-web-shell/bridge-host-test-fakes'
+import {
+  createFakeRpcClient,
+  rpcSuccess
+} from '../../mobile-web-shell/test-support/bridge-host-test-fakes'
 import type { SparsePreset } from '../../../../src/shared/worktree/create-types'
 import type { WorkspaceSparseDraft } from '../mobile-tasks-project-workspace-types'
 import { item } from '../item-detail/github-task-identity.test-fixture'

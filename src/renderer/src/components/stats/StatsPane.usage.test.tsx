@@ -49,7 +49,7 @@ let historyAccounts: ProviderAccountsSnapshot | null = null
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: Partial<AppState>) => unknown) => selector(store)
 }))
-vi.mock('../status-bar/use-owner-usage-rate-limits', () => ({
+vi.mock('../status-bar/usage/use-owner-usage-rate-limits', () => ({
   useOwnerUsageRateLimits: () => ({
     rateLimits: quota,
     remoteOwner: { environmentId: 'remote', label: 'Build server' },

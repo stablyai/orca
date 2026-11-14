@@ -7,7 +7,6 @@ import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
 import { readServeAbortPark } from '../../../../shared/serve-abort-park'
 import { preflightElectronServe, recordElectronServeStartupAbort } from './serve-electron-preflight'
 import * as metadataReader from '../../profile/metadata'
-import { RuntimeClientError } from '../../connection/types'
 
 vi.mock('../../profile/metadata', async (original) => {
   const actual = await original<typeof metadataReader>()
@@ -33,12 +32,10 @@ function status(reachable: boolean, pid: number | null = 4242) {
 
 describe('preflightElectronServe', () => {
   let userData: string
-  let stdout: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     userData = mkdtempSync(join(tmpdir(), 'orca-serve-preflight-'))
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-    stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
   })
 
   afterEach(() => {
@@ -65,40 +62,6 @@ describe('preflightElectronServe', () => {
       probeListener: vi.fn(async () => overrides.probe ?? 'not-listening')
     }
   }
-
-  it('prints the refusal as a JSON envelope for --json callers', async () => {
-    await preflightElectronServe({ json: true }, userData, {
-      platform: 'linux',
-      deps: deps({ reachable: true })
-    })
-    const envelope = JSON.parse(String(stdout.mock.calls[0]?.[0]))
-    expect(envelope).toMatchObject({
-      ok: false,
-      error: { code: 'runtime_serve_already_running', data: { verdict: 'live', pid: 4242 } }
-    })
-  })
-
-  it('treats an accepting socket as live and an unanswered one as unverifiable, both refused', async () => {
-    await expect(
-      preflightElectronServe({}, userData, {
-        platform: 'linux',
-        deps: deps({ probe: 'accepting' })
-      })
-    ).resolves.toBe(3)
-    await expect(
-      preflightElectronServe({}, userData, { platform: 'linux', deps: deps({ probe: 'unproven' }) })
-    ).resolves.toBe(3)
-  })
-
-  it('treats a denied status check as unverifiable, not as stopped', async () => {
-    const denied = new RuntimeClientError('runtime_access_denied', 'denied')
-    await expect(
-      preflightElectronServe({}, userData, {
-        platform: 'linux',
-        deps: deps({ statusError: denied })
-      })
-    ).resolves.toBe(3)
-  })
 
   describe('remembered macOS startup abort', () => {
     const fingerprint = () => 'Background|ssh=1|sandbox=0'

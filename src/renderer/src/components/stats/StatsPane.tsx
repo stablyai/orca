@@ -14,7 +14,7 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   getUsageOwnerHostScope,
   useOwnerUsageRateLimits
-} from '../status-bar/use-owner-usage-rate-limits'
+} from '../status-bar/usage/use-owner-usage-rate-limits'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,

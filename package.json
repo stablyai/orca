@@ -128,7 +128,6 @@
     "build:process-footprint-macos": "node config/scripts/native-build/macos/build-process-footprint-macos.mjs",
     "build:notification-status-macos": "node config/scripts/native-build/macos/build-notification-status-macos.mjs",
     "build:native": "node config/scripts/native-build/composition/build-native-for-platform.mjs",
-    "smoke:computer": "node config/scripts/runtime-verification/desktop-transport/computer-use-smoke.mjs",
     "verify:computer-native": "node config/scripts/runtime-verification/desktop-transport/verify-computer-native.mjs",
     "verify:cli-bin": "node config/scripts/cli-build/verify-cli-bin.mjs",
     "verify:built-skills-cli": "node config/scripts/runtime-verification/skills-cli/verify-skills-cli-runtime.cjs out",

@@ -11,7 +11,7 @@ import type {
   NativeChatToolResultBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentJournalBoundedPayload } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { INLINE_TEXT_SELECTION } from '../../../../components/inline-text-selection'
+import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { styles } from '../messages/mobile-native-chat-message-styles'
 import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

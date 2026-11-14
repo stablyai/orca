@@ -73,7 +73,7 @@ for (const { baselineLegacy, current, name } of [
   },
   {
     baselineLegacy: 'mobile/src/source-control/review/mobile-diff-review-queue.ts',
-    current: 'mobile/src/source-control/review/mobile-diff-review-queue.ts',
+    current: 'mobile/src/source-control/review/diff-state/mobile-diff-review-queue.ts',
     name: 'buildMobileDiffReviewQueue'
   }
 ]) {

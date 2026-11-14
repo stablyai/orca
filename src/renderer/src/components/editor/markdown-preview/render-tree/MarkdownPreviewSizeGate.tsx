@@ -1,7 +1,7 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
 import { LARGE_MARKDOWN_PREVIEW_MAX_BYTES } from '../document-worker/markdown-preview-document-types'
-import '../../../status-bar/workspace-space-format'
+import '../../../status-bar/workspace-storage/workspace-space-format'
 import { formatBytes } from '../../../../../../shared/format-bytes'
 
 export function MarkdownPreviewSizeGate({

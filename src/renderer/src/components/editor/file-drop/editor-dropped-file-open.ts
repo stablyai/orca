@@ -15,7 +15,7 @@ import { captureWorktreeSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-m
 import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { DROP_STAGING_RELATIVE_DIR } from '../../../../../shared/drop-staging-ignore'
-import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/open-document-in-floating-workspace'
+import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/workspace/open-document-in-floating-workspace'
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { isResolvedWorkspaceFileDragExecutionHost } from '@/lib/files/drop/workspace-file-drag'
