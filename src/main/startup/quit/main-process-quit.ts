@@ -130,6 +130,8 @@ function installWillQuitHandler(): void {
     state.desktopPushService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
+    state.unsubscribeWakeSignalClock?.()
+    state.unsubscribeWakeSignalClock = null
     state.stopDesktopPresenceReporter?.()
     state.stopDesktopPresenceReporter = null
     // Keep log-stream diagnostics alive through renderer quit vetoes.

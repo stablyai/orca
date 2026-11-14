@@ -131,6 +131,8 @@ export type RuntimeNotifier = {
       sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
       newLeafId?: string
+      /** An agent's split: the new pane leaves the user's active pane and keyboard focus alone. */
+      activate?: false
     }
   ): void
   /** `recordInteraction: false` marks a title the host applied, not one the user typed. */

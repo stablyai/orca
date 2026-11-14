@@ -1,5 +1,4 @@
 import React from 'react'
-import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
@@ -66,21 +65,6 @@ export function formatAutomationDateTimeWithRelative(
   return relative ? `${absolute} (${relative})` : absolute
 }
 
-export function getAutomationRunStatusVariant(
-  status: AutomationRun['status']
-): React.ComponentProps<typeof Badge>['variant'] {
-  if (status === 'dispatched' || status === 'completed') {
-    return 'secondary'
-  }
-  if (status.startsWith('skipped')) {
-    return 'outline'
-  }
-  if (status === 'dispatch_failed') {
-    return 'destructive'
-  }
-  return 'dot'
-}
-
 export function getAutomationRunStatusLabel(
   status: AutomationRun['status'],
   t: Translate = translate
@@ -141,21 +125,27 @@ export function Field({
 export function AutomationRunErrorNotice({
   label,
   error,
+  action,
   className
 }: {
   label: string
   error: string
+  /** The one step that fixes this failure, when there is one. */
+  action?: React.ReactNode
   className?: string
 }): React.JSX.Element {
   return (
     <div
       role="alert"
       className={cn(
-        'rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive',
+        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive',
         className
       )}
     >
-      <span className="font-medium">{label}</span> {error}
+      <span className="min-w-0 flex-1">
+        <span className="font-medium">{label}</span> {error}
+      </span>
+      {action}
     </div>
   )
 }

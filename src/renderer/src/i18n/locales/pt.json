@@ -5468,11 +5468,9 @@
             "newWorktreeCardStyle": {
               "card": "cartão",
               "cards": "cartões",
-              "description": "Pré-visualize o layout atualizado do cartão de worktree, o posicionamento dos metadados, as opções do menu de exibição do cartão e a apresentação do status.",
               "menu": "menu",
               "metadata": "metadados",
               "status": "status",
-              "title": "Novo estilo de cartão",
               "worktree": "worktree",
               "worktrees": "worktrees"
             },
@@ -5943,12 +5941,6 @@
             "idleMinutesSuffix": "minutos",
             "title": "Suspensão do agente",
             "toggleLabel": "Alternar suspensão do agente"
-          },
-          "newWorktreeCardStyle": {
-            "copy": "Pré-visualize o layout atualizado do cartão de worktree, o posicionamento dos metadados, as opções do menu de exibição do cartão e a apresentação do status.",
-            "description": "Pré-visualize o layout atualizado do cartão de worktree, o posicionamento dos metadados, as opções do menu de exibição do cartão e a apresentação do status.",
-            "title": "Novo estilo de cartão",
-            "toggleLabel": "Alternar novo estilo de cartão"
           },
           "ca2219fe5e": "Mostra um pequeno bichinho animado fixado no canto inferior direito. Escolha um personagem (Claudino, OpenCode, Gremlin) ou envie seu próprio PNG, APNG, GIF, WebP, JPG ou SVG no menu do bichinho na barra de status. Oculte-o quando quiser no mesmo menu sem desativar esta configuração.",
           "dd6f0a1d45": "Bichinho",
@@ -14560,10 +14552,8 @@
       },
       "automations": {
         "AutomationsPage": {
-          "c3a28c9793": "Selecione uma automação para ver as execuções.",
           "295698292f": "Executar novamente",
           "0e110a3469": "Execuções",
-          "bb1b2cd31e": "Visão geral",
           "25060635c6": "Adicionar novo",
           "d207ab4c25": "Começar de um modelo",
           "15e0bfb13b": "Excluir",
@@ -14601,8 +14591,6 @@
           "8500baacb4": "origem externa",
           "36f71740a7": "Espaço de trabalho selecionado",
           "cd8397cc32": "Novo espaço de trabalho em cada execução",
-          "pendingAutomationMissing": "Automação não está mais disponível.",
-          "pendingAutomationRunMissing": "Histórico de execução não está mais disponível.",
           "paused": "Pausada",
           "missingWorkspace": "Espaço de trabalho faltando",
           "usageUnavailable": "Uso indisponível",
@@ -14611,7 +14599,6 @@
           "latestSavedOutput": "Última saída salva",
           "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
           "retryFullOutput": "Tentar novamente",
-          "backToList": "Todas as automações",
           "tableName": "Nome",
           "tableProject": "Projeto",
           "tableHost": "Host",
@@ -14621,7 +14608,6 @@
           "rowActions": "Ações da automação",
           "tableLastRun": "Última execução",
           "ownerChanged": "Esta automação mudou de host. Atualize e tente novamente.",
-          "runError": "Erro:",
           "deleteAutomationDescription": "Excluir <name/> e seu histórico de execuções. Os espaços de trabalho criados por execuções anteriores não serão excluídos.",
           "deleteExternalAutomationDescription": "Excluir <name/> de <provider/> em <host/>.",
           "runUsageSummaryTokens_one": "{{cost}} (est.) · {{tokens}} token",
@@ -14734,8 +14720,6 @@
           "18763ded26": "Programação",
           "dbef8dc110": "Esta automação SSH só é executada enquanto o Orca conseguir alcançar o host SSH. Se a reconexão precisar de credenciais interativas ou o host estiver indisponível, a execução é registrada como ignorada.",
           "1f6026358e": "Excluir automação",
-          "d79452fb30": "Retomar automação",
-          "91a4155e95": "Pausar automação",
           "2fb1605beb": "Executar Agora",
           "221916d93c": "Crie uma automação para começar a agendar trabalho de agente.",
           "b09b2384fd": "Pausada",
@@ -14906,13 +14890,11 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Ainda sem execuções.",
-          "9974a2b429": "Status",
           "13988187b3": "Tokens",
           "86a248187e": "Gasto",
           "149c0b49c7": "Espaço de Trabalho",
           "8faaa00726": "Execução",
-          "53fc5f07ab": "Histórico de execução",
-          "a00e38d1a3": "n/d",
+          "a00e38d1a3": "—",
           "historyUnavailable": "O histórico de execução não está disponível a partir deste host. Isso não significa que a automação falhou ou não tem execuções."
         },
         "AutomationSchedulePicker": {
@@ -14999,10 +14981,6 @@
           "copyFailed": "Falha ao copiar",
           "copyPrompt": "Copiar prompt"
         },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Contexto da execução",
-          "33741dd973": "Voltar para execuções"
-        },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, ordenado crescente",
           "sortedDescending": "{{value0}}, ordenado decrescente"
@@ -15017,8 +14995,7 @@
           "hostReselection": "Edite a automação e selecione novamente o host antes de executá-la."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Trilha de navegação de automações",
-          "runDetails": "Detalhes da execução"
+          "ariaLabel": "Trilha de navegação de automações"
         },
         "AutomationEditorPromptSection": {
           "a7c3e91b04": "Editar nome"
@@ -15110,14 +15087,13 @@
           "noWorkspaceLaunched": "Nenhum espaço de trabalho iniciado"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "Não iniciado",
-          "namedWorkspaceGone": "{{name}} (não está mais disponível)"
+          "notLaunched": "Não iniciado"
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}",
           "tokensAndCost_many": "{{tokens}} tokens · {{cost}}",
-          "costUnavailable": "n/d"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "Host SSH",
@@ -21697,7 +21673,8 @@
         "unconfirmed": "{{agent}} não conseguiu confirmar a ramificação",
         "unconfirmedDetail": "Ela pode ter sido aberta. Confira o histórico de sessões antes de tentar novamente.",
         "failed": "{{agent}} não conseguiu ramificar este chat",
-        "failedDetail": "Seu chat não foi alterado. Tente novamente."
+        "failedDetail": "Seu chat não foi alterado. Tente novamente.",
+        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar."
       },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",

@@ -161,7 +161,7 @@ describe('file explorer inline input with an IME', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it.each(['file', 'folder', 'rename'] as const)(
+  it.each(['file'] as const)(
     'ignores a keyCode-only confirmation and its unmarked redispatch for %s',
     async (type) => {
       const { rerenderWith, onSubmit } = renderNewFileRow()

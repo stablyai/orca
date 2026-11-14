@@ -42,6 +42,7 @@ describe('browser session proxy', () => {
   })
 
   afterEach(() => {
+    setBrowserNetworkProxySettingsResolver(null)
     vi.restoreAllMocks()
   })
 

@@ -3,6 +3,7 @@ import type { Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeLineageGroupKey } from './group-keys'
+import { buildWorktreeLineageRanges, type WorktreeLineageSource } from '../worktree-lineage-range'
 import {
   getExpandedWorktreeOccurrences,
   type WorktreeOccurrence,
@@ -79,15 +80,16 @@ export function appendWorktreeRows(
     folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
   }
 ): void {
+  const lineageRanges = buildWorktreeLineageRanges(plan)
   const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
   const childIdsByParent = new Map<string, string[]>()
-  for (const occurrence of sectionOccurrences) {
+  sectionOccurrences.forEach((occurrence) => {
     if (occurrence.parent) {
       const children = childIdsByParent.get(occurrence.parent.key) ?? []
       children.push(occurrence.row.id)
       childIdsByParent.set(occurrence.parent.key, children)
     }
-  }
+  })
   const occurrences = getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
     options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
   )
@@ -99,6 +101,7 @@ export function appendWorktreeRows(
         buildFolderWorkspaceRow(folderPair, options.groupDepth, occurrence, {
           collapsedGroups: options.collapsedGroups,
           childWorktreeIds: childIdsByParent.get(occurrence.key),
+          descendantIdentities: lineageRanges.get(occurrence.key),
           hostContextLabel: options.hostContextLabelByWorktreeIdentity?.get(
             getWorktreeHostIdentity(worktree)
           )
@@ -118,6 +121,7 @@ export function appendWorktreeRows(
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
       lineageChildWorktreeIds: childIdsByParent.get(occurrence.key),
+      lineageDescendantIdentities: lineageRanges.get(occurrence.key),
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
@@ -140,6 +144,7 @@ export function buildFolderWorkspaceRow(
   options?: {
     collapsedGroups: ReadonlySet<string>
     childWorktreeIds?: readonly string[]
+    descendantIdentities?: WorktreeLineageSource
     hostContextLabel?: string
   }
 ): FolderWorkspaceRow {
@@ -147,6 +152,7 @@ export function buildFolderWorkspaceRow(
     occurrence && occurrence.childCount > 0 ? getWorktreeLineageGroupKey(occurrence.row) : undefined
   return {
     type: 'folder-workspace',
+    lineageDescendantIdentities: options?.descendantIdentities,
     key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
