@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { View } from 'react-native'
 import { MobileSegmentedControl } from '../../components/MobileSegmentedControl'
-import { MobileSourceCopyButton } from '../../components/MobileSourceCopyButton'
+import { MobileSourceCopyButton } from '../../components/code-presentation/MobileSourceCopyButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from '../preview/mobile-file-preview-styles'

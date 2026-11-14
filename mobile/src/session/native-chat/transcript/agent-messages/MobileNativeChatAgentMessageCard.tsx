@@ -14,7 +14,7 @@ import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
 import { MobileAgentIcon } from '../../../../components/MobileAgentIcon'
 import { AgentStateDot } from '../../../../components/AgentStateDot'
-import { MobileSourceCopyButton } from '../../../../components/MobileSourceCopyButton'
+import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors } from '../../../../theme/mobile-theme'
 import { styles } from './mobile-agent-message-card-styles'

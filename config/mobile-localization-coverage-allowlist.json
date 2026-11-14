@@ -133,14 +133,14 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/mobile-markdown-blocks.tsx",
+    "filePath": "mobile/src/components/markdown/blocks/mobile-markdown-blocks.tsx",
     "kind": "jsx-expression",
     "text": "[x]",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "filePath": "mobile/src/components/rich-markdown/MobileRichMarkdownEditor.tsx",
     "kind": "jsx-attribute:placeholder",
     "text": "https://",
     "dynamic": false,

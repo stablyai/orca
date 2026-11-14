@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { routeMarkdownHref } from '../../components/markdown-href-routing'
+import { routeMarkdownHref } from '../../components/markdown/links/markdown-href-routing'
 import { mobileMarkdownFileLink } from './mobile-markdown-file-link'
 
 const params = {

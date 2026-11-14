@@ -18,10 +18,10 @@ import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { MobileSourceCopyButton } from '../../../../components/MobileSourceCopyButton'
-import { MobileSyntaxSegments } from '../../../../components/MobileSyntaxSegments'
-import { MarkdownLinkHandlerContext } from '../../../../components/markdown-link-handler'
-import { INLINE_TEXT_SELECTION } from '../../../../components/inline-text-selection'
+import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
+import { MobileSyntaxSegments } from '../../../../components/code-presentation/MobileSyntaxSegments'
+import { MarkdownLinkHandlerContext } from '../../../../components/markdown/links/markdown-link-handler'
+import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { highlightMobileCode } from '../../../../files/session-documents/mobile-file-syntax'
