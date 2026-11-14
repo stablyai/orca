@@ -12,10 +12,10 @@ export type RendererRequestChannels<Reply extends { requestId: string }> = {
 }
 
 /** Sends one request to a window's renderer and waits for its matching reply. */
-export function requestFromRenderer<Reply extends { requestId: string }>(
+export function requestFromRenderer<Body, Reply extends { requestId: string }>(
   webContents: WebContents,
   channels: RendererRequestChannels<Reply>,
-  body: object,
+  body: Body,
   timeoutMs: number
 ): Promise<Reply> {
   if (webContents.isDestroyed()) {

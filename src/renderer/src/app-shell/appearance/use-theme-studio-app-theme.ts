@@ -32,7 +32,7 @@ async function answer(request: ThemeStudioRequest): Promise<ThemeStudioReply> {
   }
   const { settings } = useAppStore.getState()
   if (!settings) {
-    return { requestId, ok: false, message: 'Orca is still loading its settings.' }
+    throw new Error('Orca is still loading its settings.')
   }
   const themes = await usePluginThemeStore.getState().fetchEntries()
   return {

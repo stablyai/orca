@@ -1,5 +1,4 @@
-import { existsSync } from 'node:fs'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { parsePluginAppThemeArtifact } from '../../shared/plugins/artifacts/plugin-theme-artifact'
 import { parsePluginTerminalThemeArtifact } from '../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
@@ -55,7 +54,10 @@ export async function writeThemeStudioPlugin(
     }
     const { files } = themeStudioPluginFiles(draft, id)
     assertLoadable(files)
-    const replaced = existsSync(folder)
+    const replaced = await stat(folder).then(
+      () => true,
+      () => false
+    )
     await rm(folder, { recursive: true, force: true })
     for (const [path, text] of Object.entries(files)) {
       const file = join(folder, ...path.split('/'))

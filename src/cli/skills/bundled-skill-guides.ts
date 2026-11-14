@@ -595,7 +595,7 @@ const ORCA_CLI_MARKDOWN = [
   "| Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries | `references/browser.md`          |",
   "| Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |",
   "| Creating, loading, installing, updating, approving, or publishing an Orca plugin, or adding a plugin catalog    | `references/plugins.md`          |",
-  "| Changing Orca's colors live: previewing, checking, keeping or sharing an app, terminal or syntax theme           | `references/themes.md`           |",
+  "| Changing Orca's colors live: previewing, checking, keeping or sharing an app, terminal or syntax theme          | `references/themes.md`           |",
   "| Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |",
   "",
 ].join('\n')

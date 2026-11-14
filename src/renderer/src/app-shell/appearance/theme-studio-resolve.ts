@@ -46,7 +46,7 @@ function selectedAppTheme(
       browserColorProbe
     )
     return synthesized?.base === mode
-      ? { ...synthesized, label: 'Match Terminal', pluginName: 'Match Terminal' }
+      ? { ...synthesized, label: MATCH_TERMINAL_APP_THEME, pluginName: MATCH_TERMINAL_APP_THEME }
       : null
   }
   return themes.find((theme) => theme.id === selected && theme.base === mode) ?? null
