@@ -14,6 +14,10 @@ const {
 const { builtinModules } = require('node:module')
 const { basename, dirname, join, relative, resolve, sep } = require('node:path')
 const { pathToFileURL } = require('node:url')
+const {
+  assertMacExecutableUuid,
+  giveMacExecutableUniqueUuid
+} = require('../../desktop-distribution/macos/macos-executable-uuid.cjs')
 
 const MAC_TERMINAL_HOST_NAME = 'Orca Agents'
 const MAC_TERMINAL_HOST_EXECUTABLE = 'Orca Agents'
@@ -280,6 +284,9 @@ function assembleMacTerminalHost({ appPath, nodeExecutable, iconPath, info }) {
   mkdirSync(join(paths.bundle, 'Contents', 'MacOS'), { recursive: true })
   cpSync(nodeExecutable, paths.executable)
   chmodSync(paths.executable, 0o755)
+  // Terminals' responsible process is this helper. Stock Node's UUID is shared by every install of that build
+  // (nvm, Homebrew, other apps), so Local Network privacy could attribute terminals to another program (#21988).
+  giveMacExecutableUniqueUuid(paths.executable, info.CFBundleIdentifier)
   cpSync(iconPath, paths.icon)
   cpSync(join(daemonOut, 'main'), join(paths.daemon, 'out', 'main'), { recursive: true })
   // Pins out/ to CommonJS so a stray parent package.json cannot change the loader.
@@ -384,6 +391,11 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
       minimumOs
     })
   )
+  try {
+    assertMacExecutableUuid(paths.executable, appId)
+  } catch (error) {
+    problems.push(error.message)
+  }
   const minos = parseBuildVersionMinos(
     spawnChecked('/usr/bin/otool', ['-l', paths.executable]).stdout
   )
