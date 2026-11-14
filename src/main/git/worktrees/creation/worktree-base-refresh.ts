@@ -106,6 +106,7 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
   const routedOptions = routeLocalGitOptions({ ...options, cwd: repoPath, admissionTier })
   const key = stableInFlightKey([
     routedOptions.wslDistro ?? '',
+    options.wslDistro ?? '',
     repoPath,
     parsed.fullRef,
     remoteTrackingRef,

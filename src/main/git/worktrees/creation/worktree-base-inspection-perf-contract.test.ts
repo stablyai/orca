@@ -24,6 +24,7 @@ import {
 import { beginGitRefMutation } from '../../refs/git-ref-change-signal'
 import { createGitOperationExecutor } from '../../command-runner/admission/git-operation-executor'
 import { registerWorktreeSuiteHooks } from '../testing/worktree-test-harness'
+import { setLocalGitRuntimeRouter } from '../../command-runner/host-routing/local-git-runtime-route'
 
 registerWorktreeSuiteHooks()
 
@@ -155,3 +156,56 @@ it('keeps inherited admission tiers separate', async () => {
   await Promise.all([background, interactive])
   expect(f.scans).toEqual({ lists: 2, statuses: 2 })
 })
+
+it.each([true, false])(
+  'preserves explicit and inferred WSL inspection outcomes, explicit first=%s',
+  async (explicitFirst) => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    setLocalGitRuntimeRouter(() => 'Ubuntu')
+    const started = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    gitExec.mockImplementation(async (args: string[], options: { cwd: string }) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: args.at(-1) === 'refs/heads/main^{commit}' ? 'local-tip' : 'remote-tip' }
+      }
+      if (args[0] === 'rev-list') {
+        return { stdout: '0\t3\n' }
+      }
+      if (args[0] === 'worktree') {
+        return { stdout: 'worktree /mnt/c/repo\nHEAD local-tip\nbranch refs/heads/main\n' }
+      }
+      if (args.includes('status')) {
+        started.resolve()
+        await release.promise
+        if (options.cwd === '/mnt/c/repo') {
+          throw new Error('Linux owner path is unavailable to host Git')
+        }
+        return { stdout: '' }
+      }
+      throw new Error('unexpected fixture command')
+    })
+    const inspect = (explicit: boolean) =>
+      getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+        'C:\\repo',
+        'origin/main',
+        'refs/remotes/origin/main',
+        undefined,
+        explicit ? { wslDistro: 'Ubuntu' } : {}
+      )
+    try {
+      const first = inspect(explicitFirst)
+      await started.promise
+      const second = inspect(!explicitFirst)
+      release.resolve()
+      expect(await Promise.all([first, second])).toEqual(
+        explicitFirst
+          ? [{ baseRef: 'origin/main', localBranch: 'main', behind: 3 }, undefined]
+          : [undefined, { baseRef: 'origin/main', localBranch: 'main', behind: 3 }]
+      )
+    } finally {
+      release.resolve()
+      setLocalGitRuntimeRouter(null)
+      platform.mockRestore()
+    }
+  }
+)
