@@ -15,7 +15,10 @@ import {
   waitFor
 } from './daemon-pty-adapter-test-harness'
 
-const probe = vi.hoisted(() => ({ cwd: null as string | null, during: () => {} }))
+const probe = vi.hoisted((): { cwd: string | null; during: () => void } => ({
+  cwd: null,
+  during: () => {}
+}))
 // The probe itself reads a real shell's folder; here it reports a chosen one.
 vi.mock('../daemon-live-sleep-cwd', () => ({
   readDaemonSleepFolder: async () => {
