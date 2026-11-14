@@ -8,7 +8,7 @@ export const PR_BROWSER_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/browser-image-link-focus.spec.ts'],
     matches: (file) =>
       file ===
-        'src/renderer/src/components/browser-pane/assemble-chrome/browser-page-guest-focus.ts' ||
+        'src/renderer/src/components/browser-pane/assemble-chrome/focus/browser-page-guest-focus.ts' ||
       file === 'tests/e2e/helpers/browser-link-server.ts'
   },
   {
