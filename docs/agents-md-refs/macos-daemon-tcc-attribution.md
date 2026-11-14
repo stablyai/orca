@@ -60,8 +60,8 @@ The helper's bundle, executable and display name are `Orca Agents`; its identifi
 and designated requirement still match Orca.app. This names the existing terminal-agent process
 without changing its privacy client. Supported local macOS native chat providers also use the
 independent host when it supports provider spawning and its executable can be resolved. Older or
-unsupported hosts, an unavailable host executable, fork fallback and remote/server routes keep
-direct launching under their existing owner. An adopted older daemon keeps its original name until
+unsupported hosts, an unavailable host executable, failed connection or ping checks, fork fallback
+and remote/server routes keep direct launching under their existing owner. An adopted older daemon keeps its original name until
 it exits; the fork fallback and Windows names are unchanged.
 
 ## macOS floor
