@@ -74,7 +74,9 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
     light: { tint: '--text-link', percent: 30, into: '--chat-canvas' },
     dark: { tint: '--text-link', percent: 40, into: '--chat-canvas' }
   },
-  '--chat-selection-foreground': ['--foreground']
+  '--chat-selection-foreground': ['--foreground'],
+  // Monaco paints this one, not main.css (plugin-monaco-theme.ts).
+  '--editor-selection': { tint: '--ring', percent: 30 }
 }
 
 export function pluginAppThemeCssFallback(
