@@ -4,6 +4,20 @@ import type { SessionSearchCandidateRow } from './session-search-catalog-candida
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 import { sessionSearchStoredCandidate } from './session-search-candidate-facts'
 
+export function consumeSessionSearchCandidatePage(
+  db: SyncDatabase,
+  receipts: { key: string; revision: number }[]
+): number {
+  if (!receipts.length) {
+    return 0
+  }
+  const result = db
+    .prepare(`UPDATE temp.search_candidates SET changed=0
+      WHERE changed=1 AND (key,revision) IN (SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]') FROM json_each(?))`)
+    .run(JSON.stringify(receipts.map((row) => [row.key, row.revision])))
+  return Number(result.changes)
+}
+
 export function readSessionSearchCandidateRows(
   db: SyncDatabase,
   where: string,

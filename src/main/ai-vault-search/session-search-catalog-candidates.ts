@@ -7,7 +7,10 @@ import {
   sessionSearchCandidateAdmission,
   sessionSearchPathAdmission
 } from './session-search-candidate-admission'
-import { readSessionSearchCandidateRows } from './session-search-candidate-rows'
+import {
+  readSessionSearchCandidateRows,
+  consumeSessionSearchCandidatePage
+} from './session-search-candidate-rows'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 import { putSessionSearchCandidate } from './session-search-candidate-entry'
 import {
@@ -254,14 +257,7 @@ export class SessionSearchCatalogCandidates {
     return { rows, references }
   }
   consumedPage(receipts: { key: string; revision: number }[]): void {
-    if (!receipts.length) {
-      return
-    }
-    const result = this.db
-      .prepare(`UPDATE temp.search_candidates SET changed=0
-      WHERE changed=1 AND (key,revision) IN (SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]') FROM json_each(?))`)
-      .run(JSON.stringify(receipts.map((row) => [row.key, row.revision])))
-    this.pending -= Number(result.changes)
+    this.pending -= consumeSessionSearchCandidatePage(this.db, receipts)
   }
   rowChanged(path: string): void {
     this.publications.rowChanged(path)
