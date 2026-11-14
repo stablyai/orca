@@ -12,7 +12,7 @@ import { setPluginHookRunner } from './plugin-hook-dispatch'
 const { resumeCheck } = vi.hoisted(() => ({
   resumeCheck: vi.fn<(command: string, ensureHost: () => Promise<void>) => Promise<void>>()
 }))
-vi.mock('../../ai-vault/structured-session-ownership', () => ({
+vi.mock('../../ai-vault/structured-sessions/structured-session-ownership', () => ({
   assertLegacyAiVaultResumeCommandAllowed: resumeCheck
 }))
 

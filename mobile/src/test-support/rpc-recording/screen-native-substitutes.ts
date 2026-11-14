@@ -81,8 +81,7 @@ export function reactNativeScreenMembers(): Record<string, unknown> {
       create: (sheet: unknown) => sheet,
       flatten: flattenStyle,
       hairlineWidth: 1,
-      absoluteFill: ABSOLUTE_FILL,
-      absoluteFillObject: ABSOLUTE_FILL
+      absoluteFill: ABSOLUTE_FILL
     }
   }
 }

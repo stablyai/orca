@@ -2,7 +2,7 @@ import type { SourceControlAiSettingsInput } from '../../../../shared/source-con
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitPushTarget, GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
-import type { GitRuntimeOptions } from '../../../git/git-runtime-options'
+import type { GitRuntimeOptions } from '../../../git/command-runner/git-runtime-options'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths/worktree-shared-directories'
 import {
   ExecutionHostNotDispatchableError,
@@ -11,9 +11,9 @@ import {
 import type {
   createLocalGitProvider,
   LocalGitProvider
-} from '../../../providers/local-git-provider'
+} from '../../../providers/git/local-provider'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import type { PullRequestLinkedIssueMeta } from '../../../source-control/pull-request-linked-issue'
 import { normalizeRuntimeRelativePath } from '../../files/paths/runtime-relative-paths'
 

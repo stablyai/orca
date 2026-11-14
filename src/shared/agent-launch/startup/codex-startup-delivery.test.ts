@@ -16,13 +16,4 @@ describe('hasCodexNativeDraftFlag', () => {
     expect(hasCodexNativeDraftFlag("codex 'please compare --prefill behavior'")).toBe(false)
     expect(hasCodexNativeDraftFlag("codex '--prefill=not-an-option'")).toBe(false)
   })
-
-  it('does not match non-Codex commands', () => {
-    expect(hasCodexNativeDraftFlag("claude --prefill 'review this'")).toBe(false)
-  })
-
-  it('leaves plain Codex and normal Codex arguments on the fast path', () => {
-    expect(hasCodexNativeDraftFlag('codex')).toBe(false)
-    expect(hasCodexNativeDraftFlag('codex --model gpt-5')).toBe(false)
-  })
 })

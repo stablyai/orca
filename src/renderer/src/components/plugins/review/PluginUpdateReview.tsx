@@ -1,5 +1,5 @@
 import { ArrowRight } from 'lucide-react'
-import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { reachablePluginCapabilities } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
 import { useTranslate } from '@/i18n/use-translate'

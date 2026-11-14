@@ -1,5 +1,8 @@
 import { aiVaultScopePathsForWslDistro } from '../../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
-import { recordSessionScanIssue, scanIssueTextFromError } from '../../../session-scan-issues'
+import {
+  recordSessionScanIssue,
+  scanIssueTextFromError
+} from '../../../parsing/session-scan-issues'
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
@@ -20,7 +23,10 @@ import {
 } from './session-scanner-opencode-wsl-client'
 import { findForeignSqliteReaderEntry } from '../../../../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
 import { runOpenCodeSqliteScanRequest } from '../sqlite/session-scanner-opencode-sqlite-scan-scope'
-import { noteAiVaultScanDatabases, openAiVaultScanSource } from '../../../ai-vault-scan-progress'
+import {
+  noteAiVaultScanDatabases,
+  openAiVaultScanSource
+} from '../../../scan-lifecycle/ai-vault-scan-progress'
 
 export function resolveOpenCodeSqliteWorkerEntryPath(
   runtimeDir = __dirname,

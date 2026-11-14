@@ -1,5 +1,5 @@
 import { getRepoDialableSshTargetId } from '../../../shared/execution-host'
-import type { GitRuntimeOptions } from '../../git/git-runtime-options'
+import type { GitRuntimeOptions } from '../../git/command-runner/git-runtime-options'
 import type { Repo } from '../../../shared/repo-types'
 import {
   readIssueCommandUnlessWslStopped,

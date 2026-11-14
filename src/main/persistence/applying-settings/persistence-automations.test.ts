@@ -120,6 +120,83 @@ describe('Store', () => {
     expect(store.updateAutomation(existing.id, { workspaceId: undefined }).workspaceId).toBe('wt1')
   })
 
+  it('applies a batch of updates, reporting a missing row without blocking the rest', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const create = (name: string) =>
+      store.createAutomation({
+        name,
+        prompt: 'Run checks',
+        agentId: 'claude',
+        projectId: 'r1',
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+      })
+    const [a, b, c] = [create('A'), create('B'), create('C')]
+
+    const results = store.updateAutomations([
+      { id: a.id, updates: { enabled: false } },
+      { id: 'missing', updates: { enabled: false } },
+      { id: b.id, updates: { enabled: false } }
+    ])
+
+    expect(results.map((result) => ('automation' in result ? 'ok' : 'error'))).toEqual([
+      'ok',
+      'error',
+      'ok'
+    ])
+    expect(store.listAutomations().map(({ name, enabled }) => [name, enabled])).toEqual([
+      ['A', false],
+      ['B', false],
+      ['C', true]
+    ])
+    expect(store.automationEnablementRevision(a.id)).toBe(1)
+    expect(store.automationEnablementRevision(c.id)).toBe(0)
+  })
+
+  it('writes the same record from a batch as from a single update', async () => {
+    vi.useFakeTimers({ now: new Date('2026-06-01T00:00:00Z'), toFake: ['Date'] })
+    try {
+      const store = await createStore()
+      store.addRepo(makeRepo())
+      const createdBy = { kind: 'plugin', pluginKey: 'p', name: 'P' } as const
+      const create = () =>
+        store.createAutomation({
+          name: 'Same',
+          prompt: 'Run checks',
+          agentId: 'claude',
+          projectId: 'r1',
+          workspaceMode: 'new_per_run',
+          timezone: 'UTC',
+          rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+          dtstart: new Date('2026-05-13T00:00:00Z').getTime(),
+          createdBy
+        })
+      const [single, batched] = [create(), create()]
+      vi.setSystemTime(new Date('2026-06-02T00:00:00Z'))
+      const updates = { enabled: false, createdBy: { ...createdBy, endedAt: 42 } }
+
+      const fromSingle = store.updateAutomation(single.id, updates)
+      const [fromBatch] = store.updateAutomations([{ id: batched.id, updates }])
+
+      const { id: _singleId, ...expected } = fromSingle
+      expect('automation' in fromBatch && fromBatch.automation).toEqual({
+        ...expected,
+        id: batched.id
+      })
+      const stored = store.listAutomations()
+      const { id: _storedSingleId, ...storedSingle } = stored[0]
+      expect(stored[1]).toEqual({ ...storedSingle, id: batched.id })
+      expect(store.automationEnablementRevision(batched.id)).toBe(
+        store.automationEnablementRevision(single.id)
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('stores its own contexts over a client-perspective create runContext', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))

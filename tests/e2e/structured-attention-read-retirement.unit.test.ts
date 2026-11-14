@@ -105,7 +105,7 @@ describe('Explicit desktop read acknowledgements', () => {
     useAppStore.setState({ activeWorktreeId: 'elsewhere' })
     render(bridge())
     await waitFor(() => expect(fixture.completion).toBeTypeOf('function'))
-    act(() => addPrompt('A'))
+    await act(() => addPrompt('A'))
     await waitFor(() => expect(transport.dispatch).toHaveBeenCalledTimes(1))
     act(() => {
       useAppStore.getState().acknowledgeAgents([SUBJECT], undefined, 'explicit')
@@ -148,7 +148,7 @@ describe('Explicit desktop read acknowledgements', () => {
           }
         ]
       ]),
-      readStatusState: () => projectStructuredAgentSessionStatusState(otherItems),
+      readStatusState: async () => projectStructuredAgentSessionStatusState(otherItems),
       readChildWork: () => undefined,
       now: () => 42
     })
@@ -179,7 +179,7 @@ describe('Explicit desktop read acknowledgements', () => {
     otherFeed.observe(OTHER)
     const screen = render(bridge(true))
     await waitFor(() => expect(fixture.completion).toBeTypeOf('function'))
-    act(() => addPrompt('A'))
+    await act(() => addPrompt('A'))
     await waitFor(() => expect(fixture.hydrate).toBeTypeOf('function'))
     await act(async () => fixture.hydrate?.())
     await waitFor(() => expect(dismissIds()).toHaveLength(1))
@@ -251,7 +251,7 @@ describe('Viewed structured session owner lifecycle', () => {
     useAppStore.setState({ activeWorktreeId: 'elsewhere' })
     const screen = render(tree({ shown: false, strict: options.strict }))
     await waitFor(() => expect(fixture.completion).toBeTypeOf('function'))
-    act(() => addPrompt('A'))
+    await act(() => addPrompt('A'))
     await settle()
     expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBe('agent-completion')
     return screen
@@ -287,7 +287,7 @@ describe('Viewed structured session owner lifecycle', () => {
     act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
     screen.rerender(tree({ shown: false }))
     await settle()
-    act(() => addPrompt('B'))
+    await act(() => addPrompt('B'))
     await settle()
     // An owner that already holds history resumes its journal stream instead of re-reading it.
     act(() => useAppStore.getState().setActiveWorktree(WORKSPACE))
@@ -360,7 +360,7 @@ describe('Accepted structured history read retirement', () => {
       )
     )
     await waitFor(() => expect(fixture.completion).toBeTypeOf('function'))
-    act(() => addPrompt('A'))
+    await act(() => addPrompt('A'))
     await act(async () => fixture.hydrate?.())
     await waitFor(() => expect(fixture.journal).toBeTypeOf('function'))
     act(() => useAppStore.getState().acknowledgeAgents([SUBJECT]))
@@ -371,7 +371,9 @@ describe('Accepted structured history read retirement', () => {
       publishView()
     })
     expect(dismissIds()).toHaveLength(1)
-    expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBe('agent-completion')
+    await waitFor(() =>
+      expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBe('agent-completion')
+    )
     act(() => useAppStore.setState({ activeWorktreeId: WORKSPACE }))
     screen.rerender(
       createElement(
@@ -477,6 +479,9 @@ describe('Accepted structured history read retirement', () => {
     const relay = new RuntimeMobileNotificationController()
     try {
       addPrompt('A')
+      await waitFor(() =>
+        expect(fixture.events.some((event) => event.type === 'notification')).toBe(true)
+      )
       const sent = fixture.events.find((event) => event.type === 'notification')
       if (!sent?.notificationId || sent.type !== 'notification') {
         throw new Error('prompt not sent')

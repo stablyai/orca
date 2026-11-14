@@ -1,5 +1,5 @@
 import { ORCA_BROWSER_CLI_COMMAND_KEYS } from '../../shared/orca-browser-cli-commands'
-import type { HandlerGroup } from '../handler-group-manifest'
+import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 export const BROWSER_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {

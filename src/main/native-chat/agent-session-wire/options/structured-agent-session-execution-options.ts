@@ -1,17 +1,13 @@
 import {
   readAgentSessionExecutionOptions,
   type AgentSessionExecutionOptions
-} from '../../../../shared/agent-session/options/agent-session-execution-options'
+} from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import {
   refuse,
   type AgentSessionWireRefusal
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
-import { latestStructuredChildOptionsSubmission } from './structured-agent-session-message-options'
-
 /** Capture send-specific choices or saved defaults once under the acceptance lane. */
 export function captureStructuredExecutionOptions(
   ctx: Pick<AgentSessionTurnContext, 'agents' | 'agent' | 'persistedOptions'>,
@@ -55,41 +51,22 @@ export function captureStructuredExecutionOptions(
 }
 
 /** Steering reuses acceptance facts, never the next-message picker or a later provider report. */
-export function captureStructuredSteerOptions(
+export async function captureStructuredSteerOptions(
   ctx: Pick<
     AgentSessionTurnContext,
-    'journal' | 'fence' | 'currentWork' | 'agents' | 'agent' | 'persistedOptions'
+    'readWork' | 'fence' | 'agents' | 'agent' | 'persistedOptions'
   >,
   supplied?: Readonly<Record<string, string>>,
   selection?: Readonly<Record<string, string>>
-): ReturnType<typeof captureStructuredExecutionOptions> {
-  const turn = ctx.journal.newestTurn()
-  const work = contextStructuredAgentSessionCurrentWork(ctx)
-  if (!work.working()) {
+): Promise<ReturnType<typeof captureStructuredExecutionOptions>> {
+  if (!ctx.readWork) {
+    throw new Error('current-work reader was not bound to this operation')
+  }
+  const active = await ctx.readWork({ kind: 'steer-options', fence: ctx.fence })
+  if (!active.working) {
     return captureStructuredExecutionOptions(ctx, supplied, selection)
   }
-  const candidates = ctx.journal
-    .submissions()
-    .filter(
-      (submission) =>
-        submission.handedOverAt !== undefined &&
-        (turn?.state === 'running' && work.activeTurnId() !== null
-          ? agentJournalSubmissionKey(submission.clientMessageId) === turn.userItemId
-          : work.owesSend(submission))
-    )
-  const onChild = ctx.journal
-    .submissions()
-    .filter((submission) => submission.fence === ctx.fence && submission.handedOverAt !== undefined)
-  const active =
-    candidates.length === 1
-      ? candidates[0]
-      : candidates.length === 0 &&
-          turn?.state === 'running' &&
-          work.activeTurnId() !== null &&
-          !onChild.some((submission) => submission.dispatchState === 'pending')
-        ? latestStructuredChildOptionsSubmission(onChild, ctx.fence)
-        : undefined
-  return active?.options
+  return active.options
     ? { options: { ...active.options } }
     : {
         refusal: refuse(

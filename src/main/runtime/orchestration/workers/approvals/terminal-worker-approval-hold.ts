@@ -3,10 +3,11 @@ import type { ClaudePermissionHookChannel } from '../../../../agent-hooks/server
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import type { WorkerTurnStopReportDeps } from '../turn-stops/worker-turn-stop-report'
-import type { ClaudeToolResult } from './claude-tool-result-close'
-import type {
-  WorkerApprovalOutcome,
-  WorkerApprovalPayload
+import type { ClaudeToolRecord } from './claude-tool-result-close'
+import {
+  closedApproval,
+  type WorkerApprovalOutcome,
+  type WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'notify'> & {
@@ -20,11 +21,11 @@ export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'no
   processIncarnation: (handle: string) => string | null
   /** The pane's screen once it has applied every PTY chunk; null while it lags or is unreadable. */
   readScreen: (paneKey: string) => readonly string[] | null
-  /** The tool_result Claude's transcript records for this tool call, once written. */
-  readToolResult: (call: {
+  /** The hook decision and tool_result Claude's transcript records for this tool call, once written. */
+  readToolRecord: (call: {
     transcriptPath: string
     toolUseId: string
-  }) => Promise<ClaudeToolResult | null>
+  }) => Promise<ClaudeToolRecord | null>
   now: () => number
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
 }
@@ -45,16 +46,64 @@ export type TerminalWorkerApprovalHold = {
   dialogSeen: boolean
   /** Its card already closed; the tool's result may still name how, without waking anyone. */
   refinable: boolean
-  /** Its PostToolUse arrived while an answer was in flight: the tool ran. */
+  /** Its PostToolUse or PostToolUseFailure arrived while an answer was in flight: the tool ran. */
   ranSeen: boolean
   expiresAt?: string
   /** The coordinator was told about it, so it is owed one closing line. */
   reported: boolean
+  /** How Orca closed it, once closed other than by its own answer. */
+  closedAs?: TerminalWorkerApprovalCloseHow | null
   timer: { cancel: () => void } | null
 }
 
 export type TerminalWorkerApprovalCloseHow = Pick<WorkerApprovalOutcome, 'by' | 'decision'>
 
+// Claude's words for a check no hook may approve (2.1.322 strings: "allow rules, hooks and plugins
+// cannot approve it", "hooks cannot approve …"); its dialog shows them as the warning.
+const HOOKS_CANNOT_APPROVE = /\bhooks\b[^.]*\bcannot (?:approve|grant)\b/i
+
+/** Claude lets only a person at its terminal allow this prompt. */
+export function holdIsPersonOnly(hold: Pick<TerminalWorkerApprovalHold, 'summary'>): boolean {
+  return HOOKS_CANNOT_APPROVE.test(hold.summary.reason ?? '')
+}
+
+/** An allow Claude will not take: its check is one only a person at the terminal may approve, or it
+ *  dropped Orca's allow and still asks. */
+export function droppedAllowRefusal(
+  hold: TerminalWorkerApprovalHold,
+  input: { approvalId: string; decision: 'allow' | 'deny' }
+): TerminalWorkerApprovalAnswer | null {
+  if (
+    input.decision !== 'allow' ||
+    (hold.closedAs?.by !== 'terminal-only' && !holdIsPersonOnly(hold))
+  ) {
+    return null
+  }
+  return {
+    ok: false,
+    code: 'approval_requires_person',
+    message: `Claude lets only a person approve ${input.approvalId}, in the worker's terminal, so it stays with the user.`
+  }
+}
+
 export type TerminalWorkerApprovalAnswer =
   | { ok: true; approval: WorkerApprovalPayload }
-  | { ok: false; code: 'approval_not_open'; message: string }
+  | { ok: false; code: 'approval_not_open' | 'approval_requires_person'; message: string }
+
+/** The approval as its escalation and closing message carry it. */
+export function holdPayload(
+  hold: TerminalWorkerApprovalHold,
+  outcome?: WorkerApprovalOutcome
+): WorkerApprovalPayload {
+  const open: WorkerApprovalPayload = {
+    v: 1,
+    approvalId: hold.approvalId,
+    state: 'open',
+    worker: { handle: hold.handle, dispatchId: hold.dispatch.id, taskId: hold.dispatch.task_id },
+    summary: hold.summary,
+    allowedActions: ['allow', 'deny'],
+    ...(holdIsPersonOnly(hold) ? { personOnly: true } : {}),
+    ...(hold.expiresAt ? { expiresAt: hold.expiresAt } : {})
+  }
+  return outcome ? closedApproval(open, outcome) : open
+}

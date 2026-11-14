@@ -3,18 +3,18 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import {
   hasClosedTerminalTabRecord,
   recordClosedTerminalTabTombstone
-} from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+} from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { TerminalSurfaceCloseTarget } from '../../../../shared/workspace-layout/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import {
   closeTerminalTabInWorkspaceSession,
   type WorkspaceSessionTerminalTabCloseResult
 } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
-import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import type { DurableProfileStateMutation } from '../../../persistence/loading-store/store-runtime-state'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {

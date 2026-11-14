@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
-import type { NativeChatReplyReveals } from '../../../../../shared/native-chat/transcript/native-chat-reply-reveals'
+import type { NativeChatReplyReveals } from '../../../../../shared/native-chat/transcript/row-content/native-chat-reply-reveals'
 
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
 

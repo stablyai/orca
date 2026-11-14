@@ -36,7 +36,7 @@ import {
   type SessionFragment
 } from './orcad-source-session-copy-resolution'
 import { withoutOrcadMigrationDrafts } from '../worktrees/orcad-source-draft-rename'
-import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../../shared/workspace-scope'
 import { orcadMigrationSessionPartitions } from './orcad-source-session-partitions'

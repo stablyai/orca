@@ -23,7 +23,7 @@ import {
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { WslMoveRequest } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { ColdRestoreInfo } from '../../../daemon/history/restoration/terminal-history-cold-restore-info'
 import type { TerminalCheckpointFile } from '../../../daemon/protocol/daemon-checkpoint-file'
 import type { OrcadMigrationBlobSource } from '../../../managed-server/migration/transfers/orcad-migration-blob-coordinator'

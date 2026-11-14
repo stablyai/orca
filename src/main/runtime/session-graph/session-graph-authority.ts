@@ -123,6 +123,20 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     }
   }
 
+  /** Null when no window is attached: there is no renderer to fence. A booting or reloading one throws. */
+  protected captureRendererGraphFence(): number | null {
+    return this.authoritativeWindowId === null ? null : this.captureReadyGraphEpoch()
+  }
+
+  protected assertRendererGraphFence(fence: number | null): void {
+    if (fence !== null) {
+      this.assertStableReadyGraph(fence)
+    } else if (this.authoritativeWindowId !== null) {
+      // A window attached mid-operation; its renderer owns the graph again.
+      throw new Error('runtime_unavailable')
+    }
+  }
+
   protected resolveFolderWorkspaceConnectionId(workspace: FolderWorkspace): string | null {
     const repos = this.store?.getRepos() ?? []
     const projectGroups = this.store?.getProjectGroups?.() ?? []
@@ -238,6 +252,29 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
 
   /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */
   markClientHostedPagesReconciled(pairedDeviceId: string): void {
-    this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
+    const held = this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
+    if (!held?.size) {
+      return
+    }
+    const candidates = this.selectMobileSessionTabsListeners(undefined, pairedDeviceId)
+    if (candidates.length === 0) {
+      return
+    }
+    const deliver = this.createMobileSessionTabsDelivery()
+    for (const worktree of held) {
+      const selected = this.selectMobileSessionTabsListeners(worktree, pairedDeviceId, candidates)
+      if (selected.length === 0) {
+        continue
+      }
+      deliver(
+        this.getMobileSessionTabsForWorktree(worktree, pairedDeviceId, {
+          includeAgentSenders: false
+        }),
+        ++this.mobileSessionTabsChangeSequence,
+        pairedDeviceId,
+        selected,
+        'reconciliation'
+      )
+    }
   }
 }

@@ -3,7 +3,7 @@ import { fixture } from './crew-read-model.test-fixture'
 import { buildCrewSnapshot } from './crew-party-snapshot'
 import { approvalReportId } from '../workers/approvals/worker-approval-report'
 
-it("puts each approval's newest report on its worker's row, drops stale receipts, and ignores rows Orca did not write", () => {
+it("puts each approval's newest report on its worker's row, keeps old receipts, and ignores rows Orca did not write", () => {
   const { db, deps, run, assign } = fixture()
   const dispatch = assign('term_worker')
   const send = (approvalId: string, state: 'open' | 'answered', own = true) =>
@@ -43,7 +43,9 @@ it("puts each approval's newest report on its worker's row, drops stale receipts
   send('apr_open', 'answered', false)
 
   const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
+  // Receipts are the chat's history: one closed hours ago stays.
   expect(row.approvals?.map(({ approval }) => [approval.approvalId, approval.state])).toEqual([
+    ['apr_old', 'answered'],
     ['apr_answered', 'answered'],
     ['apr_open', 'open']
   ])
@@ -81,5 +83,43 @@ it('keeps showing an open approval behind more closed ones than the row bound', 
     .run('apr_still_open')
 
   const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
-  expect(row.approvals?.map(({ approval }) => approval.approvalId)).toEqual(['apr_still_open'])
+  const ids = row.approvals?.map(({ approval }) => approval.approvalId)
+  expect(ids?.[0]).toBe('apr_still_open')
+  expect(ids?.at(-1)).toBe('apr_149')
+})
+
+it('closes an open approval once its Dispatch stops running, at the time it ended', () => {
+  const { db, deps, run, assign } = fixture()
+  const dispatch = assign('term_worker')
+  db.insertMessage({
+    id: approvalReportId(dispatch.id, 'apr_open', 'open'),
+    from: 'term_worker',
+    to: `run:${run.id}`,
+    subject: 'apr_open',
+    type: 'escalation',
+    runId: run.id,
+    payload: JSON.stringify({
+      approval: {
+        v: 1,
+        approvalId: 'apr_open',
+        state: 'open',
+        worker: { handle: 'term_worker', dispatchId: dispatch.id, taskId: dispatch.task_id },
+        summary: { title: 'Allow Bash?', detail: null, reason: null },
+        allowedActions: ['allow', 'deny'],
+        expiresAt: '2099-01-01T00:00:00.000Z'
+      }
+    })
+  })
+  db.completeDispatch(dispatch.id)
+
+  const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
+  expect(row.approvals?.map(({ approval }) => approval)).toEqual([
+    expect.objectContaining({
+      approvalId: 'apr_open',
+      state: 'answered',
+      allowedActions: [],
+      outcome: { by: 'worker-ended', decision: null, reason: null, reasonDelivered: false }
+    })
+  ])
+  expect(row.approvals?.[0].approval.expiresAt).toBeUndefined()
 })

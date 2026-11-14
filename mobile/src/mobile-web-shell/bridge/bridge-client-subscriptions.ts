@@ -1,4 +1,4 @@
-import type { BrowserScreencastFrame } from '../../browser/browser-screencast-protocol'
+import type { BrowserScreencastFrame } from '../../browser/screencast/browser-screencast-protocol'
 import type { RpcEnvelopeFields } from '../../transport/rpc/rpc-envelope-fields'
 import {
   BRIDGE_PROTOCOL_VERSION,

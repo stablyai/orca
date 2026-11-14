@@ -1,4 +1,4 @@
-import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser-observation-params'
+import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import { BrowserError } from '../../../browser/browser-error'
 import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'

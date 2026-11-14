@@ -6,7 +6,7 @@ import { useStructuredAgentSessionSendOptions } from './delivery/use-structured-
 import { useStructuredAgentSessionSends } from './delivery/use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './writes/use-structured-agent-session-command-write'
 import { structuredAgentSessionQueueControls } from '../../queue/structured-agent-session-queue-request'
-import { nativeChatQueueFollowUps } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/agent-session/launch/structured-agent-session-legacy-launch-stop'
 import {
@@ -37,8 +37,8 @@ import { useStructuredAgentSessionRailOutline } from '../../viewport/rail/use-st
 import { useStructuredAgentSessionQueuedMessages } from '../../queue/use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './writes/structured-conversation-command-send'
 import { pendingSendsOutsideQueuedCards } from '../../queue/structured-agent-session-sending-queued-cards'
-import { hostStatesTurnScopes } from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
-import { withNativeChatCutTurnNotices } from '../../../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
+import { hostStatesTurnScopes } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
+import { withNativeChatCutTurnNotices } from '../../../../../../shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from '../../conversation/projection/use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from '../../messages/actions/use-structured-agent-session-rewind'
 

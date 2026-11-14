@@ -10,12 +10,12 @@ import {
 } from 'lucide-react-native'
 import { hasTerminalDirectionPadSpace } from '../layout/side-rail-strip'
 import { useSideRailStrip, useSideRailDirectionPadAvailable } from '../layout/side-rail'
-import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../terminal/terminal-key-definitions'
+import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../terminal/key-input/terminal-key-definitions'
 import {
   createTerminalAccessoryRepeatController,
   TERMINAL_ACCESSORY_REPEAT_DELAY_MS,
   TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS
-} from '../terminal/terminal-accessory-repeat'
+} from '../terminal/key-input/terminal-accessory-repeat'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'

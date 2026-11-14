@@ -24,6 +24,7 @@ import {
   routePathnameFromKey
 } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
+import { reactNativeSvgWebPlugin } from './react-native-svg-web-plugin.mjs'
 import {
   ROUTE_ENTRY_NAMESPACE,
   entryStaticClosure,
@@ -235,6 +236,9 @@ export const lucideBarrelPlugin = {
   }
 }
 
+// Render checks bundle components on their own; share the page's module shims so they resolve alike.
+export const mobileWebRenderCheckPlugins = [lucideBarrelPlugin, reactNativeSvgWebPlugin]
+
 // react-native-web's own assignment, matched whole so an upgrade that moves it fails the build.
 const RNW_HAIRLINE_ASSIGNMENT = 'StyleSheet.hairlineWidth = 1;'
 // Round native hairline upward to 1/64 CSS px: WebKit floors exact 1/3 to 21/64 and paints nothing at 3×; 22/64 minimizes spill across rows.
@@ -308,6 +312,7 @@ export function mobileWebAppBuildOptions(
         anchoredLazyModules
       ),
       lucideBarrelPlugin,
+      reactNativeSvgWebPlugin,
       hairlineDevicePixelPlugin
     ],
     resolveExtensions: [

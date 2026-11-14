@@ -42,7 +42,7 @@ vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (import
 
 // Keep the actual shell, pending chat and creation flow; unrelated chrome and heavy pane contents are boundaries.
 vi.mock('../components/Sidebar', () => ({ default: () => null }))
-vi.mock('../components/right-sidebar', () => ({
+vi.mock('../components/right-sidebar/RightSidebar', () => ({
   default: () => <aside aria-label="Workspace tools" />
 }))
 vi.mock('./TitlebarLeftControls', () => ({ TitlebarLeftControls: () => null }))

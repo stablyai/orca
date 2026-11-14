@@ -3,7 +3,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-sessi
 import { serializeRemoteRuntimePayload } from '../../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { readAgentSessionHistory } from '../agent-session-history-page'
 
-import { fixture, body, item } from './agent-session-history-contract-test-fixture'
+import { fixture, body, item } from './agent-session-history-contract.test-fixture'
 
 describe('history page byte ceiling', () => {
   // Several legal messages exceed the 4 MiB outbound cap.
@@ -18,7 +18,7 @@ describe('history page byte ceiling', () => {
     }
   }
 
-  function pageOf(result: ReturnType<typeof readAgentSessionHistory>) {
+  function pageOf(result: Awaited<ReturnType<typeof readAgentSessionHistory>>) {
     if (!result.ok) {
       throw new Error(`expected a page, got reset ${result.reset}`)
     }
@@ -30,7 +30,7 @@ describe('history page byte ceiling', () => {
     await appendLargeItems(20)
 
     const tail = pageOf(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'tail',
         limit: 40
@@ -47,7 +47,7 @@ describe('history page byte ceiling', () => {
       guard += 1
       expect(guard).toBeLessThan(30)
       const page = pageOf(
-        readAgentSessionHistory(fixture.journal, {
+        await readAgentSessionHistory(fixture.journal, {
           sessionId: 'session-1',
           direction: 'before',
           cursor,
@@ -63,11 +63,11 @@ describe('history page byte ceiling', () => {
   })
 
   it('bounds a forward catch-up page by bytes and keeps replaying to the head', async () => {
-    const start = { epoch: fixture.journal.epoch, sequence: 0 }
+    const start = { epoch: fixture.journal.cursor().epoch, sequence: 0 }
     await appendLargeItems(20)
 
     const first = pageOf(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'after',
         cursor: start,
@@ -85,7 +85,7 @@ describe('history page byte ceiling', () => {
       guard += 1
       expect(guard).toBeLessThan(30)
       const page = pageOf(
-        readAgentSessionHistory(fixture.journal, {
+        await readAgentSessionHistory(fixture.journal, {
           sessionId: 'session-1',
           direction: 'after',
           cursor,
@@ -107,7 +107,7 @@ describe('history page byte ceiling', () => {
     })
 
     const tail = pageOf(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'tail',
         limit: 40

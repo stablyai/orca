@@ -130,8 +130,12 @@ export abstract class AgentHookServerState {
   protected endpointFileWritten = false
   protected state: HookListenerState = createHookListenerState({
     nextListingOrder: this.nextStatusListingOrder,
-    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey)
+    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey),
+    ...this.legacyRowHooks
   })
+  protected get legacyRowHooks(): Parameters<typeof createHookListenerState>[0] {
+    return {}
+  }
   protected onTransportInterference: ((report: HookTransportInterferenceReport) => void) | null =
     null
   protected transportInterference = createHookTransportInterferenceTracker(

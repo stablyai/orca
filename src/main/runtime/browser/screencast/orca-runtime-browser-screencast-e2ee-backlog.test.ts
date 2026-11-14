@@ -6,7 +6,7 @@ import {
   createSinglePageBrowserCommandsHost,
   createStreamedGuest
 } from '../client-pages/single-page-browser-commands-host-test-double'
-import { E2EEChannel } from '../../rpc/e2ee-channel'
+import { E2EEChannel } from '../../rpc/mobile/e2ee/e2ee-channel'
 import {
   decrypt,
   decryptBytes,
@@ -14,7 +14,7 @@ import {
   encrypt,
   generateKeyPair
 } from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
-import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
+import type { RpcBinarySender } from '../../rpc/transports/rpc-binary-sender'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({
   webContentsFromId: vi.fn(),

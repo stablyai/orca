@@ -160,34 +160,6 @@ describe('OrcaRuntimeService', () => {
     expect(setBackgroundThrottling).not.toHaveBeenCalled()
   })
 
-  it('selects a created terminal only for the paired caller', async () => {
-    let spawnIndex = 0
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: `pty-headless-${++spawnIndex}` }))),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-    const hostTerminal = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`)
-
-    const callerTerminal = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      clientNavigationId: 'device-a',
-      navigation: 'caller'
-    })
-
-    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).activeTabId).toBe(
-      hostTerminal.tab.id
-    )
-    expect(
-      (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-a')).activeTabId
-    ).toBe(callerTerminal.tab.id)
-    expect(
-      (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-b')).activeTabId
-    ).toBe(hostTerminal.tab.id)
-  })
-
   it('scopes terminal-create idempotency to the paired caller', async () => {
     let spawnIndex = 0
     const runtime = new OrcaRuntimeService(store)

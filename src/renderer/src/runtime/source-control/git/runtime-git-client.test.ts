@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getRuntimeGitStatus } from './runtime-git-status-client'
+import {
+  getRuntimeGitStatus,
+  getRuntimeWorktreeAtRiskLocalFiles
+} from './runtime-git-status-client'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -9,6 +12,8 @@ import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTest
 const gitStatus = vi.fn()
 const gitCancelStatus = vi.fn()
 const gitCheckIgnored = vi.fn()
+const gitAtRiskLocalFiles = vi.fn()
+const gitCancelAtRiskLocalFiles = vi.fn()
 const gitSubmoduleStatus = vi.fn()
 const gitDiff = vi.fn()
 const gitBranchCompare = vi.fn()
@@ -34,6 +39,9 @@ beforeEach(() => {
   gitCancelStatus.mockReset()
   gitCancelStatus.mockResolvedValue(undefined)
   gitCheckIgnored.mockReset()
+  gitAtRiskLocalFiles.mockReset()
+  gitCancelAtRiskLocalFiles.mockReset()
+  gitCancelAtRiskLocalFiles.mockResolvedValue(undefined)
   gitSubmoduleStatus.mockReset()
   gitDiff.mockReset()
   gitBranchCompare.mockReset()
@@ -61,6 +69,8 @@ beforeEach(() => {
         status: gitStatus,
         cancelStatus: gitCancelStatus,
         checkIgnored: gitCheckIgnored,
+        atRiskLocalFiles: gitAtRiskLocalFiles,
+        cancelAtRiskLocalFiles: gitCancelAtRiskLocalFiles,
         submoduleStatus: gitSubmoduleStatus,
         diff: gitDiff,
         branchCompare: gitBranchCompare,
@@ -107,5 +117,44 @@ describe('runtime git client', () => {
     resolveStatus({ entries: [], conflictOperation: 'unknown' })
     // Best-effort main cancellation may still resolve status; aborted calls must reject rather than publish fresh results.
     await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('cancels a local at-risk file scan in main when its signal aborts', async () => {
+    const controller = new AbortController()
+    let resolveScan!: (value: { count: number; samplePaths: string[]; complete: boolean }) => void
+    gitAtRiskLocalFiles.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveScan = resolve
+        })
+    )
+
+    const request = getRuntimeWorktreeAtRiskLocalFiles(
+      { target: { kind: 'local' as const }, worktreeId: 'wt-1', worktreePath: '/repo-feature' },
+      controller.signal
+    )
+    await vi.waitFor(() => expect(gitAtRiskLocalFiles).toHaveBeenCalled())
+    const requestToken = gitAtRiskLocalFiles.mock.calls[0]?.[0]?.requestToken
+    expect(requestToken).toEqual(expect.any(String))
+    expect(gitCancelAtRiskLocalFiles).not.toHaveBeenCalled()
+
+    controller.abort()
+
+    expect(gitCancelAtRiskLocalFiles).toHaveBeenCalledWith({ requestToken })
+    resolveScan({ count: 1, samplePaths: ['.env'], complete: true })
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('does not start a local at-risk file scan for an already aborted signal', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      getRuntimeWorktreeAtRiskLocalFiles(
+        { target: { kind: 'local' as const }, worktreeId: 'wt-1', worktreePath: '/repo-feature' },
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(gitAtRiskLocalFiles).not.toHaveBeenCalled()
   })
 })

@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../../../shared/file-import/native-file-drop'
 import { formatNativeChatFileReference } from '../../../../../../shared/agent-image-paste'
 import type { NativeChatComposerInput } from '../../composer/editor/native-chat-composer-input'
-import { isImageDropPath } from '../../../../../../shared/image-path-paste'
+import { isAgentInlineImagePath } from '../../../../../../shared/agent-inline-image-types'
 import { nativeChatAttachmentOwnerChangedNotice } from './native-chat-attachment-notices'
 import {
   nativeChatWorkspaceAttachmentMismatchNotice,
@@ -150,7 +150,9 @@ export function useNativeChatResolvedPathAttachments({
               batch.operation.apply(intoScope ? null : (paths) => filePaths.push(...paths)) ||
               attached
           } else {
-            const images = attachable.filter(({ path }) => acceptsImages && isImageDropPath(path))
+            const images = attachable.filter(
+              ({ path }) => acceptsImages && isAgentInlineImagePath(path)
+            )
             appendImageAttachments(images.map(({ path, connectionId }) => ({ path, connectionId })))
             filePaths.push(
               ...attachable.filter((path) => !images.includes(path)).map(({ path }) => path)

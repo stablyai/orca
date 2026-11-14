@@ -30,7 +30,7 @@ import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-ses
 import type { SessionSnapshotOperations } from './session-snapshot-operations'
 import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
 import { scheduleSave } from '../profile-writing/write-scheduling'
-import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-row-order'
+import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,

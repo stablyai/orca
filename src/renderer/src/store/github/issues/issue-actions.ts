@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { IssueInfo } from '../../../../../shared/github/pull-request-types'
+import type { IssueInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { sourceScopedRepoCacheKey } from '../cache/cache-identity'

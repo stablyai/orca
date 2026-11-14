@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View, type HostInstance } from 'react-native'
 import { Bot, ListFilter } from 'lucide-react-native'
 import { colors, pressedStyle, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -18,7 +18,7 @@ import { useMobileLaunchAgentLabel } from '../../session/agent-launch/use-mobile
 import { useHostProtocolGates } from '../host-protocol-gates-context'
 import { AgentLaunchNotice } from '../AgentLaunchNotice'
 import { useNow } from '../../hooks/use-now'
-import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
+import { useKeyboardOcclusion } from '../../platform/keyboard/keyboard-occlusion'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { NavBarButton } from '../nav-bar/NavBarButton'
 import { PullDownMenu } from '../nav-bar/PullDownMenu'
@@ -49,7 +49,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
   )
   const [hideBots, setHideBots] = useState(false)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
-  const filterRef = useRef<View>(null)
+  const filterRef = useRef<HostInstance>(null)
   const [showResolved, setShowResolved] = useState(false)
   const [resolvedLimit, setResolvedLimit] = useState(COMMENT_PAGE)
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
@@ -289,6 +289,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
                     error={askNotice.error}
                     warning={askNotice.warning}
                     undeliveredPrompt={askNotice.undeliveredPrompt}
+                    opens={askNotice.opens}
                     errorStyle={styles.noticeError}
                   />
                 </View>

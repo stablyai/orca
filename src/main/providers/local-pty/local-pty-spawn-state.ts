@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../pty-spawn-result'
+import type { PtySpawnResult } from '../pty/spawn-result'
 import {
   pendingLocalPtySpawns,
   ptyIncarnations,

@@ -171,6 +171,10 @@ export async function listDetectedWorktreesForCapturedRepo(
         return null
       }
     }
+    // The owner may have retired these rows' route during the overlay and hygiene awaits.
+    if (scan.authorityCurrent && !scan.authorityCurrent()) {
+      return abortedResult() ?? null
+    }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     releaseWslStoppedWorktreeRescan(repo.id)
     // Rows describe scan-start generation, which clients order against applied create/remove replies.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/checks/check-types'
 import {
   beginGitHubChecksTabDetails,
   createGitHubChecksTabState,

@@ -1,3 +1,5 @@
+import { testJournalWorkReader } from '../../../agent-session-journal/journal-current-work.test-fixture'
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,9 +10,9 @@ import { createTrackedJournalOpener } from '../../../agent-session-journal/store
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { performThreadGoalChange } from '../structured-agent-session-thread-goal'
 import type { AgentSessionTurnContext } from '../structured-agent-session-turns'
-import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -51,6 +53,7 @@ function context(
     logger: createStructuredAgentSessionLogger(),
     sessionId: 'session-1',
     journal,
+    readWork: testJournalWorkReader(journal, 1),
     fence: 1,
     adapter,
     agents: claudeAndCodexAgents(adapter),
@@ -82,7 +85,7 @@ describe('performThreadGoalChange', () => {
         message: 'goals feature is disabled'
       }
     })
-    expect(journal.snapshot().items).toEqual([])
+    expect(await readTestJournalItems(journal)).toEqual([])
   })
 
   it('retains the objective when a lost reply leaves application unknown', async () => {
@@ -99,7 +102,7 @@ describe('performThreadGoalChange', () => {
         change: { kind: 'set', objective: 'Ship the parser' }
       })
     ).rejects.toThrow('connection closed')
-    expect(journal.snapshot().items.map((item) => item.body)).toEqual([
+    expect((await readTestJournalItems(journal)).map((item) => item.body)).toEqual([
       expect.objectContaining({ sentAs: 'goal' })
     ])
   })

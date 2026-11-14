@@ -20,7 +20,7 @@ import { REMOTE_NODE_RUNTIME_READY } from '../../../../managed-server/install/or
 import { getRemoteHostPlatform } from '../../../../ssh/remote-host/ssh-remote-platform'
 import { runWslProcess, type WslSpec } from '../../../../wsl/execution/wsl-runner'
 import { describeWslProcessFailure } from '../../../../wsl/execution/wsl-process-failure'
-import { admitWslTranscriptPath } from '../../../../native-chat/wsl-transcript-running-admission'
+import { admitWslTranscriptPath } from '../../../../native-chat/transcript-filesystem/wsl-transcript-running-admission'
 import { AI_VAULT_SCAN_ISSUE_COPY } from '../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 

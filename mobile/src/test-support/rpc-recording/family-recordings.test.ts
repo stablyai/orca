@@ -34,15 +34,11 @@ async function certify(id: string, scenarios: RecordingScenario[]) {
     : expectGoldenFile(directory, id, golden))
 }
 
-describe('family reply partitions and owned schedules', () => {
+describe('owned family schedules', () => {
   const goldens = familyGoldens(input.scenarios)
   for (const golden of goldens) {
-    it(
-      golden.title,
-      async () => {
-        await certify(golden.id, golden.scenarios())
-      },
-      golden.timeoutMs
-    )
+    it(golden.title, async () => {
+      await certify(golden.id, golden.scenarios())
+    })
   }
 })

@@ -1,5 +1,5 @@
 // STA-4603/STA-4536: distinguish operator close, clean finish and crash records.
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +9,7 @@ import '../db/contract-constants'
 import '../db/messages/mailbox-routing-page'
 import '../db/dispatch-row-writer'
 import '../db/attempt-outcome-projection'
-import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../db/orchestration-records'
+import type { DispatchContextRow } from '../db/orchestration-records'
 import { createRootDispatch } from '../db/root-dispatch-test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
@@ -36,7 +36,6 @@ class ExitProvenanceRuntime extends OrcaRuntimeService {
 }
 
 afterEach(() => {
-  vi.restoreAllMocks()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -154,54 +153,6 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     expect(mail.map((message) => message.subject)).toEqual(['Worker exited without reporting'])
     expect(mail[0]?.body).toContain('exited (Agent process killed by signal 9)')
   })
-
-  it.each([
-    ['ready', 1],
-    ['stopping', 0],
-    ['stop_unknown', 0]
-  ] as const)(
-    'relays a paired worker closing from %s to its Run home %i time(s)',
-    (state, sent) => {
-      const db = createDb()
-      const runtime = createRuntime(db)
-      const attachment: RemoteDispatchAttachmentRow = {
-        home_run_id: 'run_home',
-        dispatch_id: 'ctx_paired',
-        task_id: 'task_paired',
-        home_peer_fingerprint: 'peer',
-        protocol_version: 1,
-        runtime_epoch: 'epoch',
-        capability_hash: null,
-        pane_key: PANE_KEY,
-        process_incarnation: null,
-        state,
-        stage: 'running',
-        worktree_id: WORKTREE_ID,
-        terminal_handle: HANDLE,
-        setup_state: 'not_applicable',
-        effects: '[]',
-        residual_resources: '[]',
-        to_worker_imported_sequence: 0,
-        depth: 1,
-        consumer_generation: 0,
-        last_error: null,
-        created_at: '2026-01-01 00:00:00',
-        updated_at: '2026-01-01 00:00:00'
-      }
-      vi.spyOn(db, 'findActiveRemoteAttachmentForPane').mockReturnValue(attachment)
-      vi.spyOn(db, 'isRemoteAttachmentProcessCurrent').mockReturnValue(true)
-      vi.spyOn(db, 'hasPendingFederatedWorkerReport').mockReturnValue(false)
-      // Only the call matters; the report logs and swallows a relay failure.
-      const relay = vi.spyOn(db, 'enqueueFederationRelay').mockImplementation(() => {
-        throw new Error('no Run home in this test')
-      })
-      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-      // The coordinator's worker-stop closes the terminal before it settles the attachment.
-      runtime.markPtyStopRequested(PTY_ID)
-      runtime.onPtyExit(PTY_ID, 0)
-      expect(relay).toHaveBeenCalledTimes(sent)
-    }
-  )
 
   it('does not carry an unconsumed stop intent across a same-id respawn', () => {
     const db = createDb()

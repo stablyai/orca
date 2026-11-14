@@ -1,4 +1,5 @@
 import type { AgentKind } from '../../../shared/telemetry-events'
+import { publishedOrcaSessionId } from '../identity/pane-agent-identities'
 import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
@@ -75,6 +76,9 @@ export function toAgentStatusIpcPayload(
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
     ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
     ...(entry.programStatus ? { programStatus: entry.programStatus } : {}),
+    ...(publishedOrcaSessionId(entry.agentIdentity) !== undefined
+      ? { orcaSessionId: publishedOrcaSessionId(entry.agentIdentity) }
+      : {}),
     ...entry.payload
   }
 }

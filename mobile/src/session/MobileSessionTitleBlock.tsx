@@ -1,13 +1,13 @@
 import { Fragment, useCallback } from 'react'
 import { DetailCardFocusBoundary } from '../components/detail-card-host'
-import { Platform, Pressable, StyleSheet, Text, type View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, type HostInstance } from 'react-native'
 import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { StatusDot } from '../components/StatusDot'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { styles } from './mobile-session-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { pressedStyle } from '../theme/mobile-theme'
-import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
+import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
 
 /** The session's title and status line. A tap opens a card with the full name, where it lives
  *  and its host, as desktop's tab card does, because a sideways phone cuts the title short. */
@@ -35,7 +35,7 @@ export function MobileSessionTitleBlock({
   const titleKeepsKeyboard = useKeyboardPersistingTaps('always')
   const { openerRef } = details
   const attachOpener = useCallback(
-    (view: View | null) => {
+    (view: HostInstance | null) => {
       openerRef.current = view
       titleKeepsKeyboard(view)
     },

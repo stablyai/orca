@@ -8,7 +8,7 @@ import {
   hostTestMessage,
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION
-} from './host/testing/structured-agent-session-host-test-data'
+} from './host/testing/structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { openRigTurnFor } from './host/testing/structured-agent-session-queued-rig-turn.test-fixture'
 
@@ -20,9 +20,15 @@ afterEach(() => rig.dispose())
 
 it('steers the complete draft once with running choices while future picks and queued snapshots stay intact', async () => {
   const runningChoices = { model: 'model-a', effort: 'high', serviceTier: 'default' }
-  rig.host.deps.adapter.readAppliedInputOptions = ({ next }) => ({
-    active: runningChoices,
-    next: next ?? {}
+  rig.host.deps.adapter.captureMessageSteeringInputs = () => ({
+    kind: 'codex',
+    compiler: {
+      active: runningChoices,
+      activeInput: runningChoices,
+      defaults: runningChoices,
+      models: [],
+      listedServiceTiers: []
+    }
   })
   const first = rig.send('running', undefined, { carried: runningChoices })
   await first.result
@@ -59,7 +65,7 @@ it('steers the complete draft once with running choices while future picks and q
   expect(rig.dispatch.mock.calls[1]?.[0]).toMatchObject({ body, executionOptions: runningChoices })
   expect((await rig.handoff(operationId))?.options).toEqual(runningChoices)
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
-  expect(journal?.queuedMessages.get(queued.value.queued.messageId)?.options).toMatchObject(
+  expect((await journal?.queuedMessages.get(queued.value.queued.messageId))?.options).toMatchObject(
     queuedChoices
   )
   expect(rig.store.getRecord(SESSION)?.options).toMatchObject(futureChoices)
@@ -91,16 +97,22 @@ it.each(['options', 'selection'] as const)(
 
 it('reuses the opening submission choices before the provider publishes its running turn', async () => {
   const choices = { model: 'model-a', effort: 'high', serviceTier: 'default' }
-  rig.host.deps.adapter.readAppliedInputOptions = ({ next }) => ({
-    active: choices,
-    next: next ?? {}
+  rig.host.deps.adapter.captureMessageSteeringInputs = () => ({
+    kind: 'codex',
+    compiler: {
+      active: choices,
+      activeInput: choices,
+      defaults: choices,
+      models: [],
+      listedServiceTiers: []
+    }
   })
   const first = rig.send('opening', undefined, { carried: choices })
   expect(await first.result).toMatchObject({ ok: true })
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledOnce())
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
-  expect(journal?.newestTurn()).toBeNull()
-  expect(rig.host.currentWork(SESSION)?.working()).toBe(true)
+  expect(await journal?.reads.newestTurn()).toBeNull()
+  expect((await rig.host.currentWork(SESSION))?.working()).toBe(true)
   const fields = {
     body: hostTestMessage('clarify the opening turn'),
     steer: true as const,
@@ -114,7 +126,7 @@ it('reuses the opening submission choices before the provider publishes its runn
   }
   expect(await rig.host.send(QUEUED_RIG_CALLER, params)).toMatchObject({ ok: true })
   const queuedJournal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
-  expect(queuedJournal?.queuedMessages.get(operation)?.options).toEqual(choices)
+  expect((await queuedJournal?.queuedMessages.get(operation))?.options).toEqual(choices)
   await rig.settleAccepted(first.id, 'opening')
   await openRigTurnFor(rig, first.id)
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))

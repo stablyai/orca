@@ -3,7 +3,7 @@ import type { StructuredAgentSessionSendControl } from '../../../../../../../sha
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionSendSelection
-} from '../../../../../../../shared/agent-session/options/structured-agent-session-option-view'
+} from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import { getStructuredAgentSessionLaunchSelection } from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import type { StructuredAgentSessionLaunchView } from '../../../host-access/use-native-chat-provisional-launch'
 import type { useStructuredAgentSessionOptionState } from '../../options/structured/use-structured-agent-session-option-state'

@@ -1,7 +1,7 @@
-import type * as WorkspaceAndProjectStateModule from '../../tasks/use-mobile-tasks-workspace-and-project-state'
-import type * as GithubTaskIdentityModule from '../../tasks/github-task-identity'
-import type * as TaskItemStateModule from '../../tasks/use-mobile-tasks-item-state'
-import type * as TaskDraftRowsModule from '../../tasks/task-draft-rows'
+import type * as WorkspaceAndProjectStateModule from '../../tasks/project-board/use-mobile-tasks-workspace-and-project-state'
+import type * as GithubTaskIdentityModule from '../../tasks/item-detail/github-task-identity'
+import type * as TaskItemStateModule from '../../tasks/item-detail/use-mobile-tasks-item-state'
+import type * as TaskDraftRowsModule from '../../tasks/item-detail/task-draft-rows'
 import type * as DurableDraftFieldsModule from '../../drafts/durable-draft-fields'
 import { useLayoutEffect, useRef } from 'react'
 import type { operationModuleLoader } from './operation-module-loader'
@@ -19,13 +19,13 @@ function useTaskStateAndSelection(
   fixture: Record<string, unknown>
 ) {
   const { useMobileTasksItemState } = modules.load<typeof TaskItemStateModule>(
-    'mobile/src/tasks/use-mobile-tasks-item-state.tsx'
+    'mobile/src/tasks/item-detail/use-mobile-tasks-item-state.tsx'
   )
   const { useMobileTasksSelection, githubTaskKey } = modules.load<typeof GithubTaskIdentityModule>(
-    'mobile/src/tasks/github-task-identity.ts'
+    'mobile/src/tasks/item-detail/github-task-identity.ts'
   )
   const { useTaskCommentDraft } = modules.load<typeof TaskDraftRowsModule>(
-    'mobile/src/tasks/task-draft-rows.ts'
+    'mobile/src/tasks/item-detail/task-draft-rows.ts'
   )
   const itemState = useMobileTasksItemState()
   const selection = useMobileTasksSelection(
@@ -128,7 +128,7 @@ export function useTaskActionMountOwners(
 ): void {
   const { state, selection } = useTaskStateAndSelection(modules, model, fixture)
   const { useMobileTasksMutation } = modules.load<typeof WorkspaceAndProjectStateModule>(
-    'mobile/src/tasks/use-mobile-tasks-workspace-and-project-state.tsx'
+    'mobile/src/tasks/project-board/use-mobile-tasks-workspace-and-project-state.tsx'
   )
   const mutation = useMobileTasksMutation()
   const { detailRequestItem, hydrateActionItem, ...actionSelection } = selection
@@ -182,7 +182,7 @@ export function useTaskFileMountOwner(
   model: Record<string, unknown>
 ): void {
   const { useMobileTasksItemState } = modules.load<typeof TaskItemStateModule>(
-    'mobile/src/tasks/use-mobile-tasks-item-state.tsx'
+    'mobile/src/tasks/item-detail/use-mobile-tasks-item-state.tsx'
   )
   const state = useMobileTasksItemState()
   const owners = {

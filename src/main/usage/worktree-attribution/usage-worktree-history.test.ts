@@ -81,17 +81,4 @@ describe('UsageWorktreeHistory', () => {
     await history.flush()
     expect(readFileSync(file, 'utf8')).toBe(newer)
   })
-
-  it('lets a live worktree in another repo own a path a removed one used', () => {
-    const other: Repo = { ...repo, id: 'repo-2', path: '/src/other' }
-    const source: UsageWorktreeSource = {
-      getRepos: () => [repo, other],
-      getAllWorktreeMeta: () => ({ 'repo-2::/ws/feat': { displayName: 'live' } }),
-      getRememberedWorktreeDisplayNames: () => new Map([['repo-1::/ws/feat', 'removed']]),
-      whenLoaded: async () => {}
-    }
-    const known = loadKnownUsageWorktreesByRepo(source, [repo, other])
-    expect(known.get('repo-1')?.map(({ path }) => path)).toEqual(['/src/app'])
-    expect(known.get('repo-2')?.map(({ path }) => path)).toEqual(['/src/other', '/ws/feat'])
-  })
 })

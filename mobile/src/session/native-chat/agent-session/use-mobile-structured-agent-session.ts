@@ -1,5 +1,5 @@
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
-import { structuredChatTranscriptIdentity } from '../transcript/mobile-native-chat-transcript-store'
+import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
@@ -11,47 +11,47 @@ import {
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
-} from '../input/mobile-structured-actionable-prompt'
+} from '../input/prompts/mobile-structured-actionable-prompt'
 import {
   projectStructuredPermission,
   projectStructuredQuestion
-} from '../input/mobile-structured-agent-prompts'
+} from '../input/prompts/mobile-structured-agent-prompts'
 import type {
   MobileStructuredAgentSessionArgs,
   StructuredMobileSession
 } from './mobile-structured-agent-session-contract'
 import type { MobileNativeChatVisualSource } from '../visual/mobile-native-chat-visual-read'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
-import { useMobileStructuredStopPress } from '../composer/use-mobile-structured-stop-press'
+import { useMobileStructuredStopPress } from '../composer/delivery/use-mobile-structured-stop-press'
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
-import { useMobileStructuredPromptResponses } from '../input/use-mobile-structured-prompt-responses'
-import { useMobileStructuredAgentOptions } from '../input/use-mobile-structured-agent-options'
-import { useHostModelCatalogCache } from '../input/mobile-host-model-catalog-query'
-import { useMobileStructuredCommandController } from '../composer/use-mobile-structured-command-controller'
-import { useMobileStructuredSessionOptionStamp } from '../input/use-mobile-structured-session-option-stamp'
-import { useMobileStructuredAgentTurnTiming } from '../transcript/use-mobile-structured-agent-turn-timing'
+import { useMobileStructuredPromptResponses } from '../input/prompts/use-mobile-structured-prompt-responses'
+import { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
+import { useHostModelCatalogCache } from '../input/session-options/mobile-host-model-catalog-query'
+import { useMobileStructuredCommandController } from '../composer/commands/use-mobile-structured-command-controller'
+import { useMobileStructuredSessionOptionStamp } from '../input/session-options/use-mobile-structured-session-option-stamp'
+import { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion/use-mobile-structured-agent-turn-timing'
 import {
   pendingStructuredPromptIdentity,
   useMobileStructuredRequestCancel
 } from './mobile-structured-agent-session-cancel'
 import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
-import { useMobileStructuredSendWithOutcome } from '../composer/use-mobile-structured-send-with-outcome'
-import { useMobileStructuredQueuedMessageControls } from '../input/use-mobile-structured-queued-message-controls'
-import { useMobileStructuredBackgroundTasks } from '../input/use-mobile-structured-background-tasks'
-import { useMobileStructuredSends } from '../composer/use-mobile-structured-sends'
-import { useMobileStructuredSendRecorded } from '../composer/mobile-structured-send-recorded-read'
+import { useMobileStructuredSendWithOutcome } from '../composer/delivery/use-mobile-structured-send-with-outcome'
+import { useMobileStructuredQueuedMessageControls } from '../input/queued-messages/use-mobile-structured-queued-message-controls'
+import { useMobileStructuredBackgroundTasks } from '../input/tasks/use-mobile-structured-background-tasks'
+import { useMobileStructuredSends } from '../composer/delivery/use-mobile-structured-sends'
+import { useMobileStructuredSendRecorded } from '../composer/delivery/mobile-structured-send-recorded-read'
 import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from '../preferences/use-mobile-native-chat-queue-follow-ups'
-import { useMobileStructuredStopOffer } from '../composer/use-mobile-structured-stop-offer'
-import { useMobileStructuredTurnIndicator } from '../transcript/use-mobile-structured-turn-indicator'
-import { useMobileStructuredContextUsage } from '../composer/use-mobile-structured-context-usage'
-import { useMobileStructuredInterruptedContinue } from '../composer/use-mobile-structured-interrupted-continue'
+import { useMobileStructuredStopOffer } from '../composer/delivery/use-mobile-structured-stop-offer'
+import { useMobileStructuredTurnIndicator } from '../transcript/ingestion/use-mobile-structured-turn-indicator'
+import { useMobileStructuredContextUsage } from '../composer/commands/use-mobile-structured-context-usage'
+import { useMobileStructuredInterruptedContinue } from '../composer/delivery/use-mobile-structured-interrupted-continue'
 import {
   useMobileStructuredThreadGoal,
   useMobileStructuredThreadGoalSend
-} from '../input/use-mobile-structured-thread-goal'
-import { useMobileStructuredTranscript } from '../transcript/use-mobile-structured-transcript'
+} from '../input/tasks/use-mobile-structured-thread-goal'
+import { useMobileStructuredTranscript } from '../transcript/ingestion/use-mobile-structured-transcript'
 import { useMobileStructuredAgentRewind } from './use-mobile-structured-agent-rewind'
-import { useMobileNativeChatUsageLimit } from '../use-mobile-native-chat-usage-limit'
+import { useMobileNativeChatUsageLimit } from '../status/use-mobile-native-chat-usage-limit'
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs

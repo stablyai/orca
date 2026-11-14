@@ -32,6 +32,7 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
+import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
 
 export function VaultSessionRow({
   session,
@@ -44,6 +45,7 @@ export function VaultSessionRow({
   resumeDisabled,
   resumeHidden,
   onToggleDetails,
+  originalPaneTarget,
   onJumpToOriginalPane,
   showJumpToWorktree,
   onJumpToWorktree,
@@ -78,6 +80,7 @@ export function VaultSessionRow({
   resumeDisabled: boolean
   resumeHidden?: boolean
   onToggleDetails: () => void
+  originalPaneTarget?: AiVaultOriginalPaneTarget | null
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
@@ -109,7 +112,7 @@ export function VaultSessionRow({
     ? t('aiVault.continueInCli', 'Continue in CLI')
     : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
-  const title = useAiVaultSessionDisplayTitle(session)
+  const title = useAiVaultSessionDisplayTitle(session, originalPaneTarget)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   const deleteHost = useAiVaultSessionDeleteHost(session)

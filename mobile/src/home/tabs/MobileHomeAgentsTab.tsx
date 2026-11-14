@@ -8,7 +8,7 @@ import {
   WifiOff
 } from 'lucide-react-native'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, ScrollView, Text, View, type HostInstance } from 'react-native'
 import {
   AGENT_LIST_GROUP_BY_CHOICES,
   agentListRowsIn,
@@ -61,7 +61,7 @@ export function MobileHomeAgentsTab(props: {
   const [query, setQuery] = useState('')
   const [pickedHost, setPickedHost] = useState<string | null>(null)
   const [menu, setMenu] = useState<'closed' | 'options' | 'group-by'>('closed')
-  const optionsRef = useRef<View>(null)
+  const optionsRef = useRef<HostInstance>(null)
   // An unpaired desktop's filter falls back to every desktop.
   const hostFilter = hosts.some((host) => host.id === pickedHost) ? pickedHost : null
   const { now } = data.agentList

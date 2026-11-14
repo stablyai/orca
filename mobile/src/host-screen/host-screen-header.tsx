@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, type HostInstance } from 'react-native'
 import {
   CalendarClock,
   ChevronLeft,
@@ -95,7 +95,7 @@ export function HostScreenHeader({
     onHideSidebar,
     router
   } = controller
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
   const disconnected = connState !== 'connected'

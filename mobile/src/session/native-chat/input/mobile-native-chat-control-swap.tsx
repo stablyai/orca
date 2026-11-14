@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
 import { SHEET_CURVE } from '../../../components/sheet-motion-values'
-import { useReducedMotionEnabled } from '../../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
 
 const SWAP_MS = 150
 const REDUCED_SWAP_MS = 100
@@ -85,5 +85,5 @@ export function MobileNativeChatControlSwap({
 
 const styles = StyleSheet.create({
   slot: { alignItems: 'center', justifyContent: 'center' },
-  leaving: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' }
+  leaving: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' }
 })

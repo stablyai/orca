@@ -9,16 +9,19 @@ export function useWebClientTerminalResize({
   isActive,
   isVisible,
   managerRef,
+  terminalManager,
   paneTransportsRef
 }: {
   isActive: boolean
   isVisible: boolean
+  terminalManager: PaneManager | null
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
 }): void {
   useEffect(() => {
     if (
       !(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ ||
+      !terminalManager ||
       !isVisible ||
       !isActive
     ) {
@@ -27,7 +30,7 @@ export function useWebClientTerminalResize({
     const cleanupCallbacks: (() => void)[] = []
     const fitAndForward = (): void => {
       const manager = managerRef.current
-      if (!manager) {
+      if (manager !== terminalManager) {
         return
       }
       for (const pane of manager.getPanes()) {
@@ -65,5 +68,5 @@ export function useWebClientTerminalResize({
         cleanup()
       }
     }
-  }, [isActive, isVisible, managerRef, paneTransportsRef])
+  }, [terminalManager, isActive, isVisible, managerRef, paneTransportsRef])
 }

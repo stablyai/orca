@@ -12,7 +12,7 @@ import type { OrcadDeploymentLink } from '../../../shared/remote-runtime/host-ca
 import { wslHostRunRefusal, WSL_HOST_REMOVING_MESSAGE } from './wsl-host-add-admission'
 import type { WslHostsMovedProjects, WslHostsPolicyState } from '../../../shared/wsl-hosts-policy'
 
-export const WSL_HOSTS_GATED_OFF_MESSAGE = 'WSL hosts are not available in this build.'
+export const WSL_HOSTS_GATED_OFF_MESSAGE = 'WSL hosts are turned off for this launch of Orca.'
 
 // Fixed for the run once main reads the disk; nothing can create a host or a move while not open.
 let promoted: { hasSavedWslHost: boolean; hasWslMoveCutover: boolean } | null = null

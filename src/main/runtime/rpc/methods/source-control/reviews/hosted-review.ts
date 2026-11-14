@@ -5,7 +5,7 @@ import {
   HostedReviewCreate,
   HostedReviewCreationEligibility,
   HostedReviewForBranch
-} from '../../../../../../shared/rpc-contract/hosted-review-params'
+} from '../../../../../../shared/rpc-contract/source-control/hosted-review-params'
 
 export const HOSTED_REVIEW_METHODS = [
   defineMethod({

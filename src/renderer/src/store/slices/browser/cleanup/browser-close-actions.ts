@@ -1,3 +1,4 @@
+import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -80,9 +81,10 @@ export function createBrowserCloseActions(
                 const handle = s.remoteBrowserPageHandlesByPageId[page.id]
                 return handle ? [{ worktreeId: page.worktreeId, handle }] : []
               })
-          const nextRemoteBrowserPageHandlesByPageId = {
-            ...s.remoteBrowserPageHandlesByPageId
-          }
+          const nextRemoteBrowserPageHandlesByPageId = copyBrowserPageHandles(
+            s.remoteBrowserPageHandlesByPageId,
+            closedPages.map((page) => page.id)
+          )
           for (const page of closedPages) {
             delete nextRemoteBrowserPageHandlesByPageId[page.id]
           }

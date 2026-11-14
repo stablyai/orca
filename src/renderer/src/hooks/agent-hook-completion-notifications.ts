@@ -8,7 +8,7 @@ import type {
 import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { dispatchTerminalNotification } from '../components/terminal-pane/notifications/dispatch-terminal-notification'
 import '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
-import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { getPtyIdForPaneKey } from './pane-key-pty-id'
 import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle'
 import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '../components/terminal-pane/notifications/agent-task-complete-policy'
@@ -21,7 +21,7 @@ import {
   discardHookLaneCompletionRequests,
   submitHookLaneCompletion
 } from './agent-hook-completion-revision-hold'
-import { getFirstTerminalTab } from '@/store/terminals/terminal-tab-owner-index'
+import { getFirstTerminalTab } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import * as finishDrops from '@/attention/agent-finish-drop-breadcrumb'
 import type {
   CoordinatorEntry,

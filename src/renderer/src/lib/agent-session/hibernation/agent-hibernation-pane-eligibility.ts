@@ -8,7 +8,7 @@ import type {
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
-import { isLiveResumeAnchorForCompletedAgent } from '../../../../../shared/agent-session/lifecycle/live-resume-anchor-record'
+import { isLiveResumeAnchorForCompletedAgent } from '../../../../../shared/agent-session/lifecycle/resume/live-resume-anchor-record'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 import type { RuntimeTerminalAttention } from '../../../../../shared/runtime-terminal-contracts'

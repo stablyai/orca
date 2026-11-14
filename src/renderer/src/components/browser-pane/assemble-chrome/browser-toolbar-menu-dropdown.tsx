@@ -54,6 +54,7 @@ export type BrowserToolbarPageActions = {
 }
 
 type BrowserToolbarMenuDropdownProps = {
+  extensionDiscoveryTarget: boolean
   browserPageId: string
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
@@ -70,6 +71,7 @@ type BrowserToolbarMenuDropdownProps = {
 }
 
 export function BrowserToolbarMenuDropdown({
+  extensionDiscoveryTarget,
   browserPageId,
   menuOpen,
   onMenuOpenChange,
@@ -99,6 +101,10 @@ export function BrowserToolbarMenuDropdown({
           className="h-7 w-7"
           title={menuLabel}
           aria-label={menuLabel}
+          data-contextual-tour-target={
+            extensionsSub && extensionDiscoveryTarget ? 'browser-extensions-control' : undefined
+          }
+          data-browser-profile-id={profile.effectiveProfileId}
         >
           <Ellipsis className="size-4" />
         </Button>

@@ -21,7 +21,7 @@ import {
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
-import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/worker-start-agent-placement'
+import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/start/placement/worker-start-agent-placement'
 
 type WorkspaceLookup = {
   showManagedTerminalWorkspace: (

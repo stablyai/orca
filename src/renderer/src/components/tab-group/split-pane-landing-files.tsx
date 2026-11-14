@@ -9,6 +9,7 @@ import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list
 import { parseQuickOpenQueryTarget } from '../../../../shared/quick-open/quick-open-query-target'
 import { openQuickOpenFile } from '../quick-open-file-navigation'
 import { rankQuickOpenFilesWithHistory } from '../quick-open-history-ranking'
+import { useLandingResultsChange } from './split-pane-landing-item'
 
 const MAX_FILE_RESULTS = 8
 
@@ -16,11 +17,13 @@ const MAX_FILE_RESULTS = 8
 export function LandingFileResults({
   worktreeId,
   worktreePath,
-  query
+  query,
+  onResultsChange
 }: {
   worktreeId: string
   worktreePath: string
   query: string
+  onResultsChange: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const deferredQuery = useDeferredValue(query.trim())
@@ -41,6 +44,10 @@ export function LandingFileResults({
             MAX_FILE_RESULTS
           ),
     [deferredQuery, target.pathQuery, files, history]
+  )
+  useLandingResultsChange(
+    matches.map(({ path }) => path),
+    onResultsChange
   )
   if (matches.length === 0) {
     return null

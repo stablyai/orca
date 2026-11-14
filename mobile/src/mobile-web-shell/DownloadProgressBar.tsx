@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -107,7 +107,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised
   },
   fill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.textSecondary,
     transformOrigin: 'left'
   }

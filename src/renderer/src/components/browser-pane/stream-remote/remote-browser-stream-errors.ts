@@ -49,6 +49,11 @@ export function isRemoteBrowserPageMissingError(error: unknown): boolean {
   return isRemoteBrowserPageMissingCode(readErrorCode(error))
 }
 
+// The input landed and opened a page dialog, which the stream shows; its agent instructions are not for a person.
+export function isRemoteBrowserInputOpenedDialogError(error: unknown): boolean {
+  return readErrorCode(error) === 'browser_dialog_opened'
+}
+
 // Stop automatic retry only for proven permanent failures; unclassified failures retain bounded recovery.
 export function isPermanentRemoteBrowserStreamFailure(error: unknown): boolean {
   const code = readErrorCode(error)

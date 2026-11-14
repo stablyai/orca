@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ComponentProps } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { TextField } from './composer-input/TextField'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -16,7 +16,7 @@ export function MobileWorkspaceNameInput({
   ...props
 }: MobileWorkspaceNameInputProps) {
   const t = useMobileTranslation()
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<TextInputInstance>(null)
 
   useEffect(() => {
     if (!shouldAutoFocus) {

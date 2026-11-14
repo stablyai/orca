@@ -10,7 +10,7 @@ import {
   type NativeChatTurnOpenedPullRequests
 } from '../../../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import { nativeChatToolFullPayload } from '../../../../../../shared/native-chat/tools/native-chat-tool-output'
-import { nativeChatRowsInTranscriptOrder } from '../../subagents/native-chat-subagent-sections'
+import { nativeChatRowsInTranscriptOrder } from '../../subagents/native-chat-subagent-scope'
 import { NativeChatMarkdownImageOwnerContext } from '../../media/images/native-chat-markdown-image-owner'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
 import type { NativeChatTurnRows } from '../../conversation/slots/use-native-chat-turn-membership'

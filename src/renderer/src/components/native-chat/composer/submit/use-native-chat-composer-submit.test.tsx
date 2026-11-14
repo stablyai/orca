@@ -3,7 +3,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'

@@ -1,5 +1,5 @@
 import type { BlockContent, DefinitionContent, Literal, Parent, PhrasingContent } from 'mdast'
-import type { GitHubCalloutKind } from '../../../src/shared/github/github-callouts'
+import type { GitHubCalloutKind } from '../../../src/shared/github/markdown/github-callouts'
 
 // The node types MobileMarkdown adds to mdast, registered by declaration merging. Merging needs
 // interfaces, which React Doctor's root rules flag; mobile's lint config ignores this file because

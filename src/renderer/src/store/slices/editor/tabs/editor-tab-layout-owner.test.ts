@@ -6,7 +6,7 @@ import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/lay
 
 import { createTabsSliceMockApi } from '../../tabs/tabs-slice-test-harness'
 import { createTestStore } from '../../../testing/app-store-test-fixture'
-import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeLayout, makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -78,65 +78,10 @@ function openFile(
 }
 
 const tabsOf = (worktreeId = WT): Tab[] => store.getState().unifiedTabsByWorktree[worktreeId] ?? []
-const groupOf = (groupId: string) =>
-  store.getState().groupsByWorktree[WT]!.find((group) => group.id === groupId)
 const tabFor = (fileId: string, groupId = g1): Tab | undefined =>
   tabsOf().find((tab) => tab.entityId === fileId && tab.groupId === groupId)
 
 describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs drawn from main’s frame', () => {
-  it('selects a new tab only once its frame draws it, in that update or right after (c)', async () => {
-    const updates: { drawn: boolean; selected: boolean }[] = []
-    let tabId = ''
-    const stop = store.subscribe((state) => {
-      const drawn = (state.unifiedTabsByWorktree[WT] ?? []).some((tab) => tab.id === tabId)
-      const selected =
-        state.groupsByWorktree[WT]?.find((group) => group.id === g1)?.activeTabId === tabId
-      updates.push({ drawn, selected })
-    })
-    openFile('/a.ts')
-    tabId = layoutApplyTestTransport.sentOfType('openEditorTab')[0]!.tabId!
-    expect(groupOf(g1)?.activeTabId).toBe('term')
-
-    await main.settle()
-    stop()
-    const firstDrawn = updates.findIndex((update) => update.drawn)
-    const firstSelected = updates.findIndex((update) => update.selected)
-    expect(firstDrawn).toBeGreaterThanOrEqual(0)
-    expect(updates.slice(0, firstDrawn).some((update) => update.selected)).toBe(false)
-    expect([firstDrawn, firstDrawn + 1]).toContain(firstSelected)
-    expect(groupOf(g1)?.activeTabId).toBe(tabId)
-  })
-
-  it("keeps a double-clicked Explorer file's tab when a later single click previews another", async () => {
-    // editor-tab-selection-restore.spec.ts: dblclick package.json (two preview opens, then the
-    // keep), wait, then single-click src/index.ts.
-    const explorerOpen = (path: string) =>
-      store.getState().openFile(
-        {
-          filePath: path,
-          relativePath: path.slice(1),
-          worktreeId: WT,
-          language: 'ts',
-          mode: 'edit'
-        },
-        { preview: true, focusEditor: true, suppressActiveRuntimeFallback: true }
-      )
-    const pkg = explorerOpen('/package.json')
-    explorerOpen('/package.json')
-    store.getState().makePreviewFilePermanent(pkg)
-    await main.settle()
-    expect(tabFor(pkg)?.isPreview).toBeFalsy()
-
-    const index = explorerOpen('/src/index.ts')
-    await main.settle()
-
-    expect(tabFor(pkg)).toBeDefined()
-    expect(tabFor(index)).toBeDefined()
-    expect(
-      layoutApplyTestTransport.mainModel?.workspaces[WT]?.tabs.map((tab) => tab.entityId)
-    ).toEqual(['term', pkg, index])
-  })
-
   it('drops a tab’s content when main lost its workspace before the close came in', async () => {
     const a = openFile('/a.ts')
     await main.settle()

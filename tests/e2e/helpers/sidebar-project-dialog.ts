@@ -5,6 +5,11 @@ function sidebarHeaderActions(page: Page) {
   return page.locator('[data-sidebar-header-actions]')
 }
 
+export async function openSidebarProjectMenu(page: Page): Promise<void> {
+  await sidebarHeaderActions(page).getByRole('button', { name: 'Add project', exact: true }).click()
+  await expect(page.getByRole('menu', { name: 'Add project' })).toBeVisible()
+}
+
 export async function openSidebarProjectDialog(page: Page): Promise<void> {
   await sidebarHeaderActions(page).getByRole('button', { name: 'Add project', exact: true }).click()
   await expect(page.getByRole('dialog', { name: /Add a project/i })).toBeVisible()

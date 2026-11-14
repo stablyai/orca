@@ -1,3 +1,5 @@
+import type * as UseMobileTasksProjectMetadataActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-metadata-actions'
+import type * as UseMobileTasksProjectReviewCheckActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-review-check-actions'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -151,7 +153,6 @@ function mountModelHook<Actions>(
 export function taskProjectRowFieldMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const boardFixture = {
     activeGitHubProjectHost: PROJECT_HOST,
     findProjectRowRepo: () => PROJECT_REPO,
@@ -163,9 +164,9 @@ export function taskProjectRowFieldMountAdapters(
     projectRowDetailRefreshSeq: 0
   }
   const rowFields: MountAdapter = (context) => {
-    const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-metadata-actions')
-    >('use-mobile-tasks-project-metadata-actions.tsx').useMobileTasksProjectMetadataActions
+    const useActions = modules.load<typeof UseMobileTasksProjectMetadataActionsModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-metadata-actions.tsx'
+    ).useMobileTasksProjectMetadataActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: { ...boardFixture, projectFieldDrafts: {} },
@@ -197,9 +198,9 @@ export function taskProjectRowFieldMountAdapters(
     })
   }
   const rowReviewChecks: MountAdapter = (context) => {
-    const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-review-check-actions')
-    >('use-mobile-tasks-project-review-check-actions.tsx').useMobileTasksProjectReviewCheckActions
+    const useActions = modules.load<typeof UseMobileTasksProjectReviewCheckActionsModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-review-check-actions.tsx'
+    ).useMobileTasksProjectReviewCheckActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: { ...boardFixture, projectRowItem: PR_ROW, projectReviewersDraft: 'octocat' },

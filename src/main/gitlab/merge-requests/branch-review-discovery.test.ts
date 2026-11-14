@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const { read, pages } = vi.hoisted(() => ({ read: vi.fn(), pages: vi.fn() }))
-vi.mock('../../git/command-runner/glab-exec-file', () => ({
+vi.mock('../../git/command-runner/hosted-cli/glab-exec-file', () => ({
   glabExecFileAsync: read
 }))
 

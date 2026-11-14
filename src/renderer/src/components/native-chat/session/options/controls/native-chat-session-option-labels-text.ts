@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type {
   NativeChatSessionOptionCopyId,
   NativeChatSessionOptionSay
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 
 // Literal English defaults: the localization gate only reads string literals at the call site.
 

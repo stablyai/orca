@@ -14,8 +14,8 @@ import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-dea
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
-import { PtyProcessListAdmission } from '../../../providers/pty-process-list-admission'
-import type { PtyProcessInfo } from '../../../providers/pty-provider-contract'
+import { PtyProcessListAdmission } from '../../../providers/pty/process-list-admission'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
   async listProcesses(opts?: {

@@ -20,13 +20,13 @@ import type { WorkspaceLayoutModel } from '../../../../../shared/workspace-layou
 import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import {
   diffPublishedLayouts,
   indexPublishedLayout,
   type WorkspaceLayoutRecordChange
-} from '../../../../../shared/workspace-layout/workspace-layout-records'
-import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-records'
+import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { layoutSnapshotFrame, publishedLayoutsOf } from './main-loaded-layout-frames.test-fixture'
 import { throwLayoutFrameApplyErrors } from './workspace-layout-frame-apply-check.test-fixture'

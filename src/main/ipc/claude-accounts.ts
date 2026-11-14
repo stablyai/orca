@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { ClaudeAccountService } from '../claude-accounts/service'
-import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import type { ClaudeAccountSelectionTarget } from '../claude-accounts/selection/runtime-selection'
 import { openAccountSignInLink } from './account-sign-in-link-opener'
 
 export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountService): void {

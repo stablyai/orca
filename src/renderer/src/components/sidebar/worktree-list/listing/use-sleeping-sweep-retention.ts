@@ -7,7 +7,7 @@ import {
   cloneSleepingSweepRetentionState,
   createSleepingSweepRetentionState,
   updateSleepingSweepRetention
-} from '../../../../../../shared/sidebar-list/sleeping-sweep-retention'
+} from '../../../../../../shared/sidebar-list/selection/sleeping-sweep-retention'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
 

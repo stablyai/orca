@@ -7,13 +7,14 @@ import {
   type AgentJournalItemBody
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import {
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import { settlePRPendingObligations } from './pr-head-evaluation'
+import { prWatchStorage } from './pr-watch-storage'
+import {
+  openTestAgentSessionDatabase,
+  withTestAgentSessionDatabase
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { PRPendingActionResumeDeps } from './pr-pending-action-types'
 import { PRPendingActionResume } from './pr-pending-action-resume'
 import { prInfoFixture } from './pr-watch-test-fixtures'
@@ -62,27 +63,27 @@ function openJournal(): Promise<AgentSessionJournal> {
   })
 }
 
-function count(table: string): number {
-  const database = openTestJournalHostDatabase(root)
-  return Number(database.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n)
+async function count(table: string): Promise<number> {
+  return withTestAgentSessionDatabase(root, (db) =>
+    Number(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n)
+  )
 }
 
 /** A fresh resume, as after a restart: nothing in memory, only the saved row. */
-function resumeAfterRestart(
+async function resumeAfterRestart(
   overrides: Partial<PRPendingActionResumeDeps> = {}
-): PRPendingActionResume {
-  const database = openTestJournalHostDatabase(root)
+): Promise<PRPendingActionResume> {
+  const database = prWatchStorage(await openTestAgentSessionDatabase(root))
   return new PRPendingActionResume({
     database,
     chatExists: () => true,
     chatWorkspace: async () => WORKSPACE,
     repositories: async () => [{ owner: 'acme', repo: 'repo' }],
     resolvePushRemote: async () => ({ host: 'github.com', owner: 'acme', repo: 'repo' }),
-    readAfterPush: () => {},
+    readAfterPush: async () => {},
     resolveCommitSha: async () => null,
     isCommitInPRHead: async () => false,
-    settle: (row, indices, verified) =>
-      settlePRPendingObligations(database, row, indices, verified),
+    settle: (row, indices, verified) => database.write({ kind: 'settle', row, indices, verified }),
     logger: { warn: () => {} },
     now: () => clock,
     ...overrides
@@ -107,16 +108,16 @@ describe('pending PR actions', () => {
       { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     // The host died before verifying: only the row committed with the call survives.
-    expect(count('pr_pending_actions')).toBe(1)
-    const first = resumeAfterRestart()
+    expect(await count('pr_pending_actions')).toBe(1)
+    const first = await resumeAfterRestart()
     first.drain()
-    await vi.waitFor(() => expect(count('pr_chat_actions')).toBe(1))
+    await vi.waitFor(async () => expect(await count('pr_chat_actions')).toBe(1))
     first.clear()
-    const second = resumeAfterRestart()
+    const second = await resumeAfterRestart()
     second.drain()
     second.clear()
-    expect(count('pr_pending_actions')).toBe(0)
-    expect(count('pr_chat_actions')).toBe(1)
+    expect(await count('pr_pending_actions')).toBe(0)
+    expect(await count('pr_chat_actions')).toBe(1)
   })
 
   it('captures a call whose finish commits inside a lifecycle batch', async () => {
@@ -132,14 +133,14 @@ describe('pending PR actions', () => {
       fence: 0,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    expect(count('pr_pending_actions')).toBe(0)
+    expect(await count('pr_pending_actions')).toBe(0)
     // The turn's end settles the call in the same batch that ends the turn.
     await journal.appendLifecycleBatch({
       settlementId: 'turn-end',
       fence: 0,
       mutations: [{ kind: 'item', identity, body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }]
     })
-    expect(count('pr_pending_actions')).toBe(1)
+    expect(await count('pr_pending_actions')).toBe(1)
   })
 
   it('keeps each verified target while a sibling resolves, through restart and expiry', async () => {
@@ -162,19 +163,19 @@ describe('pending PR actions', () => {
       ],
       resolvePushRemote: async () => null
     }
-    const first = resumeAfterRestart(unresolved)
+    const first = await resumeAfterRestart(unresolved)
     first.drain()
-    await vi.waitFor(() => expect(count('pr_chat_actions')).toBe(2))
+    await vi.waitFor(async () => expect(await count('pr_chat_actions')).toBe(2))
     first.clear()
-    expect(count('pr_pending_actions')).toBe(1)
+    expect(await count('pr_pending_actions')).toBe(1)
     clock = finishedAt + 25 * 60 * 60_000
-    const second = resumeAfterRestart(unresolved)
+    const second = await resumeAfterRestart(unresolved)
     second.drain()
-    await vi.waitFor(() => expect(count('pr_pending_actions')).toBe(0))
+    await vi.waitFor(async () => expect(await count('pr_pending_actions')).toBe(0))
     second.clear()
-    const owners = openTestJournalHostDatabase(root)
-      .db.prepare('SELECT owner, number FROM pr_chat_actions ORDER BY owner')
-      .all()
+    const owners = await withTestAgentSessionDatabase(root, (db) =>
+      db.prepare('SELECT owner, number FROM pr_chat_actions ORDER BY owner').all()
+    )
     expect(owners).toEqual([
       { owner: 'acme', number: 12 },
       { owner: 'me', number: 12 }
@@ -191,7 +192,7 @@ describe('pending PR actions', () => {
     let release = () => {}
     const resolved = new Promise<void>((resolve) => (release = resolve))
     // Resolution starts in time and succeeds only after the expiry passed.
-    const resume = resumeAfterRestart({
+    const resume = await resumeAfterRestart({
       repositories: async () => {
         await resolved
         return [{ owner: 'acme', repo: 'repo' }]
@@ -200,21 +201,26 @@ describe('pending PR actions', () => {
     resume.drain()
     clock += 25 * 60 * 60_000
     release()
-    await vi.waitFor(() => expect(count('pr_pending_actions')).toBe(0))
+    await vi.waitFor(async () => expect(await count('pr_pending_actions')).toBe(0))
     resume.clear()
-    expect(count('pr_chat_actions')).toBe(0)
+    expect(await count('pr_chat_actions')).toBe(0)
   })
 
   it('captures nothing from an imported transcript', async () => {
     const journal = await openJournal()
-    await journal.replaceEpochItems('legacy_import', 0, [
-      {
-        identity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-0', ordinal: 0 },
-        body: shellCall('gh pr create --fill', 'https://github.com/acme/repo/pull/3\n'),
-        ownerFence: 0
-      }
-    ])
-    expect(count('pr_pending_actions')).toBe(0)
+    await journal.write({
+      kind: 'epoch-replace',
+      reason: 'legacy_import',
+      fence: 0,
+      items: [
+        {
+          identity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-0', ordinal: 0 },
+          body: shellCall('gh pr create --fill', 'https://github.com/acme/repo/pull/3\n'),
+          ownerFence: 0
+        }
+      ]
+    })
+    expect(await count('pr_pending_actions')).toBe(0)
   })
 
   it('records both actions of one call that pushes and opens a PR', async () => {
@@ -227,7 +233,7 @@ describe('pending PR actions', () => {
       ),
       { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    const resume = resumeAfterRestart()
+    const resume = await resumeAfterRestart()
     resume.drain()
     // The create alone doesn't complete the row; the push's PR read does, with both actions.
     const read = prInfoFixture({
@@ -237,14 +243,14 @@ describe('pending PR actions', () => {
       headRepo: { owner: 'acme', repo: 'repo' },
       prRepo: { owner: 'acme', repo: 'repo' }
     })
-    await vi.waitFor(() => {
-      resume.verifyRead(prWatchCandidate(WORKSPACE, null), read, clock)
-      expect(count('pr_pending_actions')).toBe(0)
+    await vi.waitFor(async () => {
+      await resume.verifyRead(prWatchCandidate(WORKSPACE, null), read, clock)
+      expect(await count('pr_pending_actions')).toBe(0)
     })
     resume.clear()
-    const kinds = openTestJournalHostDatabase(root)
-      .db.prepare('SELECT kind FROM pr_chat_actions ORDER BY kind')
-      .all()
+    const kinds = await withTestAgentSessionDatabase(root, (db) =>
+      db.prepare('SELECT kind FROM pr_chat_actions ORDER BY kind').all()
+    )
     expect(kinds.map((row) => row.kind)).toEqual(['opened', 'pushed'])
   })
 })

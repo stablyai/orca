@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import { terminalCreateFeatureRequirement } from '../../agent-launch-feature-requirement'
+import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
@@ -8,7 +8,7 @@ import { defineMethod, defineStreamingMethod } from '../../core'
 import {
   CreateTerminalTab,
   WorktreeTabSelector
-} from '../../../../../shared/rpc-contract/session-tabs-schemas-params'
+} from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,
@@ -19,7 +19,7 @@ import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
-import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
+import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import '../../../../../shared/protocol-version'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
 import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/session-tabs-tab-delta'
@@ -36,7 +36,7 @@ export const SESSION_TAB_METHODS = [
     params: WorktreeTabSelector,
     handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
       await prepareStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
-      return projectSessionTabsForClient(
+      const result = projectSessionTabsForClient(
         await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
           includeInitialSurfaceLaunch: true,
           includeAgentSenders: clientKind !== 'mobile'
@@ -44,6 +44,8 @@ export const SESSION_TAB_METHODS = [
         clientKind,
         clientCapabilities
       )
+      runtime.observeClientHostedPageSnapshots?.([result], pairedDeviceId)
+      return result
     }
   }),
   defineMethod({
@@ -129,6 +131,7 @@ export const SESSION_TAB_METHODS = [
       },
       emit
     ) => {
+      const observation = Symbol('session-tabs-stream')
       let subscriptionId: string | null = null
       let released = false
       let endOnRelease = true
@@ -164,6 +167,7 @@ export const SESSION_TAB_METHODS = [
             closePhoneSession?.()
             signal?.removeEventListener('abort', release)
             stopListening()
+            runtime.forgetClientHostedPageObservation?.(pairedDeviceId, observation)
             stopCapabilities()
             if (endOnRelease) {
               emit({ type: 'end' })
@@ -184,13 +188,30 @@ export const SESSION_TAB_METHODS = [
         snapshot: NonNullable<typeof currentSnapshot>,
         capabilities = capabilitySource?.current ?? clientCapabilities
       ) => projectSessionTabsForClient(snapshot, clientKind, capabilities)
+      const emitSnapshot = (
+        projected: NonNullable<typeof currentSnapshot>,
+        type: 'snapshot' | 'updated'
+      ): void => {
+        if (released) {
+          return
+        }
+        emit({
+          type,
+          ...(type === 'snapshot'
+            ? tabDelta.full(withProofDelta(projected))
+            : tabDelta.update(withProofDelta(projected)))
+        })
+        if (!released) {
+          runtime.observeClientHostedPageSnapshots?.([projected], pairedDeviceId, observation)
+        }
+      }
       stopCapabilities =
         capabilitySource?.observe((previous) => {
           if (!released && currentSnapshot) {
             const projected = project(currentSnapshot)
             // The last frame was projected with the previous set; a change it ignores sends nothing.
             if (!isDeepStrictEqual(projected, project(currentSnapshot, previous))) {
-              emit({ type: 'updated', ...tabDelta.update(withProofDelta(projected)) })
+              emitSnapshot(projected, 'updated')
             }
           }
         }) ?? (() => {})
@@ -223,45 +244,44 @@ export const SESSION_TAB_METHODS = [
         }
         let subscribedWorktree = initial.worktree
         currentSnapshot = initial
-        emit({
-          type: 'snapshot',
-          ...tabDelta.full(withProofDelta(project(initial)))
-        })
+        emitSnapshot(project(initial), 'snapshot')
         if (released) {
           return
         }
+        const acceptsWorktree = (worktree: string): boolean => {
+          if (released) {
+            return false
+          }
+          if (worktree !== subscribedWorktree && worktreeIdsEqual(worktree, subscribedWorktree)) {
+            // Subscribe can precede publication of the host's stored spelling.
+            try {
+              subscribedWorktree =
+                runtime.getExplicitSessionWorktreeIdSelector(`id:${initial.worktree}`) ??
+                subscribedWorktree
+            } catch {
+              // An ambiguous alias cannot authorize switching to either session.
+              return false
+            }
+          }
+          return worktree === subscribedWorktree
+        }
         stopListening = runtime.onMobileSessionTabsChanged(
           (snapshot) => {
-            if (
-              snapshot.worktree !== subscribedWorktree &&
-              worktreeIdsEqual(snapshot.worktree, subscribedWorktree)
-            ) {
-              // Subscribe can precede publication of the host's stored spelling.
-              try {
-                subscribedWorktree =
-                  runtime.getExplicitSessionWorktreeIdSelector(`id:${initial.worktree}`) ??
-                  subscribedWorktree
-              } catch {
-                // An ambiguous alias cannot authorize switching to either session.
-                return
-              }
+            if (released) {
+              return
             }
-            if (snapshot.worktree === subscribedWorktree) {
-              // Keep one stream spelling because clients index frames by worktree.
-              const streamSnapshot =
-                snapshot.worktree === initial.worktree
-                  ? snapshot
-                  : { ...snapshot, worktree: initial.worktree }
-              const { navigationIntent: _intent, ...retained } = streamSnapshot
-              currentSnapshot = retained
-              emit({
-                type: 'updated',
-                ...tabDelta.update(withProofDelta(project(streamSnapshot)))
-              })
-            }
+            // Keep one stream spelling because clients index frames by worktree.
+            const streamSnapshot =
+              snapshot.worktree === initial.worktree
+                ? snapshot
+                : { ...snapshot, worktree: initial.worktree }
+            const { navigationIntent: _intent, ...retained } = streamSnapshot
+            currentSnapshot = retained
+            emitSnapshot(project(streamSnapshot), 'updated')
           },
           pairedDeviceId,
-          clientKind
+          clientKind,
+          { observation: 'caller', acceptsWorktree }
         )
       } catch (error) {
         // A stream already ended by its release must not also report an error.

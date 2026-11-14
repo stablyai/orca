@@ -12,8 +12,8 @@ import {
 } from './use-structured-agent-session-options.test-fixture'
 import { act, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/agent-session-options-result'
-import { structuredAgentSessionMessageSelection } from '../../../../../../../shared/agent-session/options/structured-agent-session-option-view'
+import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import { structuredAgentSessionMessageSelection } from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import {
   resetHostModelCatalogSnapshotsForTests,

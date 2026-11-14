@@ -1,4 +1,4 @@
-import { getDefaultUserDataPath } from '../../../../src/cli/runtime/metadata'
+import { getDefaultUserDataPath } from '../../../../src/cli/runtime/profile/metadata'
 import type { PairingOffer } from '../../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { RemoteRuntimeSharedControlConnection } from '../../../../src/shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import {

@@ -6,7 +6,7 @@ import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/ag
 import {
   independentAgentModelCatalog,
   usesModelSpecificAcpEfforts
-} from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
+} from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
   type StructuredAgentSessionOptionsReader
@@ -18,7 +18,7 @@ import { structuredAgentSessionThreadGoalReport } from '../operations/structured
 import type {
   AgentSessionOptionsResult,
   AgentSessionAcceptedInputSources
-} from '../../../../shared/agent-session/options/agent-session-options-result'
+} from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { journalOpenReadRefusal } from '../../agent-session-journal/replay/journal-open-failure'
 import {
   confirmedCurrentOptions,
@@ -29,14 +29,13 @@ import {
 import { structuredAgentSessionImmediatePermission } from './structured-agent-session-launch-permission'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { readStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-read'
-import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/agent-session-model-efforts'
-import { structuredAgentSessionModelPicks } from './structured-agent-session-option-intent'
+import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-efforts'
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
 export async function readStructuredAgentSessionOptions(
   context: Pick<
     StructuredAgentSessionMutationContext,
-    'deps' | 'serialize' | 'openConversation' | 'conversation' | 'sessions'
+    'deps' | 'serialize' | 'openConversation' | 'conversation'
   > &
     Partial<Pick<StructuredAgentSessionMutationContext, 'deliveryOrder'>>,
   sessionId: string,
@@ -72,7 +71,6 @@ export async function readStructuredAgentSessionOptions(
         child && child.phase !== 'starting'
           ? await adapter.readOptions?.({ sessionId, fence: child.fence })
           : undefined
-      const modelPicks = child ? structuredAgentSessionModelPicks(child) : 0
       const scope = () =>
         structuredAgentSessionCatalogScopeOwned(
           context.deps,
@@ -95,8 +93,7 @@ export async function readStructuredAgentSessionOptions(
         records,
         session,
         child,
-        options: observed ?? null,
-        modelPicks
+        options: observed ?? null
       }
     })
   let started = await readCurrent(true)
@@ -132,10 +129,14 @@ export async function readStructuredAgentSessionOptions(
   const session = await context.conversation(sessionId)
   const agent = session.params.provider
   const capabilities = agents.capabilities(agent)
-  const floor = session.journal.context.floor()
-  const contextFloor = floor ? { contextFloor: floor } : {}
   const restingOptions = await atRest()
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
+  const [floor, goalSource, contextUsage] = await Promise.all([
+    session.journal.reads.contextFloor(),
+    session.journal.reads.threadGoalSource(),
+    capabilities?.contextUsage ? session.journal.reads.contextUsage() : undefined
+  ])
+  const contextFloor = floor ? { contextFloor: floor } : {}
   if (live && usesModelSpecificAcpEfforts(agent)) {
     options = {
       ...options,
@@ -163,17 +164,6 @@ export async function readStructuredAgentSessionOptions(
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
-  // After every await: a pick or a replaced child since the live read retires its report.
-  const reportedModel =
-    live &&
-    started.kind === 'live' &&
-    context.sessions.get(sessionId)?.child === started.child &&
-    started.modelPicks === structuredAgentSessionModelPicks(started.child)
-      ? (options.current.reportedModel ??
-        (agent === 'claude' && options.current.confirmed?.includes('model')
-          ? options.current.model
-          : undefined))
-      : undefined
   const current = {
     ...selected.current,
     ...options.current,
@@ -266,7 +256,7 @@ export async function readStructuredAgentSessionOptions(
     current: {
       ...current,
       acceptedInputSources,
-      reportedModel,
+      reportedModel: undefined,
       ...(reportedEffort !== undefined ? { reportedEffort } : {}),
       defaulted,
       confirmed,
@@ -292,11 +282,9 @@ export async function readStructuredAgentSessionOptions(
     acceptsImages: capabilities?.imagePrompts === true && options.acceptsImages !== false,
     ...structuredAgentSessionThreadGoalReport(
       capabilities?.threadGoal === true,
-      session.journal.threadGoal(),
+      goalSource.goal,
       contextFloor
     ),
-    ...(capabilities?.contextUsage
-      ? { contextUsage: { current: session.journal.contextUsage(), ...contextFloor } }
-      : {})
+    ...(contextUsage ? { contextUsage: { current: contextUsage, ...contextFloor } } : {})
   }
 }

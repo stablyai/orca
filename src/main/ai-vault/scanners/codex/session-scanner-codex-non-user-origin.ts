@@ -1,5 +1,5 @@
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
 
 /** Join by parentThreadId; agentPath is a label, and fork lineage does not establish spawn parentage. */
 export type CodexSubagentParentage = {

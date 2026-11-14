@@ -18,7 +18,7 @@ const {
   spawnMock: vi.fn()
 }))
 
-vi.mock('./runtime-client', async () => {
+vi.mock('./runtime/client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
   return createRuntimeClientModuleMock({
     callMock,
@@ -28,7 +28,17 @@ vi.mock('./runtime-client', async () => {
   })
 })
 
-vi.mock('./runtime/environments', () => ({
+vi.mock('./runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: serveOrcaAppMock
+}))
+
+vi.mock('./runtime/profile/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: getDefaultUserDataPathMock
+}))
+
+vi.mock('./runtime/pairing/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
@@ -44,10 +54,10 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
-import { queueFixtures } from './test-fixtures'
+import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/connection/types'
+import { queueFixtures } from './runtime/fixtures/runtime-rpc-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
-import { agentLaunchHostFixture } from './agent-launch-test-fixtures'
+import { agentLaunchHostFixture } from './agents/agent-launch-test-fixtures'
 
 const WORKTREE_ID = 'repo-1::/tmp/repo'
 const ORIGINAL_EXIT_CODE = process.exitCode

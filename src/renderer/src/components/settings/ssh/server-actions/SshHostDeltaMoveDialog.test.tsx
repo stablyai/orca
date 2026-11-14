@@ -7,7 +7,7 @@ import type {
   OrcadDeltaMoveResult
 } from '../../../../../../shared/orcad-managed-runtime'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { SshHostDeltaMoveDialog } from './SshHostDeltaMoveDialog'
 
 vi.mock('../../../ui/dialog', () => ({

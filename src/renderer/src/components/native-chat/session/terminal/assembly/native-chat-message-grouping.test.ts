@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { orderNativeChatDisplayMessages as orderNativeChatMessages } from '../../../../../../../shared/native-chat/transcript/native-chat-message-order'
+import { orderNativeChatDisplayMessages as orderNativeChatMessages } from '../../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../../../shared/native-chat/native-chat-streaming'
 import { sortForImageNormalization } from './native-chat-session-assembler'
 
