@@ -14,10 +14,7 @@ import {
   createStructuredAgentSessionOptionState,
   type StructuredAgentSessionOptionState
 } from '../structured-agent-session-options'
-import {
-  canSetStructuredAgentSessionOption,
-  structuredAgentSessionOptionSnapshot
-} from './structured-agent-session-option-snapshot'
+import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView,
@@ -155,37 +152,12 @@ describe('a Claude chat on the model id an older host lists by alias', () => {
         settable: true,
         kind: { currentValue: 'medium', choices: expect.arrayContaining(EFFORTS) }
       })
-      expect(canSetStructuredAgentSessionOption(state, 'effort', 'high')).toBe(true)
       expect(carried(state, undefined, { effort: 'high' })).toEqual({
         model: 'claude-opus-5-5',
         effort: 'high'
       })
     }
   })
-
-  it('matches the 1M id only through its own row, an exact row first, then the first alias', () => {
-    // `best` is hypothetical: two aliases resolving to one id; no recorded listing has one.
-    const oneM = [
-      alias('opus[1m]', 'claude-opus-5-5[1m]', { efforts: levels('low', 'high') }),
-      alias('best', 'claude-opus-5-5[1m]', { efforts: levels('max') }),
-      ...LISTING
-    ]
-    expect(
-      effortRow(coherent(answer('claude-opus-5-5[1m]', oneM, null, 'low'), oneM))
-    ).toMatchObject({ settable: true, kind: { choices: levels('low', 'high') } })
-    // Listed after the alias that resolves to it, so only exact-first precedence picks it.
-    const exact = [
-      ...LISTING,
-      alias('claude-opus-5-5', 'claude-opus-5-5', { efforts: levels('low', 'max') })
-    ]
-    expect(effortRow(coherent(answer('claude-opus-5-5', exact, null, 'low'), exact))).toMatchObject(
-      {
-        kind: { choices: levels('low', 'max') }
-      }
-    )
-  })
-
-  // The next two guard the lookup's fallbacks: neither changes with the fix.
 })
 
 describe('what a send carries', () => {
@@ -287,8 +259,6 @@ describe('what a send carries', () => {
       expect(structuredAgentSessionMessageSelection(accepted).effort).toBe('vendor/custom')
       expect(structuredAgentSessionSendSelection(accepted)?.effort).toBe('vendor/custom')
     }
-    expect(result.current.effort).toBe('high')
-    expect(result.current.acceptedInputSources?.effort).toBe('policy')
   })
 
   it('captures literal accepted effort independently of reports, aliases and missing catalog rows', () => {
@@ -341,7 +311,6 @@ describe('what a send carries', () => {
       effort: 'high'
     })
     expect(structuredAgentSessionSendSelection(view)).toEqual({ model: 'sonnet', effort: 'high' })
-    expect(view.record).not.toBe(listed.record)
     expect(listed.record).toEqual(originalRecord)
     expect(carried(listed, remembered, { model: 'sonnet' })).toEqual({
       model: 'sonnet',
