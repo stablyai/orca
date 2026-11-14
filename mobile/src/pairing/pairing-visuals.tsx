@@ -8,7 +8,7 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated'
 import { Check } from 'lucide-react-native'
-import { SHEET_CURVE } from '../components/sheet-motion-values'
+import { SHEET_CURVE } from '../components/motion/sheet-motion-values'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { pairScanStyles as scanStyles } from '../pair-scan-styles'

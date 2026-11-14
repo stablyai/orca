@@ -8,7 +8,7 @@ import {
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch
 } from './mobile-existing-agent-launch'
-import { agentPromptNotSentMessage } from '../../source-control/review/pr-ai-triage-launch'
+import { agentPromptNotSentMessage } from '../../source-control/review/agent-launch/pr-ai-triage-launch'
 import { readAgentLaunchNotice } from './agent-launch-request'
 import { translate } from '../../i18n/mobile-i18n'
 import {
