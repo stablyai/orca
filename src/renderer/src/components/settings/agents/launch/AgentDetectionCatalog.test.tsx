@@ -170,7 +170,7 @@ it.each([
   }
 )
 
-it('reveals only the destination list when a focused editor changes membership', async () => {
+it('reveals a focused moved editor while letting newer focus and navigation take precedence', async () => {
   const view = render(catalog(false, vi.fn()))
   fireEvent.click(screen.getByRole('button', { name: 'Claude' }))
   const input = screen.getByDisplayValue<HTMLInputElement>('claude')
@@ -190,33 +190,33 @@ it('reveals only the destination list when a focused editor changes membership',
   expect(source.scrollTop).toBe(20)
   expect(view.container.scrollTop).toBe(40)
   expect(document.activeElement).toBe(input)
-})
 
-it.each(['unfocused', 'focus change', 'navigation'])(
-  'does not reveal a moved editor after %s',
-  async (mode) => {
-    const view = render(catalog(false, vi.fn()))
-    fireEvent.click(screen.getByRole('button', { name: 'Claude' }))
-    const input = screen.getByDisplayValue<HTMLInputElement>('claude')
-    if (mode !== 'unfocused') {
-      input.focus()
-    }
-    const destination = screen.getByRole('region', { name: 'Installed agents' })
-    vi.spyOn(destination, 'getBoundingClientRect').mockImplementation(
-      () => new DOMRect(0, 100, 500, 200)
-    )
-    vi.spyOn(input, 'getBoundingClientRect').mockImplementation(
-      () => new DOMRect(0, 800 - destination.scrollTop, 100, 20)
-    )
-    view.rerender(catalog(true, vi.fn()))
-    if (mode === 'focus change') {
-      const outside = document.createElement('button')
-      view.container.append(outside)
-      outside.focus()
-    } else if (mode === 'navigation') {
-      cancelSettingsListReveal()
-    }
-    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
-    expect(destination.scrollTop).toBe(0)
-  }
-)
+  const outside = document.createElement('button')
+  view.container.append(outside)
+  const settleReveal = () =>
+    act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+
+  outside.focus()
+  view.rerender(catalog(false, vi.fn()))
+  destination.scrollTop = 0
+  view.rerender(catalog(true, vi.fn()))
+  await settleReveal()
+  expect(destination.scrollTop).toBe(0)
+  expect(document.activeElement).toBe(outside)
+
+  view.rerender(catalog(false, vi.fn()))
+  input.focus()
+  view.rerender(catalog(true, vi.fn()))
+  outside.focus()
+  await settleReveal()
+  expect(destination.scrollTop).toBe(0)
+  expect(document.activeElement).toBe(outside)
+
+  view.rerender(catalog(false, vi.fn()))
+  input.focus()
+  view.rerender(catalog(true, vi.fn()))
+  cancelSettingsListReveal()
+  await settleReveal()
+  expect(destination.scrollTop).toBe(0)
+  expect(document.activeElement).toBe(input)
+})

@@ -89,7 +89,9 @@ it('lets interaction cancel after the row arrives but before its layout settles'
 it('stops waiting at thirty seconds without a late jump', async () => {
   vi.useFakeTimers()
   const { fallback, arrive, reveal } = pending()
-  await vi.advanceTimersByTimeAsync(30_000)
+  await vi.advanceTimersByTimeAsync(29_999)
+  expect(fallback).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
   expect(fallback).toHaveBeenCalled()
   arrive()
   await mutations()
