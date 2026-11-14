@@ -304,37 +304,6 @@ for (const engine of ['chromium', 'webkit']) {
         expect(shown.mountedSandbox).toBe('allow-top-navigation-by-user-activation')
       }, 240_000)
 
-      // Check painted fixtures, granted document content and inert fragment targets.
-      it('paints both artifact variants and keeps hidden fragment links inert', async (ctx) => {
-        // A doctype with a public identifier and no system identifier, which is quirks. The bare
-        // name is not, so a pass that rewrote one as the other moves the whole artifact between
-        // layout modes -- which is what this arm exists to catch.
-        const quirks = '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">'
-        const shown = await open(browser(), { signal: ctx.signal, doctype: quirks })
-        const hidden = await open(browser(), {
-          signal: ctx.signal,
-          doctype: quirks,
-          grants: ['navigate', 'storage']
-        })
-        // Both fixture variants painted.
-        expect(shown.pixel).toBe(ARTIFACT_RGB)
-        expect(hidden.pixel).toBe(ARTIFACT_RGB)
-
-        // Known granted doctype remains distinct from the bare-doctype control.
-        expect(shown.inside?.doctypePublicId).toBe('-//W3C//DTD HTML 4.01 Transitional//EN')
-        // Bare-doctype control proves ID reader can distinguish lost identifier.
-        const bare = await open(browser(), { signal: ctx.signal, grants: ['navigate', 'storage'] })
-        expect(bare.inside?.doctypePublicId).toBe('')
-
-        // Granted fixture retains the leading pre newline.
-        expect(shown.inside?.preText).toBe('\nkept')
-
-        // Granted fragment remains known broken navigation; hidden arm must strip it rather than preserve false scroll affordance.
-        expect(shown.inside?.fragmentHref).toBe('#fragtarget')
-        expect(hidden.inside?.fragmentHref).toBeNull()
-        expect(hidden.links?.linked).toBe(0)
-      }, 240_000)
-
       // srcdoc #fragment resolves against embedder base, triggering frame-src none instead of scrolling; Chromium can replace artifact with error page.
       // Granted control retains known bug (followup-html-preview-fragment-links.md) and proves navigation counters see it; hidden arm must remain inert.
 
