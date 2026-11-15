@@ -17,7 +17,7 @@ import {
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { exchangeRemotePairingTicket } from '../../../../shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairingOffer,
   isEphemeralVmRuntimeEnvironment,

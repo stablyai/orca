@@ -7,7 +7,10 @@ import { getAppIconPath } from './desktop-integration/app-icon'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-hosting/browser-client-host-id-argument'
-import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
+import {
+  formatWindowMaterialArgument,
+  resolveWindowMaterial
+} from '../../shared/app-lifecycle/windows/window-material'
 import { windowMaterialOptions } from './presentation/window-material-options'
 import { rememberWindowMaterial } from './presentation/window-material-suppression'
 import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
@@ -32,7 +35,7 @@ import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   formatHiddenWindowFramePumpArgument,
   shouldPumpHiddenWindowFrames
-} from '../../shared/hidden-window-frame-pump'
+} from '../../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import {
   forceRepaint,
   installMacosVisibilityRepaint,

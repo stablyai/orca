@@ -25,7 +25,7 @@ import {
   validResetAt
 } from './usage-reset-caption'
 import { formatBareUsagePercentage } from './usage-percentage-label'
-import { getUsageHealthTone, usageTextClass } from './usage-health-tone'
+import { getUsageHealthTone } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
 
 type ProviderId = ProviderRateLimits['provider']
@@ -64,10 +64,7 @@ function ScopedUsageFlag({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <span
-      data-usage-scoped-urgent
-      className={`shrink-0 text-[11px] ${usageTextClass(section.window.usedPercent)}`}
-    >
+    <span data-usage-scoped-urgent className="shrink-0 text-[11px] text-muted-foreground">
       {`${section.label} ${formatBareUsagePercentage(section.window.usedPercent, display, t)}`}
     </span>
   )

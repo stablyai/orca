@@ -1,4 +1,4 @@
-import { DESKTOP_PRESENCE_TTL_MS } from '../../../../shared/desktop-client-presence'
+import { DESKTOP_PRESENCE_TTL_MS } from '../../../../shared/app-lifecycle/presence/desktop-client-presence'
 
 export class DesktopClientPresenceTracker {
   private readonly reports = new Map<string, { away: boolean; at: number }>()

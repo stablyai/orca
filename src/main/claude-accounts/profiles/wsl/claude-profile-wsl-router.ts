@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { lstat, readFile } from 'node:fs/promises'
 import { join, posix } from 'node:path'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV,

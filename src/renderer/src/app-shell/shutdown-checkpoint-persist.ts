@@ -1,5 +1,5 @@
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import { formatShutdownCheckpointFailureReason } from '../../../shared/renderer-shutdown-events'
+import { formatShutdownCheckpointFailureReason } from '../../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 import type { WorkspaceSessionHostSnapshot } from '../lib/workspace/persistence/workspace-session-host-persistence'
 import { recordRendererCrashBreadcrumb } from '../diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
