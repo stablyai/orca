@@ -21,14 +21,14 @@ it('keeps a reply scrolled to its start when new output grows the chat', () => {
   })
   act(() => tail?.listProps.ref(list))
 
-  act(() => tail?.scrollRowToTop(3))
+  act(() => tail?.scrollRowToTop({ index: 3, viewOffset: 40 }))
   act(() => tail?.pinToTailAfterContentResize(0, 900))
 
   expect(list.scrollToIndex).toHaveBeenCalledWith({
     animated: true,
     index: 3,
     viewPosition: 0,
-    viewOffset: 48
+    viewOffset: 40
   })
   expect(list.scrollToOffset).not.toHaveBeenCalled()
   act(() => renderer.unmount())

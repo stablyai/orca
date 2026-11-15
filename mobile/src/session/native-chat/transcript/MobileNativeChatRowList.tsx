@@ -3,6 +3,7 @@ import { FlatList, Platform } from 'react-native'
 import type { LegacyComposedGesture } from 'react-native-gesture-handler'
 import { MobileNativeChatPinchZoom } from './viewport/mobile-native-chat-pinch-zoom'
 import type { MobileNativeChatRowKeys } from './projection/mobile-native-chat-row-keys'
+import type { MobileNativeChatTurnRow } from './projection/use-mobile-native-chat-row-props'
 import { MobileNativeChatPageList } from './viewport/MobileNativeChatPageList'
 import {
   mobileNativeChatRowAnchor,
@@ -31,6 +32,7 @@ type Props = Pick<
 > & {
   tail: MobileNativeChatTailFollow
   rowKeys: MobileNativeChatRowKeys
+  turnRowOf: (index: number, row: PageProps['rows'][number]) => MobileNativeChatTurnRow
   /** With a header, the row below it anchors the native list's visible content. */
   hasHeader: boolean
   pinchGesture: LegacyComposedGesture
@@ -40,6 +42,7 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
   const scrollRow = useMobileNativeChatRowScroll(
     props.rows,
     props.rowKeys.keyOf,
+    props.turnRowOf,
     props.tail.scrollRowToTop
   )
   return (

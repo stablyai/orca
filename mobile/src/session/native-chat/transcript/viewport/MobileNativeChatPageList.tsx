@@ -299,9 +299,12 @@ export function MobileNativeChatPageList({
       },
       scrollToIndex: ({ index, viewOffset }) => {
         const s = scroller()
-        const row = live.current.rows[index]
-        const top =
-          s && row ? mobileNativeChatRowTop(s, latest.current.rowKeys.keyOf(row)) : undefined
+        // Folded rows draw nothing; the first drawn row from `index` holds that place.
+        const { rows } = live.current
+        let top: number | undefined
+        for (let at = index; s && top === undefined && at < rows.length; at += 1) {
+          top = mobileNativeChatRowTop(s, latest.current.rowKeys.keyOf(rows[at]!))
+        }
         if (s && top !== undefined) {
           write(s, s.scrollTop + top - s.getBoundingClientRect().top - viewOffset)
           notePlace(s)

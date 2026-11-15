@@ -2,8 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 
 const AT_TAIL_SLOP = 80
-// A row scrolled to the top keeps this much of what precedes it in view, so its start reads as a start.
-const ROW_TOP_PEEK = 48
 
 /** The page's list is anchored at its end, so it reports the reader's distance from it itself. */
 function listReportsGestures(): boolean {
@@ -54,8 +52,9 @@ export type MobileNativeChatTailFollow = {
   pinToTail: () => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
-  /** Puts row `index` at the top and stops following the tail, so new output cannot pull it away. */
-  scrollRowToTop: (index: number) => void
+  /** Puts row `index` at the top, `viewOffset` below it, and stops following the tail, so new
+   *  output cannot pull it away. */
+  scrollRowToTop: (target: { index: number; viewOffset: number }) => void
   beginUserScroll: () => void
   endUserDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   beginMomentum: () => void
@@ -154,11 +153,10 @@ export function useMobileNativeChatTailFollow(args: {
   }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
 
   const scrollRowToTop = useCallback(
-    (index: number) => {
+    ({ index, viewOffset }: { index: number; viewOffset: number }) => {
       clearUserScrollSettle()
       userScrollActiveRef.current = false
       setFollowing(false)
-      const viewOffset = index === 0 ? 0 : ROW_TOP_PEEK
       listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0, viewOffset })
     },
     [clearUserScrollSettle, setFollowing]
@@ -167,8 +165,7 @@ export function useMobileNativeChatTailFollow(args: {
   // A row the native list has not measured yet: land near it from the average row height.
   const onScrollToIndexFailed = useCallback(
     ({ index, averageItemLength }: ScrollToIndexFailure) => {
-      const offset = Math.max(0, index * averageItemLength - ROW_TOP_PEEK)
-      listRef.current?.scrollToOffset({ animated: true, offset })
+      listRef.current?.scrollToOffset({ animated: true, offset: index * averageItemLength })
     },
     []
   )
