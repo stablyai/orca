@@ -2,6 +2,7 @@ import {
   createTomlLineScanState,
   getTomlTableHeader,
   isTomlStructuralLine,
+  parseTomlSingleLineStringValue,
   updateTomlLineScanState
 } from './config-toml-line-scan'
 
@@ -42,7 +43,8 @@ export function readCodexSharedSqliteHome(config: string): string | null {
   return null
 }
 
-function hasTopLevelSqliteHome(config: string): boolean {
+/** The top-level sqlite_home line (the user's or Orca's), or null when the config has none. */
+function findTopLevelSqliteHomeLine(config: string): string | null {
   let scan = createTomlLineScanState()
   for (const line of config.split('\n')) {
     const structural = isTomlStructuralLine(scan)
@@ -51,13 +53,23 @@ function hasTopLevelSqliteHome(config: string): boolean {
       continue
     }
     if (getTomlTableHeader(line)) {
-      return false
+      return null
     }
     if (/^\s*(?:sqlite_home|"sqlite_home"|'sqlite_home')\s*=/.test(line)) {
-      return true
+      return line
     }
   }
-  return false
+  return null
+}
+
+function hasTopLevelSqliteHome(config: string): boolean {
+  return findTopLevelSqliteHomeLine(config) !== null
+}
+
+/** Where a home's config puts Codex's databases, from a single-line string value. */
+export function readCodexConfiguredSqliteHome(config: string): string | null {
+  const line = findTopLevelSqliteHomeLine(config)
+  return (line && parseTomlSingleLineStringValue(line, line.indexOf('=') + 1)?.value) || null
 }
 
 /** Points Codex's databases at `sqliteHome` unless the user's own config sets one; null removes Orca's line. */

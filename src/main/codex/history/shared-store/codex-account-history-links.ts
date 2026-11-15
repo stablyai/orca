@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, readdir, realpath, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import {
@@ -16,8 +16,9 @@ import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 const STORE_DIRECTORIES = ['sessions', 'archived_sessions', 'rollout-migrations']
 
 // Local logs and scratch; per-home process endpoints (a linked daemon socket would attach an
-// account to the ~/.codex login's daemon); resources Orca links or copies itself, including the
-// home's own bundled marketplaces inside `.tmp`.
+// account to the ~/.codex login's daemon); state keyed to the home's own path (encrypted secrets
+// whose keyring passphrase is named from CODEX_HOME, the Windows sandbox setup); resources Orca
+// links or copies itself, including the home's own bundled marketplaces inside `.tmp`.
 const PRIVATE_DIRECTORIES = new Set([
   'log',
   'tmp',
@@ -25,6 +26,10 @@ const PRIVATE_DIRECTORIES = new Set([
   'app-server-control',
   'app-server-daemon',
   'ipc',
+  'secrets',
+  '.sandbox',
+  '.sandbox-bin',
+  '.sandbox-secrets',
   'skills',
   'hooks',
   'plugins',
@@ -125,28 +130,40 @@ async function recordIndexPending(pendingDir: string, path: string): Promise<voi
   }
 }
 
+async function readConfig(configPath: string): Promise<string> {
+  try {
+    return await readFile(configPath, 'utf8')
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return ''
+    }
+    throw error
+  }
+}
+
 /** Orca's sqlite_home line in the home's own config; never the user's ~/.codex config. */
 async function writeSharedSqliteHome(
   accountHome: string,
   sqliteHome: string | null
 ): Promise<void> {
   const configPath = join(accountHome, 'config.toml')
-  let current = ''
-  try {
-    current = await readFile(configPath, 'utf8')
-  } catch (error) {
-    if (!isDefinitiveAbsence(error)) {
-      throw error
+  // A mirror writing meanwhile wins the race; the line is then applied to its content.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const current = await readConfig(configPath)
+    const next = applyCodexSharedSqliteHome(current, sqliteHome)
+    if (next === current) {
+      return
     }
+    const staged = `${configPath}.${randomUUID()}.tmp`
+    // Mirrored MCP environment tokens require owner-only writes.
+    await writeFile(staged, next, { mode: 0o600 })
+    if ((await readConfig(configPath)) === current) {
+      await rename(staged, configPath)
+      return
+    }
+    await unlink(staged)
   }
-  const next = applyCodexSharedSqliteHome(current, sqliteHome)
-  if (next === current) {
-    return
-  }
-  const staged = `${configPath}.${randomUUID()}.tmp`
-  // Mirrored MCP environment tokens require owner-only writes.
-  await writeFile(staged, next, { mode: 0o600 })
-  await rename(staged, configPath)
+  throw new Error(`Codex config kept changing; sqlite_home not updated in ${configPath}`)
 }
 
 export function isCodexAccountHistoryLinked(

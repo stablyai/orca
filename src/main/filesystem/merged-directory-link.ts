@@ -1,4 +1,5 @@
 import {
+  copyFile,
   link,
   lstat,
   mkdir,
@@ -10,7 +11,7 @@ import {
   symlink,
   unlink
 } from 'node:fs/promises'
-import type { BigIntStats } from 'node:fs'
+import { constants as fsConstants, type BigIntStats } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file-operations'
@@ -77,12 +78,11 @@ async function moveEntry(from: string, to: string, item: BigIntStats): Promise<v
     await (item.isSymbolicLink() ? symlink(await readlink(from), to) : link(from, to))
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code ?? ''
-    // Some filesystems refuse hard links; a rename still moves the file when the name is free.
-    if (!HARD_LINK_UNSUPPORTED.has(code) || (await lstatIfPresent(to))) {
+    // Some filesystems refuse hard links; an exclusive copy publishes without replacing a name.
+    if (!HARD_LINK_UNSUPPORTED.has(code) || !item.isFile()) {
       throw error
     }
-    await renameFileWithWindowsRetryAsync(from, to)
-    return
+    await copyFile(from, to, fsConstants.COPYFILE_EXCL)
   }
   await unlink(from)
 }
@@ -188,7 +188,11 @@ export async function mergeDirectoryIntoLink(
         await moveTree(source, pending, { retained: 0, failed: [] }, {})
       }
       if (await lstatIfPresent(source)) {
-        throw new DirectoryLinkError('retained-conflict', `Conflicts kept in ${source}`)
+        // A name conflicting in both places: set this version aside in its own folder.
+        await renameFileWithWindowsRetryAsync(
+          source,
+          `${source}.${Date.now()}${MERGE_PENDING_SUFFIX}`
+        )
       }
     } else {
       await renameFileWithWindowsRetryAsync(source, pending)

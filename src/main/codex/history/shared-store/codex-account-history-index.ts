@@ -9,6 +9,7 @@ import { listCodexIndexPendingRollouts } from './codex-account-history-links'
 
 let stopping = false
 const hostHealsByPendingDir = new Map<string, Promise<void>>()
+const rerunRequested = new Set<string>()
 
 /** Stops background index work at quit; settled rows and markers are kept. */
 export function stopCodexAccountHistoryWork(): void {
@@ -64,10 +65,22 @@ export async function healCodexIndexPendingRollouts(args: {
   })
 }
 
-/** One background pass per store; a later launch resumes what is left. */
-export function startHostCodexIndexHeal(pendingDir: string, storeHome: string): void {
+/**
+ * One background pass per store, and only while no history pass runs (`isPaused`): a pass may
+ * have recorded markers for files not moved yet, which a read would wrongly settle as missing.
+ * A request while one runs reruns it afterwards, from whatever markers are left.
+ */
+export function requestHostCodexIndexHeal(
+  pendingDir: string,
+  storeHome: string,
+  isPaused: () => boolean
+): void {
   const key = normalizeRuntimePathForComparison(pendingDir)
-  if (stopping || hostHealsByPendingDir.has(key)) {
+  if (stopping || isPaused()) {
+    return
+  }
+  if (hostHealsByPendingDir.has(key)) {
+    rerunRequested.add(key)
     return
   }
   const task = listCodexIndexPendingRollouts(pendingDir)
@@ -83,13 +96,19 @@ export function startHostCodexIndexHeal(pendingDir: string, storeHome: string): 
               }
             })
           }
-        }
+        },
+        options: { shouldStop: isPaused }
       })
     )
     .catch((error: unknown) => {
       console.warn('[codex-account-history] Indexing shared history failed:', error)
     })
-    .finally(() => hostHealsByPendingDir.delete(key))
+    .finally(() => {
+      hostHealsByPendingDir.delete(key)
+      if (rerunRequested.delete(key)) {
+        requestHostCodexIndexHeal(pendingDir, storeHome, isPaused)
+      }
+    })
   hostHealsByPendingDir.set(key, task)
 }
 
@@ -97,5 +116,6 @@ export const _internals = {
   reset: (): void => {
     stopping = false
     hostHealsByPendingDir.clear()
+    rerunRequested.clear()
   }
 }

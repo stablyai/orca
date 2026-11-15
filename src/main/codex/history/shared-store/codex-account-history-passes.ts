@@ -4,10 +4,13 @@ import {
   getOrcaUserDataPath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { startHostCodexIndexHeal } from './codex-account-history-index'
+import { requestHostCodexIndexHeal } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
 
 type QueuedPass = { shared: boolean; pass: Promise<void> }
+
+const INDEX_PENDING_DIR = (): string =>
+  join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
 
 /**
  * Host account history passes, in request order per home: a request joins only the latest one
@@ -16,6 +19,7 @@ type QueuedPass = { shared: boolean; pass: Promise<void> }
 export class CodexAccountHistoryPasses {
   private readonly latest = new Map<string, QueuedPass>()
   private readonly sharedThisRun = new Set<string>()
+  private activePasses = 0
 
   run(accountHome: string, shared: boolean): Promise<void> {
     const key = normalizeRuntimePathForComparison(accountHome)
@@ -23,9 +27,20 @@ export class CodexAccountHistoryPasses {
     if (previous?.shared === shared) {
       return previous.pass
     }
-    const pass = (previous?.pass ?? Promise.resolve()).then(() =>
-      this.runPass(key, accountHome, shared)
-    )
+    const pass = (previous?.pass ?? Promise.resolve()).then(async () => {
+      this.activePasses += 1
+      try {
+        await this.runPass(key, accountHome, shared)
+      } finally {
+        this.activePasses -= 1
+      }
+      // Index once no pass is moving files; a pass that recorded nothing leaves no work.
+      requestHostCodexIndexHeal(
+        INDEX_PENDING_DIR(),
+        getSystemCodexHomePath(),
+        () => this.activePasses > 0
+      )
+    })
     this.latest.set(key, { shared, pass })
     void pass.finally(() => {
       if (this.latest.get(key)?.pass === pass) {
@@ -49,7 +64,7 @@ export class CodexAccountHistoryPasses {
         await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })
         return
       }
-      const indexPendingDir = join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
+      const indexPendingDir = INDEX_PENDING_DIR()
       const result = await shareCodexAccountHistory({
         accountHome,
         storeHome,
@@ -61,7 +76,6 @@ export class CodexAccountHistoryPasses {
       })
       if (result === 'shared') {
         this.sharedThisRun.add(key)
-        startHostCodexIndexHeal(indexPendingDir, storeHome)
       }
     } catch (error) {
       onWarning(error)
