@@ -184,6 +184,8 @@ export function EditorEditFileSurface({
           src={fileContent.mediaUrl}
           byteSize={fileContent.size}
           filePath={activeFile.filePath}
+          sourceWorktreeId={activeFile.worktreeId}
+          sourceRelativePath={activeFile.relativePath}
           mimeType={fileContent.mimeType}
           preferenceKey={pdfPreferenceKey}
           scrollCacheKey={pdfViewStateKey}

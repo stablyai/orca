@@ -29,6 +29,8 @@ type ImageViewerProps = {
   /** The file's size when `src` hides the bytes. */
   byteSize?: number
   filePath: string
+  sourceWorktreeId?: string | null
+  sourceRelativePath?: string | null
   mimeType?: string
   layout?: 'fill' | 'intrinsic'
   // Persist zoom only with owner-qualified identity; diff/conflict callers must not use a path-only key.
@@ -53,6 +55,8 @@ export default function ImageViewer({
   src,
   byteSize,
   filePath,
+  sourceWorktreeId,
+  sourceRelativePath,
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill',
   preferenceKey,
@@ -104,6 +108,8 @@ export default function ImageViewer({
         src={src}
         byteSize={byteSize}
         filePath={filePath}
+        sourceWorktreeId={sourceWorktreeId}
+        sourceRelativePath={sourceRelativePath}
         preferenceKey={preferenceKey}
         scrollCacheKey={scrollCacheKey}
       />
