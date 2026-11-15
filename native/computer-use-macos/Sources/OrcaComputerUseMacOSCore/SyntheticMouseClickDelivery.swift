@@ -1,3 +1,5 @@
+import CoreGraphics
+
 /// Foreground (--restore-window) clicks: HID taps behind a focused-recipient fence; background clicks use BackgroundInputTransport.
 /// Pace down/up events or WindowServer can drop mouseUp.
 public enum SyntheticMouseClickDelivery {
@@ -55,6 +57,16 @@ public enum SyntheticMouseClickDelivery {
         case let .buttonDown(pressIndex), let .buttonUp(pressIndex):
             return Int64(pressIndex)
         }
+    }
+
+    /// Apps read the live pointer while handling a gesture (hover, menus, drops), so wait before putting it back.
+    public static let pointerRestoreSettleMicroseconds: UInt32 = 200_000
+
+    /// The pointer goes back only while it still sits where the last HID event left it; anywhere else means the user moved it.
+    public static func shouldRestorePointer(saved: CGPoint, lastPosted: CGPoint?, current: CGPoint) -> Bool {
+        guard let lastPosted else { return false }
+        func near(_ a: CGPoint, _ b: CGPoint) -> Bool { abs(a.x - b.x) <= 1 && abs(a.y - b.y) <= 1 }
+        return near(current, lastPosted) && !near(saved, lastPosted)
     }
 
     public static func uniqueWindowCandidate<Candidate>(
