@@ -1,8 +1,58 @@
-const { app, BrowserWindow, contentTracing } = require('electron')
+const { app, BrowserWindow } = require('electron')
 const { createServer } = require('node:http')
-const { readFile, mkdir, writeFile } = require('node:fs/promises')
+const { readFile, mkdir, writeFile, open } = require('node:fs/promises')
 const { resolve, join, relative, extname } = require('node:path')
 const os = require('node:os')
+
+async function bounded(phase, operation) {
+  console.log(JSON.stringify({ phase, state: 'started' }))
+  let timer
+  try {
+    const result = await Promise.race([
+      operation(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${phase} exceeded 120 seconds`)), 120000)
+      })
+    ])
+    console.log(JSON.stringify({ phase, state: 'completed' }))
+    return result
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function stopTrace(debuggerClient, path) {
+  let listener
+  const completed = new Promise((resolve) => {
+    listener = (_, method, params) => {
+      if (method === 'Tracing.tracingComplete') {
+        resolve(params.stream)
+      }
+    }
+    debuggerClient.on('message', listener)
+  })
+  try {
+    await debuggerClient.sendCommand('Tracing.end')
+    const handle = await completed
+    if (!handle) {
+      throw new Error('Trace completed without a stream')
+    }
+    const file = await open(path, 'w')
+    try {
+      let eof = false
+      while (!eof) {
+        const part = await debuggerClient.sendCommand('IO.read', { handle, size: 65536 })
+        await file.writeFile(part.base64Encoded ? Buffer.from(part.data, 'base64') : part.data)
+        eof = part.eof
+      }
+    } finally {
+      await file.close()
+      await debuggerClient.sendCommand('IO.close', { handle })
+    }
+  } finally {
+    debuggerClient.removeListener('message', listener)
+  }
+}
 
 if (process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
   throw new Error('Gallery benchmark requires ORCA_BACKGROUND_LAUNCH=1')
@@ -70,6 +120,10 @@ async function run() {
       { name: '2000-cold-and-same-worker-warm', options: { count: 2000, warm: true } },
       { name: 'single-row-update-after-ready', options: { count: 2000, warm: true, update: true } },
       { name: 'large-unrelated-tool-input', options: { count: 1, largeTool: true, warm: true } },
+      { name: 'oversized-serialized-read', options: { count: 1, serializedTool: true } },
+      { name: 'oversized-work-run', options: { count: 1, longRun: true } },
+      { name: 'large-unique-image-source', options: { count: 1, largeSource: true, warm: true } },
+      { name: 'large-plain-document', options: { count: 1, hugeDocument: true, warm: true } },
       { name: '100k-image', options: { count: 1, giant: true, image: true, warm: true } },
       { name: '100k-text', options: { count: 1, giant: true, image: false, warm: true } },
       { name: 'oversized-image-fields', options: { count: 1, largeFields: true, warm: true } },
@@ -80,15 +134,20 @@ async function run() {
       { name: 'reopen-new-worker-cold-index', options: { count: 2000 } }
     ]
     for (const { name, options } of workloads) {
-      await contentTracing.startRecording({
-        included_categories: [
-          'devtools.timeline',
-          'blink.user_timing',
-          'toplevel',
-          'v8',
-          'disabled-by-default-devtools.timeline'
-        ]
-      })
+      await bounded(`${name}:trace-start`, () =>
+        window.webContents.debugger.sendCommand('Tracing.start', {
+          transferMode: 'ReturnAsStream',
+          traceConfig: {
+            includedCategories: [
+              'devtools.timeline',
+              'blink.user_timing',
+              'toplevel',
+              'v8',
+              'disabled-by-default-devtools.timeline'
+            ]
+          }
+        })
+      )
       const trace = join(traceDirectory, `${name}.json`)
       try {
         const pending = window.webContents.executeJavaScript(
@@ -110,7 +169,7 @@ async function run() {
             }
           }, 50)
         })
-        const result = await pending
+        const result = await bounded(`${name}:workload`, () => pending)
         const input = await inputProbe
         const heapUsage = await window.webContents.debugger.sendCommand('Runtime.getHeapUsage')
         const targets = await window.webContents.debugger.sendCommand('Target.getTargets')
@@ -129,10 +188,14 @@ async function run() {
           processes: app.getAppMetrics()
         })
         console.log(JSON.stringify({ name, result }))
+        await writeFile(join(directory, 'report.json'), JSON.stringify(report, null, 2))
       } finally {
-        await contentTracing.stopRecording(trace)
+        await bounded(`${name}:trace-stop`, () => stopTrace(window.webContents.debugger, trace))
       }
     }
+  } catch (error) {
+    errors.push(String(error))
+    throw error
   } finally {
     await writeFile(join(directory, 'report.json'), JSON.stringify(report, null, 2))
     window.destroy()

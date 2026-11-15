@@ -121,7 +121,7 @@ describe('transcript gallery index', () => {
     expect(next.map((entry) => entry.source)).toEqual(['/tmp/read.png'])
   })
 
-  it('reuses an uploaded group and retires it when a committed rewind removes it', async () => {
+  it('retires a rewound group only after the client releases its lease', async () => {
     const index = new NativeChatGalleryIndex()
     await index.handle({ type: 'begin', id: 1, revision: 1, scopeKey: 'chat' })
     await put(index, 1, 2, surfaces(read))
@@ -134,7 +134,43 @@ describe('transcript gallery index', () => {
     await index.handle({ type: 'commit', id: 8, revision: 3 })
     await index.handle({ type: 'begin', id: 9, revision: 4, scopeKey: 'chat' })
     expect(await index.handle({ type: 'reuse', id: 10, revision: 4, handles: [2] })).toMatchObject({
+      type: 'ack'
+    })
+    await index.handle({ type: 'release', id: 11, revision: 4, handles: [2] })
+    expect(await index.handle({ type: 'reuse', id: 10, revision: 4, handles: [2] })).toMatchObject({
       type: 'error'
     })
   })
+})
+
+it('keeps huge image fields exact while assigning bounded duplicate-safe renderer identities', async () => {
+  const index = new NativeChatGalleryIndex()
+  await index.handle({ type: 'begin', id: 1, revision: 1, scopeKey: 'chat' })
+  const source = `data:image/png;base64,${'a'.repeat(500_000)}`
+  const second = `${source}b`
+  const result = await index.handle({
+    type: 'put',
+    id: 2,
+    revision: 1,
+    groups: [source, source, second].map((url, offset) => ({
+      handle: offset + 10,
+      projectionMs: 0,
+      surfaces: [
+        {
+          kind: 'files' as const,
+          ownerId: 'same',
+          slotKey: 'same',
+          role: 'row-attachment',
+          blocks: [{ type: 'image-ref' as const, url }]
+        }
+      ]
+    }))
+  })
+  if (result.type !== 'groups') {
+    throw new Error('Large image identities did not index')
+  }
+  const entries = result.groups.flatMap((group) => group.entries)
+  expect(entries.map((entry) => entry.key.length <= 64)).toEqual([true, true, true])
+  expect(new Set(entries.map((entry) => entry.key)).size).toBe(2)
+  expect(entries.map((entry) => entry.source)).toEqual([source, source, second])
 })

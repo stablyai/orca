@@ -1,3 +1,4 @@
+import { NativeChatGalleryProjectionLimitError } from '../../../src/renderer/src/components/native-chat/media/gallery/native-chat-gallery-projection-budget'
 import { galleryBenchmarkSnapshot } from './gallery-index-benchmark-transcript'
 import { NativeChatGalleryClient } from '../../../src/renderer/src/components/native-chat/media/gallery/native-chat-gallery-client'
 
@@ -46,6 +47,10 @@ type GalleryBenchmarkOptions = {
   manyImages?: boolean
   largeTool?: boolean
   update?: boolean
+  serializedTool?: boolean
+  longRun?: boolean
+  largeSource?: boolean
+  hugeDocument?: boolean
 }
 async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<unknown> {
   const data = galleryBenchmarkSnapshot(
@@ -79,6 +84,35 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
         input: { file_path: '/fixture/read.png', unrelated: 'seed '.repeat(400_000) }
       },
       { type: 'tool-result', output: 'bytes '.repeat(400_000) }
+    ]
+  }
+  if (first?.kind === 'message' && options.serializedTool) {
+    first.message.blocks = [
+      {
+        type: 'tool-call',
+        name: 'Read',
+        state: 'completed',
+        input: JSON.stringify({
+          file_path: '/fixture/read.png',
+          unrelated: 'seed '.repeat(400_000)
+        })
+      }
+    ]
+  }
+  if (first?.kind === 'message' && options.longRun) {
+    first.workRun = Array.from({ length: 513 }, (_, index) => ({
+      ...first.message,
+      id: `member-${index}`
+    }))
+  }
+  if (first?.kind === 'message' && options.largeSource) {
+    first.message.blocks = [
+      { type: 'image-ref', url: `data:image/png;base64,${'a'.repeat(2_000_000)}` }
+    ]
+  }
+  if (first?.kind === 'message' && options.hugeDocument) {
+    first.message.blocks = [
+      { type: 'text', text: `${'a'.repeat(2_000_000)}\n\n![large](/fixture/large-document.png)` }
     ]
   }
   const longTasks: { start: number; duration: number }[] = []
@@ -159,8 +193,18 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
       if (options.cancel) {
         setTimeout(() => client.close(), 10)
       }
-      const result = await pending
-      const revisions = await Promise.all(superseded)
+      let rejectedProjection = false
+      const result = await pending.catch((error: unknown) => {
+        if (
+          (options.serializedTool || options.longRun) &&
+          error instanceof NativeChatGalleryProjectionLimitError
+        ) {
+          rejectedProjection = true
+          return null
+        }
+        throw error
+      })
+      const revisions = await Promise.allSettled(superseded)
       const totalMs = performance.now() - started
       await input
       samples.push({
@@ -169,9 +213,12 @@ async function runGalleryBenchmark(options: GalleryBenchmarkOptions): Promise<un
         wire: sampleWire,
         inputTaskDelayMs: inputDelay,
         imageCount: result?.entries.length ?? null,
+        rejectedProjection,
         latestImage: options.stream ? (result?.entries.at(-1)?.source ?? null) : undefined,
         supersededRevisions: options.stream
-          ? revisions.filter((revision) => revision === null).length
+          ? revisions.filter(
+              (revision) => revision.status === 'fulfilled' && revision.value === null
+            ).length
           : undefined,
         metrics: result?.metrics ?? null
       })

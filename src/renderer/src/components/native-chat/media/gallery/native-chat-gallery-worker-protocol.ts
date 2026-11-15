@@ -13,6 +13,7 @@ export type NativeChatGalleryWorkerCommand =
       }[]
     }
   | { type: 'reuse'; handles: readonly number[] }
+  | { type: 'release'; handles: readonly number[] }
   | { type: 'commit' }
 
 export type NativeChatGalleryWorkerRequest = {

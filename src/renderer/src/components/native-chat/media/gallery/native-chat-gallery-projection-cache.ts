@@ -1,5 +1,10 @@
+import {
+  assertNativeChatGalleryProjection,
+  NativeChatGalleryProjectionLimitError
+} from './native-chat-gallery-projection-budget'
+import { NativeChatGalleryRetirementQueue } from './native-chat-gallery-retirement-queue'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { yieldToEventLoop } from '../../../../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
 import type { NativeChatGalleryEntry } from './native-chat-gallery-entries'
 import type { NativeChatGallerySurface } from './native-chat-gallery-surfaces'
 
@@ -27,18 +32,28 @@ export type NativeChatGalleryPreparedGroup = {
 
 export class NativeChatGalleryProjectionCache {
   private nextHandle = 0
-  private readonly byKey = new Map<string, Group>()
-  private readonly groups = new Map<number, Group>()
+  private byKey = new Map<string, Group>()
+  private groups = new Map<number, Group>()
+  private committed = new Set<number>()
+  private generation = 0
+  readonly retirements = new NativeChatGalleryRetirementQueue()
 
   clear(): void {
-    this.byKey.clear()
-    this.groups.clear()
+    this.byKey = new Map()
+    this.groups = new Map()
+    this.committed = new Set()
+    this.retirements.clear()
+    this.generation++
   }
 
   async cached(
     input: NativeChatGalleryGroupInput,
     options: ProjectionOptions
   ): Promise<number | null> {
+    if (input.key.length > 1040) {
+      throw new NativeChatGalleryProjectionLimitError()
+    }
+    const generation = this.generation
     const group = this.byKey.get(input.key)
     const before = group?.input
     if (
@@ -66,7 +81,7 @@ export class NativeChatGalleryProjectionCache {
         await yieldToEventLoop()
       }
     }
-    return group.handle
+    return generation === this.generation ? group.handle : null
   }
 
   prepare(
@@ -74,7 +89,11 @@ export class NativeChatGalleryProjectionCache {
     options: ProjectionOptions,
     project: () => NativeChatGallerySurface[]
   ): NativeChatGalleryPreparedGroup {
+    if (input.key.length > 1040) {
+      throw new NativeChatGalleryProjectionLimitError()
+    }
     const started = performance.now()
+    assertNativeChatGalleryProjection(input)
     const surfaces = project()
     return {
       handle: ++this.nextHandle,
@@ -104,16 +123,55 @@ export class NativeChatGalleryProjectionCache {
         options: source.options,
         entries: result.entries
       }
+      const previous = this.byKey.get(group.input.key)
+      if (previous && !this.committed.has(previous.handle)) {
+        this.groups.delete(previous.handle)
+        this.retirements.enqueue([previous.handle])
+      }
       this.groups.set(group.handle, group)
       this.byKey.set(group.input.key, group)
     }
+  }
+
+  async retainKeys(keys: ReadonlySet<string>, isCurrent: () => boolean): Promise<boolean> {
+    const generation = this.generation
+    let visited = 0
+    for (const [handle, group] of this.groups) {
+      if (!this.committed.has(handle) && !keys.has(group.input.key)) {
+        this.groups.delete(handle)
+        if (this.byKey.get(group.input.key) === group) {
+          this.byKey.delete(group.input.key)
+        }
+        this.retirements.enqueue([handle])
+      }
+      if (++visited % 128 === 0) {
+        await yieldToEventLoop()
+        if (!isCurrent() || generation !== this.generation) {
+          return false
+        }
+      }
+    }
+    return isCurrent() && generation === this.generation
   }
 
   async assemble(
     order: readonly number[],
     isCurrent: () => boolean
   ): Promise<NativeChatGalleryEntry[] | null> {
+    const generation = this.generation
+    const valid = (): boolean => {
+      if (!isCurrent()) {
+        return false
+      }
+      if (generation !== this.generation) {
+        throw new Error('Gallery worker retired during assembly')
+      }
+      return true
+    }
     const entries: NativeChatGalleryEntry[] = []
+    const nextByKey = new Map<string, Group>()
+    const nextGroups = new Map<number, Group>()
+    const retired: number[] = []
     const seen = new Set<string>()
     const retained = new Set<number>()
     let visited = 0
@@ -123,14 +181,19 @@ export class NativeChatGalleryProjectionCache {
       if (!group) {
         throw new Error('Gallery result lost its surface group')
       }
+      nextByKey.set(group.input.key, group)
+      nextGroups.set(handle, group)
       for (const entry of group.entries) {
+        if (entry.key.length > 64) {
+          throw new Error('Gallery result contains an oversized identity')
+        }
         if (!seen.has(entry.key)) {
           seen.add(entry.key)
           entries.push(entry)
         }
         if (++visited % 128 === 0) {
           await yieldToEventLoop()
-          if (!isCurrent()) {
+          if (!valid()) {
             return null
           }
         }
@@ -138,24 +201,28 @@ export class NativeChatGalleryProjectionCache {
       if (++visited % 128 === 0) {
         await yieldToEventLoop()
       }
-      if (!isCurrent()) {
+      if (!valid()) {
         return null
       }
     }
-    for (const [handle, group] of this.groups) {
+    for (const handle of this.groups.keys()) {
       if (!retained.has(handle)) {
-        this.groups.delete(handle)
-        if (this.byKey.get(group.input.key) === group) {
-          this.byKey.delete(group.input.key)
-        }
+        retired.push(handle)
       }
       if (++visited % 128 === 0) {
         await yieldToEventLoop()
-        if (!isCurrent()) {
+        if (!valid()) {
           return null
         }
       }
     }
+    if (!valid()) {
+      return null
+    }
+    this.byKey = nextByKey
+    this.groups = nextGroups
+    this.committed = retained
+    this.retirements.enqueue(retired)
     return entries
   }
 }

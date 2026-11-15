@@ -1,8 +1,9 @@
+import { NativeChatGalleryEntryIdentities } from './native-chat-gallery-entry-identities'
 import {
   nativeChatDocumentImages,
   type NativeChatDocumentImage
 } from '../../markdown/native-chat-document-images'
-import { yieldToEventLoop } from '../../../../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
 import type { NativeChatGallerySurface } from './native-chat-gallery-surfaces'
 import {
   nativeChatGalleryEntries,
@@ -24,12 +25,15 @@ type DocumentCache = {
 
 export class NativeChatGalleryIndex {
   private readonly documents = new Map<string, DocumentCache>()
-  private readonly groups = new Map<number, readonly string[]>()
+  private readonly groups = new Map<
+    number,
+    { documents: readonly string[]; identities: readonly string[] }
+  >()
+  private readonly documentUsers = new Map<string, number>()
+  private readonly identities = new NativeChatGalleryEntryIdentities()
   private revision = -1
   private scopeKey = ''
   private order: number[] = []
-  private readonly seenDocuments = new Set<string>()
-  private readonly seenGroups = new Set<number>()
   private metrics: NativeChatGalleryIndexMetrics = this.emptyMetrics()
 
   private emptyMetrics(): NativeChatGalleryIndexMetrics {
@@ -50,12 +54,12 @@ export class NativeChatGalleryIndex {
         if (this.scopeKey !== request.scopeKey) {
           this.documents.clear()
           this.groups.clear()
+          this.documentUsers.clear()
+          this.identities.clear()
         }
         this.scopeKey = request.scopeKey
         this.revision = request.revision
         this.order = []
-        this.seenDocuments.clear()
-        this.seenGroups.clear()
         this.metrics = this.emptyMetrics()
       } else {
         if (request.revision !== this.revision) {
@@ -64,6 +68,9 @@ export class NativeChatGalleryIndex {
         if (request.type === 'put') {
           const groups: { handle: number; entries: NativeChatGalleryEntry[] }[] = []
           for (const group of request.groups) {
+            if (this.groups.has(group.handle)) {
+              throw new Error('Gallery group handle was already uploaded')
+            }
             const entries: NativeChatGalleryEntry[] = []
             const documents: string[] = []
             this.metrics.projectionMs += group.projectionMs
@@ -88,36 +95,46 @@ export class NativeChatGalleryIndex {
               }
               processedSurface = true
             }
-            this.groups.set(group.handle, documents)
+            const identityKeys = entries.map((entry) => entry.key)
+            const identified = entries.map((entry) => this.identities.retain(entry))
+            this.groups.set(group.handle, { documents, identities: identityKeys })
+            for (const id of documents) {
+              this.documentUsers.set(id, (this.documentUsers.get(id) ?? 0) + 1)
+            }
             this.appendGroup(group.handle)
-            groups.push({ handle: group.handle, entries })
+            groups.push({ handle: group.handle, entries: identified })
           }
           return { ...identity, type: 'groups', groups }
         }
         if (request.type === 'reuse') {
           for (const handle of request.handles) {
-            const documents = this.groups.get(handle)
-            if (!documents) {
+            const group = this.groups.get(handle)
+            if (!group) {
               throw new Error('Gallery surface group is no longer available')
             }
-            for (const id of documents) {
-              this.seenDocuments.add(id)
-            }
-            this.metrics.cachedDocuments += documents.length
+            this.metrics.cachedDocuments += group.documents.length
             this.metrics.reusedGroups++
             this.appendGroup(handle)
           }
+        } else if (request.type === 'release') {
+          for (const handle of request.handles) {
+            const group = this.groups.get(handle)
+            if (!group) {
+              continue
+            }
+            this.groups.delete(handle)
+            this.identities.release(group.identities)
+            for (const id of group.documents) {
+              const users = (this.documentUsers.get(id) ?? 0) - 1
+              if (users <= 0) {
+                this.documentUsers.delete(id)
+                this.documents.delete(id)
+              } else {
+                this.documentUsers.set(id, users)
+              }
+            }
+          }
         } else {
-          for (const id of this.documents.keys()) {
-            if (!this.seenDocuments.has(id)) {
-              this.documents.delete(id)
-            }
-          }
-          for (const handle of this.groups.keys()) {
-            if (!this.seenGroups.has(handle)) {
-              this.groups.delete(handle)
-            }
-          }
           return { ...identity, type: 'ready', order: this.order, metrics: this.metrics }
         }
       }
@@ -134,7 +151,6 @@ export class NativeChatGalleryIndex {
   }
 
   private appendGroup(handle: number): void {
-    this.seenGroups.add(handle)
     this.order.push(handle)
     this.metrics.slots++
   }
@@ -143,7 +159,6 @@ export class NativeChatGalleryIndex {
     let images: readonly NativeChatDocumentImage[] | undefined
     if (surface.kind === 'document') {
       const id = nativeChatGallerySurfaceId(this.scopeKey, surface)
-      this.seenDocuments.add(id)
       const cached = this.documents.get(id)
       if (
         cached?.text === surface.text &&

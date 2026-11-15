@@ -1,6 +1,6 @@
 import type { Element, Root as HastRoot } from 'hast'
 import type { Root } from 'mdast'
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type { Options as RemarkRehypeOptions } from 'remark-rehype'
 import { NativeChatHtmlSourceMaps } from './native-chat-markdown-html-source-map'
 import { authoredMarkdownAnchor, type MappedMarkdown } from './native-chat-markdown-source-map'

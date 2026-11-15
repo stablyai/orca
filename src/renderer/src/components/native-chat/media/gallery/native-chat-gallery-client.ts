@@ -1,6 +1,10 @@
+import {
+  nativeChatGalleryGroupKey,
+  NativeChatGalleryProjectionLimitError
+} from './native-chat-gallery-projection-budget'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
-import { yieldToEventLoop } from '../../../../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
 import {
   nativeChatGallerySlotSurfaces,
   nativeChatReasoningImageSurface
@@ -54,6 +58,10 @@ export class NativeChatGalleryClient {
   constructor(private readonly onProgress?: (completedSlots: number) => void) {}
 
   index(snapshot: NativeChatGallerySnapshot): Promise<NativeChatGalleryReady | null> {
+    if (snapshot.scopeKey.length > 1024 || snapshot.stoppedLabel.length > 1024) {
+      this.close()
+      return Promise.reject(new NativeChatGalleryProjectionLimitError())
+    }
     if (this.scopeKey !== null && this.scopeKey !== snapshot.scopeKey) {
       this.close()
     }
@@ -102,6 +110,8 @@ export class NativeChatGalleryClient {
     })
     if (result?.type === 'groups' && job.revision === this.revision) {
       this.cache.register(groups, result.groups)
+    } else {
+      this.cache.retirements.enqueue(groups.map((group) => group.handle))
     }
   }
 
@@ -136,7 +146,7 @@ export class NativeChatGalleryClient {
         continue
       }
       const input = {
-        key: `slot:${slot.message.id}`,
+        key: nativeChatGalleryGroupKey('slot', slot.message),
         message: slot.message,
         workRun: slot.workRun,
         active: slot.activeTurnIsWorking,
@@ -164,16 +174,64 @@ export class NativeChatGalleryClient {
     return completed
   }
 
+  private async retainSnapshot(job: Job): Promise<boolean> {
+    const keys = new Set<string>()
+    let visited = 0
+    for (const slots of [job.snapshot.slots, job.snapshot.waitingSlots]) {
+      for (const slot of slots) {
+        if (slot.kind === 'message' && slot.drawsMessage && !slot.receipt) {
+          keys.add(nativeChatGalleryGroupKey('slot', slot.message))
+        }
+        if (++visited % 64 === 0) {
+          await yieldToEventLoop()
+          if (job.revision !== this.revision) {
+            return false
+          }
+        }
+      }
+    }
+    if (job.snapshot.liveReasoning) {
+      keys.add(nativeChatGalleryGroupKey('reasoning', job.snapshot.liveReasoning.message))
+    }
+    return this.cache.retainKeys(keys, () => job.revision === this.revision)
+  }
+
+  private async releaseRetired(job: Job): Promise<boolean> {
+    while (job.revision === this.revision) {
+      const handles = this.cache.retirements.peek()
+      if (!handles.length) {
+        return true
+      }
+      const result = await this.request(job, { type: 'release', handles })
+      if (result?.type !== 'ack' || job.revision !== this.revision) {
+        return false
+      }
+      this.cache.retirements.acknowledge(handles.length)
+    }
+    return false
+  }
+
   private async run(job: Job): Promise<NativeChatGalleryReady | null> {
     const { snapshot, revision } = job
+    if (!(await this.retainSnapshot(job))) {
+      return null
+    }
     await this.request(job, { type: 'begin', scopeKey: snapshot.scopeKey })
+    if (!(await this.releaseRetired(job))) {
+      return null
+    }
     const completed = await this.appendSlots(job, snapshot.slots)
     if (revision !== this.revision) {
       return null
     }
     if (snapshot.liveReasoning) {
       const { message, growing } = snapshot.liveReasoning
-      const input = { key: `reasoning:${message.id}`, message, active: growing, trailing: false }
+      const input = {
+        key: nativeChatGalleryGroupKey('reasoning', message),
+        message,
+        active: growing,
+        trailing: false
+      }
       const cached = await this.cache.cached(input, snapshot)
       await (cached !== null
         ? this.request(job, { type: 'reuse', handles: [cached] })
