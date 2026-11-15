@@ -62,6 +62,10 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
   resolveComments: translate(
     'auto.components.settings.source.control.action.recipe.options.resolveComments',
     'Start an agent from selected unresolved PR or MR comments.'
+  ),
+  reviewChanges: translate(
+    'auto.components.settings.source.control.action.recipe.options.reviewChanges',
+    'Start an agent that reviews the changes and leaves its findings as review notes.'
   )
 }))
 

@@ -24,6 +24,8 @@ export type SourceControlAiControllerParams = {
   unresolvedConflicts: Pick<GitStatusEntry, 'path' | 'conflictKind'>[]
   stagedEntries: Pick<GitStatusEntry, 'path' | 'status' | 'area'>[]
   worktreePath: string | null
+  /** The branch-compare base the panel shows; null when none resolved. */
+  compareBaseRef: string | null
   commitMessage: string
   commitError: string | null
   pushRecoveryPrompt: string | null

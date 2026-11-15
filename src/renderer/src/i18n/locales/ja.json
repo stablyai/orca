@@ -10655,7 +10655,8 @@
                   "unsupportedSavedAgent": "{{value0}} はこのテキスト生成レシピを実行できません。以下からサポートされている Agent のいずれかを選択してください。",
                   "resolveComments": "選択した未解決の PR または MR コメントから Agent を開始します。",
                   "fixPushFailure": "pre-pushフックまたはgit pushが失敗したときに Agent を起動します。",
-                  "commitMessageSharedModel": "PR の詳細、ブランチ名、チャット名も、それぞれのモデルを選択していない場合はこのモデルを使用できます。「デフォルトと同じ」には使用するモデルが表示されます。"
+                  "commitMessageSharedModel": "PR の詳細、ブランチ名、チャット名も、それぞれのモデルを選択していない場合はこのモデルを使用できます。「デフォルトと同じ」には使用するモデルが表示されます。",
+                  "reviewChanges": "変更をレビューし、指摘をレビューノートとして残す Agent を開始します。"
                 }
               }
             }
@@ -21223,6 +21224,11 @@
       "switchedIn": "{{workspace}} で",
       "thisComputer": "このコンピューター",
       "updateHost": "ここからブランチを切り替えるには、{{host}} の Orca を更新してください。"
+    },
+    "reviewChanges": {
+      "menuItem": "AI で変更をレビュー",
+      "emptyPrompt": "変更レビューのプロンプトが空です。ソース管理の AI 設定を更新してください。",
+      "started": "変更をレビューする AI Agent を起動しました。指摘はノートとして表示されます。"
     }
   },
   "rendererRecovery": {

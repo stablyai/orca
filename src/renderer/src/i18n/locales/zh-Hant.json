@@ -11159,7 +11159,8 @@
                   "unsupportedSavedAgent": "{{value0}} 無法執行此用於產生文字的動作範本。請在下方選擇支援的代理程式。",
                   "resolveComments": "從選取的未解決 PR 或 MR 評論啟動代理程式。",
                   "fixPushFailure": "當 pre-push 鉤子或 git push 失敗時啟動代理程式。",
-                  "commitMessageSharedModel": "Pull request 詳細資訊、分支名稱和聊天名稱未選擇自己的模型時，也可以使用此模型；其「與預設值相同」選項會顯示使用的模型。"
+                  "commitMessageSharedModel": "Pull request 詳細資訊、分支名稱和聊天名稱未選擇自己的模型時，也可以使用此模型；其「與預設值相同」選項會顯示使用的模型。",
+                  "reviewChanges": "啟動代理程式審查變更，並將發現的問題留作審查筆記。"
                 }
               }
             }
@@ -21161,6 +21162,11 @@
       "switchedIn": "在 {{workspace}} 中",
       "thisComputer": "這台電腦",
       "updateHost": "請在 {{host}} 上更新 Orca，以便從這裡切換分支。"
+    },
+    "reviewChanges": {
+      "menuItem": "使用 AI 審查變更",
+      "emptyPrompt": "變更審查提示詞為空。請更新原始碼控制 AI 設定。",
+      "started": "已啟動 AI 代理程式審查變更，發現的問題會以筆記顯示。"
     }
   },
   "agentsSidebarIntro": {

@@ -21,7 +21,8 @@ export const SOURCE_CONTROL_ACTION_VARIABLES: Record<AiActionId, SourceControlAc
   fixPushFailure: ['basePrompt'],
   fixChecks: ['basePrompt'],
   resolveConflicts: ['basePrompt'],
-  resolveComments: ['basePrompt']
+  resolveComments: ['basePrompt'],
+  reviewChanges: ['basePrompt']
 }
 
 export type SourceControlActionVariableInfo = {

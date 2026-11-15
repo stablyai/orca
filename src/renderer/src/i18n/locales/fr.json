@@ -11216,7 +11216,8 @@
                   "unsupportedSavedAgent": "{{value0}} ne peut pas exécuter cette recette de génération de texte. Choisissez l'un des agents pris en charge ci-dessous.",
                   "resolveComments": "Démarre un agent à partir des commentaires PR ou MR non résolus sélectionnés.",
                   "fixPushFailure": "Démarre un agent lorsqu'un hook pre-push ou un git push échoue.",
-                  "commitMessageSharedModel": "Les détails de la pull request, le nom de branche et le nom du chat peuvent aussi utiliser ce modèle s’ils n’en choisissent pas un autre ; leur option « Identique au modèle par défaut » indique le modèle utilisé."
+                  "commitMessageSharedModel": "Les détails de la pull request, le nom de branche et le nom du chat peuvent aussi utiliser ce modèle s’ils n’en choisissent pas un autre ; leur option « Identique au modèle par défaut » indique le modèle utilisé.",
+                  "reviewChanges": "Démarre un agent qui relit les modifications et laisse ses remarques sous forme de notes de revue."
                 }
               }
             }
@@ -21871,6 +21872,11 @@
       "switchedIn": "Dans {{workspace}}",
       "thisComputer": "cet ordinateur",
       "updateHost": "Mettez à jour Orca sur {{host}} pour changer de branche d’ici."
+    },
+    "reviewChanges": {
+      "menuItem": "Relire les modifications avec l'IA",
+      "emptyPrompt": "Le prompt de relecture des modifications est vide. Mettez à jour les paramètres IA du contrôle de code source.",
+      "started": "Un agent IA relit les modifications. Ses remarques apparaîtront sous forme de notes."
     }
   },
   "agentsSidebarIntro": {

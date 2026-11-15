@@ -30,7 +30,7 @@ Use **Generate pull request details with AI** in the create-review dialog when y
 
 ## Per-repo AI action recipes
 
-**Generate with AI**, **Generate pull request details with AI**, **Fix with AI**, and **Resolve with AI** are all Source Control AI actions — each one is backed by an **action recipe** that picks the agent, CLI arguments, and prompt template Orca runs when you trigger the action. Edit them under [Settings → Git & Source Control](/docs/settings) → **Action recipes**, either as your global default or scoped to the current repository.
+**Generate with AI**, **Generate pull request details with AI**, **Fix with AI**, **Resolve with AI**, and **Review changes with AI** are all Source Control AI actions — each one is backed by an **action recipe** that picks the agent, CLI arguments, and prompt template Orca runs when you trigger the action. Edit them under [Settings → Git & Source Control](/docs/settings) → **Action recipes**, either as your global default or scoped to the current repository.
 
 Templates can include variables such as `{basePrompt}`, `{branch}`, `{stagedFiles}`, `{stagedPatch}`, and **`{linkedIssue}`** for commit messages; PR details also support `{baseBranch}`, `{currentTitle}`, `{currentBody}`, `{commitSummary}`, `{changedFiles}`, and `{patch}`.
 

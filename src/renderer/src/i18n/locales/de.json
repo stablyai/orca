@@ -11336,7 +11336,8 @@
                   "unsupportedSavedAgent": "{{value0}} kann dieses Textgenerierungsrezept nicht ausführen. Einen der unten aufgeführten unterstützten Agenten auswählen.",
                   "resolveComments": "Einen Agenten anhand ausgewählter ungelöster PR- oder MR-Kommentare starten.",
                   "fixPushFailure": "Einen Agenten starten, wenn ein pre-push-Hook oder git push fehlschlägt.",
-                  "commitMessageSharedModel": "Pull-Request-Details, Branch-Name und Chat-Name können dieses Modell ebenfalls verwenden, wenn sie kein eigenes auswählen; ihre Option „Wie Standard“ zeigt das verwendete Modell an."
+                  "commitMessageSharedModel": "Pull-Request-Details, Branch-Name und Chat-Name können dieses Modell ebenfalls verwenden, wenn sie kein eigenes auswählen; ihre Option „Wie Standard“ zeigt das verwendete Modell an.",
+                  "reviewChanges": "Einen Agenten starten, der die Änderungen prüft und seine Befunde als Review-Notizen hinterlässt."
                 }
               }
             }
@@ -21479,6 +21480,11 @@
       "switchedIn": "In {{workspace}}",
       "thisComputer": "diesem Computer",
       "updateHost": "Aktualisiere Orca auf {{host}}, um von hier aus Branches zu wechseln."
+    },
+    "reviewChanges": {
+      "menuItem": "Änderungen mit KI prüfen",
+      "emptyPrompt": "Der Prompt für die Änderungsprüfung ist leer. KI-Einstellungen der Quellcodeverwaltung aktualisieren.",
+      "started": "Ein KI-Agent prüft jetzt die Änderungen. Seine Befunde erscheinen als Notizen."
     }
   },
   "agentsSidebarIntro": {

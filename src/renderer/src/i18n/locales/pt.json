@@ -318,6 +318,11 @@
       "switchedIn": "Em {{workspace}}",
       "thisComputer": "este computador",
       "updateHost": "Atualize o Orca em {{host}} para trocar de branch daqui."
+    },
+    "reviewChanges": {
+      "menuItem": "Revisar mudanças com IA",
+      "emptyPrompt": "O prompt de revisão de mudanças está vazio. Atualize as configurações de IA do Controle de Código-Fonte.",
+      "started": "Foi iniciado um agente de IA para revisar as mudanças. Os problemas encontrados vão aparecer como notas."
     }
   },
   "githubChecks": {
@@ -8296,7 +8301,8 @@
                   "unsupportedSavedAgent": "{{value0}} não pode executar esta receita de geração de texto. Escolha um dos agentes suportados abaixo.",
                   "resolveComments": "Inicia um agente a partir de comentários não resolvidos selecionados de PR ou MR.",
                   "fixPushFailure": "Inicia um agente quando um hook de pre-push ou git push falha.",
-                  "commitMessageSharedModel": "Os detalhes da pull request, o nome da branch e o nome do chat também podem usar este modelo quando não escolhem outro; a opção “Igual ao padrão” mostra qual modelo usam."
+                  "commitMessageSharedModel": "Os detalhes da pull request, o nome da branch e o nome do chat também podem usar este modelo quando não escolhem outro; a opção “Igual ao padrão” mostra qual modelo usam.",
+                  "reviewChanges": "Inicia um agente que revisa as mudanças e deixa os problemas encontrados como notas de revisão."
                 }
               }
             }

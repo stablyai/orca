@@ -247,7 +247,8 @@ export function computeActionDirtyById(
     fixPushFailure: isDirty('fixPushFailure'),
     fixChecks: isDirty('fixChecks'),
     resolveConflicts: isDirty('resolveConflicts'),
-    resolveComments: isDirty('resolveComments')
+    resolveComments: isDirty('resolveComments'),
+    reviewChanges: isDirty('reviewChanges')
   }
 }
 
