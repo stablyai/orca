@@ -1,3 +1,4 @@
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { WorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { DispatchPreambleSendOptions } from '../workers/launch/worker-dispatch-preamble'
 
@@ -8,6 +9,9 @@ export type WorktreeDrift = {
 } | null
 
 export type CoordinatorRuntime = {
+  getOrchestrationWorkspaceSelectorArgument?: OrcaRuntimeService['getOrchestrationWorkspaceSelectorArgument']
+  showManagedTerminalWorkspace?: OrcaRuntimeService['showManagedTerminalWorkspace']
+  getTerminalWorktreeIdForHandle?: OrcaRuntimeService['getTerminalWorktreeIdForHandle']
   sendTerminalAgentPrompt(
     handle: string,
     prompt: string,

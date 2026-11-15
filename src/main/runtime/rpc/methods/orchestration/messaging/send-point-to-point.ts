@@ -1,3 +1,5 @@
+import { withoutCallerWorkspaceCheck } from '../../../../orchestration/db/messages/record-workspace-pr-check'
+import { checkWorkerDoneWorkspacePrs } from './worker-done-workspace-check'
 import type {
   MessagePriority,
   MessageType
@@ -102,8 +104,12 @@ export function sendPointToPointMessage(args: {
       priority: params.priority as MessagePriority,
       threadId: params.threadId,
       payload: dispatch
-        ? bindCoordinatorMutationPayload(messageType, payload, dispatch.id)
-        : payload,
+        ? bindCoordinatorMutationPayload(
+            messageType,
+            withoutCallerWorkspaceCheck(payload),
+            dispatch.id
+          )
+        : withoutCallerWorkspaceCheck(payload),
       senderPaneKey,
       senderDispatchId:
         dispatch && isDispatchAssignee(dispatch, from, senderPaneKey) ? dispatch.id : undefined,
@@ -171,6 +177,11 @@ export function sendPointToPointMessage(args: {
           runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
         )
       }
+      const checkWarnings =
+        msg.type === 'worker_done' &&
+        (reconciled.action === 'completed' || reconciled.action === 'failed')
+          ? checkWorkerDoneWorkspacePrs({ runtime, db, msg, settled: reconciled, from, to })
+          : []
       const receipt = withReportWarnings(
         msg.type === 'worker_done'
           ? {
@@ -182,8 +193,12 @@ export function sendPointToPointMessage(args: {
             }
           : { message: exposeMessage(msg) }
       )
-      return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
-        runtime.notifyMessageArrived(msg.to_handle, msg.type)
+      return recordReceiptForPostCommitNudge(
+        recordMutationReceipt,
+        checkWarnings.length
+          ? { ...receipt, warnings: [...(receipt.warnings ?? []), ...checkWarnings] }
+          : receipt,
+        () => runtime.notifyMessageArrived(msg.to_handle, msg.type)
       )
     }
     const receipt = withReportWarnings({ message: exposeMessage(msg) })

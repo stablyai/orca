@@ -1,3 +1,4 @@
+import { workerPreambleWorkspace } from '../../../../orchestration/workers/launch/worker-preamble-workspace'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { dispatchAccess } from '../access/run-access-rules'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -152,6 +153,11 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
+        workspace: await workerPreambleWorkspace(
+          runtime,
+          db.getWorkerDispatch(ctx.id)?.worktree_id ?? runtime.getTerminalWorktreeIdForHandle(to),
+          to
+        ),
         canDispatchSubWorkers: ctx.depth < runtime.getNestedWorkerMaxDepth(),
         taskSpec: task.spec,
         coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
@@ -213,7 +219,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     permission: 'workspace',
     params: DispatchShowParams,
     access: { kind: 'reads', targets: { task: 'task' } },
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
         throw new Error('Missing --task')
@@ -235,6 +241,14 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           taskId: task.id,
           // Use the real Dispatch id for matching previews; use a placeholder before dispatch.
           dispatchId: ctx?.id ?? 'ctx_preview',
+          workspace: await workerPreambleWorkspace(
+            runtime,
+            ctx
+              ? (db.getWorkerDispatch(ctx.id)?.worktree_id ??
+                  runtime.getTerminalWorktreeIdForHandle(workerHandle))
+              : undefined,
+            workerHandle
+          ),
           canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
           taskSpec: task.spec,
           coordinatorHandle,

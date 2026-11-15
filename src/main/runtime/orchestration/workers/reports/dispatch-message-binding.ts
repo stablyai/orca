@@ -1,3 +1,4 @@
+import { withoutCallerWorkspaceCheck } from '../../db/messages/record-workspace-pr-check'
 import type { MessageType } from '../../db/orchestration-records'
 
 export function bindCoordinatorMutationPayload(
@@ -5,6 +6,7 @@ export function bindCoordinatorMutationPayload(
   payload: string | null | undefined,
   dispatchId: string
 ): string | undefined {
+  payload = withoutCallerWorkspaceCheck(payload ?? undefined)
   if (type !== 'escalation' && type !== 'decision_gate') {
     return payload ?? undefined
   }

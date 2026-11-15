@@ -1,3 +1,4 @@
+import { UNKNOWN_LINEAGE_KEY } from '../../../shared/worktree/lineage/lineage-uncertainty'
 /**
  * The profile state of UNC Windows-drive projects converted to their drive paths (D1c): each field
  * that can name one is re-keyed by wsl-drive-unc-identity-rewrite.ts, and the projects switch to
@@ -60,6 +61,15 @@ export function rewriteWslDriveUncState(
     roots
   })
   const next: PersistedState = { ...state }
+  if (
+    state.workspaceLineageUncertaintyByChild &&
+    Object.keys(state.workspaceLineageUncertaintyByChild).length
+  ) {
+    next.workspaceLineageUncertaintyByChild = {
+      ...state.workspaceLineageUncertaintyByChild,
+      [UNKNOWN_LINEAGE_KEY]: true
+    }
+  }
   for (const [field, disposition] of Object.entries(WSL_DRIVE_UNC_STATE_DISPOSITIONS)) {
     if (disposition === 'rewrite' && isStateField(field) && state[field] !== undefined) {
       Object.assign(next, { [field]: rewriteWslDriveUncValue(state[field], rewriter) })

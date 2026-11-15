@@ -1,3 +1,4 @@
+import { preserveFolderLineageUncertainty } from '../../../../shared/worktree/lineage/lineage-uncertainty'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WORKSPACE_LINEAGE_DOMAINS } from '../../profile-save-domains'
 import type { WorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -41,6 +42,17 @@ export class CrossStoreLineagePersistence {
       : undefined
   }
 
+  getWorkspaceLineageUncertainty(): Record<string, true> {
+    return (
+      this[crossStoreLineagePersistenceContext].runtime.state.workspaceLineageUncertaintyByChild ??
+      {}
+    )
+  }
+
+  getRawCrossStoreWorkspaceLineage(): Record<string, unknown> {
+    return this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey ?? {}
+  }
+
   getAllCrossStoreWorkspaceLineage(): Record<WorkspaceKey, CrossStoreWorkspaceLineage> {
     return validCrossStoreLineage(
       this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey
@@ -60,6 +72,7 @@ export class CrossStoreLineagePersistence {
     if (child?.type === 'worktree') {
       delete state.worktreeLineageById[child.worktreeId]
     }
+    preserveFolderLineageUncertainty(state, lineage.childWorkspaceKey)
     delete state.workspaceLineageByChildKey[lineage.childWorkspaceKey]
     state.crossStoreLineageByChildKey ??= {}
     state.crossStoreLineageByChildKey[lineage.childWorkspaceKey] = lineage

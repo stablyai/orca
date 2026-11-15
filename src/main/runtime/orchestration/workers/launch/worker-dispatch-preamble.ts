@@ -1,9 +1,11 @@
+import { workspacePrCopy } from '../../../../../shared/orchestration/workspace-pr-copy'
 import type { OrchestrationCliCommand } from './orchestration-cli-command'
 import type { RuntimeAgentPromptWriteOptions } from '../../../terminal/input/agent-prompt-write-options'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../../../shared/orchestration/workers/orca-dispatch-status-prompt'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 
 export type PreambleParams = {
+  workspace?: { id: string; name: string; path: string; parentArgument?: string }
   taskId: string
   // Dispatch ids fence completion authority across retries of one Task.
   dispatchId: string
@@ -133,7 +135,7 @@ ${postDoneInstructions}`
       : buildSubDispatchSection(cli, params.workerHandle)
     : ''
 
-  return `${header}${drift}${subDispatch}
+  return `${header}${params.workspace ? `\n\n${workspacePrCopy.preamble(cli, params.workspace.name, params.workspace.path, params.workspace.id, params.workspace.parentArgument)}` : ''}${drift}${subDispatch}
 
 === TASK ===
 ${params.taskSpec}`

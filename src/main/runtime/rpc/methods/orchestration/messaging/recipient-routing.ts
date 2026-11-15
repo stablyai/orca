@@ -212,6 +212,7 @@ export type SendRecipientWarning = {
     | 'recipient_delivery_unknown'
     | 'stale_task_id'
     | 'files_not_sent'
+    | 'pull_request_outside_workspace'
   recipient: string
   message: string
 }

@@ -1,3 +1,4 @@
+import { reportedWorkspacePrLines } from '../workspace-pr-copy'
 import {
   formatReportFollowUpLine,
   type ReportFollowUpAction
@@ -176,6 +177,9 @@ function formatLegacyAwareCheckMessages(
       }
       if (message.body) {
         lines.push(formatQuotedMessageField('body', message.body))
+      }
+      if (message.type === 'worker_done') {
+        lines.push(...reportedWorkspacePrLines(message.payload))
       }
       if (message.payload) {
         lines.push(formatQuotedMessageField('payload', message.payload))

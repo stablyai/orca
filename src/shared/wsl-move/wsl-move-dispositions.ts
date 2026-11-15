@@ -63,6 +63,7 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   },
   worktreeLineageById: moveDisposition(16),
   workspaceLineageByChildKey: moveDisposition(17),
+  workspaceLineageUncertaintyByChild: moveDisposition(17),
   crossStoreLineageByChildKey: moveDisposition(17, {
     note: 'Moves with its child; the parent names another store and is never rewritten.'
   }),

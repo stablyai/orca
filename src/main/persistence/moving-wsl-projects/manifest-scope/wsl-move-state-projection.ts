@@ -1,3 +1,4 @@
+import { UNKNOWN_LINEAGE_KEY } from '../../../../shared/worktree/lineage/lineage-uncertainty'
 // Compare stores independently of mover export so omitted rows remain visible after host/path normalization.
 import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
 import {
@@ -59,6 +60,7 @@ export type WslMoveProjectionInput = {
     | 'worktreeIdentityAliases'
     | 'worktreeLineageById'
     | 'workspaceLineageByChildKey'
+    | 'workspaceLineageUncertaintyByChild'
     | 'crossStoreLineageByChildKey'
     | 'automations'
     | 'automationRuns'
@@ -89,6 +91,7 @@ export const WSL_MOVE_PROJECTED_STATE_FIELDS = [
   'worktreeMetaByIdentity',
   'worktreeLineageById',
   'workspaceLineageByChildKey',
+  'workspaceLineageUncertaintyByChild',
   'crossStoreLineageByChildKey',
   'automations',
   'automationRuns'
@@ -191,6 +194,11 @@ export function projectWslMoveState(
     ),
     worktreeLineageById: pickKeys(state.worktreeLineageById, ownerInScope),
     workspaceLineageByChildKey: pickKeys(state.workspaceLineageByChildKey, ownerInScope),
+    workspaceLineageUncertaintyByChild:
+      state.workspaceLineageUncertaintyByChild &&
+      Object.keys(state.workspaceLineageUncertaintyByChild).length
+        ? { [UNKNOWN_LINEAGE_KEY]: true }
+        : undefined,
     crossStoreLineageByChildKey: pickKeys(state.crossStoreLineageByChildKey ?? {}, ownerInScope),
     automations: byId(withoutKeys(automations, HOST_BINDINGS.automations).map(withoutSetupId)),
     automationRuns: byId(

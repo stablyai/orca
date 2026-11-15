@@ -1,3 +1,4 @@
+import { WORKTREE_ADOPT_COMMAND_SPEC } from './worktree-adopt'
 import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
@@ -79,6 +80,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca worktree current', 'orca worktree current --json']
   },
   WORKTREE_CREATE_COMMAND_SPEC,
+  WORKTREE_ADOPT_COMMAND_SPEC,
   WORKTREE_SET_COMMAND_SPEC,
   {
     path: ['worktree', 'rm'],

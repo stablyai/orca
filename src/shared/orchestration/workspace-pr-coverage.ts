@@ -1,0 +1,285 @@
+import { worktreeWorkspaceKey } from '../workspace/identity/workspace-scope'
+import { getRepoExecutionHostId } from '../execution-host'
+import {
+  decodeLineageUncertaintyKey,
+  isLineageUncertaintyMap,
+  LINEAGE_SCAN_ROW_LIMIT
+} from '../worktree/lineage/lineage-uncertainty'
+import type { Repo } from '../repository/repo-types'
+import type { WorkspacePrSnapshot } from './workspace-pr-check'
+
+type Edge = { parent: string; childInstance?: string | null; parentInstance?: string | null }
+
+export function possibleWorkspacePrRepositories(
+  input: WorkspacePrSnapshot,
+  host: string,
+  repos: Map<string, Repo[]>,
+  identities: (id: string) => Set<string> | undefined,
+  projectOf: (id: string) => string | undefined,
+  interested: ReadonlySet<string>
+) {
+  let incomplete = false,
+    rawRows = 0,
+    hasCanonical = false,
+    hasCross = false
+  const candidateRepos = new Set<string>(),
+    targets: string[] = [],
+    markers = new Set<string>(),
+    neededParents = new Set<string>()
+  const nodeKey = (key: string) => (key.startsWith('worktree:') ? key.slice(9) : key)
+  const primaries = new Set(input.primaries.map(nodeKey))
+  const state = input.uncertainty
+  const markerRows = isLineageUncertaintyMap(state) ? state : {}
+  let collectParents = false
+  for (const _key in markerRows) {
+    collectParents = true
+    break
+  }
+  const admit = () => {
+    if (++rawRows <= LINEAGE_SCAN_ROW_LIMIT) {
+      return true
+    }
+    incomplete = true
+    return false
+  }
+  const relevantProjects = new Map<string, boolean>()
+  const consider = (child: string, unknownHost = false) => {
+    const project = projectOf(child)
+    if (!project) {
+      if (!child.startsWith('folder:')) {
+        incomplete = true
+      }
+      return
+    }
+    let relevant = unknownHost ? undefined : relevantProjects.get(project)
+    if (relevant === undefined) {
+      const owners = repos.get(project)
+      relevant =
+        unknownHost || !owners || owners.some((repo) => getRepoExecutionHostId(repo) === host)
+      if (relevant) {
+        const ids = identities(project)
+        relevant = !ids || [...ids].some((id) => interested.has(id))
+      }
+      if (!unknownHost) {
+        relevantProjects.set(project, relevant)
+      }
+    }
+    if (relevant) {
+      targets.push(child)
+    }
+  }
+  for (const child in input.lineage) {
+    if (!admit()) {
+      break
+    }
+    if (collectParents) {
+      const parent = input.lineage[child]?.parentWorktreeId
+      if (typeof parent === 'string') {
+        neededParents.add(parent)
+      }
+    }
+    consider(child)
+  }
+  for (const child in input.workspaceLineage) {
+    hasCanonical = true
+    if (!admit()) {
+      break
+    }
+    if (collectParents) {
+      const parent = input.workspaceLineage[child]?.parentWorkspaceKey
+      if (typeof parent === 'string') {
+        neededParents.add(nodeKey(parent))
+      }
+    }
+    consider(nodeKey(child))
+  }
+  for (const child in input.crossStoreLineage) {
+    hasCross = true
+    if (!admit()) {
+      break
+    }
+    consider(nodeKey(child))
+  }
+  if (state !== undefined && !isLineageUncertaintyMap(state)) {
+    incomplete = true
+  }
+  const markedProjects = new Set<string>()
+  for (const key in markerRows) {
+    if (!admit()) {
+      break
+    }
+    const decoded = (input.decodeUncertaintyKey ?? decodeLineageUncertaintyKey)(key)
+    if (!decoded || markerRows[key] !== true) {
+      incomplete = true
+      continue
+    }
+    const { host: markerHost, child, node, project } = decoded
+    if (markerHost !== null && markerHost !== host) {
+      continue
+    }
+    if (!child || !node) {
+      incomplete = true
+    } else {
+      if (project && !markedProjects.has(project)) {
+        markedProjects.add(project)
+        const ids = identities(project)
+        if (!ids) {
+          return { candidateRepos, incomplete: true }
+        }
+        for (const id of ids) {
+          if (interested.has(id)) {
+            candidateRepos.add(id)
+          }
+        }
+        if (candidateRepos.size === interested.size) {
+          return { candidateRepos, incomplete }
+        }
+      } else if (!project && !node.startsWith('folder:')) {
+        return { candidateRepos, incomplete: true }
+      }
+      if (neededParents.has(node)) {
+        markers.add(node)
+      }
+    }
+  }
+  if (input.folders.length + input.repos.length > 200) {
+    incomplete = true
+  }
+  const folders = new Map(
+    input.folders
+      .slice(0, Math.max(0, 200 - input.repos.length))
+      .map((folder) => [`folder:${folder.id}`, folder])
+  )
+  if (incomplete) {
+    return { candidateRepos, incomplete }
+  }
+  const memo = new Map<string, boolean | 'visiting'>()
+  const path: string[] = []
+  const meta = (key: string) => (key.startsWith('folder:') ? undefined : input.metadata(key, host))
+  const parentInstances = new Map<string, string | undefined>()
+  const parentInstanceOf = (key: string) => {
+    if (!parentInstances.has(key)) {
+      parentInstances.set(key, meta(key)?.instanceId)
+    }
+    return parentInstances.get(key)
+  }
+  const edgeOf = (key: string): Edge | boolean | undefined => {
+    const canonicalKey =
+      hasCanonical || hasCross ? (key.startsWith('folder:') ? key : worktreeWorkspaceKey(key)) : ''
+    if (hasCross && Object.hasOwn(input.crossStoreLineage, canonicalKey)) {
+      return true
+    }
+    const raw = key.startsWith('folder:') ? undefined : input.lineage[key]
+    const row = hasCanonical ? input.workspaceLineage[canonicalKey] : undefined
+    if ((raw && raw.worktreeId !== key) || (row && row.childWorkspaceKey !== canonicalKey)) {
+      return true
+    }
+    if (!raw && !row) {
+      return (hasCanonical && Object.hasOwn(input.workspaceLineage, canonicalKey)) ||
+        Object.hasOwn(input.lineage, key)
+        ? true
+        : undefined
+    }
+    if (
+      raw &&
+      row &&
+      (raw.parentWorktreeId !== nodeKey(row.parentWorkspaceKey) ||
+        raw.worktreeInstanceId !== row.childInstanceId ||
+        raw.parentWorktreeInstanceId !== row.parentInstanceId)
+    ) {
+      return true
+    }
+    const edge: Edge = row
+      ? {
+          parent: nodeKey(row.parentWorkspaceKey),
+          childInstance: row.childInstanceId,
+          parentInstance: row.parentInstanceId
+        }
+      : {
+          parent: raw!.parentWorktreeId,
+          childInstance: raw!.worktreeInstanceId,
+          parentInstance: raw!.parentWorktreeInstanceId
+        }
+    const cm = meta(key)
+    if (!cm || !edge.childInstance || cm.instanceId !== edge.childInstance) {
+      return true
+    }
+    if (edge.parent.startsWith('folder:')) {
+      const folder = folders.get(edge.parent)
+      if (
+        !folder ||
+        folder.isArchived ||
+        !edge.parentInstance ||
+        edge.parentInstance !== folder.id ||
+        (input.folderHost && input.folderHost(folder) !== host)
+      ) {
+        return true
+      }
+    } else if (!edge.parentInstance || parentInstanceOf(edge.parent) !== edge.parentInstance) {
+      return true
+    }
+    const knownParent = memo.get(edge.parent)
+    return typeof knownParent === 'boolean' ? knownParent : edge
+  }
+  // Memoized parent walks inspect only ancestors that could affect the reported repositories.
+  const possible = (child: string): boolean => {
+    if (primaries.has(child) || markers.has(child)) {
+      return true
+    }
+    const first = edgeOf(child)
+    if (typeof first === 'boolean') {
+      return first
+    }
+    if (!first) {
+      return false
+    }
+    path.length = 0
+    let cursor = child,
+      answer = false
+    while (true) {
+      if (primaries.has(cursor) || markers.has(cursor)) {
+        answer = true
+        break
+      }
+      const known = memo.get(cursor)
+      if (known !== undefined) {
+        answer = known === 'visiting' || known
+        break
+      }
+      memo.set(cursor, 'visiting')
+      path.push(cursor)
+      const edge = cursor === child ? first : edgeOf(cursor)
+      if (typeof edge === 'boolean') {
+        answer = edge
+        break
+      }
+      if (!edge) {
+        break
+      }
+      cursor = edge.parent
+    }
+    for (const key of path) {
+      memo.set(key, answer)
+    }
+    return answer
+  }
+  for (const child of targets) {
+    if (!possible(child)) {
+      continue
+    }
+    const project = projectOf(child)
+    const ids = project ? identities(project) : undefined
+    if (!ids) {
+      incomplete = true
+    }
+    for (const key of ids ?? []) {
+      if (interested.has(key)) {
+        candidateRepos.add(key)
+      }
+    }
+    if (candidateRepos.size === interested.size) {
+      break
+    }
+  }
+  return { candidateRepos, incomplete }
+}

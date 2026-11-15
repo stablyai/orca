@@ -1,3 +1,4 @@
+import { preserveFolderLineageUncertainty } from '../../../../shared/worktree/lineage/lineage-uncertainty'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { WORKSPACE_LINEAGE_DOMAINS } from '../../profile-save-domains'
 import {
@@ -34,6 +35,7 @@ export class FolderParentLineagePersistence {
     if (!ownsRawIdBucket(state, target)) {
       return undefined
     }
+    preserveFolderLineageUncertainty(state, worktreeWorkspaceKey(target.id))
     delete state.worktreeLineageById[target.id]
     delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(target.id)]
     state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)] = lineage

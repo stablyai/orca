@@ -170,12 +170,17 @@ export function getWorktreeMetaForHost(
   runtime: MetadataRuntime,
   scheduling: WriteSchedulingOperations,
   worktreeId: string,
-  requestedHostId: ExecutionHostId
+  requestedHostId: ExecutionHostId,
+  options?: { migrate?: boolean }
 ): WorktreeMeta | undefined {
   const state = runtime.state
   const executionHostId = worktreeMetaHostFor(worktreeId, requestedHostId)
-  const changed = migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
+  const changed =
+    options?.migrate !== false && migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
   const alias = composeWorktreeHostIdentity(executionHostId, worktreeId)
+  if (options?.migrate === false && (state.worktreeIdentityAliases?.[alias]?.length ?? 0) > 1) {
+    return undefined
+  }
   const identityKey = resolveAliasIdentityKey(state, alias)
   if (changed) {
     scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)

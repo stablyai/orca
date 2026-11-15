@@ -2,6 +2,7 @@ import {
   type WorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
+import { preserveFolderLineageUncertainty } from '../../../shared/worktree/lineage/lineage-uncertainty'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { withCrossStoreChildKey } from '../../../shared/worktree/lineage/cross-store-lineage-records'
 import { migrateWorkspaceSessionWorktreeIdentity } from './worktree-identity-session-migration'
@@ -56,6 +57,8 @@ export function migrateWorktreeIdentity(
   }
 
   if (oldWorkspaceKey in state.workspaceLineageByChildKey) {
+    preserveFolderLineageUncertainty(state, oldWorkspaceKey)
+    preserveFolderLineageUncertainty(state, newWorkspaceKey)
     const lineage = state.workspaceLineageByChildKey[oldWorkspaceKey]
     state.workspaceLineageByChildKey[newWorkspaceKey] = {
       ...lineage,

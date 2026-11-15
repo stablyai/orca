@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { reportedWorkspacePrLines } from '../../../../../shared/orchestration/workspace-pr-copy'
 import type { MessageRow } from '../../db/orchestration-records'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 import {
@@ -172,6 +173,9 @@ export function formatMessageBannerWithContent(
 
   const body = msg.body ? appendField(msg.body) : undefined
   const payload = msg.payload ? appendField(msg.payload, '[Payload: ', ']') : undefined
+  if (msg.type === 'worker_done') {
+    lines.push(...reportedWorkspacePrLines(msg.payload, options.cliCommand ?? 'orca'))
+  }
 
   if (authority === 'current' && options.followUp) {
     lines.push(`[${formatReportFollowUpLine(options.followUp, options.cliCommand ?? 'orca')}]`)

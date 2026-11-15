@@ -1,3 +1,4 @@
+import { withoutCallerWorkspaceCheck } from '../db/messages/record-workspace-pr-check'
 import { z } from 'zod'
 import {
   MESSAGE_TYPES,
@@ -48,7 +49,10 @@ export function parseRelayedMessage(payload: string): RelayedMessage {
     priority:
       message.priority === 'high' || message.priority === 'urgent' ? message.priority : 'normal',
     threadId: typeof message.threadId === 'string' ? message.threadId : null,
-    payload: typeof message.payload === 'string' ? message.payload : null
+    payload:
+      typeof message.payload === 'string'
+        ? (withoutCallerWorkspaceCheck(message.payload) ?? null)
+        : null
   }
 }
 

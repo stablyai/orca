@@ -1,3 +1,4 @@
+import { preserveFolderLineageUncertainty } from '../../../shared/worktree/lineage/lineage-uncertainty'
 import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 import {
   getRepoExecutionHostId,
@@ -184,6 +185,7 @@ export function pruneSessionlessMissingLocalWorktreeMetadataForRepo(
       continue
     }
     delete state.worktreeLineageById[worktreeId]
+    preserveFolderLineageUncertainty(state, worktreeWorkspaceKey(worktreeId))
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
     delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(worktreeId)]
     removedIds.push(worktreeId)

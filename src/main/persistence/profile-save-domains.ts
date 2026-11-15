@@ -12,7 +12,15 @@ export const WORKTREE_METADATA_DOMAINS = [
 export const WORKSPACE_LINEAGE_DOMAINS = [
   'worktreeLineageById',
   'workspaceLineageByChildKey',
+  'workspaceLineageUncertaintyByChild',
   'crossStoreLineageByChildKey'
+] as const
+
+/** A workspace-row lineage write: the row, any cross-store record it replaces, and folder-edge uncertainty. */
+export const WORKSPACE_LINEAGE_ROW_DOMAINS = [
+  'workspaceLineageByChildKey',
+  'crossStoreLineageByChildKey',
+  'workspaceLineageUncertaintyByChild'
 ] as const
 
 /** Records that carry sort stamps and unread flags: worktree metadata and folder workspaces. */
@@ -67,6 +75,7 @@ export const REMOVE_PROJECT_DOMAINS: readonly string[] = [
 export const FOLDER_WORKSPACE_REMOVAL_DOMAINS: readonly string[] = [
   'folderWorkspaces',
   'workspaceLineageByChildKey',
+  'workspaceLineageUncertaintyByChild',
   'crossStoreLineageByChildKey',
   ...WORKSPACE_SESSION_DOMAINS,
   'mobileClientTabSelectionsByDeviceId'

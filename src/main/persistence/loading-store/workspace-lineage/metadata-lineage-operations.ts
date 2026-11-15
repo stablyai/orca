@@ -1,3 +1,5 @@
+import { releaseChildLineageRows, removeFolderLineageRows } from './folder-lineage-erasure'
+import { preserveFolderLineageUncertainty } from '../../../../shared/worktree/lineage/lineage-uncertainty'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 
@@ -11,7 +13,6 @@ import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import {
   type WorkspaceKey,
-  folderWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { workspaceSessionPartitionIdsForHost } from '../../restoring-sessions/session-owner-removal'
@@ -76,13 +77,15 @@ export class MetadataLineageOperations {
 
   getWorktreeMetaForHost(
     worktreeId: string,
-    executionHostId: ExecutionHostId
+    executionHostId: ExecutionHostId,
+    options?: { migrate?: boolean }
   ): WorktreeMeta | undefined {
     return getWorktreeMetaForHostOperation(
       this[metadataLineageOperationsContext].runtime,
       this[metadataLineageOperationsContext].scheduling,
       worktreeId,
-      executionHostId
+      executionHostId,
+      options
     )
   }
 
@@ -184,14 +187,10 @@ export class MetadataLineageOperations {
       )
     )
     if (!preservesDifferentPersistedOwner) {
-      delete this[metadataLineageOperationsContext].runtime.state.worktreeMeta[worktreeId]
-      delete this[metadataLineageOperationsContext].runtime.state.worktreeLineageById[worktreeId]
-      delete this[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey[
-        worktreeWorkspaceKey(worktreeId)
-      ]
-      delete this[metadataLineageOperationsContext].runtime.state.crossStoreLineageByChildKey?.[
-        worktreeWorkspaceKey(worktreeId)
-      ]
+      const { state } = this[metadataLineageOperationsContext].runtime
+      releaseChildLineageRows(state, worktreeWorkspaceKey(worktreeId))
+      delete state.worktreeMeta[worktreeId]
+      delete state.worktreeLineageById[worktreeId]
     }
     for (const partition of partitions) {
       removeWorkspaceSessionOwnerInPartition(
@@ -249,11 +248,11 @@ export class MetadataLineageOperations {
     if (!ownsRawIdBucket(state, target)) {
       return undefined
     }
+    releaseChildLineageRows(state, worktreeWorkspaceKey(target.id))
     state.worktreeLineageById[target.id] = lineage
     // A child has at most one parent record; the workspace row mirrors this link.
     state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)] =
       toWorkspaceLineageRow(lineage)
-    delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(target.id)]
     saveDomains(this, saved.WORKSPACE_LINEAGE_DOMAINS)
     return lineage
   }
@@ -263,9 +262,8 @@ export class MetadataLineageOperations {
     if (!ownsRawIdBucket(state, target)) {
       return
     }
+    releaseChildLineageRows(state, worktreeWorkspaceKey(target.id))
     delete state.worktreeLineageById[target.id]
-    delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)]
-    delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(target.id)]
     saveDomains(this, saved.WORKSPACE_LINEAGE_DOMAINS)
   }
 
@@ -303,9 +301,10 @@ export class MetadataLineageOperations {
    * setFolderParentLineage, which keeps the child to one parent. */
   setWorkspaceLineage(lineage: WorkspaceLineage): WorkspaceLineage {
     const state = this[metadataLineageOperationsContext].runtime.state
+    preserveFolderLineageUncertainty(state, lineage.childWorkspaceKey)
     state.workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
     delete state.crossStoreLineageByChildKey?.[lineage.childWorkspaceKey]
-    saveDomains(this, ['workspaceLineageByChildKey', 'crossStoreLineageByChildKey'])
+    saveDomains(this, saved.WORKSPACE_LINEAGE_ROW_DOMAINS)
     return lineage
   }
 
@@ -332,10 +331,8 @@ export function removeWorkspaceLineageForRemovedFolder(
   owner: MetadataLineageOperations,
   folderWorkspaceId: string
 ): void {
-  const folderKey = folderWorkspaceKey(folderWorkspaceId)
-  // A cross-store record moves or drops with its child only.
-  delete owner[metadataLineageOperationsContext].runtime.state.crossStoreLineageByChildKey?.[
-    folderKey
-  ]
-  owner.removeWorkspaceLineage((lineage) => lineage.parentWorkspaceKey === folderKey)
+  const { state } = owner[metadataLineageOperationsContext].runtime
+  if (removeFolderLineageRows(state, folderWorkspaceId)) {
+    saveDomains(owner, saved.WORKSPACE_LINEAGE_DOMAINS)
+  }
 }

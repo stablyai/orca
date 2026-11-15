@@ -1,3 +1,4 @@
+import { workerPreambleWorkspace } from '../../../../../../orchestration/workers/launch/worker-preamble-workspace'
 import type { RuntimeTerminalSend } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
@@ -55,6 +56,11 @@ export async function deliverWorkerDispatchPreamble(args: {
     ? null
     : chatAssigneeOf(resolveDispatchAssigneeParty(terminalHandle, args.db))
   const preamble = buildDispatchPreamble({
+    workspace: await workerPreambleWorkspace(
+      runtime,
+      args.db.getWorkerDispatch(args.dispatchId)?.worktree_id,
+      terminalHandle
+    ),
     // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
     canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
     taskId: args.taskId,

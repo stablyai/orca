@@ -1,3 +1,4 @@
+import { preserveFolderLineageUncertainty } from '../../../shared/worktree/lineage/lineage-uncertainty'
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import {
@@ -81,6 +82,7 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     }
     delete state.worktreeMeta[key]
     delete state.worktreeLineageById[key]
+    preserveFolderLineageUncertainty(state, worktreeWorkspaceKey(key))
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
     delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(key)]
     // Remove identity aliases too or future worktrees at the same path could inherit dead metadata.
@@ -138,6 +140,9 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
     state.worktreeMeta = {}
     // Legacy lineage belongs to the discarded locator projection; canonical host state does not.
     state.worktreeLineageById = {}
+    for (const key in state.workspaceLineageByChildKey) {
+      preserveFolderLineageUncertainty(state, key)
+    }
     state.workspaceLineageByChildKey = {}
     changed ||= rawWorktreeMeta !== undefined || hadLineage
   }
@@ -147,6 +152,7 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
       delete state.worktreeMeta[key]
       // Legacy lineage belongs to this corrupt locator row; canonical host state is independent.
       delete state.worktreeLineageById[key]
+      preserveFolderLineageUncertainty(state, worktreeWorkspaceKey(key))
       delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
       changed = true
       continue

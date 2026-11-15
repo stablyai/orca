@@ -12,6 +12,13 @@ export function getFolderWorkspaceHostId(
   workspace: FolderWorkspace,
   projectGroups: readonly ProjectGroup[]
 ): ExecutionHostId {
+  return resolveFolderWorkspaceHostId(workspace, projectGroups) ?? LOCAL_EXECUTION_HOST_ID
+}
+
+export function resolveFolderWorkspaceHostId(
+  workspace: FolderWorkspace,
+  projectGroups: readonly ProjectGroup[]
+): ExecutionHostId | undefined {
   const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
   if (explicitHostId) {
     return explicitHostId
@@ -28,8 +35,8 @@ export function getFolderWorkspaceHostId(
     if (matchingHostId === undefined) {
       matchingHostId = hostId
     } else if (matchingHostId !== hostId) {
-      return LOCAL_EXECUTION_HOST_ID
+      return undefined
     }
   }
-  return matchingHostId ?? LOCAL_EXECUTION_HOST_ID
+  return matchingHostId
 }

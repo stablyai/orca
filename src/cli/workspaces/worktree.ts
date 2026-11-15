@@ -1,3 +1,5 @@
+import { workspacePrCopy } from '../../shared/orchestration/workspace-pr-copy'
+import { getOptionalStartupAgent } from './worktree-startup-agent'
 import { withFolderSetupSupportWarning } from './folder-setup-support-warning'
 import { withWorktreeSelectorRecovery } from './worktree-selector-recovery'
 import { cliCaller } from '../automations/automation-caller-chat'
@@ -22,16 +24,15 @@ import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getOptionalStringFlagAllowingEmpty,
-  getPresentStringFlag,
-  getRequiredStringFlag
+  getRequiredStringFlag,
+  getPresentStringFlag
 } from '../arguments/flags'
 import {
   getRequiredWorktreeSelector,
   resolveWorktreeCreateCwdContext,
   resolveCurrentWorktreeSelector
 } from '../workspace-selection/workspace-selector'
-import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import { parseCliAgent, readCliAgentLaunch } from '../agents/agent-launch-request'
+import { readCliAgentLaunch } from '../agents/agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
@@ -64,21 +65,17 @@ import {
   resolveReferenceInputs
 } from '../references/reference-input'
 
-function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
-  const agent = getPresentStringFlag(flags, 'agent')
-  if (agent === undefined) {
-    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
-      flags.has(name)
-    )
-    if (needsAgent) {
-      throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)
-    }
-    return undefined
-  }
-  return parseCliAgent(agent)
-}
-
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
+  'worktree adopt': async ({ flags, client, json }) => {
+    if (!getOptionalStringFlag(flags, 'parent-worktree')) {
+      throw new RuntimeClientError('parent_required', workspacePrCopy.parent_required())
+    }
+    const result = await client.call<{ message: string }>('worktree.adopt', {
+      path: getRequiredStringFlag(flags, 'path'),
+      parentWorktree: getRequiredStringFlag(flags, 'parent-worktree')
+    })
+    printResult(result, json, (value) => value.message)
+  },
   'worktree ps': runWorktreePs,
   'worktree list': async ({ flags, client, json }) => {
     const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreeListResult>>(

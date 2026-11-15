@@ -240,6 +240,15 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             purpose: 'dispatch-preamble',
             operationId: orchestrationMutation.requestId,
             body: buildDispatchPreamble({
+              workspace: {
+                id: worktree.id,
+                name: worktree.displayName || worktree.branch,
+                path: worktree.path,
+                parentArgument: runtime.getOrchestrationWorkspaceSelectorArgument(
+                  terminalHandle,
+                  worktree.id
+                )
+              },
               taskId: params.taskId,
               dispatchId: params.dispatchId,
               taskSpec: params.taskSpec,

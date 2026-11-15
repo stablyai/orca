@@ -1,3 +1,7 @@
+import {
+  normalizeLineageUncertainty,
+  UNKNOWN_LINEAGE_KEY
+} from '../../../../shared/worktree/lineage/lineage-uncertainty'
 import { decodeSavedLocalPtyReference } from '../../restoring-sessions/saved-local-terminal-ids'
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
@@ -99,6 +103,35 @@ export function normalizeLoadedProfileState(
     parsed.workspaceLineageByChildKey
   )
   const worktreeLineageById = { ...parsed.worktreeLineageById }
+  const uncertainty = normalizeLineageUncertainty(
+    parsed.workspaceLineageUncertaintyByChild,
+    markNeedsSave
+  )
+  const crossStoreLineageByChildKey = normalizeCrossStoreLineageByChildKey(
+    parsed.crossStoreLineageByChildKey
+  )
+  for (const value of [
+    parsed.worktreeLineageById,
+    parsed.workspaceLineageByChildKey,
+    parsed.crossStoreLineageByChildKey
+  ]) {
+    if (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value))) {
+      uncertainty[UNKNOWN_LINEAGE_KEY] = true
+      markNeedsSave()
+    }
+  }
+  for (const key in parsed.workspaceLineageByChildKey ?? {}) {
+    if (!Object.hasOwn(workspaceLineageByChildKey, key)) {
+      uncertainty[UNKNOWN_LINEAGE_KEY] = true
+      markNeedsSave()
+    }
+  }
+  for (const key in parsed.crossStoreLineageByChildKey ?? {}) {
+    if (!crossStoreLineageByChildKey || !Object.hasOwn(crossStoreLineageByChildKey, key)) {
+      uncertainty[UNKNOWN_LINEAGE_KEY] = true
+      markNeedsSave()
+    }
+  }
   dropInferredParentsOverFolderParents(worktreeLineageById, workspaceLineageByChildKey)
 
   const legacyPaneKeyAliasEntries = normalizeLegacyPaneKeyAliasEntries(
@@ -152,10 +185,11 @@ export function normalizeLoadedProfileState(
     mobileClientTabSelectionsByDeviceId: normalizePersistedMobileClientTabSelections(
       parsed.mobileClientTabSelectionsByDeviceId
     ),
+    ...(parsed.workspaceLineageUncertaintyByChild !== undefined || Object.keys(uncertainty).length
+      ? { workspaceLineageUncertaintyByChild: uncertainty }
+      : {}),
     workspaceLineageByChildKey,
-    crossStoreLineageByChildKey: normalizeCrossStoreLineageByChildKey(
-      parsed.crossStoreLineageByChildKey
-    ),
+    crossStoreLineageByChildKey,
     settings: normalizeLoadedGlobalSettings(parsed, terminal, profile),
     ui: normalizeLoadedUiState(
       parsed,
