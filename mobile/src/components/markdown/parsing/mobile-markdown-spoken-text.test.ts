@@ -6,7 +6,7 @@ describe('mobileMarkdownSpokenText', () => {
     const markdown = [
       '## Plan',
       '',
-      'Run **the tests** with `pnpm test`, see [the docs](https://example.com/docs).',
+      'Run **the tests** with `pnpm test`, see [the docs](https://example.com/docs). Area $x^2$ grows.',
       '',
       '```ts',
       'const answer = 42',
@@ -16,7 +16,7 @@ describe('mobileMarkdownSpokenText', () => {
       '- second step'
     ].join('\n')
     expect(mobileMarkdownSpokenText(markdown)).toBe(
-      'Plan\nRun the tests with pnpm test, see the docs.\nfirst step\nsecond step'
+      'Plan\nRun the tests with pnpm test, see the docs. Area grows.\nfirst step\nsecond step'
     )
   })
 })

@@ -27,7 +27,11 @@ export function speakOnDevice(text: string): Promise<void> {
       Speech.speak(piece, {
         onDone: index === pieces.length - 1 ? settle : undefined,
         onStopped: settle,
-        onError: settle
+        // A failed piece leaves later ones queued; stop them so the reply matches what plays.
+        onError: () => {
+          stopOnDevice()
+          settle()
+        }
       })
     })
   })
