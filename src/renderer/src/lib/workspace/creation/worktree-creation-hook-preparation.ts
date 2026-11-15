@@ -1,11 +1,16 @@
+import {
+  pickApprovedSetupHashes,
+  type ApprovedSetupHashes
+} from '../../../../../shared/worktree/creation/approved-setup-hashes'
 import { useAppStore } from '@/store/index'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
+import type { SetupHooksCreateSource } from '../../../../../shared/worktree/setup-hooks-create-source'
 import {
   ensureHooksConfirmed,
   readAndConfirmRuntimeIssueCommand
-} from '../../ensure-hooks-confirmed'
-import { confirmWorkspaceSetupDecision } from '../../workspace-setup-trust'
-import { buildTrustedComposerIssueCommand } from '../../composer-issue-command'
+} from '../../../runtime/repo-hooks/ensure-hooks-confirmed'
+import { confirmWorkspaceSetupDecision } from './setup/workspace-setup-trust'
+import { buildTrustedComposerIssueCommand } from './composer-issue-command'
 import { getInitialWorktreeCreationPhase } from './worktree-creation-flow-startup'
 
 export async function prepareWorktreeCreationHooks(
@@ -32,7 +37,9 @@ export async function prepareWorktreeCreationHooks(
     request.repoId,
     request.setupDecision,
     preparation.executionHostId,
-    isCancelled
+    isCancelled,
+    undefined,
+    setupHooksCreateSource(request)
   )
   if (confirmed === 'cancelled') {
     return null
@@ -74,6 +81,7 @@ export async function prepareWorktreeCreationHooks(
     hookPreparation: undefined,
     executionHostId: request.executionHostId ?? preparation.executionHostId,
     setupDecision,
+    ...pickApprovedSetupHashes(confirmed),
     issueCommand
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
@@ -81,4 +89,29 @@ export async function prepareWorktreeCreationHooks(
     phase: getInitialWorktreeCreationPhase(prepared)
   })
   return prepared
+}
+
+/**
+ * Only explicit reuse checks out the named branch; every other create starts from the base. A VM
+ * create picks its base after this check, so it keeps reading the project checkout.
+ */
+export function setupHooksCreateSource(
+  request: Pick<
+    WorktreeCreationRequest,
+    'branchIntent' | 'branchNameOverride' | 'baseBranch' | 'ephemeralVmRecipe'
+  >
+): SetupHooksCreateSource | undefined {
+  if (request.ephemeralVmRecipe) {
+    return undefined
+  }
+  return request.branchIntent === 'open-existing-v2' && request.branchNameOverride
+    ? { kind: 'branch', ref: request.branchNameOverride, baseBranch: request.baseBranch }
+    : { kind: 'base', baseBranch: request.baseBranch }
+}
+
+/** Setup fields for the create call; the approved hash lets the host check the created branch. */
+export function setupCreateArgs(
+  request: Pick<WorktreeCreationRequest, 'setupOnly' | keyof ApprovedSetupHashes>
+): { setupOnly?: boolean } & ApprovedSetupHashes {
+  return { setupOnly: request.setupOnly, ...pickApprovedSetupHashes(request) }
 }

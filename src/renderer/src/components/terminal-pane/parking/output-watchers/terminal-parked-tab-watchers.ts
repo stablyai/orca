@@ -1,71 +1,27 @@
 /** Parking removes pane byte parsers; run pane-less watchers until reveal, exit or teardown. */
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
-import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-execution-host-pty-id'
 import { discardPreHandlerPtyState } from '../../pty-transport/delivery/pty-pre-handler-buffer'
-import { terminalProviderHasAuthoritativeSnapshot } from '../../../terminal/terminal-provider-snapshot-capability'
-import {
-  isParkRestorableTerminalPty,
-  type TerminalParkRestorePolicy
-} from '../retention/terminal-hidden-view-parking'
-import { selectPairedRuntimeParkingEnvironmentIds } from '../retention/paired-runtime-parking-capabilities'
+import { isParkRestorableTerminalPty } from '../retention/terminal-hidden-view-parking'
 
 import {
   reconcileParkedWatcherPtyIds,
-  resolveParkedTerminalPaneCandidates,
   type ParkableTerminalTabModel
 } from './terminal-parked-watcher-reconciliation'
 import { collapseParkedExitedLeaf, startParkedPtyWatcher } from './terminal-parked-pty-watcher'
 import {
   capturedPanesByTabId,
   disposeParkedTabWatchers,
+  retireParkedTerminalTab,
   parkedWatchersByTabId,
   type ParkedTabWatcherEntry,
   type ParkedTerminalPaneCapture
 } from './terminal-parked-watcher-registry'
 
-export type ParkedTerminalPtyEligibility = (ptyId: string) => boolean
-
-const allowOrdinaryParkRestore = (ptyId: string): boolean =>
-  isRemoteExecutionHostPtyId(ptyId) || terminalProviderHasAuthoritativeSnapshot(ptyId)
-
-// SSH fact watchers use local main too; coverage follows restore policy, not daemon-only snapshots.
-function parkRestorePolicyFromState(state: {
-  settings: { terminalSshViewParking?: boolean } | null
-  runtimeStatusByEnvironmentId: ReadonlyMap<
-    string,
-    { status: { capabilities?: readonly string[] } | null | undefined }
-  >
-}): TerminalParkRestorePolicy {
-  return {
-    sshParkingEnabled: state.settings?.terminalSshViewParking !== false,
-    pairedRuntimeParkingEnvironmentIds: selectPairedRuntimeParkingEnvironmentIds(
-      state.runtimeStatusByEnvironmentId
-    )
-  }
-}
-
-/** Refuse parking unless every valid-leaf PTY is restorable and watcher-covered, or bell/title/completion effects disappear. */
-export function canWatcherCoverParkedTerminalTab(
-  worktreeId: string,
-  tab: ParkableTerminalTabModel,
-  // Local parking requires authoritative daemon snapshots; paired/SSH use their own restore policy.
-  isPtyEligible: ParkedTerminalPtyEligibility = allowOrdinaryParkRestore
-): boolean {
-  const state = useAppStore.getState()
-  const panes = resolveParkedTerminalPaneCandidates(tab, state)
-  const restorePolicy = parkRestorePolicyFromState(state)
-  return (
-    panes.length > 0 &&
-    panes.every(
-      (pane) =>
-        pane.ptyId !== null &&
-        isTerminalLeafId(pane.leafId) &&
-        isParkRestorableTerminalPty(pane.ptyId, worktreeId, restorePolicy) &&
-        isPtyEligible(pane.ptyId)
-    )
-  )
-}
+import {
+  parkedTerminalTabCoverage,
+  parkRestorePolicyFromState
+} from './parked-terminal-tab-coverage'
 
 function startParkedTabWatchers(
   worktreeId: string,
@@ -80,7 +36,7 @@ function startParkedTabWatchers(
   }
   parkedWatchersByTabId.set(tab.id, entry)
   const restorePolicy = parkRestorePolicyFromState(useAppStore.getState())
-  for (const pane of resolveParkedTerminalPaneCandidates(tab, useAppStore.getState())) {
+  for (const pane of parkedTerminalTabCoverage(worktreeId, tab).panes) {
     startParkedPtyWatcher({
       worktreeId,
       tab,
@@ -157,7 +113,7 @@ function watchablePanes(
   const state = useAppStore.getState()
   const restorePolicy = parkRestorePolicyFromState(state)
   return new Map(
-    resolveParkedTerminalPaneCandidates(tab, state).flatMap((pane) =>
+    parkedTerminalTabCoverage(worktreeId, tab).panes.flatMap((pane) =>
       pane.ptyId &&
       isTerminalLeafId(pane.leafId) &&
       isParkRestorableTerminalPty(pane.ptyId, worktreeId, restorePolicy)
@@ -224,7 +180,11 @@ function startOrReconcileParkedTabWatchers(
     if (!entry.parkedTabIds.has(tab.id)) {
       continue
     }
-    const watcherEntry = parkedWatchersByTabId.get(tab.id)
+    let watcherEntry = parkedWatchersByTabId.get(tab.id)
+    if (watcherEntry && watcherEntry.worktreeId !== worktreeId) {
+      disposeParkedTabWatchers(tab.id)
+      watcherEntry = undefined
+    }
     const restoreTitleOnRegister = entry.restoreTitleOnStartTabIds?.has(tab.id) === true
     if (watcherEntry) {
       reconcileParkedTabWatchers(worktreeId, tab, watcherEntry, restoreTitleOnRegister)
@@ -234,50 +194,28 @@ function startOrReconcileParkedTabWatchers(
   }
 }
 
-/** Batch registry sweeps once per rendered workspace set for O(registry + tabs) work. Hoisting disposal/start crosses only disjoint tab sets because each tab has one workspace owner. */
+/** Reconcile only addressed workspace buckets; unrelated watchers and captures retain their owners. */
 export function syncParkedTerminalTabWatchersForWorkspaces(
   entriesByWorktreeId: ReadonlyMap<string, ParkedTerminalTabWatcherSyncEntry>
 ): void {
-  if (entriesByWorktreeId.size === 0) {
-    return
-  }
-  // Allocate live-tab sets only for worktrees with registry rows.
-  const liveTabIdsByWorktreeId = new Map<string, ReadonlySet<string>>()
-  const liveTabIdsFor = (worktreeId: string): ReadonlySet<string> | null => {
-    const cached = liveTabIdsByWorktreeId.get(worktreeId)
-    if (cached) {
-      return cached
-    }
-    const entry = entriesByWorktreeId.get(worktreeId)
-    if (!entry) {
-      return null
-    }
-    const liveTabIds = new Set(entry.tabs.map((tab) => tab.id))
-    liveTabIdsByWorktreeId.set(worktreeId, liveTabIds)
-    return liveTabIds
-  }
-  for (const [tabId, watcherEntry] of parkedWatchersByTabId) {
-    const entry = entriesByWorktreeId.get(watcherEntry.worktreeId)
-    if (!entry) {
-      continue
-    }
-    const liveTabIds = liveTabIdsFor(watcherEntry.worktreeId)
-    if (!liveTabIds?.has(tabId)) {
-      disposeClosedParkedTabWatchers(tabId, watcherEntry)
-      continue
-    }
-    if (!entry.parkedTabIds.has(tabId) && watcherEntry.disposersByPtyId.size > 0) {
-      disposeParkedTabWatchers(tabId)
-    }
-  }
-  // Why: closed tabs never park/reveal again; drop captures to keep the registry bounded.
-  for (const [tabId, capture] of capturedPanesByTabId) {
-    const liveTabIds = liveTabIdsFor(capture.worktreeId)
-    if (liveTabIds && !liveTabIds.has(tabId)) {
-      capturedPanesByTabId.delete(tabId)
-    }
-  }
   for (const [worktreeId, entry] of entriesByWorktreeId) {
+    const liveTabIds = new Set(entry.tabs.map((tab) => tab.id))
+    for (const tabId of Array.from(parkedWatchersByTabId.workspaceTabIds(worktreeId))) {
+      const watcherEntry = parkedWatchersByTabId.get(tabId)
+      if (!watcherEntry) {
+        continue
+      }
+      if (!liveTabIds.has(tabId)) {
+        disposeClosedParkedTabWatchers(tabId, watcherEntry)
+      } else if (!entry.parkedTabIds.has(tabId) && watcherEntry.disposersByPtyId.size > 0) {
+        disposeParkedTabWatchers(tabId)
+      }
+    }
+    for (const tabId of Array.from(capturedPanesByTabId.workspaceTabIds(worktreeId))) {
+      if (!liveTabIds.has(tabId)) {
+        retireParkedTerminalTab(tabId)
+      }
+    }
     startOrReconcileParkedTabWatchers(worktreeId, entry)
   }
 }

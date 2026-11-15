@@ -1,7 +1,7 @@
 // verify-15b: a WSL host pane's wake joined the new prompt onto the restored one.
 import { Terminal } from '@xterm/headless'
 import { describe, expect, it, vi } from 'vitest'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 

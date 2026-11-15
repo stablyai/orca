@@ -1,7 +1,8 @@
+import { admitTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { ensurePtyDispatcher } from '../delivery/pty-dispatcher'
 import {
   clearConsumedPreHandlerPtyExit,
@@ -12,9 +13,10 @@ import {
   isPreHandlerPtyStateDiscarded
 } from '../delivery/pty-pre-handler-buffer'
 import { projectIpcPtyConnectResult } from './ipc-pty-connect-result'
-import { waitAtTerminalPtyPreSpawnE2EBarrier } from '../../terminal-pty-pre-spawn-e2e-barrier'
+import { markTerminalProviderSessionBound } from '../../../terminal/terminal-provider-gone-sessions'
+import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2e-barrier'
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
-import { isSshSessionGoneError } from '../../pty-connection/pty-connect-limits'
+import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from '../pty-transport-types'
@@ -86,6 +88,8 @@ export async function connectIpcPty(
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
+    // Any resolved spawn or cold restore is live under this id, even if this transport was destroyed meanwhile.
+    markTerminalProviderSessionBound(spawnResult.id)
     const retireDisposedFreshSpawn = async (): Promise<void> => {
       if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
         return
@@ -128,6 +132,12 @@ export async function connectIpcPty(
     handlers.registerData(spawnResult.id)
     if (context.isDestroyed()) {
       return
+    }
+    if (!hasPreHandlerPtyExit(spawnResult.id, spawnResult.incarnationId)) {
+      admitTerminalNoticeLifetime(spawnResult.id, {
+        incarnationId: spawnResult.incarnationId,
+        fresh: !admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore
+      })
     }
     const exitedBeforeAttach = handlers.registerExit(spawnResult.id, spawnResult.incarnationId)
     if (exitedBeforeAttach) {

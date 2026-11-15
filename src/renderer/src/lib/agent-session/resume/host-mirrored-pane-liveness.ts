@@ -1,15 +1,15 @@
-import type { useAppStore } from '@/store/index'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import { hasHostSessionMirrorHydrated } from '@/runtime/host-session-mirror-hydration'
-import { hasHostMirrorHandleWaitExpired } from '../../host-mirror-handle-gap-wait'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '../../resolve-owner'
-import { warnAmbiguousOwnerOnce } from '../../ambiguous-owner-warning'
+import { hasHostSessionMirrorHydrated } from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
+import { hasHostMirrorHandleWaitExpired } from './host-mirror-handle-gap-wait'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '../../workspace/ownership/resolve-owner'
+import { warnAmbiguousOwnerOnce } from '../../workspace/ownership/ambiguous-owner-warning'
+import type { useAppStore } from '@/store/index'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 

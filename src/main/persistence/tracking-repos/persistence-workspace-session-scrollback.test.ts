@@ -106,6 +106,6 @@ describe('Store', () => {
     initDataPath()
     const store = createSqliteTestStore(Store, { dataFile: profileDataFile })
 
-    expect(store.readTerminalScrollbackSnapshot(ref)).toBe('legacy-scrollback')
+    expect(await store.readTerminalScrollbackSnapshotAsync(ref)).toBe('legacy-scrollback')
   })
 })

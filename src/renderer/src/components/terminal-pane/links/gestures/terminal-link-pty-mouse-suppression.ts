@@ -4,7 +4,7 @@ import {
   isTerminalLinkDirectActivation,
   isTerminalMiddleClickActivation
 } from './terminal-link-activation'
-import { isXtermMouseReport } from '../../terminal-pointer-input-sequences'
+import { isXtermMouseReport } from '../../input/pointer/terminal-pointer-input-sequences'
 
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 const MAX_DEFERRED_PTY_INPUT_FRAMES = 64

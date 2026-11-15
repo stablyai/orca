@@ -1,18 +1,19 @@
 import type React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Use two blocks: balancing one wrapped string leaves a gap in the pre-sized tooltip. */
 export function ResumeInNewCliTooltipText(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <span className="block">
-        {translate(
+        {t(
           'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCliTooltipFork',
           'Start a new terminal agent session with a copy of this conversation.'
         )}
       </span>
       <span className="block">
-        {translate(
+        {t(
           'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCliTooltipChat',
           'This chat stays unchanged.'
         )}

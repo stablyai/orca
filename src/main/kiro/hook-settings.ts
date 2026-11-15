@@ -2,16 +2,18 @@ import { join, posix as pathPosix } from 'node:path'
 import { resolveKiroHomeDir } from '../../shared/kiro-home'
 import {
   createManagedCommandMatcher,
-  getSharedManagedScriptPath,
   hookDefinitionHasManagedCommand,
-  isPlainObject,
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
+import {
   MANAGED_HOOK_TIMEOUT_MILLISECONDS,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  removeManagedCommands,
-  wrapPosixHookCommand,
   type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 
 const KIRO_SCRIPT_BASE = 'kiro-hook'
 

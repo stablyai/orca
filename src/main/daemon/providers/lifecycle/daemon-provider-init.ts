@@ -1,9 +1,10 @@
+import { daemonDiedRespawnMessage } from '../../launch/daemon-exit-record'
 import { getLocalPtyProvider } from '../../../ipc/pty/provider/registry'
 import { rebindLocalProviderListeners } from '../../../ipc/pty/provider/listener-lifecycle'
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic
-} from '../../../startup/startup-diagnostics'
+} from '../../../startup/diagnostics/startup-diagnostics'
 import { checkDaemonHealth } from '../../health/daemon-health'
 import {
   collectPinnedDaemonVersions,
@@ -109,7 +110,7 @@ export async function initDaemonPtyProvider(
     respawn: async (reason: DaemonRespawnReason) => {
       // A wedged daemon can look dead here; launch reports the proven replacement cause after recovery.
       if (reason === 'daemon_died') {
-        console.warn('[daemon] Daemon process died — respawning')
+        console.warn(daemonDiedRespawnMessage())
         // Synthetic exits during manual restart must not enter the crash bucket.
         if (!isDaemonRestartInFlight()) {
           trackDaemonRetired('died_respawn')

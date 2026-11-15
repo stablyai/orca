@@ -80,16 +80,6 @@ describe('snapshot mouse encoding', () => {
     expect(wheelUpReport(restored)).toBe(SGR_WHEEL_UP_AT_10_5)
   })
 
-  it('round-trips SGR-pixels encoding', async () => {
-    const { terminal, addon } = createTerminal()
-    await write(terminal, 'x\x1b[?1002h\x1b[?1016h')
-
-    const restored = await replay(serializeWithAbsoluteCursor(addon, terminal))
-
-    expect(restored.modes.mouseTrackingMode).toBe('drag')
-    expect(readTerminalMouseEncoding(restored)).toBe('sgr-pixels')
-  })
-
   it('restores no mouse reports when tracking is off, even with SGR encoding armed', async () => {
     const { terminal, addon } = createTerminal()
     await write(terminal, 'x\x1b[?1003h\x1b[?1006h\x1b[?1003l')

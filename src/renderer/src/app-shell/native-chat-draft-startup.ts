@@ -2,10 +2,10 @@ import { useAppStore } from '../store'
 import { resolveNativeChatDraftOwner } from '../components/native-chat/drafts/native-chat-draft-owner'
 import {
   hydrateNativeChatComposerDrafts,
-  setNativeChatComposerDraftOwnerResolver,
   waitForNativeChatComposerDrafts
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { recheckNativeChatComposerDraftImagesIn } from '@/components/native-chat/native-chat-composer-draft-image-check'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import { setNativeChatComposerDraftOwnerResolver } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
+import { recheckNativeChatComposerDraftImagesIn } from '@/components/native-chat/drafts/native-chat-composer-draft-image-check'
 
 // Bound startup waiting; a late load still fills drafts the user has not edited.
 const DRAFT_LOAD_WAIT_MS = 1_500

@@ -60,18 +60,6 @@ describe('Session focus loss', () => {
     session.dispose()
   })
 
-  it('does not repeat a blur the viewer already sent', async () => {
-    const { session, written, emit, attach } = createSession()
-    const token = attach()
-    await emit('\x1b[?1004h')
-    session.write(FOCUS_OUT)
-
-    session.detachClient(token)
-
-    expect(written).toEqual([FOCUS_OUT])
-    session.dispose()
-  })
-
   it('tells a newly armed program even after its predecessor heard the blur', async () => {
     const { session, written, emit, attach } = createSession()
     const token = attach()

@@ -17,13 +17,12 @@ import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { RichMarkdownClipboardLinkOrigin } from '../clipboard/rich-markdown-clipboard-link-origin'
-import { createLowlight, common } from 'lowlight'
 import {
   acquireLocalImageSrcLease,
   loadLocalImageSrc
 } from '../../document-images/useLocalImageSrc'
 import { subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated } from '../../document-images/local-image-src-cache'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   createRawMarkdownHtmlBlock,
   createRawMarkdownHtmlInline,
@@ -46,14 +45,13 @@ import { RichMarkdownOrderedList } from '../lists/rich-markdown-ordered-list'
 import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from '../code-blocks/rich-markdown-lowlight'
 import { RichMarkdownTaskList } from '../lists/rich-markdown-task-list'
-import { createCachedLowlight } from '../code-blocks/rich-markdown-lowlight-cache'
-import { documentResourceAccess } from '@/lib/local-file-access'
+import { richMarkdownLowlight } from '../code-blocks/rich-markdown-lowlight-instance'
+import { documentResourceAccess } from '@/lib/files/access/local-file-access'
+import { attachRichMarkdownImageErrorLink } from '../images/rich-markdown-image-error-link'
 import {
   readRichMarkdownImageRuntimeContext,
   resolveRichMarkdownImageUrl
 } from '../images/rich-markdown-image-context'
-
-const lowlight = createCachedLowlight(createLowlight(common))
 
 const RichMarkdownCode = Code.extend({
   // Permit linked code labels while keeping emphasis marks excluded.
@@ -63,11 +61,15 @@ const RichMarkdownCode = Code.extend({
 export function createRichMarkdownExtensions({
   codec,
   includePlaceholder = false,
+  allowBase64Images = true,
+  imageErrorLink = false,
   htmlSuperscriptLinks = false,
   htmlSuperscriptLinkContext
 }: {
   codec: RichMarkdownEditorCodec
   includePlaceholder?: boolean
+  allowBase64Images?: boolean
+  imageErrorLink?: boolean
   htmlSuperscriptLinks?: boolean
   htmlSuperscriptLinkContext?: RichMarkdownHtmlSuperscriptLinkContext
 }): AnyExtension[] {
@@ -95,7 +97,7 @@ export function createRichMarkdownExtensions({
         })
       }
     }).configure({
-      lowlight,
+      lowlight: richMarkdownLowlight,
       defaultLanguage: null
     }),
     RichMarkdownLink.configure({
@@ -120,13 +122,15 @@ export function createRichMarkdownExtensions({
         return ({ node, HTMLAttributes, editor }) => {
           // A wrapper prevents native image-byte dragging from conflicting with ProseMirror’s schema-node relocation.
           const dom = document.createElement('span')
-          // Keep the image wrapper inline so it cannot break surrounding text onto separate lines.
-          dom.style.display = 'inline-block'
+          // Inline, not inline-block: a shrink-to-fit wrapper collapses an SVG that has a viewBox but no width to 0×0.
+          dom.style.display = 'inline'
           dom.style.lineHeight = '0'
-          dom.style.maxWidth = '100%'
 
           const img = document.createElement('img')
           img.draggable = false
+          // Undo preflight's block, middle-aligned images so text keeps flowing around them as before.
+          img.style.display = 'inline-block'
+          img.style.verticalAlign = 'baseline'
           let renderedAttributeNames = new Set<string>()
           const syncImageAttributes = (attributes: Record<string, unknown>): void => {
             const nextNames = new Set<string>()
@@ -151,6 +155,9 @@ export function createRichMarkdownExtensions({
           dom.appendChild(img)
 
           let currentSrc = node.attrs.src as string | undefined
+          const errorLink = imageErrorLink
+            ? attachRichMarkdownImageErrorLink(dom, img, () => currentSrc)
+            : undefined
           let currentContextVersion = getImageContextVersion(this.storage)
           let releaseImageLease: (() => void) | undefined
 
@@ -222,6 +229,7 @@ export function createRichMarkdownExtensions({
                 )
               )
               const newSrc = updatedNode.attrs.src as string | undefined
+              errorLink?.update(newSrc !== currentSrc)
               const nextContextVersion = getImageContextVersion(this.storage)
               if (newSrc !== currentSrc || nextContextVersion !== currentContextVersion) {
                 currentSrc = newSrc
@@ -241,7 +249,7 @@ export function createRichMarkdownExtensions({
         }
       }
     }).configure({
-      allowBase64: true,
+      allowBase64: allowBase64Images,
       // Markdown nests images in paragraphs; block image nodes would become schema-invalid and crash on the first edit.
       inline: true
     }),

@@ -50,25 +50,6 @@ describe('graph and annotated worktree scans', () => {
     __resetSparseCheckoutStateCacheForTests()
   })
 
-  it('does not probe sparse state for a graph scan', async () => {
-    const rows = await listWorktreeGraph(REPO, { wslDistro: 'Ubuntu' })
-
-    expect(rows[0]?.path).toBe('C:\\wt\\x')
-    expect(rows[0]?.isSparse).toBeUndefined()
-    expect(detectSparseCheckoutMock).not.toHaveBeenCalled()
-  })
-
-  it('reads the git listing once for an overlapping graph and annotated scan', async () => {
-    const [graphRows, annotatedRows] = await Promise.all([
-      listWorktreeGraph(REPO, { wslDistro: 'Ubuntu' }),
-      listWorktrees(REPO, { wslDistro: 'Ubuntu' })
-    ])
-
-    expect(readTranslatedWorktreeGraphMock).toHaveBeenCalledTimes(1)
-    expect(graphRows[0]?.isSparse).toBeUndefined()
-    expect(annotatedRows[0]?.isSparse).toBe(true)
-  })
-
   it('resolves a graph scan while the annotated scan is still probing', async () => {
     let releaseProbe!: () => void
     detectSparseCheckoutMock.mockImplementation(

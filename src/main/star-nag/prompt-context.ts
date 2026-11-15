@@ -3,7 +3,7 @@ import {
   bucketStarNagAgentsSinceBaseline,
   type StarNagPromptMode,
   type StarNagPromptSource
-} from '../../shared/star-nag-telemetry'
+} from '../../shared/telemetry/star-nag-telemetry'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'

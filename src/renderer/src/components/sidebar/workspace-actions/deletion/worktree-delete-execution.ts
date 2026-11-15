@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getWorktreeOnHostFromState } from '@/store/selectors'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -13,7 +13,7 @@ import {
 import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale-workspace-list-toast'
 import { showPreservedBranchBatchToast } from './preserved-branch-batch-toast'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'

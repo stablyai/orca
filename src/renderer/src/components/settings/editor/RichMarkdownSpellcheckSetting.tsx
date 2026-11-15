@@ -1,6 +1,7 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 
@@ -13,26 +14,28 @@ export function RichMarkdownSpellcheckSetting({
   settings,
   updateSettings
 }: RichMarkdownSpellcheckSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const enabled = settings.richMarkdownSpellcheckEnabled ?? true
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.GeneralEditorSettingsSection.b82f86d7d2',
-        'Rich Markdown Spellcheck'
+      id={GENERAL_SETTING_ANCHORS.spellcheck}
+      title={t(
+        'auto.components.settings.GeneralEditorSettingsSection.a0361dfb05',
+        'Rich Markdown spellcheck'
       )}
-      description={translate(
+      description={t(
         'auto.components.settings.GeneralEditorSettingsSection.5195f0b9ef',
         'Show browser spelling underlines and suggestions while editing rich Markdown.'
       )}
       keywords={['spellcheck', 'spell check', 'spelling', 'markdown', 'red underline']}
     >
       <SettingsSwitchRow
-        label={translate(
-          'auto.components.settings.GeneralEditorSettingsSection.b82f86d7d2',
-          'Rich Markdown Spellcheck'
+        label={t(
+          'auto.components.settings.GeneralEditorSettingsSection.a0361dfb05',
+          'Rich Markdown spellcheck'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.GeneralEditorSettingsSection.5195f0b9ef',
           'Show browser spelling underlines and suggestions while editing rich Markdown.'
         )}

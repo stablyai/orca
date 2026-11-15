@@ -1,23 +1,23 @@
-import {
-  prepareDirectWorkItemSetup,
-  type DirectWorkItemLaunchResult
-} from './direct-work-item-setup'
-import { toast } from 'sonner'
+import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'
+import { agentLaunchRecoveryMessage } from '@/lib/agent-session/launch/failure/agent-launch-failure'
+import { confirmDirectWorkItemSetup, prepareDirectWorkItemSetup } from './direct-work-item-setup'
+import type { DirectWorkItemLaunchResult } from './direct-work-item-setup'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
+  directWorkItemFailureReporter,
   gitLabIssueNumber,
   resolvePrHeadErrorMessage,
   unavailableAgentErrorMessage,
   workspaceActivationErrorMessage
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-messages'
-import type { GitPushTarget } from '../../../../../../shared/worktree/types'
+import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
 import { buildDirectWorkItemStartupOpts } from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent'
 import {
   getDirectWorkItemIdentity,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-draft'
-import { getLaunchableWorkItemDraftContent } from '@/lib/linked-work-item-context'
+import { getLaunchableWorkItemDraftContent } from '@/lib/work-items/linked-work-item-context'
 import {
   directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,
@@ -27,14 +27,11 @@ import {
   captureDirectWorkItemLaunchArgs
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/workspace/creation/work-item/launch-work-item-direct-types'
-import {
-  beginDirectWorkItemStructuredLaunch,
-  finishDirectWorkItemPrompt
-} from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
+import * as routing from './launch-work-item-direct-agent-routing'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/workspace/creation/work-item/launch-work-item-direct-route-preparation'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 /** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
 export async function launchWorkItemDirect(
   args: LaunchWorkItemDirectArgs
@@ -44,11 +41,8 @@ export async function launchWorkItemDirect(
   args = captureDirectWorkItemLaunchArgs(args)
   let agentArgs = args.agentArgs
   let creationAccepted = false
-  const reportFailure = (message: string): false => {
-    toast.error(message)
-    args.onFailureNotified?.()
-    return false
-  }
+  let failureAgent = agentOverride
+  const reportFailure = directWorkItemFailureReporter(args.onFailureNotified, () => failureAgent)
   try {
     if (args.signal?.aborted) {
       return 'cancelled'
@@ -58,47 +52,53 @@ export async function launchWorkItemDirect(
     if (!context) {
       return false
     }
+    if (context.unavailable) {
+      return context.unavailable.pending
+        ? 'cancelled'
+        : reportFailure(agentLaunchRecoveryMessage(context.unavailable.recovery))
+    }
     const { repo } = context
     const promptDelivery = args.promptDelivery ?? 'draft'
     const { itemType, itemNumber } = getDirectWorkItemIdentity(item)
-    const finalSetupDecision = await prepareDirectWorkItemSetup(
+    const setupDecision = await prepareDirectWorkItemSetup(
       repo,
       context.executionHostId,
       args.signal,
       args.onSetupRequired
     )
-    if (finalSetupDecision === 'review-request') {
-      return false
+    if (setupDecision === 'review-request' || setupDecision === 'cancelled') {
+      return setupDecision === 'cancelled' ? 'cancelled' : false
     }
-    if (finalSetupDecision === 'cancelled') {
-      return 'cancelled'
-    }
-
     const { workspaceIntentName, workspaceName } = getDirectWorkItemWorkspaceNames(
       item,
       itemType,
       itemNumber
     )
-    let resolvedBaseBranch = baseBranch
-    let resolvedPushTarget: GitPushTarget | undefined
-    let resolvedBranchNameOverride: string | undefined
-    let resolvedCompareBaseRef: string | undefined
-    if (!resolvedBaseBranch && itemType === 'pr' && itemNumber) {
+    let prStart: GitHubPrStartPoint | undefined
+    if (!baseBranch && itemType === 'pr' && itemNumber) {
       try {
         // Direct Use PR bypasses the picker but still needs its resolved head before git worktree add.
-        const result = await resolveDirectPrStartPoint(repoId, itemNumber, context.target, item)
-        resolvedBaseBranch = result.baseBranch
-        resolvedPushTarget = result.pushTarget
-        resolvedBranchNameOverride = result.branchNameOverride
-        resolvedCompareBaseRef = result.compareBaseRef
-      } catch (error) {
+        prStart = await resolveDirectPrStartPoint(repoId, itemNumber, context.target, item)
+      } catch {
         if (args.signal?.aborted) {
           return 'cancelled'
         }
-        toast.error(error instanceof Error ? error.message : resolvePrHeadErrorMessage())
+        reportFailure(resolvePrHeadErrorMessage())
         openModalFallback()
         return false
       }
+    }
+    const resolvedBaseBranch = prStart?.baseBranch ?? baseBranch
+    // Approve the orca.yaml at the start point the create checks out, so a PR's own setup is what's reviewed.
+    const confirmedSetup = await confirmDirectWorkItemSetup(
+      repo,
+      context.executionHostId,
+      setupDecision,
+      { kind: 'base', baseBranch: resolvedBaseBranch },
+      args.signal
+    )
+    if (confirmedSetup === 'cancelled') {
+      return 'cancelled'
     }
 
     const projectPreflight = await context.projectContextPromise
@@ -106,8 +106,7 @@ export async function launchWorkItemDirect(
       return 'cancelled'
     }
     if (!projectPreflight) {
-      toast.error(unavailableAgentErrorMessage())
-      return false
+      return reportFailure(unavailableAgentErrorMessage())
     }
     const projectContext = projectPreflight.context
     const { prospectiveAgent, unavailable } = await resolveDirectProspectiveAgent(
@@ -119,11 +118,11 @@ export async function launchWorkItemDirect(
     if (args.signal?.aborted) {
       return 'cancelled'
     }
+    failureAgent = prospectiveAgent ?? undefined
     if (unavailable) {
-      toast.error(unavailableAgentErrorMessage())
-      return false
+      return reportFailure(unavailableAgentErrorMessage())
     }
-    const requestId = newAgentLaunchRequestId()
+    const requestId = createNonSecureContextUuid()
     const draftContent = await Promise.resolve(getLaunchableWorkItemDraftContent(item))
     if (args.signal?.aborted) {
       return 'cancelled'
@@ -152,11 +151,11 @@ export async function launchWorkItemDirect(
     const agentArgsError = directWorkItemAgentArgsError(
       preflightInputs ? preflightInputs.agentArgs : args.agentArgs,
       context.shell,
-      Boolean(projectContext && preflightPlan?.route === 'structured-native-chat')
+      Boolean(projectContext && preflightPlan?.route === 'structured-native-chat'),
+      failureAgent
     )
     if (agentArgsError) {
-      toast.error(agentArgsError)
-      return false
+      return reportFailure(agentArgsError)
     }
 
     if (args.signal?.aborted) {
@@ -168,16 +167,16 @@ export async function launchWorkItemDirect(
       repoId,
       workspaceName,
       resolvedBaseBranch,
-      finalSetupDecision,
+      confirmedSetup.setupDecision,
       undefined,
       telemetrySource,
       workspaceIntentName?.displayName ?? item.title,
       itemType === 'issue' && itemNumber ? itemNumber : undefined,
       itemType === 'pr' && itemNumber ? itemNumber : undefined,
-      resolvedPushTarget,
+      prStart?.pushTarget,
       undefined,
       item.linearIdentifier,
-      resolvedBranchNameOverride,
+      prStart?.branchNameOverride,
       undefined,
       itemType === 'mr' && itemNumber ? itemNumber : undefined,
       gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
@@ -189,8 +188,11 @@ export async function launchWorkItemDirect(
       undefined,
       undefined,
       undefined,
-      resolvedCompareBaseRef,
-      { executionHostId: context.executionHostId }
+      prStart?.compareBaseRef,
+      {
+        executionHostId: context.executionHostId,
+        ...pickApprovedSetupHashes(confirmedSetup)
+      }
     )
     const worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
@@ -202,6 +204,7 @@ export async function launchWorkItemDirect(
       agentOverride,
       agentLaunchPreferences: args.agentLaunchPreferences,
       agentArgs: args.agentArgs,
+      actionAgentArgs: args.actionAgentArgs,
       ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
       resolveLaunchInputs: args.resolveLaunchInputs,
       ...(preflightInputs ? { preflightInputs } : {}),
@@ -244,11 +247,20 @@ export async function launchWorkItemDirect(
         defaultTabs: result.defaultTabs,
         ...(launchPreparation.structuredLaunch
           ? { providesInitialSurface: true }
-          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource))
+          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource, {
+              ...launchPreparation.freshLaunchInputs,
+              prompt: draftContent,
+              promptDelivery,
+              legacy: () => ({
+                startupPlan,
+                pasteDraftAfterLaunch: draftLaunchedNatively ? null : draftContent,
+                submitPastedPrompt: promptDelivery !== 'draft'
+              })
+            }))
       })
       return activationHolder.value !== false
     }
-    const structuredResult = beginDirectWorkItemStructuredLaunch({
+    const structuredResult = routing.beginDirectWorkItemStructuredLaunch({
       plan,
       primaryTabId: null,
       beforeOpen: revealWorkspace,
@@ -267,29 +279,29 @@ export async function launchWorkItemDirect(
       // Report a workspace disappearing between create and activation rather than silently drop its draft.
       return reportFailure(workspaceActivationErrorMessage())
     }
-    const primaryTabId = structuredResult.completed
-      ? structuredResult.primaryTabId
-      : activation.primaryTabId
-
     store.setSidebarOpen(true)
 
     if (structuredResult.completed) {
       return true
     }
 
-    const completed = finishDirectWorkItemPrompt({
-      primaryTabId,
+    if (context.target.kind === 'environment' && startupPlan && !startupPlanFailed) {
+      // The seeded startup carries the prompt and token until the shared pane delivery owner attaches.
+      return (
+        routing.directWorkItemStartupAccepted(activation, startupPlan, startupPlanFailed) ||
+        reportFailure(workspaceActivationErrorMessage())
+      )
+    }
+    return routing.finishDirectWorkItemPrompt({
+      primaryTabId: activation.primaryTabId,
       effectiveAgent,
       promptDelivery,
       draftContent,
       startupPlan,
       draftLaunchedNatively,
-      startupPlanFailed
+      startupPlanFailed,
+      onFailureNotified: () => args.onFailureNotified?.()
     })
-    if (!completed) {
-      args.onFailureNotified?.()
-    }
-    return completed
   } catch (error) {
     if (!creationAccepted && args.signal?.aborted) {
       return 'cancelled'

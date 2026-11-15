@@ -4,7 +4,7 @@ import '../db/contract-constants'
 import '../db/messages/mailbox-routing-page'
 import '../db/dispatch-row-writer'
 import '../db/attempt-outcome-projection'
-import type { CrewReadDependencies } from './crew-read-model'
+import type { CrewReadDependencies } from './crew-read-dependencies'
 const opened: OrchestrationDb[] = []
 afterEach(() => opened.splice(0).forEach((db) => db.close()))
 export function fixture() {

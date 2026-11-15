@@ -2,7 +2,7 @@ import { joinPath } from '@/lib/path'
 import '@/components/right-sidebar/file-explorer/watching/useFileExplorerWatch'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/file-explorer/watching/file-explorer-watch-path'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { FsChangedPayload } from '../../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../../../shared/file-watch/filesystem-change-event'
 import { externalChangePathKeyFor } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import {
   getLocalWindowsWslPathIdentity,

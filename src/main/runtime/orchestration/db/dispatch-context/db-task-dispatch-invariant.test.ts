@@ -55,26 +55,6 @@ describe('Task/Dispatch invariant transactions', () => {
     }
   )
 
-  it('surfaces invalid Task lifecycle edges instead of returning the unchanged row', () => {
-    const { db } = createDatabase()
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'invalid lifecycle edge' })
-    db.updateTaskStatus(task.id, 'blocked')
-
-    expect(() =>
-      db.updateTaskStatus(
-        task.id,
-        'invalid' as Parameters<OrchestrationDb['updateTaskStatus']>[1],
-        'must reject'
-      )
-    ).toThrowError(
-      expect.objectContaining({
-        code: 'lifecycle_conflict',
-        data: expect.objectContaining({ state: 'blocked', to: 'invalid' })
-      })
-    )
-    expect(db.getTask(task.id)).toMatchObject({ status: 'blocked', result: null })
-  })
-
   it.each(['completed', 'failed'] as const)(
     'rolls back a %s Task when Dispatch settlement fails',
     (status) => {

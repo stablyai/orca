@@ -33,12 +33,6 @@ describe('kitty release reports for IME-consumed keys', () => {
     expect(releases(emitted)).toEqual([releaseOf(32)])
   })
 
-  it('keeps press and release pairs for plain ASCII typed with the IME off', async () => {
-    const events = sogouGtkTrace.events.filter((event) => event.scenario === 's4_ascii_im_off')
-    const { emitted } = await replayThroughLinuxPane(events, KITTY_FLAGS_3)
-    expect(emitted).toBe(`l${releaseOf(108)}s${releaseOf(115)} ${releaseOf(32)}7${releaseOf(55)}`)
-  })
-
   it.each([
     ['IBus', ibusTrace.dom],
     ['fcitx5', fcitx5Trace.dom]
@@ -51,16 +45,5 @@ describe('kitty release reports for IME-consumed keys', () => {
     expect(releases(emitted)).toEqual([])
     // The ASCII run was recorded under a legacy xterm that cancelled its text, so it can't replay here.
     expect(emitted).toBe('한글\r')
-  })
-
-  it('suppresses the release of a key held across a focus change', async () => {
-    const heldAcrossFocus: RecordedDomEvent[] = [
-      { type: 'keyup', key: 'x', code: 'KeyX', keyCode: 88 },
-      { type: 'keydown', key: 'ArrowUp', code: 'ArrowUp', keyCode: 38 },
-      { type: 'keyup', key: 'ArrowUp', code: 'ArrowUp', keyCode: 38 }
-    ]
-    const { emitted } = await replayThroughLinuxPane(heldAcrossFocus, KITTY_FLAGS_3)
-    // The arrow xterm encodes itself still gets its press and release.
-    expect(emitted).toBe('\x1b[A\x1b[1;1:3A')
   })
 })

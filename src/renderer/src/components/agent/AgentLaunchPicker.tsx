@@ -21,8 +21,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { useTranslate } from '@/i18n/use-translate'
 import { rowLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentPickerDraftScope } from './AgentLaunchSetupButton'
@@ -53,6 +54,7 @@ export const AgentLaunchPicker = memo(
     emptyLabel,
     cli,
     children,
+    onSelectBlankTerminal,
     onTriggerEnter,
     onOpenChange,
     onCatalogOpen,
@@ -77,6 +79,7 @@ export const AgentLaunchPicker = memo(
     /** True when this launch is the terminal and a chat exists, so the closed field says "(CLI)". */
     cli?: boolean
     children?: ReactNode
+    onSelectBlankTerminal?: () => void
     onTriggerEnter?: () => void
     onOpenChange?: (open: boolean) => void
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
@@ -84,7 +87,7 @@ export const AgentLaunchPicker = memo(
     onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
     /** The saved default; with onSetDefault, right-clicking an agent row offers "Set as default". */
     defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
-    onSetDefault?: (agent: AgentPickerEntry['agent']) => void
+    onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -92,6 +95,7 @@ export const AgentLaunchPicker = memo(
       surface?: AgentPickerDraft['surface']
     ) => void
   }) {
+    const t = useTranslate()
     useUiLanguageRevision()
     const ownDraftScope = useAgentPickerDraftScope()
     const [settingsOpen, setSettingsOpen] = useState(false)
@@ -175,9 +179,9 @@ export const AgentLaunchPicker = memo(
     const summary = [modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
     const agentLabel = agent
       ? cli
-        ? rowLabel({ kind: 'cli', agent })
+        ? rowLabel({ kind: 'cli', agent }, t)
         : getAgentLabel(agent)
-      : (emptyLabel ?? translate('agentPicker.select', 'Select agent'))
+      : (emptyLabel ?? t('agentPicker.select', 'Select agent'))
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -186,7 +190,7 @@ export const AgentLaunchPicker = memo(
               ref={trigger}
               type="button"
               data-agent-launch-picker-trigger="true"
-              aria-label={translate('agentPicker.select', 'Select agent')}
+              aria-label={t('agentPicker.select', 'Select agent')}
               variant="outline"
               className="w-full min-w-0"
               disabled={disabled || model.state !== 'settled'}
@@ -240,7 +244,6 @@ export const AgentLaunchPicker = memo(
                 : 'min-w-64'
             }
           >
-            {children}
             {model.state === 'settled' ? (
               <AgentLaunchPickerMenu
                 draftScope={draftScope ?? ownDraftScope}
@@ -248,6 +251,8 @@ export const AgentLaunchPicker = memo(
                 entries={entries}
                 initialQuery={initialQuery}
                 searchInputRef={setSearchInput}
+                leadingItems={children}
+                onSelectBlankTerminal={onSelectBlankTerminal}
                 value={value}
                 draftForEntry={draftForEntry}
                 mode="select"
@@ -260,7 +265,7 @@ export const AgentLaunchPicker = memo(
               />
             ) : (
               <DropdownMenuItem disabled>
-                {translate('agentPicker.select', 'Select agent')}
+                {t('agentPicker.select', 'Select agent')}
               </DropdownMenuItem>
             )}
             <AgentSettingsMenuItem onSelect={openAgentSettings} />

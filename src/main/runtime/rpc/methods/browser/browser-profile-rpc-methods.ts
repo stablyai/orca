@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { ProfileCreate } from '../../../../../shared/rpc-contract/browser-identity-params'
+import { ProfileCreate } from '../../../../../shared/rpc-contract/browser/browser-identity-params'
 import {
   ProfileDelete,
   ProfileClearGoogleCookies,
@@ -7,7 +7,7 @@ import {
   TabProfileClone,
   TabSetProfile,
   TabShow
-} from '../../../../../shared/rpc-contract/browser-params'
+} from '../../../../../shared/rpc-contract/browser/browser-params'
 
 export const BROWSER_PROFILE_METHODS = [
   defineMethod({

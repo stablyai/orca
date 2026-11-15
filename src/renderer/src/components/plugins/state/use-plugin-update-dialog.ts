@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import type { PluginPageNavigation } from './use-plugin-page-navigation'
 
@@ -19,7 +19,7 @@ export function usePluginUpdateDialog({
   ready: boolean
   updates: readonly PluginListEntry[]
   /** Left for the list when the Updates list is asked for from a plugin's page. */
-  page: Pick<PluginPageNavigation, 'openKey' | 'back'>
+  page: Pick<PluginPageNavigation, 'openKey' | 'toCatalog'>
   showUpdates: () => void
   /** Re-reads main's catalogs, which the update pass refreshed after this pane loaded them. */
   reloadCatalogs: () => Promise<void>
@@ -58,7 +58,7 @@ export function usePluginUpdateDialog({
       handlers.current.open([entry])
     } else {
       if (handlers.current.page.openKey) {
-        handlers.current.page.back()
+        handlers.current.page.toCatalog()
       }
       handlers.current.showUpdates()
     }

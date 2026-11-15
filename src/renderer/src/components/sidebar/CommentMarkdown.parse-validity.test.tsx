@@ -6,11 +6,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 import CommentMarkdown, { type CommentMarkdownExtension } from './CommentMarkdown'
 
 import { NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER } from '../../../../shared/native-chat/native-chat-visual-directive'
-import { remarkNativeChatVisuals } from '../native-chat/native-chat-visual-markdown-syntax'
-vi.mock('../native-chat/NativeChatInlineVisual', () => ({
+import { remarkNativeChatVisuals } from '../native-chat/media/visuals/native-chat-visual-markdown-syntax'
+vi.mock('../native-chat/media/visuals/NativeChatInlineVisual', () => ({
   NativeChatInlineVisual: ({ file }: { file: string }) => <div data-visual-file={file} />
 }))
-vi.mock('../native-chat/use-native-chat-file-link-existence', () => ({
+vi.mock('../native-chat/links/actions/use-native-chat-file-link-existence', () => ({
   useNativeChatFileLinkExists: () => undefined
 }))
 vi.mock('./CommentMermaidBlock', () => ({ default: () => null }))

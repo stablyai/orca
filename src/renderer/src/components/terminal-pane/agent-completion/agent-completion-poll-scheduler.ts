@@ -1,5 +1,5 @@
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
-import type { InspectionPriority } from '../agent-process-inspection-queue'
+import type { InspectionPriority } from './process-inspection/agent-process-inspection-queue'
 import type { PendingTitleController } from './agent-completion-pending-title'
 import type { ProcessMonitorState } from './agent-completion-process-types'
 import {

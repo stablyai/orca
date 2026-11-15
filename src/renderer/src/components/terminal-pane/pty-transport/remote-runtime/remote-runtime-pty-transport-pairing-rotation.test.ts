@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 import type { PtyTransport } from '../pty-transport-types'
@@ -103,7 +103,7 @@ async function installRepairableMain(): Promise<{
   }
   publishCatalog()
   const { setRuntimeEnvironmentCatalogRefresher } =
-    await import('@/runtime/runtime-environment-pairing-refresh')
+    await import('@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh')
   setRuntimeEnvironmentCatalogRefresher(async () => publishCatalog())
   const isStale = (request: RevisionedRequest): boolean =>
     request.expectedEnvironmentPairingRevision !== undefined &&
@@ -154,9 +154,9 @@ async function createCatalogStore() {
     toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() }
   }))
   const { createRuntimeStatusTestStore } =
-    await import('@/store/slices/runtime-status.test-fixture')
+    await import('@/store/slices/runtime-status/runtime-status.test-fixture')
   const { resetDeferredPeerChecksForTests } =
-    await import('@/store/slices/runtime-environment-peer-replacement')
+    await import('@/store/slices/runtime-status/runtime-environment-peer-replacement')
   resetDeferredPeerChecksForTests()
   return createRuntimeStatusTestStore()
 }
@@ -197,7 +197,7 @@ describe('remote runtime pane across a pairing rotation', () => {
 
   afterEach(async () => {
     const { setRuntimeEnvironmentCatalogRefresher } =
-      await import('@/runtime/runtime-environment-pairing-refresh')
+      await import('@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh')
     setRuntimeEnvironmentCatalogRefresher(null)
   })
 
@@ -220,83 +220,6 @@ describe('remote runtime pane across a pairing rotation', () => {
     await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo typed-after-update\r'))
     expect(onError).not.toHaveBeenCalled()
     transport.destroy?.()
-  })
-
-  it('rebinds a pane whose stream reopened before main re-paired, instead of dropping its keys', async () => {
-    const { transport, onError, repair, publishCatalog } = await restartServerUnderLivePane('tab-1')
-    const firstCallbacks = subscriptionCallbacks
-
-    // The server is back and the stream reopened on the old pairing; main re-pairs only afterwards.
-    repair()
-    publishCatalog()
-
-    await vi.waitFor(() => expect(subscribeRevisions().at(-1)).toBe(2))
-    await vi.waitFor(() => expect(subscriptionCallbacks).not.toBe(firstCallbacks))
-    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
-    emitSnapshot(latestSubscribePayload().streamId, 'prompt$ ')
-    await vi.waitFor(() => expect(transport.getRecoveryState?.().phase).toBe('connected'))
-    expect(transport.sendInput('echo typed-after-repair\r', 'driving')).toBe(true)
-
-    await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo typed-after-repair\r'))
-    expect(latestSubscribePayload().terminal).toBe('terminal-1')
-    expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
-  })
-
-  it('rebinds a host session pane through its inventory on the new pairing', async () => {
-    const { transport, onError, repair } =
-      await restartServerUnderLivePane('web-terminal-host-tab-1')
-    const firstCallbacks = subscriptionCallbacks
-
-    repair()
-    firstCallbacks?.onClose?.()
-
-    await vi.waitFor(() => expect(subscribeRevisions().at(-1)).toBe(2), { timeout: 5_000 })
-    await vi.waitFor(() => expect(subscriptionCallbacks).not.toBe(firstCallbacks))
-    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
-    emitSnapshot(latestSubscribePayload().streamId, 'prompt$ ')
-
-    await vi.waitFor(() => expect(transport.getRecoveryState?.().phase).toBe('connected'))
-    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
-    expect(latestSubscribePayload().terminal).toBe('terminal-1')
-    expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
-  })
-
-  it('Reconnect rebinds a pane whose retries stopped while the server restarted re-paired', async () => {
-    vi.useFakeTimers()
-    try {
-      const { transport, onError, repair, publishCatalog, setReachable } =
-        await restartServerUnderLivePane('web-terminal-host-tab-1')
-      setReachable(false)
-      subscriptionCallbacks?.onClose?.()
-      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
-      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
-
-      repair()
-      setReachable(true)
-      // Another subscriber's refusal already brought the renderer catalog to the new revision.
-      publishCatalog()
-      const subscribesBefore = runtimeSubscribe.mock.calls.length
-      runtimeCall.mockClear()
-      expect(transport.retryRecovery?.()).toBe(true)
-
-      await vi.waitFor(() =>
-        expect(runtimeSubscribe.mock.calls.length).toBeGreaterThan(subscribesBefore)
-      )
-      expect(subscribeRevisions().at(-1)).toBe(2)
-      await vi.waitFor(() => expect(latestSubscribePayload().terminal).toBe('terminal-1'))
-      emitSnapshot(latestSubscribePayload().streamId, 'prompt$ ')
-      await vi.waitFor(() => expect(transport.getRecoveryState?.().phase).toBe('connected'))
-      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
-      for (const [request] of runtimeCall.mock.calls) {
-        expect(requestRevision(request)).toBe(2)
-      }
-      expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it.each([

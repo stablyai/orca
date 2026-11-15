@@ -1,3 +1,4 @@
+import { BROWSER_EXTENSION_METHODS } from './browser-extension-rpc-methods'
 import { defineMethod } from '../../core'
 import {
   BrowserTarget,
@@ -27,21 +28,21 @@ import {
   TabSwitch,
   Upload,
   Wait
-} from '../../../../../shared/rpc-contract/browser-params'
-import { Screenshot, Snapshot } from '../../../../../shared/rpc-contract/browser-observation-params'
+} from '../../../../../shared/rpc-contract/browser/browser-params'
+import * as browserObservationParams from '../../../../../shared/rpc-contract/browser/browser-observation-params'
 import {
   BrowserOpenUrlParams,
   BrowserTabCreateParams
-} from '../../../../../shared/rpc-contract/browser-tab-create-params'
+} from '../../../../../shared/rpc-contract/browser/browser-tab-create-params'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
-import { CertificateProceed } from '../../../../../shared/rpc-contract/browser-core-params'
+import { CertificateProceed } from '../../../../../shared/rpc-contract/browser/browser-core-params'
 
 export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.snapshot',
     permission: 'workspace',
-    params: Snapshot,
+    params: browserObservationParams.Snapshot,
     handler: async (params, { runtime }) => runtime.browserSnapshot(params)
   }),
   defineMethod({
@@ -90,7 +91,7 @@ export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.screenshot',
     permission: 'workspace',
-    params: Screenshot,
+    params: browserObservationParams.Screenshot,
     handler: async (params, { runtime }) => runtime.browserScreenshot(params)
   }),
   defineMethod({
@@ -118,6 +119,12 @@ export const BROWSER_CORE_METHODS = [
     handler: async (params, { runtime }) => runtime.browserTabCurrent(params)
   }),
   defineMethod({
+    name: 'browser.tabAnnotations',
+    permission: 'workspace',
+    params: BrowserTarget,
+    handler: async (params, { runtime }) => runtime.browserTabAnnotations(params)
+  }),
+  defineMethod({
     name: 'browser.tabSwitch',
     permission: 'workspace',
     params: TabSwitch,
@@ -127,16 +134,17 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.tabCreate',
     permission: 'workspace',
     params: BrowserTabCreateParams,
-    handler: async (params, { runtime, pairedDeviceId, clientKind }) =>
+    handler: async (params, { runtime, pairedDeviceId, clientKind, signal }) =>
       pairedDeviceId
-        ? runtime.browserTabCreate(params, { pairedDeviceId, clientKind })
-        : runtime.browserTabCreate(params, { clientKind })
+        ? runtime.browserTabCreate(params, { pairedDeviceId, clientKind, signal })
+        : runtime.browserTabCreate(params, { clientKind, signal })
   }),
   defineMethod({
     name: 'browser.openUrl',
     permission: 'workspace',
     params: BrowserOpenUrlParams,
-    handler: async (params, { runtime }) => runtime.browserOpenUrlOnClient(params)
+    handler: async (params, { runtime, signal }) =>
+      runtime.browserOpenUrlOnClient(params, { signal })
   }),
   defineMethod({
     name: 'browser.tabClose',
@@ -145,6 +153,7 @@ export const BROWSER_CORE_METHODS = [
     handler: async (params, { runtime }) => runtime.browserTabClose(params)
   }),
   ...BROWSER_PROFILE_METHODS,
+  ...BROWSER_EXTENSION_METHODS,
   defineMethod({
     name: 'browser.hover',
     permission: 'workspace',

@@ -1,22 +1,23 @@
 // @protected-copy
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { AppState } from '@/store'
-import type { WorktreePurgeTarget } from '@/store/slices/worktree-helpers'
+import type { Translate } from '@/i18n/use-translate'
+import type { AppState } from '@/store/types'
+import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getKnownRepoWorktreeIds } from '@/store/repos/repo-removal'
 
-export function discardedUnsavedFilesLabel(count: number): string {
-  return translate(
+export function discardedUnsavedFilesLabel(count: number, t: Translate = translate): string {
+  return t(
     'components.workspace.delete.unsavedEdits.discarded',
     'Unsaved edits in {{count}} files will be discarded:',
     { count, defaultValue_one: 'Unsaved edits in {{count}} file will be discarded:' }
   )
 }
 
-export function moreUnsavedFilesLabel(count: number): string {
-  return translate('components.workspace.delete.unsavedEdits.moreFiles', 'and {{value}} more', {
+export function moreUnsavedFilesLabel(count: number, t: Translate = translate): string {
+  return t('components.workspace.delete.unsavedEdits.moreFiles', 'and {{value}} more', {
     value: count
   })
 }

@@ -10,7 +10,7 @@ import {
   registerSshProviderRequestAbort,
   getSshProviderAuthority,
   isCurrentSshProviderAuthority
-} from '../../../ssh/ssh-provider-authority'
+} from '../../../ssh/connection/authority/ssh-provider-authority'
 import type { DetectedWorktreeRequestArgs } from '../ipc-context-schemas'
 import {
   hasValidDirectSshAuthority,

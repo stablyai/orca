@@ -1,10 +1,10 @@
 import type { FileHandle } from 'node:fs/promises'
-import type { FilePreview } from '../../shared/file-preview-kind'
-import { rasterImageExceedsPreviewLimits } from '../../shared/raster-image-prefix-limits'
-import { RASTER_IMAGE_PREVIEW_TOO_LARGE_ERROR } from '../../shared/raster-image-preview-limits'
+import type { FilePreview } from '../../shared/file-preview/file-preview-kind'
+import { rasterImageExceedsPreviewLimits } from '../../shared/file-preview/raster-image-prefix-limits'
+import { RASTER_IMAGE_PREVIEW_TOO_LARGE_ERROR } from '../../shared/file-preview/raster-image-preview-limits'
 import { MAX_PREVIEWABLE_BINARY_SIZE } from '../ipc/filesystem/filesystem-file-content-inspection'
 import { fileTooLargeError } from '../ipc/filesystem/local-regular-file-read'
-import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
 import { readRemotePreviewRange } from './remote-file-preview-reader'
 
 /** A URL preview keeps the base64 path's guard: an image whose header proves it oversized never reaches the decoder. */

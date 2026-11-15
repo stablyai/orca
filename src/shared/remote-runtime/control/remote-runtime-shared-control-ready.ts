@@ -1,6 +1,6 @@
 import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
 import WebSocket from 'ws'
-import { abortSignalReason } from '../../abort-signal-reason'
+import { abortSignalReason } from '../../concurrency/abort-signal-reason'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { REMOTE_RUNTIME_MAX_READY_WAITERS } from '../remote-runtime-memory-limits'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'

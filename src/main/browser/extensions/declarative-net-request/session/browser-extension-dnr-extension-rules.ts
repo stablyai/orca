@@ -1,6 +1,6 @@
 import type { DnrEngine } from '../engine'
-import { readDnrRuleJson } from '../rule-schema'
-import type { DnrRule, DnrRulesetSource } from '../rule-types'
+import { readDnrRuleJson } from '../rule-compilation/rule-schema'
+import type { DnrRule, DnrRulesetSource } from '../rule-compilation/rule-types'
 import {
   DNR_API_CONSTANTS,
   DNR_ERRORS,

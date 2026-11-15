@@ -9,7 +9,7 @@ import type {
   LinearSliceSet
 } from './linear-slice-contract'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
-import { linearListCustomViews } from '@/runtime/runtime-linear-project-client'
+import { linearListCustomViews } from '@/runtime/linear/runtime-linear-project-client'
 import {
   collectionWithWorkspaceError,
   emptyLinearCollection,

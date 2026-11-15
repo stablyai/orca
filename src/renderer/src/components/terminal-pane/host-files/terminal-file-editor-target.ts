@@ -1,4 +1,4 @@
-import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
+import { findWorkspaceFileRoute } from '@/lib/files/access/runtime-workspace-file-route'
 import {
   isPathInsideWorktree,
   toWorktreeRelativePath
@@ -11,7 +11,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { TerminalFileContext } from './terminal-file-path-mapping'
 
 export type LinkedFileEditorTarget = {

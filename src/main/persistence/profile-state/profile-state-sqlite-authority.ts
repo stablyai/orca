@@ -4,37 +4,38 @@ import type {
   ProfileStateAuthorityInitialState,
   ProfileStateDomainReplacement,
   ProfileStateMaintenance
-} from '../loading-store/profile-state-authority'
+} from '../loading-store/profile-writing/profile-state-authority'
 import {
   importProfileStateJson,
   readAcceptedProfileStateParsedSnapshot,
   readProfileStateParsedSnapshot,
-  readProfileStateRevision,
   readProfileStateSnapshot
-} from './profile-state-documents'
+} from './documents/profile-state-documents'
+import { readProfileStateRevision } from './database/profile-state-revision'
 import {
   openWritableProfileStateDatabase,
   openProfileStateDatabaseReadOnly
-} from './profile-state-database'
-import { writeProfileStateDomains } from './profile-state-domain-writes'
+} from './database/profile-state-database'
+import { writeProfileStateDomains } from './documents/profile-state-domain-writes'
 import {
   prepareProfileStateDomainMutation,
   validateProfileStateDomainTransaction
-} from './profile-state-domain-write-validation'
+} from './documents/profile-state-domain-write-validation'
 import {
   parseProfileStateRoot,
   ProfileStateRevisionConflictError
-} from './profile-state-document-validation'
-import { assertProfileStateRevisionOnDisk } from './profile-state-revision-readmission'
+} from './documents/profile-state-document-validation'
+import { assertProfileStateRevisionOnDisk } from './database/profile-state-revision-readmission'
 import {
   quarantineProfileStateDatabase,
   type ProfileStateDatabaseQuarantine
-} from './profile-state-database-quarantine'
+} from './recovery/profile-state-database-quarantine'
 import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
-import { buildCompleteDocumentReplacements } from './profile-state-complete-replacements'
-import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
-import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
-import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
+import { buildCompleteDocumentReplacements } from './documents/profile-state-complete-replacements'
+import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
+import { ensureProfileStateAuthorityMarker } from './database/profile-state-authority-marker'
+import type { ProfileStateWriterInitialization } from './writer/profile-state-writer-protocol'
+import { ProfileStateLegacyDocumentRefresh } from './document-parts/profile-state-legacy-document-refresh'
 
 /** Reuse one writable handle; fenced domain commits preserve unchanged normalized rows. */
 export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
@@ -42,6 +43,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
   private observedRevision: number | undefined
   private writableDatabase: ReturnType<typeof openWritableProfileStateDatabase> | undefined
   private backupRotation: ProfileStateBackupRotation | undefined
+  private readonly legacyDocuments = new ProfileStateLegacyDocumentRefresh()
 
   constructor(
     private readonly databasePath: string,
@@ -71,6 +73,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     assertProfileStateRevisionOnDisk(this.databasePath, this.profileId, revision)
     this.observedRevision = revision
     this.assertCurrentRevision()
+    this.legacyDocuments.startWriterThread(this.writableDatabase?.db)
   }
 
   get revision(): number {
@@ -148,11 +151,13 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       this.readSerializedState()
     }
     const opened = this.openWritableDatabase()
+    this.legacyDocuments.catchUp(this.writableDatabase?.db)
     this.observedRevision = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? 0,
       replacements,
       automationRunsAfter
     }).revision
+    this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
 
   assertCurrentRevision(): void {
@@ -199,6 +204,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       })
     }
     const opened = this.openWritableDatabase()
+    this.legacyDocuments.catchUp(this.writableDatabase?.db)
     const currentRevision = readProfileStateRevision(opened.db)
     const complete = buildCompleteDocumentReplacements(opened.db, replacements)
     if (currentRevision === 0 || complete.length === 0) {
@@ -219,6 +225,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       expectedRevision: this.observedRevision ?? currentRevision,
       replacements: complete
     }).revision
+    this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
 
   scheduleBackup(): void {
@@ -247,9 +254,11 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     return quarantineProfileStateDatabase(this.databasePath, this.profileId, quarantineRoot, reason)
   }
 
-  close(): void {
+  /** Only a graceful shutdown refreshes legacy rows; quarantine and maintenance closes must not write. */
+  close(options: { refreshLegacyDocuments?: boolean } = {}): void {
     this.assertActive()
     this.backupRotation?.stop()
+    this.legacyDocuments.beforeClose(this.writableDatabase?.db, options.refreshLegacyDocuments)
     this.writableDatabase?.db.close()
     this.writableDatabase = undefined
   }

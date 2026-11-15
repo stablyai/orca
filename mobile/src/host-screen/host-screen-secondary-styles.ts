@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { WORKTREE_ROW_LAYOUT } from '../components/worktree-list-row-layout'
+import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-row-layout'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
@@ -10,6 +10,10 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   },
   list: {
     paddingBottom: spacing.lg
+  },
+  offlineBanner: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm
   },
   // The chevron sits in the rows' status-dot column, so the icon and title start at the row text.
   sectionHeader: {

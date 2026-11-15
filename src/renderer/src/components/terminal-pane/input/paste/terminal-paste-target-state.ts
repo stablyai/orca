@@ -1,3 +1,5 @@
+import { isEditableKeyboardTarget } from '@/components/browser-pane/host-guest/input/browser-keyboard'
+
 type TerminalPastePaneIdentity = {
   id: number
   leafId: string
@@ -10,6 +12,7 @@ type TerminalPastePaneManager = {
 type TerminalPasteTransport = {
   getPtyId: () => string | null
   isConnected: () => boolean
+  isHoldingInput?: () => boolean
 }
 
 export type TerminalPasteTargetState = {
@@ -29,12 +32,18 @@ export function isTerminalPanePasteTargetCurrent({
   transport,
   ptyId
 }: TerminalPasteTargetState): boolean {
-  return Boolean(
-    manager?.getPanes().some((pane) => pane.id === paneId && pane.leafId === leafId) &&
-    transport &&
-    paneTransports.get(paneId) === transport &&
-    transport.isConnected() &&
-    transport.getPtyId() === ptyId
+  if (
+    !manager?.getPanes().some((pane) => pane.id === paneId && pane.leafId === leafId) ||
+    !transport ||
+    paneTransports.get(paneId) !== transport
+  ) {
+    return false
+  }
+  // A paste made before the first bind (ptyId null) may follow this transport onto the PTY it binds.
+  const livePtyId = transport.getPtyId()
+  return (
+    (livePtyId === ptyId || ptyId === null) &&
+    (transport.isConnected() || transport.isHoldingInput?.() === true)
   )
 }
 
@@ -60,22 +69,17 @@ export function isTerminalPanePasteFocusCurrent({
   if (activeElement === activeElementAtDispatch) {
     return true
   }
-  // Permission/dictation handoffs can blur xterm to body or replace its textarea mid-paste.
-  if (isInertDocumentFocus(activeElement)) {
+  // xterm can replace its helper textarea mid-paste.
+  if (paneContainer.contains(activeElement) && isXtermHelperTextarea(activeElement)) {
     return true
   }
-  if (activeElement === paneContainer) {
-    return true
-  }
-  return paneContainer.contains(activeElement) && isXtermHelperTextarea(activeElement)
+  // Blur to body, overlays and external dictation move focus mid-paste; cancel only if another typing surface took it.
+  return !isOtherPasteTarget(activeElement)
 }
 
-function isInertDocumentFocus(element: Element | null): boolean {
-  if (!element) {
-    return true
-  }
-  const tagName = element.tagName?.toUpperCase()
-  return tagName === 'BODY' || tagName === 'HTML'
+function isOtherPasteTarget(element: Element | null): boolean {
+  const tagName = element?.tagName?.toUpperCase()
+  return isEditableKeyboardTarget(element) || tagName === 'IFRAME' || tagName === 'WEBVIEW'
 }
 
 function isXtermHelperTextarea(element: Element | null): boolean {

@@ -4,13 +4,13 @@ import {
   navigationTargetsClients,
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
-} from '../../../../shared/runtime-navigation'
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { phoneWakeReport } from '../../../../shared/workspace-sleep'
-import type { Repo } from '../../../../shared/repo-types'
+import { phoneWakeReport } from '../../../../shared/workspace/lifecycle/workspace-sleep'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWait } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   type WorktreeStartupDraftPaste,
   type WorktreeStartupFollowup,
@@ -142,7 +142,13 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     repo: Repo,
     draft: string,
     requestedAgent?: TuiAgent,
-    launchSource?: string
+    launchSource?: string,
+    inputs?: {
+      createdWithAgent?: TuiAgent
+      startupAgentArgs?: string | null
+      startupSessionOptions?: Parameters<typeof buildWorktreeStartupForDraft>[0]['sessionOptions']
+      startupLaunchPreferences?: AgentLaunchPreferences
+    }
   ): ReturnType<typeof buildWorktreeStartupForDraft> {
     if (!this.store) {
       return null
@@ -150,6 +156,11 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return buildWorktreeStartupForDraft({
       repo,
       draft,
+      originalAgent: inputs?.createdWithAgent ?? requestedAgent,
+      agentArgs: inputs?.startupAgentArgs,
+      sessionOptions:
+        inputs?.startupSessionOptions ??
+        this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
       ...(requestedAgent ? { requestedAgent } : {}),
       ...(launchSource ? { launchSource } : {}),
       settings: this.store.getSettings(),

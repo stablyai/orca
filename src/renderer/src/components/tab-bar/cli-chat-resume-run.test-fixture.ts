@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { expect, vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
 import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -5,7 +6,7 @@ import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-sessi
 import { stopStructuredLaunchSlotTracking } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
-import { resetWebSessionFocusIntentForTests } from '@/runtime/web-session-focus-intent'
+import { resetWebSessionFocusIntentForTests } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { StructuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
@@ -74,7 +75,9 @@ export const row = (paneKey: string, extra: Record<string, unknown> = {}) => ({
 })
 export const showAgentInSource = () =>
   useAppStore.setState({
-    agentStatusByPaneKey: { [SOURCE.paneKey]: row(SOURCE.paneKey, { tabId: 'tab-1' }) }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({ [SOURCE.paneKey]: row(SOURCE.paneKey, { tabId: 'tab-1' }) })
+    )
   })
 
 /** Every test starts with one terminal pane whose shell still runs its agent, on a host that can't close it. */

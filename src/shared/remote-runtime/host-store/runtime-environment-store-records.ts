@@ -1,12 +1,12 @@
-import { constants, copyFileSync, existsSync } from 'node:fs'
+import { constants, copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { readNodeFileSyncWithinLimit } from '../../node-bounded-file-reader'
+import { readEnvironmentRegistryFile } from './runtime-environment-store-observation'
 import {
   PersistedRuntimeEnvironmentSchema,
   type PersistedRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
-import { hardenExistingSecureFile } from '../../secure-file'
+import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
 import {
   remoteServerPairingFailureText,
   type RemoteServerPairingFailureCode,
@@ -101,25 +101,42 @@ export function readEnvironmentStoreRecords(
   options: EnvironmentStoreRecordsReadOptions = {}
 ): EnvironmentStoreRecords {
   const path = getEnvironmentStorePath(userDataPath)
-  if (!options.requireStoreFile && !existsSync(path)) {
-    return { environments: [], unreadable: [] }
+  let text: string
+  try {
+    const read = readEnvironmentRegistryFile(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES)
+    if (!read) {
+      if (options.requireStoreFile) {
+        throw invalidEnvironmentStoreError(path)
+      }
+      return { environments: [], unreadable: [] }
+    }
+    text = read.buffer.toString('utf8')
+  } catch {
+    throw invalidEnvironmentStoreError(path)
   }
+  if (options.recoverBlankStore && /^[\s\0]*$/.test(text)) {
+    return { environments: [], unreadable: [], blankFile: true }
+  }
+  return parseEnvironmentStoreRecordsText(path, text)
+}
+
+function invalidEnvironmentStoreError(path: string): RuntimeEnvironmentStoreError {
+  return new RuntimeEnvironmentStoreError(
+    'runtime_error',
+    `Could not read Orca environments at ${path}; the file is invalid.`
+  )
+}
+
+/** Parses bytes already read from `path`; the error matches a failed read of that file. */
+export function parseEnvironmentStoreRecordsText(
+  path: string,
+  text: string
+): EnvironmentStoreRecords {
   let records: unknown[]
   try {
-    hardenExistingSecureFile(path)
-    const text = readNodeFileSyncWithinLimit(
-      path,
-      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
-    ).buffer.toString('utf8')
-    if (options.recoverBlankStore && /^[\s\0]*$/.test(text)) {
-      return { environments: [], unreadable: [], blankFile: true }
-    }
     records = StoreEnvelopeSchema.parse(JSON.parse(text)).environments
   } catch {
-    throw new RuntimeEnvironmentStoreError(
-      'runtime_error',
-      `Could not read Orca environments at ${path}; the file is invalid.`
-    )
+    throw invalidEnvironmentStoreError(path)
   }
   const result: EnvironmentStoreRecords = { environments: [], unreadable: [] }
   for (const raw of records) {
@@ -133,16 +150,19 @@ export function readEnvironmentStoreRecords(
   return result
 }
 
-/** Copies (never moves) a blank store aside before a write replaces it, so readers never see the name missing. */
 export function backUpBlankEnvironmentStore(userDataPath: string): void {
   const path = getEnvironmentStorePath(userDataPath)
   const backupPath = `${path}.corrupt-${Date.now()}-${process.pid}`
   copyFileSync(path, backupPath, constants.COPYFILE_EXCL)
   hardenExistingSecureFile(backupPath)
-  console.warn(`[runtime-environments] ${path} held no data; kept a copy at ${backupPath}.`)
+  warnUnreadableEnvironmentState(`${path} held no data; kept a copy at ${backupPath}.`)
 }
 
 const warned = new Set<string>()
+let warningSink = (message: string): void => console.warn(`[runtime-environments] ${message}`)
+export function setEnvironmentStoreWarningSink(sink: (message: string) => void): void {
+  warningSink = sink
+}
 
 /** Logs once per distinct message so per-round-trip reads do not flood the log. */
 export function warnUnreadableEnvironmentState(message: string): void {
@@ -150,5 +170,5 @@ export function warnUnreadableEnvironmentState(message: string): void {
     return
   }
   warned.add(message)
-  console.warn(`[runtime-environments] ${message}`)
+  warningSink(message)
 }

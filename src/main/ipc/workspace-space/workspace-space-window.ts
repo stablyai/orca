@@ -5,8 +5,8 @@ import {
   getWorkspaceSpaceWindow,
   isWorkspaceSpaceWindowRenderer
 } from '../../window/workspace-space-window'
-import { safelyRevealWindow } from '../../window/focus-existing-window'
-import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
+import { safelyRevealWindow } from '../../window/activation/focus-existing-window'
+import { isBackgroundLaunch } from '../../window/activation/foreground-activation-policy'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import { isWorkspaceSpaceChange } from '../../../shared/workspace-disk-space/workspace-space-change'
 import type { Store } from '../../persistence/loading-store/store'
@@ -18,6 +18,7 @@ export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
     'workspaceSpace:requestWindowState',
     'workspaceSpace:revealWorktree',
     'workspaceSpace:requestWorktreeRefresh',
+    'workspaceSpace:requestIssueRefresh',
     'workspaceSpace:publishWindowAnalysis'
   ]) {
     ipcMain.removeHandler(channel)
@@ -72,6 +73,27 @@ export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
       getTrustedUIRendererWebContents()?.send('workspaceSpace:worktreeRefreshRequested')
     }
   })
+  // Why: the main window owns issueCache and publishes it to the Space window; Space asks rather than writing its own copy.
+  ipcMain.handle(
+    'workspaceSpace:requestIssueRefresh',
+    (event, worktreeId: unknown, hostId: unknown): void => {
+      if (!isWorkspaceSpaceWindowRenderer(event.sender) || typeof worktreeId !== 'string') {
+        return
+      }
+      if (hostId !== undefined && typeof hostId !== 'string') {
+        return
+      }
+      const executionHostId = normalizeExecutionHostId(hostId)
+      if (hostId !== undefined && executionHostId === null) {
+        return
+      }
+      getTrustedUIRendererWebContents()?.send(
+        'workspaceSpace:issueRefreshRequested',
+        worktreeId,
+        executionHostId ?? undefined
+      )
+    }
+  )
   ipcMain.handle('workspaceSpace:publishWindowAnalysis', (event, analysis: unknown): void => {
     if (isWorkspaceSpaceWindowRenderer(event.sender) && analysis && typeof analysis === 'object') {
       getTrustedUIRendererWebContents()?.send('workspaceSpace:windowAnalysis', analysis)

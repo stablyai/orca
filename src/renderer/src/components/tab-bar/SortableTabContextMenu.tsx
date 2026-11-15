@@ -9,6 +9,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import { useAppStore } from '../../store'
 import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
 import type { NativeChatTabSession } from './tab-session-history-switch'
@@ -132,6 +133,7 @@ export function SortableTabContextMenu({
   canSplitTerminal = true,
   nativeChat
 }: SortableTabContextMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
@@ -169,7 +171,7 @@ export function SortableTabContextMenu({
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={onToggleViewMode}>
             <SquareTerminal className="size-3.5 shrink-0" />
-            {translate(
+            {t(
               'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
               'Continue with Terminal Agent'
             )}
@@ -191,38 +193,35 @@ export function SortableTabContextMenu({
           <Pin className="size-3.5 shrink-0" />
         )}
         {isPinned
-          ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
-          : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
+          ? t('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
+          : t('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
       </ContextMenuItem>
       {onAllowAutoClose ? (
         <ContextMenuItem onSelect={onAllowAutoClose}>
           <Timer className="size-3.5 shrink-0" />
-          {translate(
-            'components.tab.bar.SortableTabContextMenu.allowAutoClose',
-            'Allow Auto-Close'
-          )}
+          {t('components.tab.bar.SortableTabContextMenu.allowAutoClose', 'Allow Auto-Close')}
         </ContextMenuItem>
       ) : null}
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
         <X className="size-3.5" />
-        {translate('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
+        {t('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
         {closeShortcut ? <ContextMenuShortcut>{closeShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
       <ContextMenuItem inset onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
-        {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
+        {t('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
       </ContextMenuItem>
       <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={onRenameOpen}>
         <Pencil className="size-3.5" />
-        {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
+        {t('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
         {renameShortcut ? <ContextMenuShortcut>{renameShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
       <div className="pt-1.5 pr-2.5 pb-1.5 pl-8">
         <div className="text-2xs font-semibold text-muted-foreground mb-1.5">
-          {translate('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
+          {t('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
         </div>
         <div className="flex flex-wrap gap-2">
           {TAB_COLORS.map((color) => {

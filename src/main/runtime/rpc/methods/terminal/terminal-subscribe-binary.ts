@@ -3,10 +3,8 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
-import {
-  iterateTerminalOutputFrameChunks,
-  type TerminalOutputMeta
-} from '../../terminal-output-frame-chunks'
+import type { TerminalOutputMeta } from '../../terminal/terminal-output-frame-chunks'
+import { iterateStreamOutputFrames } from './terminal-stream-resume-ledger'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences,
@@ -14,7 +12,7 @@ import {
   type TerminalReplyQuerySequence
 } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
-import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-length'
+import { measureTerminalStreamByteLength } from '../../terminal/terminal-stream-byte-length'
 import { createTerminalOutputBatcher, type TerminalOutputBatcher } from './terminal-output-batcher'
 import { trimPendingOutputToBudget } from './terminal-stream-replay'
 import { allocateTerminalSubscriptionStreamId } from './terminal-subscription-stream-id'
@@ -68,10 +66,10 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   const streamClosed = new Promise<void>((resolve) => {
     resolveStream = resolve
   })
-  registration.setTeardown(() => {
-    // Dispose credit first so the final flush cannot start a recovery on a closing stream.
-    outputCredit?.dispose()
+  registration.setTeardown((release) => {
+    outputCredit?.close(release)
     outputBatcher?.flush()
+    outputCredit?.dispose()
     outputBatcher?.dispose()
     streamToken?.release()
     closed = true
@@ -97,13 +95,14 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     if (closed || !sendBinary) {
       return
     }
+    streamToken?.ledger?.noteSentFrame(opcode)
     sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: frameSeq, payload }), {
       compressible: true
     })
   }
   const sendOutputFrames = (data: string, meta?: TerminalOutputMeta): void => {
     // Why text: phones before this release can't decode OutputSpan, so a span here is output they drop.
-    for (const chunk of iterateTerminalOutputFrameChunks(data, meta, 'text')) {
+    for (const chunk of iterateStreamOutputFrames(streamToken?.ledger, data, meta)) {
       sendFrame(chunk.opcode ?? TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
     }
   }
@@ -113,7 +112,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
       send: sendOutputFrames,
       sendRecoverySnapshot: () => sendTerminalCreditRecoverySnapshot(args, state)
     })
-    streamToken = registerTerminalStreamToken(args.pairedDeviceId, outputCredit.acknowledge)
+    streamToken = registerTerminalStreamToken(args, outputCredit.acknowledge)
   }
   outputBatcher = createTerminalOutputBatcher((data, meta) => {
     // Metadata bypasses credit so dropped output never loses a cwd change.
@@ -296,7 +295,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     streamClosed,
     sendFrame
   }
-  await publishTerminalSubscribeBinarySnapshot(args, state, streamToken?.token ?? null)
+  await publishTerminalSubscribeBinarySnapshot(args, state, streamToken)
   if (registration.released) {
     return
   }

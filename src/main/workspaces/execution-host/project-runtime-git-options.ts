@@ -1,10 +1,10 @@
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import {
   resolveLocalProjectRuntimeForRepo,
   type ProjectRuntimeResolutionStore
 } from './local-project-runtime-resolution'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import { wslHostsOptedIn } from '../../wsl/host-lifecycle/wsl-host-gate'
 
 export type LocalProjectGitExecOptions = {

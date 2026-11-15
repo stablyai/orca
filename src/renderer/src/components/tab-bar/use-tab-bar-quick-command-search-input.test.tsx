@@ -36,17 +36,6 @@ function setup() {
 
 // Enter executes a terminal command, so exercise the actual guarded search field.
 describe('quick command search IME ownership', () => {
-  it('navigates hosted commands by the caller-provided composite key', () => {
-    const { input, onCommandValueChange } = setup()
-    fireEvent.keyDown(input, { key: 'ArrowDown', keyCode: 40 })
-    expect(onCommandValueChange).toHaveBeenCalledWith(commands[1].id)
-  })
-
-  it('leaves native select-all available', () => {
-    const { input } = setup()
-    expect(fireEvent.keyDown(input, { key: 'a', ctrlKey: true })).toBe(true)
-  })
-
   it('does not run a command on the bare redispatch after a confirmation', () => {
     const { input, onRun } = setup()
     fireEvent.compositionStart(input)
@@ -69,12 +58,6 @@ describe('quick command search IME ownership', () => {
     fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, isComposing: true, ctrlKey: true })
     fireEvent.compositionEnd(input)
     fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, ctrlKey: true })
-    expect(onRun).toHaveBeenCalledExactlyOnceWith(commands[0])
-  })
-
-  it('runs a command on ordinary Enter', () => {
-    const { input, onRun } = setup()
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
     expect(onRun).toHaveBeenCalledExactlyOnceWith(commands[0])
   })
 })

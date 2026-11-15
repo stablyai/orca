@@ -1,5 +1,7 @@
+import { memoryJournalMap } from '../journal-memory-collections'
 import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
 import { isNativeOutcomeField } from './journal-outcome-format-2'
+import { journalManualStop } from '../queued-messages/queued-message-pause-marks'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import {
   detachJournalNativePrefix,
@@ -17,6 +19,21 @@ import {
 } from './journal-outcome-codec'
 import type { JournalOutcomeSource } from './journal-outcome-format'
 import type Database from '../../../sqlite/sync-database'
+import type { JournalEntryChange } from '../projection/journal-transition-collections'
+import type { JournalOutcomeItemAdmission } from '../journal-outcome-item-provenance'
+
+export type JournalOutcomeReadOptions = {
+  admitItem?: JournalOutcomeItemAdmission
+}
+
+export type JournalOutcomeTransition = {
+  state: JournalReducerState
+  input: <V>(value: V) => V
+  changes: (reset?: boolean) => JournalEntryChange[]
+  untracked: (key: string, value: unknown) => unknown
+  flush?: () => void
+  recorded?: (generation: number, sequence: number) => void
+}
 
 // The key index orders each key's records newest first, so a range seek past the last key read lands
 // on the next key's newest record: one indexed seek per key, whatever its revisions number.
@@ -31,14 +48,17 @@ export function readJournalOutcomes(
   sessionId: string,
   epoch: string,
   source: JournalOutcomeSource,
-  baseline?: JournalReducerState
+  baseline?: JournalReducerState,
+  options?: JournalOutcomeReadOptions
 ): JournalReducerState {
   const newest = db.prepare(JOURNAL_NEWEST_OUTCOME_SQL)
-  const recoveries = [...(baseline?.queue.cards.values() ?? [])].flatMap((card) =>
-    card.recovers ? [{ id: card.messageId, recovers: card.recovers }] : []
+  const recoveries = [...(baseline ? memoryJournalMap(baseline.queue.cards).values() : [])].flatMap(
+    (card) => (card.recovers ? [{ id: card.messageId, recovers: card.recovers }] : [])
   )
   const prefix = detachJournalNativePrefix(baseline)
-  const fold = new JournalOutcomeFold()
+  const fold = new JournalOutcomeFold(
+    options?.admitItem && { generation: source.generation, admit: options.admitItem }
+  )
   let after = { field: '', key: '' }
   for (;;) {
     const row = newest.get(source.generation, after.field, after.key, source.through)
@@ -51,7 +71,7 @@ export function readJournalOutcomes(
           card.recovers = recovers
         }
       }
-      restoreJournalNativeState(db, state, source.format, fold, prefix)
+      restoreJournalNativeState(db, state, source.format, fold, prefix, source)
       return state
     }
     const value = fold.add(row)
@@ -68,10 +88,47 @@ export function persistJournalOutcomeRows(
   rows: readonly JournalRow[],
   savedAt?: number,
   upgradeNative = false,
-  finish?: (state: JournalReducerState) => void
+  finish?: (state: JournalReducerState) => void,
+  format: 2 | 3 = 3
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
-  let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
+  persistJournalOutcomeTransition(
+    db,
+    transition,
+    source,
+    rows,
+    savedAt,
+    upgradeNative,
+    finish,
+    format
+  )
+  return { state: transition.state, adopt: transition.adopt }
+}
+
+/** Both storage homes use the same admission, per-row encoder and preserved key ordinals. */
+export function persistJournalOutcomeTransition(
+  db: Database.Database,
+  transition: JournalOutcomeTransition,
+  source: Pick<JournalOutcomeSource, 'generation' | 'prefix'>,
+  rows: readonly JournalRow[],
+  savedAt?: number,
+  upgradeNative = false,
+  finish?: (state: JournalReducerState) => void,
+  format: 2 | 3 = 3
+): void {
+  const state = transition.state
+  let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
+  if (format === 3) {
+    const marks = transition.state.queuePauseMarks
+    if (marks.manualStop === undefined) {
+      const stop = journalManualStop(marks)
+      marks.manualStop = stop && {
+        sequence: stop.sequence,
+        event: { ...stop.event, reason: 'user-stop' }
+      }
+    }
+    journalInputOrder(transition.state).completeQueueConversion(transition.state)
+  }
   journalInputOrder(transition.state).introduceOverlays(transition.state)
   const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
     WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
@@ -86,6 +143,7 @@ export function persistJournalOutcomeRows(
     if (row === rows.at(-1)) {
       finish?.(transition.state)
     }
+    transition.flush?.()
     const changes = transition
       .changes(true)
       .filter(
@@ -98,7 +156,11 @@ export function persistJournalOutcomeRows(
         const changed = new Set(
           changes.filter((change) => change.path === path).map((change) => change.key)
         )
-        for (const [key, value] of transition.state[path]) {
+        const nativeEntries =
+          path === 'inputEntries'
+            ? transition.state.queries.nativeInputEntries(transition.state)
+            : transition.state.queries.nativeInputCards(transition.state)
+        for (const [key, value] of nativeEntries) {
           if (!changed.has(key)) {
             changes.push({ path, key, value, deleted: false, reinsert: true })
           }
@@ -107,7 +169,13 @@ export function persistJournalOutcomeRows(
       upgradeNative = false
     }
     // Only this row's own transition is recorded, never a snapshot of a prefix value it left alone.
-    const encoded = encodeJournalOutcomes(transition.state, changes, scalar, transition.untracked)
+    const encoded = encodeJournalOutcomes(
+      transition.state,
+      changes,
+      scalar,
+      transition.untracked,
+      format
+    )
     scalar = encoded.scalars
     for (const [index, value] of encoded.values.entries()) {
       // Each change's record is at its own index; the scalar records after them match no change.
@@ -134,8 +202,8 @@ export function persistJournalOutcomeRows(
         Number(value.deleted)
       )
     }
+    transition.recorded?.(source.generation, row.seq)
   }
-  return { state: transition.state, adopt: transition.adopt }
 }
 
 function appended(seq: number, index: number): string {

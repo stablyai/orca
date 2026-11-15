@@ -1,16 +1,19 @@
 import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { dirname } from '@/lib/path'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from '../mutations/file-explorer-inline-input-row'
-import { shouldShowIgnoredDecoration, STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import {
+  shouldShowIgnoredDecoration,
+  STATUS_COLORS
+} from '../../../../lib/source-control/paths/git-path-decoration'
 import type { DirCache, FileExplorerOperationOwner, TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { getFileExplorerOperationExecutionHostId } from '../navigation/file-explorer-operation-owner'
-import type { WorkspaceFileDragSource } from '@/lib/workspace-file-drag'
+import type { WorkspaceFileDragSource } from '@/lib/files/drop/workspace-file-drag'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>

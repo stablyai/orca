@@ -33,7 +33,7 @@ import {
   isSameGitRepository,
   splitQualifiedPluginKey
 } from '../../../shared/plugins/catalog/plugin-marketplace'
-import { readPluginManifestText } from '../plugin-manifest-file'
+import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
 import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
 
 export type { PluginInstallResult } from './plugin-install-staging'

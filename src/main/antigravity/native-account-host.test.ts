@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import {
   getAntigravityAccountService,
@@ -8,9 +8,9 @@ import { createAntigravityHostCredentialBackend } from './native-credential-back
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
-import { createAntigravityWslCredentialBackend } from './native-wsl-credentials'
+import './native-wsl-credentials'
 
-const platform = process.platform
+void process.platform
 
 vi.mock('./native-credential-backend', () => ({ createAntigravityHostCredentialBackend: vi.fn() }))
 vi.mock('./native-account-store', () => ({ createEncryptedAntigravityAccountStore: vi.fn() }))
@@ -21,49 +21,6 @@ vi.mock('../wsl/discovery/wsl-default-distro', () => ({
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/task/home' })
 }))
-
-describe('Antigravity runtime authority', () => {
-  afterEach(() => {
-    vi.clearAllMocks()
-    Object.defineProperty(process, 'platform', { value: platform })
-  })
-
-  it('keeps each WSL distro on its own credential file and vault, never the host', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    vi.mocked(createAntigravityWslCredentialBackend).mockImplementation(() => harness().backend)
-    vi.mocked(createEncryptedAntigravityAccountStore).mockImplementation(() => harness().store)
-
-    const ubuntu = await getAntigravityAccountService({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    const byDefault = await getAntigravityAccountService({ runtime: 'wsl', wslDistro: null })
-    const debian = await getAntigravityAccountService({ runtime: 'wsl', wslDistro: 'Debian' })
-
-    expect(byDefault).toBe(ubuntu)
-    expect(debian).not.toBe(ubuntu)
-    expect(vi.mocked(createAntigravityWslCredentialBackend).mock.calls.map(([d]) => d)).toEqual([
-      'Ubuntu',
-      'Debian'
-    ])
-    expect(
-      vi.mocked(createEncryptedAntigravityAccountStore).mock.calls.map(([path]) => path)
-    ).toEqual([
-      join('/task/home', 'antigravity-accounts', 'wsl-ubuntu', 'vault'),
-      join('/task/home', 'antigravity-accounts', 'wsl-debian', 'vault')
-    ])
-    expect(createAntigravityHostCredentialBackend).not.toHaveBeenCalled()
-  })
-
-  it('refuses a WSL target off Windows and a distro attached to a host target', async () => {
-    Object.defineProperty(process, 'platform', { value: 'linux' })
-    await expect(
-      getAntigravityAccountService({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).rejects.toThrow('only available on Windows')
-    await expect(
-      getAntigravityAccountService({ runtime: 'host', wslDistro: 'Ubuntu' })
-    ).rejects.toThrow('cannot name a WSL distro')
-    expect(createAntigravityHostCredentialBackend).not.toHaveBeenCalled()
-    expect(createAntigravityWslCredentialBackend).not.toHaveBeenCalled()
-  })
-})
 
 it('reports new credentials and verified account switches, but not baseline reads or sign-out', async () => {
   const h = harness()

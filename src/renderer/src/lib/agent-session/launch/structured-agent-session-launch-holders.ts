@@ -2,14 +2,10 @@ import { launchStateLifecycle } from './structured-agent-session-launch-lifecycl
 import {
   structuredLaunchStates,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
-import type { AgentLaunchRequestId } from './routing/agent-launch-request-id'
+} from './structured-agent-session-launch-state-store'
 
 // Coalesce re-delivery of one action only. Other actions and failed/unconfirmed retries open independent chats/text; conversation resumes still hold because hosts refuse duplicate adoption.
-function holdsLaunchIdentity(
-  state: StructuredLaunchState,
-  requestId?: AgentLaunchRequestId
-): boolean {
+function holdsLaunchIdentity(state: StructuredLaunchState, requestId?: string): boolean {
   const lifecycle = launchStateLifecycle(state)
   if (lifecycle === 'failed' || lifecycle === 'cancelled') {
     return false
@@ -29,7 +25,7 @@ function holdsLaunchIdentity(
 /** Launches a start of `requestId` would join; without it, every new start's own create. */
 export function structuredLaunchesHoldingIdentity(
   matches: (identity: string) => boolean,
-  requestId?: AgentLaunchRequestId
+  requestId?: string
 ): StructuredLaunchState[] {
   return [...structuredLaunchStates()].filter(
     (state) => matches(state.identity) && holdsLaunchIdentity(state, requestId)
@@ -39,7 +35,7 @@ export function structuredLaunchesHoldingIdentity(
 /** The launch a start joins: the one `requestId` re-delivers, or a resume of its conversation. */
 export function getJoinableStructuredLaunchState(
   identity: string,
-  requestId: AgentLaunchRequestId
+  requestId: string
 ): StructuredLaunchState | undefined {
   return structuredLaunchesHoldingIdentity((candidate) => candidate === identity, requestId).at(-1)
 }

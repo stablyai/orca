@@ -14,7 +14,7 @@ import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-proje
 import { visibleNonBlankTerminalLines } from './tail/terminal-tail-read'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
@@ -270,7 +270,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       if (!snapshot || snapshot.data.length === 0) {
         return { lines: [] }
       }
-      return this.parseVisibleSnapshot(snapshot)
+      return await this.parseVisibleSnapshot(snapshot)
     } catch {
       return { lines: [] }
     }

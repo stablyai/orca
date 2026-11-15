@@ -1,6 +1,6 @@
-import type { Store } from '../../persistence/loading-store/store'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { createFolderWorktree } from '../../workspaces/catalog/repo-worktrees'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
@@ -11,7 +11,7 @@ import { mergeWorktree } from '../worktree-metadata-merge'
 import { getRepoOwnedWorktreeMeta } from '../../workspaces/catalog/worktree-metadata-ownership'
 
 export function listWorkspaceCleanupFolderWorkspaces(
-  store: Store,
+  store: RuntimeStore,
   repo: Repo,
   repoOwnerCount: number
 ): Worktree[] {

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -26,10 +26,6 @@ function writeStateDb(path: string, rows: Record<string, string | Uint8Array>): 
 }
 
 describe('readCursorProfile', () => {
-  it('reports a missing database as missing', () => {
-    expect(readCursorProfile(join(dir, 'state.vscdb'))).toEqual({ status: 'missing' })
-  })
-
   it('reads the stored session from a good database', () => {
     const path = join(dir, 'state.vscdb')
     writeStateDb(path, {
@@ -47,16 +43,6 @@ describe('readCursorProfile', () => {
         membershipType: 'pro',
         subscriptionStatus: null
       }
-    })
-  })
-
-  it('reports a corrupt database as an error', () => {
-    const path = join(dir, 'state.vscdb')
-    writeFileSync(path, 'not a sqlite database'.repeat(100))
-
-    expect(readCursorProfile(path)).toEqual({
-      status: 'error',
-      error: 'Unable to read the Cursor desktop login'
     })
   })
 

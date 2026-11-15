@@ -1,30 +1,33 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
+import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
-import { cn } from '@/lib/utils'
-import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
-import { useClaudeAgentRowView } from '@/components/dashboard/use-claude-agent-row-view'
+import { cn } from '@/lib/class-names'
+import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
+import { useClaudeAgentRowView } from '@/components/dashboard/rows/use-claude-agent-row-view'
 import './worktree-card-agent-summary'
-import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-row-dot-state'
+import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-status/presentation/agent-row-dot-state'
 import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { formatAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
 import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
-import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
-import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
+import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
+import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
+import { forkMarkedNameText } from '@/components/native-chat/fork/fork-marked-name-text'
+import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
-import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
-import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
+import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
+import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
 import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-order'
 import {
   programStatusAttentionLine,
   type ProgramStatusPresentation
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -38,7 +41,8 @@ export function getCompactAgentSecondary(
   agent: DashboardAgentRowData,
   now: number,
   lastAssistantMessageOverride?: string,
-  presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation
+  presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation,
+  t?: Translate
 ): string {
   // Program-reported blocks need user attention before other row details.
   if (presentation.attention) {
@@ -52,7 +56,7 @@ export function getCompactAgentSecondary(
   if (agent.state === 'unverifiable') {
     return agentNoUpdateLabel(agent.entry, now)
   }
-  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
+  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   if (stoppingLabel) {
     return stoppingLabel
   }
@@ -127,6 +131,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   cacheTimerActive = true,
   isUnvisited = false
 }: CompactAgentRowProps) {
+  const t = useTranslate()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
@@ -137,8 +142,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
   const dotState = dotStateOverride ?? getAgentDotState(agent)
-  const conversationName = useAgentRowConversationName(agent)
+  const { name: conversationName, forked } = useAgentRowConversationNaming(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
+  const forkNamed = forked && conversationName !== null
   const isLineageChild = agent.lineage?.depth === 1
   // Hold assistant text per positive turn clock; commit in an effect so discarded renders cannot cache messages.
   const turn = agent.entry.stateStartedAt
@@ -155,14 +161,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const held = heldMessageRef.current
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
-  const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation)
-  const { leadingText, trailingText } = getCompactAgentLineOrder(
-    agent,
-    dotState,
-    primary,
-    secondary
-  )
-  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
+  const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
+  const { leadingText, trailingText } = getCompactAgentLineOrder(agent, primary, secondary, t)
+  const shownText = (text: string): string =>
+    forkNamed && text === primary ? forkMarkedNameText(t, text) : text
+  const shownNode = (text: string): React.ReactNode =>
+    forkNamed && text === primary ? <ForkMarkedName name={text} /> : text
+  const rowTitle = `${shownText(leadingText)}${trailingText ? ` - ${shownText(trailingText)}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
@@ -236,6 +241,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             title={sendTargetDisabledReason ? null : undefined}
             tooltipSide="right"
             progress={presentation.progress}
+            unread={isUnvisited}
           />
           {!hideIcon && (
             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
@@ -246,11 +252,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             className="min-w-0 flex-1 truncate"
             title={sendTargetDisabledReason ? undefined : rowTitle}
           >
-            <span className={leadClassName}>{leadingText}</span>
+            <span className={leadClassName}>{shownNode(leadingText)}</span>
             {trailingText && (
               <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
                 {' '}
-                - {trailingText}
+                - {shownNode(trailingText)}
               </span>
             )}
           </span>

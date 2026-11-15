@@ -8,7 +8,7 @@ import {
   devinSessionsIndexForSidecar,
   resetDevinSessionsIndexCacheForTests
 } from './session-scanner-devin-db'
-import { isolatedScanRoots } from '../../session-scanner-test-fixtures'
+import { isolatedScanRoots } from '../../scanner-fixtures/session-scanner-test-fixtures'
 import type { SessionSidecarStat } from '../../parse-cache/session-sidecar-stat'
 
 // Mirror the Devin CLI 3000.10.x schema so every probed column exists.

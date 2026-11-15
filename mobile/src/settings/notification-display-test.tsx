@@ -1,24 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
 import { ListRow } from '../components/list/ListGroup'
-import { useAllHostClients } from '../transport/use-all-host-clients'
-import { loadHostCatalog } from '../transport/host-store'
-import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
+import { useAllHostClients } from '../transport/connection/use-all-host-clients'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import { pushDeliveryTest } from '../notifications/push-registration/mobile-push-delivery-test-operations'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from './settings-screen-frame'
 import * as Notifications from 'expo-notifications'
-import { waitForPushFallback } from '../notifications/push-fallback'
+import { waitForPushFallback } from '../notifications/push-registration/push-fallback'
 import {
   getHostPushSupported,
   getHostPushSupportCompletion
 } from '../notifications/push-registration'
-import { getNotificationPermissionState } from '../notifications/notification-permissions'
+import { getNotificationPermissionState } from '../notifications/delivery-policy/notification-permissions'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
-import { loadNotificationDeliveryPreferences } from '../notifications/notification-delivery-preferences'
+import { loadNotificationDeliveryPreferences } from '../notifications/delivery-policy/notification-delivery-preferences'
 import {
   DESKTOP_NOTIFICATION_CHANNEL_ID,
   ensureDesktopNotificationChannel
-} from '../notifications/desktop-notification-channel'
+} from '../notifications/foreground-delivery/desktop-notification-channel'
 
 export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: () => void }) {
   useMobileColorScheme()

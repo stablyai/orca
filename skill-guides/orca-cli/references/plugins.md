@@ -127,8 +127,8 @@ ORCA plugin uninstall acme.notes-panel --json
 a version tag to the newest version tag and from a branch to its newest commit; a commit pin stays.
 An update from the same repository that asks for no new access keeps its approval. One that adds
 capabilities, a higher execution level, commands, shortcuts or panels, or that comes from another
-repository, fails with `approval_required` listing exactly what grows; the running version keeps
-working until it is approved. `--all` updates everything it can and exits 3 with one
+repository (even a theme or language pack), fails with `approval_required` listing exactly what
+changes; the running version keeps working until it is approved. `--all` updates everything it can and exits 3 with one
 `--approve` command per plugin still waiting.
 
 `plugin uninstall` and `plugin catalog rm` never need approval. `plugin catalog add` always

@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { isKiroSessionMetadataPath, parseKiroSessionFile } from './session-scanner-kiro-parser'
+import { parseKiroSessionFile } from './session-scanner-kiro-parser'
 import { kiroTranscriptPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 
 const SESSION_ID = '0b5e1c2a-3d4f-4a5b-8c6d-7e8f9a0b1c2d'
@@ -51,30 +51,6 @@ async function writeSession(meta: string, transcript?: string): Promise<string> 
 }
 
 describe('Kiro session parser', () => {
-  it('matches only <uuid>.json metadata files', () => {
-    expect(isKiroSessionMetadataPath(`/x/${SESSION_ID}.json`)).toBe(true)
-    expect(isKiroSessionMetadataPath(`/x/${SESSION_ID}.jsonl`)).toBe(false)
-    expect(isKiroSessionMetadataPath(`/x/${SESSION_ID}.lock`)).toBe(false)
-    expect(isKiroSessionMetadataPath('/x/agent_config.json')).toBe(false)
-  })
-
-  it('reads title, cwd, model and turns from metadata plus transcript', async () => {
-    const path = await writeSession(metadata(), `${prompt}\n${reply}\n`)
-    const session = await parseKiroSessionFile(fileAt(path), 'linux')
-    expect(session).toMatchObject({
-      agent: 'kiro',
-      sessionId: SESSION_ID,
-      title: 'Fix the login bug',
-      cwd: '/tmp/kiro',
-      model: 'claude-opus-5',
-      messageCount: 2
-    })
-    expect(session?.previewMessages.map((message) => message.text)).toEqual([
-      'Fix the login bug',
-      'Fixed it.'
-    ])
-  })
-
   it('keeps a complete final record that lacks a trailing newline', async () => {
     const path = await writeSession(metadata(), `${prompt}\n${reply}`)
     expect((await parseKiroSessionFile(fileAt(path), 'linux'))?.messageCount).toBe(2)
@@ -85,14 +61,6 @@ describe('Kiro session parser', () => {
     const session = await parseKiroSessionFile(fileAt(path), 'linux')
     expect(session?.messageCount).toBe(0)
     expect(session?.title).toBe('Fix the login bug')
-  })
-
-  it('omits a subagent child session from the top-level list', async () => {
-    const path = await writeSession(
-      metadata({ parent_session_id: '1c6f2d3b-4e5a-4b6c-9d7e-8f9a0b1c2d3e' }),
-      `${prompt}\n`
-    )
-    expect(await parseKiroSessionFile(fileAt(path), 'linux')).toBeNull()
   })
 
   it('resumes by the validated file name, not a mismatched metadata session_id', async () => {

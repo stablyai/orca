@@ -1,10 +1,11 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { runAgentHibernationTick } from './agent-hibernation-coordinator'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../../runtime/runtime-compatibility-test-fixture'
+} from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import {
   deferred,
   entry,
@@ -84,10 +85,12 @@ describe('agent sleep coordinator runtime-liveness races', () => {
         }
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'], 'tab-late': ['pty-late'] },
-      agentStatusByPaneKey: {
-        [entry().paneKey]: entry(),
-        [lateEntry.paneKey]: lateEntry
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [entry().paneKey]: entry(),
+          [lateEntry.paneKey]: lateEntry
+        })
+      )
     })
 
     const tick = runAgentHibernationTick()

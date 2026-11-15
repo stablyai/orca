@@ -1,7 +1,7 @@
 import { spawnProcess } from '@orca/process-host'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { relayBundleCandidates } from '../../../ssh/relay-bundle-paths'
+import { relayBundleCandidates } from '../../../wsl/execution/relay-bundle-paths'
 import { withWslGuestLauncherRevision } from '../../../wsl/execution/wsl-guest-launcher-revision'
 import { orcadPosixNodeRuntimeGlobs } from '../../../managed-server/install/orcad-node-runtime-globs'
 import {
@@ -11,7 +11,7 @@ import {
   WSL_BROWSER_NETWORK_RELAY_SENTINEL,
   WSL_BROWSER_NETWORK_RELAY_STALE_EXIT_CODE,
   WSL_BROWSER_NETWORK_RELAY_VERSION_FILE
-} from '../../../../shared/wsl-browser-network-relay-contract'
+} from '../../../../shared/browser/network/tunnels/wsl-browser-network-relay-contract'
 
 const STARTUP_TIMEOUT_MS = 10_000
 const INSTALL_TIMEOUT_MS = 30_000

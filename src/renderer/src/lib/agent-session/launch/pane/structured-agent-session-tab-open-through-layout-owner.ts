@@ -6,8 +6,8 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import { defaultAgentChatLabel } from '../../../../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useAppStore } from '@/store/index'
-import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
-import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
+import { hasPendingEntityTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { contentTabOpenPlacement } from '@/store/slices/tabs/content-tab-open-placement'
 
 export type AgentSessionTabOpen = {

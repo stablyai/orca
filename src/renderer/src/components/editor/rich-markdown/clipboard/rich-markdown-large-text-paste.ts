@@ -2,15 +2,15 @@ import type { Editor } from '@tiptap/react'
 import { TextSelection, type SelectionBookmark, type Transaction } from '@tiptap/pm/state'
 import { closeHistory } from '@tiptap/pm/history'
 import { toast } from 'sonner'
-import { yieldToEventLoop } from '../../../../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
 import {
   getUtf8ChunkEndIndex,
   isUtf8ByteLengthWithinLimit
-} from '../../../../../../shared/utf8-byte-limits'
+} from '../../../../../../shared/text/utf8-byte-limits'
 import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield
-} from '@/lib/text-control-paste'
+} from '@/lib/text-input/paste/text-control-paste'
 import { translate } from '@/i18n/i18n'
 import { getRichMarkdownImageResolverContextVersion } from '../images/rich-markdown-image-context'
 import { trackRichMarkdownLargePasteHistory } from './rich-markdown-large-paste-history'

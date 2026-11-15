@@ -1,4 +1,4 @@
-import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
+import { textGenerationErrorText } from '@/lib/text-generation/text-generation-error-copy'
 import { planCommitMessageGeneration } from '../../../../../shared/source-control/ai/generation/commit-message-plan'
 import {
   renderSourceControlActionCommandTemplate,
@@ -6,6 +6,7 @@ import {
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type SourceControlGenerationPlanResult =
   | { ok: true; commandLabel: string; delivery: string; caveat: string }
@@ -54,7 +55,8 @@ const SYNTHETIC_BASE_PROMPTS: Record<SourceControlTextActionId, string> = {
 /** Validate saved repo/global recipes against synthetic context; active linkedIssue must not disable Save/Generate for otherwise valid templates. */
 export function planSourceControlTextGeneration(
   actionId: SourceControlTextActionId,
-  params: ResolvedSourceControlAiGenerationParams
+  params: ResolvedSourceControlAiGenerationParams,
+  t: Translate = translate
 ): SourceControlGenerationPlanResult {
   const prompt =
     params.commandInputTemplate !== undefined
@@ -66,10 +68,7 @@ export function planSourceControlTextGeneration(
   if (!prompt.trim()) {
     return {
       ok: false,
-      error: translate(
-        'auto.lib.source.control.generation.plan.dc480d5897',
-        'Command input is empty.'
-      )
+      error: t('auto.lib.source.control.generation.plan.dc480d5897', 'Command input is empty.')
     }
   }
   const planned = planCommitMessageGeneration(params, prompt)

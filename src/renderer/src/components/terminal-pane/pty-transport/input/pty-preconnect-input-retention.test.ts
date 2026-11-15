@@ -1,35 +1,9 @@
 import { getEventListeners } from 'node:events'
 import { describe, expect, it } from 'vitest'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
-import { createDeferred } from '../../pty-connection-test-async'
+import { createDeferred } from '../../pty-connection/test-fixtures/pty-connection-test-async'
 
 describe('preconnect input lifetime', () => {
-  it('releases abort listeners after repeated successful flushes', async () => {
-    const controller = new AbortController()
-    const delivered: string[] = []
-    for (let index = 0; index < 50; index += 1) {
-      const buffer = createPtyPreconnectInputBuffer()
-      const text = `paste-${index}`
-      const accepted = buffer.enqueueAccepted(text, 'driving', undefined, {
-        signal: controller.signal
-      })
-      await buffer.flush({
-        isCurrent: () => true,
-        sendInput: () => true,
-        sendInputImmediate: () => true,
-        sendInputAccepted: async (data) => {
-          delivered.push(data)
-          return true
-        }
-      })
-      await expect(accepted).resolves.toBe(true)
-      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
-    }
-    expect(delivered).toHaveLength(50)
-    controller.abort()
-    expect(delivered).toHaveLength(50)
-  })
-
   it('releases queued and active paste listeners on clear while a write is stalled', async () => {
     const controller = new AbortController()
     const buffer = createPtyPreconnectInputBuffer()

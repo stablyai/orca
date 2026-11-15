@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { isNativeChatShellEnvironmentName } from '../../../../../shared/native-chat/native-chat-shell-environment'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
@@ -23,6 +23,7 @@ function ShellEnvironmentNamesField({
   savedNames: readonly string[]
   onChange: (names: string[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const name = draft.trim()
@@ -48,7 +49,7 @@ function ShellEnvironmentNamesField({
   return (
     <div className="space-y-2">
       <Label htmlFor={NAME_INPUT_ID}>
-        {translate(
+        {t(
           'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNamesLabel',
           'Variables to pass from your shell'
         )}
@@ -66,7 +67,7 @@ function ShellEnvironmentNamesField({
             event.preventDefault()
             add()
           }}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNamePlaceholder',
             'Variable name'
           )}
@@ -78,12 +79,12 @@ function ShellEnvironmentNamesField({
         />
         <Button type="button" variant="outline" size="sm" disabled={!canAdd} onClick={add}>
           <Plus className="size-3.5" />
-          {translate('auto.components.settings.ExperimentalPane.nativeChat.shellEnvNameAdd', 'Add')}
+          {t('auto.components.settings.ExperimentalPane.nativeChat.shellEnvNameAdd', 'Add')}
         </Button>
       </div>
       {savedNames.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNamesEmpty',
             'No variables added yet.'
           )}
@@ -101,7 +102,7 @@ function ShellEnvironmentNamesField({
                 size="icon-xs"
                 variant="ghost"
                 onClick={() => remove(savedName)}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNameRemove',
                   'Remove {{value0}}',
                   { value0: savedName }
@@ -115,7 +116,7 @@ function ShellEnvironmentNamesField({
         </ul>
       )}
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNamesAlwaysPassed',
           'PATH, locale, and SSH_AUTH_SOCK are always passed. Applies the next time a chat starts or resumes.'
         )}
@@ -128,6 +129,7 @@ export function NativeChatShellEnvironmentSetting({
   settings,
   updateSettings
 }: NativeChatShellEnvironmentSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const inheritAll = settings.nativeChatInheritShellEnvironment !== false
   const savedNames = settings.nativeChatShellEnvironmentVariables ?? []
   const entry = getChatBehaviorEntriesByKey().shellEnvironment
@@ -139,7 +141,7 @@ export function NativeChatShellEnvironmentSetting({
         label={entry.title}
         description={entry.description}
         checked={inheritAll}
-        ariaLabel={translate(
+        ariaLabel={t(
           'auto.components.settings.ExperimentalPane.nativeChat.shellEnvToggleLabel',
           'Toggle using your shell environment'
         )}

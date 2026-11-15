@@ -1,5 +1,5 @@
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION,
   type AgentJournalMessageItem
@@ -23,6 +23,8 @@ export type JournalQueueChange =
       queuedAt: AgentJournalCursor | null
       holdReason?: string
       options?: AgentSessionExecutionOptions
+      deliveryMode?: 'queue' | 'steer'
+      unattended?: boolean
       attempt?: string
       /** The doubtful submission resolved by the person's action on this card. */
       recovers?: string

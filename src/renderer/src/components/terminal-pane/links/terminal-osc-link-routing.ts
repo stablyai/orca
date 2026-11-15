@@ -1,3 +1,7 @@
+import type {
+  HttpLinkActionDestinations as TerminalHttpLinkActionDestinations,
+  HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester
+} from '@/lib/browser/navigation/http-link-destinations'
 import { resolveFileLinkPath } from './files/terminal-file-link-target'
 import { isWindowsAbsolutePathLike } from '../../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './files/terminal-link-handlers'
@@ -6,11 +10,7 @@ import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
 } from './gestures/terminal-link-activation'
-import {
-  handleTerminalHttpLink,
-  type TerminalHttpLinkActionDestinations,
-  type TerminalLinkRoutingPreferenceRequester
-} from './http/terminal-url-link-hit-testing'
+import { handleTerminalHttpLink } from './http/terminal-url-link-hit-testing'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 import { handleTerminalFileLink } from './files/terminal-file-link-actions'

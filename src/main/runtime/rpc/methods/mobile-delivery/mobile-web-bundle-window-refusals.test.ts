@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +7,6 @@ import {
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
   MOBILE_WEB_BUNDLE_RANGE_METHOD
 } from '../../../../../shared/mobile-web-bundle/bundle-rpc-contract'
-import { resetBundledMobileWebBundleCacheForTests } from '../../../bundled-mobile-web-bundle'
 import type { RpcResponse } from '../../core'
 import type { RpcDispatcher } from '../../dispatcher'
 import { resetMobileWebBundleAssetVerdictsForTests } from './mobile-web-bundle-asset-reader'
@@ -33,7 +31,6 @@ function errorMessage(response: RpcResponse): string | undefined {
 beforeEach(() => {
   scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-bundle-window-'))
   installMobileWebBundleAppPath(scratch)
-  resetBundledMobileWebBundleCacheForTests()
   resetMobileWebBundleAssetVerdictsForTests()
   resetMobileWebBundleReadAdmissionForTests()
   vi.spyOn(console, 'warn').mockImplementation(() => {})

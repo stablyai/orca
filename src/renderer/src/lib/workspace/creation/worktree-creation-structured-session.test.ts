@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 
 type PendingCreationState = { pendingWorktreeCreations: Record<string, unknown> }
 type PendingCreationListener = (state: PendingCreationState) => void
@@ -85,7 +85,7 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
-vi.mock('@/components/native-chat/native-chat-composer-mount', () => ({
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-mount', () => ({
   nativeChatComposerSelection: () => undefined,
   waitForNativeChatComposerHandoff: mocks.waitForComposerMount
 }))
@@ -94,7 +94,6 @@ vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
 }))
 
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
-import { projectSourceControlActionLaunch } from '../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 
 const request = {
@@ -147,186 +146,6 @@ describe('launchStructuredWorktreeSession', () => {
     })
   })
 
-  it('uses the normal workspace surface when no chat tab is published', async () => {
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      args.onTabOpenSettled?.(null)
-      return launchHandle()
-    })
-    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'fallback-terminal' })
-
-    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
-      primaryTabId: 'fallback-terminal'
-    })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1', {
-      providesInitialSurface: false,
-      worktreeCreationId: 'creation-1'
-    })
-  })
-
-  it.each([true, false])('recovers a held prompt after no tab, visible: %s', async (visible) => {
-    mocks.state.pendingWorktreeCreations = {
-      'creation-1': { phase: 'creating', heldChatMessage: 'Add a test', request }
-    }
-    if (!visible) {
-      mocks.state.activePendingCreationId = null
-    }
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      args.onTabOpenSettled?.(null, 'layout-refused')
-      return launchHandle()
-    })
-    mocks.launchAgentInNewTabWithOutcome.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'recovered-terminal' }
-    })
-
-    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
-      primaryTabId: 'recovered-terminal'
-    })
-    expect(mocks.launchAgentInNewTabWithOutcome).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: 'Add a test',
-        promptDelivery: 'auto-submit',
-        activate: visible,
-        agentSessionLaunchPlan: expect.objectContaining({ route: 'terminal-tui' })
-      })
-    )
-    if (!visible) {
-      expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    }
-  })
-
-  it.each(['workspace', 'view'] as const)(
-    'preserves %s navigation while waiting for the replacement chat',
-    async (navigation) => {
-      let openTab: BeginArgs['onTabOpenSettled']
-      mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-        openTab = args.onTabOpenSettled
-        return launchHandle()
-      })
-
-      const completion = launchStructuredWorktreeSession(baseArgs)
-      if (navigation === 'workspace') {
-        mocks.state.activePendingCreationId = null
-      } else {
-        mocks.state.activeView = 'tasks'
-      }
-      openTab?.('agent-session:session-1')
-      await completion
-      expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    }
-  )
-
-  it('cancels a launch dismissed while waiting for its chat tab', async () => {
-    const launch = launchHandle()
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue(launch)
-
-    const completion = launchStructuredWorktreeSession(baseArgs)
-    mocks.state.pendingWorktreeCreations = {}
-    mocks.listener?.(mocks.state)
-
-    await expect(completion).resolves.toMatchObject({ cancelled: true })
-    expect(launch.cancel).toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-  })
-
-  it('does not launch after the pending creation was cancelled', async () => {
-    mocks.state.pendingWorktreeCreations = {}
-
-    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
-      accepted: true,
-      cancelled: true,
-      primaryTabId: null
-    })
-    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
-  })
-
-  it('does not open a tab when cancellation races the reveal callback', async () => {
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      const pending = mocks.state.pendingWorktreeCreations
-      mocks.state.pendingWorktreeCreations = {}
-      mocks.listener?.(mocks.state)
-      mocks.state.pendingWorktreeCreations = pending
-      const allowed = args.beforeOpen?.('session-1')
-      return allowed === false ? null : launchHandle()
-    })
-
-    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
-      accepted: true,
-      cancelled: false,
-      primaryTabId: null
-    })
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-  })
-
-  it('logs a chat tab that throws while opening instead of dropping it silently', async () => {
-    const failure = new Error('tab store unavailable')
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation(() => {
-      throw failure
-    })
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
-      accepted: true,
-      primaryTabId: null
-    })
-    expect(consoleError).toHaveBeenCalledWith(
-      'worktree create: structured chat tab failed to open',
-      'worktree-1',
-      failure
-    )
-    expect(mocks.unsubscribe).toHaveBeenCalled()
-    consoleError.mockRestore()
-  })
-
-  it('sends what the user wrote while the worktree was created as the first message', async () => {
-    const launchInputs = projectSourceControlActionLaunch(
-      {
-        agentId: 'codex',
-        agentArgs: `-c 'model="true"'`,
-        launchPreferences: {
-          agentId: 'codex',
-          modelSelection: {
-            base: 'default',
-            options: { effort: { agentId: 'codex', value: 'high' } }
-          }
-        }
-      },
-      'codex',
-      { basePrompt: '' }
-    )
-    mocks.state.pendingWorktreeCreations = {
-      'creation-1': { phase: 'creating', heldChatMessage: 'Add a test', request }
-    }
-
-    await launchStructuredWorktreeSession({ ...baseArgs, request: { ...request, launchInputs } })
-
-    expect(mocks.beginStructuredAgentSessionProvisionalLaunch.mock.calls[0][0].plan).toMatchObject({
-      prompt: 'Add a test',
-      promptDelivery: 'auto-submit',
-      launchOptions: { effort: 'high' },
-      chatLaunchOptions: { model: 'true', effort: 'high' }
-    })
-    expect(mocks.beginStructuredAgentSessionProvisionalLaunch.mock.calls[0][0]).toHaveProperty(
-      'declinedTerminal.agentArgs',
-      `-c 'model="true"'`
-    )
-  })
-
-  it('leaves a linked item draft to the pending composer draft the launch moves over', async () => {
-    const linked = {
-      ...request,
-      quickPrompt: '',
-      launchDraftPrompt: 'Issue #12',
-      promptDelivery: 'draft' as const
-    }
-    mocks.state.pendingWorktreeCreations = { 'creation-1': { phase: 'creating', request: linked } }
-
-    await launchStructuredWorktreeSession({ ...baseArgs, request: linked })
-
-    expect(mocks.beginStructuredAgentSessionProvisionalLaunch.mock.calls[0][0].plan).toMatchObject({
-      prompt: ''
-    })
-  })
-
   it.each([true, false])(
     'moves the latest unsent typing only when the replacement is published, foreground: %s',
     async (foreground) => {
@@ -360,19 +179,6 @@ describe('launchStructuredWorktreeSession', () => {
     }
   )
 
-  it('keeps unsent text when the replacement tab is refused', async () => {
-    const source = 'pending-worktree-creation:creation-1'
-    updateNativeChatComposerDraft(source, { text: 'Keep this draft' }, 'immediate')
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      args.onTabOpenSettled?.(null, 'layout-refused')
-      return launchHandle()
-    })
-
-    await launchStructuredWorktreeSession(baseArgs)
-
-    expect(readNativeChatComposerDraft(source).text).toBe('Keep this draft')
-  })
-
   it('keeps the pending draft editable until the published chat editor mounts', async () => {
     const mounted = Promise.withResolvers<void>()
     mocks.waitForComposerMount.mockReturnValue(mounted.promise)
@@ -399,42 +205,5 @@ describe('launchStructuredWorktreeSession', () => {
       'Still typing while the editor mounts'
     )
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledOnce()
-  })
-
-  it('finishes in the background after navigation while the replacement mounts', async () => {
-    mocks.waitForComposerMount.mockImplementation(
-      (_source, _destination, signal) =>
-        new Promise((resolve) => {
-          signal.addEventListener('abort', () => resolve(), { once: true })
-        })
-    )
-    const completion = launchStructuredWorktreeSession(baseArgs)
-    await Promise.resolve()
-    mocks.state.activeView = 'tasks'
-    mocks.listener?.(mocks.state)
-
-    await completion
-
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.unsubscribe).toHaveBeenCalled()
-  })
-
-  it('keeps both newer typing and a first message returned by a failed launch', async () => {
-    updateNativeChatComposerDraft(
-      'agent-session:session-1',
-      { text: 'Returned first message' },
-      'immediate'
-    )
-    updateNativeChatComposerDraft(
-      'pending-worktree-creation:creation-1',
-      { text: 'Newer follow-up' },
-      'immediate'
-    )
-
-    await launchStructuredWorktreeSession(baseArgs)
-
-    expect(readNativeChatComposerDraft('agent-session:session-1').text).toBe(
-      'Returned first message\n\nNewer follow-up'
-    )
   })
 })

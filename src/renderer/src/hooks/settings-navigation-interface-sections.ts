@@ -11,25 +11,29 @@ import { getNotificationsPaneSearchEntries } from '@/components/settings/notific
 import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts/shortcuts-search'
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { translate } from '@/i18n/i18n'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { Translate } from '@/i18n/use-translate'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import { BarChart3, Bell, Keyboard, MessageSquare, Palette, TextCursorInput } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
-export function buildInterfaceSettingsSections({
-  isMac,
-  isWindows,
-  isWebClient,
-  hostQueuesMessages,
-  typedChatPermissions,
-  managedBrowserCreationEnabled,
-  mobileEmulatorCreationEnabled
-}: SettingsNavigationBuildOptions): SettingsNavSection[] {
+export function buildInterfaceSettingsSections(
+  {
+    isMac,
+    isWindows,
+    isWebClient,
+    hostQueuesMessages,
+    typedChatPermissions,
+    managedBrowserCreationEnabled,
+    mobileEmulatorCreationEnabled
+  }: SettingsNavigationBuildOptions,
+  t: Translate = translate
+): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   return [
     {
       id: 'appearance',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.93d88d20bf', 'Appearance'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.93d88d20bf', 'Appearance'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.b11a5a48a2',
         'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
       ),
@@ -43,15 +47,15 @@ export function buildInterfaceSettingsSections({
     },
     {
       id: 'chat',
-      title: translate('settings.appearance.chat.title', 'Chat UI'),
-      description: translate('settings.chat.description', 'Choose how chats look and behave.'),
+      title: t('settings.appearance.chat.title', 'Chat UI'),
+      description: t('settings.chat.description', 'Choose how chats look and behave.'),
       icon: MessageSquare,
       searchEntries: [
-        ...(showDesktopOnlySettings ? getChatLaunchSearchEntries() : []),
+        ...(showDesktopOnlySettings ? getChatLaunchSearchEntries(t) : []),
         getChatPermissionSearchEntry(typedChatPermissions),
-        ...getChatAppearanceSearchEntries(),
-        ...getChatTurnActivitySearchEntries(),
-        ...getChatBehaviorSearchEntries().filter(
+        ...getChatAppearanceSearchEntries(t),
+        ...getChatTurnActivitySearchEntries(t),
+        ...getChatBehaviorSearchEntries(t).filter(
           (entry) => hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups'
         ),
         ...(showDesktopOnlySettings
@@ -62,8 +66,8 @@ export function buildInterfaceSettingsSections({
     },
     {
       id: 'input',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.0c6ee88a5f', 'Input & Editing'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.0c6ee88a5f', 'Input & Editing'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.1f452cbd4c',
         'Selection and editing behavior.'
       ),
@@ -75,11 +79,8 @@ export function buildInterfaceSettingsSections({
       ? [
           {
             id: 'notifications',
-            title: translate(
-              'auto.hooks.useSettingsNavigationMetadata.2eece16ad1',
-              'Notifications'
-            ),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.2eece16ad1', 'Notifications'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.7682607591',
               'Native desktop notifications for agent and terminal events.'
             ),
@@ -91,8 +92,8 @@ export function buildInterfaceSettingsSections({
       : []),
     {
       id: 'shortcuts',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.94295ebfb3', 'Shortcuts'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.94295ebfb3', 'Shortcuts'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.dcd0d9b74f',
         'Keyboard shortcuts for common actions.'
       ),
@@ -105,8 +106,8 @@ export function buildInterfaceSettingsSections({
     },
     {
       id: 'stats',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & Usage'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & Usage'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.b351014180',
         'Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.'
       ),

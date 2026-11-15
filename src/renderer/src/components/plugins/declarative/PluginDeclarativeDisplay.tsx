@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   PluginDeclarativeProps,
   PluginDeclarativeTone
@@ -112,9 +112,10 @@ export function PluginDeclarativeLink({
 
 /** A component this Orca does not know: neutral, so the rest of the panel still works. */
 export function PluginDeclarativeUnsupported({ name }: { name: string }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="rounded-md border border-dashed border-border px-2 py-1.5 text-xs text-muted-foreground">
-      {translate(
+      {t(
         'auto.components.plugins.declarative.PluginDeclarativeView.unsupported',
         '{{value0}} is not available in this version of Orca',
         { value0: name }

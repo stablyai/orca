@@ -6,6 +6,9 @@ vi.mock('../components/terminal/terminal-provider-snapshot-capability', () => ({
   collectTerminalProviderSnapshotPtyIds: () => [],
   refreshTerminalProviderSnapshotCapabilities: async () => undefined
 }))
+vi.mock('../components/terminal/terminal-provider-gone-sessions', () => ({
+  probeTerminalProviderGoneSessions: async () => undefined
+}))
 vi.mock('../store', async () => {
   const { create } = await import('zustand')
   const useAppStore = create(() => ({

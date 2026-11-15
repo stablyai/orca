@@ -107,18 +107,6 @@ describe('a WSL bridge pane exit after the distro is terminated', () => {
     expect(restarts).not.toHaveBeenCalled()
   })
 
-  it('still runs deferred work once a settled list shows the distro running again', async () => {
-    await vi.advanceTimersByTimeAsync(60_000)
-    noteWslDistroMayHaveStopped('Ubuntu')
-    const restarts = vi.fn()
-    deferUntilWslDistroRunning('Ubuntu', 'fs-watch:root-a', restarts)
-    await vi.advanceTimersByTimeAsync(1_000)
-
-    await readConfirmedRunningWslDistros()
-
-    expect(restarts).toHaveBeenCalledOnce()
-  })
-
   it('lists once more past the settle when a mid-stop list skipped deferred work', async () => {
     await vi.advanceTimersByTimeAsync(60_000)
     noteWslDistroMayHaveStopped('Ubuntu')

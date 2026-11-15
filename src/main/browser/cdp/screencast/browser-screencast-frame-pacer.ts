@@ -2,7 +2,7 @@ import type { WebContents } from 'electron'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
-} from '../../../../shared/browser-screencast-protocol'
+} from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import type {
   BrowserScreencastOptions,

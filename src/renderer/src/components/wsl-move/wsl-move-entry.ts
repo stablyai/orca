@@ -4,14 +4,14 @@
  * and the Experimental switch on. Main refuses every call with the gate closed regardless.
  */
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WslMoveRowRef } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import {
   useWslHostsAcceptNewWork,
   useWslHostServerFilesMissing
 } from '../sidebar/use-wsl-hosts-enabled'
 import { openWslMoveDialog } from './wsl-move-dialog-store'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { wslMoveCatalogCandidates, wslMoveTargetForRepo } from './wsl-move-scope-rows'
 
 export function openWslMoveDialogFor(distro: string, only?: WslMoveRowRef): void {

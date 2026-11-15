@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { eventSchemas } from '../../shared/telemetry-events'
+import { eventSchemas } from '../../shared/telemetry/telemetry-event-registry'
 import {
   pluginInstallKind,
   pluginTelemetryCatalog,

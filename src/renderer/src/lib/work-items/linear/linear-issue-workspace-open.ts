@@ -7,12 +7,12 @@ import {
   activateAndRevealWorktree
 } from '@/lib/workspace/activation/worktree-activation'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   findLinearIssueWorkspaceAttachment,
   type LinearIssueAttachmentRef
 } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Re-read current workspace attachments at action time so newly created issue workspaces are reused instead of duplicated. */
 export function openLinearIssueWorkspaceOrStart(

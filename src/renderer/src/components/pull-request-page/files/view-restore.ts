@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
-import { setWithLRU } from '@/lib/scroll-cache'
+import { setWithLRU } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { prFilesDiffScrollTopCache, prFilesDiffViewStateCache } from '../cache/files-diff-view'
 

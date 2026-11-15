@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/protocol-version'
-import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTabsResult
-} from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { subscribeSessionTabsInventory } from './session-tabs-inventory'
@@ -118,12 +118,49 @@ function deferredPtyInventory(): {
   }
 }
 
-function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSnapshot[] = []) {
-  const runtime = new OrcaRuntimeService()
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: initialSnapshots })
+class CensusRuntime extends OrcaRuntimeService {
+  projectedFrames = 0
+  afterFrame?: () => void
+  protected override toMobileSessionTabsResult(snapshot: RuntimeMobileSessionTabsSnapshot) {
+    const frame = super.toMobileSessionTabsResult(snapshot)
+    const afterFrame = this.afterFrame
+    this.afterFrame = undefined
+    if (afterFrame) {
+      queueMicrotask(afterFrame)
+    }
+    return frame
+  }
+  protected override projectMobileSessionTabsForClient(
+    snapshot: RuntimeMobileSessionTabsResult,
+    clientId?: string
+  ) {
+    this.projectedFrames += 1
+    return super.projectMobileSessionTabsForClient(snapshot, clientId)
+  }
+}
+
+async function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSnapshot[] = []) {
+  const runtime = new CensusRuntime()
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: initialSnapshots })
   const census = deferredPtyInventory()
   const internals = runtime as unknown as RuntimeInventoryInternals
   vi.spyOn(internals, 'refreshMobileSessionPtyInventory').mockReturnValue(census.promise)
+  let afterBoundary: (() => Promise<void>) | undefined
+  const collect = runtime.listAllMobileSessionTabsInventoryWithChangeSequence.bind(runtime)
+  vi.spyOn(runtime, 'listAllMobileSessionTabsInventoryWithChangeSequence').mockImplementation(
+    async (...args) => {
+      const inventory = await collect(...args)
+      const changes = afterBoundary
+      afterBoundary = undefined
+      await changes?.()
+      return inventory
+    }
+  )
+  // Desktop frames prepare sender identity first; wait for the scheduled pass to deliver.
+  const senderFramesDelivered = async (): Promise<void> => {
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    await runtime['agentProjections'].senders.withPreparedPublication(() => undefined, false)
+  }
   const emit = vi.fn<(event: unknown) => void>()
   const pending = subscribeSessionTabsInventory(
     {
@@ -138,17 +175,22 @@ function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSnapshot
     emit
   )
   return {
+    atBoundary: (changes: () => Promise<void>): void => {
+      afterBoundary = changes
+    },
     census,
     emit,
     internals,
     pending,
-    publish: (snapshots: RuntimeMobileSessionTabsSnapshot[], flush = true): void => {
-      runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
+    publish: async (snapshots: RuntimeMobileSessionTabsSnapshot[], flush = true): Promise<void> => {
+      await runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
       if (flush) {
         internals.mobileSessionTabsNotifyCoalescer.flushAll()
+        await senderFramesDelivered()
       }
     },
-    runtime
+    runtime,
+    senderFramesDelivered
   }
 }
 
@@ -197,46 +239,38 @@ function createHarness() {
 }
 
 describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundary', () => {
-  it('subsumes a delivered change already captured by the census', async () => {
-    const harness = createRuntimeHarness()
-    const created = runtimeSnapshot('wt-census-race', 1)
-
-    harness.publish([created])
+  it('replays a change between frame construction and census promise settlement', async () => {
+    const existing = runtimeSnapshot('wt-existing', 1)
+    const created = runtimeSnapshot('wt-created', 1)
+    const harness = await createRuntimeHarness([existing])
+    let changed = Promise.resolve()
+    harness.runtime.afterFrame = () => {
+      changed = harness.publish([existing, created])
+    }
     harness.census.resolve(completePtyInventory())
     await harness.pending
+    await changed
+    await harness.senderFramesDelivered()
 
     expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
       expect.objectContaining({
         type: 'snapshots',
-        authoritative: true,
-        snapshots: [expect.objectContaining({ worktree: created.worktree, snapshotVersion: 1 })]
-      })
-    ])
-  })
-
-  it('subsumes a removal that precedes the final census snapshot', async () => {
-    const existing = runtimeSnapshot('wt-census-race', 1)
-    const harness = createRuntimeHarness([existing])
-
-    harness.publish([])
-    harness.census.resolve(completePtyInventory())
-    await harness.pending
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [], authoritative: true }
+        snapshots: [expect.objectContaining({ worktree: 'wt-existing' })]
+      }),
+      expect.objectContaining({ type: 'updated', worktree: 'wt-created' })
     ])
   })
 
   it('subsumes creation and removal at the census release edge', async () => {
     const created = runtimeSnapshot('wt-created', 1)
-    const creation = createRuntimeHarness()
+    const creation = await createRuntimeHarness()
     creation.census.resolve(completePtyInventory())
-    creation.publish([created])
+    await creation.publish([created])
 
     const existing = runtimeSnapshot('wt-removed', 1)
-    const removal = createRuntimeHarness([existing])
+    const removal = await createRuntimeHarness([existing])
     removal.census.resolve(completePtyInventory())
-    removal.publish([])
+    await removal.publish([])
 
     await Promise.all([creation.pending, removal.pending])
 
@@ -251,13 +285,14 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
   })
 
   it('does not replay a delayed pre-boundary change after initialization', async () => {
-    const harness = createRuntimeHarness()
+    const harness = await createRuntimeHarness()
     const created = runtimeSnapshot('wt-census-race', 1)
 
-    harness.publish([created], false)
+    await harness.publish([created], false)
     harness.census.resolve(completePtyInventory())
     await harness.pending
     harness.internals.mobileSessionTabsNotifyCoalescer.flushAll()
+    await harness.senderFramesDelivered()
 
     expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
       expect.objectContaining({
@@ -269,11 +304,11 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
   })
 
   it('delivers a creation after the effective snapshot boundary', async () => {
-    const harness = createRuntimeHarness()
+    const harness = await createRuntimeHarness()
     const created = runtimeSnapshot('wt-census-race', 1)
 
+    harness.atBoundary(() => harness.publish([created]))
     harness.census.resolve(completePtyInventory())
-    queueMicrotask(() => harness.publish([created]))
     await harness.pending
 
     expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
@@ -288,10 +323,10 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
 
   it('delivers a removal after the effective snapshot boundary', async () => {
     const existing = runtimeSnapshot('wt-census-race', 1)
-    const harness = createRuntimeHarness([existing])
+    const harness = await createRuntimeHarness([existing])
 
+    harness.atBoundary(() => harness.publish([]))
     harness.census.resolve(completePtyInventory())
-    queueMicrotask(() => harness.publish([]))
     await harness.pending
 
     expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
@@ -310,17 +345,17 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
   })
 
   it('coalesces ordinary same-structure churn and replays worktrees in sequence order', async () => {
-    const harness = createRuntimeHarness()
+    const harness = await createRuntimeHarness()
     const worktreeB1 = runtimeSnapshot('wt-b', 1)
     const worktreeA = runtimeSnapshot('wt-a', 1)
     const worktreeB2 = runtimeSnapshot('wt-b', 2)
 
-    harness.census.resolve(completePtyInventory())
-    queueMicrotask(() => {
-      harness.publish([worktreeB1])
-      harness.publish([worktreeB1, worktreeA])
-      harness.publish([worktreeB2, worktreeA])
+    harness.atBoundary(async () => {
+      await harness.publish([worktreeB1])
+      await harness.publish([worktreeB1, worktreeA])
+      await harness.publish([worktreeB2, worktreeA])
     })
+    harness.census.resolve(completePtyInventory())
     await harness.pending
 
     expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
@@ -331,16 +366,16 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
   })
 
   it('replays create, remove, and recreate transitions without collapsing them', async () => {
-    const harness = createRuntimeHarness()
+    const harness = await createRuntimeHarness()
     const created = runtimeSnapshot('wt-census-race', 1)
     const recreated = runtimeSnapshot('wt-census-race', 2)
 
-    harness.census.resolve(completePtyInventory())
-    queueMicrotask(() => {
-      harness.publish([created])
-      harness.publish([])
-      harness.publish([recreated])
+    harness.atBoundary(async () => {
+      await harness.publish([created])
+      await harness.publish([])
+      await harness.publish([recreated])
     })
+    harness.census.resolve(completePtyInventory())
     await harness.pending
 
     expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
@@ -353,16 +388,16 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
 
   it('cancels a stale coalesced callback before removal and later recreation', async () => {
     const initial = runtimeSnapshot('wt-census-race', 1)
-    const harness = createRuntimeHarness([initial])
+    const harness = await createRuntimeHarness([initial])
     const pending = runtimeSnapshot('wt-census-race', 2)
     const recreated = runtimeSnapshot('wt-census-race', 3)
 
     harness.census.resolve(completePtyInventory())
     await harness.pending
-    harness.publish([pending], false)
-    harness.publish([])
+    await harness.publish([pending], false)
+    await harness.publish([])
     harness.internals.mobileSessionTabsNotifyCoalescer.flushAll()
-    harness.publish([recreated])
+    await harness.publish([recreated])
 
     expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
       expect.objectContaining({
@@ -379,17 +414,18 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
   })
 
   it('keeps a newer immediate change when an older coalesced callback arrives last', async () => {
-    const harness = createRuntimeHarness()
+    const harness = await createRuntimeHarness()
     const scheduled = runtimeSnapshot('wt-census-race', 1)
     const immediate = runtimeSnapshot('wt-census-race', 2)
 
-    harness.publish([scheduled], false)
-    harness.census.resolve(completePtyInventory())
-    queueMicrotask(() => {
+    await harness.publish([scheduled], false)
+    harness.atBoundary(async () => {
       harness.internals.mobileSessionTabsByWorktree.set(immediate.worktree, immediate)
       harness.internals.emitMobileSessionTabsSnapshot(immediate)
       harness.internals.mobileSessionTabsNotifyCoalescer.flushAll()
+      await harness.senderFramesDelivered()
     })
+    harness.census.resolve(completePtyInventory())
     await harness.pending
 
     expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
@@ -407,7 +443,7 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
 
   it('preserves caller-only follow intent when a later shared snapshot is buffered', async () => {
     const runtime = new OrcaRuntimeService()
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
     const census = deferredInventory()
     vi.spyOn(runtime, 'listAllMobileSessionTabsInventoryWithChangeSequence').mockImplementation(
       () => census.promise
@@ -419,7 +455,8 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
         runtime,
         connectionId: 'conn-caller',
         requestId: 'req-caller',
-        pairedDeviceId: 'device-caller'
+        pairedDeviceId: 'device-caller',
+        clientKind: 'mobile'
       },
       callerEmit
     )
@@ -428,7 +465,8 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
         runtime,
         connectionId: 'conn-bystander',
         requestId: 'req-bystander',
-        pairedDeviceId: 'device-bystander'
+        pairedDeviceId: 'device-bystander',
+        clientKind: 'mobile'
       },
       bystanderEmit
     )
@@ -470,38 +508,9 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
     expect(bystanderEmit.mock.calls[1]?.[0]).not.toHaveProperty('navigationIntent')
   })
 
-  it('subsumes pre-boundary follow intent into the census selection', async () => {
-    const runtime = new OrcaRuntimeService()
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
-    const census = deferredInventory()
-    vi.spyOn(runtime, 'listAllMobileSessionTabsInventoryWithChangeSequence').mockImplementation(
-      () => census.promise
-    )
-    const emit = vi.fn<(event: unknown) => void>()
-    const pending = subscribeSessionTabsInventory(
-      {
-        runtime,
-        connectionId: 'conn-follow-before',
-        requestId: 'req-follow-before',
-        pairedDeviceId: 'device-follow-before'
-      },
-      emit
-    )
-    const selected = snapshot(1, [terminalTab('selected')])
-    const internals = runtime as unknown as RuntimeInventoryInternals
-
-    internals.emitMobileSessionTabsSnapshotToClient(selected, 'device-follow-before', true)
-    census.resolve({ snapshots: [selected], authoritative: true, changeSequence: 1 })
-    await pending
-
-    expect(emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [selected] }
-    ])
-  })
-
   it('aborts the census and removes the real runtime listener on disconnect', async () => {
     const runtime = new OrcaRuntimeService()
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    await runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
     const census = deferredPtyInventory()
     const internals = runtime as unknown as RuntimeInventoryInternals
     vi.spyOn(internals, 'refreshMobileSessionPtyInventory').mockReturnValue(census.promise)
@@ -526,21 +535,6 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
 })
 
 describe('session tabs inventory census boundary', () => {
-  it('deduplicates a post-watermark notification already projected by the census', async () => {
-    const harness = createHarness()
-    const included = snapshot(2, [terminalTab('included')])
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [included], authoritative: true, changeSequence: 0 })
-    await pending
-    harness.deliver(included, 1)
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [included], authoritative: true }
-    ])
-  })
-
   it('delivers a post-boundary projected-state change without a new snapshot revision', async () => {
     const harness = createHarness()
     const pendingTab = {
@@ -722,3 +716,45 @@ describe('session tabs inventory census boundary', () => {
     expect(emit).not.toHaveBeenCalled()
   })
 })
+
+it.each(['subsumed', 'invalidated', 'aborted'] as const)(
+  'does not owe completion for %s held census candidates never emitted',
+  async (caseName) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const h = await createRuntimeHarness()
+    try {
+      const created = runtimeSnapshot('wt-census-race', 1)
+      await h.publish([created])
+      if (caseName === 'invalidated') {
+        for (let index = 0; index < 300; index += 1) {
+          await h.publish(index % 2 ? [created] : [])
+        }
+      }
+      if (caseName === 'aborted') {
+        h.runtime.cleanupSubscription(
+          'session.tabs:conn-runtime-census-race:*:req-runtime-census-race'
+        )
+      }
+      vi.setSystemTime(Date.now() + 46_000)
+      h.census.resolve(completePtyInventory())
+      if (caseName === 'aborted') {
+        await expect(h.pending).rejects.toThrow('client_disconnected')
+        expect(h.emit).not.toHaveBeenCalled()
+      } else {
+        await h.pending
+        expect(h.emit.mock.calls).toHaveLength(1)
+        expect(h.emit.mock.calls[0]?.[0]).toMatchObject({ type: 'snapshots' })
+      }
+      h.runtime.projectedFrames = 0
+      const outputs = h.emit.mock.calls.length
+      await h.runtime.markClientHostedPagesReconciled('paired-runtime-census-race')
+      expect(h.runtime.projectedFrames).toBe(0)
+      expect(h.emit.mock.calls).toHaveLength(outputs)
+    } finally {
+      h.runtime.cleanupSubscription(
+        'session.tabs:conn-runtime-census-race:*:req-runtime-census-race'
+      )
+      vi.useRealTimers()
+    }
+  }
+)

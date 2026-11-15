@@ -1,0 +1,150 @@
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
+import type { AppState } from '../../types'
+import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import {
+  getWorkspaceCleanupCandidateIdentity,
+  resolveWorkspaceCleanupRemovalHostId
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import {
+  buildActivityTabHostIndex,
+  resolveActivityExecutionHostId
+} from '@/components/activity/activity-event-builder-context'
+import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
+import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
+import {
+  findIndexedDetectedWorktrees,
+  findIndexedWorktreeOwnerForHost
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { translate } from '@/i18n/i18n'
+import { getWorkspaceCleanupAgentStartedFailure } from './workspace-cleanup-preflight-failures'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../workspaces/catalog/workspace-record-fields'
+
+export function assertWorkspaceCleanupAgentStopApproved(
+  state: AppState,
+  candidate: WorkspaceCleanupCandidate,
+  approvedCandidate: WorkspaceCleanupCandidate | undefined
+): void {
+  const evidence = getWorkspaceCleanupAgentEvidence(state, [candidate]).get(
+    getWorkspaceCleanupCandidateIdentity(candidate)
+  )
+  if (evidence?.status === 'unknown') {
+    throw new Error(
+      translate(
+        'auto.store.slices.workspace.cleanup.hostUnresolved',
+        'Orca cannot tell which host owns this workspace. Refresh projects and review it again.'
+      )
+    )
+  }
+  if (evidence?.status === 'live' && !approvedCandidate?.blockers.includes('live-agent')) {
+    throw new Error(
+      getWorkspaceCleanupAgentStartedFailure(
+        {
+          ...candidate,
+          executionHostId: resolveWorkspaceCleanupRemovalHostId(candidate)
+        },
+        candidate
+      ).message
+    )
+  }
+}
+
+export type WorkspaceCleanupAgentEvidence = {
+  status?: 'live' | 'unknown'
+  finishedAgentCount: number | null
+}
+
+/** Missing ownership remains a refusal, rather than becoming another host's agent or idle. */
+export function getWorkspaceCleanupAgentEvidence(
+  state: AppState,
+  candidates: readonly WorkspaceCleanupCandidate[]
+): Map<string, WorkspaceCleanupAgentEvidence> {
+  const evidence = new Map<string, WorkspaceCleanupAgentEvidence>()
+  let hostIndex: ReturnType<typeof buildActivityTabHostIndex> | undefined
+  const candidatesByWorktreeId = new Map<string, WorkspaceCleanupCandidate[]>()
+  for (const candidate of candidates) {
+    const group = candidatesByWorktreeId.get(candidate.worktreeId) ?? []
+    group.push(candidate)
+    evidence.set(getWorkspaceCleanupCandidateIdentity(candidate), {
+      finishedAgentCount: resolveWorkspaceCleanupRemovalHostId(candidate) ? 0 : null
+    })
+    candidatesByWorktreeId.set(candidate.worktreeId, group)
+  }
+  for (const [worktreeId, worktreeCandidates] of candidatesByWorktreeId) {
+    const rows = buildWorktreeAgentRows({
+      tabs: state.tabsByWorktree[worktreeId] ?? [],
+      representedTabs: state.unifiedTabsByWorktree
+        ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
+        : undefined,
+      entries: selectLiveAgentStatusEntriesForWorktree(state, worktreeId),
+      runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+      runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
+      paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+      now: Date.now()
+    })
+    const owners = new Map(
+      rows.filter((row) => row.rowSource !== 'subagent').map((row) => [row.paneKey, row])
+    )
+    for (const row of rows) {
+      const isLive = row.state === 'working' || row.state === 'blocked' || row.state === 'waiting'
+      if (!isLive && (row.state !== 'done' || row.rowSource === 'subagent')) {
+        continue
+      }
+      // Synthetic children display work owned by their actual parent pane.
+      const owner = row.rowSource === 'subagent' ? owners.get(row.activationPaneKey ?? '') : row
+      hostIndex ??= buildActivityTabHostIndex(state.unifiedTabsByWorktree)
+      const leafId = owner && parsePaneKey(owner.paneKey)?.leafId
+      const ptyIds = (owner && state.ptyIdsByTabId[owner.tab.id]) ?? []
+      const ptyId =
+        (owner &&
+          leafId &&
+          state.terminalLayoutsByTabId?.[owner.tab.id]?.ptyIdsByLeafId?.[leafId]) ||
+        owner?.tab.ptyId ||
+        owner?.entry.terminalHandle ||
+        (ptyIds.length === 1 ? ptyIds[0] : undefined)
+      const hostId = owner
+        ? resolveActivityExecutionHostId(
+            { worktreeId, tab: owner.tab },
+            owner.entry,
+            ptyId,
+            hostIndex
+          )
+        : undefined
+      for (const candidate of worktreeCandidates) {
+        const identity = getWorkspaceCleanupCandidateIdentity(candidate)
+        const candidateHost = resolveWorkspaceCleanupRemovalHostId(candidate)
+        const facts = evidence.get(identity)!
+        if (!hostId || !candidateHost) {
+          if (isLive) {
+            facts.status = 'unknown'
+          }
+          facts.finishedAgentCount = null
+        } else {
+          const owner =
+            findIndexedWorktreeOwnerForHost(
+              selectWorktreesByRepo(state),
+              worktreeId,
+              candidateHost
+            ) ??
+            findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId).find(
+              (worktree) => isExecutionHostAliasForWorktree(candidateHost, worktree)
+            )
+          if (isExecutionHostAliasForWorktree(hostId, owner ?? { hostId: candidateHost })) {
+            if (isLive && facts.status !== 'unknown') {
+              facts.status = 'live'
+            } else if (!isLive && facts.finishedAgentCount !== null) {
+              facts.finishedAgentCount += 1
+            }
+          }
+        }
+      }
+    }
+  }
+  return evidence
+}

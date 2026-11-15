@@ -6,9 +6,9 @@ import type {
   CurrentActionSelection,
   SelectedSourceControlActionRecipe
 } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
-import type { getAgentCatalog } from '@/lib/agent-catalog'
+import type { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import type { useAppStore } from '@/store/index'
-import type { useRepoById } from '@/store/selectors'
+import type { useRepoById } from '@/store/repos/use-repository-catalog'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'

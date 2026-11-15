@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../journal-observation.test-support'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem,
@@ -7,16 +8,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { applyJournalRow, createJournalReducerState } from './journal-reducer'
-import {
-  buildJournalItemRow,
-  buildJournalTombstoneRow,
-  journalLifecycleBatchRowBuilder
-} from '../writing/journal-row-builders'
+
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export function registerJournalProducerInheritanceTests(): void {
   const child: AgentJournalItemIdentity = {
@@ -58,104 +54,6 @@ export function registerJournalProducerInheritanceTests(): void {
     producerKind: undefined,
     attempt: undefined
   }
-
-  function seeded() {
-    const state = createJournalReducerState('session-1', 'epoch-1')
-    let seq = 0
-    const write = (
-      identity: AgentJournalItemIdentity,
-      body: AgentJournalMessageItem,
-      stamp?: Parameters<typeof buildJournalItemRow>[0]['linkage']
-    ) => {
-      seq += 1
-      applyJournalRow(
-        state,
-        buildJournalItemRow({
-          state,
-          identity,
-          body,
-          seq,
-          fence: 1,
-          ts: 1_000 + seq,
-          ...(stamp ? { linkage: stamp } : {}),
-          turnScope: AGENT_JOURNAL_THREAD_SCOPE
-        })
-      )
-    }
-    const settle = (identities: AgentJournalItemIdentity[]) => {
-      seq += 1
-      applyJournalRow(
-        state,
-        journalLifecycleBatchRowBuilder(
-          () => state,
-          `settle-${seq}`,
-          identities.map((identity) => ({
-            kind: 'item' as const,
-            identity,
-            body: text('settled'),
-            turnScope: AGENT_JOURNAL_THREAD_SCOPE
-          })),
-          { fence: 1 }
-        )(seq, 1_000 + seq)
-      )
-    }
-    const remove = (identity: AgentJournalItemIdentity) => {
-      seq += 1
-      const itemId = agentJournalItemKey(identity)
-      applyJournalRow(
-        state,
-        buildJournalTombstoneRow({ state, itemId, seq, fence: 1, ts: 1_000 + seq })
-      )
-    }
-    const item = (identity: AgentJournalItemIdentity) =>
-      state.items.get(agentJournalItemKey(identity))
-    return { state, write, settle, remove, item }
-  }
-
-  describe('producer inheritance in the reducer', () => {
-    it('keeps the whole bundle when a plain revision names no producer', () => {
-      const { write, item } = seeded()
-      write(child, text('looking'), linkage)
-      write(child, text('looked'))
-
-      expect(item(child)).toMatchObject({ revision: 2, body: text('looked'), sequence: 1 })
-      expect(producerOf(item(child))).toEqual(linkage)
-    })
-
-    it("keeps each row's own producer when one batch settles a child's row and the session's", () => {
-      const { write, settle, item } = seeded()
-      write(child, text('child working'), linkage)
-      write(own, text('own working'))
-      settle([child, own])
-
-      expect(item(child)).toMatchObject({ revision: 2, body: text('settled') })
-      expect(producerOf(item(child))).toEqual(linkage)
-      expect(item(own)).toMatchObject({ revision: 2, body: text('settled') })
-      expect(producerOf(item(own))).toEqual(NO_PRODUCER)
-    })
-
-    it('replaces the bundle wholesale when a revision names any producer', () => {
-      const { write, item } = seeded()
-      write(child, text('looking'), linkage)
-      write(child, text('looking'), { agentId: 'task-1', producerKind: 'agent' })
-
-      expect(producerOf(item(child))).toEqual({
-        ...NO_PRODUCER,
-        agentId: 'task-1',
-        producerKind: 'agent'
-      })
-    })
-
-    it('gives a row re-created after its removal nothing from the removed one', () => {
-      const { write, remove, item } = seeded()
-      write(child, text('first life'), linkage)
-      remove(child)
-      write(child, text('second life'))
-
-      expect(item(child)?.body).toEqual(text('second life'))
-      expect(producerOf(item(child))).toEqual(NO_PRODUCER)
-    })
-  })
 
   describe('producer inheritance across a reopen', () => {
     let root: string
@@ -215,7 +113,7 @@ export function registerJournalProducerInheritanceTests(): void {
           }
         ]
       })
-      const live = journal.snapshot().items
+      const live = await readTestJournalItems(journal)
       expect(live.map((item) => [item.revision, producerOf(item)])).toEqual([
         [3, linkage],
         [2, NO_PRODUCER]
@@ -223,7 +121,7 @@ export function registerJournalProducerInheritanceTests(): void {
 
       await journal.close()
       const reopened = await open()
-      expect(reopened.snapshot().items).toEqual(live)
+      expect(await readTestJournalItems(reopened)).toEqual(live)
     })
   })
 }

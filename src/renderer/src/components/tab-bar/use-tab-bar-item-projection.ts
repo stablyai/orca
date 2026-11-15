@@ -1,4 +1,4 @@
-import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { useMemo, useState } from 'react'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { Tab } from '../../../../shared/tab-types'

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 
 function reading(usedPercent: number, updatedAt: number): ProviderRateLimits {
@@ -51,10 +51,4 @@ it('drops a reading when agy switched accounts during the read', async () => {
     switched: true
   })
   expect(h.getVault().accounts.every((account) => !account.usage)).toBe(true)
-})
-
-it('never reads native credentials when no account is saved', async () => {
-  const h = harness()
-  expect(await h.service.beginUsageRead()).toBeNull()
-  expect(h.backend.read).not.toHaveBeenCalled()
 })

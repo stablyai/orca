@@ -1,7 +1,7 @@
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
-import type { OrchestrationWorkerReadFallbackReason } from '../../../../../shared/orchestration-worker-output'
+import type { OrchestrationWorkerReadFallbackReason } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../../../native-chat/session-file-resolver'
 import { nativeChatLineDecoderForAgent } from '../../../../native-chat/transcript-tail-reader'
 import {
@@ -19,7 +19,7 @@ type WorkerTranscriptReadFailure = {
   warnings: string[]
 }
 
-type WorkerTranscriptReadSuccess = {
+export type WorkerTranscriptReadSuccess = {
   ok: true
   filePath: string
   sourceFingerprint: string
@@ -32,6 +32,11 @@ type WorkerTranscriptReadSuccess = {
 }
 
 export type WorkerTranscriptReadResult = WorkerTranscriptReadFailure | WorkerTranscriptReadSuccess
+
+/** Whether readWorkerTranscript can read this agent's transcript at all. */
+export function canReadWorkerTranscript(agent: AgentType): boolean {
+  return Boolean(resolveNativeChatTranscriptAgent(agent) && nativeChatLineDecoderForAgent(agent))
+}
 
 export async function readWorkerTranscript(args: {
   agent: AgentType

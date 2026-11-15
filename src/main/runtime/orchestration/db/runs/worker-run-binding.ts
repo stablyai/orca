@@ -1,6 +1,6 @@
 import type { DispatchContextRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { isSelfCreatedDispatch } from '../dispatch-depth'
+import { isSelfCreatedDispatch } from '../dispatch-creator-evaluation'
 import type { OrchestrationDb } from '../orchestration-db'
 import {
   mailboxAddressOf,
