@@ -11,7 +11,7 @@ import { browserSessionRegistry } from '../sessions/profiles/browser-session-reg
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve-browser-tab-layout'
 
-// orca serve has no renderer for webviews; hidden BrowserWindows host its pages.
+// orca serve has no renderer for webviews; hidden offscreen BrowserWindows host its pages.
 // Headless Linux requires Xvfb; Electron --headless segfaults.
 
 const DEFAULT_VIEWPORT_WIDTH = 1280
@@ -54,7 +54,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       webPreferences: {
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
         partition,
-        // Why: hidden windows alone do not reliably paint for headless CDP capture.
+        // A hidden window on a headless display has no surface to draw into, so captures came back blank.
         offscreen: true,
         sandbox: true,
         contextIsolation: true,
@@ -64,6 +64,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       }
     })
 
+    // Nothing reads offscreen paint frames: CDP captures and screencasts copy from the compositor,
+    // and delivering every animation frame to main costs hundreds of MB per animated tab.
+    win.webContents.stopPainting()
     this.windowsByPageId.set(browserPageId, win)
     // Server pages have no window to ask in; agents and phones answer their dialogs.
     installBrowserJavaScriptDialogs(win.webContents, () => null)
