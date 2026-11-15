@@ -29,9 +29,9 @@ function makeRuntime(opts: { paneLayout?: boolean } = {}): {
   return { runtime, writes }
 }
 
-function syncGraph(runtime: OrcaRuntimeService): void {
+async function syncGraph(runtime: OrcaRuntimeService): Promise<void> {
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -66,7 +66,7 @@ describe('runtime terminal handle incarnation fencing', () => {
     const { runtime, writes } = makeRuntime()
     const staleHandle = runtime.preAllocateHandleForPty(PTY_ID)
     register(runtime, 'incarnation-old')
-    syncGraph(runtime)
+    await syncGraph(runtime)
     await expect(runtime.readTerminal(staleHandle)).resolves.toMatchObject({
       handle: staleHandle,
       status: 'running'
@@ -101,7 +101,7 @@ describe('runtime terminal handle incarnation fencing', () => {
     const { runtime } = makeRuntime()
     const staleHandle = runtime.preAllocateHandleForPty(PTY_ID)
     register(runtime, 'incarnation-old')
-    syncGraph(runtime)
+    await syncGraph(runtime)
     runtime.onPtySpawned(PTY_ID, 'incarnation-new', { awaitsRegistration: false })
     const replacementHandle = runtime.createPreAllocatedTerminalHandle()
     runtime.registerPreAllocatedHandleForPty(PTY_ID, replacementHandle)

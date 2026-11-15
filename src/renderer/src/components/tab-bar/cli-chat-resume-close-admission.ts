@@ -13,7 +13,7 @@ import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } f
 import {
   chatAgentsShareConversations,
   namesCliConversation
-} from '../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'
 import { cliChatResumeClosingPaneKeys } from './cli-chat-resume-close-terminal'
@@ -21,7 +21,7 @@ import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/
 import { structuredLaunchesHoldingIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-holders'
 import { structuredLaunchIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'

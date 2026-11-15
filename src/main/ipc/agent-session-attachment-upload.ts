@@ -135,7 +135,7 @@ export async function uploadPasteToAgentSessionAttachments(
   const stored = await uploadBufferToAgentSessionAttachments(
     {
       ...target,
-      environmentId: resolveEnvironment(userDataPath, runtimeEnvironmentId).id,
+      environmentId: (await resolveEnvironment(userDataPath, runtimeEnvironmentId)).id,
       userDataPath
     },
     name,

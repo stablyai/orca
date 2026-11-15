@@ -12,7 +12,7 @@ import { openCodeTranscriptDefaultDeps, type OpenCodeTranscriptDeps } from './tr
 import {
   openCodeTranscriptPageLimit,
   OPENCODE_TRANSCRIPT_MAX_WINDOW
-} from '../../../../shared/opencode-transcript-page-limit'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 
 const OPENCODE_POLL_MS = 1_000
 

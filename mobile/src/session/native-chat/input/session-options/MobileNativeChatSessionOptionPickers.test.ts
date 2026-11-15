@@ -18,7 +18,7 @@ import {
   findByHostType
 } from '../../../../test-support/react-test-renderer-host-nodes'
 
-vi.mock('../../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('../../../../components/controls/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', () => ({
   AccessibilityInfo: { announceForAccessibilityWithOptions: vi.fn() },
   ActivityIndicator: 'ActivityIndicator',

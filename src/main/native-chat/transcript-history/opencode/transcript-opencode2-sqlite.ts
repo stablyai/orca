@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type SyncDatabase from '../../../sqlite/sync-database'
-import { openCodeTranscriptPageLimit } from '../../../../shared/opencode-transcript-page-limit'
+import { openCodeTranscriptPageLimit } from '../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../../../opencode-usage/schema-helpers'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 import { extractString } from '../../../../shared/trimmed-string'

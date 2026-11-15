@@ -13,7 +13,7 @@ import { resolveOrcaManagedCodexHomePath } from '../../codex/configuration/homes
 import { agentSessionOwnerObservationIsLive } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { historyRowFallsBackToChatLabel } from '../../../shared/structured-chat-row-name'
+import { historyRowFallsBackToChatLabel } from '../../../shared/agent-session/view/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import {
   redactForTransport,

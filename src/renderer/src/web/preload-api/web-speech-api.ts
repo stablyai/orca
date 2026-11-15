@@ -5,8 +5,8 @@ import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechTranscriptEvent
-} from '../../../../shared/speech-types'
-import { hostDictationErrorMessage } from '../../../../shared/host-dictation-error-messages'
+} from '../../../../shared/speech/speech-types'
+import { hostDictationErrorMessage } from '../../../../shared/speech/dictation/host-dictation-error-messages'
 import {
   MAX_DICTATION_AUDIO_CHUNK_BYTES,
   PCM_BYTES_PER_SAMPLE
@@ -16,7 +16,7 @@ import { createNonSecureContextUuid } from '../../../../shared/non-secure-contex
 import { errorMessage } from '../../../../shared/error-message'
 import { callRuntimeResult } from './web-runtime-calls'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
-import { pairedDictationFinishTimeoutMs } from '../../../../shared/dictation-finish-deadlines'
+import { pairedDictationFinishTimeoutMs } from '../../../../shared/speech/dictation/dictation-finish-deadlines'
 
 const MAX_CHUNK_SAMPLES = MAX_DICTATION_AUDIO_CHUNK_BYTES / PCM_BYTES_PER_SAMPLE
 // A slow link can leave a backlog of chunks behind Stop; past this, keep the text so far instead.

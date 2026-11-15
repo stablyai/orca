@@ -8,7 +8,7 @@ import '../../rpc/compatibility/runtime-capability-proof'
 import '../../hosts/capabilities/local-runtime-capabilities'
 import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscribe'
 import './structured-agent-session-request-timeouts'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionStatusEvent

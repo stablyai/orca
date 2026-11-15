@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 
@@ -50,6 +50,6 @@ export class RecoveryWorkspaceRuntime extends OrcaRuntimeService {
 export type RecoveryRuntimeObservation = RecoveryWorkspaceRuntime & {
   projectedFrames: number
   sessionTabsSequence(): number
-  peekSnapshotForClient(worktree: string, clientId: string): RuntimeMobileSessionTabsResult
-  snapshotForClient(worktree: string, clientId: string): RuntimeMobileSessionTabsResult
+  peekSnapshotForClient(worktree: string, clientId: string): Promise<RuntimeMobileSessionTabsResult>
+  snapshotForClient(worktree: string, clientId: string): Promise<RuntimeMobileSessionTabsResult>
 }

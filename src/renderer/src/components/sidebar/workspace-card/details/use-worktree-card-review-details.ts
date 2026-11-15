@@ -9,6 +9,7 @@ import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { streamShortName } from '../../../../../../shared/perforce/workspace-copy/workspace-copy-name-rules'
 import { areTaskSourceContextsEqual } from '../../../../../../shared/work-items/task-source-context'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import {
   deriveWorktreeCardPrDisplay,
   getWorktreeReviewCacheKeys
@@ -61,7 +62,8 @@ export function useWorktreeCardReviewDetails({
           settings,
           repo.connectionId,
           repo.executionHostId,
-          true
+          true,
+          getWorktreeGitHubIssueRepository(worktree)
         )
       : ''
   // Saved workspace bindings keep equal Linear identifiers separate.

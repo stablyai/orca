@@ -1,6 +1,6 @@
 import type { IPty } from 'node-pty'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
-import { shouldInspectOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
+import { shouldInspectOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { createPtyForegroundResolver } from '../../daemon/pty-subprocess/spawn-file-foreground-process'
 import {

@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useCallback, useSyncExternalStore } from 'react'
 import type { DashboardAgentRow } from './dashboard-agent-row'
 import { useFocusedAgentPaneKey } from '@/components/sidebar/workspace-card/activity/focused-agent-row-highlight'
@@ -12,7 +13,16 @@ import {
 export function useClaudeAgentRowView(agent: DashboardAgentRow) {
   const paneKey = agent.activationPaneKey ?? agent.paneKey
   const focused = useFocusedAgentPaneKey(agent.tab.worktreeId) === paneKey
-  const parent = useAppStore((state) => state.agentStatusByPaneKey[paneKey]) ?? agent.entry
+  const { agentType, structuredHostOwned, providerSessionId } = useAppStore(
+    useShallow((state) => {
+      const parent = state.agentStatusByPaneKey[paneKey] ?? agent.entry
+      return {
+        agentType: parent.agentType,
+        structuredHostOwned: parent.structuredHostOwned,
+        providerSessionId: parent.providerSession?.id
+      }
+    })
+  )
   const environmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, agent.tab.worktreeId)
   )
@@ -23,8 +33,7 @@ export function useClaudeAgentRowView(agent: DashboardAgentRow) {
     const environment = state.runtimeEnvironments.find((item) => item.id === environmentId)
     return environment?.pairingRevision ?? environment?.createdAt
   })
-  const enabled =
-    parent.agentType === 'claude' && !parent.structuredHostOwned && agent.rowSource !== 'retained'
+  const enabled = agentType === 'claude' && !structuredHostOwned
   const key = `${environmentId ?? 'local'}:${revision ?? ''}`
   const subscribe = useCallback(
     (listener: () => void) =>
@@ -37,10 +46,10 @@ export function useClaudeAgentRowView(agent: DashboardAgentRow) {
     () =>
       enabled
         ? readClaudeAgentViews(key).find(
-            (view) => view.paneKey === paneKey && view.sessionId === parent.providerSession?.id
+            (view) => view.paneKey === paneKey && view.sessionId === providerSessionId
           )
         : undefined,
-    [enabled, key, paneKey, parent.providerSession?.id]
+    [enabled, key, paneKey, providerSessionId]
   )
   const view = useSyncExternalStore(subscribe, read, read)
   if (!view) {

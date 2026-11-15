@@ -18,8 +18,11 @@ import {
   orcadTemplateCommonFilenames,
   orcadTemplatePackagedRipgrep,
   orcadTemplateTargetFilenames
-} from '../../../shared/orcad-artifacts'
-import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import {
+  pinnedNodeRuntimeAsset,
+  type NodeRuntimeTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
 import { findOrcadCachePath } from '../../node-runtime/orcad-cache-path'
 import type { PinnedRuntimeMaterializeOptions } from '../../node-runtime/pinned-runtime-materializer'
 import { readOrcadArtifactVerificationRecord } from './orcad-artifact-verification-record'

@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { HostAuthority } from '../../../../../shared/host-authority'
+import type { HostAuthority } from '../../../../../shared/execution-host/host-authority'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,

@@ -3,8 +3,8 @@ import { Check } from 'lucide-react'
 import type {
   FeatureWallSetupStep,
   FeatureWallSetupStepId
-} from '../../../../../shared/feature-wall-setup-steps'
-import { getFeatureWallSetupStepsForSection } from '../../../../../shared/feature-wall-setup-steps'
+} from '../../../../../shared/feature-education/explore/feature-wall-setup-steps'
+import { getFeatureWallSetupStepsForSection } from '../../../../../shared/feature-education/explore/feature-wall-setup-steps'
 import { cn } from '@/lib/class-names'
 import { useScrollEdgeFades } from '@/lib/list-interaction/use-scroll-edge-fades'
 import type { FeatureWallSetupProgress } from './feature-wall-setup-progress'

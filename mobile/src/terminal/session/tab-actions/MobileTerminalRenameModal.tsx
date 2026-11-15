@@ -1,5 +1,5 @@
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
-import { TextInputSheetContent } from '../../../components/TextInputModal'
+import { TextInputSheetContent } from '../../../components/sheets/TextInputModal'
 import { useDraftRenameSheet } from '../../../components/rename/use-draft-rename-sheet'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useHostDisplay } from '../../../host-descriptors/use-host-display'

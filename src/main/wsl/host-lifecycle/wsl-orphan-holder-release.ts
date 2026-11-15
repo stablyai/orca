@@ -1,6 +1,6 @@
 /** Which recorded `wsl.exe` holders an Orca launch keeps, and releasing the rest (E11). */
 import { existsSync } from 'node:fs'
-import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/runtime-environment-registry'
 import { sameWslDistro } from './wsl-host-add-admission'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 import type { WslDistroHolder, WslDistroHolderAdoption } from '../discovery/wsl-distro-holder-types'
@@ -18,8 +18,8 @@ export function wslHolderKeepPolicy(args: {
   userDataPath: string
   keepHostHolders: boolean
   isAdding?: (distro: string) => boolean
-}): (distro: string) => boolean {
-  return (distro) => {
+}): (distro: string) => Promise<boolean> {
+  return async (distro) => {
     if (!args.keepHostHolders) {
       return false
     }
@@ -27,8 +27,11 @@ export function wslHolderKeepPolicy(args: {
       return true
     }
     try {
-      const { deployments, unreadableEnvironmentIds } = readWslHostDeployments(args.userDataPath)
+      const { deployments, unreadableEnvironmentIds } = await readWslHostDeployments(
+        args.userDataPath
+      )
       return (
+        args.isAdding?.(distro) === true ||
         unreadableEnvironmentIds.size > 0 ||
         deployments.some((record) => sameWslDistro(record.distro, distro) && !record.pendingStop)
       )
@@ -45,20 +48,22 @@ export function wslHolderKeepPolicy(args: {
  */
 export async function releaseUnwantedWslHolders(args: {
   userDataPath: string
-  isWanted: (distro: string) => boolean
+  isWanted: (distro: string) => boolean | Promise<boolean>
   holder?: () => WslDistroHolder
 }): Promise<WslDistroHolderAdoption[]> {
   if (!existsSync(wslDistroHolderDirectory(args.userDataPath))) {
     return []
   }
-  const unwanted = (await listWslDistroHolderRecordDistros(args.userDataPath)).filter(
-    (distro) => !args.isWanted(distro)
+  const distros = await listWslDistroHolderRecordDistros(args.userDataPath)
+  let holder: WslDistroHolder | undefined
+  const outcomes = await Promise.all(
+    distros.map(async (distro) => {
+      if (await args.isWanted(distro)) {
+        return undefined
+      }
+      holder ??= args.holder?.() ?? createWslDistroHolder({ userDataPath: args.userDataPath })
+      return { distro, state: await holder.release(distro) }
+    })
   )
-  if (unwanted.length === 0) {
-    return []
-  }
-  const holder = args.holder?.() ?? createWslDistroHolder({ userDataPath: args.userDataPath })
-  return Promise.all(
-    unwanted.map(async (distro) => ({ distro, state: await holder.release(distro) }))
-  )
+  return outcomes.filter((outcome): outcome is WslDistroHolderAdoption => outcome !== undefined)
 }

@@ -1,5 +1,5 @@
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type {
@@ -19,7 +19,7 @@ import type {
 } from '../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorktreeStartupDraftPaste } from '../startup/runtime-worktree-agent-startup'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { RuntimeRepoSelector } from '../catalog/runtime-repo-selector'
 
 export type RuntimeManagedWorktreeCreateArgs = {

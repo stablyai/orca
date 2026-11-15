@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import TabGroupPanel, { type TabGroupPanelTabStrip } from './TabGroupPanel'
 import type { HoveredTabInsertion } from './useTabDragSplit'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { setGroupRatioThroughLayoutOwner } from './tab-group-layout-owner-commands'
-import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-drag-passthrough'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/drag/webview-drag-passthrough'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85

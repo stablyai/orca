@@ -30,7 +30,7 @@ vi.mock('../authentication/ssh-identity-file-read', () => ({
 import { buildConnectConfig } from './ssh-connect-config'
 import { findDefaultKeyFile } from '../authentication/ssh-auth-resolution'
 import { walkInitialAuthLadder } from './testing/ssh-connection-test-fixtures'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 
 describe('findDefaultKeyFile', () => {

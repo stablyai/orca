@@ -1,7 +1,7 @@
 import { WorkspaceDetailPlaceholder } from '../../../src/worktree/row-presentation/WorkspaceDetailPlaceholder'
 import { HostScreen } from '../../../src/host-screen/HostScreen'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
-import { usePageOwnsHostArea } from '../../../src/mobile-web-shell/page-owns-host-area'
+import { usePageOwnsHostArea } from '../../../src/mobile-web-shell/routing/page-owns-host-area'
 
 // Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.
 export default function HostWorktreeRoute() {

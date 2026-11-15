@@ -4,8 +4,8 @@ import type {
 } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { ZcodePlanSite } from '../../../../shared/zcode-plan-sites'
 import type { WorktreeVisibilityDefaults } from '../../../../shared/global-settings-types'
-import { RuntimeRpcCallQueuePool } from '../../../../shared/runtime-rpc-call-queue'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import { RuntimeRpcCallQueuePool } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { WebRuntimeClient } from '../web-runtime-client'
 import {

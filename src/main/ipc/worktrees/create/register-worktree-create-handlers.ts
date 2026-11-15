@@ -12,7 +12,8 @@ import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan
 } from '../../../observability/instrumentation'
-import { workspaceSourceSchema, type WorkspaceSource } from '../../../../shared/telemetry-events'
+import { workspaceSourceSchema } from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { WorkspaceSource } from '../../../../shared/workspace-source'
 
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'

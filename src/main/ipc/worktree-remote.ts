@@ -1,4 +1,4 @@
-import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
+import { readableWslDistroHoldText } from '../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 

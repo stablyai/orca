@@ -1,14 +1,15 @@
+import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { setRuntimeBrowserCommandsFactory } from '../../runtime/browser/installation/runtime-browser-commands-factory'
 import { markHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 import { setDesktopBrowserBridgeHostEnabled } from '../../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/orcad-managed-launch-env'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-managed-launch-env'
 import { startOrcadBrowserProvider } from '../browser-providers/orcad-browser-startup'
 import {
   BackendServiceLifetime,
   type BackendServiceCleanup
 } from '../../backend/service-composition'
-import type { OrcadManagedStopInstance } from '../../../shared/orcad-stop-request'
+import type { OrcadManagedStopInstance } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { acquireOrcadInstanceLock } from '../instance-lock/orcad-instance-lock'
 import {
   markOrcadRunFailed,
@@ -167,7 +168,11 @@ export async function startOrcadWithLifecycle<T extends object>(
       runtimeCleanupSucceeded = true
     } finally {
       await checkpointing
-      await cleanupHost(runtimeCleanupSucceeded)
+      try {
+        await closeEnvironmentStore()
+      } finally {
+        await cleanupHost(runtimeCleanupSucceeded)
+      }
     }
   })
   try {

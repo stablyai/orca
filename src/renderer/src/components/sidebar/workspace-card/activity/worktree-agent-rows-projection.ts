@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow'
 import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -14,9 +15,9 @@ import {
 } from './worktree-card-status-inputs'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import {
+  reuseArrayIfEqual,
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
-  selectRetainedAgentEntriesForWorktree,
   selectTerminalLayoutsForWorktree
 } from './worktree-agent-row-selectors'
 import { selectWorktreeAgentOrchestration as selectRuntimeAgentOrchestrationForWorktree } from './worktree-agent-orchestration-index'
@@ -29,6 +30,22 @@ import { getAgentPaneExecutionHost } from '@/store/slices/agent-status/agent-pan
 
 export const EMPTY_AGENT_ROWS: DashboardAgentRow[] = []
 
+function reuseUnchangedRows(previous: DashboardAgentRow[], next: DashboardAgentRow[]) {
+  const byPaneKey = new Map(previous.map((row) => [row.paneKey, row]))
+  return reuseArrayIfEqual(
+    previous,
+    next.map((row) => {
+      const old = byPaneKey.get(row.paneKey)
+      return old &&
+        shallow(old.tab, row.tab) &&
+        shallow(old.lineage, row.lineage) &&
+        shallow({ ...old, tab: row.tab, lineage: row.lineage }, row)
+        ? old
+        : row
+    })
+  )
+}
+
 function rowBelongsToHost(
   state: AppState,
   row: DashboardAgentRow,
@@ -37,16 +54,14 @@ function rowBelongsToHost(
   stampedHosts: ReadonlyMap<string, ExecutionHostId | undefined>
 ): boolean {
   const paneKey = row.activationPaneKey ?? row.paneKey
-  const entry =
-    state.agentStatusByPaneKey[paneKey] ??
-    state.retainedAgentsByPaneKey[paneKey]?.entry ??
-    row.entry
-  const retainedHost = state.agentStatusByPaneKey[paneKey]
-    ? undefined
-    : state.retainedAgentsByPaneKey[paneKey]?.executionHostId
-  const paneHost =
-    retainedHost ??
-    getAgentPaneExecutionHost(state, paneKey, entry, row.tab.ptyId, stampedHosts.get(row.tab.id))
+  const entry = state.agentStatusByPaneKey[paneKey] ?? row.entry
+  const paneHost = getAgentPaneExecutionHost(
+    state,
+    paneKey,
+    entry,
+    row.tab.ptyId,
+    stampedHosts.get(row.tab.id)
+  )
   return (
     paneHost === hostId ||
     Boolean(
@@ -74,7 +89,6 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
     const tabs = state.tabsByWorktree[worktreeId] ?? EMPTY_TABS
     const liveEntries = selectLiveAgentStatusEntriesForWorktree(state, worktreeId)
     const migrationUnsupported = selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
-    const retained = selectRetainedAgentEntriesForWorktree(state, worktreeId)
     const runtimePaneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
     const ptyIdsByTabId = selectLivePtyIdsForWorktree(state, worktreeId)
     const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
@@ -108,7 +122,6 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       tabs,
       liveEntries,
       migrationUnsupported,
-      retained,
       runtimePaneTitlesByTabId,
       ptyIdsByTabId,
       terminalLayoutsByTabId,
@@ -144,7 +157,6 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       tabs,
       representedTabs,
       entries,
-      retained,
       runtimePaneTitlesByTabId,
       ptyIdsByTabId,
       terminalLayoutsByTabId,
@@ -157,10 +169,13 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
         .filter((tab) => tab.contentType === 'terminal')
         .map((tab) => [tab.entityId, tab.executionHostId])
     )
-    result = applyAgentRowLineage(
-      hostId
-        ? rows.filter((row) => rowBelongsToHost(state, row, hostId, workspaceOwner, stampedHosts))
-        : rows
+    result = reuseUnchangedRows(
+      result,
+      applyAgentRowLineage(
+        hostId
+          ? rows.filter((row) => rowBelongsToHost(state, row, hostId, workspaceOwner, stampedHosts))
+          : rows
+      )
     )
     return result
   }
@@ -195,7 +210,6 @@ export function worktreeAgentProjectionInputs(state: AppState): readonly unknown
     state.tabsByWorktree,
     state.unifiedTabsByWorktree,
     state.migrationUnsupportedByPtyId,
-    state.retainedAgentsByPaneKey,
     state.ptyIdsByTabId,
     state.terminalLayoutsByTabId,
     state.runtimeAgentOrchestrationByPaneKey,

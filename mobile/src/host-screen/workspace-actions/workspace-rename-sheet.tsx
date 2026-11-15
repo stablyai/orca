@@ -1,5 +1,5 @@
 import { automaticWorktreeDisplayName } from '../../../../src/shared/worktree/metadata/display-name-provenance'
-import { TextInputSheetContent } from '../../components/TextInputModal'
+import { TextInputSheetContent } from '../../components/sheets/TextInputModal'
 import { useDraftRenameSheet } from '../../components/rename/use-draft-rename-sheet'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { HostMutationPhase } from '../../query/host-mutation'

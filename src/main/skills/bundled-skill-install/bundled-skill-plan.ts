@@ -4,7 +4,7 @@ import type {
   BundledSkillOp,
   BundledSkillPlan,
   BundledSkillPlanEntry
-} from '../../../shared/bundled-skill-plan'
+} from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import {
   hasCloudReceipt,
@@ -210,7 +210,12 @@ async function planTarget(
             : {})
         }
       : decided
-  const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves: former.leaves }
+  // Beside a current copy, a former-name folder Orca doesn't own is the user's own skill, not a blocker.
+  const leaves =
+    op.kind === 'keep'
+      ? former.leaves.filter((stale) => stale.reason !== 'edited' && stale.reason !== 'other')
+      : former.leaves
+  const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves }
   const writes = op.kind !== 'keep' && op.kind !== 'leave'
   if (!writes && op.cleanup.length === 0 && !op.previous?.length) {
     return { op, ...result }

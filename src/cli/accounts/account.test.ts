@@ -1,4 +1,4 @@
-import type * as NodeCliCommandResolutionModule from '../../shared/node-cli-command-resolution'
+import type * as NodeCliCommandResolutionModule from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { EventEmitter } from 'node:events'
@@ -42,12 +42,15 @@ vi.mock('../../main/claude-accounts/runtime-auth/keychain', () => ({
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
 // PATH assertions must exercise the real withCliRuntimeOnPath filesystem probes.
-vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
-  getVersionManagerBinPaths: getVersionManagerBinPathsMock,
-  resolveCliCommand: resolveCliCommandMock
-}))
-vi.mock('../../shared/windows-console-input', () => ({
+vi.mock(
+  '../../shared/shell/command-resolution/node-cli-command-resolution',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
+    getVersionManagerBinPaths: getVersionManagerBinPathsMock,
+    resolveCliCommand: resolveCliCommandMock
+  })
+)
+vi.mock('./windows-console-input', () => ({
   stdioForWindowsInteractiveChild: stdioForWindowsInteractiveChildMock
 }))
 
@@ -59,7 +62,7 @@ import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
   DATA_ACCOUNT_RUNTIME_CAPABILITY
-} from '../../shared/account-runtime-capabilities'
+} from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
 
 function helpChild(stdout: string): EventEmitter {
   const child = Object.assign(new EventEmitter(), { stdout: new PassThrough() })

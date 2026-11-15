@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { BellRing, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { usesCustomNotificationSound } from '../../../../shared/notification-settings-types'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -77,7 +78,7 @@ export function NotificationStep({
   const previewSound = async (
     customSoundId: GlobalSettings['notifications']['customSoundId']
   ): Promise<void> => {
-    if (customSoundId === 'system') {
+    if (!usesCustomNotificationSound(customSoundId)) {
       return
     }
     const result = await window.api.notifications.playSound({

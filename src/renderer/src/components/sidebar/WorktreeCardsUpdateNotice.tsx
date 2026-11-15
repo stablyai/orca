@@ -37,29 +37,11 @@ function useWorktreeCardsUpdateNotice(): [visible: boolean, dismiss: () => void]
 
 const SKELETON = 'block h-2 shrink-0 rounded-full bg-foreground/[0.14]'
 
-/** Numbers a new piece in the demo; the caption repeats the number. */
-function Marker({ n, inverted = false }: { n: 1 | 2; inverted?: boolean }): React.JSX.Element {
+/** Outlines one new piece of the demo card. */
+function Callout({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        'inline-flex size-3.5 shrink-0 items-center justify-center rounded-full text-3xs leading-none font-semibold',
-        inverted ? 'bg-background text-foreground' : 'bg-foreground text-background'
-      )}
-    >
-      {n}
-    </span>
-  )
-}
-
-/** Outlines one new piece of the demo card and numbers it. */
-function Callout({ n, children }: { n: 1 | 2; children: React.ReactNode }): React.JSX.Element {
-  return (
-    <span className="relative mr-2.5 inline-flex shrink-0 rounded-[6px] outline-1 outline-offset-2 outline-foreground/60 outline-dashed">
+    <span className="mr-2.5 inline-flex shrink-0 rounded-[6px] outline-1 outline-offset-2 outline-foreground/60 outline-dashed">
       {children}
-      <span className="absolute -top-2.5 -right-2.5">
-        <Marker n={n} />
-      </span>
     </span>
   )
 }
@@ -79,7 +61,7 @@ function UpdateDemo(): React.JSX.Element {
           <span className={`${SKELETON} w-3`} />
         </span>
         <span className={`${SKELETON} w-7`} />
-        <Callout n={1}>
+        <Callout>
           <WorktreeCardStatusPill signal={{ kind: 'needs', count: 1 }} />
         </Callout>
         <span className={`${SKELETON} ml-auto w-3`} />
@@ -89,7 +71,7 @@ function UpdateDemo(): React.JSX.Element {
         <span className={`${SKELETON} w-20 opacity-70`} />
       </div>
       <div className="pl-[18px]">
-        <Callout n={2}>
+        <Callout>
           <span className={cn(buttonVariants({ variant: 'outline', size: 'chip' }), 'gap-1 px-1')}>
             <Workflow className="size-2.5" />
             {t('sidebar.worktreeCardsUpdateNotice.exampleChildren', '1 child')}
@@ -103,6 +85,10 @@ function UpdateDemo(): React.JSX.Element {
       </div>
     </div>
   )
+}
+
+function Bullet(): React.JSX.Element {
+  return <span aria-hidden="true" className="mt-1.5 size-1 shrink-0 rounded-full bg-background" />
 }
 
 export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
@@ -144,11 +130,11 @@ export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
       <UpdateDemo />
       <ul className="space-y-1 text-xs leading-snug">
         <li className="flex items-start gap-1.5">
-          <Marker n={1} inverted />
+          <Bullet />
           {t('sidebar.worktreeCardsUpdateNotice.statusCaption', 'Title flags agents that need you')}
         </li>
         <li className="flex items-start gap-1.5">
-          <Marker n={2} inverted />
+          <Bullet />
           {t('sidebar.worktreeCardsUpdateNotice.childrenCaption', 'Parents sum up child worktrees')}
         </li>
       </ul>

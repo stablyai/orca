@@ -1,4 +1,4 @@
-import type { WslHostStatus } from '../../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { hasOrcadTemplate } from '../../../orcad/artifact-slots/orcad-artifact-materializer'
 import { createWslHostConnector } from '../../host-lifecycle/wsl-host-connector'
 import type { WslHostConnector } from '../../host-lifecycle/wsl-host-connector-contract'
@@ -30,8 +30,8 @@ export function createLaneWslHost(userDataPath: string): LaneWslHost {
   const connector = createWslHostConnector({
     userDataPath,
     onChange: service.handleConnectionChange.bind(service),
-    hasUserVisibleWork: (distro) => service.hasUserVisibleWork(distro),
-    isKnownDistro: (distro) => service.isKnownDistro(distro),
+    hasUserVisibleWork: async (distro) => await service.hasUserVisibleWork(distro),
+    isKnownDistro: async (distro) => await service.isKnownDistro(distro),
     runtime: { call: refuse, census: refuse }
   })
   service.attach(connector)

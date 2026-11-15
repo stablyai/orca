@@ -20,7 +20,7 @@ import { triggerError, triggerSuccess } from '../../../../platform/haptics/hapti
 import type { PRCheckDetail } from '../../../../../../src/shared/github/checks/check-types'
 import { LIST_LEADING_SLOT, LIST_ROW_PADDING } from '../../../../components/list/ListGroup'
 import { PullDownMenu } from '../../../../components/nav-bar/PullDownMenu'
-import type { ActionSheetAction } from '../../../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../../../components/sheets/ActionSheetModal'
 import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
 import { PrMiniButton } from '../PrMiniButton'
 import { presentCheckDetail } from './pr-check-detail-content'

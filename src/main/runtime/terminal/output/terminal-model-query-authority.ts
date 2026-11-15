@@ -1,6 +1,6 @@
 /** Main answers only queries in chunks hidden delivery dropped; capture ownership at ingestion. Record native Windows ConPTY at spawn to install DA1 override before bytes arrive. */
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   isHiddenPtyDeliveryGateEnabled,
   shouldDropHiddenRendererPtyData

@@ -9,12 +9,12 @@ import {
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/components/floating-terminal/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab
-} from '@/components/floating-terminal/floating-workspace-tab-creation'
+} from '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   ensureClientCreationActionAllowed,
@@ -286,6 +286,19 @@ export function handleTerminalWorkspaceKeyDown(
       type: 'switch',
       direction: terminalTabDirection,
       scope: 'terminal',
+      floatingPanelOwned: floatingWorkspaceFocused
+    })
+  }
+  const moveTabDirection = matchShortcut('tab.moveRight')
+    ? 1
+    : matchShortcut('tab.moveLeft')
+      ? -1
+      : null
+  if (moveTabDirection !== null && claimTabSwitch()) {
+    notifyTerminalCapture(moveTabDirection === 1 ? 'tab.moveRight' : 'tab.moveLeft')
+    dispatchWorkspaceTabCommand({
+      type: 'move',
+      direction: moveTabDirection,
       floatingPanelOwned: floatingWorkspaceFocused
     })
   }

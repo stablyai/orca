@@ -56,6 +56,32 @@ describe('notificationsApi.playSound', () => {
       played: false,
       reason: 'playback-failed'
     })
-    await expect(notificationsApi.playSound()).resolves.toEqual({ played: true })
+    await expect(notificationsApi.playSound()).resolves.toEqual({
+      played: true
+    })
+  })
+
+  it('skips playback under macOS Focus but keeps the cached sound for previews', async () => {
+    const notificationsApi = await loadNotificationsApi()
+    await expect(notificationsApi.playSound()).resolves.toEqual({
+      played: true
+    })
+    invoke.mockImplementation((channel: string, options?: { force?: boolean }) =>
+      channel === 'notifications:resolveSoundPath'
+        ? Promise.resolve(
+            options?.force ? { ok: true, path: SOUND_PATH } : { ok: false, reason: 'focus-active' }
+          )
+        : Promise.reject(new Error(`unexpected ${channel}`))
+    )
+    play.mockClear()
+    await expect(notificationsApi.playSound()).resolves.toEqual({
+      played: false,
+      reason: 'focus-active'
+    })
+    expect(play).not.toHaveBeenCalled()
+    await expect(notificationsApi.playSound({ force: true })).resolves.toEqual({
+      played: true
+    })
+    expect(play).toHaveBeenCalledTimes(1)
   })
 })

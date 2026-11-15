@@ -7,7 +7,7 @@ import {
   claudeLiveOwedTaskNotificationKinds,
   claudeTasksAwaitAgents
 } from '../background-tasks/claude-owed-task-notifications'
-import { claudeRosterHasWorkingSubagent } from '../../../../claude-subagent-roster'
+import { claudeRosterHasWorkingSubagent } from './claude-subagent-roster'
 import type { HookListenerState } from '../../../listener-state'
 import { mainAgentIdleSince, type ClaudeLeadTurnState } from '../../../main-agent-turn-state'
 

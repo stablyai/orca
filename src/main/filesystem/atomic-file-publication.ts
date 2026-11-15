@@ -9,7 +9,7 @@ import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
-import { renameFileWithWindowsRetry } from '../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetry } from '../../shared/file-write/windows-retry-file-operations'
 
 export function writeFileAtomically(
   targetPath: string,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { mulberry32 } from '../../../../shared/agent-tui-ansi-fuzz-stream'
+import { mulberry32 } from '../../../../shared/terminal/testing/agent-tui-ansi-fuzz-stream'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 import {

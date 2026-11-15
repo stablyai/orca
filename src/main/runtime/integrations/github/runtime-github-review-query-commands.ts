@@ -8,6 +8,7 @@ import { getPRChecks } from '../../../github/client/check/get-pr-checks'
 import { getPRComments } from '../../../github/client/fetch/get-pr-comments'
 import { getPRFileContents } from '../../../github/pull-requests/files/pull-request-file-contents'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import type { GitHubPRRefreshReason } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
@@ -21,14 +22,16 @@ export class RuntimeGitHubReviewQueryCommands {
 
   async getRepoIssue(
     repoSelector: string,
-    number: number
+    number: number,
+    ownerRepo?: GitHubOwnerRepo
   ): Promise<Awaited<ReturnType<typeof getIssue>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getIssue(
       repo.path,
       number,
       getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0],
+      ownerRepo
     )
   }
 
@@ -37,15 +40,21 @@ export class RuntimeGitHubReviewQueryCommands {
     prNumber: number,
     headSha?: string,
     prRepo?: GitHubOwnerRepo | null,
-    options?: { noCache?: boolean; userRefresh?: boolean }
+    options?: {
+      noCache?: boolean
+      userRefresh?: boolean
+      reason?: GitHubPRRefreshReason
+    }
   ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+    const { reason, ...readOptions } = options ?? {}
     return getPRChecks(
       repo.path,
       prNumber,
       headSha,
       prRepo ?? null,
-      options,
+      // Only a client's timer is capped by this host's cadence; other reasons stay fresh.
+      { ...readOptions, timed: reason === 'swr' },
       getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )

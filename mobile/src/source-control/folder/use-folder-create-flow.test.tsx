@@ -25,13 +25,13 @@ vi.mock('../../new-workspace/creation/modal/NewWorktreeModalController', () => (
     return null
   }
 }))
-vi.mock('../../components/ConfirmModal', () => ({
+vi.mock('../../components/sheets/ConfirmModal', () => ({
   ConfirmModal: (props: { visible: boolean; onConfirm?: () => void; onCancel: () => void }) => {
     seen.confirm = props
     return null
   }
 }))
-vi.mock('../../components/TransientToast', () => ({
+vi.mock('../../components/feedback/TransientToast', () => ({
   TransientToast: () => null,
   useTransientToast: () => ({
     message: null,

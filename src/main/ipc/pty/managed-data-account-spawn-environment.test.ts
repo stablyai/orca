@@ -22,7 +22,7 @@ import type * as ServiceModule from '../../managed-data-accounts/service'
 import {
   MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS,
   restoreManagedDataAccountEnvironment
-} from '../../../shared/managed-data-account-environment'
+} from '../../../shared/agent-launch/environment/managed-data-account-environment'
 
 const selected = vi.hoisted(() => {
   const value: Record<string, string> = {}

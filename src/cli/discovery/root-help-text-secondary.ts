@@ -144,6 +144,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  --element <ref>           Element ref from snapshot (e.g. @e3)',
   '  --url <url>               URL to navigate to',
   '  --value <text>            Value to fill or select',
+  '  --value-stdin             Read the fill value from stdin (keeps secrets out of argv)',
   '  --input <text>            Text to type at current focus (no element needed)',
   '  --expression <js>         JavaScript expression to evaluate',
   '  --key <key>               Key to press (Enter, Tab, Escape, Control+a, etc.)',

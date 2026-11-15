@@ -13,7 +13,7 @@ import {
 import { nativeChatToolRowVerbCopy } from './native-chat-tool-row-verb-copy'
 import { nativeChatDiffCardCopy } from '../../../../source-control/review/review-notes/native-chat-diff-card-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { MobileSourceCopyButton } from '../../../../components/MobileSourceCopyButton'
+import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileNativeChatOpenedDetail } from '../../visual/mobile-native-chat-opened-detail'

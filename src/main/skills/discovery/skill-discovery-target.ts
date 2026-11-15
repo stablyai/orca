@@ -3,10 +3,13 @@ import {
   type WslSkillDiscoveryObservation
 } from './skill-discovery-wsl-observation'
 import type { Repo } from '../../../shared/repo-types'
-import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
+import type {
+  SkillDiscoveryResult,
+  SkillDiscoveryTarget
+} from '../../../shared/skills/discovery/skills'
 import { getDefaultWslDistro, getWslHomeAsync } from '../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
-import { toLinuxPath } from '../../../shared/wsl-paths'
+import { toLinuxPath } from '../../../shared/file-access/wsl-paths'
 import { clearSkillRootScanCache, discoverSkills } from './skill-native-discovery'
 import { discoverSkillObservationInWsl } from './skill-discovery-wsl'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'

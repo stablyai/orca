@@ -3,8 +3,8 @@ import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { pairMobileClient } from './helpers/paired-mobile-client'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
-import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeMarkdownReadTabResult } from '../../src/shared/mobile-markdown-document'
 
 test('a phone creates, edits, and saves a note on a host without a renderer', async ({

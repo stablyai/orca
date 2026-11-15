@@ -3,7 +3,7 @@ src/terminal/document/terminal-webview-engine.generated.ts
 src/terminal/document/terminal-webview-engine-css.generated.ts
 src/terminal/document/terminal-webview-document-script.generated.ts
 src/components/mermaid/mermaid-page-engine.generated.ts
-src/components/katex-page-style.generated.ts
+src/components/markdown/math/katex-page-style.generated.ts
 .expo/
 dist/
 /android/
