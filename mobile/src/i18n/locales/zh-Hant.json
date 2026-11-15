@@ -136,6 +136,33 @@
       "title": "終端機"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca 現已上架 Google Play",
+      "description": "此 App 仍可繼續使用，但之後的更新將透過 Google Play 提供。切換只需要幾分鐘。",
+      "installTitle": "從 Google Play 安裝 Orca",
+      "installDescription": "現在就能安裝，無論你在哪裡。",
+      "openGooglePlay": "開啟 Google Play",
+      "cantUseGooglePlay": "我無法使用 Google Play"
+    },
+    "download": {
+      "title": "取得新版 Orca App",
+      "description": "此 App 仍可繼續使用，但之後的更新與安全性修正將透過新 App 提供。切換只需要幾分鐘。",
+      "installTitle": "下載新 App",
+      "installDescription": "如果手機詢問，請允許瀏覽器安裝 App。",
+      "download": "下載",
+      "keepThisVersion": "繼續使用此版本",
+      "keepThisVersionNote": "你將收不到安全性修正。我們會在一週後再提醒你。"
+    },
+    "pairTitle": "與電腦配對",
+    "pairDescription": "在電腦上的 Orca 中，前往「設定」→「行動版」，然後掃描 QR Code。",
+    "deleteTitle": "刪除此 App",
+    "deleteDescription": "等新 App 顯示你的代理程式後再刪除。在那之前，請繼續使用此 App。",
+    "dataKept": "你的代理程式、聊天和工作區都儲存在電腦上，因此在新 App 中也能全部看到。",
+    "banner": {
+      "seeHowToSwitch": "查看如何切換"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "網址"
