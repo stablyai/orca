@@ -9,7 +9,7 @@ import { applyAgentLaunchPluginHook } from '../spawn-agent-launch-plugin-hook'
 import { endPaneAgentLaunch } from './spawn-agent-launch-end'
 import { preparePtyIpcSpawnPreflight } from './spawn-preflight'
 import { assemblePtyIpcSpawnEnv } from './spawn-env'
-import { preparePtyIpcQoderCommand } from './spawn-qoder-command'
+import { preparePtyIpcHostAgentCommand } from './spawn-host-agent-command'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
 import { attachOnlyViewOf } from '../pane/attach-only-view'
 import { commitPtyIpcSpawn } from './spawn-commit'
@@ -52,7 +52,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
       }
       await preparePtyIpcSpawnPreflight(ctx)
       await assemblePtyIpcSpawnEnv(ctx)
-      await preparePtyIpcQoderCommand(ctx)
+      await preparePtyIpcHostAgentCommand(ctx)
       await buildPtyIpcSpawnOptions(ctx)
     },
     facts: () => ({
