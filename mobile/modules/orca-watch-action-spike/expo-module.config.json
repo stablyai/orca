@@ -1,0 +1,7 @@
+{
+  "platforms": ["apple"],
+  "apple": {
+    "modules": ["OrcaWatchActionSpikeModule"],
+    "appDelegateSubscribers": ["OrcaWatchActionSpikeSubscriber"]
+  }
+}

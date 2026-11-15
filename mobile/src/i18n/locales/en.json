@@ -8670,5 +8670,19 @@
     "workspacesAllButCount": "All but {{count}}",
     "headerMissing": "Fill in {{header}} to add this server.",
     "servers": "Servers"
+  },
+  "watchActionSpike": {
+    "armed": "Armed. Lock the phone now; the test arrives on your Watch in {{seconds}}s.",
+    "nativeMissing": "Native spike module missing from this build.",
+    "keychainMoved": "Moved {{count}} keychain items (status {{status}}).",
+    "host": "Watch test host",
+    "noHost": "No paired host",
+    "keychain": "Pairing readable while locked",
+    "on": "On",
+    "off": "Off",
+    "arm": "Arm Watch test ({{seconds}}s)",
+    "refresh": "Refresh results",
+    "clear": "Clear results",
+    "nativeTimeline": "Native timeline"
   }
 }
