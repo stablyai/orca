@@ -146,7 +146,11 @@ describe('CodexRuntimeHomeService', () => {
         '../../../codex/history/shared-store/wsl-codex-account-history',
         async (importOriginal) => ({
           ...(await importOriginal<typeof WslCodexAccountHistory>()),
-          startWslCodexAccountHistoryInBackground: vi.fn(() => Promise.resolve())
+          WslCodexAccountHistoryLaunches: class {
+            run(): Promise<void> {
+              return Promise.resolve()
+            }
+          }
         })
       )
       const retiredHome = join(guestHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')

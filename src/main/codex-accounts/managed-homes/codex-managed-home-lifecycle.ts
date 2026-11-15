@@ -30,7 +30,7 @@ const KEEP_ON_REMOVAL_SCRIPT = [
   'kept() {',
   '  case "${1##*/}" in',
   '    *.orca-profile-merge) return 0 ;;',
-  '    sessions | archived_sessions) [ -L "$1" ] ;;',
+  '    sessions | archived_sessions) return 0 ;;',
   '    *) return 1 ;;',
   '  esac',
   '}',

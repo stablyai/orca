@@ -43,12 +43,18 @@ export async function runWslGuestNodeHelper(args: {
   helperArgs: readonly string[]
   timeoutMs: number
   maxOutputBytes?: number
+  /** Throws once the distro stopped; `wsl -d` would boot it again. */
+  requireRunning?: () => Promise<void>
 }): Promise<string> {
   const helper = await findBundledHelper(args.helperFilename)
   if (!helper) {
     throw new Error(`The bundled WSL ${args.helperLabel} helper is missing. Reinstall Orca.`)
   }
-  const run = (spec: WslSpec, timeoutMs?: number) => runGuest(args.distro, spec, timeoutMs)
+  const requireRunning = args.requireRunning ?? (async () => {})
+  const run = async (spec: WslSpec, timeoutMs?: number) => {
+    await requireRunning()
+    return runGuest(args.distro, spec, timeoutMs)
+  }
   const node = await ensureWslPinnedRuntime(
     run,
     join(getAppEnvironment().getPath('userData'), 'orcad-artifacts'),
@@ -59,6 +65,7 @@ export async function runWslGuestNodeHelper(args: {
     args: ['-a', '-u', helper],
     loginPath: 'none'
   })
+  await requireRunning()
   return runGuest(
     args.distro,
     {

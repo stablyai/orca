@@ -27,7 +27,11 @@ vi.mock(
   '../../../codex/history/shared-store/wsl-codex-account-history',
   async (importOriginal) => ({
     ...(await importOriginal<typeof WslCodexAccountHistory>()),
-    startWslCodexAccountHistoryInBackground: async () => {}
+    WslCodexAccountHistoryLaunches: class {
+      run(): Promise<void> {
+        return Promise.resolve()
+      }
+    }
   })
 )
 vi.mock('electron', () => ({

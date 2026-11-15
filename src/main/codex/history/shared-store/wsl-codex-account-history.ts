@@ -51,14 +51,14 @@ async function linkInGuest(
   dependencies: WslAccountHistoryDependencies
 ): Promise<HelperOutput | null> {
   // Every wsl.exe step re-checks: the user may stop the distro mid-pass, and a step would boot it.
-  await dependencies.requireRunning(target.distro)
   const stdout = await dependencies.runHelper({
     distro: target.distro,
     helperFilename: WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME,
     helperLabel: 'Codex account history',
     helperArgs: [target.shared ? 'share' : 'unshare', target.accountHome, target.storeHome],
     timeoutMs: HELPER_TIMEOUT_MS,
-    maxOutputBytes: HELPER_MAX_OUTPUT_BYTES
+    maxOutputBytes: HELPER_MAX_OUTPUT_BYTES,
+    requireRunning: () => dependencies.requireRunning(target.distro)
   })
   return parseHelperOutput(stdout)
 }
@@ -167,6 +167,11 @@ export class WslCodexAccountHistoryLaunches {
     string,
     { target: WslCodexAccountHistoryTarget; output: HelperOutput }
   >()
+  // A heal that failed waits for the next launch in that distro, not an immediate retry.
+  private readonly failedHeals = new Map<
+    string,
+    { target: WslCodexAccountHistoryTarget; output: HelperOutput }
+  >()
   private readonly activePasses = new Map<string, number>()
   // A home settled in a mode this run skips later guest passes in it.
   private readonly settledThisRun = new Map<string, boolean>()
@@ -186,6 +191,7 @@ export class WslCodexAccountHistoryLaunches {
     const pass = (previous?.pass ?? Promise.resolve())
       .then(async () => {
         if (this.settledThisRun.get(key) === target.shared) {
+          this.retryFailedHeal(distroKey)
           return
         }
         this.settledThisRun.delete(key)
@@ -215,6 +221,15 @@ export class WslCodexAccountHistoryLaunches {
     return pass
   }
 
+  private retryFailedHeal(distroKey: string): void {
+    const failed = this.failedHeals.get(distroKey)
+    if (failed && !this.owedHeals.has(distroKey)) {
+      this.failedHeals.delete(distroKey)
+      this.owedHeals.set(distroKey, failed)
+      this.startOwedHeal(distroKey)
+    }
+  }
+
   // A pass may have recorded markers for files not moved yet, which a read would settle as missing.
   private startOwedHeal(distroKey: string): void {
     const isPaused = (): boolean => (this.activePasses.get(distroKey) ?? 0) > 0
@@ -226,6 +241,7 @@ export class WslCodexAccountHistoryLaunches {
     const heal = healInGuest(owed.target, owed.output, this.dependencies, isPaused)
       .catch((error: unknown) => {
         console.warn('[codex-account-history] Indexing WSL shared history failed:', error)
+        this.failedHeals.set(distroKey, owed)
       })
       .finally(() => {
         this.heals.delete(distroKey)

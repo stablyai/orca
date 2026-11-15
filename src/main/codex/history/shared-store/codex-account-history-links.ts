@@ -235,14 +235,15 @@ export async function shareCodexAccountHistory(
 /**
  * Sharing turned off: later conversations stay private. Links become fresh empty folders, and the
  * home's pre-share databases (they list files that now live in the store) move aside so Codex
- * starts a private index. History already shared stays in the store.
+ * starts a private index. History already shared stays in the store. False when a link stayed.
  */
 export async function unshareCodexAccountHistory(args: {
   accountHome: string
   storeHome: string
   onWarning: (error: unknown) => void
-}): Promise<void> {
+}): Promise<boolean> {
   let unlinked = false
+  let complete = true
   for (const entry of await readDirectoryEntries(args.accountHome)) {
     const link = join(args.accountHome, entry.name)
     if (
@@ -258,12 +259,13 @@ export async function unshareCodexAccountHistory(args: {
       await mkdir(link)
       unlinked = true
     } catch (error) {
+      complete = false
       args.onWarning(error)
     }
   }
   await writeSharedSqliteHome(args.accountHome, null)
   if (!unlinked) {
-    return
+    return complete
   }
   const holding = join(args.accountHome, PRE_SHARE_DATABASES_DIR, String(Date.now()))
   for (const entry of await readDirectoryEntries(args.accountHome)) {
@@ -274,9 +276,11 @@ export async function unshareCodexAccountHistory(args: {
       await mkdir(holding, { recursive: true })
       await rename(join(args.accountHome, entry.name), join(holding, entry.name))
     } catch (error) {
+      complete = false
       args.onWarning(error)
     }
   }
+  return complete
 }
 
 /** Rollout file names whose rows the store's index still owes. */

@@ -114,11 +114,17 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     options?: CodexHomeLaunchOptions
   ): Promise<string | null> {
     if (target?.runtime !== 'wsl') {
-      const account = this.getSelfContainedManagedHostAccount()
-      const accountHome = account ? this.getTrustedSelfContainedManagedHomePath(account) : null
-      if (accountHome) {
-        // Codex must start on linked history, so this home's pass finishes first.
+      // Codex must start on linked history, so the launched home's pass finishes first; the
+      // selection may change while it runs, so prepare until the launched home is the last one.
+      let prepared: string | null = null
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const account = this.getSelfContainedManagedHostAccount()
+        const accountHome = account ? this.getTrustedSelfContainedManagedHomePath(account) : null
+        if (!accountHome || accountHome === prepared) {
+          break
+        }
         await this.prepareAccountHistory(accountHome)
+        prepared = accountHome
       }
       this.prepareAllAccountHistoryInBackground()
       return this.prepareForCodexLaunch(target, launchEnv, options)

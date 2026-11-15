@@ -61,8 +61,9 @@ export class CodexAccountHistoryPasses {
     }
     try {
       if (!shared) {
-        await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })
-        this.settledThisRun.set(key, false)
+        if (await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })) {
+          this.settledThisRun.set(key, false)
+        }
         return
       }
       const indexPendingDir = INDEX_PENDING_DIR()
