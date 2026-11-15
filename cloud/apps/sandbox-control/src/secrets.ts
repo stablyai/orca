@@ -485,6 +485,8 @@ export async function effectiveSecrets(
 }
 
 let cachedKeyring: { source: string; keyring: Promise<Keyring>; failedAt?: number } | null = null
+/** The KMS keyring once loaded (a value, never a promise in flight: see kmsKeyring). */
+let kmsReady: { source: string; keyring: Keyring } | null = null
 /** How long a failed KMS unwrap is remembered, so an outage is not one KMS round trip per request. */
 export const KMS_RETRY_AFTER_MS = 10_000
 
@@ -505,8 +507,14 @@ function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | un
   const plaintextRetiredId = env.SECRETS_KEK_PLAINTEXT_RETIRED_ID
   const plaintextRetired = plaintextRetiredId ? `${plaintextRetiredId}\n${env.SECRETS_KEK ?? ''}` : ''
   const source = `kms\n${activeId}\n${env.SECRETS_KMS_KEY ?? ''}\n${env.SECRETS_KEK_WRAPPED ?? ''}\n${env.SECRETS_KEK_RETIRED_WRAPPED ?? ''}\n${plaintextRetired}\n${sealFormat}`
+  // WORKER-XREQ-PROMISE: only a keyring that has come out of KMS (or a settled failure) is shared. An
+  // in-flight load is this request's own: shared, a load whose request was cancelled mid-KMS would hang every
+  // later request in the isolate forever (seen: secret routes through the egress proxy stuck until cancelled).
+  if (kmsReady?.source === source) {
+    return Promise.resolve(kmsReady.keyring)
+  }
   const cached = cachedKeyring
-  if (cached?.source === source && (cached.failedAt === undefined || Date.now() - cached.failedAt < KMS_RETRY_AFTER_MS)) {
+  if (cached?.source === source && cached.failedAt !== undefined && Date.now() - cached.failedAt < KMS_RETRY_AFTER_MS) {
     return cached.keyring
   }
   const load = async (): Promise<Keyring> => {
@@ -543,6 +551,9 @@ function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | un
     }
   }
   const entry: NonNullable<typeof cachedKeyring> = { source, keyring: load() }
+  entry.keyring.then((keyring) => {
+    kmsReady = { source, keyring }
+  }, () => undefined)
   entry.keyring.catch((error: unknown) => {
     entry.failedAt = Date.now()
     const kms = error instanceof SecretsKmsError ? error : null

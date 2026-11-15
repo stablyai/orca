@@ -22,7 +22,6 @@ export function createIdTokenSource(config: { serviceAccountJson: string; audien
   const doFetch = config.fetch ?? fetch
   const now = config.now ?? Date.now
   let cached: { value: string; expiresAt: number } | null = null
-  let pending: Promise<string> | null = null
   let signingKey: CryptoKey | null = null
   async function mint(): Promise<string> {
     let account: z.infer<typeof ServiceAccount>
@@ -60,10 +59,9 @@ export function createIdTokenSource(config: { serviceAccountJson: string; audien
     if (cached && cached.expiresAt - now() > 5 * 60_000) {
       return cached.value
     }
-    pending ??= mint().finally(() => {
-      pending = null
-    })
-    return pending
+    // Each request mints for itself: an in-flight mint shared across requests hangs them all if its own request
+    // is cancelled (settled-cache.ts). The value, once minted, is shared.
+    return mint()
   }
 }
 

@@ -67,6 +67,7 @@ import { activeGoldenSnapshots, advanceGoldenImages } from './golden-images'
 import { nearestRegionEnabled, nearestRegions, sandboxRegions, seedRegion, servedRegions } from './regions'
 import { handleRuntimeBundleRoute, runtimeBundleFor, runtimeBundleUrl } from './runtime-bundles'
 import { createIdTokenSource, relayingFetch } from './chatgpt-relay'
+import { settledCache } from './settled-cache'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
   BillingUnavailableError,
@@ -596,7 +597,8 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
 
 // Account credentials per person, decrypted at most once a minute per isolate; an edit or delete drops it.
 const ACCOUNT_CACHE_MS = 10_000
-const accountCache = new Map<string, { at: number; value: Promise<{ value: string | null; suspect: boolean }> }>()
+// Settled values only (settled-cache.ts): a shared in-flight promise hangs every request behind a cancelled one.
+const accountCache = settledCache<{ value: string | null; suspect: boolean }>(ACCOUNT_CACHE_MS)
 function cachedAccountCredential(
   db: D1Database,
   keyring: Keyring,
@@ -604,15 +606,7 @@ function cachedAccountCredential(
   agent: 'claude' | 'codex',
   now: number
 ): Promise<{ value: string | null; suspect: boolean }> {
-  const key = `${userId}:${agent}`
-  const hit = accountCache.get(key)
-  if (hit && now - hit.at < ACCOUNT_CACHE_MS) {
-    return hit.value
-  }
-  const value = readUsableAgentCredentialState(db, keyring, userId, agent, now)
-  accountCache.set(key, { at: now, value })
-  value.catch(() => accountCache.delete(key))
-  return value
+  return accountCache.get(`${userId}:${agent}`, now, () => readUsableAgentCredentialState(db, keyring, userId, agent, now))
 }
 export function forgetAccountCredential(userId: string, agent: 'claude' | 'codex'): void {
   accountCache.delete(`${userId}:${agent}`)

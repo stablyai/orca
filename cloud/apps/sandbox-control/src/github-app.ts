@@ -177,7 +177,7 @@ export function createGitHubAppMinter(config: {
     metadataTokens.set(installationId, token)
     return token.token
   }
-  let requestOwners: { at: number; owners: Promise<Set<string>> } | null = null
+  let requestOwners: { at: number; owners: Set<string> } | null = null
 
   return {
     getInstallation: (installationId) => installationFor(`/app/installations/${installationId}`),
@@ -231,28 +231,20 @@ export function createGitHubAppMinter(config: {
       }
     },
 
-    pendingRequestOwners() {
-      // One app-wide list, shared by every repo-access check for a minute.
-      if (!requestOwners || now() - requestOwners.at > 60_000) {
-        const entry = {
-          at: now(),
-          owners: (async () => {
-            const response = await github('GET', '/app/installation-requests?per_page=100')
-            const body = InstallationRequests.safeParse(await response.json().catch(() => null))
-            if (!response.ok || !body.success) {
-              throw new Error(`github installation requests failed (${response.status})`)
-            }
-            return new Set(body.data.map((r) => r.account.login.toLowerCase()))
-          })()
-        }
-        entry.owners.catch(() => {
-          if (requestOwners === entry) {
-            requestOwners = null
-          }
-        })
-        requestOwners = entry
+    async pendingRequestOwners() {
+      // One app-wide list, shared by every repo-access check for a minute: the settled list only, never a
+      // request in flight (an in-flight one shared across requests hangs them all if its request is cancelled).
+      if (requestOwners && now() - requestOwners.at <= 60_000) {
+        return requestOwners.owners
       }
-      return requestOwners.owners
+      const response = await github('GET', '/app/installation-requests?per_page=100')
+      const body = InstallationRequests.safeParse(await response.json().catch(() => null))
+      if (!response.ok || !body.success) {
+        throw new Error(`github installation requests failed (${response.status})`)
+      }
+      const owners = new Set(body.data.map((r) => r.account.login.toLowerCase()))
+      requestOwners = { at: now(), owners }
+      return owners
     },
 
     appRequest: (method, path, body) => github(method, path, body),

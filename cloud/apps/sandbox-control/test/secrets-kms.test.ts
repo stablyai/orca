@@ -2,7 +2,8 @@ import { createCipheriv, createDecipheriv, generateKeyPairSync, randomBytes, typ
 import { jwtVerify } from 'jose'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { START_COMMAND } from '../src/sandbox-vm-commands'
-import { KMS_RETRY_AFTER_MS } from '../src/secrets'
+import { KMS_RETRY_AFTER_MS, keyringFor } from '../src/secrets'
+import type { Env } from '../src/env'
 import { createKeyring } from '../src/secrets-crypto'
 import { createKekUnwrapper, kekWrapAad, SecretsKmsError } from '../src/secrets-kms'
 import { createHarness } from './harness'
@@ -368,5 +369,22 @@ describe('secret store with SECRETS_KEK_SOURCE=kms', () => {
     expect((await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: alice })).status).toBe(200)
     expect(h.vercel.commands.find((c) => c.command === START_COMMAND)!.env.ORCA_SECRET_ENV).toBeDefined()
     expect(h.raw.prepare('SELECT * FROM secrets').all()).toEqual(before)
+  })
+})
+
+describe('WORKER-XREQ-PROMISE: no request ever waits on another request’s KMS load', () => {
+  it('two loads at once on a cold isolate each call KMS; once one has a keyring, later calls reuse it', async () => {
+    const env = { ...kmsEnv(), SECRETS_KEK_WRAPPED: kms.wrap(K1, 'k1'), SECRETS_KEK_ID: 'k1', SECRETS_KMS_KEY: KEY_NAME } as unknown as Env
+    // A source no earlier test loaded: a cold keyring.
+    const cold = { ...env, SECRETS_KEK_RETIRED_WRAPPED: JSON.stringify({ kx: kms.wrap(K2, 'kx') }) } as unknown as Env
+    const before = kms.state.decrypts
+    const [a, b] = await Promise.all([keyringFor(cold, kms.fetch)!, keyringFor(cold, kms.fetch)!])
+    expect(a).toBeTruthy()
+    expect(b).toBeTruthy()
+    // Two keys per load (active + retired) and two loads: neither request waited on the other's.
+    expect(kms.state.decrypts - before).toBe(4)
+    const settled = kms.state.decrypts
+    await keyringFor(cold, kms.fetch)
+    expect(kms.state.decrypts).toBe(settled)
   })
 })

@@ -63,8 +63,10 @@ export type ShareGatewayDeps = {
 }
 
 type Resolved = { link: ShareLinkRow; sandbox: SandboxRow }
-const linkCache = new Map<string, { at: number; value: Promise<Resolved | null> }>()
-const routeCache = new Map<string, { at: number; url: Promise<string> }>()
+// Settled values only (settled-cache.ts): an in-flight load shared across requests hangs them all if its own
+// request is cancelled.
+const linkCache = new Map<string, { at: number; value: Resolved | null }>()
+const routeCache = new Map<string, { at: number; url: string }>()
 const rates = new Map<string, { at: number; count: number }>()
 
 export function forgetShareLink(id: string): void {
@@ -103,13 +105,13 @@ async function loadResolved(db: D1Database, id: string): Promise<Resolved | null
 function resolve(db: D1Database, id: string, now: number, fresh = false): Promise<Resolved | null> {
   const hit = linkCache.get(id)
   if (!fresh && hit && now - hit.at < LINK_CACHE_MS) {
-    return hit.value
+    return Promise.resolve(hit.value)
   }
   prune(linkCache, now, LINK_CACHE_MS)
-  const value = loadResolved(db, id)
-  linkCache.set(id, { at: now, value })
-  value.catch(() => linkCache.delete(id))
-  return value
+  return loadResolved(db, id).then((value) => {
+    linkCache.set(id, { at: now, value })
+    return value
+  })
 }
 
 /** The proxy's public route for this session; adds port 6769 to sandboxes created before share links. */
@@ -118,7 +120,7 @@ function proxyRoute(deps: ShareGatewayDeps, sandbox: SandboxRow): Promise<string
   const now = deps.now()
   const hit = routeCache.get(key)
   if (hit && now - hit.at < ROUTE_CACHE_MS) {
-    return hit.url
+    return Promise.resolve(hit.url)
   }
   prune(routeCache, now, ROUTE_CACHE_MS)
   const url = (async () => {
@@ -134,9 +136,10 @@ function proxyRoute(deps: ShareGatewayDeps, sandbox: SandboxRow): Promise<string
     }
     return added.url
   })()
-  routeCache.set(key, { at: now, url })
-  url.catch(() => routeCache.delete(key))
-  return url
+  return url.then((value) => {
+    routeCache.set(key, { at: now, url: value })
+    return value
+  })
 }
 
 function requestCookies(request: Request): [string, string][] {
