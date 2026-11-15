@@ -1,0 +1,26 @@
+name: OrcaWatch
+options:
+  deploymentTarget:
+    watchOS: '26.0'
+settings:
+  base:
+    DEVELOPMENT_TEAM: 28HX49S37H
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: '5.9'
+targets:
+  OrcaWatch:
+    type: application
+    platform: watchOS
+    sources: [Sources]
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: Orca
+        WKApplication: true
+        WKWatchOnly: true
+        # Resolved from build settings at build time; pass them to xcodebuild, never commit values.
+        OrcaBridgeURL: $(ORCA_BRIDGE_URL)
+        OrcaBridgeToken: $(ORCA_BRIDGE_TOKEN)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cjna.orca.watch
