@@ -1,7 +1,13 @@
 import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../db/orchestration-db'
-import { acknowledgeWorkerDock, readWorkerDock, readWorkerDockResult } from './worker-dock-read'
+import {
+  acknowledgeWorkerDock,
+  readWorkerDock,
+  readWorkerDockResult,
+  readWorkerDockResultRefs
+} from './worker-dock-read'
+import { oldestWorkerDockResultRef } from '../../../../shared/orchestration/dock/worker-dock'
 import { refreshWorkerDockActivity } from './worker-dock-activity'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { installWorkerDockSchema } from '../db/schema/worker-dock-schema'
@@ -62,6 +68,16 @@ function report(dispatchId: string, outcome: 'succeeded' | 'failed') {
 }
 
 describe('worker dock lifecycle projection', () => {
+  it('pages complete result windows when many reports have the same settlement time', () => {
+    for (let index = 0; index < 100; index++) {
+      report(worker(), 'succeeded')
+    }
+    const first = readWorkerDockResultRefs(db, party)
+    const second = readWorkerDockResultRefs(db, party, oldestWorkerDockResultRef(first))
+    expect(first).toHaveLength(50)
+    expect(second).toHaveLength(50)
+    expect(new Set([...first, ...second].map((row) => row.id)).size).toBe(100)
+  })
   it('preserves a normalized status episode through replay and retains unverifiable membership', () => {
     vi.useFakeTimers({ now: 1794657600000 })
     const id = worker()

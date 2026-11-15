@@ -271,7 +271,7 @@ export function NativeChatWorkerApprovalStack({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-11 min-w-11 shrink-0"
+                  className="h-11 min-w-11 shrink-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   aria-label={t(
                     'components.native-chat.workerDock.showQuestion',
                     'Show {{name}} question',

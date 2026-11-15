@@ -11,6 +11,11 @@ export async function verifyStickyInput(
   await composer.fill('Review this draft with a backward selection in the middle.')
   await composer.focus()
   const editor = await page.evaluateHandle(() => document.activeElement!)
+  const instrumented = await page.evaluate(() =>
+    ['chat', 'composer', 'strip'].every(
+      (name) => performance.getEntriesByName(`sticky-workers:${name}:render`).length > 0
+    )
+  )
   await editor.evaluate((element) => {
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
     const text = walker.nextNode()!
@@ -86,7 +91,8 @@ export async function verifyStickyInput(
   return {
     method:
       'Hidden Chromium DOM focus/backward selection and CDP composition during real dock feed settlement; native OS IME, OS focus and screen reader not tested',
-    selection,
+    instrumented,
+    selection: { ...selection, counts: instrumented ? selection.counts : null },
     composition
   }
 }

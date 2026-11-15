@@ -3,6 +3,17 @@ import { dirname } from 'node:path'
 import type { Page, Locator } from '@playwright/test'
 
 export async function measureStickyPerformance(page: Page, composer: Locator, tracePath: string) {
+  const instrumentation = await page.evaluate(() =>
+    Object.fromEntries(
+      ['chat', 'composer', 'strip'].map((name) => [
+        name,
+        performance.getEntriesByName(`sticky-workers:${name}:render`).length
+      ])
+    )
+  )
+  if (Object.values(instrumentation).some((count) => count === 0)) {
+    throw new Error('This build lacks the required renderer measurement marks.')
+  }
   const client = await page.context().newCDPSession(page)
   await client.send('Performance.enable')
   await client.send('Tracing.start', {
@@ -83,7 +94,9 @@ export async function measureStickyPerformance(page: Page, composer: Locator, tr
       const previous = new Map(before.metrics.map((metric) => [metric.name, metric.value]))
       repeats.push({
         renderCounts: counts,
-        residentRows: await page.locator('[data-worker-dock-row]').count(),
+        residentRows: await page
+          .locator('[data-worker-dock-row], [data-native-chat-background-tasks] li')
+          .count(),
         keyToFrameMs,
         rendererMetricsDelta: Object.fromEntries(
           after.metrics
@@ -122,6 +135,7 @@ export async function measureStickyPerformance(page: Page, composer: Locator, tr
   }
   await client.detach()
   return {
+    instrumentation,
     method:
       'Five warm edits/12-key inputs/90-frame scrolls, then five saved repeats; hidden Chromium keyboard-to-animation-frame latency, CDP renderer CPU metrics; identical temporary function-entry marks; browser trace retained',
     repeats

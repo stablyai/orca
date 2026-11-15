@@ -10,7 +10,8 @@ import type { NativeChatTimedRow } from '../../../conversation/slots/native-chat
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   WorkerDockResult,
-  WorkerDockResultRef
+  WorkerDockResultRef,
+  oldestWorkerDockResultRef
 } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import { useWorkerDockResults } from './worker-dock-feed'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
@@ -195,7 +196,7 @@ export function NativeChatWorkerResultTimeline({
     [refs, target, feed.party]
   )
   const loadOlder = () => {
-    const before = refs.toSorted((a, b) => (a.at ?? 0) - (b.at ?? 0)).at(0)
+    const before = oldestWorkerDockResultRef(refs)
     if (!before || !feed.party) {
       return
     }

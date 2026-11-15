@@ -9,6 +9,7 @@ import {
   WorkerDockEntry,
   WorkerDockResultRef,
   WorkerDockResult,
+  compareWorkerDockResultRefs,
   type WorkerDockSnapshot
 } from '../../../../shared/orchestration/dock/worker-dock'
 import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
@@ -289,11 +290,6 @@ export function readWorkerDockResultRefs(
     .all(...bindings)
   return [...reports, ...stops, ...failures]
     .map((row) => WorkerDockResultRef.parse(row))
-    .sort(
-      (a, b) =>
-        Number(a.at === null) - Number(b.at === null) ||
-        (b.at ?? 0) - (a.at ?? 0) ||
-        (a.dispatchId < b.dispatchId ? -1 : a.dispatchId > b.dispatchId ? 1 : 0)
-    )
+    .sort(compareWorkerDockResultRefs)
     .slice(0, 50)
 }

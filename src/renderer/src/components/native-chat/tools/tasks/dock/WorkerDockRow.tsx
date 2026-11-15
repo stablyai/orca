@@ -1,6 +1,6 @@
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { workerDockKindLabel, workerDockStateLabel } from './worker-dock-labels'
-import { memo, useRef } from 'react'
+import { memo, useRef, useState } from 'react'
 import {
   Bot,
   CircleAlert,
@@ -78,8 +78,9 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     cancelled: boolean
     activated: boolean
   } | null>(null)
+  const [focusedAction, setFocusedAction] = useState<'stop' | 'clear' | null>(null)
   const failed = row.state === 'failed' || row.state === 'unexpected'
-  const action = failed && row.clearable !== false ? 'clear' : 'stop'
+  const action = focusedAction ?? (failed && row.clearable !== false ? 'clear' : 'stop')
   const unavailable =
     row.ownerActionsAvailable === false ||
     row.retired ||
@@ -177,7 +178,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
                 size="icon-xs"
                 data-worker-dock-action={row.id}
                 className={cn(
-                  '[&_svg]:pointer-events-none',
+                  'transition-colors aria-disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&_svg]:pointer-events-none',
                   narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5'
                 )}
                 aria-label={
@@ -200,9 +201,11 @@ export const WorkerDockRow = memo(function WorkerDockRow({
                                       'components.native-chat.workerDock.resultReady',
                                       'result ready'
                                     )
-                                  : pending
-                                    ? workerDockStateLabel(t, 'stopping')
-                                    : workerDockStateLabel(t, 'unavailable')
+                                  : failed
+                                    ? workerDockStateLabel(t, row.state)
+                                    : pending
+                                      ? workerDockStateLabel(t, 'stopping')
+                                      : workerDockStateLabel(t, 'unavailable')
                           }
                         )
                       : t(
@@ -278,7 +281,9 @@ export const WorkerDockRow = memo(function WorkerDockRow({
                 }}
                 onBlur={() => {
                   gesture.current = null
+                  setFocusedAction(null)
                 }}
+                onFocus={() => setFocusedAction(action)}
                 onClick={() => {
                   const captured = gesture.current
                   if (captured?.cancelled || captured?.activated) {

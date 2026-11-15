@@ -65,6 +65,8 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
     const paneHeight =
       element.closest('[data-native-chat-root]')?.getBoundingClientRect().height ?? innerHeight
     const cap = Math.max(44, Math.min(paneHeight * 0.4, paneHeight - 180))
+    const border = Number.parseFloat(getComputedStyle(element).borderBottomWidth) || 0
+    const contentCap = cap - border
     const top = element.getBoundingClientRect().top
     let boundary = cap
     for (const row of element.querySelectorAll<HTMLElement>(
@@ -77,12 +79,12 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
       }
       const bottom = rect.bottom - top
       const start = rect.top - top
-      if (start > 0 && start < cap && bottom > cap) {
+      if (start > 0 && start < contentCap && bottom > contentCap) {
         const first = row.parentElement?.firstElementChild === row
-        boundary = Math.min(boundary, start - (first ? 24 : 0))
+        boundary = Math.min(boundary, start + border - (first ? 24 : 0))
       }
     }
-    setHeight(Math.max(44, Math.floor(boundary)))
+    setHeight(Math.max(44, Math.min(Math.floor(cap), Math.ceil(boundary))))
   })
   useLayoutEffect(measure, [held, measure])
   useEffect(() => observeDockFrame(frame.current, measure), [measure])

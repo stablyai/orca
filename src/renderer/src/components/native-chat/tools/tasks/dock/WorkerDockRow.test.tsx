@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -85,10 +85,37 @@ it('keeps a focused unavailable Stop focusable and never turns activation into a
     </TooltipProvider>
   )
   const target = screen.getByRole('button', { name: /Stop Verifier/ })
-  target.focus()
+  act(() => target.focus())
   expect(target).toHaveFocus()
   expect(target).toHaveAttribute('aria-disabled', 'true')
   expect(target).not.toHaveAttribute('disabled')
+  fireEvent.click(target)
+  expect(action).not.toHaveBeenCalled()
+})
+
+it('keeps a focused Stop unavailable when its accepted failure arrives', () => {
+  const action = vi.fn()
+  const tree = (row: WorkerDockRowView) => (
+    <TooltipProvider>
+      <WorkerDockRow
+        row={row}
+        narrow={false}
+        mixed={false}
+        modelColumn={false}
+        visible
+        pending={false}
+        onOpen={() => {}}
+        onAction={action}
+      />
+    </TooltipProvider>
+  )
+  const { rerender } = render(tree(running))
+  const target = screen.getByRole('button', { name: /^Stop Verifier/ })
+  act(() => target.focus())
+  rerender(tree({ ...running, state: 'failed', settlement: 'failure-1', stoppable: false }))
+  expect(screen.getByRole('button', { name: /^Stop Verifier/ })).toBe(target)
+  expect(target).toHaveFocus()
+  expect(target).toHaveAttribute('aria-disabled', 'true')
   fireEvent.click(target)
   expect(action).not.toHaveBeenCalled()
 })

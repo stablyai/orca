@@ -16,18 +16,27 @@ export async function measureStickyLayout(page: Page, askCount: number) {
       const rect = (element: Element | null | undefined) =>
         element?.getBoundingClientRect().toJSON()
       const frameRect = frame?.getBoundingClientRect()
+      const frameBorder = frame ? Number.parseFloat(getComputedStyle(frame).borderBottomWidth) : 0
+      const queueRect = queue?.getBoundingClientRect()
+      const top = Math.max(frameRect?.top ?? 0, queueRect?.top ?? 0)
+      const bottom = Math.min((frameRect?.bottom ?? 0) - frameBorder, queueRect?.bottom ?? 0)
       const rows = [
         ...document.querySelectorAll<HTMLElement>('[data-native-chat-worker-question-summary]')
       ].map((row) => {
         const button = row.querySelector('button')!
         const bounds = button.getBoundingClientRect()
+        const hit = [
+          [bounds.left + bounds.width / 2, bounds.top + 1],
+          [bounds.left + bounds.width / 2, bounds.bottom - 1],
+          [bounds.left + 1, bounds.top + bounds.height / 2],
+          [bounds.right - 1, bounds.top + bounds.height / 2]
+        ].every(([x, y]) => button.contains(document.elementFromPoint(x, y)))
         return {
           id: row.dataset.nativeChatWorkerQuestionSummary,
           button: rect(button),
-          intersectsFrame:
-            !!frameRect && bounds.top < frameRect.bottom && bounds.bottom > frameRect.top,
-          completeInFrame:
-            !!frameRect && bounds.top >= frameRect.top && bounds.bottom <= frameRect.bottom
+          hit,
+          intersectsFrame: bounds.top < bottom && bounds.bottom > top,
+          completeInFrame: bounds.top >= top && bounds.bottom <= bottom
         }
       })
       const reasons = [...document.querySelectorAll<HTMLElement>('[data-worker-dock-reason]')].map(
@@ -81,6 +90,9 @@ export async function measureStickyLayout(page: Page, askCount: number) {
       layout.rows.filter((row) => row.intersectsFrame && !row.completeInFrame),
       JSON.stringify(layout)
     ).toEqual([])
+    for (const row of layout.rows.filter((row) => row.intersectsFrame)) {
+      expect(row.hit, JSON.stringify(row)).toBe(true)
+    }
   }
   const stop = page.locator('[data-worker-dock-action][aria-label^="Stop "]').first()
   if (await stop.count()) {

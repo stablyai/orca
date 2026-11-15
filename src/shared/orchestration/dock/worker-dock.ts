@@ -52,6 +52,25 @@ export const WorkerDockResultRef = z.object({
   settlement: z.string()
 })
 export type WorkerDockResultRef = z.infer<typeof WorkerDockResultRef>
+export function compareWorkerDockResultRefs(
+  a: Pick<WorkerDockResultRef, 'at' | 'dispatchId'>,
+  b: Pick<WorkerDockResultRef, 'at' | 'dispatchId'>
+): number {
+  return (
+    Number(a.at === null) - Number(b.at === null) ||
+    (b.at ?? 0) - (a.at ?? 0) ||
+    (a.dispatchId < b.dispatchId ? -1 : a.dispatchId > b.dispatchId ? 1 : 0)
+  )
+}
+export function oldestWorkerDockResultRef(refs: readonly WorkerDockResultRef[]) {
+  let oldest: WorkerDockResultRef | undefined
+  for (const ref of refs) {
+    if (!oldest || compareWorkerDockResultRefs(ref, oldest) > 0) {
+      oldest = ref
+    }
+  }
+  return oldest
+}
 export const WorkerDockSnapshot = z.object({
   results: z.array(WorkerDockResultRef).default([]),
   revision: z.number(),
