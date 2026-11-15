@@ -8,6 +8,7 @@ import { useAppStore } from '../../../../store/index'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import type { CursorAccountStatus } from '../../../../../../shared/rate-limit-types'
+import type { CursorSavedAccountsState } from '../../../../../../shared/cursor-account-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
@@ -35,6 +36,16 @@ function credentialSourceLabel(
   return null
 }
 
+async function settleSavedAccountAction(
+  action: () => Promise<CursorSavedAccountsState>
+): Promise<{ state: CursorSavedAccountsState | null; error: string | null }> {
+  try {
+    return { state: await action(), error: null }
+  } catch (error) {
+    return { state: null, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 export function CursorAccountsSection(): React.JSX.Element {
   const t = useTranslate()
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
@@ -42,6 +53,9 @@ export function CursorAccountsSection(): React.JSX.Element {
   const [status, setStatus] = useState<CursorAccountStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [saved, setSaved] = useState<CursorSavedAccountsState | null>(null)
+  const [savedBusy, setSavedBusy] = useState(false)
+  const [savedError, setSavedError] = useState<string | null>(null)
 
   // Reject overlapping usage reads that finish late with older account state.
   const latestLoad = useRef(0)
@@ -77,11 +91,45 @@ export function CursorAccountsSection(): React.JSX.Element {
     void loadStatus()
   }, [loadStatus, cursorUsage?.updatedAt])
 
+  const loadSaved = useCallback(async (): Promise<void> => {
+    const outcome = await settleSavedAccountAction(() => window.api.cursorAccounts.list())
+    if (outcome.state) {
+      setSaved(outcome.state)
+    }
+    setSavedError(outcome.error)
+  }, [])
+
+  useEffect(() => {
+    void loadSaved()
+  }, [loadSaved, cursorUsage?.updatedAt])
+
+  const runSavedAction = async (
+    action: () => Promise<CursorSavedAccountsState>,
+    refreshAfter: boolean
+  ): Promise<void> => {
+    setSavedBusy(true)
+    setSavedError(null)
+    const outcome = await settleSavedAccountAction(async () => {
+      const next = await action()
+      if (refreshAfter) {
+        await loadStatus()
+        await refreshRateLimits()
+      }
+      return next
+    })
+    if (outcome.state) {
+      setSaved(outcome.state)
+    }
+    setSavedError(outcome.error)
+    setSavedBusy(false)
+  }
+
   // Let the snapshot effect reload status once; each extra read touches an externally owned keychain item.
   const handleRefreshUsage = async (): Promise<void> => {
     setRefreshing(true)
     try {
-      await refreshRateLimits()
+      // A sign-in changed outside Orca shows up here without reopening Settings.
+      await Promise.all([refreshRateLimits(), loadSaved()])
     } finally {
       setRefreshing(false)
     }
@@ -114,10 +162,17 @@ export function CursorAccountsSection(): React.JSX.Element {
             {t('auto.components.settings.CursorAccountsSection.title', 'Cursor')}
           </span>
         }
-        description={t(
-          'auto.components.settings.CursorAccountsSection.subtitle',
-          'Shows your Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.'
-        )}
+        description={
+          saved?.supported
+            ? t(
+                'auto.components.settings.CursorAccountsSection.subtitleManaged',
+                'Shows your Cursor plan usage and lets you switch between saved cursor-agent sign-ins on this computer.'
+              )
+            : t(
+                'auto.components.settings.CursorAccountsSection.subtitle',
+                'Shows your Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.'
+              )
+        }
         action={
           <a
             href={CURSOR_USAGE_DASHBOARD_URL}
@@ -201,6 +256,86 @@ export function CursorAccountsSection(): React.JSX.Element {
             {t('auto.components.settings.CursorAccountsSection.refreshUsage', 'Refresh usage')}
           </Button>
         </div>
+
+        {saved?.supported ? (
+          <SearchableSetting
+            title={t('auto.components.settings.CursorAccountsSection.savedTitle', 'Saved accounts')}
+            description={t(
+              'auto.components.settings.CursorAccountsSection.savedDescription',
+              'Switching changes the cursor-agent sign-in. Cursor sessions already running keep their account until you restart them. Cursor IDE is not affected.'
+            )}
+            keywords={[...SEARCH_KEYWORDS, 'account', 'switch', 'saved']}
+            className="py-3"
+          >
+            <div className="space-y-2">
+              {saved.accounts.map((account) => {
+                const active = account.id === saved.activeAccountId
+                return (
+                  <div key={account.id} className="flex items-center gap-2 text-xs">
+                    <span className="min-w-0 flex-1 truncate">
+                      {account.email ??
+                        account.displayName ??
+                        t(
+                          'auto.components.settings.CursorAccountsSection.unnamed',
+                          'Cursor account'
+                        )}
+                    </span>
+                    {active ? (
+                      <Badge variant="secondary">
+                        {t('auto.components.settings.CursorAccountsSection.active', 'Active')}
+                      </Badge>
+                    ) : (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          disabled={savedBusy}
+                          onClick={() =>
+                            void runSavedAction(
+                              () => window.api.cursorAccounts.select(account.id),
+                              true
+                            )
+                          }
+                        >
+                          {t('auto.components.settings.CursorAccountsSection.switch', 'Switch')}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={savedBusy || account.id === saved.selectedAccountId}
+                          onClick={() =>
+                            void runSavedAction(
+                              () => window.api.cursorAccounts.remove(account.id),
+                              false
+                            )
+                          }
+                        >
+                          {t('auto.components.settings.CursorAccountsSection.remove', 'Remove')}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+              {saved.currentUnsaved ? (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  disabled={savedBusy}
+                  onClick={() =>
+                    void runSavedAction(() => window.api.cursorAccounts.addCurrent(), false)
+                  }
+                >
+                  {t(
+                    'auto.components.settings.CursorAccountsSection.saveCurrent',
+                    'Save current account'
+                  )}
+                </Button>
+              ) : null}
+              {savedError ? <p className="text-xs text-destructive">{savedError}</p> : null}
+            </div>
+          </SearchableSetting>
+        ) : null}
 
         {pools.length > 0 || monthly ? (
           <SearchableSetting

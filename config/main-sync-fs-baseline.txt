@@ -243,6 +243,8 @@
 17 src/main/emulator/serve-sim-runtime-materializer.ts
 12 src/main/external-editors/external-editor-launch.ts
 14 src/main/filesystem/atomic-file-publication.ts
+5 src/main/cursor-accounts/cursor-account-store.ts
+4 src/main/cursor-accounts/cursor-macos-credential-backend.ts
 3 src/main/filesystem/file-content-observation.ts # Existing reads/existence checks relocated from observed callers; no new synchronous I/O.
 9 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/rolling-file-backup.ts
