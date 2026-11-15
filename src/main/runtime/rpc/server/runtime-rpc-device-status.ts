@@ -1,5 +1,5 @@
 import type { RpcResponse } from '../core'
-import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 // Stamp proven scope at transport boundary; status.get has no connection context.
 export function injectDeviceScope(response: string, scope: DeviceScope): string {
