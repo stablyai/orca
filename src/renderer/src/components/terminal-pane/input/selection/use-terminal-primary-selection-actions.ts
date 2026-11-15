@@ -71,18 +71,18 @@ export function useTerminalPrimarySelectionActions({
       if (!targetPane) {
         return
       }
-      // Always arm suppression for Chromium’s mouseup paste; forward tracking-mode reports unless the selection modifier makes Orca the sole paste owner.
       event.preventDefault()
-      armPrimarySelectionNativePasteSuppression()
       if (
         settingsRef.current?.terminalUrlMiddleClickBehavior !== 'none' &&
         isTerminalMiddleClickActivation(event.nativeEvent) &&
         !targetPane.terminal.hasSelection() &&
         isTerminalLinkAtMouseEvent(targetPane.terminal, event.nativeEvent)
       ) {
-        // Why: the link opens on mouseup, so this press must not also paste.
+        // Why: the link opens on mouseup and its preventDefault blocks Chromium's paste, so nothing pastes here.
         return
       }
+      // Arm suppression for Chromium’s mouseup paste whenever Orca may paste; forward tracking-mode reports unless the selection modifier makes Orca the sole paste owner.
+      armPrimarySelectionNativePasteSuppression()
       if (
         targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
         !terminalForcesSelectionForClick(event)
