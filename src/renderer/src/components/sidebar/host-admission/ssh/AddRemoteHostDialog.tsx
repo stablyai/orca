@@ -27,13 +27,16 @@ export type AddRemoteHostMode = 'ssh' | 'server' | 'wsl'
 type AddRemoteHostDialogProps = {
   mode: AddRemoteHostMode | null
   onOpenChange: (mode: AddRemoteHostMode | null) => void
+  /** Prefills the server pairing field, e.g. from an `orca://pair?...` link. */
+  initialPairingCode?: string | null
 }
 
 type SshDialogView = 'form' | 'config-picker'
 
 export function AddRemoteHostDialog({
   mode,
-  onOpenChange
+  onOpenChange,
+  initialPairingCode = null
 }: AddRemoteHostDialogProps): React.JSX.Element {
   const t = useTranslate()
   const open = mode !== null
@@ -57,6 +60,12 @@ export function AddRemoteHostDialog({
   const [serverName, setServerName] = useState('')
   const [pairingCode, setPairingCode] = useState('')
   const [allowLoopback, setAllowLoopback] = useState(false)
+  const [seededPairingCode, setSeededPairingCode] = useState<string | null>(null)
+  if (open && initialPairingCode && initialPairingCode !== seededPairingCode) {
+    setSeededPairingCode(initialPairingCode)
+    setPairingCode(initialPairingCode)
+    setAllowLoopback(false)
+  }
   const [isSaving, setIsSaving] = useState(false)
   const configSearchGeneration = useRef(0)
   const configSearchQuery = useRef('')
@@ -95,6 +104,7 @@ export function AddRemoteHostDialog({
     setIsBulkImporting(false)
     setServerName('')
     setPairingCode('')
+    setSeededPairingCode(null)
     setAllowLoopback(false)
   }
 

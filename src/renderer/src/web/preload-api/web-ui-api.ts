@@ -191,6 +191,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     consumePendingSkillShare: () => Promise.resolve(null),
     onOpenPluginInstallLink: () => noopUnsubscribe,
     consumePendingPluginInstallLink: () => Promise.resolve(null),
+    onOpenRemotePairingLink: () => noopUnsubscribe,
+    consumePendingRemotePairingLink: () => Promise.resolve(null),
     // Why: the web client has no OS shell handing it files, so there is never a queued open.
     onOpenMarkdownFiles: () => noopUnsubscribe,
     consumePendingMarkdownFileOpens: () => Promise.resolve([]),

@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store/index'
 import { openPluginInstallLink } from '../../store/plugins/navigation/plugin-preview-request'
+import { openRemotePairingLink } from '../../components/sidebar/host-admission/ssh/remote-pairing-link-request'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -60,6 +61,18 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       .then((link) => {
         if (link) {
           openPluginInstallLink(link)
+        }
+      })
+      .catch(() => {})
+  }
+
+  unsubs.push(window.api.ui.onOpenRemotePairingLink?.(openRemotePairingLink) ?? (() => {}))
+  const pendingPairingLink = window.api.ui.consumePendingRemotePairingLink?.()
+  if (pendingPairingLink && typeof pendingPairingLink.then === 'function') {
+    void pendingPairingLink
+      .then((link) => {
+        if (link) {
+          openRemotePairingLink(link)
         }
       })
       .catch(() => {})

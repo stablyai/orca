@@ -53,6 +53,13 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingPluginInstallLink: (): Promise<string | null> =>
     ipcRenderer.invoke('ui:consumePendingPluginInstallLink'),
+  onOpenRemotePairingLink: (callback: (link: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, link: string): void => callback(link)
+    ipcRenderer.on('ui:openRemotePairingLink', listener)
+    return () => ipcRenderer.removeListener('ui:openRemotePairingLink', listener)
+  },
+  consumePendingRemotePairingLink: (): Promise<string | null> =>
+    ipcRenderer.invoke('ui:consumePendingRemotePairingLink'),
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, documents: MarkdownDocument[]): void =>
       callback(documents)
