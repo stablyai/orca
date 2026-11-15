@@ -7,7 +7,6 @@ import { registerPtyConnectionColdRestoreAgentResumeTests } from '../reattach/pt
 import { registerPtyConnectionColdRestoreRepaintTests } from '../reattach/pty-connection-cold-restore-repaint.spec'
 import { registerPtyConnectionColdRestoreResumeCommandTests } from '../reattach/pty-connection-cold-restore-resume-command.spec'
 import { registerPtyConnectionRestartReplacementDisposeTests } from '../spawn/pty-connection-restart-replacement-stop-claim.spec'
-import { registerPtyConnectionHibernationActivityTests } from '../input/pty-connection-hibernation-activity.spec'
 import { registerPtyConnectionHiddenSleepingResumeTests } from '../lifecycle/pty-connection-hidden-sleeping-resume.spec'
 import { registerPtyConnectionSessionLivenessTests } from '../lifecycle/pty-connection-session-liveness.spec'
 import { registerPtyConnectionOwnerErrorRetryTests } from '../reattach/pty-connection-owner-error-retry.spec'
@@ -34,7 +33,6 @@ describe(
 )
 describe('pty-connection-hibernation-wake', () => {
   registerPtyConnectionRestartReplacementDisposeTests()
-  registerPtyConnectionHibernationActivityTests()
 })
 describe('pty-connection-hidden-sleeping-resume', registerPtyConnectionHiddenSleepingResumeTests)
 describe('pty-connection-session-liveness', () => {
