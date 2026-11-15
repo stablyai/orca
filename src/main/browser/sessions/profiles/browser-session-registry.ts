@@ -37,7 +37,11 @@ import {
 import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import { markBrowserIdentityMigrationNoticePending } from '../../identity/mode/browser-identity-mode-store'
 import { forgetBrowserProfileOwnedStores } from './browser-profile-owned-stores'
-import { attachBrowserExtensionsToProfileSession } from '../../extensions/profile-sessions/browser-extension-session-loader'
+import {
+  attachBrowserExtensionsToProfileSession,
+  getBrowserExtensionSessionForProfile
+} from '../../extensions/profile-sessions/browser-extension-session-loader'
+import { isBrowserExtensionSupportEnabled } from '../../extensions/browser-extension-support'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
 type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
@@ -129,7 +133,7 @@ class BrowserSessionRegistry {
       }
     }
     if (meta.profiles.length > 0) {
-      this.hydrateFromPersisted(meta.profiles, meta.enabledExtensionIdsByProfileId)
+      this.hydrateFromPersisted(meta.profiles)
     }
 
     // Hydration skips the default profile, so install its policies separately.
@@ -137,16 +141,23 @@ class BrowserSessionRegistry {
     void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
       console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
     })
-    this.attachExtensions(defaultProfile, meta.enabledExtensionIdsByProfileId.default ?? [])
   }
 
-  // Why here and not in the partition installer: that installer also serves route, SSH and
-  // doc-preview partitions, and release 1 runs extensions only in local browser profiles.
-  private attachExtensions(
-    profile: BrowserSessionProfile,
-    enabledExtensionIds = this.getEnabledExtensionIds(profile.id)
-  ): void {
-    attachBrowserExtensionsToProfileSession(profile, enabledExtensionIds)
+  /**
+   * Starts a profile's extensions once it has a page or Settings acts on them, never at launch:
+   * each running profile wakes its extensions' service workers. Only local browser profiles
+   * run extensions, so route, SSH and doc-preview partitions never come through here.
+   */
+  attachExtensions(profileId: string): void {
+    const profile = this.profiles.get(profileId)
+    // Why these first: the enabled list is read from disk, and this runs for every new tab.
+    if (
+      profile &&
+      isBrowserExtensionSupportEnabled() &&
+      !getBrowserExtensionSessionForProfile(profileId)
+    ) {
+      attachBrowserExtensionsToProfileSession(profile, this.getEnabledExtensionIds(profileId))
+    }
   }
 
   getEnabledExtensionIds(profileId: string): string[] {
@@ -204,8 +215,9 @@ class BrowserSessionRegistry {
     )
   }
 
-  isAllowedPartition(partition: string): boolean {
-    return this.listProfiles().some((p) => p.partition === partition)
+  /** The local browser profile a partition belongs to; tabs attach only in these. */
+  profileIdForPartition(partition: string): string | null {
+    return this.listProfiles().find((p) => p.partition === partition)?.id ?? null
   }
 
   resolvePartition(profileId: string | null | undefined): string {
@@ -260,7 +272,6 @@ class BrowserSessionRegistry {
     }
     this.profiles.set(id, profile)
     this.persistProfiles()
-    this.attachExtensions(profile)
     this.onProfilesChanged?.()
     return profile
   }
@@ -324,10 +335,7 @@ class BrowserSessionRegistry {
     }
   }
 
-  hydrateFromPersisted(
-    profiles: BrowserSessionProfile[],
-    enabledExtensionIdsByProfileId = this.loadPersistedMeta().enabledExtensionIdsByProfileId
-  ): void {
+  hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
     for (const profile of profiles) {
       if (!isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)) {
         continue
@@ -337,7 +345,6 @@ class BrowserSessionRegistry {
         void installBrowserSessionPartitionPolicies(profile).catch(() => {
           console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
         })
-        this.attachExtensions(profile, enabledExtensionIdsByProfileId[profile.id] ?? [])
       }
     }
   }

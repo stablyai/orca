@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow'
 import type { Tab } from '../../../../../../shared/tab-types'
 import {
   parseAgentStatusPaneIdentity,
@@ -59,7 +60,9 @@ export function patchLiveEntriesByWorktree(
     ) {
       return null
     }
-    changed.push({ paneKey, entry })
+    if (!agentRowEntriesEqual(previous, entry)) {
+      changed.push({ paneKey, entry })
+    }
   }
   if (keyCount !== Object.keys(previousMap).length) {
     // Removed keys require bucket cleanup through a full rebuild.
@@ -77,7 +80,7 @@ export function patchLiveEntriesByWorktree(
       continue
     }
     const bucket = entriesByWorktree.get(worktreeId)
-    const index = bucket?.indexOf(previousMap[paneKey]) ?? -1
+    const index = bucket?.findIndex((row) => row.paneKey === paneKey) ?? -1
     if (!bucket || index < 0) {
       return null
     }
@@ -90,4 +93,14 @@ export function patchLiveEntriesByWorktree(
     }
   }
   return entriesByWorktree
+}
+
+/** Delivery sequence is consumed from the store by attention, never displayed in agent rows. */
+export function agentRowEntriesEqual(previous: AgentStatusEntry, next: AgentStatusEntry): boolean {
+  if (previous === next) {
+    return true
+  }
+  const { acceptedStatusSeq: _previousSequence, ...previousRow } = previous
+  const { acceptedStatusSeq: _nextSequence, ...nextRow } = next
+  return shallow(previousRow, nextRow)
 }

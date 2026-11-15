@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { syncGuestAnnotationViewportBridge } from '@/components/browser-pane/annotate/guest-annotation-viewport-bridge'
-import { consumeBrowserAnnotationViewportMessage } from '@/components/browser-pane/annotate/browser-annotation-viewport-message'
-import { useBrowserPageAnnotationSend } from '@/components/browser-pane/annotate/use-browser-page-annotation-send'
-import { useBrowserPageGrabAnnotations } from '@/components/browser-pane/annotate/use-browser-page-grab-annotations'
-import { useBrowserPageMarkupCapture } from '@/components/browser-pane/annotate/use-browser-page-markup-capture'
-import { useGrabMode } from '@/components/browser-pane/annotate/useGrabMode'
+import { syncGuestAnnotationViewportBridge } from '@/components/browser-pane/annotate/viewport/guest-annotation-viewport-bridge'
+import { consumeBrowserAnnotationViewportMessage } from '@/components/browser-pane/annotate/viewport/browser-annotation-viewport-message'
+import { useBrowserPageAnnotationSend } from '@/components/browser-pane/annotate/delivery/use-browser-page-annotation-send'
+import { useBrowserPageGrabAnnotations } from '@/components/browser-pane/annotate/grab/use-browser-page-grab-annotations'
+import { useBrowserPageMarkupCapture } from '@/components/browser-pane/annotate/capture/use-browser-page-markup-capture'
+import { useGrabMode } from '@/components/browser-pane/annotate/grab/useGrabMode'
 import type { BrowserOverlayViewport } from '@/components/browser-pane/describe-page/browser-annotation-geometry'
-import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
+import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/toolbar/browser-annotate-split-button'
 
 /** Use the stable browser page ID for annotations and tools so replacing the guest grant preserves both. */
 export function useDocPreviewGuestTools({

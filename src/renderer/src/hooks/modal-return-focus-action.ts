@@ -1,4 +1,4 @@
-import type { BrowserFocusTarget } from '../components/browser-pane/host-guest/browser-focus'
+import type { BrowserFocusTarget } from '../components/browser-pane/host-guest/input/browser-focus'
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 
 /** Capture focus before Radix mounts the modal; document.activeElement no longer identifies the return surface at close. */

@@ -26,6 +26,12 @@ export const pendingAcpResolution = {
   resolvedAt: null
 } as const
 
+export type AcpAdvertisedEfforts = {
+  efforts: AgentSessionOptionChoice[]
+  defaultEffort?: string
+  declaredDefaultEffort?: string | null
+}
+
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
   reply(response: AgentSessionPromptResponse | null): unknown
@@ -151,11 +157,9 @@ export type AcpDialect = {
     params: unknown
   ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
-  modelEfforts?(model: ModelInfo): {
-    efforts: AgentSessionOptionChoice[]
-    defaultEffort?: string
-    declaredDefaultEffort?: string | null
-  }
+  modelEfforts?(model: ModelInfo): AcpAdvertisedEfforts
+  /** Efforts of a listed model family that `models` advertises only as per-effort variants. */
+  familyEfforts?(family: string, models: readonly ModelInfo[]): AcpAdvertisedEfforts | undefined
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
   /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */

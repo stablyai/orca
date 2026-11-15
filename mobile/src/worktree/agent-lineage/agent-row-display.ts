@@ -1,4 +1,4 @@
-import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { isAgentStatusFresh } from '../../../../src/shared/agent-status/contracts/agent-status-freshness'
 import { agentVerdictDisplayMark } from '../../../../src/shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { resolveDecayedAgentRowState } from '../../../../src/shared/agent-status/presentation/agent-row-decay-state'
@@ -63,6 +63,17 @@ export function agentStateLabel(state: AgentDotState): string {
     case 'permission':
       return translate('worktree.agentRowDisplay.permission', 'Needs attention')
   }
+}
+
+/** The row's label when it leads with a forked chat's name: that name and what follows it. */
+export function agentDisplayForkedLead(
+  row: RuntimeWorktreeAgentRow,
+  label: string
+): { name: string; rest: string } | null {
+  const name = row.conversationName?.trim()
+  return row.conversationForked && name && label.startsWith(name)
+    ? { name, rest: label.slice(name.length) }
+    : null
 }
 
 // Match desktop's compact row: name then message, else message → prompt → state; Stop leads while ending the turn.

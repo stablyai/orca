@@ -15,16 +15,19 @@ import { isBotPRComment } from '../../../../../../src/shared/source-control/revi
 import { canAddRootComment } from './pr-comment-actions'
 import { buildPRCommentsResolutionPrompt } from '../../../../../../src/shared/source-control/review-comments/pr-comments-resolution-prompt'
 import { useMobileLaunchAgentLabel } from '../../../../session/agent-launch/use-mobile-launch-agent-label'
-import { useHostProtocolGates } from '../../../../components/host-protocol-gates-context'
-import { AgentLaunchNotice } from '../../../../components/AgentLaunchNotice'
+import { useHostProtocolGates } from '../../../../components/host-connection/host-protocol-gates-context'
+import { AgentLaunchNotice } from '../../../../agents/presentation/AgentLaunchNotice'
 import { useNow } from '../../../../hooks/use-now'
 import { useKeyboardOcclusion } from '../../../../platform/keyboard/keyboard-occlusion'
 import { useBackClaim } from '../../../../navigation/use-back-claim'
 import { NavBarButton } from '../../../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../../../components/nav-bar/PullDownMenu'
-import { MobileSegmentedControl } from '../../../../components/MobileSegmentedControl'
+import { MobileSegmentedControl } from '../../../../components/controls/MobileSegmentedControl'
 import { SectionHeader } from '../../../../components/list/ListGroup'
-import { MobileLoadErrorState, MobileStateView } from '../../../../components/MobileStateView'
+import {
+  MobileLoadErrorState,
+  MobileStateView
+} from '../../../../components/feedback/MobileStateView'
 import { PrThreadRow, type PrAskToFix, type PrThreadActions } from './PrThreadRow'
 import { PrThreadScreen } from './PrThreadScreen'
 import { PRCommentComposer } from './PRCommentComposer'

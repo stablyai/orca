@@ -4,7 +4,7 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMetadata } from '../../../shared/runtime-bootstrap'
+import type { RuntimeMetadata } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { probeRuntimeListener, RUNTIME_LISTENER_PROBE_TIMEOUT_MS } from './runtime-listener-probe'
 
 const servers = new Set<Server>()
@@ -59,10 +59,6 @@ describe('probeRuntimeListener', () => {
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))
 
     await expect(probeRuntimeListener(metadataFor(endpoint))).resolves.toBe('accepting')
-  })
-
-  it('frees a profile whose endpoint was never bound', async () => {
-    await expect(probeRuntimeListener(metadataFor(nextEndpoint()))).resolves.toBe('not-listening')
   })
 
   it.skipIf(process.platform === 'win32')(

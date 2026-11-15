@@ -1,5 +1,5 @@
 import type { JiraIssue, JiraProjectStatusOrder } from '../../../../../../shared/jira/jira-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { jiraGetProjectStatusOrder } from '@/runtime/jira/runtime-jira-client'

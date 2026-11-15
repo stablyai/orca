@@ -1,4 +1,4 @@
-import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/input/browser-focus'
 import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { resolveLinkOpenSidePlacement } from '../../links/placement/adjacent-link-open-group'

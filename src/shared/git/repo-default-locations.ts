@@ -1,7 +1,7 @@
 import { getDefaultWorkspaceDir } from '../constants'
 import { normalizeRuntimePathForComparison } from '../cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
-import { getEffectiveHostSetting } from '../host-setting-overrides'
+import { getEffectiveHostSetting } from '../execution-host/host-setting-overrides'
 import type { GlobalSettings } from '../global-settings-types'
 
 export type RepoDefaultLocationSettings = {

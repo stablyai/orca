@@ -1,4 +1,4 @@
-import { BridgeReplyRefusedError } from '../mobile-web-shell/bridge/bridge-client-errors'
+import { BridgeReplyRefusedError } from '../mobile-web-shell/bridge/client-state/bridge-client-errors'
 import { isLogicalClientSuspendedError } from '../transport/connection/logical-client-suspended-error'
 import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import '../transport/connection/stable-logical-rpc-client'

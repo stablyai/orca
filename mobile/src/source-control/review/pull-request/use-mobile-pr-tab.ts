@@ -18,7 +18,7 @@ import { useMobilePrCommentActions } from './comments/use-mobile-pr-comment-acti
 import { useMobilePrTextAction } from './actions/use-mobile-pr-text-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../agent-launch/use-mobile-pr-ai-triage'
 import { usePRBotAuthorOverrides } from './comments/use-pr-bot-author-overrides'
-import { useHostProtocolGates } from '../../../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../../../components/host-connection/host-protocol-gates-context'
 import { useMobilePrPolling, type PrTabLive } from './use-mobile-pr-polling'
 import { unlinkMobilePr } from '../creation/mobile-pr-link'
 import { translate } from '../../../i18n/mobile-i18n'

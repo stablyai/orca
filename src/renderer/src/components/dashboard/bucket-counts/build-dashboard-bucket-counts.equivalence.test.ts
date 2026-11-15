@@ -151,7 +151,6 @@ function baseState(): DashboardSnapshotState {
         state: 'waiting'
       })
     },
-    retainedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     runtimeAgentOrchestrationByPaneKey: {},
     terminalLayoutsByTabId: {

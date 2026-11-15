@@ -1,6 +1,6 @@
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../control/remote-runtime-shared-control-types'
-import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../runtime-session-contracts'
+import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 
 export const RUNTIME_HOST_STATUS_CHANNEL = 'runtimeEnvironments:statusChanged'
 

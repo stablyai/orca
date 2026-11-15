@@ -1,9 +1,9 @@
 import {
   issueBrowserGuestNavigation,
   cachedBrowserGuestMetadata
-} from '../host-guest/browser-guest-metadata-cache'
+} from '../host-guest/metadata/browser-guest-metadata-cache'
 import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
@@ -11,7 +11,7 @@ import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensio
 import {
   applyBrowserPageViewportLayout,
   syncBrowserPageChromeInset
-} from '../host-guest/browser-page-viewport'
+} from '../host-guest/viewport/browser-page-viewport'
 
 export function useBrowserPageWebviewUrlSync({
   browserTabId,

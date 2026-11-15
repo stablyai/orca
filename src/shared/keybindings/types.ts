@@ -73,6 +73,8 @@ export type KeybindingActionId =
   | 'tab.closeAll'
   | 'tab.rename'
   | 'tab.reopenClosed'
+  | 'tab.moveLeft'
+  | 'tab.moveRight'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
   | 'tab.nextAllTypes'

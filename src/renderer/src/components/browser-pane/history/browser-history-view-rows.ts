@@ -4,7 +4,7 @@ import { startOfLocalDay } from '../../../../../shared/automations/scheduling/au
 import {
   listBrowserHistoryRecents,
   type BrowserAddressBarSuggestion
-} from '../assemble-chrome/browser-address-bar-suggestions'
+} from '../assemble-chrome/address-bar/browser-address-bar-suggestions'
 
 export type BrowserHistoryClearRange = 'hour' | 'today' | 'all'
 

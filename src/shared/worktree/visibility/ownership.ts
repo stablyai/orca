@@ -2,7 +2,7 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../cross-platform-path'
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 import {
   isRuntimePathAbsoluteForRepo,
   resolveConfiguredWorktreeBasePaths,

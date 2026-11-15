@@ -5,7 +5,7 @@ import { mintStablePaneId } from '@/lib/pane-manager/pane-layout/mint-stable-pan
 import { refusalActsAsToday } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { serverLayoutApplyRoute } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { expectPaneToMountUnfocused } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { useAppStore } from '@/store/index'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'

@@ -46,7 +46,7 @@ import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimag
 import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
 import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
 import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
-import { ignoreInheritedWslHostsGateState } from '../shared/wsl-host-internal-gate'
+import { ignoreInheritedWslHostsGateState } from '../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import { registerOrcaProtocolClient } from './startup/open-routing/orca-protocol-registration'
 import { clearWindowsStdHandleInheritance } from './startup/windows-startup/windows-std-handle-inheritance'
 import { installWindowsIsolatedSpawner } from './startup/windows-startup/windows-isolated-spawner'

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcadDecommissionResult } from '../../../shared/orcad-decommission'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import type { OrcadDecommissionResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-decommission'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { stopWslHostServer, type WslHostServerStopSteps } from './wsl-host-server-stop'
 import type { WslHostPeerDesktops } from './wsl-host-peer-desktops'
 

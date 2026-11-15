@@ -4,8 +4,8 @@ import {
 } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { endBrowserPageInitializationAction } from '../../components/browser-pane/navigate/browser-page-deferred-navigation'
 import { useAppStore } from '@/store'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
 import {
   getRuntimeEnvironmentRevision,

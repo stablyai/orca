@@ -21,10 +21,11 @@ import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/term
 import type { WindowMaterialSettings } from './window-material'
 import type { EditorSaveSettings } from './editor-save-settings'
 import type { NestedWorkerDepthSettings } from './orchestration/workers/nested-worker-depth'
-import type { SshRemoteControlSettings } from './ssh-remote-control-settings'
+import type { SshRemoteControlSettings } from './remote-runtime/ssh/ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from './agent-launch/permissions/agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from './keybindings/global-settings'
 import type { WorkspaceCleanupPolicySettings } from './workspace-cleanup/workspace-cleanup-policy'
+import type { PRAutoRefreshSettings } from './review-refresh-policy'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
@@ -53,4 +54,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &
-  WorkspaceCleanupPolicySettings
+  WorkspaceCleanupPolicySettings &
+  PRAutoRefreshSettings

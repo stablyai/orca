@@ -28,7 +28,7 @@ vi.mock('./bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' })
 
 import { REPO_CLONE_TIMEOUT_MS } from '../new-workspace/creation/workspace-create-timeout'
 import { AddProjectModal } from './AddProjectModal'
-import { ActionSheetContent } from './ActionSheetModal'
+import { ActionSheetContent } from './sheets/ActionSheetModal'
 
 const repoRow = {
   id: 'repo-added',

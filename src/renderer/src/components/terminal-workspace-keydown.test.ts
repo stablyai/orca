@@ -5,8 +5,8 @@ import type * as WorktreeActivation from '@/lib/workspace/activation/worktree-ac
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../hooks/ipc-tab-switch'
-import '@/components/floating-terminal/floating-workspace-terminal-actions'
-import '@/components/floating-terminal/floating-workspace-tab-creation'
+import '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import '@/lib/notifications/terminal-shortcut-capture-notification'
 import '@/lib/workspace/tabs/workspace-tab-commands'
 import type { Tab } from '../../../shared/tab-types'
@@ -28,7 +28,7 @@ import type * as AgentTabShortcuts from './terminal-agent-tab-shortcut'
 import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import './use-terminal-bulk-close-actions'
 import '../store/slices/editor/types/open-file.test-fixture'
-import '../store/slices/tabs/tab-group.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 
 const confirmBulkClose = vi.hoisted(() => vi.fn<() => Promise<boolean>>())
 vi.mock('./confirmation-dialog-context', () => ({
@@ -71,13 +71,13 @@ vi.mock('../hooks/ipc-tab-switch', () => ({
   handleSwitchTabAcrossAllTypes: vi.fn(),
   handleSwitchTerminalTab: vi.fn()
 }))
-vi.mock('@/components/floating-terminal/floating-workspace-terminal-actions', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-terminal-actions', () => ({
   handleEmptyFloatingWorkspacePanelCloseShortcut: () => false,
   isEventTargetInsideFloatingWorkspacePanel: () => mocks.targetInsideFloatingPanel,
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
   switchFloatingWorkspaceTab: vi.fn()
 }))
-vi.mock('@/components/floating-terminal/floating-workspace-tab-creation', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-tab-creation', () => ({
   createFloatingWorkspaceBrowserTab: vi.fn(),
   createFloatingWorkspaceMarkdownTab: vi.fn(),
   createFloatingWorkspaceTerminalTab: vi.fn()
@@ -111,6 +111,7 @@ vi.mock('@/runtime/browser/closing/browser-workspace-tab-close', () => ({
 vi.mock('../store/slices/browser/cleanup/browser-webview-cleanup', () => ({
   destroyWorkspaceWebviews: vi.fn()
 }))
+vi.mock('./tab-bar/web-runtime-tab-move-mirror', () => ({ mirrorWebRuntimeTabMove: vi.fn() }))
 
 const controller = {
   activeWorktreeId: 'repo-1::/repo/worktree',
@@ -263,5 +264,94 @@ describe('reopen closed tab from the welcome screen', () => {
       navigationIntent: 'user-open'
     })
     expect(event.defaultPrevented).toBe(true)
+  })
+})
+
+describe('tab.moveLeft / tab.moveRight', () => {
+  const worktreeId = controller.activeWorktreeId!
+  const reorderUnifiedTabs = vi.fn()
+  const boundController = {
+    ...controller,
+    keybindings: {
+      'tab.moveLeft': ['Mod+Alt+Shift+BracketLeft'],
+      'tab.moveRight': ['Mod+Alt+Shift+BracketRight']
+    }
+  }
+
+  // Focused group g holds a,b,c; neighbor group h holds x so edges must not spill across groups.
+  function seed(activeTabId: string, groupsWorktreeId = worktreeId): void {
+    const tabs = [
+      ...['a', 'b', 'c'].map((id) =>
+        makeUnifiedTab({ id, worktreeId: groupsWorktreeId, groupId: 'g' })
+      ),
+      makeUnifiedTab({ id: 'x', worktreeId: groupsWorktreeId, groupId: 'h' })
+    ]
+    mocks.state = {
+      activeWorktreeId: worktreeId,
+      activeGroupIdByWorktree: { [groupsWorktreeId]: 'g' },
+      groupsByWorktree: {
+        [groupsWorktreeId]: [
+          makeTabGroup({
+            id: 'g',
+            worktreeId: groupsWorktreeId,
+            activeTabId,
+            tabOrder: ['a', 'b', 'c']
+          }),
+          makeTabGroup({ id: 'h', worktreeId: groupsWorktreeId, activeTabId: 'x', tabOrder: ['x'] })
+        ]
+      },
+      unifiedTabsByWorktree: { [groupsWorktreeId]: tabs },
+      tabsByWorktree: { [groupsWorktreeId]: tabs.map((tab) => ({ id: tab.entityId })) },
+      tabBarOrderByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      reorderUnifiedTabs
+    }
+  }
+
+  function press(direction: 'left' | 'right'): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key: direction === 'left' ? '[' : ']',
+      code: direction === 'left' ? 'BracketLeft' : 'BracketRight',
+      metaKey: true,
+      altKey: true,
+      shiftKey: true,
+      cancelable: true
+    })
+    handleTerminalWorkspaceKeyDown(event, boundController, 'darwin')
+    return event
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+  })
+
+  it('moves the active tab one slot within its group', () => {
+    seed('b')
+    expect(press('left').defaultPrevented).toBe(true)
+    expect(reorderUnifiedTabs).toHaveBeenLastCalledWith('g', ['b', 'a', 'c'])
+    press('right')
+    expect(reorderUnifiedTabs).toHaveBeenLastCalledWith('g', ['a', 'c', 'b'])
+  })
+
+  it('stops at the left edge of the group', () => {
+    seed('a')
+    expect(press('left').defaultPrevented).toBe(true)
+    expect(reorderUnifiedTabs).not.toHaveBeenCalled()
+  })
+
+  it('stops at the right edge of the group instead of crossing into the next group', () => {
+    seed('c')
+    expect(press('right').defaultPrevented).toBe(true)
+    expect(reorderUnifiedTabs).not.toHaveBeenCalled()
+  })
+
+  it('moves the floating panel tab when the panel owns the event', () => {
+    seed('a', FLOATING_TERMINAL_WORKTREE_ID)
+    mocks.targetInsideFloatingPanel = true
+    press('right')
+    expect(reorderUnifiedTabs).toHaveBeenLastCalledWith('g', ['b', 'a', 'c'])
   })
 })

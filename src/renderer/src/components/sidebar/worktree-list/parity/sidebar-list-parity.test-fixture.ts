@@ -8,7 +8,7 @@ import {
   getSettingsFocusedExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { buildWorkspaceRows } from '../../../../../../shared/sidebar-list/feed-facts/workspace-rows'

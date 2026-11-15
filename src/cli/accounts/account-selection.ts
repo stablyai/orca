@@ -1,7 +1,7 @@
 import type { HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
-import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
+import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
@@ -12,7 +12,7 @@ import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
 } from '../../shared/managed-account-types'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getWslAccountTarget } from './account-wsl-location'
 import {
   formatAccountsBlock,

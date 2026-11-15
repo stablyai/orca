@@ -1,8 +1,8 @@
-import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
-import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/input/browser-focus'
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 import '../../../store/testing/app-store-test-fixture'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import '../../../../../shared/session-tabs-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import '../../../../../shared/protocol-version'
 import '../../../lib/browser/navigation/http-link-in-group-availability'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
@@ -37,7 +37,7 @@ import { captureWebSessionIntentOwner } from '../../web-session-tabs-sync/identi
 import { peekWebSessionFocusIntent } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import type * as SnapshotModule from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
-vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
+vi.mock('@/components/browser-pane/host-guest/input/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
   requestBrowserFocus: vi.fn()
 }))

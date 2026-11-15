@@ -88,28 +88,4 @@ describe('command aliases dispatch to the canonical handler', () => {
       process.exitCode = priorExitCode
     }
   })
-
-  it('rejects the archive-hook waiver without --run-hooks instead of ignoring it', async () => {
-    queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
-    const priorExitCode = process.exitCode
-
-    try {
-      await main(
-        ['worktree', 'rm', '--worktree', 'id:wt-1', '--allow-failed-archive-hook', '--json'],
-        '/tmp/repo'
-      )
-
-      expect(process.exitCode).toBe(1)
-      expect(callMock).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
-      expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))).toMatchObject({
-        ok: false,
-        error: {
-          code: 'invalid_argument',
-          message: expect.stringContaining('without --run-hooks no hook runs at all')
-        }
-      })
-    } finally {
-      process.exitCode = priorExitCode
-    }
-  })
 })

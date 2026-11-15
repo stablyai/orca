@@ -17,7 +17,7 @@ import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentati
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type CrewRowLook = { partyKey: string; status: WorktreeStatus; agentType: string }
 export type CrewStatusGroup = 'needsYou' | 'working' | 'idle' | 'failed'

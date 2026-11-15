@@ -14,7 +14,7 @@ import {
   hydrateOverrides
 } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { useAppStore } from '../../store/index'
 
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300

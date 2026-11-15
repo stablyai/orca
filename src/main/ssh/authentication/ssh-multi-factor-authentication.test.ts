@@ -17,7 +17,7 @@ import {
   type SigningRequestOptions
 } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 import {
   buildConnectConfig,

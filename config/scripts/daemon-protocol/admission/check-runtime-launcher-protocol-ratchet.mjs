@@ -21,7 +21,7 @@ export const RUNTIME_LAUNCHER_PATHS = [
   'src/main/node-runtime/runtime-archive-download.ts',
   'src/main/managed-server/install/orcad-remote-node-runtime.ts',
   // orcad slot layout: which runtime file a packaged slot carries.
-  'src/shared/orcad-artifacts.ts',
+  'src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts',
   'config/scripts/orcad-distribution/server-bundle/build-orcad.mjs',
   'config/scripts/orcad-distribution/prebuilds/build-orcad-node.mjs',
   'config/scripts/orcad-distribution/template/build-orcad-template.mjs',

@@ -25,7 +25,7 @@ import {
 import {
   assertOrcadMigrationDormantStateReferences,
   parseOrcadMigrationDormantState
-} from '../orcad-migration-dormant-state-validation'
+} from './orcad-migration-dormant-state-validation'
 
 export { MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES, MAX_ORCAD_MIGRATION_REPOSITORIES }
 export const ORCAD_MIGRATION_MANIFEST_VERSION = 1 as const

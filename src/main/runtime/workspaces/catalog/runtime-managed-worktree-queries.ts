@@ -15,7 +15,7 @@ import {
   localWorktreeCatalogVersionAt
 } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type { Repo } from '../../../../shared/repo-types'
-import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeListResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'

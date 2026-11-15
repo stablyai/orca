@@ -10,7 +10,7 @@ import { REPO_CLONE_TIMEOUT_MS } from '../new-workspace/creation/workspace-creat
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { ActionSheetContent } from './ActionSheetModal'
+import { ActionSheetContent } from './sheets/ActionSheetModal'
 import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { newWorktreeFormStyles as formStyles } from '../new-workspace/creation/forms/new-worktree-form-styles'
 import type { MobileWorkspaceRepo } from '../new-workspace/creation/forms/new-worktree-modal-types'

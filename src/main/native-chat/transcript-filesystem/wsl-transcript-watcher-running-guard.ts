@@ -1,4 +1,4 @@
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { filterPathsToRunningWslDistrosAsync } from '../../wsl/filesystem/wsl-running-path-filter'
 import {
   createTranscriptNativeWatcher,

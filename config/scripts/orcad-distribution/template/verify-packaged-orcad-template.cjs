@@ -11,7 +11,7 @@ const {
   orcadTemplateCommonFilenames,
   orcadTemplatePackagedRipgrep,
   orcadTemplateTargetFilenames
-} = require('../../../../src/shared/orcad-artifacts.ts')
+} = require('../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts')
 const {
   COMPAT_SERVER_TARGETS,
   ORCAD_TEMPLATE_TARGETS,

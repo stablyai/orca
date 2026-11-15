@@ -1,4 +1,4 @@
-import type * as PageStorage from '../../mobile-web-shell/bridge/page-async-storage'
+import type * as PageStorage from '../../mobile-web-shell/bridge/page-storage/page-async-storage'
 import type * as Visits from './last-visited-worktree-by-host'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -18,9 +18,9 @@ async function loadPage(pathname: string): Promise<PageModules> {
   vi.resetModules()
   // Use doMock after resetModules; a persistent mock registry would share page adapters.
   vi.doMock('@react-native-async-storage/async-storage', async () => ({
-    default: (await import('../../mobile-web-shell/bridge/page-async-storage')).default
+    default: (await import('../../mobile-web-shell/bridge/page-storage/page-async-storage')).default
   }))
-  const storage = await import('../../mobile-web-shell/bridge/page-async-storage')
+  const storage = await import('../../mobile-web-shell/bridge/page-storage/page-async-storage')
   const visits = await import('./last-visited-worktree-by-host')
   storage.publishPageStorage(
     Object.fromEntries(appStore),

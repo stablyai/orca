@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { HEADER_LENGTH, FrameDecoder } from '../../../shared/relay-frame-decoder'
-import type { DecodedFrame } from '../../../shared/relay-frame-decoder-contract'
+import {
+  HEADER_LENGTH,
+  FrameDecoder
+} from '../../../shared/remote-runtime/relay/relay-frame-decoder'
+import type { DecodedFrame } from '../../../shared/remote-runtime/relay/relay-frame-decoder-contract'
 import { MessageType, encodeFrame } from './remote-frame-protocol'
 
 describe('FrameDecoder', () => {

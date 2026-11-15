@@ -7,8 +7,8 @@ import {
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-session-contracts'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
+import type { RuntimeSyncWindowGraph } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,

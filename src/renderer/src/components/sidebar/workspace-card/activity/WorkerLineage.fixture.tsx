@@ -45,7 +45,7 @@ const rows = applyAgentRowLineage(
       tabs.map((tab) => [structuredAgentSessionPaneKey(tab.id, tab.entityId), tab])
     ),
     entries,
-    retained: [],
+
     now
   })
 )

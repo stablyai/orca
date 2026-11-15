@@ -20,7 +20,7 @@ import {
   useNativeChatWorkerApprovalReceipts,
   type NativeChatWorkerApproval
 } from './native-chat-worker-approval-feed'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatTimedRow } from '../conversation/slots/native-chat-timed-rows'
 import {
   formatOrcaSessionAddress,

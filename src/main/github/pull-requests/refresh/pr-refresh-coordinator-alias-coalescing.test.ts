@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
@@ -25,7 +25,15 @@ describe('pr-refresh-coordinator', () => {
     moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
   })
 
+  // Transforming the coordinator's module graph is the slow first step on a loaded machine: do it
+  // once under the hook limit, so each test still imports its own fresh instance, quickly.
+  beforeAll(async () => {
+    await import('./pr-refresh-coordinator')
+  })
+
   afterEach(() => {
+    // A body that failed must not leave its timers to run on the next test's clock.
+    vi.clearAllTimers()
     vi.useRealTimers()
   })
 
@@ -146,6 +154,92 @@ describe('pr-refresh-coordinator', () => {
       '/repo::feature/a',
       '/repo::feature/b'
     ])
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a shown alias alive after its co-shown alias leaves, until the last alias leaves', async () => {
+    const { reportVisiblePRRefreshCandidates, pruneWorktreePRRefreshAliases } =
+      await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'found',
+      pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
+      // ast-grep-ignore: test-no-wall-clock -- Outcome time advances with the fake-clock follow-up.
+      fetchedAt: Date.now()
+    }))
+    const first = makeCandidate({
+      cacheKey: '/repo::feature/a',
+      branch: 'feature/a',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-a',
+      currentHeadOid: 'head-a'
+    })
+    const second = makeCandidate({
+      cacheKey: '/repo::feature/b',
+      branch: 'feature/b',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-b',
+      currentHeadOid: 'head-b'
+    })
+    reportVisiblePRRefreshCandidates([first, second], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    const outcomes = () =>
+      sendMock.mock.calls.map(([, event]) => event).filter((event) => event.outcome)
+    expect(outcomes()).toHaveLength(1)
+    expect(outcomes()[0].aliases.map((alias) => alias.cacheKey)).toEqual([
+      '/repo::feature/a',
+      '/repo::feature/b'
+    ])
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    pruneWorktreePRRefreshAliases('wt-b')
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(outcomes()).toHaveLength(2)
+    expect(outcomes()[1].aliases.map((alias) => alias.cacheKey)).toEqual(['/repo::feature/a'])
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+
+    pruneWorktreePRRefreshAliases('wt-a')
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(outcomes()).toHaveLength(2)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('delivers a newly shown alias while automatic timers are off', async () => {
+    const policy = await import('../../../../shared/review-refresh-policy')
+    policy.setPRAutoRefreshCadence('off')
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'found',
+      pr: makePR({ checksStatus: 'pending' }),
+      // ast-grep-ignore: test-no-wall-clock -- Outcome time advances with the fake-clock follow-up.
+      fetchedAt: Date.now()
+    }))
+    const first = makeCandidate({
+      cacheKey: '/repo::feature/a',
+      branch: 'feature/a',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-a'
+    })
+    reportVisiblePRRefreshCandidates([first], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    // An unselected open PR keeps the Default two-minute freshness floor in every cadence.
+    await vi.advanceTimersByTimeAsync(120_000)
+    const second = makeCandidate({
+      cacheKey: '/repo::feature/b',
+      branch: 'feature/b',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-b'
+    })
+    reportVisiblePRRefreshCandidates([first, second], 2, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    const delivered = sendMock.mock.calls.map(([, event]) => event).filter((event) => event.outcome)
+    expect(delivered).toHaveLength(2)
+    expect(delivered[1].aliases.map((alias) => alias.cacheKey)).toEqual([
+      '/repo::feature/a',
+      '/repo::feature/b'
+    ])
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 })

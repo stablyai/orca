@@ -38,15 +38,15 @@ import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/l
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
-  OrcadDeclareClientParamsSchema,
-  OrcadPeerDesktopsParamsSchema
-} from '../orcad-peer-desktops-contract'
-import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
-import {
   CrewSubscribeParams,
   WorkerApprovalsSubscribeParams
 } from '../orchestration/orchestration-crew'
 import { PeerRunCancelParams } from '../orchestration/remote-owned-wire'
+import {
+  OrcadDeclareClientParamsSchema,
+  OrcadPeerDesktopsParamsSchema
+} from '../remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
+import { OrcadTerminalCensusParamsSchema } from '../remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
 import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'

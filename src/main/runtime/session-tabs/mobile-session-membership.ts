@@ -9,7 +9,7 @@ import { hasHostAuthoritativeTerminalMembership } from '../../persistence/termin
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { retireTerminalSurfacesFromSnapshot } from '../terminal/surface/mobile-session-terminal-retirement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
