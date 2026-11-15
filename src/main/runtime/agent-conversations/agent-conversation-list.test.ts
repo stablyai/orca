@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { agentConversationPlaces } from './agent-conversation-list'
-import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 const TERMINAL = testOrcaSessionId('claude_5688af50_12a0_4b0b_9a4a_098d87fe1e68')
 const hookServer = vi.hoisted(() => ({

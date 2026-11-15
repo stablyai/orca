@@ -24,7 +24,7 @@ import {
 } from '../../shared/agent-conversations/agent-conversation-contracts'
 import { AGENT_STATUS_STATES } from '../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/agent-session/identity/orca-session-address-prefix'
 import {
   AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
   isUnattachedAgentSessionReadRefusal

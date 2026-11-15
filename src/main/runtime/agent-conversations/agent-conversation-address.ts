@@ -1,9 +1,9 @@
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 import {
   isOrcaSessionId,
   parseOrcaSessionAddress,
   type OrcaSessionId
-} from '../../../shared/orca-session-address'
+} from '../../../shared/agent-session/identity/orca-session-address'
 import { isTerminalHandle } from '../../../shared/terminal-handle-prefix'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { AGENT_CONVERSATION_REFUSAL_CODES as CODES } from '../../../shared/agent-conversations/agent-conversation-contracts'

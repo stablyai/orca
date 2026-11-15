@@ -32,8 +32,7 @@ export type AgentListResult = {
 export type AgentShowResult = {
   orcaSessionId: string
   kind: AgentConversationKind
-  /** Where it is open now: none when it isn't open, two for one conversation resumed in two panes.
-   *  Read from the conversation's own status rows, so they carry no title (`list` does). */
+  /** Open places, each with the same title and last reply as its `list` row. */
   places: AgentConversationRow[]
 }
 

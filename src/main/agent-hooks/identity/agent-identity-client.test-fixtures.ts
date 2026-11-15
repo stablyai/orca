@@ -9,7 +9,10 @@ import {
 import type { WorkerRequestTransport } from '../../worker-threads/worker-thread-transport'
 import type { AgentIdentityClient, AgentIdentityLookup } from './agent-identity-worker-client'
 import { handleAgentIdentityRequest } from './agent-identity-worker-entry'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../shared/agent-session/identity/orca-session-address'
 
 /** The worker's real SQL handler behind an asynchronous boundary, counting requests. Each answer
  *  can be held so a test decides when (and in which order) replies arrive. */
