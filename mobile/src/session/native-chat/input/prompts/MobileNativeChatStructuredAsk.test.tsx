@@ -72,7 +72,7 @@ async function pick(label: string): Promise<void> {
   })
 }
 
-it('sends skipped questions but takes Submit back to a skipped required one first', async () => {
+it('offers no Skip on a required question and takes Submit back to it instead of sending', async () => {
   vi.useFakeTimers()
   const onAnswer = vi.fn(async (_encoded: string) => true)
   act(() => {
@@ -85,12 +85,19 @@ it('sends skipped questions but takes Submit back to a skipped required one firs
   })
 
   await pick('1 B')
-  await act(async () => footer('Skip').props.onPress())
+  expect(shows('Question 2?')).toBe(true)
+  expect(footer('Next').props.disabled).toBe(true)
+
+  // Jumping past it by its step tab: Submit returns to it rather than sending.
+  const tab = tree.root.find(
+    (node) =>
+      isHost(node, 'Pressable') && node.findAll((n) => n.props.children === 'Step 3').length > 0
+  )
+  act(() => tab.props.onPress())
   await act(async () => footer('Submit').props.onPress())
   expect(onAnswer).not.toHaveBeenCalled()
   expect(shows('Question 2?')).toBe(true)
 
-  // Answering the required question moves on; Submit then sends with the last one skipped.
   await pick('2 A')
   expect(footer('Submit').props.disabled).toBe(false)
   await act(async () => footer('Submit').props.onPress())

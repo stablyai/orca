@@ -87,17 +87,35 @@ it('sends a partly answered set when the user skips the later questions and pres
   })
 })
 
-it('takes Submit back to a skipped required question instead of sending', () => {
+it('offers no Skip on a required question and takes Submit back to it instead of sending', () => {
   // Also how every question from a host that predates skippable questions behaves.
-  const { onAnswer } = renderCard([question(1), question(2, false), question(3)])
+  const { onAnswer } = renderCard([
+    question(1),
+    { ...question(2, false), freeTextQuestionId: 'q2' },
+    question(3)
+  ])
+  const step = (n: number): void =>
+    act(() =>
+      container.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[n]!.click()
+    )
 
   pick(1)
-  act(() => button('Skip').click())
-  act(() => button('Submit').click())
+  expect(title()).toBe('Question 2?')
+  expect(button('Next').disabled).toBe(true)
+  // Enter on the unanswered required step keeps it too.
+  act(() => {
+    container
+      .querySelector<HTMLTextAreaElement>('[data-native-chat-answer-field]')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  })
+  expect(title()).toBe('Question 2?')
 
+  // Jumping past it by its step chip: Submit returns to it rather than sending.
+  step(2)
+  act(() => button('Submit').click())
   expect(onAnswer).not.toHaveBeenCalled()
   expect(title()).toBe('Question 2?')
-  // Answering it moves on; the last step can now submit with its own question skipped.
+
   pick(0)
   act(() => button('Submit').click())
   expect(onAnswer).toHaveBeenCalledWith({

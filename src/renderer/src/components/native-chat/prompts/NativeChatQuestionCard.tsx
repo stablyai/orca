@@ -169,15 +169,18 @@ export function NativeChatQuestionCard({
   // With nothing to dismiss (an item's ask), only a whole answer goes: Submit waits for every step.
   const nothingToSend =
     !onCancel && isLast && prompt.questions.some((_, i) => !answeredAt(i))
-  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered || nothingToSend)
+  const waitsForAnswer = q.required === true && !currentAnswered
+  const confirmLabel = askConfirmLabel(
+    currentAnswered || waitsForAnswer,
+    isLast,
+    anyAnswered || nothingToSend
+  )
+  const confirmBlocked = askConfirmAction({ isLast, anyAnswered, waitsForAnswer }) === 'stay'
   // A caller that needs every answer sends Submit to the open step instead of skipping it.
   const canSkipSteps = !nothingToSend && !requiresEveryAnswer
   const skipAndSubmit = confirmLabel === 'submit' && !currentAnswered && total > 1 && canSkipSteps
   const outlinedConfirm =
     skipAndSubmit || nothingToSend || (requiresEveryAnswer && !currentAnswered)
-  // Submit is idle on the required question it would only return to.
-  const submitBlocked =
-    isLast && anyAnswered && askUnansweredRequired(prompt.questions, (i) => answeredAt(i)) === index
   const currentTypedAnswerChosen = typedAnswerChosen(index)
 
   const submitAll = (sel: number[][], oth: string[]): void => {
@@ -256,7 +259,7 @@ export function NativeChatQuestionCard({
     if (blocked) {
       return
     }
-    const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard })
+    const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard, waitsForAnswer })
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
     } else if (action === 'cancel') {
@@ -449,7 +452,7 @@ export function NativeChatQuestionCard({
               enterHint={
                 currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
               }
-              disabled={blocked || nothingToSend || submitBlocked}
+              disabled={blocked || nothingToSend || confirmBlocked}
               onConfirm={() => confirm()}
             />
           </div>
