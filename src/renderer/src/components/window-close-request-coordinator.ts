@@ -1,7 +1,11 @@
 /** App owns the close subscription even without Terminal mounted (#5144); run unsaved-work guards, then rich confirmation or the landing-page fallback. */
 
 import { showShutdownCheckpointFailureToast } from '@/app-shell/shutdown/shutdown-checkpoint-failure-toast'
-import { ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT } from '../../../shared/renderer-shutdown-events'
+import {
+  formatShutdownCheckpointFailureReason,
+  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
+  publishShutdownCheckpointFailureReason
+} from '../../../shared/renderer-shutdown-events'
 
 export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
 
@@ -11,11 +15,14 @@ let activeHandler: WindowCloseRequestHandler | null = null
 // Explicit app quits may degrade durable-session checkpoints to avoid trapping the user (#15352); arbitrary unload remains strict.
 let windowCloseCheckpointInProgress = false
 
+// A second failed durable write closes anyway, as before this wait existed, so a broken disk cannot trap quit.
+let durableCloseCheckpointFailed = false
+
 export function isWindowCloseCheckpointInProgress(): boolean {
   return windowCloseCheckpointInProgress
 }
 
-/** Close proceeds only after the checkpoint it staged is durable; a failed write cancels the close. */
+/** Close proceeds only after the checkpoint it staged is durable; a failed write cancels the close once. */
 export async function prepareWindowCloseCheckpoint(): Promise<boolean> {
   windowCloseCheckpointInProgress = true
   let accepted: boolean
@@ -29,8 +36,15 @@ export async function prepareWindowCloseCheckpoint(): Promise<boolean> {
   }
   try {
     await window.api.app.awaitBeforeUnloadCheckpoint()
+    durableCloseCheckpointFailed = false
     return true
-  } catch {
+  } catch (error) {
+    if (durableCloseCheckpointFailed) {
+      console.error('[app] Session snapshot still could not be saved; closing anyway', error)
+      return true
+    }
+    durableCloseCheckpointFailed = true
+    publishShutdownCheckpointFailureReason(formatShutdownCheckpointFailureReason(error))
     // Re-stage on the next close attempt instead of trusting the failed checkpoint.
     window.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT))
     return false

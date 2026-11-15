@@ -78,16 +78,26 @@ describe('window-close-request-coordinator', () => {
     expect(consumeShutdownCheckpointFailureReason()).toBeNull()
   })
 
-  it('cancels the Terminal-less close when its staged checkpoint fails to reach disk', async () => {
+  it('cancels a close once when its staged checkpoint fails to reach disk, then closes anyway', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     awaitBeforeUnloadCheckpoint.mockRejectedValue(new Error('disk full'))
     const aborted = vi.fn()
-    window.addEventListener('orca:renderer-shutdown-checkpoint-aborted', aborted, { once: true })
+    window.addEventListener('orca:renderer-shutdown-checkpoint-aborted', aborted)
 
     await dispatchWindowCloseRequest({ isQuitting: true })
 
     expect(confirmWindowClose).not.toHaveBeenCalled()
     expect(cancelWindowClose).toHaveBeenCalledTimes(1)
     expect(aborted).toHaveBeenCalledTimes(1)
+    expect(toast.error).toHaveBeenCalledWith(
+      'Quit canceled: the session snapshot could not be saved (disk full).'
+    )
+
+    await dispatchWindowCloseRequest({ isQuitting: true })
+
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+    expect(aborted).toHaveBeenCalledTimes(1)
+    window.removeEventListener('orca:renderer-shutdown-checkpoint-aborted', aborted)
   })
 
   it('cancels the close — no confirm, no handler — when a guard vetoes', async () => {
