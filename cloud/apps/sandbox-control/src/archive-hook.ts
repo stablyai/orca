@@ -50,10 +50,10 @@ for _ in $(seq 1 ${ORCAD_WAIT_SECONDS}); do
 done
 if [ -z "$opid" ]; then echo ORCA_ARCHIVE_HOOK_NO_ORCAD; exit 0; fi
 end=$(( $(date +%s) + $2 ))
+# git lists the primary checkout first (under its real path, which $P may only link to).
 git -C "$P" worktree list --porcelain 2>/dev/null | awk '/^worktree /{print substr($0,10)}' >"$D/targets" || true
-others="$(grep -cvxF "$P" "$D/targets" 2>/dev/null)"
-if [ "$others" -gt 0 ] 2>/dev/null; then
-  grep -vxF "$P" "$D/targets" | head -n ${MAX_CHECKOUTS} >"$D/targets.run"
+if [ "$(wc -l <"$D/targets")" -gt 1 ]; then
+  tail -n +2 "$D/targets" | head -n ${MAX_CHECKOUTS} >"$D/targets.run"
 else
   echo "$P" >"$D/targets.run"
 fi
