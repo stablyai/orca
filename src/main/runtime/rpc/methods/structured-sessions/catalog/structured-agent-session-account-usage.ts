@@ -4,7 +4,7 @@ import {
 } from '../../../../../../shared/agent-session/agent-session-account-usage'
 import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { requireLegacyAgentSessionAccountHome } from '../../../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { RateLimitState } from '../../../../../../shared/rate-limit-types'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
 import { buildCodexResetCreditExpectedScope } from '../../../../../../shared/codex-reset-credit-scope'

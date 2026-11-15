@@ -3,7 +3,7 @@ import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-reque
 import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type { RepoKind } from '../../../shared/repo-types'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import type { PRWatchStorage } from './pr-watch-storage'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 
 /** A git checkout a watch reads through. Folder workspaces have none, so their chats get no lines. */
@@ -20,7 +20,7 @@ export type PRWatchWorkspace = {
 }
 
 export type PRWatchServiceDeps = {
-  database: JournalHostDatabase
+  database: PRWatchStorage
   /** The chat's git workspace. 'not-git': a folder workspace or a chat outside a worktree, which
    *  never gets lines. Null: gone or not resolvable right now. */
   chatWorkspace: (chatId: string) => Promise<PRWatchWorkspace | 'not-git' | null>

@@ -8,7 +8,7 @@ import {
   getLocalExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../shared/execution-host'
-import { AgentSessionHistoryIcon } from '@/components/right-sidebar/agent-session-history-icon'
+import { AgentSessionHistoryIcon } from '@/components/right-sidebar/activity-bar/agent-session-history-icon'
 import { AiVaultPanelHeader } from '@/components/right-sidebar/ai-vault/panel/AiVaultPanelHeader'
 import { highlightedSearchSnippet } from '@/components/right-sidebar/ai-vault/search/AiVaultSearchEvidence'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT } from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-limit'

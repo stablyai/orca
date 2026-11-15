@@ -29,7 +29,7 @@ import type { ClosedEditorTabSnapshot } from '../slices/editor/types/open-file'
 import '../../../../shared/workspace-scope'
 
 const recoveryNotice = vi.hoisted(() => vi.fn())
-vi.mock('@/components/editor/closed-unsaved-files-toast', () => ({
+vi.mock('@/components/editor/model-lifetime/retention/closed-unsaved-files-toast', () => ({
   showClosedUnsavedFilesToast: recoveryNotice
 }))
 

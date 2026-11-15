@@ -38,6 +38,7 @@ import type {
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
+import { NativeChatLineBoundaryKeys } from './native-chat-line-boundary-keys'
 
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
 
@@ -104,6 +105,7 @@ function NativePromptEditor({
         NativeChatFileReference,
         NativeChatImageReference,
         NativeChatUnkernedRunDecorations,
+        NativeChatLineBoundaryKeys,
         // A disabled box still says why it is disabled, as the plain text box's placeholder does.
         Placeholder.configure({
           placeholder: () => placeholderRef.current,

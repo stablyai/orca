@@ -14,7 +14,7 @@ import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
-import type { DiffNotesDelivery } from '../source-control/review/mobile-review-comment-state'
+import type { DiffNotesDelivery } from '../source-control/review/review-notes/mobile-review-comment-state'
 import type {
   DirtyMarkdownDraft,
   FileDocState,

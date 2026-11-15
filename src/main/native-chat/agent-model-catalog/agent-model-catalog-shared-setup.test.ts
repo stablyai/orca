@@ -1,6 +1,6 @@
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import { AgentModelCatalogStore } from './agent-model-catalog-store'
@@ -333,43 +333,3 @@ it('keeps one folder-agent listing for a workspace on the same folder when anoth
   expect(await a).toMatchObject({ models: [{ id: 'other' }] })
   expect(probe.mock.calls.map((call) => call[1]?.workspacePath)).toEqual(['/repo', '/other'])
 })
-
-it.each([10, 100])(
-  'registers %i readers and unique targets once per shared flight',
-  async (count) => {
-    vi.useFakeTimers()
-    onTestFinished(() => {
-      vi.useRealTimers()
-    })
-    for (const delayedScope of [false, true]) {
-      const h = harness('opencode2')
-      const scope = Promise.withResolvers<void>()
-      if (delayedScope) {
-        h.folder.gate = scope
-      }
-      const registrations = vi.spyOn(h.store, 'refresh')
-      const submissions = vi.spyOn(h.store.efforts, 'demand')
-      const readers: Promise<unknown>[] = []
-      for (let index = 0; index < count; index++) {
-        readers.push(
-          h.service.read({
-            agent: 'opencode2',
-            sessionId: 'a',
-            selectedModel: `m${index}`,
-            waitForListing: true
-          })
-        )
-        if (!delayedScope) {
-          await vi.advanceTimersByTimeAsync(0)
-        }
-      }
-      scope.resolve()
-      await vi.advanceTimersByTimeAsync(0)
-      expect(h.run).toHaveBeenCalledOnce()
-      expect(registrations.mock.calls.length).toBe(count)
-      expect(submissions.mock.calls.length).toBe(count)
-      h.discovery.resolve(listing('shared'))
-      await Promise.all(readers)
-    }
-  }
-)

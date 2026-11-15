@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react'
 
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import { focusTerminalTabSurface } from '../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest,
   type BrowserFocusRequestDetail
-} from '../components/browser-pane/host-guest/browser-focus'
+} from '../components/browser-pane/host-guest/input/browser-focus'
 import {
   resolveModalReturnFocusAction,
   type ModalReturnFocusSurface

@@ -12,7 +12,7 @@ import { projectViewSourceScope } from '../cache/cache-identity'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { patchGitHubProjectRowContent } from '../projects/project-row-actions'
-import { buildProjectWorkItem } from '@/components/github-project/project-work-item'
+import { buildProjectWorkItem } from '@/components/github-project/row-actions/project-work-item'
 import { isEmptyTaskChange, type TaskChange, type TaskFacts } from './task-change'
 import type {
   GitHubProjectRow,

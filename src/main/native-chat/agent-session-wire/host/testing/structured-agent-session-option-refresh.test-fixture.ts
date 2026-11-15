@@ -3,7 +3,7 @@ import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionResult
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentModelCatalogService } from '../../../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionMutationContext } from '../../operations/structured-agent-session-mutation-context'
 import type { StructuredAgentSessionLiveOptions } from '../../options/structured-agent-session-option-models'
@@ -12,7 +12,7 @@ import {
   hostTestRestingOptionsRecord,
   hostTestRestingOptionsJournal,
   hostTestOptionsReadStore
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { readStructuredAgentSessionOptions } from '../../options/structured-agent-session-options-read'
 
 function deferred<T>() {

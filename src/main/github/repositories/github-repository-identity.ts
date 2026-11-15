@@ -24,6 +24,8 @@ export type GitHubRepoContext = {
   admissionTier?: GitAdmissionTier
   /** SSH keeps the binding even when cwd is omitted from gh options. */
   ghAccount?: GhAccountBinding
+  /** Captured authority; a known unbound project also overrides caller account input. */
+  ghAccountFromProject?: boolean
 }
 
 export type LocalGitExecOptions = {
@@ -90,9 +92,14 @@ export function githubRepoContext(
     scope.wslDistro === context.wslDistro
       ? scope
       : null
-  const account = pinned ?? resolveGitHubProjectAccount(context) ?? context
+  const project = pinned ? null : resolveGitHubProjectAccount(context)
+  const account = pinned ?? project ?? context
   const binding = account.ghAccount ? Object.freeze({ ...account.ghAccount }) : undefined
-  return Object.freeze({ ...context, ghAccount: binding })
+  return Object.freeze({
+    ...context,
+    ghAccount: binding,
+    ghAccountFromProject: pinned ? pinned.ghAccountFromProject === true : project !== null
+  })
 }
 
 export function ghRepoExecOptions(context: GitHubRepoContext): {

@@ -4,13 +4,6 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
-import type Database from '../../sqlite/sync-database'
-import {
-  finishUploadSweep,
-  listUploadsBeingSwept,
-  markUnclaimedUploadForSweep,
-  pruneAgentSessionAttachmentClaims
-} from './agent-session-attachment-claims'
 import { AGENT_SESSION_ATTACHMENT_PART_FILE } from './agent-session-attachment-references'
 import { removeQuietly, type AgentSessionAttachmentStore } from './agent-session-attachment-store'
 
@@ -18,11 +11,10 @@ export const ABANDONED_PART_MAX_AGE_MS = 60 * 60 * 1000
 export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export type AgentSessionAttachmentSweepFacts = {
-  /** Without a writable journal, only unfinished part files may be removed. */
-  database: () => Database.Database | null
-  write: <T>(run: (db: Database.Database) => T) => T | undefined
-  /** null means imports are incomplete; no chat claims can yet be judged orphaned. */
-  recordedSessionIds: () => Pick<ReadonlySet<string>, 'has'> | null
+  listBeingSwept: () => readonly string[] | Promise<readonly string[]>
+  markForSweep: (uploadId: string, now: number) => boolean | Promise<boolean>
+  finishSweep: (uploadId: string) => void | Promise<void>
+  pruneClaims: () => void | Promise<void>
   onUploadRemoved?: (uploadDir: string) => void
 }
 
@@ -34,15 +26,13 @@ export async function sweepAgentSessionAttachments(
   now = Date.now()
 ): Promise<AgentSessionAttachmentSweepResult> {
   const removed: string[] = []
-  // Disk awaits can outlive journal closure; resolve the database again for each statement.
-  const { database } = facts
   const remove = async (uploadDir: string): Promise<void> => {
     await removeQuietly(uploadDir)
     facts.onUploadRemoved?.(uploadDir)
   }
-  for (const uploadId of withDatabase(database, listUploadsBeingSwept) ?? []) {
+  for (const uploadId of await facts.listBeingSwept()) {
     await remove(join(store.rootDir, uploadId))
-    facts.write((db) => finishUploadSweep(db, uploadId))
+    await facts.finishSweep(uploadId)
   }
   for (const uploadId of await listDirectories(store.rootDir)) {
     if (store.isUploadInFlight(uploadId)) {
@@ -61,31 +51,15 @@ export async function sweepAgentSessionAttachments(
       continue
     }
     // Whichever lands first wins: claims retain uploads, sweep marks reject later claims.
-    if (
-      ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS ||
-      facts.write((db) => markUnclaimedUploadForSweep(db, uploadId, now)) !== true
-    ) {
+    if (ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS || !(await facts.markForSweep(uploadId, now))) {
       continue
     }
     await remove(uploadDir)
-    facts.write((db) => finishUploadSweep(db, uploadId))
+    await facts.finishSweep(uploadId)
     removed.push(uploadDir)
   }
-  facts.write((db) =>
-    pruneAgentSessionAttachmentClaims(db, {
-      root: store.rootDir,
-      recordedSessionIds: facts.recordedSessionIds()
-    })
-  )
+  await facts.pruneClaims()
   return { removed }
-}
-
-function withDatabase<T>(
-  database: AgentSessionAttachmentSweepFacts['database'],
-  run: (db: Database.Database) => T
-): T | undefined {
-  const db = database()
-  return db ? run(db) : undefined
 }
 
 async function listDirectories(dir: string): Promise<string[]> {

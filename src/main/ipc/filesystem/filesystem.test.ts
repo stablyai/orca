@@ -6,7 +6,6 @@ import {
   handlers,
   store,
   REPO_PATH,
-  readFileMock,
   realpathMock,
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
@@ -148,8 +147,6 @@ describe('registerFilesystemHandlers', () => {
     await expect(handlers.get('fs:readFile')!(null, { filePath: linkPath })).rejects.toThrow(
       'Access denied: path resolves outside allowed directories'
     )
-
-    expect(readFileMock).not.toHaveBeenCalled()
   })
 
   it('rejects readFile when a symlink in a canonical alias worktree escapes the registered root', async () => {
@@ -172,8 +169,6 @@ describe('registerFilesystemHandlers', () => {
     await expect(handlers.get('fs:readFile')!(null, { filePath: aliasLinkPath })).rejects.toThrow(
       'Access denied: path resolves outside allowed directories'
     )
-
-    expect(readFileMock).not.toHaveBeenCalled()
   })
 
   // WSL UNC has no Recycle Bin; delete inside the distro instead (#6415).

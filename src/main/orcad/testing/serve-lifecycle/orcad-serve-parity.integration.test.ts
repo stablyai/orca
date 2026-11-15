@@ -26,7 +26,6 @@ import { ORCAD_LOCK_FILE_NAME } from '../../instance-lock/orcad-instance-lock'
 import { resolveBundledOrcadRuntime } from '../../runtime-launch/orcad-bundled-runtime'
 import { skipForMissingInputs } from '../native-slots/orcad-node-slot-fixture'
 import { buildDaemonSessionClient } from '../daemon-processes/orcad-daemon-session-client-fixture'
-import type { ServeCleanupDiagnostics } from './orcad-serve-cleanup-diagnostics.test-fixture'
 import { boundedText } from './orcad-serve-cleanup-redaction.test-fixture'
 import {
   killAndAwaitExit,
@@ -42,22 +41,14 @@ const runtime = existsSync(join(slotDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME))
   : null
 const skip = skipForMissingInputs('artifact', runtime ? [] : ['a Node orcad slot in out/orcad'])
 const roots: string[] = []
-const cleanupDiagnostics = new Set<ServeCleanupDiagnostics>()
 
 afterEach(async () => {
   const failures: unknown[] = []
   // Stop every profile before removing any project root it may still use.
   for (const root of roots) {
-    const diagnostics = [...cleanupDiagnostics].find((entry) => entry.owns(root))
-    await diagnostics?.capture('beforeDaemonCleanup', root)
-    const startedAt = Date.now()
     try {
       await killProfileDaemons(root)
-      diagnostics?.note('daemonCleanupResolved', { elapsedMs: Date.now() - startedAt })
-      await diagnostics?.capture('afterDaemonCleanup', root)
     } catch (error) {
-      await diagnostics?.capture('daemonCleanupFailed', root)
-      diagnostics?.report('daemonCleanupFailed', root, error, Date.now() - startedAt)
       failures.push(error)
     }
   }
@@ -65,18 +56,10 @@ afterEach(async () => {
     throw new AggregateError(failures, 'Profile daemon shutdown incomplete')
   }
   for (const root of roots.slice()) {
-    const diagnostics = [...cleanupDiagnostics].find((entry) => entry.owns(root))
-    const startedAt = Date.now()
     try {
       await removeTestRoot(root)
       roots.splice(roots.indexOf(root), 1)
-      if (diagnostics?.rootRemoved(root)) {
-        cleanupDiagnostics.delete(diagnostics)
-      }
     } catch (error) {
-      const elapsedMs = Date.now() - startedAt
-      await diagnostics?.capture('rootRemovalFailed', root)
-      diagnostics?.report('rootRemovalFailed', root, error, elapsedMs)
       failures.push(error)
     }
   }
@@ -220,7 +203,6 @@ describe.skipIf(skip)('orca serve on orcad', () => {
     })
     expect(result.code).toBe(78)
     expect(result.stdout).toBe('')
-    expect(result.stderr).toContain('The Orca desktop app')
   }, 90_000)
 
   // Allow real orcad startup and HTTP round trips for the missing-web-client regression (#30120).

@@ -26,6 +26,7 @@ import type { AgentWorkspaceTrustSettings } from './agent-launch/permissions/age
 import type { KeybindingGlobalSettings } from './keybindings/global-settings'
 import type { WorkspaceCleanupPolicySettings } from './workspace-cleanup/workspace-cleanup-policy'
 import type { WorkspaceTitleLanguageSettings } from './workspace-title-language'
+import type { PRAutoRefreshSettings } from './review-refresh-policy'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = WorkspaceTitleLanguageSettings &
@@ -55,4 +56,5 @@ export type GlobalSettingsBase = WorkspaceTitleLanguageSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &
-  WorkspaceCleanupPolicySettings
+  WorkspaceCleanupPolicySettings &
+  PRAutoRefreshSettings

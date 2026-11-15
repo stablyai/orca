@@ -274,8 +274,8 @@
     {
       "files": [
         "src/main/runtime/rpc/dispatcher.ts",
-        "src/main/plugins/plugin-runtime-rpc.ts",
-        "src/main/plugins/plugin-runtime-binding.ts"
+        "src/main/plugins/runtime/plugin-runtime-rpc.ts",
+        "src/main/plugins/runtime/plugin-runtime-binding.ts"
       ],
       "rules": {
         "no-restricted-imports": [

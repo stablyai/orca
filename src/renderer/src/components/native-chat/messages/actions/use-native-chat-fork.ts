@@ -15,7 +15,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalRenderItem
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from '../../../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'

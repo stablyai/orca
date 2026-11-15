@@ -1,3 +1,5 @@
+import { readTestJournalItems } from '../journal-observation.test-support'
+import { openTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,12 +8,9 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalQuestionItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openAgentSessionJournal } from '../journal-store-factory'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../store-lifecycle/journal-host-database-test-support'
 import { boundJournalPromptBody, cancelledJournalPromptBody } from './journal-prompt-body-bounds'
 
 let root: string | undefined
@@ -52,7 +51,7 @@ function largestQuestion(): AgentJournalQuestionItem {
 
 it('saves, cancels and reopens a question whose previews make it larger than one batch', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-prompt-previews-'))
-  const open = () =>
+  const open = async () =>
     openAgentSessionJournal({
       identity: {
         sessionId: 'session-previews',
@@ -61,7 +60,7 @@ it('saves, cancels and reopens a question whose previews make it larger than one
         agent: 'codex',
         providerHandle: codexProviderHandle('thread-1')
       },
-      database: openTestJournalHostDatabase(root!),
+      database: await openTestAgentSessionDatabase(root!),
       now: () => 1_000
     })
   const identity = { provider: 'orca' as const, clientMessageId: 'claude-prompt:session:req-1' }
@@ -83,9 +82,8 @@ it('saves, cancels and reopens a question whose previews make it larger than one
   await journal.close()
 
   const reopened = await open()
-  const saved = reopened
-    .snapshot()
-    .items.map((item) => item.body)
+  const saved = (await readTestJournalItems(reopened))
+    .map((item) => item.body)
     .find((item): item is AgentJournalQuestionItem => item.kind === 'question')
   await reopened.close()
   expect(saved).toMatchObject({ kind: 'question', resolution: { state: 'cancelled' } })

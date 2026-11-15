@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { createElement, useLayoutEffect, useRef } from 'react'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
-import { useMonacoEditorDecorations } from '../../use-monaco-editor-decorations'
+import { useMonacoEditorDecorations } from '../../monaco/use-monaco-editor-decorations'
 import type { editor, languages, Position } from 'monaco-editor'
 import type { OnMount } from '@monaco-editor/react'
 import {
