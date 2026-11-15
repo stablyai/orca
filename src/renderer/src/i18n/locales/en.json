@@ -21212,11 +21212,11 @@
           "open": "Open",
           "busyDescription": "\"Same port number only\" is on, so :{{value0}} was not forwarded.",
           "useAnother": "Use another port",
-          "forwarded": "Forwarded :{{value0}} to localhost:{{value1}}",
           "remappedInUse": "{{value0}} · {{value1}} in use on this computer",
-          "many": "{{value0}} ports forwarded",
           "busyInUse": "localhost:{{value0}} in use on this computer",
-          "openPortsPanel": "Open ports"
+          "openPortsPanel": "Open ports",
+          "appAvailable": "Your app on port {{value0}} is available at localhost:{{value1}}",
+          "manyAppsAvailable": "{{value0}} apps are available on this computer"
         }
       },
       "cloudWorkspaces": {
