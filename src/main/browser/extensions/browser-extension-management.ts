@@ -31,6 +31,7 @@ import {
 import { browserExtensionIdForUnpackedFolder } from './installation/browser-extension-load-directory'
 import { forgetBrowserExtensionPackageRevision } from './installation/browser-extension-package-revisions'
 import {
+  describeBrowserExtensionLoadError,
   forgetBrowserExtensionLoadFailures,
   getBrowserExtensionLoadFailure
 } from './profile-sessions/browser-extension-load-errors'
@@ -58,7 +59,7 @@ async function settle(action: () => Promise<void>): Promise<BrowserExtensionActi
     await action()
     return { ok: true }
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    return { ok: false, error: describeBrowserExtensionLoadError(error) }
   }
 }
 

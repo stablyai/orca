@@ -8,7 +8,7 @@ function key(profileId: string, extensionId: string): string {
   return `${profileId}\0${extensionId}`
 }
 
-function errorMessage(error: unknown): string {
+export function describeBrowserExtensionLoadError(error: unknown): string {
   const message = error instanceof Error && error.message ? error.message : String(error)
   // Why: Electron prefixes Orca's internal copy path, which means nothing to the user.
   return message.replace(/^Loading extension at .+? failed with: /, '')
@@ -19,7 +19,7 @@ export function recordBrowserExtensionLoadFailure(
   extensionId: string,
   error: unknown
 ): void {
-  const message = errorMessage(error)
+  const message = describeBrowserExtensionLoadError(error)
   if (errors.get(key(profileId, extensionId)) !== message) {
     errors.set(key(profileId, extensionId), message)
     notifyBrowserExtensionListChanged()

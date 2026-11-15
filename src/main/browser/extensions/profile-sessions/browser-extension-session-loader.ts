@@ -172,14 +172,17 @@ function suspendProfile(state: ProfileSessionState): Promise<void> {
 
 /** Unloads a profile session's extensions and Orca's wiring; its saved extension data stays. */
 async function unloadProfileSession(state: ProfileSessionState): Promise<void> {
-  await suspendProfile(state)
-  await Promise.all(
-    [...new Set([...state.started, ...state.enabled()])].map((id) => resetExtension(state, id))
-  )
-  await state.loads.close()
-  // Why after close: a cancelled load records its failure as it stops. A re-attached session keeps its own.
-  if (!stateByProfileId.has(state.profile.id)) {
-    forgetBrowserExtensionLoadFailures({ profileId: state.profile.id })
+  try {
+    await suspendProfile(state)
+    await Promise.all(
+      [...new Set([...state.started, ...state.enabled()])].map((id) => resetExtension(state, id))
+    )
+  } finally {
+    await state.loads.close()
+    // Why after close: a cancelled load records its failure as it stops. A re-attached session keeps its own.
+    if (!stateByProfileId.has(state.profile.id)) {
+      forgetBrowserExtensionLoadFailures({ profileId: state.profile.id })
+    }
   }
   for (const extension of state.session.extensions.getAllExtensions()) {
     removeBrowserExtensionFromSession(state.session, extension.id)
@@ -268,13 +271,7 @@ export function getBrowserExtensionProfileForPartition(
 }
 
 /** Unloads it and cancels its loads in flight, which stop at their next step. */
-export function unloadBrowserExtensionFromProfile(
-  profileId: string,
-  extensionId: string,
-  replacement?: BrowserExtensionTargetReplacement
-): Promise<unknown> {
-  return unloadAndCancel(profileId, extensionId, replacement)
-}
+export const unloadBrowserExtensionFromProfile = unloadAndCancel
 
 /** A reload's replacement load settles the prerequisite its unload kept, without waiting on it. */
 export function replaceBrowserExtensionInProfile(
