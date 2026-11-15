@@ -1,3 +1,4 @@
+import { preserveFolderLineageUncertainty } from '../../../shared/worktree/lineage/lineage-uncertainty'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { type WorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -124,10 +125,12 @@ export function pruneWorktreeStateForRepo(
     const childScope = parseWorkspaceKey(childKey)
     const parentScope = parseWorkspaceKey(lineage.parentWorkspaceKey)
     if (childScope?.type === 'worktree' && belongsToHost(childScope.worktreeId)) {
+      preserveFolderLineageUncertainty(state, childKey as WorkspaceKey)
       delete state.workspaceLineageByChildKey[childKey as WorkspaceKey]
       continue
     }
     if (parentScope?.type === 'worktree' && belongsToHost(parentScope.worktreeId)) {
+      preserveFolderLineageUncertainty(state, childKey as WorkspaceKey)
       delete state.workspaceLineageByChildKey[childKey as WorkspaceKey]
     }
   }

@@ -774,6 +774,7 @@ import {
   WorkspacePortScanParams
 } from './workspaces/workspace-ports-params'
 import { SetCollapsedParams } from './workspaces/workspace-view-collapse-params'
+import { WorktreeAdopt } from './workspaces/worktree-adopt-params'
 import { WorktreeCreate, WorktreePrefetchCreateBase } from './workspaces/worktree-create-params'
 import {
   WorktreeActivate,
@@ -1679,6 +1680,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'workspacePorts.scan': WorkspacePortScanParams,
   'workspacePorts.scanHost': WorkspacePortScanHostParams,
   'worktree.activate': WorktreeActivate,
+  'worktree.adopt': WorktreeAdopt,
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.archive': WorktreeArchive,
   'worktree.create': WorktreeCreate,

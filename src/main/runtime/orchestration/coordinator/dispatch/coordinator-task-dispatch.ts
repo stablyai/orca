@@ -1,3 +1,4 @@
+import { workerPreambleWorkspace } from '../../workers/launch/worker-preamble-workspace'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { TaskRow } from '../../db/orchestration-records'
 import { buildDispatchPreamble } from '../../workers/launch/worker-dispatch-preamble'
@@ -95,7 +96,19 @@ export async function dispatchTaskToWorker(params: {
   })
 
   // Dev workers need orca-dev to reach the dev socket.
+  const workspace = runtime.showManagedTerminalWorkspace
+    ? await workerPreambleWorkspace(
+        {
+          showManagedTerminalWorkspace: runtime.showManagedTerminalWorkspace.bind(runtime),
+          getOrchestrationWorkspaceSelectorArgument:
+            runtime.getOrchestrationWorkspaceSelectorArgument?.bind(runtime)
+        },
+        runtime.getTerminalWorktreeIdForHandle?.(targetHandle),
+        targetHandle
+      )
+    : undefined
   const preamble = buildDispatchPreamble({
+    workspace,
     taskId: task.id,
     dispatchId: dispatch.id,
     canDispatchSubWorkers: dispatch.depth < params.nestedWorkerMaxDepth,

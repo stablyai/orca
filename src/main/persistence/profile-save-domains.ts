@@ -12,6 +12,7 @@ export const WORKTREE_METADATA_DOMAINS = [
 export const WORKSPACE_LINEAGE_DOMAINS = [
   'worktreeLineageById',
   'workspaceLineageByChildKey',
+  'workspaceLineageUncertaintyByChild',
   'crossStoreLineageByChildKey'
 ] as const
 
@@ -67,6 +68,7 @@ export const REMOVE_PROJECT_DOMAINS: readonly string[] = [
 export const FOLDER_WORKSPACE_REMOVAL_DOMAINS: readonly string[] = [
   'folderWorkspaces',
   'workspaceLineageByChildKey',
+  'workspaceLineageUncertaintyByChild',
   'crossStoreLineageByChildKey',
   ...WORKSPACE_SESSION_DOMAINS,
   'mobileClientTabSelectionsByDeviceId'

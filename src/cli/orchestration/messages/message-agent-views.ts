@@ -1,3 +1,4 @@
+import { reportedWorkspacePrLines } from '../../../shared/orchestration/workspace-pr-copy'
 import {
   formatOrchestrationCheckText,
   formatUnacknowledgedDeliveryNotice,
@@ -18,6 +19,7 @@ export type MessageView = {
   to?: string
   subject?: string
   body?: string
+  workspaceWarnings?: string[]
   priority?: string
   readOnly?: true
   handled?: boolean
@@ -49,6 +51,10 @@ export function toMessageView(
     ...(options.recipient && message.read !== undefined ? { handled: message.read === 1 } : {}),
     ...(message.follow_up && !isLegacyReadOnlyMessage(message, options.legacyCompatibilityActive)
       ? { followUp: formatReportFollowUpLine(message.follow_up, orchestrationCliName()) }
+      : {}),
+    ...(type === 'worker_done' &&
+    reportedWorkspacePrLines(message.payload, orchestrationCliName()).length
+      ? { workspaceWarnings: reportedWorkspacePrLines(message.payload, orchestrationCliName()) }
       : {}),
     ...payloadView(message)
   }

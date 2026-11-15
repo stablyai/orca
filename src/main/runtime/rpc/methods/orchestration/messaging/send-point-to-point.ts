@@ -1,3 +1,10 @@
+import type { WorkspaceCheck } from '../../../../../../shared/orchestration/workspace-pr-check'
+import {
+  recordWorkspacePrCheck,
+  withoutCallerWorkspaceCheck
+} from '../../../../orchestration/db/messages/record-workspace-pr-check'
+import { displayPrRef } from '../../../../../../shared/orchestration/workspace-pr-refs'
+import { workspacePrCopy } from '../../../../../../shared/orchestration/workspace-pr-copy'
 import type {
   MessagePriority,
   MessageType
@@ -72,8 +79,12 @@ export function sendPointToPointMessage(args: {
       priority: params.priority as MessagePriority,
       threadId: params.threadId,
       payload: dispatch
-        ? bindCoordinatorMutationPayload(messageType, params.payload, dispatch.id)
-        : params.payload,
+        ? bindCoordinatorMutationPayload(
+            messageType,
+            withoutCallerWorkspaceCheck(params.payload),
+            dispatch.id
+          )
+        : withoutCallerWorkspaceCheck(params.payload),
       senderPaneKey,
       senderDispatchId:
         dispatch && isDispatchAssignee(dispatch, from, senderPaneKey) ? dispatch.id : undefined,
@@ -133,6 +144,36 @@ export function sendPointToPointMessage(args: {
           runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
         )
       }
+      const checkWarnings: SendRecipientWarning[] = []
+      if (
+        msg.type === 'worker_done' &&
+        (reconciled.action === 'completed' || reconciled.action === 'failed')
+      ) {
+        let check: WorkspaceCheck
+        try {
+          check = runtime.checkReportedWorkspacePrs(
+            reconciled.dispatchId,
+            msg.subject,
+            msg.body ?? ''
+          )
+        } catch {
+          check = { version: 1, state: 'skipped', outside: [] }
+        }
+        recordWorkspacePrCheck(db, msg, reconciled.taskId, check)
+        const primary = db.getWorkerDispatch(reconciled.dispatchId)?.worktree_id ?? ''
+        for (const ref of check.outside) {
+          checkWarnings.push({
+            code: 'pull_request_outside_workspace',
+            recipient: to,
+            message: workspacePrCopy.worker(
+              displayPrRef(ref),
+              runtime.getTerminalOrchestrationCliCommand(from),
+              primary,
+              runtime.getOrchestrationWorkspaceSelectorArgument(from, primary)
+            )
+          })
+        }
+      }
       const receipt = withSendWarnings(
         msg.type === 'worker_done'
           ? {
@@ -144,8 +185,12 @@ export function sendPointToPointMessage(args: {
             }
           : { message: exposeMessage(msg) }
       )
-      return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
-        runtime.notifyMessageArrived(msg.to_handle, msg.type)
+      return recordReceiptForPostCommitNudge(
+        recordMutationReceipt,
+        checkWarnings.length
+          ? { ...receipt, warnings: [...(receipt.warnings ?? []), ...checkWarnings] }
+          : receipt,
+        () => runtime.notifyMessageArrived(msg.to_handle, msg.type)
       )
     }
     const receipt = withSendWarnings({ message: exposeMessage(msg) })

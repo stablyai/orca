@@ -34,7 +34,7 @@ import {
   WorktreeResolveCallerParent
 } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
-import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
+import { WORKTREE_ADOPTION_METHODS } from './worktree-adoption-methods'
 import { waitsForWorktreeRemoval } from '../../workspace-client-views/worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
@@ -167,7 +167,7 @@ export const WORKTREE_METHODS = [
         }
       })
   }),
-  WORKTREE_PROVISIONED_ROOT_METHOD,
+  ...WORKTREE_ADOPTION_METHODS,
   defineMethod({
     name: 'worktree.prefetchCreateBase',
     permission: 'workspace',

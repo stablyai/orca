@@ -210,6 +210,7 @@ export type SendRecipientWarning = {
     | 'recipient_run_mismatch'
     | 'recipient_delivery_held'
     | 'recipient_delivery_unknown'
+    | 'pull_request_outside_workspace'
   recipient: string
   message: string
 }

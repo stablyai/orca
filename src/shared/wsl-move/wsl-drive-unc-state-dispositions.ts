@@ -31,6 +31,7 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   worktreeIdentityAliases: 'rewrite',
   worktreeLineageById: 'rewrite',
   workspaceLineageByChildKey: 'rewrite',
+  workspaceLineageUncertaintyByChild: 'keep',
   crossStoreLineageByChildKey: 'rewrite-child-key',
   // Desktop-wide; a path here (the worktree folder) is not a project's.
   settings: 'keep',

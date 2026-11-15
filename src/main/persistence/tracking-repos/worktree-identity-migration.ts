@@ -3,6 +3,7 @@ import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-lo
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { preserveFolderLineageUncertainty } from '../../../shared/worktree/lineage/lineage-uncertainty'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
@@ -251,6 +252,8 @@ export function migrateWorktreeIdentity(
   }
 
   if (oldWorkspaceKey in state.workspaceLineageByChildKey) {
+    preserveFolderLineageUncertainty(state, oldWorkspaceKey)
+    preserveFolderLineageUncertainty(state, newWorkspaceKey)
     const lineage = state.workspaceLineageByChildKey[oldWorkspaceKey]
     state.workspaceLineageByChildKey[newWorkspaceKey] = {
       ...lineage,
