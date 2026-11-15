@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { runProcess, runProcessSync, spawnProcess } from '@orca/process-host'
 import { hasNoChangedFiles } from './vitest-changed-precheck.mjs'
 import { RUN_ARGS_ENV } from './vitest-run-filters.mjs'
+import { withLocalCheckSlot } from '../../preflight/local-checks/local-check-slot.mjs'
 import { localModuleCacheEnv } from '../module-cache/vitest-local-module-cache.mjs'
 import { createRunTempDirectory } from './vitest-run-temp-directory.mjs'
 import { createVitestZodBundle } from '../module-cache/vitest-zod-bundle.mjs'
@@ -99,5 +100,5 @@ if (await hasNoChangedFiles(vitestArgs, root, runProcess)) {
   // Vitest's own result for this case, without paying its startup.
   console.log('No changed files found, exiting with code 0')
 } else {
-  process.exitCode = await runVitest()
+  process.exitCode = await withLocalCheckSlot(runVitest)
 }
