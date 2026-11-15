@@ -17,6 +17,12 @@ const GOAL_FRAME_KINDS = new Set([
 
 type GoalCandidate = Pick<AgentJournalRenderItem, 'sequence' | 'body' | 'agentId'>
 
+/** A goal row the transcript leaves to the goal banner. */
+export const AGENT_SESSION_THREAD_GOAL_PRESENTATION = 'thread-goal'
+
+/** Persist counter-only goal revisions at most this often; readers extrapolate while a turn runs. */
+export const AGENT_SESSION_THREAD_GOAL_ACCOUNTING_REVISION_SECONDS = 30
+
 export function isAgentJournalThreadGoalStatus(
   value: string
 ): value is AgentJournalThreadGoalStatus {
@@ -100,6 +106,15 @@ export function agentSessionThreadGoalStatusChange(
     case 'complete':
       return null
   }
+}
+
+/** The status change a goal's controls offer; an agent-owned goal can only resume, and only when its agent's /goal does. */
+export function agentSessionThreadGoalOfferedStatusChange(
+  status: AgentJournalThreadGoalStatus,
+  control: { hostChanges: boolean; agentResumes: boolean }
+): 'active' | 'paused' | null {
+  const change = agentSessionThreadGoalStatusChange(status)
+  return control.hostChanges || (control.agentResumes && change === 'active') ? change : null
 }
 
 /** Accrue beyond exact provider time only during an active running turn, starting at the later of updatedAt and turn start. */
