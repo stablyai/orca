@@ -19,7 +19,7 @@ import {
 } from '@/lib/browser/history/browser-history-match'
 import { displayableFaviconUrl } from '../../../../../../shared/browser/browser-favicon-url'
 import { formatBrowserPaletteUrl } from '@/lib/browser/palette/browser-palette-search'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard/clipboard-text'
 import { translate } from '@/i18n/i18n'
 
 export const MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS = 8

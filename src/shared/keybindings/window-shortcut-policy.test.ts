@@ -6,7 +6,7 @@ import {
   type WindowShortcutAction,
   type WindowShortcutInput
 } from './window-shortcut-policy'
-import type { KeybindingOverrides } from './keybindings'
+import type { KeybindingOverrides } from './types'
 
 describe('resolveWindowShortcutAction', () => {
   it('keeps ctrl/cmd+r and unrelated readline control chords out of the allowlist', () => {

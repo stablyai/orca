@@ -1,11 +1,8 @@
 // OpenCode show-cursor follows composer mount ~2s after paste mode; mimo-code shares this signal.
-import { CURSOR_SHOW_SEQUENCE as DECTCEM_SHOW_CURSOR } from './terminal/protocol/escape/terminal-cursor-restore'
-import type {
-  DraftPasteReadySignal,
-  TuiAgentConfig
-} from './agent-launch/catalog/tui-agent-config-types'
-import { createOpenCodeAgentRowScanner } from './agent-launch/startup/readiness/opencode-agent-row-scanner'
-import { createCodexComposerReadyScanner } from './agent-launch/startup/readiness/codex-composer-ready-scanner'
+import { CURSOR_SHOW_SEQUENCE as DECTCEM_SHOW_CURSOR } from '../../../terminal/protocol/escape/terminal-cursor-restore'
+import type { DraftPasteReadySignal, TuiAgentConfig } from '../../catalog/tui-agent-config-types'
+import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
+import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
 
 // Paste mode precedes composer readiness; per-agent markers avoid guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'

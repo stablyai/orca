@@ -1,4 +1,4 @@
-import { stripAnsiEscapeSequences } from '../../ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../terminal/protocol/escape/ansi-escape-sequences'
 import { isPushHookFailure } from '../../source-control/recovery/source-control-push-failure'
 
 // Why: strip `user:password@` on any scheme, but a lone `user@` only on HTTP(S) — SSH's git@host user-info is required, so stripping breaks the URL.

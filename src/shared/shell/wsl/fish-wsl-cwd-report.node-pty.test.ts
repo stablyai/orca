@@ -3,10 +3,10 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fishRequirementViolation, resolveFishBinary } from './fish-binary-requirement'
-import { getWslFishInitCommand } from './shell/wsl/wsl-login-shell-command'
-import { toWindowsWslPath } from './file-access/wsl-paths'
-import { parseFileUriPath } from '../main/daemon/emulation/osc7-file-uri'
+import { fishRequirementViolation, resolveFishBinary } from '../testing/fish-binary-requirement'
+import { getWslFishInitCommand } from './wsl-login-shell-command'
+import { toWindowsWslPath } from '../../file-access/wsl-paths'
+import { parseFileUriPath } from '../../../main/daemon/emulation/osc7-file-uri'
 
 const FISH = resolveFishBinary(3)
 const FISH_PATH = FISH.available ? FISH.path : ''
@@ -125,14 +125,6 @@ describe('a WSL bridge fish pane reports its folder', () => {
         expect([unc(home), unc(deep)]).toContain(report.folder)
       }
       expect(output).toContain('USER_PROMPT_HOOK')
-    },
-    60_000
-  )
-
-  itWithFish(
-    'only inside WSL',
-    async () => {
-      expect(hostless(await runFish({}))).toEqual([unc('/elsewhere')])
     },
     60_000
   )

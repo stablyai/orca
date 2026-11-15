@@ -1,10 +1,7 @@
-import {
-  hasModifier,
-  isLatinShortcutKey,
-  keybindingRunsInTextField,
-  type KeybindingActionId,
-  type KeybindingInput
-} from './keybindings'
+import { hasModifier } from './parser'
+import { isLatinShortcutKey } from './input'
+import { keybindingRunsInTextField } from './matching'
+import type { KeybindingActionId, KeybindingInput } from './types'
 
 export type TextShortcutInput = KeybindingInput & {
   isComposing?: boolean

@@ -1886,12 +1886,12 @@
       "invariant": "Small incomplete status, ANSI and title controls must not retain the larger consumed output strings they were sliced from. Every retained control fragment is routed through ownRetainedString, which preserves exact UTF-16, current caps and trimming, payload order and clean-output offsets on both the Buffer and the code-unit fallback copier.",
       "oracle": "Retained primitive memory/fidelity and general status/title parser tests remain. No current dedicated pending status UTF16/title cap fixture establishes the removed alarms. No fresh validation or physical provider/performance conclusion.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status/transport/agent-status-osc.test.ts src/shared/osc-title-scan-tail.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status/transport/agent-status-osc.test.ts src/shared/agent-status/title/osc-title-scan-tail.test.ts"
       ],
       "testFiles": [
         "src/shared/own-retained-string.test.ts",
         "src/shared/agent-status/transport/agent-status-osc.test.ts",
-        "src/shared/osc-title-scan-tail.test.ts"
+        "src/shared/agent-status/title/osc-title-scan-tail.test.ts"
       ],
       "assertionRefs": [
         {
@@ -1910,7 +1910,7 @@
           "platform": "linux",
           "result": "passed",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status/transport/agent-status-osc.test.ts src/shared/osc-title-scan-tail.test.ts --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status/transport/agent-status-osc.test.ts src/shared/osc-title-scan-tail.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status/transport/agent-status-osc.test.ts src/shared/agent-status/title/osc-title-scan-tail.test.ts",
           "durationSeconds": 2.428,
           "summary": "Audit5553 fresh reduced selector: 11 cases across three retained files passed with per-file isolation and owned temporary root. Single local run; no p95, soak, cross-platform/provider or replacement-equivalence evidence. Prior records remain retired in knownGaps. Artifact:5553-root-workflow-gate-cleanup/gate-retained.log."
         }

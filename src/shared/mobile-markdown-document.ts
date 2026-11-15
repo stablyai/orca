@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from './clipboard/clipboard-text'
 import { clampUtf8TextPrefix, getUtf8ByteLength } from './utf8-byte-limits'
 
 export const MOBILE_MARKDOWN_EDIT_MAX_BYTES = 256 * 1024

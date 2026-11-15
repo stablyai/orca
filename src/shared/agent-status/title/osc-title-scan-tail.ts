@@ -1,4 +1,4 @@
-import { ownRetainedString } from './own-retained-string'
+import { ownRetainedString } from '../../own-retained-string'
 
 const OSC_TITLE_SCAN_TAIL_LIMIT = 4096
 const OSC_TITLE_PREFIX_LENGTH = 4

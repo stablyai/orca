@@ -24,6 +24,7 @@ import {
 
 const shared = Object.keys(BASELINE_SOURCE_HASHES)
 const currentSourcePaths = {
+  'ansi-escape-sequences.ts': 'terminal/protocol/escape/ansi-escape-sequences.ts',
   'check-job-log-tail-slice.ts': 'source-control/checks/logs/check-job-log-tail-slice.ts',
   'check-job-log-excerpt.ts': 'source-control/checks/logs/check-job-log-excerpt.ts'
 }

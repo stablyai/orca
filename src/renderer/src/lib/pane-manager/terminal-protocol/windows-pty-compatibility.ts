@@ -5,7 +5,7 @@ import {
   buildXtermConptyOptions,
   parseWindowsBuildNumber,
   windowsPtyForOwnerMachine
-} from '../../../../../shared/xterm-conpty-options'
+} from '../../../../../shared/terminal/pty/native-process/xterm-conpty-options'
 
 export type WindowsPtyCompatibilityContext = {
   userAgent?: string

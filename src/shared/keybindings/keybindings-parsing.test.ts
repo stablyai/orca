@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { isKeybindingActionId } from './definitions'
+import { keybindingFromInput, keybindingFromInputForAction } from './input'
+import { keybindingMatchesInput, keybindingMatchesAction } from './matching'
 import {
-  isKeybindingActionId,
-  keybindingFromInput,
-  keybindingFromInputForAction,
-  keybindingMatchesInput,
-  keybindingMatchesAction,
   normalizeKeybinding,
   normalizeKeybindingListForAction,
   normalizeKeybindingList
-} from './keybindings'
+} from './normalization'
 
 describe('keybindings', () => {
   it('accepts bounded plugin command action IDs and rejects malformed variants', () => {

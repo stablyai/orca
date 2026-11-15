@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import {
-  findKeybindingConflicts,
-  isDoubleTapBinding,
-  keybindingFromInput,
-  keybindingMatchesAction,
-  keybindingMatchesInput,
-  normalizeKeybinding
-} from './keybindings'
+import { findKeybindingConflicts } from './formatting'
+import { isDoubleTapBinding, normalizeKeybinding } from './normalization'
+import { keybindingFromInput } from './input'
+import { keybindingMatchesAction, keybindingMatchesInput } from './matching'
 
 describe('keybindings', () => {
   it('parses, normalizes, and rejects double-tap modifier bindings', () => {

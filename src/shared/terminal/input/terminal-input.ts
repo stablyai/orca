@@ -1,7 +1,7 @@
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   isClipboardTextByteLengthOverLimitWithYield
-} from '../../clipboard-text'
+} from '../../clipboard/clipboard-text'
 import { getUtf8ChunkEndIndex, measureUtf8ByteLength } from '../../utf8-byte-limits'
 
 export const TERMINAL_INPUT_CHUNK_MAX_BYTES = 16 * 1024

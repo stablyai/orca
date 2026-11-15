@@ -1,15 +1,12 @@
-import { getKeybindingDefinition } from './keybindings/definitions'
-import {
-  isKeybindingAllowedInTerminal,
-  isKeybindingPotentialTerminalConflict
-} from './keybindings/effective'
-import { keybindingMatchesAction, matchKeybindingDigitIndex } from './keybindings/matching'
+import { getKeybindingDefinition } from './definitions'
+import { isKeybindingAllowedInTerminal, isKeybindingPotentialTerminalConflict } from './effective'
+import { keybindingMatchesAction, matchKeybindingDigitIndex } from './matching'
 import type {
   KeybindingActionId,
   KeybindingMatchOptions,
   KeybindingOverrides,
   PhysicalModifierToken
-} from './keybindings/types'
+} from './types'
 
 export type WindowShortcutInput = {
   type?: string

@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import {
-  findKeybindingActionsForBinding,
-  findKeybindingConflicts,
-  getEffectiveKeybindingsForAction,
-  keybindingMatchesAction,
-  resolveKeybindingOverrides,
-  getLegacySearchBindings
-} from './keybindings'
+import { findKeybindingActionsForBinding, findKeybindingConflicts } from './formatting'
+import { getEffectiveKeybindingsForAction } from './effective'
+import { keybindingMatchesAction } from './matching'
+import { resolveKeybindingOverrides } from './profile-defaults'
+import { getLegacySearchBindings } from './definitions'
 
 describe('keybindings', () => {
   it('keeps the inherited search chord available for terminal-first chat toggling', () => {
