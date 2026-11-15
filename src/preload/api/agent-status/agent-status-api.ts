@@ -6,7 +6,7 @@ import type {
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentInterruptInferenceRequest } from '../../../shared/agent-status/lifecycle/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
-import type { ComputerAwakeStatus } from '../../../shared/computer-awake-mode'
+import type { ComputerAwakeStatus } from '../../../shared/app-lifecycle/computer-awake-mode'
 import type { AgentListPublication } from '../../../shared/agent-status/presentation/agent-list-status'
 
 export type AgentStatusApi = {

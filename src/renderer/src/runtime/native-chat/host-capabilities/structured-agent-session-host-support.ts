@@ -26,7 +26,7 @@ import {
 import '../../rpc/subscriptions/runtime-rpc-subscribe'
 import '../requests/structured-agent-session-request-timeouts'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../../../shared/agent-session/structured-agent-session-host-capability'
 
 /** Read a capability through the runtime's existing status cache. A failed/unknown

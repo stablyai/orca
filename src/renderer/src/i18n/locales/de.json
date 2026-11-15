@@ -1397,7 +1397,7 @@
             "33290e88ed": "Profil konnte nicht verbunden werden",
             "9fcb07a796": "Profil verbunden",
             "2f6c78a039": "Profil-Authentifizierung konnte nicht aktualisiert werden",
-            "a37b5e6d37": "Vom Profil abgemeldet",
+            "a37b5e6d37": "Von Orca abgemeldet",
             "83600521e7": "Abmelden fehlgeschlagen",
             "76deec8f58": "Organisation konnte nicht gewechselt werden",
             "7d4bc516ee": "Profil konnte nicht gewechselt werden",
@@ -1981,6 +1981,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+Klick zum Öffnen im Systembrowser",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Arbeitsbereich-Kommentar",
+        "createdByAutomation": "Durch Automatisierung erstellt",
+        "linkedTask": "Verknüpfte Aufgabe",
+        "pullRequest": "Pull Request",
+        "mergeRequest": "Merge Request",
+        "linkedIssue": "Verknüpftes Issue",
+        "listeningPort": "Lauschender Port"
       }
     },
     "hooks": {
@@ -3625,6 +3634,8 @@
           "draft": "Entwurf",
           "labelCount_one": "{{count}} Label",
           "labelCount_other": "{{count}} Labels",
+          "authorCount_one": "{{count}} Autor",
+          "authorCount_other": "{{count}} Autoren",
           "allStates": "Alle",
           "filterPullRequests": "Pull Requests filtern",
           "filterIssues": "Issues filtern",

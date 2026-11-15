@@ -80,7 +80,7 @@ export type ComputerSnapshotData = {
 
 export type ComputerScreenshotData = {
   data?: string
-  format: 'png'
+  format: 'png' | 'jpeg'
   width: number
   height: number
   scale: number

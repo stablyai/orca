@@ -1,6 +1,6 @@
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import type { RuntimeRepoSearchRefs } from '../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 
 import { isQualifiedBaseRef } from '../../../../git/refs/resolution/base-ref-search-selector'

@@ -4,7 +4,7 @@ import {
 } from './runtime-environment-usage-response'
 import { getRuntimeEnvironmentStatus } from '../status/runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { prepareFencedRuntimeRequest } from './runtime-environment-request-preparation'
 import {

@@ -1,5 +1,5 @@
 import { ipcMain, Menu, Notification, type BrowserWindow } from 'electron'
-import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../../shared/quit-teardown-deadline'
+import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../../shared/app-lifecycle/shutdown/quit-teardown-deadline'
 import { translateMain } from '../../i18n/main-i18n'
 import type { Store } from '../../persistence/loading-store/store'
 import { resolveWindowCloseAction } from './window-close-decision'

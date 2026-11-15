@@ -1,8 +1,8 @@
 // Telemetry must never fail a health read, so every error stops here.
 
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { classifyDaemonAppVersionMatch } from '../../../shared/telemetry/daemon-adoption-telemetry'
-import type { DaemonAsyncIoHealth } from '../../../shared/daemon-async-io-health'
+import type { DaemonAsyncIoHealth } from '../../../shared/terminal/daemon/daemon-async-io-health'
 import type { DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS } from '../../../shared/telemetry/schemas/telemetry-daemon-event-schemas'
 import { track } from '../../telemetry/client'
 import type { DaemonEndpointIdentity } from '../protocol/daemon-hello-protocol'

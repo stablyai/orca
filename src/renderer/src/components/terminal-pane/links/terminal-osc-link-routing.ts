@@ -6,10 +6,7 @@ import { resolveFileLinkPath } from './files/terminal-file-link-target'
 import { isWindowsAbsolutePathLike } from '../../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './files/terminal-link-handlers'
 import { classifyTerminalOscLinkTarget } from '../../../../../shared/terminal/links/terminal-osc-link-target'
-import {
-  isTerminalLinkActionActivation,
-  isTerminalLinkDirectActivation
-} from './gestures/terminal-link-activation'
+import { isTerminalOwnedLinkGesture } from './gestures/terminal-link-activation'
 import { handleTerminalHttpLink } from './http/terminal-url-link-hit-testing'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
@@ -28,17 +25,6 @@ type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
       | 'stopPropagation'
     >
   >
-
-function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boolean {
-  if (!event) {
-    return false
-  }
-  if ('button' in event && event.button !== undefined && event.button !== 0) {
-    return false
-  }
-  // Desktop links require an intentional gesture; ordinary clicks/selecting must not open them. Mobile taps use WebView routing.
-  return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
-}
 
 /** ConPTY widens raw UTF-8 OSC 8 bytes to Latin-1 and terminates early on byte 0x9C (C1 ST), leaving C1 controls, replacement chars, or truncated UTF-8 tails. */
 export function isCorruptedOscLinkText(rawText: string): boolean {
@@ -61,7 +47,8 @@ export function handleOscLink(
       actionDestinations?: TerminalHttpLinkActionDestinations
     }
 ): boolean {
-  if (isCorruptedOscLinkText(rawText) || !isDesktopOscLinkActivation(event)) {
+  // Desktop links require an intentional gesture; ordinary clicks/selecting must not open them. Mobile taps use WebView routing.
+  if (isCorruptedOscLinkText(rawText) || !isTerminalOwnedLinkGesture(event)) {
     return false
   }
   const finish = (handled: boolean): boolean => {

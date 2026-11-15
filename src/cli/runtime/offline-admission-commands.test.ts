@@ -4,7 +4,7 @@ import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setAppEnvironment } from '../../shared/app-environment'
+import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import type * as ProcessHost from '@orca/process-host'
 import { main } from '../index'
 
