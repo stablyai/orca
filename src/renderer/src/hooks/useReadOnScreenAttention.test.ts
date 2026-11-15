@@ -8,7 +8,7 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 const CODEX_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
-// Codex Stop can migrate done state to retained rows before view acknowledgement; scan both live and retained maps or the row stays bold forever (codex-agent-row-bold-stuck.md). Test the pure target selector independently of DOM presence gates.
+// Codex Stop can migrate done state to retained rows before view acknowledgement; scan live maps or the row stays bold forever (codex-agent-row-bold-stuck.md). Test the pure target selector independently of DOM presence gates.
 
 describe('resolveAutoAckTabTargets', () => {
   const FLOATING_TAB_ID = 'tab-floating'
@@ -93,7 +93,6 @@ describe('computeLapsedManualUnreadProtections', () => {
     const lapsed = computeLapsedManualUnreadProtections(
       {
         liveTurns: {},
-        retainedTurns: {},
         manuallyUnreadTurnStartedAt: { [paneKey]: 1_000 }
       },
       new Set([paneKey])

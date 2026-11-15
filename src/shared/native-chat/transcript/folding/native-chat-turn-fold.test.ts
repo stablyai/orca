@@ -17,12 +17,34 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
     reportsFailure: false,
     explainsTurn: false,
     sendsBack: false,
+    failedHook: false,
     ...overrides
   }
 }
 
 /** An error-toned system row: the agent or host reporting the turn failed. */
 const FAILURE = row({ role: 'system', reportsFailure: true })
+
+function hookFailure(id: string, event: string): NativeChatMessage {
+  return {
+    id,
+    role: 'system',
+    timestamp: 1,
+    source: 'transcript',
+    blocks: [
+      {
+        type: 'text',
+        text: `Codex ${event} hook failed: hook exited with code 1`,
+        tone: 'error',
+        providerFrame: {
+          provider: 'codex',
+          kind: 'notification:hook/completed',
+          payload: { head: '{}', byteLength: 2, digest: 'fixture', truncated: false }
+        }
+      }
+    ]
+  }
+}
 
 const SETTLED = new Set(['turn-1'])
 const NONE = new Set<string>()
@@ -93,6 +115,26 @@ describe('rendered plans in collapsed turns', () => {
     const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
     expect([...result.foldedRows]).toEqual(folded)
     expect([...nativeChatTurnAnswerRows(rows)]).toEqual(answers)
+  })
+})
+
+describe('failed hooks in a settled turn', () => {
+  it('keeps the answer and the hook failures after it visible, folding earlier ones as work', () => {
+    const messages = [
+      PROMPT,
+      WORK,
+      hookFailure('post-tool', 'PostToolUse'),
+      ANSWER,
+      hookFailure('post-model', 'PostModelRequest'),
+      hookFailure('stop', 'Stop')
+    ]
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+    const { foldedRows } = nativeChatTurnFold({
+      rows,
+      settledTurnKeys: SETTLED,
+      expandedTurnKeys: NONE
+    })
+    expect([...foldedRows].sort()).toEqual([1, 2])
   })
 })
 

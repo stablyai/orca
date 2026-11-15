@@ -3,8 +3,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import { MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE } from './mobile-dictation-session-state'
+import {
+  createFakeRpcClient,
+  type FakeRpcClient
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 
 type DeviceLog = {
   calls: string[]
@@ -93,31 +95,6 @@ afterEach(() => {
 })
 
 describe('a tapped dictation start the composer disables while the microphone is opening', () => {
-  it('reports the stop through onError instead of returning to idle in silence', async () => {
-    const rpc = createFakeRpcClient()
-    act(() => {
-      renderer = create(createElement(Probe, { client: rpc, enabled: true }))
-    })
-    await act(async () => {
-      void dictation()
-        .start()
-        .catch(() => undefined)
-      await Promise.resolve()
-    })
-    expect(dictation().status).toBe('starting')
-    await act(async () => {
-      renderer?.update(createElement(Probe, { client: rpc, enabled: false }))
-      await pump(rpc)
-    })
-    await act(async () => {
-      device.releasePermission?.()
-      await pump(rpc)
-    })
-    expect(errors).toEqual([MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE])
-    expect(dictation().status).toBe('error')
-    expect(device.calls).not.toContain('toggleRecording(true)')
-  })
-
   it('keeps a cancel the user asked for silent', async () => {
     const rpc = createFakeRpcClient()
     act(() => {

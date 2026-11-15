@@ -72,7 +72,7 @@ describe('useReadOnScreenAttention focus-group transitions', () => {
       unreadAgentCompletionPanes: { [CHAT_SUBJECT]: 'agent-completion' },
       unreadTerminalTabs: {},
       agentStatusByPaneKey: {},
-      retainedAgentsByPaneKey: {},
+
       acknowledgedAgentsByPaneKey: {}
     })
   })

@@ -27,7 +27,7 @@ import {
   structuredSessionIdleEdgeMailboxes,
   type StructuredMailboxCustody
 } from './structured-session-mail-target'
-import { exitedChatDispatchesForSession } from '../../workers/lifecycle/chat-assignee'
+import { closedChatWorkersForSession } from '../../workers/lifecycle/chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/terminal-identity-probe'
 
@@ -212,12 +212,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
   }
 
-  /** Settle ended chat Dispatches on tab hide; /clear successors retain their work. */
+  /** A closed chat ends its workers' Dispatches as a closed terminal does; /clear successors retain their work. */
   onStructuredSessionTabHidden(sessionId: string): void {
     try {
       const db = this.getExistingOrchestrationDb()
-      for (const dispatch of db ? exitedChatDispatchesForSession(sessionId, db) : []) {
-        this.failActiveDispatchOnExit(dispatch.assignee_handle, null, OPERATOR_CLOSE_EXIT_CAUSE)
+      for (const worker of db ? closedChatWorkersForSession(sessionId, db) : []) {
+        this.failActiveDispatchOnExit(worker.handle, worker.paneKey, OPERATOR_CLOSE_EXIT_CAUSE)
       }
     } catch (error) {
       console.warn('[orchestration] settling a closed chat worker failed', {

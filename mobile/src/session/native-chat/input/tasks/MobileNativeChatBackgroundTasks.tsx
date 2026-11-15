@@ -33,7 +33,7 @@ import {
   buildBackgroundTaskGroups,
   buildBackgroundTaskGroupsFromViews
 } from '../../../../../../src/shared/background-task-roster'
-import { AGENT_WORKING_COLOR, AgentStateDot } from '../../../../components/AgentStateDot'
+import { AGENT_WORKING_COLOR, AgentStateDot } from '../../../../agents/presentation/AgentStateDot'
 import { useNow } from '../../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -46,7 +46,7 @@ import {
 import {
   mobileAgentChildRowName,
   mobileAgentChildRowText
-} from '../../../../worktree/mobile-agent-child-row-text'
+} from '../../../../worktree/agent-lineage/mobile-agent-child-row-text'
 import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
 
 type TaskKind = AgentSessionBackgroundTask['kind']

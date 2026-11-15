@@ -20,6 +20,7 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
   const rawSoundId = (candidate as { customSoundId?: unknown }).customSoundId
   const customSoundId =
     rawSoundId === 'system' ||
+    rawSoundId === 'none' ||
     rawSoundId === 'two-tone' ||
     rawSoundId === 'bong' ||
     rawSoundId === 'thump' ||

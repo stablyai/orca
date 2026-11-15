@@ -45,6 +45,8 @@ export type RuntimeWorktreeAgentRow = {
   displayName: string | null
   /** The name desktop's compact row leads with (rename, chat or live title). Old hosts omit it. */
   conversationName?: string
+  /** `conversationName` names a forked native chat, drawn after the fork mark. Old hosts omit it. */
+  conversationForked?: true
   lastAssistantMessage: string | null
   toolName: string | null
   toolInput: string | null

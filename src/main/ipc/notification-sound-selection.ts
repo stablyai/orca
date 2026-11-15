@@ -8,7 +8,10 @@ import dingSoundPath from '../../../resources/notification-sounds/ding.mp3?asset
 import sonarSoundPath from '../../../resources/notification-sounds/sonar.mp3?asset'
 import thumpSoundPath from '../../../resources/notification-sounds/thump.mp3?asset'
 import twoToneSoundPath from '../../../resources/notification-sounds/two-tone.mp3?asset'
-import type { NotificationSettings } from '../../shared/notification-settings-types'
+import {
+  type NotificationSettings,
+  usesCustomNotificationSound
+} from '../../shared/notification-settings-types'
 
 export const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> = new Map([
   ['.ogg', 'audio/ogg'],
@@ -42,7 +45,7 @@ export function getSelectedNotificationSoundPath(settings: NotificationSettings)
   reason?: 'missing-path' | 'invalid-path' | 'unsupported-type'
 } {
   const customSoundId = getEffectiveNotificationSoundId(settings)
-  if (customSoundId === 'system') {
+  if (!usesCustomNotificationSound(customSoundId)) {
     return { path: null, reason: 'missing-path' }
   }
   if (customSoundId !== 'custom') {

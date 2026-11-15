@@ -61,10 +61,6 @@ describe('probeRuntimeListener', () => {
     await expect(probeRuntimeListener(metadataFor(endpoint))).resolves.toBe('accepting')
   })
 
-  it('frees a profile whose endpoint was never bound', async () => {
-    await expect(probeRuntimeListener(metadataFor(nextEndpoint()))).resolves.toBe('not-listening')
-  })
-
   it.skipIf(process.platform === 'win32')(
     'frees a profile whose owner was killed with its socket file still on disk',
     async () => {

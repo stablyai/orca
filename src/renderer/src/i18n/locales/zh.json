@@ -185,6 +185,7 @@
         "fontKeywordTypeface": "字体",
         "fontKeywordTypography": "排版",
         "inheritFont": "与 IDE 字体相同",
+        "systemFont": "系统字体",
         "fontPreviewLabel": "聊天字体预览",
         "fontPreview": "这段文字用于预览聊天字体",
         "title": "聊天界面",
@@ -3399,6 +3400,7 @@
             "1e4b81d892": "扑通",
             "86af8d938c": "咚",
             "80f7cc95b3": "二音",
+            "silent": "静音",
             "017abebfa6": "系统默认值"
           }
         }
@@ -3599,8 +3601,7 @@
             "stop_command_description": "关闭此终端将停止其中正在运行的命令",
             "dont_ask_again": "对有运行中进程的终端不再询问",
             "stop_agent_confirm": "停止代理",
-            "stop_command_confirm": "停止并关闭",
-            "automatic_resume_warning": "此终端不会自动恢复，若要稍后恢复，请取消并让工作区进入休眠"
+            "stop_command_confirm": "停止并关闭"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "收回",
@@ -4263,7 +4264,6 @@
             "c8857b40f7": "刷新使用数据",
             "75ded02687": "管理账户…",
             "ff0fbe9311": "当前",
-            "7657e3db9c": "Codex 账户",
             "38b5647724": "Codex 使用量运行时",
             "ba55303942": "打开 Codex 详情和账户切换器",
             "c35af53b73": "登录",
@@ -4271,7 +4271,6 @@
             "5c938d39ac": "周",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
             "59c6e7b4e0": "可见会话将立即重启，其他会话会在其工作树变为活动状态时重启",
@@ -4541,7 +4540,8 @@
             "compact": "精简",
             "footerDetailAria": "使用情况页脚详情",
             "detailedTooltip": "完整使用情况，包含条形图、标签和百分比",
-            "compactTooltip": "精简使用情况：每个提供方显示一项汇总"
+            "compactTooltip": "精简使用情况：每个提供方显示一项汇总",
+            "notChecked": "未检查"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
@@ -4668,9 +4668,6 @@
             "ahead": "领先 {{ahead}}",
             "behind": "落后 {{behind}}",
             "activeAgents_other": "{{count}} 个活动智能体",
-            "completedAgents_other": "{{count}} 个已完成的智能体",
-            "activeAndCompletedAgents": "{{active}}，{{completed}}",
-            "completedAgentsRetained_other": "保留了 {{count}} 个已完成的智能体",
             "noTrackedAgents": "没有正在运行的受跟踪智能体",
             "noTerminalTabs": "没有终端标签页",
             "liveTerminalTabs_other": "{{count}} 个终端标签页中有 {{live}} 个正在运行",
@@ -4716,12 +4713,17 @@
           "AccountSwitchList": {
             "used": "已用",
             "left": "剩余",
-            "reset": "重置"
+            "reset": "重置",
+            "accounts": "账户"
           },
           "InlineUsageBars": {
             "now": "现在",
             "resetsNow": "现在重置",
             "resetsIn": "{{duration}}后重置"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "显示剩余用量",
+            "showUsed": "显示已用用量"
           }
         }
       },
@@ -19337,7 +19339,8 @@
         "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
         "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
         "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
-        "forkedFrom": "分支来源"
+        "forkedFrom": "分支来源",
+        "forkedFromUnknown": "分支来源：另一个聊天"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} 字节"
@@ -19777,7 +19780,12 @@
         "failed": "{{agent}} 无法从此聊天创建分支",
         "hostUnsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。",
         "failedDetail": "聊天未发生更改。请重试。",
-        "commandWorking": "{{agent}} 回复期间无法创建分支。回复结束后，请再次运行 /fork。"
+        "commandWorking": "{{agent}} 回复期间无法创建分支。回复结束后，请再次运行 /fork。",
+        "mark": "分支 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分支：{{name}}",
+        "sourceTooltip": "{{name}} 的分支",
+        "unknownSourceTooltip": "另一个聊天的分支"
       },
       "cardKindHidden": {
         "description": "你可以随时在此处更改",
@@ -19877,7 +19885,7 @@
               "comment": "评论",
               "prunable": "可修剪",
               "locked": "已锁定",
-              "retainedAgents": "已完成的代理"
+              "finishedAgents": "已完成的代理"
             }
           },
           "noSizes": "尚未测量工作区大小",
@@ -19935,7 +19943,7 @@
           "pinned": "已固定",
           "unread": "未读",
           "comment": "有评论",
-          "retainedDoneAgents": "已完成的代理记录",
+          "finishedAgents": "已完成的代理",
           "contextPresence": "打开的标签页、终端和评论",
           "completelyEmpty": "没有任何需保留的内容",
           "noWorkspaces": "未找到工作区",

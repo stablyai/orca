@@ -659,6 +659,7 @@
         "fontKeywordTypeface": "Schriftart",
         "fontKeywordTypography": "Typografie",
         "inheritFont": "Wie IDE-Schrift",
+        "systemFont": "Systemschrift",
         "fontPreviewLabel": "Vorschau der Chat-Schrift",
         "fontPreview": "Der schnelle braune Fuchs springt über den faulen Hund.",
         "title": "Chat-Oberfläche",
@@ -3776,6 +3777,7 @@
             "1e4b81d892": "Dumpfer Schlag",
             "86af8d938c": "Gong",
             "80f7cc95b3": "Zweiton",
+            "silent": "Lautlos",
             "017abebfa6": "Systemstandard"
           }
         }
@@ -3964,7 +3966,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Dieses Terminal wird nicht automatisch fortgesetzt. Abbrechen und den Arbeitsbereich in den Ruhezustand versetzen, um es später fortzusetzen.",
             "1d1a7a9c1f": "Abbrechen",
             "stop_agent_title": "Diesen Agenten stoppen?",
             "stop_command_title": "Laufenden Befehl stoppen?",
@@ -4638,7 +4639,6 @@
             "c8857b40f7": "Nutzungsdaten aktualisieren",
             "75ded02687": "Konten verwalten…",
             "ff0fbe9311": "Aktiv",
-            "7657e3db9c": "Codex-Konto",
             "38b5647724": "Codex-Nutzung: Laufzeitumgebung",
             "ba55303942": "Codex-Details und Kontowechsel öffnen",
             "c35af53b73": "Anmelden",
@@ -4646,7 +4646,6 @@
             "5c938d39ac": "Wo.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
             "59c6e7b4e0": "Sichtbare Sitzungen werden jetzt neu gestartet. Andere werden neu gestartet, sobald ihr Worktree aktiv wird.",
@@ -4924,7 +4923,8 @@
             "compact": "Kompakt",
             "detailedTooltip": "Vollständige Nutzung mit Balken, Beschriftungen und Prozentwerten",
             "compactTooltip": "Kompakte Nutzung: eine Zusammenfassung pro Anbieter",
-            "footerDetailAria": "Detailangabe in der Nutzungsfußzeile"
+            "footerDetailAria": "Detailangabe in der Nutzungsfußzeile",
+            "notChecked": "Nicht geprüft"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} werden aktualisiert",
@@ -5057,11 +5057,6 @@
             "behind": "{{behind}} zurück",
             "activeAgents_one": "{{count}} aktiver Agent",
             "activeAgents_other": "{{count}} aktive Agenten",
-            "completedAgents_one": "{{count}} abgeschlossener Agent",
-            "completedAgents_other": "{{count}} abgeschlossene Agenten",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} abgeschlossener Agent beibehalten",
-            "completedAgentsRetained_other": "{{count}} abgeschlossene Agenten beibehalten",
             "noTrackedAgents": "Keine erfassten Agenten aktiv",
             "noTerminalTabs": "Keine Terminal-Tabs",
             "liveTerminalTabs_one": "{{live}} aktiv von {{count}} Terminal-Tab",
@@ -5114,12 +5109,17 @@
           "AccountSwitchList": {
             "used": "Verbraucht",
             "left": "Übrig",
-            "reset": "Zurücksetzung"
+            "reset": "Zurücksetzung",
+            "accounts": "Konten"
           },
           "InlineUsageBars": {
             "now": "jetzt",
             "resetsNow": "Zurücksetzung jetzt",
             "resetsIn": "Zurücksetzung in {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Verbleibende Nutzung anzeigen",
+            "showUsed": "Verbrauchte Nutzung anzeigen"
           }
         }
       },
@@ -19471,7 +19471,8 @@
         "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
         "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
         "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
-        "forkedFrom": "Abgezweigt von"
+        "forkedFrom": "Abgezweigt von",
+        "forkedFromUnknown": "Abgezweigt von einem anderen Chat"
       },
       "composer": {
         "send": "Senden",
@@ -20225,7 +20226,12 @@
         "failed": "{{agent}} konnte diesen Chat nicht abzweigen",
         "hostUnsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut.",
         "failedDetail": "Dein Chat ist unverändert. Versuche es erneut.",
-        "commandWorking": "Abzweigen ist nicht möglich, während {{agent}} antwortet. Führe /fork erneut aus, wenn die Antwort fertig ist."
+        "commandWorking": "Abzweigen ist nicht möglich, während {{agent}} antwortet. Führe /fork erneut aus, wenn die Antwort fertig ist.",
+        "mark": "Zweig ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Zweig: {{name}}",
+        "sourceTooltip": "Abgezweigt von {{name}}",
+        "unknownSourceTooltip": "Von einem anderen Chat abgezweigt"
       },
       "cardKindHidden": {
         "description": "Das kannst du jederzeit hier ändern:",
@@ -20341,7 +20347,7 @@
           "pinned": "Angeheftet",
           "unread": "Ungelesen",
           "comment": "Mit Kommentar",
-          "retainedDoneAgents": "Protokolle abgeschlossener Agenten",
+          "finishedAgents": "Abgeschlossene Agenten",
           "contextPresence": "Offene Tabs, Terminals, Kommentare",
           "completelyEmpty": "Nichts mehr zu verlieren",
           "noWorkspaces": "Keine Arbeitsbereiche gefunden.",
@@ -20459,7 +20465,7 @@
               "comment": "Kommentar",
               "prunable": "Bereinigbar",
               "locked": "Gesperrt",
-              "retainedAgents": "Abgeschlossene Agenten"
+              "finishedAgents": "Abgeschlossene Agenten"
             }
           },
           "forceDeleteRisk_one": "{{count}} Arbeitsbereich weist derzeit Risiken auf und muss möglicherweise zwangsweise gelöscht werden",

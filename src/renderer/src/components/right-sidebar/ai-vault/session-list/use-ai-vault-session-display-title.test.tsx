@@ -109,9 +109,9 @@ describe('useAiVaultSessionDisplayTitle for terminal sessions', () => {
       buildAiVaultOriginalPaneIndex(useAppStore.getState()),
       session
     )
-    const { result } = renderHook(() => useAiVaultSessionDisplayTitle(session, target))
+    const { result } = renderHook(() => useAiVaultSessionDisplayTitle(session, target).title)
     const remoteSession: AiVaultSession = { ...session, executionHostId: 'ssh:box' }
-    const remote = renderHook(() => useAiVaultSessionDisplayTitle(remoteSession, target))
+    const remote = renderHook(() => useAiVaultSessionDisplayTitle(remoteSession, target).title)
     expect(result.current).toBe('Original prompt')
 
     act(() => setTabTitle('  My rename '))
@@ -129,7 +129,7 @@ describe('useAiVaultSessionDisplayTitle for terminal sessions', () => {
       buildAiVaultOriginalPaneIndex(useAppStore.getState()),
       session
     )
-    const { result } = renderHook(() => useAiVaultSessionDisplayTitle(session, target))
+    const { result } = renderHook(() => useAiVaultSessionDisplayTitle(session, target).title)
     expect(result.current).toBe('Original prompt')
   })
 })
