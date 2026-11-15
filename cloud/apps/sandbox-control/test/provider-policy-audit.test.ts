@@ -53,8 +53,42 @@ describe('provider-policy-audit (dev only)', () => {
 })
 
 describe('policyFacts', () => {
-  it('counts transform rules and keeps header names only', () => {
-    const body = JSON.stringify({ session: { networkPolicy: { transformRules: [{ domain: 'a.com', headerNames: ['Authorization', 'x-api-key'] }, { domain: 'b.com', headerNames: ['bad header'] }] } } })
-    expect(policyFacts(body, MARKER)).toEqual({ hasNetworkPolicy: true, transformRuleCount: 2, headerNames: ['authorization', 'x-api-key'], markerFound: false })
+  it('counts injection, forward and response rules separately, with header names per kind only', () => {
+    const live = JSON.stringify({ session: { networkPolicy: { injectionRules: [{ domain: 'a.com', headerNames: ['Authorization', 'x-api-key'] }], forwardRules: [{ domain: 'b.com', headerNames: ['bad header'] }], responseRules: [{ domain: 'a.com', statusCode: 403 }] } } })
+    expect(policyFacts(live, MARKER)).toEqual({
+      hasNetworkPolicy: true,
+      injectionRules: { count: 1, headerNames: ['authorization', 'x-api-key'] },
+      forwardRules: { count: 1, headerNames: [] },
+      responseRules: { count: 1, headerNames: [] },
+      markerFound: false
+    })
+    // A scrubbed policy reads as no injection rules, response rules only.
+    const scrubbed = JSON.stringify({ session: { networkPolicy: { responseRules: [{ domain: 'a.com', statusCode: 403 }, { domain: 'a.com', statusCode: 403 }] } } })
+    expect(policyFacts(scrubbed, MARKER)).toMatchObject({ injectionRules: { count: 0 }, responseRules: { count: 2 } })
+  })
+})
+
+describe('resume-raw and echo-probe (dev only)', () => {
+  it('echo-probe answers only whether the marker came back; placeholders only', async () => {
+    const { h, id } = await setup({ SANDBOX_ENV: 'dev' })
+    h.vercel.commandHandler = (params) =>
+      params.command === 'bash' && params.args?.[1]?.includes('orca-echo-probe') ? { exitCode: 0, stdout: '200\n1\n', stderr: '' } : undefined
+    const placeholder = `orca-ph-anthropic-api-key-${id}`
+    const ok = await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'httpbin.org', header: 'x-api-key', placeholder } })
+    expect(ok.body).toEqual({ sandboxId: id, status: 200, markerFound: true })
+    const value = await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'httpbin.org', header: 'x-api-key', placeholder: 'sk-ant-real' } })
+    expect(value.status).toBe(400)
+    const elsewhere = await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'evil.example', header: 'x-api-key', placeholder } })
+    expect(elsewhere.status).toBe(400)
+  })
+
+  it('resume-raw resumes the provider session without writing a policy', async () => {
+    const { h, id, box } = await setup({ SANDBOX_ENV: 'dev' })
+    const mia = await h.token('mia', 'acme', 'sandbox', {})
+    expect((await h.call('POST', `/v1/sandboxes/${id}/suspend`, { bearer: mia })).status).toBe(200)
+    const before = JSON.stringify(box().policy)
+    const res = await h.call('POST', `/v1/internal/sandboxes/${id}/resume-raw`, { bearer: OP })
+    expect(res.body.sandboxId).toBe(id)
+    expect(JSON.stringify(box().policy)).toBe(before)
   })
 })
