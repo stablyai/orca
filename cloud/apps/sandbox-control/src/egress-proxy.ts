@@ -51,6 +51,21 @@ export type ProxiedRoute = {
   keepResponseFields?: readonly string[]
   /** Names the swapped credential in the proxy's log line (never its value). */
   label?: string
+  /**
+   * CODEX-EGRESS-BLOCKED: what the client gets when the provider's own edge refused this proxy (a
+   * Cloudflare 403 HTML page for Workers' egress IPs) instead of answering the request. The raw page
+   * is never passed on: the client shows this message rather than an HTML dump or a retry loop.
+   */
+  upstreamBlocked?: { status: number; contentType: string; body: string }
+}
+
+/** A provider's edge refused the proxy itself: Cloudflare's 403 HTML page, not an API answer. */
+export function edgeBlocked(upstream: Response): boolean {
+  return (
+    upstream.status === 403 &&
+    (upstream.headers.get('content-type') ?? '').toLowerCase().startsWith('text/html') &&
+    (upstream.headers.get('server') ?? '').toLowerCase() === 'cloudflare'
+  )
 }
 
 export type EgressProxyDeps = {
@@ -176,6 +191,15 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   })
   // Names only: which sandbox, host and credential were swapped, and what the provider answered.
   secretLog('egress_swap', { sandboxId: row.id, host, credential: route.label ?? route.header, status: upstream.status }, [credential])
+  if (route.upstreamBlocked && edgeBlocked(upstream)) {
+    // The request never reached the provider: no status hook (it says nothing about the credential).
+    secretLog('egress_upstream_blocked', { sandboxId: row.id, host, credential: route.label ?? route.header })
+    await upstream.body?.cancel().catch(() => undefined)
+    return new Response(route.upstreamBlocked.body, {
+      status: route.upstreamBlocked.status,
+      headers: { 'content-type': route.upstreamBlocked.contentType }
+    })
+  }
   route.onUpstreamStatus?.(upstream.status, { method: request.method, path })
   if (route.keepResponseFields) {
     return onlyFields(upstream, route.keepResponseFields)

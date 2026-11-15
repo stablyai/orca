@@ -415,6 +415,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
             placeholders: [provider.format(provider.placeholder(row))],
             label: `account:${agent}`,
             ...(provider.pathAllowed ? { pathAllowed: provider.pathAllowed } : {}),
+            ...(provider.upstreamBlocked ? { upstreamBlocked: provider.upstreamBlocked } : {}),
             credential: async () => {
               // The agent sees the provider's own "sign in again" answer, not a proxy error.
               const signedOut = (reason: string) => ({ deny: reason, ...(provider.signedOut ? { answer: provider.signedOut } : {}) })

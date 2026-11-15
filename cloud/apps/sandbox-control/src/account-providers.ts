@@ -41,6 +41,8 @@ export type AccountProvider = {
    * normal sign-in message instead of a proxy error.
    */
   signedOut?: { status: number; contentType: string; body: string }
+  /** The provider's edge refused the egress proxy itself (CODEX-EGRESS-BLOCKED): what the agent shows. */
+  upstreamBlocked?: { status: number; contentType: string; body: string }
 }
 
 /** Anthropic's token counter: authenticated like Messages, free, and nothing is generated. */
