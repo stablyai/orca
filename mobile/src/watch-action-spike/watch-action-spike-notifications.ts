@@ -3,26 +3,30 @@ import {
   WATCH_ACTION_SPIKE_ACTIONS,
   WATCH_ACTION_SPIKE_CATEGORY
 } from './watch-action-spike-config'
+import { translate } from '../i18n/mobile-i18n'
 import type { WatchActionSpikeResult } from './watch-action-spike-results'
 
-// Spike copy stays English: these notifications exist only in ORCA_WATCH_SPIKE builds.
+// Result notifications stay English diagnostics: they exist only in ORCA_WATCH_SPIKE builds.
 // Yes is first and nondestructive so Watch Double Tap approves; no action requires an unlocked phone.
 export function registerWatchActionSpikeCategory(): Promise<unknown> {
   return Notifications.setNotificationCategoryAsync(WATCH_ACTION_SPIKE_CATEGORY, [
     {
       identifier: WATCH_ACTION_SPIKE_ACTIONS.yes,
-      buttonTitle: 'Yes',
+      buttonTitle: translate('watchActionSpike.yes', 'Yes'),
       options: { opensAppToForeground: false }
     },
     {
       identifier: WATCH_ACTION_SPIKE_ACTIONS.no,
-      buttonTitle: 'No',
+      buttonTitle: translate('watchActionSpike.no', 'No'),
       options: { opensAppToForeground: false }
     },
     {
       identifier: WATCH_ACTION_SPIKE_ACTIONS.reply,
-      buttonTitle: 'Reply',
-      textInput: { submitButtonTitle: 'Send', placeholder: 'Say a reply' },
+      buttonTitle: translate('watchActionSpike.reply', 'Reply'),
+      textInput: {
+        submitButtonTitle: translate('watchActionSpike.send', 'Send'),
+        placeholder: translate('watchActionSpike.replyPlaceholder', 'Say a reply')
+      },
       options: { opensAppToForeground: false }
     }
   ])
@@ -32,8 +36,8 @@ export async function armWatchActionSpike(hostId: string, delaySeconds: number):
   await registerWatchActionSpikeCategory()
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Orca watch test',
-      body: 'Claude wants to run: echo hello. Allow?',
+      title: translate('watchActionSpike.testTitle', 'Orca watch test'),
+      body: translate('watchActionSpike.testBody', 'Claude wants to run: echo hello. Allow?'),
       categoryIdentifier: WATCH_ACTION_SPIKE_CATEGORY,
       data: { orcaWatchSpike: { hostId, armedAt: Date.now() } },
       sound: 'default'

@@ -8683,6 +8683,13 @@
     "arm": "Arm Watch test ({{seconds}}s)",
     "refresh": "Refresh results",
     "clear": "Clear results",
-    "nativeTimeline": "Native timeline"
+    "nativeTimeline": "Native timeline",
+    "yes": "Yes",
+    "no": "No",
+    "reply": "Reply",
+    "send": "Send",
+    "replyPlaceholder": "Say a reply",
+    "testTitle": "Orca watch test",
+    "testBody": "Claude wants to run: echo hello. Allow?"
   }
 }

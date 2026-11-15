@@ -24,10 +24,26 @@ export async function readWatchActionSpikeResults(): Promise<WatchActionSpikeRes
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY)
     const parsed: unknown = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? (parsed as WatchActionSpikeResult[]) : []
+    return Array.isArray(parsed) ? parsed.filter(isWatchActionSpikeResult) : []
   } catch {
     return []
   }
+}
+
+// Only this module writes the key, so the shape check guards against older spike builds' rows.
+function isWatchActionSpikeResult(value: unknown): value is WatchActionSpikeResult {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'at' in value &&
+    typeof value.at === 'number' &&
+    'outcome' in value &&
+    typeof value.outcome === 'string' &&
+    'steps' in value &&
+    Array.isArray(value.steps) &&
+    'log' in value &&
+    Array.isArray(value.log)
+  )
 }
 
 export async function appendWatchActionSpikeResult(result: WatchActionSpikeResult): Promise<void> {

@@ -29,6 +29,19 @@ async function nativeTapAt(notificationId: string): Promise<number | null> {
   return at
 }
 
+function readSpikeHostId(data: unknown): string | null {
+  const spike =
+    typeof data === 'object' && data !== null && 'orcaWatchSpike' in data
+      ? data.orcaWatchSpike
+      : null
+  return typeof spike === 'object' &&
+    spike !== null &&
+    'hostId' in spike &&
+    typeof spike.hostId === 'string'
+    ? spike.hostId
+    : null
+}
+
 async function handleWatchActionSpikeResponse(
   response: Notifications.NotificationResponse
 ): Promise<void> {
@@ -48,9 +61,7 @@ async function handleWatchActionSpikeResponse(
   const appState = AppState.currentState
   const tappedAt = await nativeTapAt(request.identifier)
   const nativeToJsMs = tappedAt === null ? null : startedAt - tappedAt
-  const spike = (request.content.data as { orcaWatchSpike?: { hostId?: unknown } } | undefined)
-    ?.orcaWatchSpike
-  const hostId = typeof spike?.hostId === 'string' ? spike.hostId : null
+  const hostId = readSpikeHostId(request.content.data)
   const base = {
     at: startedAt,
     action: response.actionIdentifier,

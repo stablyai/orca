@@ -16,13 +16,13 @@ Decisions in force:
 
 ## What the build contains
 
-| Piece | Path | Role |
-|---|---|---|
-| Native module | `mobile/modules/orca-watch-action-spike/ios/` | Logs every launch and spike tap natively (works even if JS never runs), holds ~30s of background time, switches pairing keychain accessibility |
-| Category, arm, result | `mobile/src/watch-action-spike/watch-action-spike-notifications.ts` | Yes/No/Reply category, local test notification, result notification |
-| Tap handler | `mobile/src/watch-action-spike/watch-action-spike-response.ts` | Started from `mobile/index.js`; refuses taps that reach JS more than 30s late (`stale`) |
-| Round trip | `mobile/src/watch-action-spike/watch-action-spike-round-trip.ts` | Keychain read → `openHostLogicalClient` → `status.get` |
-| UI | `mobile/src/watch-action-spike/WatchActionSpikeRow.tsx` | "Watch test" section in Settings → Troubleshoot |
+| Piece                 | Path                                                                | Role                                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native module         | `mobile/modules/orca-watch-action-spike/ios/`                       | Logs every launch and spike tap natively (works even if JS never runs), holds ~30s of background time, switches pairing keychain accessibility |
+| Category, arm, result | `mobile/src/watch-action-spike/watch-action-spike-notifications.ts` | Yes/No/Reply category, local test notification, result notification                                                                            |
+| Tap handler           | `mobile/src/watch-action-spike/watch-action-spike-response.ts`      | Started from `mobile/index.js`; refuses taps that reach JS more than 30s late (`stale`)                                                        |
+| Round trip            | `mobile/src/watch-action-spike/watch-action-spike-round-trip.ts`    | Keychain read → `openHostLogicalClient` → `status.get`                                                                                         |
+| UI                    | `mobile/src/watch-action-spike/WatchActionSpikeRow.tsx`             | "Watch test" section in Settings → Troubleshoot                                                                                                |
 
 Everything is gated on `ORCA_WATCH_SPIKE=1` at build time (`app.config.js` → `extra.orcaWatchSpike`),
 except the native module, which links unconditionally but only acts on its own notification category.
@@ -80,15 +80,15 @@ unlocked.
 For every test: tap **Arm**, lock the iPhone immediately with the side button, raise your wrist and wait.
 Note the result notification on the Watch.
 
-| # | Steps | What it answers | Expected |
-|---|---|---|---|
-| 1 | **Arm 15s**, stay in the app, long-press the banner, tap **Yes** | Plumbing works | `✓ Yes reached host` |
-| 2 | **Arm 60s**, lock, tap **Yes** on the Watch | Does a locked phone with today's keychain fail? | `✗ Yes failed at keychain` |
-| 3 | Same as 2, but **Double Tap** instead of tapping | Does Double Tap fire Yes? | Same result as 2, action `yes` |
-| 4 | Turn **Pairing readable while locked** **On** (phone unlocked), then repeat 2 | Does decision 1 fix it, and how fast? | `✓ Yes reached host in …ms` |
-| 5 | **Arm 60s**, lock, tap **Reply**, dictate a sentence | Dictation reaches the phone | Result quotes your sentence |
-| 6 | iPhone Settings → Wi-Fi **off** (not Control Center), repeat 4 | Does it work over the cloud relay? | `path relay` |
-| 7 | **Arm 60s**, swipe Orca out of the app switcher, lock, tap **Yes** | Cold launch: app not in memory | Prediction: no result; after reopening, a `stale` row |
+| #   | Steps                                                                         | What it answers                                 | Expected                                              |
+| --- | ----------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
+| 1   | **Arm 15s**, stay in the app, long-press the banner, tap **Yes**              | Plumbing works                                  | `✓ Yes reached host`                                  |
+| 2   | **Arm 60s**, lock, tap **Yes** on the Watch                                   | Does a locked phone with today's keychain fail? | `✗ Yes failed at keychain`                            |
+| 3   | Same as 2, but **Double Tap** instead of tapping                              | Does Double Tap fire Yes?                       | Same result as 2, action `yes`                        |
+| 4   | Turn **Pairing readable while locked** **On** (phone unlocked), then repeat 2 | Does decision 1 fix it, and how fast?           | `✓ Yes reached host in …ms`                           |
+| 5   | **Arm 60s**, lock, tap **Reply**, dictate a sentence                          | Dictation reaches the phone                     | Result quotes your sentence                           |
+| 6   | iPhone Settings → Wi-Fi **off** (not Control Center), repeat 4                | Does it work over the cloud relay?              | `path relay`                                          |
+| 7   | **Arm 60s**, swipe Orca out of the app switcher, lock, tap **Yes**            | Cold launch: app not in memory                  | Prediction: no result; after reopening, a `stale` row |
 
 Why 60s: iOS keeps "when unlocked" keychain items readable briefly after locking, so a 15s test can
 pass by accident.
