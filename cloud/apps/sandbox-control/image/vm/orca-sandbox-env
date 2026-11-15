@@ -125,6 +125,12 @@ if true; then
       printf '\n# >>> orca-cloud managed provider\n[model_providers.orca_chatgpt]\nname = "OpenAI"\n'
       printf 'base_url = "https://chatgpt.com/backend-api/codex"\nwire_api = "responses"\nrequires_openai_auth = true\nsupports_websockets = false\n'
       printf '# <<< orca-cloud managed\n'
+      # CODEX-PS-CALLS: Codex's plugin catalog made ~170 chatgpt.com calls per session start through the
+      # account swap. Off unless the person's own config says otherwise (a [features] table of theirs is
+      # left alone: TOML can't define it twice).
+      if ! grep -Eq '^[[:space:]]*(\[features\]|features[.[:space:]=])' "$user_part"; then
+        printf '\n# >>> orca-cloud managed features\n[features]\nplugins = false\n# <<< orca-cloud managed\n'
+      fi
     fi
   } >"$next"
   if ! grep -qF "[projects.\"$PROJECT\"]" "$user_part"; then
@@ -133,6 +139,19 @@ if true; then
   chmod 600 "$next"
   mv -f "$next" "$codex_config"
   rm -f "$user_part"
+fi
+# CODEX-WS-OFF: the same provider at the system layer (/etc/codex/config.toml), so Codex keeps HTTPS for it
+# even when the person's own config drops ours: header-swapping firewalls refuse WebSocket upgrades
+# (Codex then retries for ~10 s per session). Best effort: no passwordless sudo, no system file.
+if [ -n "$codex_placeholder" ] && [ -z "$custom_provider" ]; then
+  sys_cfg='# >>> orca-cloud managed (Orca Cloud)\n[model_providers.orca_chatgpt]\nname = "OpenAI"\nbase_url = "https://chatgpt.com/backend-api/codex"\nwire_api = "responses"\nrequires_openai_auth = true\nsupports_websockets = false\n# <<< orca-cloud managed\n'
+  if [ -n "${ORCA_CODEX_SYSTEM_CONFIG:-}" ]; then
+    # Tests: a scratch path, written directly.
+    mkdir -p "$(dirname "$ORCA_CODEX_SYSTEM_CONFIG")" && printf "$sys_cfg" >"$ORCA_CODEX_SYSTEM_CONFIG"
+  else
+    # shellcheck disable=SC2059
+    printf "$sys_cfg" | sudo -n sh -c 'mkdir -p /etc/codex && cat >/etc/codex/config.toml.orca-new && mv -f /etc/codex/config.toml.orca-new /etc/codex/config.toml' 2>/dev/null || true
+  fi
 fi
 # ---- Codex via the person's Orca account (contract D11): a placeholder ChatGPT login, no refresh token.
 # The egress proxy swaps the real access token on chatgpt.com; the real tokens never reach this VM. The
@@ -155,8 +174,9 @@ if [ -n "$codex_placeholder" ]; then
   # Marker first: a run cut short after the swap still recognises the file as Orca's.
   printf '%s' "$codex_placeholder" >"$codex_marker"
   codex_tmp="$(mktemp "$HOME/.codex/.auth.XXXXXX")"
-  printf '{\n  "OPENAI_API_KEY": null,\n  "tokens": {\n    "id_token": "%s",\n    "access_token": "%s",\n    "refresh_token": "",\n    "account_id": null\n  },\n  "last_refresh": "%s"\n}\n' \
-    "$codex_placeholder" "$codex_placeholder" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$codex_tmp"
+  # last_refresh far ahead: Codex never refreshes this login itself (Orca refreshes the real one centrally).
+  printf '{\n  "OPENAI_API_KEY": null,\n  "tokens": {\n    "id_token": "%s",\n    "access_token": "%s",\n    "refresh_token": "",\n    "account_id": null\n  },\n  "last_refresh": "2099-01-01T00:00:00Z"\n}\n' \
+    "$codex_placeholder" "$codex_placeholder" >"$codex_tmp"
   chmod 600 "$codex_tmp"
   mv -f "$codex_tmp" "$codex_auth"
 elif [ -f "$codex_marker" ] || [ -n "$codex_ours" ]; then

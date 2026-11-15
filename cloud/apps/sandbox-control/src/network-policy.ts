@@ -9,13 +9,18 @@
 //   undici fetch hangs on the body (bake-off). curl/git and Go clients are unaffected.
 
 type Matcher = { exact?: string; startsWith?: string }
+/** Vercel matches `path` without the query string, and `method` as a list (verified on a live sandbox). */
+type RuleMatch = { headers?: { key: Matcher; value: Matcher }[]; path?: Matcher; method?: string[] }
 export type NetworkPolicyRule =
   | {
-      match?: { headers?: { key: Matcher; value: Matcher }[] }
+      match?: RuleMatch
       transform: { headers: Record<string, string> }[]
     }
-  | { match?: { headers?: { key: Matcher; value: Matcher }[] }; forwardURL: string }
-  | { match?: { headers?: { key: Matcher; value: Matcher }[] }; response: { statusCode: number; body: string; contentType: string } }
+  | { match?: RuleMatch; forwardURL: string }
+  | { match?: RuleMatch; response: { statusCode: number; body: string; contentType: string } }
+
+/** Narrows a credential claim to these requests (path without query; methods, when given). */
+export type PathMatch = { exact?: string; startsWith?: string; methods?: readonly string[] }
 
 export type NetworkPolicy = { allow: Record<string, NetworkPolicyRule[]> }
 
@@ -192,8 +197,11 @@ export type CredentialRoute = {
   placeholders: readonly string[]
   /** Requests without a placeholder still pass (the host is shared with the client's own tokens). */
   allowUnclaimed?: boolean
+  /** Only these paths are claimed (CODEX-FIREWALL-SWAP); any other path with the placeholder gets the 403. */
+  paths?: readonly PathMatch[]
 } & (
-  | { via: 'transform'; value: string }
+  /** `extraHeaders` are set alongside the swapped header (e.g. an account id the client can't know). */
+  | { via: 'transform'; value: string; extraHeaders?: Record<string, string> }
   | { via: 'forward'; forwardURL: string }
   /** Answered by Vercel's firewall itself; nothing reaches the host (EGRESS-SWAP-FAIL-CLOSED). */
   | { via: 'respond'; statusCode: number; body: string }
@@ -209,6 +217,12 @@ export type EgressPolicyInput = {
    * builds (open egress anyway) turn it off so public repos still clone anonymously next to private ones.
    */
   denyUnclaimed?: boolean
+  /**
+   * Requests forwarded to our egress proxy by path alone (no placeholder header to match): Codex's own
+   * token refresh against auth.openai.com, which the proxy answers itself (CODEX-FIREWALL-SWAP). The host
+   * gets no 403 rule from these; everything else on it passes as before.
+   */
+  pathForwards?: readonly { host: string; path: PathMatch; forwardURL: string }[]
 }
 
 
@@ -219,22 +233,35 @@ export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
     allow[checkedHost(host)] = []
   }
   const denied = new Set<string>()
+  for (const forward of input.pathForwards ?? []) {
+    const host = checkedHost(forward.host)
+    const match: RuleMatch = {
+      path: forward.path.exact !== undefined ? { exact: forward.path.exact } : { startsWith: forward.path.startsWith ?? '/' },
+      ...(forward.path.methods ? { method: [...forward.path.methods] } : {})
+    }
+    allow[host] = [...(allow[host] ?? []), { match, forwardURL: forward.forwardURL }]
+  }
   for (const route of input.credentials ?? []) {
     const host = checkedHost(route.host)
     if (host.startsWith('*.')) {
       throw new Error('credential routes need an exact host')
     }
     const header = route.header.toLowerCase()
-    const claims = route.placeholders.map((placeholder): NetworkPolicyRule => {
-      const match = { headers: [{ key: { exact: header }, value: { exact: placeholder } }] }
+    const scopes: (PathMatch | null)[] = route.paths && route.paths.length > 0 ? [...route.paths] : [null]
+    const claims = route.placeholders.flatMap((placeholder) => scopes.map((scope): NetworkPolicyRule => {
+      const match: RuleMatch = {
+        headers: [{ key: { exact: header }, value: { exact: placeholder } }],
+        ...(scope ? { path: scope.exact !== undefined ? { exact: scope.exact } : { startsWith: scope.startsWith ?? '/' } } : {}),
+        ...(scope?.methods ? { method: [...scope.methods] } : {})
+      }
       if (route.via === 'transform') {
-        return { match, transform: [{ headers: { [header]: route.value } }] }
+        return { match, transform: [{ headers: { ...(route.extraHeaders ?? {}), [header]: route.value } }] }
       }
       if (route.via === 'respond') {
         return { match, response: { statusCode: route.statusCode, body: route.body, contentType: 'application/json' } }
       }
       return { match, forwardURL: route.forwardURL }
-    })
+    }))
     allow[host] = [...(allow[host] ?? []), ...claims]
     // One route that wants the deny is enough: a shared host fails closed.
     if (input.denyUnclaimed !== false && !route.allowUnclaimed) {

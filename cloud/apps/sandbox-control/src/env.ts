@@ -94,6 +94,11 @@ export type Env = {
   EGRESS_PROXY_URL?: string
   /** CODEX-RELAY (src/chatgpt-relay.ts): the Cloud Run relay chatgpt.com egress goes through. Unset: direct. */
   CHATGPT_RELAY_URL?: string
+  /**
+   * CODEX-FIREWALL-SWAP: `firewall` swaps the Codex account token at the sandbox firewall for Codex's hot calls
+   * (chatgpt.com answers sandbox egress); unset or `proxy`: every call through the egress proxy (and relay).
+   */
+  CODEX_EGRESS_SWAP?: string
   /** (secret) service-account JSON holding run.invoker on CHATGPT_RELAY_URL's service only. */
   CHATGPT_RELAY_SERVICE_ACCOUNT?: string
   /** Shortened session deadline (ms) for staging rollover rehearsals; refused when SANDBOX_ENV=prod. */

@@ -27,15 +27,51 @@ function scratch() {
       .map(([name, value]) => `${name}=${Buffer.from(value).toString('base64')}`)
       .join('\n')
     execFileSync('bash', [SCRIPT], {
-      env: { PATH: process.env.PATH, HOME: home, ORCA_SESSION_ENV_DIR: join(root, 'shm'), ORCA_SECRET_ENV: encoded, ORCA_ENV_GENERATION: String(generation++) },
+      env: {
+        PATH: process.env.PATH,
+        HOME: home,
+        ORCA_SESSION_ENV_DIR: join(root, 'shm'),
+        ORCA_SECRET_ENV: encoded,
+        ORCA_ENV_GENERATION: String(generation++),
+        ORCA_CODEX_SYSTEM_CONFIG: join(root, 'etc-codex', 'config.toml')
+      },
       stdio: ['ignore', 'pipe', 'pipe']
     })
   }
   const file = (path: string) => (existsSync(join(home, path)) ? readFileSync(join(home, path), 'utf8') : null)
-  return { home, run, file, sessionEnv: () => readFileSync(join(root, 'shm', 'session.env'), 'utf8') }
+  const systemConfig = () => (existsSync(join(root, 'etc-codex', 'config.toml')) ? readFileSync(join(root, 'etc-codex', 'config.toml'), 'utf8') : null)
+  return { home, run, file, systemConfig, sessionEnv: () => readFileSync(join(root, 'shm', 'session.env'), 'utf8') }
 }
 
 describe('orca-sandbox-env: Codex via the Orca account', () => {
+  it('Codex never refreshes the placeholder itself, keeps HTTPS at the system layer, and has plugins off (CODEX-FIREWALL-SWAP)', () => {
+    const { run, file, systemConfig } = scratch()
+    run({ ORCA_CODEX_AUTH_PLACEHOLDER: codexPlaceholder({ id: 'sbx_1' }) })
+    expect(JSON.parse(file('.codex/auth.json')!).last_refresh).toBe('2099-01-01T00:00:00Z')
+    const system = systemConfig()!
+    expect(system).toContain('[model_providers.orca_chatgpt]')
+    expect(system).toContain('supports_websockets = false')
+    expect(file('.codex/config.toml')).toContain('[features]\nplugins = false\n')
+  })
+
+  it("a person's own [features] table is left alone: no second one (invalid TOML), plugins as they set them", () => {
+    const { home, run, file } = scratch()
+    mkdirSync(join(home, '.codex'))
+    writeFileSync(join(home, '.codex', 'config.toml'), '[features]\nplugins = true\n')
+    run({ ORCA_CODEX_AUTH_PLACEHOLDER: codexPlaceholder({ id: 'sbx_1' }) })
+    const config = file('.codex/config.toml')!
+    expect(config.match(/^\[features\]/gm)).toHaveLength(1)
+    expect(config).toContain('plugins = true')
+    expect(config).not.toContain('plugins = false')
+  })
+
+  it('no Orca account: no plugins override and no system provider', () => {
+    const { run, file, systemConfig } = scratch()
+    run({})
+    expect(file('.codex/config.toml') ?? '').not.toContain('plugins = false')
+    expect(systemConfig()).toBeNull()
+  })
+
   it('writes a placeholder ChatGPT login (no refresh token) and the HTTPS provider, never as a shell variable', () => {
     const { run, file, sessionEnv } = scratch()
     const placeholder = codexPlaceholder({ id: 'sbx_1' })

@@ -518,3 +518,77 @@ describe('CODEX-RELAY: chatgpt.com through the Cloud Run relay', () => {
     expect(sent.headers.get('x-serverless-authorization')).toMatch(/^Bearer [\w-]+\.[\w-]+\.sig$/)
   })
 })
+
+describe('CODEX-FIREWALL-SWAP: the hot Codex calls are swapped at the sandbox firewall', () => {
+  async function firewallSetup() {
+    const t = await setup({ CODEX_EGRESS_SWAP: 'firewall' })
+    const mia = await t.as('mia', 'acme', 'member')
+    await t.signIn(mia)
+    const created = await t.h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    const box = () => [...t.h.vercel.boxes.values()].find((b) => b.params.tags.orcaSandbox === id)!
+    return { ...t, mia, id, box }
+  }
+  type Rule = { match?: { headers?: { value: { exact?: string } }[]; path?: { exact?: string; startsWith?: string }; method?: string[] }; transform?: { headers: Record<string, string> }[]; forwardURL?: string; response?: { statusCode: number } }
+  const rules = (box: { policy: { allow: Record<string, unknown[]> } }, host: string) => (box.policy.allow[host] ?? []) as Rule[]
+
+  it('exact hot paths get the token from the firewall; every other placeholder call still goes to the proxy; then the 403', async () => {
+    const { box, id } = await firewallSetup()
+    const placeholder = `Bearer ${codexPlaceholder({ id })}`
+    const chatgpt = rules(box(), 'chatgpt.com')
+    const swaps = chatgpt.filter((rule) => rule.transform)
+    expect(swaps.map((rule) => [rule.match?.path, rule.match?.method])).toEqual([
+      [{ exact: '/backend-api/codex/responses' }, ['POST']],
+      [{ exact: '/backend-api/codex/responses/compact' }, ['POST']],
+      [{ exact: '/backend-api/codex/models' }, ['GET']],
+      [{ exact: '/backend-api/wham/usage' }, ['GET']]
+    ])
+    for (const rule of swaps) {
+      expect(rule.match?.headers?.[0]?.value.exact).toBe(placeholder)
+      expect(rule.transform![0]!.headers).toEqual({ authorization: `Bearer ${ACCESS}`, 'chatgpt-account-id': 'acct-1' })
+      // Never a prefix: an encoded dot segment could walk out of one at the firewall.
+      expect(rule.match?.path?.startsWith).toBeUndefined()
+    }
+    // After the swaps: the placeholder anywhere else is forwarded to the proxy (its own pinning), then 403.
+    const after = chatgpt.slice(chatgpt.indexOf(swaps.at(-1)!) + 1)
+    expect(after[0]).toMatchObject({ forwardURL: PROXY_URL, match: { headers: [{ value: { exact: placeholder } }] } })
+    expect(after[0]!.match?.path).toBeUndefined()
+    expect(after.at(-1)).toMatchObject({ response: { statusCode: 403 } })
+  })
+
+  it('a refreshed token reaches the running sandbox’s firewall at once (no restart)', async () => {
+    const { h, box } = await firewallSetup()
+    h.advance(8 * 86_400_000)
+    await codexTick(h.env, true, h.deps)
+    const swap = rules(box(), 'chatgpt.com').find((rule) => rule.transform)!
+    expect(swap.transform![0]!.headers.authorization).toBe(`Bearer ${ACCESS_2}`)
+  })
+
+  it('Codex refreshing its placeholder login gets the placeholder back, never a real token, and the real one is refreshed centrally', async () => {
+    const { h, id, box, tokenCalls, proxied } = await firewallSetup()
+    // The policy forwards the refresh by path alone (it carries no placeholder header).
+    expect(rules(box(), 'auth.openai.com')).toEqual([{ match: { path: { exact: '/oauth/token' }, method: ['POST'] }, forwardURL: PROXY_URL }])
+    h.advance(8 * 86_400_000)
+    const before = tokenCalls.length
+    const answer = await proxied(id, 'auth.openai.com', {}, '/oauth/token', 'POST')
+    expect(answer.status).toBe(200)
+    const body = JSON.parse(answer.body) as Record<string, string>
+    expect(body.access_token).toBe(codexPlaceholder({ id }))
+    expect(body.id_token).toBe(codexPlaceholder({ id }))
+    for (const secret of SECRETS) {
+      expect(answer.body).not.toContain(secret)
+    }
+    await new Promise((r) => setTimeout(r, 20))
+    expect(tokenCalls.length).toBe(before + 1)
+  })
+
+  it('off (the default): chatgpt.com stays proxy-only and the policy holds no token', async () => {
+    const { h, as, signIn } = await setup()
+    const mia = await as('mia', 'acme', 'member')
+    await signIn(mia)
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const box = [...h.vercel.boxes.values()].find((b) => b.params.tags.orcaSandbox === created.body.sandbox.id)!
+    expect(rules(box, 'chatgpt.com').some((rule) => rule.transform)).toBe(false)
+    expect(JSON.stringify(box.policy)).not.toContain(ACCESS)
+  })
+})

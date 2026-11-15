@@ -85,6 +85,8 @@ import {
   resumeSandbox,
   rolloverSandbox,
   suspendSandbox,
+  rewriteLivePolicy,
+  CODEX_AUTH_HOST,
   applyLiveGitAccess,
   type LifecycleDeps,
   type Ready,
@@ -129,7 +131,7 @@ import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { ACCOUNT_PROVIDERS, accountProvider, isSharedWorkspace } from './account-providers'
 import { handleAccountRequestSucceeded, handleAccountUnauthorized, verifyAccountCredential } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
-import { refreshCodexLeases } from './codex-credentials'
+import { codexAccount, codexPlaceholder, refreshCodexLeases } from './codex-credentials'
 import {
   AgentCredentialError,
   PutClaudeSchema,
@@ -397,6 +399,46 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
       }))
     )
   }
+  // A refreshed Codex token reaches every place that holds it: caches, and running firewall policies.
+  const codexChanged = async (userId: string): Promise<void> => {
+    forgetAccountCredential(userId, 'codex')
+    await refreshOwnersSandboxes(env, deps, userId)
+  }
+  // CODEX-PLACEHOLDER-REFRESH: Codex in the sandbox refreshing its placeholder login (POST /oauth/token, no
+  // placeholder header: the policy forwards it by path). It gets the placeholder back, never a real token,
+  // and the real one is refreshed here (single-flight per person, rate-limited by the lease).
+  const codexRefreshRoutes = (row: SandboxRow): ProxiedRoute[] => {
+    const owned = egressAccountRoutes(row).some((route) => route.agent === 'codex' && route.owner === row.user_id)
+    const keyring = keyringFor(env)
+    if (!owned || !keyring) {
+      return []
+    }
+    const placeholder = codexPlaceholder(row)
+    return [
+      {
+        header: 'authorization',
+        placeholders: [],
+        claimsUnmarked: true,
+        label: 'account:codex:refresh',
+        pathAllowed: (method, path) => method.toUpperCase() === 'POST' && path.split('?')[0] === '/oauth/token',
+        credential: async () => {
+          const now = (deps.now ?? Date.now)()
+          const waitUntil = (work: Promise<unknown>) => (deps.waitUntil ? deps.waitUntil(work.catch(() => undefined)) : void work.catch(() => undefined))
+          await keyring
+            .then((ring) => codexAccount.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil, onChanged: codexChanged }))
+            .catch(() => undefined)
+          return {
+            deny: 'codex_placeholder_refresh',
+            answer: {
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({ access_token: placeholder, id_token: placeholder, refresh_token: '', token_type: 'Bearer', expires_in: 315_360_000 })
+            }
+          }
+        }
+      }
+    ]
+  }
   // D10/D13: re-decided per request, so a Source change, renewal, revocation, kill switch or the workspace
   // becoming shared applies to the next request with no restart.
   const accountRoutes = (row: SandboxRow, host: string): ProxiedRoute[] =>
@@ -474,7 +516,11 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
                 // Codex refreshes its lease (which marks the login dead itself); everyone else confirms with one
                 // auth check before revoking, so a transient 401 never signs the person out everywhere.
                 const handled: Promise<boolean> = provider.onUnauthorized
-                  ? keyring.then((ring) => provider.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil })).then(() => true)
+                  ? keyring
+                      .then((ring) =>
+                        provider.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil, onChanged: codexChanged })
+                      )
+                      .then(() => true)
                   : keyring
                       .then((ring) =>
                         handleAccountUnauthorized({
@@ -528,6 +574,9 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
     )
   }
   return async (row, host) => {
+    if (host === CODEX_AUTH_HOST) {
+      return codexRefreshRoutes(row)
+    }
     if (host === 'github.com') {
       return [
         // Members first: a member placeholder must never fall through to the app's token.
@@ -606,6 +655,12 @@ async function refreshOwnersSandboxes(env: Env, deps: Deps, userId: string): Pro
     if (life) {
       for (const row of results) {
         await refreshSandboxEnv(life, row).catch(() => false)
+        // CODEX-FIREWALL-SWAP: the firewall holds the token itself, so a refreshed one must reach it now.
+        if (life.config.codexFirewallSwap && row.session_id && egressAccountRoutes(row).some((route) => route.agent === 'codex')) {
+          await rewriteLivePolicy(life, row, row.session_id).catch((error: unknown) =>
+            console.error(JSON.stringify({ event: 'codex_firewall_rewrite_failed', sandboxId: row.id, error: String(error).slice(0, 120) }))
+          )
+        }
       }
     }
   })
@@ -991,6 +1046,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       extraEgressHosts: extraEgressHostsFor(env),
       dockerEnabled: env.SANDBOX_DOCKER?.trim().toLowerCase() !== 'off',
       egressPreset: parseEgressPreset(env.SANDBOX_EGRESS_PRESET),
+      codexFirewallSwap: env.CODEX_EGRESS_SWAP === 'firewall',
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1

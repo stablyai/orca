@@ -61,6 +61,11 @@ export type ProxiedRoute = {
   /** Names the swapped credential in the proxy's log line (never its value). */
   label?: string
   /**
+   * Claims a request with no placeholder header at all (CODEX-PLACEHOLDER-REFRESH): the policy forwarded it
+   * by path alone. Only for routes whose credential answers itself (a deny with an answer), never a swap.
+   */
+  claimsUnmarked?: boolean
+  /**
    * CODEX-EGRESS-BLOCKED: what the client gets when the provider's own edge refused this proxy (a
    * Cloudflare 403 HTML page for Workers' egress IPs) instead of answering the request. The raw page
    * is never passed on: the client shows this message rather than an HTML dump or a retry loop.
@@ -155,8 +160,9 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   if (routes.length === 0) {
     return deny('host_not_proxied')
   }
-  const route = routes
-    .find((candidate) => candidate.placeholders.includes(request.headers.get(candidate.header) ?? ''))
+  const route =
+    routes.find((candidate) => candidate.placeholders.includes(request.headers.get(candidate.header) ?? '')) ??
+    routes.find((candidate) => candidate.claimsUnmarked)
   if (!route) {
     return deny('placeholder_missing')
   }
@@ -166,6 +172,10 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   const credential = await route.credential()
   if (!credential) {
     return deny('credential_unavailable')
+  }
+  if (typeof credential === 'string' && route.claimsUnmarked) {
+    // An unmarked request carries no placeholder of ours: it never gets a real credential.
+    return deny('placeholder_missing')
   }
   if (typeof credential !== 'string') {
     if (credential.answer) {
