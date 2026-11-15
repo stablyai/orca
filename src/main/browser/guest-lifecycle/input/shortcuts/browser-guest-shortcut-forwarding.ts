@@ -1,3 +1,4 @@
+import { textInputOwnsComposition } from '../../../../../shared/text-input-shortcut-policy'
 import { isAgentInjectingInput } from '../../../cdp/input/agent-input-injection'
 import {
   isRecentTabSwitcherCommitRelease,
@@ -6,7 +7,7 @@ import {
   resolveWindowShortcutAction
 } from '../../../../../shared/window-shortcut-policy'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
-import type { BrowserPageZoomDirection } from '../../../../../shared/browser-page-zoom'
+import type { BrowserPageZoomDirection } from '../../../../../shared/browser/site-settings/browser-page-zoom'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -26,6 +27,7 @@ export function setupGuestShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
+  isLocalRenderer?: (renderer: Electron.WebContents) => boolean
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
@@ -38,6 +40,7 @@ export function setupGuestShortcutForwarding(args: {
     browserTabId,
     guest,
     resolveRenderer,
+    isLocalRenderer,
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
@@ -61,6 +64,7 @@ export function setupGuestShortcutForwarding(args: {
   const forwardContext: GuestShortcutForwardContext = {
     browserTabId,
     resolveRenderer,
+    isLocalRenderer,
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
@@ -95,7 +99,9 @@ export function setupGuestShortcutForwarding(args: {
       return
     }
 
-    if (input.type === 'keyDown' || input.type === 'keyUp') {
+    if (textInputOwnsComposition(input)) {
+      doubleTapDetector.reset()
+    } else if (input.type === 'keyDown' || input.type === 'keyUp') {
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: input.type,

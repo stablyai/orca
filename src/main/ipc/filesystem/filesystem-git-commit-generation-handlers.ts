@@ -19,6 +19,10 @@ import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runti
 import { withLinkedIssueDraftContext } from '../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import { resolveSourceControlAiLinkedIssue } from '../source-control/source-control-ai-linked-issue'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/execution/commit-message-agent-environment'
+import {
+  CANCELED_GENERATION_RESULT,
+  runCancelableLocalGeneration
+} from '../../text-generation/execution/source-control-generation-lanes'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import {
   getLocalAgentRuntimeTarget,
@@ -78,38 +82,47 @@ export function registerFilesystemGitCommitGenerationHandlers(
         args.worktreePath,
         worktreePath
       )
-      let context
-      try {
-        context = await getStagedCommitContext(worktreePath, {
-          ...gitOptions,
-          admissionTier: 'interactive'
-        })
-      } catch (error) {
-        console.error('[filesystem] Failed to read staged commit context:', error)
-        return {
-          success: false,
-          ...textGenerationFailure('stagedChangesReadFailed')
+      return runCancelableLocalGeneration<GenerateCommitMessageResult>(
+        'commit-message',
+        worktreePath,
+        async (isCanceled) => {
+          let context
+          try {
+            context = await getStagedCommitContext(worktreePath, {
+              ...gitOptions,
+              admissionTier: 'interactive'
+            })
+          } catch (error) {
+            console.error('[filesystem] Failed to read staged commit context:', error)
+            return {
+              success: false,
+              ...textGenerationFailure('stagedChangesReadFailed')
+            }
+          }
+          if (!context) {
+            return { success: false, ...textGenerationFailure('noStagedChanges') }
+          }
+          context = withLinkedIssueDraftContext(
+            context,
+            resolveSourceControlAiLinkedIssue(store, args, worktreePath)
+          )
+          const localEnv = await prepareLocalCommitMessageAgentEnv(
+            resolvedSettings.params.agentId,
+            commitMessageAgentEnv,
+            getLocalAgentRuntimeTarget(gitOptions)
+          )
+          if (!localEnv.ok) {
+            return { success: false, error: localEnv.error }
+          }
+          if (isCanceled()) {
+            return CANCELED_GENERATION_RESULT
+          }
+          return generateCommitMessageFromContext(
+            context,
+            resolvedSettings.params,
+            getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env)
+          )
         }
-      }
-      if (!context) {
-        return { success: false, ...textGenerationFailure('noStagedChanges') }
-      }
-      context = withLinkedIssueDraftContext(
-        context,
-        resolveSourceControlAiLinkedIssue(store, args, worktreePath)
-      )
-      const localEnv = await prepareLocalCommitMessageAgentEnv(
-        resolvedSettings.params.agentId,
-        commitMessageAgentEnv,
-        getLocalAgentRuntimeTarget(gitOptions)
-      )
-      if (!localEnv.ok) {
-        return { success: false, error: localEnv.error }
-      }
-      return generateCommitMessageFromContext(
-        context,
-        resolvedSettings.params,
-        getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env)
       )
     }
   )

@@ -11,7 +11,10 @@ import type {
   AiVaultAgent,
   AiVaultScanIssue
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { parseWslUncPath, toWindowsWslUncPathSpellings } from '../../../shared/wsl-paths'
+import {
+  parseWslUncPath,
+  toWindowsWslUncPathSpellings
+} from '../../../shared/file-access/wsl-paths'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
 import type { FileWithMtime } from '../session-scanner-types'

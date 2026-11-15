@@ -1,4 +1,4 @@
-import type { RuntimeTerminalUnavailableReason } from '../../../shared/runtime-capability-degradation'
+import type { RuntimeTerminalUnavailableReason } from '../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 import {
   parseIncompatibleArchitecture,
   parseMissingSharedLibrary,

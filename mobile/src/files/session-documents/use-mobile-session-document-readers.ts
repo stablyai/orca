@@ -3,7 +3,7 @@ import type { RpcFailure } from '../../transport/rpc/rpc-wire-types'
 import { translate } from '../../i18n/mobile-i18n'
 import { resolveMobileFileTabDoc } from './mobile-file-tab-doc'
 import { shouldIgnoreTrimWhitespace } from '../../../../src/shared/diff-whitespace'
-import { useMobileSourceControlSettings } from '../../source-control/mobile-source-control-settings'
+import { useMobileSourceControlSettings } from '../../source-control/settings/mobile-source-control-settings'
 import { filePreviewTextRead } from '../preview/mobile-file-preview-operations'
 import { markdownTabRead } from './mobile-markdown-tab-operations'
 import {

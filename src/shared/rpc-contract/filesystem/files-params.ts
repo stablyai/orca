@@ -2,7 +2,7 @@ import { PATH_EXISTENCE_BATCH_MAX } from '../../file-access/path-existence-batch
 import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../../file-listing/file-dir-page'
 import { z } from 'zod'
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from '../../quick-open/quick-open-path-search'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { FileOpen, WorktreeSelector } from './files-target-params'
 
 export const FilePathsExist = WorktreeSelector.extend({
@@ -48,7 +48,7 @@ export const ResolveTerminalPath = WorktreeSelector.extend({
     .optional()
 })
 
-// Why: absent `navigation` (phones, older CLIs) keeps the original host switch; 'caller'/'clients' open without moving it.
+// Why: only 'host'/'all' move the desktop; absent `navigation` (phones, older CLIs) opens like 'caller' (#33052).
 const FileOpenTarget = FileOpen.extend({
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })

@@ -6,7 +6,7 @@ import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
-import { normalizeOrcadRetainedMarker } from '../../../shared/orcad-retained-marker'
+import { normalizeOrcadRetainedMarker } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-retained-marker'
 import { normalizeRepoWorkspaceCleanupPolicy } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
@@ -18,7 +18,7 @@ import {
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../shared/worktree/visibility-sources'
+} from '../../../shared/worktree/visibility/visibility-sources'
 
 /** Same paths on different hosts can have different git usernames and branch prefixes. */
 export function repoGitUsernameCacheKey(

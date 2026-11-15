@@ -7,7 +7,7 @@ import {
   splitWorktreeId
 } from '../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'

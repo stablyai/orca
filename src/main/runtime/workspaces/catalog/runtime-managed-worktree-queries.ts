@@ -15,7 +15,7 @@ import {
   localWorktreeCatalogVersionAt
 } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type { Repo } from '../../../../shared/repo-types'
-import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeListResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
@@ -25,14 +25,14 @@ import {
   applyMetadataFallbackVisibility,
   buildKnownOrcaWorkspaceLayouts,
   toDetectedWorktree
-} from '../../../../shared/worktree/ownership'
+} from '../../../../shared/worktree/visibility/ownership'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/external-worktree-visibility'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
-} from '../../../../shared/worktree/visibility-sources'
+} from '../../../../shared/worktree/visibility/visibility-sources'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import {
@@ -43,7 +43,7 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
 import {
   getRetiredNameRegistryForRepo,
   hasRetiredNameRegistryStore

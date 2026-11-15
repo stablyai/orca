@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
-import { floatingWorkspaceUnavailableReason } from '@/components/floating-terminal/floating-workspace-availability'
+import { floatingWorkspaceUnavailableReason } from '@/components/floating-terminal/workspace/floating-workspace-availability'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { FloatingTerminalTriggerLocation } from '../../../../../shared/ui-chrome-types'
 import { Button } from '../../ui/button'

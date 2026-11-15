@@ -19,11 +19,11 @@ vi.mock('electron', () => ({
       mocks.handlers.set(name, handler)
   }
 }))
-vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/requests/runtime-environment-transport-routing', () => ({
   subscribeRuntimeEnvironment: mocks.subscribe
 }))
 vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
-  resolveEnvironment: () => ({ name: 'work-mac' })
+  resolveEnvironment: async () => ({ name: 'work-mac' })
 }))
 
 const { registerPluginRemotePanelHandlers } = await import('./plugin-remote-panel-ipc')

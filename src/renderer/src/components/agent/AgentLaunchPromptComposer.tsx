@@ -1,6 +1,6 @@
 import { useMemo, type Ref } from 'react'
 import { useAppStore } from '@/store'
-import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../../shared/native-chat/input/composer/agent-image-paste'
 import { translate } from '@/i18n/i18n'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { NativeChatComposer } from '../native-chat/composer/NativeChatComposer'

@@ -1,3 +1,4 @@
+import { WorkspaceHookSettingsSchema } from '../../workspace-hook-settings-schema'
 import { z } from 'zod'
 
 // Opt-in: a caller holding afterSnapshotId's repos gets `unchanged`; older hosts take no params and ignore it.
@@ -46,7 +47,18 @@ export const RepoSetHidden = RepoShow.extend({
 /** See `repoHooksCheckIsBackground`: only `wakeWslDistro` may open a stopped WSL distro (E9). */
 export const RepoHooksCheck = RepoSelector.extend({
   background: z.boolean().optional(),
-  wakeWslDistro: OptionalBoolean
+  wakeWslDistro: OptionalBoolean,
+  // Older hosts strip this and read the project checkout, as before.
+  createSource: z
+    .union([
+      z.object({ kind: z.literal('base'), baseBranch: z.string().optional() }),
+      z.object({
+        kind: z.literal('branch'),
+        ref: z.string().min(1),
+        baseBranch: z.string().optional()
+      })
+    ])
+    .optional()
 })
 
 export const RepoSearchRefs = z.object({
@@ -74,6 +86,7 @@ export const ProjectGroupCreate = z.object({
 export const ProjectGroupUpdate = z.object({
   groupId: requiredString('Missing group id'),
   updates: z.object({
+    hookSettings: WorkspaceHookSettingsSchema.optional(),
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
@@ -84,6 +97,10 @@ export const ProjectGroupUpdate = z.object({
 
 export const ProjectGroupSelector = z.object({
   groupId: requiredString('Missing group id')
+})
+
+export const ProjectGroupHooksCheck = ProjectGroupSelector.extend({
+  background: z.boolean().optional()
 })
 
 export const ProjectGroupUpdateMany = z.object({

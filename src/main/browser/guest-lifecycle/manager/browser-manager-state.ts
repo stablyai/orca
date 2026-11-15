@@ -4,7 +4,7 @@ import type { BrowserSiteDisplayController } from '../../site-settings/display/b
 import { createPageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { PageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
-import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { BrowserPagePromptTarget } from '../prompts/browser-page-prompts'
 import type { ActiveDownload } from './downloads/browser-active-download'
@@ -160,6 +160,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   protected readonly worktreeIdByTabId = new Map<string, string>()
   protected readonly policyAttachedGuestIds = new Set<number>()
+  // Guests an agent command targeted since the desktop user last gave them input.
+  protected readonly agentLedGuestIds = new Set<number>()
   protected readonly offscreenGuestIds = new Set<number>()
   protected readonly devToolsDock = new BrowserGuestDevToolsDock()
   protected readonly policyCleanupByGuestId = new Map<number, () => void>()

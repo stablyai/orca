@@ -1,3 +1,5 @@
+import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
+import { beginProfileShutdownCheckpoint } from '../../persistence/profile-shutdown-checkpoint'
 import { killWslChannelsInCloseGrace } from '../../wsl/execution/wsl-command-channel'
 import { markHostShuttingDown } from './host-shutdown-state'
 import { app, type Event } from 'electron'
@@ -5,10 +7,7 @@ import { closeAllWatchers } from '../../ipc/filesystem/watchers/filesystem-watch
 import { disposeWorktreeBaseDirectoryWatchers } from '../../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../../ipc/pty/kill-all'
-import {
-  disconnectDaemon,
-  shutdownDaemon
-} from '../../daemon/providers/lifecycle/daemon-provider-state'
+import * as daemon from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-relay/wsl-hook-relay-manager'
@@ -23,7 +22,7 @@ import { browserManager } from '../../browser/guest-lifecycle/manager/browser-ma
 import { stopCodexStateDbBackfillRecoveries } from '../../codex/history/index/codex-state-db-backfill-recovery'
 import { stopCodexAccountSessionBridges } from '../../codex/history/bridges/codex-account-session-bridge'
 import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-repo-ref-maintenance'
-import { stopBackgroundWorktreeRemovals } from '../../workspaces/removal/worktree-background-removal'
+import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../../dock/unread-badge'
@@ -32,15 +31,17 @@ import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
 import { isQuittingForUpdate } from '../../updater/updater-service'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
+import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-supervisor-install-park'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { cancelHistoryGc } from '../../pty/history/terminal-history-gc'
-import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
+import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
 import { desktopConnectorCloud } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { isDevParentShutdownRequested } from '../configure-process'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cleanup-runner-registry'
+import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extensions/profile-storage/browser-extension-profile-document-store'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
@@ -117,9 +118,20 @@ function installWillQuitHandler(): void {
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
     // A renderer can veto before-quit; push must survive until quit is committed.
     markHostShuttingDown()
+    state.profileShutdownCheckpoint ??= beginProfileShutdownCheckpoint(state.store, paneGridFlush)
+    const removalShutdown = worktreeRemovalLifetime.close()
+    const removalQuiescence = removalShutdown.then(
+      () => true,
+      (error) => {
+        console.error('[worktrees] Failed to finish stopping workspace deletion:', error)
+        return false
+      }
+    )
     state.desktopPushService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
+    state.unsubscribeWakeSignalClock?.()
+    state.unsubscribeWakeSignalClock = null
     state.stopDesktopPresenceReporter?.()
     state.stopDesktopPresenceReporter = null
     // Keep log-stream diagnostics alive through renderer quit vetoes.
@@ -167,8 +179,6 @@ function installWillQuitHandler(): void {
       REF_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
-    // Deletes may take minutes; stop now and let durable records resume them next launch.
-    stopBackgroundWorktreeRemovals()
     // Chat teardown reads background work afterward; clearing status loses subagent/command-only resume offers.
     agentHookServer.stop({ keepStatus: true })
     // Windows bare hook paths lack POSIX ORCA_PANE_KEY guards, so remove Grok hooks on quit; bound cleanup because GROK_HOME can be a stalled network mount.
@@ -212,7 +222,7 @@ function installWillQuitHandler(): void {
     const emulatorShutdown =
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
     const finalStore = state.store
-    const beginSshShutdownAndFinalSave = () => {
+    const beginSshShutdownAndFinalSave = (removalStopped: boolean) => {
       // Mark SSH leases detached synchronously immediately before final flush; no await may separate mutation from save.
       const sshShutdown = beginSshShutdown()
       killAllPty()
@@ -224,18 +234,22 @@ function installWillQuitHandler(): void {
         try {
           await finalStore.flushFinalOrThrowAsync()
           await finalStore.freezeWritesAsync()
-          state.profileStateAdmission?.release()
-          state.profileStateAdmission = undefined
+          if (removalStopped) {
+            state.profileStateAdmission?.release()
+            state.profileStateAdmission = undefined
+          }
         } catch (error) {
           console.error('[persistence] Failed to finalize profile state:', error)
         }
       })()
       return { sshShutdown, watcherShutdown, storeFlush }
     }
-    // Flush pending pane grids first (bounded at 1s); without one, begin final save synchronously.
-    const finalSaves = paneGridFlush
-      ? paneGridFlush.then(beginSshShutdownAndFinalSave)
-      : beginSshShutdownAndFinalSave()
+    // Removal writers and pending pane grids must settle before the profile freezes.
+    const finalSaves = Promise.all([
+      paneGridFlush,
+      removalQuiescence,
+      state.profileShutdownCheckpoint.catch(() => {})
+    ]).then(([, stopped]) => beginSshShutdownAndFinalSave(stopped))
     const sshShutdown = Promise.resolve(finalSaves).then((saves) => saves.sshShutdown)
     const storeFlush = Promise.resolve(finalSaves).then((saves) => saves.storeFlush)
     const watcherShutdown = Promise.resolve(finalSaves).then((saves) => saves.watcherShutdown)
@@ -267,9 +281,15 @@ function installWillQuitHandler(): void {
       rpcStopAndClear
     ]).then(() => state.runtime?.closeNotificationDismissals())
     // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
-    const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-    // Bound unsettled transports and final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
-    settleTeardownWithinDeadline([
+    const daemonTeardown = removalQuiescence.then(() =>
+      isDevParentShutdownRequested() ? daemon.shutdownDaemon() : daemon.disconnectDaemon()
+    )
+    // Bound unsettled transports and these final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
+    // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
+    const teardowns = [
+      { name: 'worktree-removals', promise: removalShutdown },
+      { name: 'install-park', promise: pendingServeSupervisorQuitCommit() },
+      { name: 'state-checkpoint', promise: state.profileShutdownCheckpoint },
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
       { name: 'runtime-rpc', promise: rpcStopAndClear },
@@ -288,6 +308,11 @@ function installWillQuitHandler(): void {
       { name: 'notification-dismissals', promise: notificationDismissalClose },
       { name: 'stats', promise: statsFlush },
       { name: 'state', promise: storeFlush }
+    ]
+    const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
+    settleTeardownWithinDeadline([
+      ...teardowns,
+      { name: 'environment-store', promise: teardownSettlement.then(closeEnvironmentStore) }
     ])
       .then((pendingTeardowns) => {
         if (pendingTeardowns.length > 0) {
@@ -299,26 +324,12 @@ function installWillQuitHandler(): void {
       .catch(() => {
         /* swallow — telemetry must never prevent app.quit() */
       })
+      // Last before quitting, so it saves every extension write accepted during teardown.
+      .then(() => closeBrowserExtensionProfileDocumentStores())
       .then(() => {
         daemonDisconnectDone = true
         app.quit()
       })
-  })
-}
-
-function installWindowAllClosedHandler(): void {
-  app.on('window-all-closed', () => {
-    // Keep serve RPC alive after disposable windows close; re-trigger macOS quit after renderer buffer-capture deferral.
-    if (
-      shouldQuitWhenAllWindowsClosed({
-        platform: process.platform,
-        isQuitting: state.isQuitting,
-        isServeMode: state.isServeMode,
-        hasOpenedMainWindow: state.hasOpenedMainWindow
-      })
-    ) {
-      app.quit()
-    }
   })
 }
 

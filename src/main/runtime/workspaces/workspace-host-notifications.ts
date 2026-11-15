@@ -3,7 +3,7 @@ import type { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSessio
 import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from '../session-lifecycle/projection/build-headless-mobile-session-browser-tabs'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../session-tabs/session-tabs-change-publication'
 import type { RuntimeWorkspaceRepoScanRefresh } from './catalog/workspace-repo-scan-refresh'
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { getPublicSshState } from '../hosts/platform-probe/public-ssh-state'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import { RuntimeEmulatorBinding } from '../emulator/runtime-emulator-binding'

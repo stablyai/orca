@@ -4,11 +4,11 @@ import { readOpenCodeForkCoverageViaWorker } from '../../ai-vault/scanners/openc
 import type { NativeCopyCoverage } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { OpenCodeCopyServerRouteError } from '../../../shared/opencode-launch-command'
+import { OpenCodeCopyServerRouteError } from '../../../shared/agent-launch/startup/opencode-launch-command'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'

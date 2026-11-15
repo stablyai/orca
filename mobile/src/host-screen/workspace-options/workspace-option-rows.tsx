@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { View } from 'react-native'
-import { MobileSwitch } from '../../components/MobileSwitch'
+import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { ListGroup, ListRow } from '../../components/list/ListGroup'
 import type { WorkspaceViewChoice } from '../../../../src/shared/workspace-view/workspace-view-options'
 

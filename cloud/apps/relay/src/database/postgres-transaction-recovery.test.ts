@@ -100,43 +100,16 @@ describePostgres('PostgreSQL transaction recovery', () => {
       'relay_assignment_migration_incarnations',
       'relay_control_connection_reservations'
     ]) {
-      await database.query(`DELETE FROM ${table} WHERE user_id IN (?, ?)`, [
-        'completion-race-user',
-        'completion-contention-user'
+      await database.query(`DELETE FROM ${table} WHERE user_id = ?`, [
+        'completion-race-user'
       ])
     }
     for (const table of ['relay_cell_admission', 'relay_cell_regions']) {
-      await database.query(`DELETE FROM ${table} WHERE cell_id IN (?, ?, ?, ?)`, [
+      await database.query(`DELETE FROM ${table} WHERE cell_id IN (?, ?)`, [
         'completion-race-source',
-        'completion-race-target',
-        'completion-contention-source',
-        'completion-contention-target'
+        'completion-race-target'
       ])
     }
-    for (const identity of [
-      { userId: 'released-order-user', relayHostId: 'releasedorder001' },
-      { userId: 'normalized-order-user', relayHostId: 'normalizedorder1' },
-      { userId: 'atomic-final-user-a', relayHostId: 'atomicfinalhosta' },
-      { userId: 'atomic-final-user-b', relayHostId: 'atomicfinalhostb' },
-      { userId: 'lease-assignment-contention-user', relayHostId: 'leaseassignment1' }
-    ]) {
-      await database.query(
-        `DELETE FROM relay_assignment_activity_leases WHERE user_id = ? AND relay_host_id = ?`,
-        [identity.userId, identity.relayHostId]
-      )
-      await database.query(
-        `DELETE FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
-        [identity.userId, identity.relayHostId]
-      )
-    }
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
-      'released-order-cell',
-      'normalized-order-cell'
-    ])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, ['atomic-final-cell'])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, [
-      'lease-assignment-contention-cell'
-    ])
     await database.query(
       `DELETE FROM relay_assignment_activity_leases WHERE user_id LIKE 'reconcile-user-%'`
     )
@@ -158,110 +131,6 @@ describePostgres('PostgreSQL transaction recovery', () => {
     await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
       'completion-race-source',
       'completion-race-target'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`,
-      ['completion-contention-user']
-    )
-    await database.query(`DELETE FROM relay_assignment_migrations WHERE user_id = ?`, [
-      'completion-contention-user'
-    ])
-    await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, [
-      'completion-contention-user'
-    ])
-    await database.query(`DELETE FROM relay_cell_runtime WHERE cell_id IN (?, ?)`, [
-      'completion-contention-source',
-      'completion-contention-target'
-    ])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
-      'completion-contention-source',
-      'completion-contention-target'
-    ])
-    await database.query(`DELETE FROM relay_cell_fences WHERE cell_id = ?`, [
-      'dead-source-contention-source'
-    ])
-    await database.query(
-      `DELETE FROM relay_control_connection_reservations WHERE user_id = ?`,
-      ['dead-source-contention-user']
-    )
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`,
-      ['dead-source-contention-user']
-    )
-    await database.query(
-      `DELETE FROM relay_assignment_migration_incarnations WHERE user_id = ?`,
-      ['dead-source-contention-user']
-    )
-    await database.query(`DELETE FROM relay_assignment_migrations WHERE user_id = ?`, [
-      'dead-source-contention-user'
-    ])
-    await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, [
-      'dead-source-contention-user'
-    ])
-    await database.query(`DELETE FROM relay_cell_runtime WHERE cell_id IN (?, ?)`, [
-      'dead-source-contention-source',
-      'dead-source-contention-target'
-    ])
-    await database.query(`DELETE FROM relay_cell_admission WHERE cell_id IN (?, ?)`, [
-      'dead-source-contention-source',
-      'dead-source-contention-target'
-    ])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
-      'dead-source-contention-source',
-      'dead-source-contention-target'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases
-       WHERE user_id IN (?, ?)`,
-      ['lease-contention-user', 'aggregate-contention-user']
-    )
-    await database.query(
-      `DELETE FROM relay_assignments
-       WHERE user_id IN (?, ?)`,
-      ['lease-contention-user', 'aggregate-contention-user']
-    )
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?)`, [
-      'lease-contention-cell',
-      'aggregate-contention-cell'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`,
-      ['sustained-lock-user']
-    )
-    await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, [
-      'sustained-lock-user'
-    ])
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, [
-      'sustained-lock-cell'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`,
-      ['sticky-cell-contention-user']
-    )
-    await database.query(
-      `DELETE FROM relay_assignments WHERE user_id = ?`,
-      ['sticky-cell-contention-user']
-    )
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, [
-      'sticky-cell-contention-cell'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id LIKE 'postgres-user-%'`
-    )
-    await database.query(`DELETE FROM relay_assignments WHERE user_id LIKE 'postgres-user-%'`)
-    await database.query(`DELETE FROM relay_cells WHERE cell_id IN (?, ?, ?)`, [
-      'cell-a',
-      'cell-b',
-      'cell-c'
-    ])
-    await database.query(
-      `DELETE FROM relay_assignment_activity_leases WHERE user_id LIKE 'sticky-fast-user-%'`
-    )
-    await database.query(
-      `DELETE FROM relay_assignments WHERE user_id LIKE 'sticky-fast-user-%'`
-    )
-    await database.query(`DELETE FROM relay_cells WHERE cell_id = ?`, [
-      'sticky-fast-cell'
     ])
   })
 

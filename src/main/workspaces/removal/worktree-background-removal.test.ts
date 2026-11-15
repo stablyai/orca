@@ -40,6 +40,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 describe('background worktree removal', () => {
   let directory = ''
   beforeEach(async () => {
+    _resetPendingWorktreeRemovalsForTests()
     directory = await mkdtemp(join(tmpdir(), 'orca-background-removal-'))
     await loadWorktreeRemovalRecords(directory)
   })

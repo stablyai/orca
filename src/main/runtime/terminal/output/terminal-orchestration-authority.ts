@@ -204,7 +204,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
     }
     if (changed) {
-      this.refreshAgentSenderAssociations()
+      void this.refreshAgentSenderAssociations().catch(console.warn)
     }
   }
 

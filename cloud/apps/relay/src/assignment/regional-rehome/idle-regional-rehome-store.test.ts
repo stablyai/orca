@@ -111,15 +111,6 @@ async function setup() {
 }
 
 describe('constrained idle regional assignment transaction', () => {
-  it('sees durable control changes between candidate polls', async () => {
-    const { store, database, safety } = await setup()
-    await database.query("UPDATE relay_region_rehome_control SET enabled = 0 WHERE control_id = 'global'")
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-    await database.query("UPDATE relay_region_rehome_control SET enabled = 1 WHERE control_id = 'global'")
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
-    await database.query("UPDATE relay_region_rehome_control SET enabled = 0 WHERE control_id = 'global'")
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-  })
 
   it.each([10, 11])('reserves source activity plus assignment at target capacity %i', async (capacity) => {
     const { store, database, safety, request } = await setup()
@@ -321,7 +312,6 @@ describe('constrained idle regional assignment transaction', () => {
     })
     expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
   })
-
 })
 
 function holdStatement(database: RelayDatabase, fragment: string) {

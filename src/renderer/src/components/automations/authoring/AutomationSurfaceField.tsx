@@ -1,6 +1,6 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useTranslate } from '@/i18n/use-translate'
-import { nativeChatPreferenceFor } from '../../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { Field, AUTOMATION_EDITOR_SECTION_LABEL_CLASS } from '../automation-page-parts'
 import { automationDraftSurface } from './automation-launch-surface'

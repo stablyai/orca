@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import '../../../../shared/agent-kind'
+import '../../../../shared/agent-status/identity/agent-kind'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
@@ -207,8 +207,6 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
     }))
     const resolved = await resolveWorktreeCreateAgentStartup(
       {
-        repoSelector: 'repo-1',
-        name: 'Review',
         startupAgent: 'codex',
         startupAccountEnv: { CODEX_HOME: '/home/u/.codex-b' }
       },

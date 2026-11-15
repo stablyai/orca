@@ -4,7 +4,7 @@ import {
   PLUGIN_ERROR_CODES,
   type PluginHostCallOutcome
 } from '../../shared/plugins/frames/plugin-protocol'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 /** One `plugins.panelSession` stream event from the paired host. */
 export const hostPanelEventSchema = z.discriminatedUnion('type', [

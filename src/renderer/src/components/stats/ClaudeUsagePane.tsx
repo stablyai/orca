@@ -173,7 +173,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
       }
     >
       <>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 @md:grid-cols-2 @4xl:grid-cols-4">
           <StatCard
             label={t('auto.components.stats.ClaudeUsagePane.ea71fae8fc', 'Input tokens')}
             value={formatTokens(summary?.inputTokens ?? 0, intlLocale)}

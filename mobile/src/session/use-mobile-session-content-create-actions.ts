@@ -6,7 +6,7 @@ import {
   browserGoForward,
   browserReload
 } from '../browser/page-interaction/mobile-browser-command-operations'
-import { sourceFileOpenRun } from '../source-control/mobile-source-file-open-operations'
+import { sourceFileOpenRun } from '../files/session-documents/mobile-source-file-open-operations'
 import { sessionBrowserTabCreate } from '../browser/tab-navigation/mobile-session-browser-operations'
 import { sessionMarkdownNoteCreate } from '../files/session-documents/mobile-markdown-tab-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'

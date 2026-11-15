@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { resolveActiveTabOwnerWorktreeId } from '@/store/terminals/active-tab-owner-worktree'
+import { resolveActiveTabOwnerWorktreeId } from '@/store/terminals/ownership/active-tab-owner-worktree'
 import { FOCUS_TERMINAL_PANE_EVENT, type FocusTerminalPaneDetail } from '@/constants/terminal'
 
 let pendingFocusPaneFrameId: number | null = null

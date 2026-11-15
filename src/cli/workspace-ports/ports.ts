@@ -1,16 +1,16 @@
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
-import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
-import { WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
+import { WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { WorkspacePortHostScanResult } from '../../shared/workspace-ports'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { formatPortsScan } from './ports-format'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   normalizeWorktreeSelectorForCaller,
   resolveCurrentWorktreeSelector

@@ -10,7 +10,7 @@ import {
   OptionalString,
   TriStateLinkedIssue
 } from '../rpc-param-primitives'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../../diff-comment-schema'
@@ -246,6 +246,17 @@ export const WorktreeRemove = WorktreeSelector.extend({
   // The caller showed that this also destroys the recipe environment Orca created for the workspace.
   // Absent: today's removal, which leaves that environment running. Older hosts strip it.
   destroyHost: z.literal(true).optional()
+})
+
+/** Archive: delete the checkout, keep the branch and the workspace. Not exposed to users yet. */
+export const WorktreeArchive = WorktreeSelector.extend({
+  hostId: OptionalExecutionHostId
+})
+
+/** Restore an archived workspace; `worktree` is its `id:` selector, since Git no longer lists it. */
+export const WorktreeRestore = WorktreeSelector.extend({
+  hostId: OptionalExecutionHostId,
+  setupDecision: z.enum(['run', 'skip', 'inherit']).optional()
 })
 
 export const WorktreePreviewNestedRemoval = WorktreeSelector.extend({

@@ -7,7 +7,7 @@ import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/c
 import { useTranslate } from '@/i18n/use-translate'
 import { translateHostDisplayLabel } from '@/components/sidebar/execution-host-label'
 import { resolveWorktreeBranchLabel } from '@/lib/workspace/display/worktree-default-display-name'
-import { getHostContextLabel } from '../../../../../shared/worktree/host-context-labels'
+import { getHostContextLabel } from '../../../../../shared/worktree/row-display/host-context-labels'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,

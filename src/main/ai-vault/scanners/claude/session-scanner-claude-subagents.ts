@@ -9,7 +9,7 @@ import type {
 import {
   CLAUDE_TASK_NOTIFICATION_MARKER,
   readClaudeTaskNotification
-} from '../../../../shared/claude-task-notification-text'
+} from '../../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-task-notification-text'
 import {
   openTranscriptReadStream,
   wslGatedReaddir,

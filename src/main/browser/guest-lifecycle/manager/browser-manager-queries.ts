@@ -2,9 +2,9 @@ import { webContents } from 'electron'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ManagedBrowserGuestContext } from '../../certificate-trust/browser-certificate-challenge'
-import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { safeOrigin } from '../browser-event-origin'
 import type { BrowserPopupPage } from '../popups/browser-popup-ownership'
 import { BrowserManagerRegistration } from './registration/browser-manager-registration'
@@ -56,6 +56,20 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
 
   getWorktreeIdForTab(browserTabId: string): string | undefined {
     return this.worktreeIdByTabId.get(this.getOwningTabIdForPage(browserTabId))
+  }
+
+  /** The workspace of a page an agent is driving whose guest lives in `sess` (null when unknown). */
+  findAgentPageInSession(sess: Electron.Session): { worktreeId: string | null } | null {
+    for (const browserPageId of this.agentActivity.activePageIds()) {
+      const guestId =
+        this.resolvePopupPageWebContentsId(browserPageId) ??
+        this.webContentsIdByTabId.get(browserPageId)
+      const guest = guestId === undefined ? undefined : webContents.fromId(guestId)
+      if (guest && !guest.isDestroyed() && guest.session === sess) {
+        return { worktreeId: this.getWorktreeIdForTab(browserPageId) ?? null }
+      }
+    }
+    return null
   }
 
   getSessionProfileIdForTab(browserTabId: string): string | null {

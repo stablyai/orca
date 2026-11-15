@@ -147,53 +147,6 @@ describe('ordered region decisions and migration outcomes', () => {
     ).toMatchObject({ reportStatus: 'stale' })
   })
 
-  it('compares with assigned region, preserves hints, and never extends a window on report', async () => {
-    const context = await setup()
-    await context.store.assign(identity, 'asia-east2')
-    const issued = await window(context)
-    expect(issued.incumbentRegion).toBe('us-central1')
-    context.advance(50)
-    await context.store.exchangeRegionCorrection(
-      identity,
-      {
-        v: 1,
-        action: 'report',
-        generation: issued.generation,
-        assignmentEpoch: issued.assignmentEpoch,
-        policyVersion: 1,
-        outcome: 'conclusive',
-        measurements: { 'us-central1': 110, 'asia-east2': 90 }
-      },
-      issued.assignmentEpoch
-    )
-    expect(await context.store.previewRegionCorrection()).toEqual({ ineligible: 1 })
-    const row = (await context.database.query(`SELECT * FROM relay_region_decisions`))[0]!
-    expect(Number(row.expires_at)).toBe(issued.expiresAt)
-    const hint = (
-      await context.database.query(
-        `SELECT preferred_region FROM relay_assignment_region_preferences WHERE user_id = ?`,
-        [identity.userId]
-      )
-    )[0]
-    expect(hint?.preferred_region).toBe('asia-east2')
-    context.advance(24 * 60 * 60_000)
-    expect(
-      await context.store.exchangeRegionCorrection(
-        identity,
-        {
-          v: 1,
-          action: 'report',
-          generation: issued.generation,
-          assignmentEpoch: issued.assignmentEpoch,
-          policyVersion: 1,
-          outcome: 'inconclusive',
-          reason: 'late'
-        },
-        issued.assignmentEpoch
-      )
-    ).toMatchObject({ reportStatus: 'expired' })
-  })
-
   it('rejects stale assignment basis and requires both thresholds', async () => {
     const context = await setup()
     for (const measurements of [

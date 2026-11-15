@@ -11,19 +11,19 @@ import {
   type SetStateAction
 } from 'react'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserLoadError,
   BrowserViewportPresetId
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   EMPTY_BROWSER_ANNOTATIONS,
   type BrowserOverlayViewport
 } from '../describe-page/browser-annotation-geometry'
-import { syncGuestAnnotationViewportBridge } from '../annotate/guest-annotation-viewport-bridge'
-import { attachBrowserPageWebview } from './attach-browser-page-webview'
-import { setBrowserPageWebviewInputLock } from './browser-page-webview'
+import { syncGuestAnnotationViewportBridge } from '../annotate/viewport/guest-annotation-viewport-bridge'
+import { attachBrowserPageWebview } from './lifecycle/attach-browser-page-webview'
+import { setBrowserPageWebviewInputLock } from './lifecycle/browser-page-webview'
 import type {
   BrowserPageRecoveryNavigationValidation,
   BrowserPageUrlSetter,

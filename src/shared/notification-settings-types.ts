@@ -21,6 +21,7 @@ export type NotificationSettings = {
   suppressWhenFocused: boolean
   customSoundId:
     | 'system'
+    | 'none'
     | 'two-tone'
     | 'bong'
     | 'thump'
@@ -37,6 +38,10 @@ export type NotificationSettings = {
   mutedNotificationSourceIds: NotificationSourceId[]
   /** Off silences every notification from a workspace the sidebar's Filters switches hide. Local only. */
   notifyHiddenWorkspaces: boolean
+}
+
+export function usesCustomNotificationSound(soundId: string | null | undefined): boolean {
+  return !!soundId && soundId !== 'system' && soundId !== 'none'
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
@@ -135,6 +140,7 @@ export type NotificationSoundResult = {
     | 'read-failed'
     | 'playback-failed'
     | 'deduped'
+    | 'focus-active'
 }
 
 export type NotificationSoundDataResult =
@@ -146,12 +152,15 @@ export type NotificationSoundDataResult =
     }
   | {
       ok: false
-      reason: Exclude<NotificationSoundResult['reason'], 'playback-failed'>
+      reason: Exclude<NotificationSoundResult['reason'], 'playback-failed' | 'focus-active'>
     }
 
 export type NotificationSoundPathResult =
   | { ok: true; path: string }
-  | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' }
+  | {
+      ok: false
+      reason: 'missing-path' | 'invalid-path' | 'unsupported-type' | 'focus-active'
+    }
 
 export type NotificationPermissionStatusResult = {
   supported: boolean

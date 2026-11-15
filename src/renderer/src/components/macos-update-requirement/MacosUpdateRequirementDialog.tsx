@@ -3,7 +3,7 @@ import { ArrowUpRight, ChevronDown } from 'lucide-react'
 import {
   isVenturaRequirement,
   type MacosUpgradeSupport
-} from '../../../../shared/macos-upgrade-support'
+} from '../../../../shared/updater/requirements/macos-upgrade-support'
 import type { UnsupportedSystemUpdate } from '../../../../shared/update-status-types'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'

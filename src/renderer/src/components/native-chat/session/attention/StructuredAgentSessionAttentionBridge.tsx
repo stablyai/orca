@@ -10,7 +10,7 @@ import {
 import { findStructuredAgentSessionReadOwner } from '../structured/read/structured-agent-session-read-owner-registry'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'
 import { useAppStore } from '@/store'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost

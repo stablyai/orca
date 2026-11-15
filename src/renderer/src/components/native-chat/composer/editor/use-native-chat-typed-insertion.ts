@@ -5,7 +5,7 @@ import {
 } from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { withQuoteAppended } from '../../drafts/native-chat-selection-quote-draft'
-import { dictationSeparators } from '../../../../../../shared/dictation-transcript-spacing'
+import { dictationSeparators } from '../../../../../../shared/speech/dictation/dictation-transcript-spacing'
 
 /** Insert/focus through the composer input for paste and imperative callers. */
 export function useNativeChatTypedInsertion(args: {

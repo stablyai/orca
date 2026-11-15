@@ -30,7 +30,7 @@ import {
   workspaceVisibleTabTypeSchema
 } from './workspace-session-tab-type-schema'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from '../zod-salvage'
-import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)

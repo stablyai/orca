@@ -13,9 +13,7 @@ const gate = vi.hoisted(() => ({
 
 vi.mock('./pr-refresh-renderer-port', () => moduleMocks.rendererPortModuleMock(coordinatorMocks))
 vi.mock('../../client/lookup/pr-for-branch-outcome', () => {
-  return {
-    getPRForBranchOutcome: coordinatorMocks.getPRForBranchOutcomeMock
-  }
+  return moduleMocks.clientModuleMock(coordinatorMocks)
 })
 vi.mock('../../repositories/github-api-repository-remote-probe', () => {
   return {

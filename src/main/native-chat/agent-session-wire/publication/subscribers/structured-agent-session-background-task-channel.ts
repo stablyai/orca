@@ -11,7 +11,8 @@ import type { AgentChildWorkView } from '../../../../../shared/agent-status/chil
 import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../../../shared/agent-status/child-work/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from '../history/structured-agent-session-history-result'
-import { hostStructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-host-current-work'
+import { captureJournalFrame, captureRequestFrame } from './agent-session-subscriber-frame-capture'
+import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import type { AgentSessionHistoryScope } from '../history/agent-session-history-page'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
 import type { AgentSessionSubscribers } from './structured-agent-session-subscribers'
@@ -22,6 +23,7 @@ import type {
   StructuredAgentSessionHostSession
 } from '../../host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from '../../host/structured-agent-session-provider-child'
+import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../history/agent-session-history-page-bounds'
 
 /** Derive modern/legacy rosters from child records; null hides the strip only when no known/unlisted work remains. */
 export class StructuredAgentSessionBackgroundTaskChannel {
@@ -33,15 +35,35 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     private readonly conversation: (
       sessionId: string
     ) => Promise<StructuredAgentSessionHostSession>,
+    private readonly currentWork: StructuredAgentSessionClientDelivery['readCurrentWork'],
     private readonly readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined,
     private readonly childWorkIncomplete: (sessionId: string) => boolean = () => false
   ) {}
 
   handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
-  /** Full reduction: absence from a bounded page cannot prove a revised/tombstoned item is absent. */
-  journalSnapshot = async (sessionId: string) =>
-    (await this.conversation(sessionId)).journal.snapshot()
+  forkBoundary = async (
+    sessionId: string,
+    itemId: string,
+    inheritedAnchor: string | undefined,
+    compareSubmissions: boolean
+  ) =>
+    (await this.conversation(sessionId)).journal.reads.forkBoundary(
+      itemId,
+      inheritedAnchor,
+      compareSubmissions
+    )
+
+  savedContent = async (sessionId: string) =>
+    (await this.conversation(sessionId)).journal.reads.savedContent()
+
+  historyItem = async (sessionId: string, itemId: string) =>
+    (await this.conversation(sessionId)).journal.reads.itemDetail(itemId)
+
+  conversationOutline = async (sessionId: string) =>
+    (await this.conversation(sessionId)).journal.reads.conversationOutline(
+      HISTORY_PAGE_CONTENT_BUDGET_BYTES
+    )
 
   async history(
     request: AgentSessionHistoryRequest,
@@ -50,22 +72,26 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     replaceNormalizedHistory = true
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
-    const work = hostStructuredAgentSessionCurrentWork(
-      { store: this.deps.store, sessions: this.sessions },
-      request.sessionId
+    const { result, queue: captured } = await captureRequestFrame(journal, () =>
+      readStructuredAgentSessionHistoryResult({
+        journal,
+        record: this.deps.store.getConversation(request.sessionId),
+        forkMarker: readForkMarker(this.deps.store, request.sessionId),
+        request,
+        scope,
+        reader,
+        replaceNormalizedHistory,
+        capture: (rows) =>
+          captureJournalFrame(
+            this.subscribers.frameHooks(request.sessionId, journal),
+            request.sessionId,
+            journal,
+            rows
+          )
+      })
     )
-    const result = readStructuredAgentSessionHistoryResult({
-      journal,
-      record: this.deps.store.getConversation(request.sessionId),
-      forkMarker: readForkMarker(this.deps.store, request.sessionId),
-      request,
-      scope,
-      reader,
-      replaceNormalizedHistory,
-      ...(work ? { work } : {})
-    })
+    const queue = captured?.value
     const backgroundTasks = this.read(request.sessionId)
-    const queue = this.subscribers.readQueuePublication(request.sessionId)
     const hostNow = this.deps.now?.() ?? Date.now()
     return {
       ...result,
@@ -87,10 +113,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
 
   async currentRequests(request: AgentSessionCurrentRequestsRead) {
     await this.conversation(request.sessionId)
-    const work = hostStructuredAgentSessionCurrentWork(
-      { store: this.deps.store, sessions: this.sessions },
-      request.sessionId
-    )
+    const work = await this.currentWork(request.sessionId)
     if (!work) {
       throw new Error('Current requests unavailable')
     }

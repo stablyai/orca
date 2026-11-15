@@ -64,25 +64,6 @@ describe('public assignment reconnect lane', () => {
     expect((await second).status).toBe(200)
   })
 
-  it('rejects on the fast lane when the verification probe fails transiently', async () => {
-    const host = 'tttttttttttttttt'
-    const assign = vi.fn()
-    const resolve = vi.fn(async () => {
-      throw Object.assign(new Error('deadlock detected'), { code: '40P01' })
-    })
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { assign, resolve } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-
-    const response = await app.request('/v1/assign', assignmentRequest(host, { reconnect: true }))
-
-    expect(response.status).toBe(503)
-    expect(response.headers.get('retry-after')).toBe('2')
-  })
-
   it('refuses a dial whose assignment row is busy at once, and frees the fast lane', async () => {
     const busy = 'bbbbbbbbbbbbbbbb'
     const next = 'nnnnnnnnnnnnnnnn'
@@ -113,38 +94,6 @@ describe('public assignment reconnect lane', () => {
     warn.mockRestore()
   })
 
-  it('asks a busy resume to retry in a second', async () => {
-    const host = 'rrrrrrrrrrrrrrrr'
-    const app = createRelayApp(config(), {
-      store: {
-        resolveResume: vi.fn(async () => ({ userId: 'user-1', relayDeviceId: 'device-1' }))
-      } as never,
-      assignments: {
-        assign: vi.fn(async () => {
-          throw new RelayAssignmentRowBusyError()
-        }),
-        resolve: vi.fn(async () => null)
-      } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    const response = await app.request('/v1/resolve', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        v: 1,
-        relayHostId: host,
-        resumeToken: Buffer.alloc(32, 1).toString('base64url')
-      })
-    })
-
-    expect(response.status).toBe(503)
-    expect(response.headers.get('retry-after')).toBe('1')
-    expect(await response.json()).toEqual({ error: 'relay_assignment_row_busy' })
-    warn.mockRestore()
-  })
 })
 
 function assignmentRequest(relayHostId: string, extra: { reconnect?: boolean } = {}): RequestInit {

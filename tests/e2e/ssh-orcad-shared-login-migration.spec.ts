@@ -13,7 +13,7 @@ import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
 import { startOrcadConvertHost, type OrcadConvertHost } from './helpers/orcad-convert-host'
 import { callEnvironment } from './helpers/paired-host-terminal'
 import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
-import { ORCAD_TEMPLATE_MANIFEST_FILENAME } from '../../src/shared/orcad-artifacts'
+import { ORCAD_TEMPLATE_MANIFEST_FILENAME } from '../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts'
 
 const HOST = process.env.ORCA_E2E_ORCAD_CONVERT_HOST
 const TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
-import type { HostMachine } from '../../../../shared/host-machine-line'
+import type { HostMachine } from '../../../../shared/execution-host/host-machine-line'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import {
   MAC_FALLBACK_MACHINE,

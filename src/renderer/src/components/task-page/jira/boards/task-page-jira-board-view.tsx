@@ -11,7 +11,7 @@ import type {
   JiraTransition
 } from '../../../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { TaskPageJiraBoard, jiraBoardIssueRefKey } from './task-page-jira-board'
 import type { TaskPageJiraBoardSection } from './task-page-jira-board-sections'
 import { JiraBoardMoveDialog, type JiraBoardMovePrompt } from './task-page-jira-board-move-dialog'

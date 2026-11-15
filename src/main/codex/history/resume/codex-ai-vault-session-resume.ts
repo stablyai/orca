@@ -4,7 +4,7 @@ import type {
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'

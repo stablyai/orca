@@ -2,6 +2,7 @@ import type { CodexManagedAccount } from '../../../shared/managed-account-types'
 import type { Store } from '../../persistence/loading-store/store'
 import { CodexCredentialAbsenceGrace } from '../credentials/codex-credential-absence-grace'
 import type {
+  CodexHomeLaunchOptions,
   CodexMirroredHomeStatus,
   CodexRateLimitHomeResolution,
   CodexReadBackMatch,
@@ -38,12 +39,12 @@ export abstract class CodexRuntimeHomeState {
   abstract prepareForCodexLaunch(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
-    options?: { unavailableManagedHomePath?: string }
+    options?: CodexHomeLaunchOptions
   ): string | null
   abstract prepareForCodexLaunchAsync(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
-    options?: { unavailableManagedHomePath?: string }
+    options?: CodexHomeLaunchOptions
   ): Promise<string | null>
   abstract beginHostSystemDefaultSessionMigrationLaunch(
     codexHomePath: string | null,

@@ -8,7 +8,7 @@ import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../shared/constants'
-import type { SshRemotePtyLease } from '../../shared/ssh-types'
+import type { SshRemotePtyLease } from '../../shared/remote-runtime/ssh/ssh-types'
 import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-metadata/worktree-meta-alias-projection'
 import { Store } from './loading-store/store'
 import { getDataFile, initDataPath } from './loading-store/user-data-path'

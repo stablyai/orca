@@ -1,6 +1,6 @@
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { ipcOrRuntimeTargetForHostId } from '../../../../runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getEnvironmentSshStateGeneration } from '../../ssh/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/runtime-status-connection-generation'
 import {
@@ -8,7 +8,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
-import type { RuntimeWorktreeListResult } from '../../../../../../shared/runtime-types'
+import type { RuntimeWorktreeListResult } from '../../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type {
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs

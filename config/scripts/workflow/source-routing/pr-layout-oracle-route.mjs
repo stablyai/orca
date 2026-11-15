@@ -9,7 +9,7 @@ export const LAYOUT_ORACLE_E2E_SPECS = [
 const LAYOUT_ORACLE_PREFIXES = [
   // Layout model, persistence and compatibility folders.
   'src/shared/workspace-layout/',
-  'src/shared/remote-layout-snapshot.ts',
+  'src/shared/remote-runtime/session-graph/remote-layout-snapshot.ts',
   'src/shared/workspace-layout/terminal-topology/terminal-leaf-move.ts',
   'src/main/persistence/terminal-topology/',
   'src/main/persistence/restoring-sessions/',
@@ -22,6 +22,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   // Window-side layout writers the layout-holder stack replaces; widened while it is open.
   'src/renderer/src/store/slices/tabs',
   'src/renderer/src/store/terminals/',
+  'src/renderer/src/components/sidebar/workspace-card/activity/worktree-terminal-record-selector.ts',
   'src/renderer/src/store/workspace-layout/workspace-layout-cache',
   'src/renderer/src/components/terminal-pane/',
   'src/renderer/src/components/agent-session-continuation/AgentSessionContinuationMenuItem.tsx',

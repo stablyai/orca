@@ -4,14 +4,14 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { setSecretStore } from '../../shared/secret-store'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   listHostRepoCatalogSnapshots,
   recordHostRepoCatalogAnswer
 } from './host-repo-catalog-snapshot-recorder'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { Store } from '../persistence/loading-store/store'
-import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
+import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/catalog/runtime-environment-removal-cleanup'
 
 vi.mock('electron', () => ({
   app: {

@@ -7,9 +7,12 @@ import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
-import type { SkillDiscoveryResult } from '../../../../shared/skills'
-import type { SkillDeletePlan, SkillDeleteResult } from '../../../../shared/skill-delete-contract'
-import { SKILL_DELETE_CAPABILITY } from '../../../../shared/skill-install-capability'
+import type { SkillDiscoveryResult } from '../../../../shared/skills/discovery/skills'
+import type {
+  SkillDeletePlan,
+  SkillDeleteResult
+} from '../../../../shared/skills/deletion/skill-delete-contract'
+import { SKILL_DELETE_CAPABILITY } from '../../../../shared/skills/capabilities/skill-install-capability'
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { getBrowserPlatform } from './web-storage'
@@ -71,9 +74,9 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
       }
       return callRuntimeResult<string[]>('preflight.detectAgents').catch(() => [])
     },
-    refreshAgents: () =>
+    refreshAgents: (args) =>
       requireActiveEnvironmentOrNull()
-        ? callRuntimeResult('preflight.refreshAgents')
+        ? callRuntimeResult('preflight.refreshAgents', args)
             .then((result) => result as RefreshAgentsResult)
             .catch(() => fallbackRefreshAgents)
         : Promise.resolve(fallbackRefreshAgents),

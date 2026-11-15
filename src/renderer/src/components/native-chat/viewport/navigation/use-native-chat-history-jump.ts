@@ -7,20 +7,15 @@ import type { NativeChatOlderPageResult } from '../history/native-chat-paginatio
 /** Bound runaway paging beyond any expected session size. */
 export const NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES = 1000
 
-/** A rail pick, or a subagent named from outside the transcript (the agents strip). */
+/** A rail pick, or the subagent a view shows, whose spawn may sit in older history. */
 export type NativeChatHistoryJumpTarget =
   | { kind: 'rail'; id: string }
   | { kind: 'subagent'; agentId: string }
 
-/**
- * What the committed transcript can do for a target now: it landed, it needs older history,
- * it needs one more commit (a disclosure the step just opened), or it cannot be reached.
- * `waited` counts the commits waited since the last page, so a step opens once, then lands.
- */
+/** What the committed transcript can do for a target now: it landed, it needs older history, or it cannot be reached. */
 export type NativeChatHistoryJumpStep = (
-  target: NativeChatHistoryJumpTarget,
-  waited: number
-) => 'landed' | 'page' | 'commit' | 'stop'
+  target: NativeChatHistoryJumpTarget
+) => 'landed' | 'page' | 'stop'
 
 /** A rail pick lands once its message has a slot; an omitted one stops. */
 export function nativeChatRailJumpStep(
@@ -88,28 +83,14 @@ export function useNativeChatHistoryJump({
 
   const run = useCallback(
     async (target: NativeChatHistoryJumpTarget, signal: AbortSignal): Promise<void> => {
-      let waited = 0
-      for (let pages = 0; ;) {
-        const next = committedRef.current.step(target, waited)
-        if (next === 'landed' || next === 'stop') {
+      for (let pages = 0; ; pages += 1) {
+        const next = committedRef.current.step(target)
+        if (next !== 'page' || pages >= NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES) {
           return
         }
-        if (next === 'commit') {
-          // A disclosure opens once; a target still missing after its commit is not coming.
-          if (waited > 0) {
-            return
-          }
-          waited += 1
-        } else {
-          if (pages >= NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES) {
-            return
-          }
-          pages += 1
-          waited = 0
-          const result = await committedRef.current.loadEarlier()
-          if (signal.aborted || result !== 'applied') {
-            return
-          }
+        const result = await committedRef.current.loadEarlier()
+        if (signal.aborted || result !== 'applied') {
+          return
         }
         await nextCommit(signal)
         if (signal.aborted) {

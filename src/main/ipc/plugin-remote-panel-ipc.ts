@@ -1,5 +1,6 @@
 import { ipcMain, type WebContents } from 'electron'
 import { z } from 'zod'
+import { errorMessage } from '../../shared/error-message'
 import { panelSessionTokenSchema } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import { PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS } from '../../shared/plugins/workers/plugin-panel-bridge-protocol'
@@ -9,9 +10,9 @@ import {
 } from '../../shared/plugins/frames/plugin-remote-panel'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { RemoteRuntimeTransportSubscription } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { PluginService } from '../plugins/plugin-service'
-import { subscribeRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+import { subscribeRuntimeEnvironment } from './runtime-environments/requests/runtime-environment-transport-routing'
 import { rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { PLUGIN_PANEL_PUSH_CHANNEL } from './plugin-panel-push-ipc'
 import { hostPanelCallOutcome, hostPanelEventSchema } from './plugin-remote-panel-wire'
@@ -60,10 +61,6 @@ export type RemotePluginPanels = {
 
 function panelKey(senderId: number, sessionToken: string): string {
   return `${senderId}\0${sessionToken}`
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 /**
@@ -207,7 +204,7 @@ export function registerPluginRemotePanelHandlers(
       }
       settleIfReady(panel)
     } catch (error) {
-      end(key, panel, `${panel.hostName}: ${message(error)}`)
+      end(key, panel, `${panel.hostName}: ${errorMessage(error)}`)
     }
   }
 
@@ -218,9 +215,17 @@ export function registerPluginRemotePanelHandlers(
       if (!parsed.success) {
         return { bound: false, reason: 'invalid request' }
       }
-      await pluginService.whenReady()
       const { sender } = event
       const { sessionToken, environmentId } = parsed.data
+      let hostName: string
+      try {
+        hostName = (await resolveEnvironment(pluginService.options.userDataPath, environmentId))
+          .name
+      } catch (error) {
+        return { bound: false, reason: errorMessage(error) }
+      }
+      // Checked last, so no plugin refresh can close the panel between this lookup and its bind.
+      await pluginService.whenReady()
       const session = pluginService.panels.sessionCaller(
         rendererPanelOwner(sender.id),
         sessionToken
@@ -228,12 +233,6 @@ export function registerPluginRemotePanelHandlers(
       const plugin = session ? pluginService.findValidPlugin(session.pluginKey) : null
       if (!session || !plugin || session.caller.surface !== 'panel') {
         return { bound: false, reason: 'this panel is not open' }
-      }
-      let hostName: string
-      try {
-        hostName = resolveEnvironment(pluginService.options.userDataPath, environmentId).name
-      } catch (error) {
-        return { bound: false, reason: message(error) }
       }
       const key = panelKey(sender.id, sessionToken)
       const existing = panels.get(key)
@@ -326,7 +325,7 @@ export function registerPluginRemotePanelHandlers(
         (error: unknown): PluginHostCallOutcome => ({
           ok: false,
           code: 'unavailable',
-          error: `${hostName} did not answer: ${message(error)}`
+          error: `${hostName} did not answer: ${errorMessage(error)}`
         })
       )
     }

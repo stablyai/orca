@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { panelSessionTokenSchema } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginService } from '../plugins/plugin-service'
+import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 import { rendererPanelOwner } from './plugin-frame-entry-ipc'
 import type { RemotePluginPanels } from './plugin-remote-panel-ipc'
 
@@ -19,7 +20,7 @@ export function registerPluginPanelPushHandlers(
   pluginService: PluginService,
   remotePanels: RemotePluginPanels
 ): void {
-  const stops = new Map<string, () => void>()
+  const pushes = new Map<string, { stop: () => void; releaseDestroyed: () => void }>()
   ipcMain.handle('plugins:openPanelPush', async (event, args: unknown): Promise<boolean> => {
     await pluginService.whenReady()
     const parsed = panelPushArgsSchema.safeParse(args)
@@ -35,18 +36,18 @@ export function registerPluginPanelPushHandlers(
     }
     const { sessionToken } = parsed.data
     const key = `${sender.id}\0${sessionToken}`
-    if (!stops.has(key)) {
-      sender.once('destroyed', () => stops.delete(key))
-    }
-    stops.get(key)?.()
-    stops.set(
-      key,
-      pluginService.panelBridge.open(session.caller, session.pluginKey, (push) => {
+    const existing = pushes.get(key)
+    existing?.stop()
+    pushes.set(key, {
+      stop: pluginService.panelBridge.open(session.caller, session.pluginKey, (push) => {
         if (!sender.isDestroyed()) {
           sender.send(PLUGIN_PANEL_PUSH_CHANNEL, { sessionToken, push })
         }
-      })
-    )
+      }),
+      releaseDestroyed:
+        existing?.releaseDestroyed ??
+        addFanoutListener(sender, 'destroyed', () => pushes.delete(key))
+    })
     return true
   })
   ipcMain.handle('plugins:closePanelPush', (event, args: unknown): void => {
@@ -54,8 +55,10 @@ export function registerPluginPanelPushHandlers(
     if (parsed.success) {
       remotePanels.closePush(event.sender.id, parsed.data.sessionToken)
       const key = `${event.sender.id}\0${parsed.data.sessionToken}`
-      stops.get(key)?.()
-      stops.delete(key)
+      const push = pushes.get(key)
+      pushes.delete(key)
+      push?.releaseDestroyed()
+      push?.stop()
     }
   })
 }

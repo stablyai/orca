@@ -3,12 +3,12 @@ import { getAppEnvironment } from '../../../shared/app-environment'
 import { readFetchResponseTextWithinLimit } from '../../../shared/fetch-response-body'
 import { readNodeFileSyncWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import { getVersionChannel, MAIN_RELEASE_REPO } from '../../../shared/release-channel'
-import { isWslHostsInternalGateOpen } from '../../../shared/wsl-host-internal-gate'
+import { isWslHostsInternalGateOpen } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import {
   parseWslHostsPolicy,
   WSL_HOSTS_POLICY_MAX_BYTES,
   type WslHostsPolicy
-} from '../../../shared/wsl-hosts-policy'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
 import { getMainHttpClient } from '../../network/http-client'
 import { noteWslHostsLivePolicyBlock } from './wsl-host-gate'
 import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'

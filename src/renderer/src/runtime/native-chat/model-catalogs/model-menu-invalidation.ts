@@ -1,12 +1,12 @@
 import { useAppStore } from '@/store/index'
-import { HOST_MODEL_CATALOG_ACCOUNT_SETTINGS } from '../../../../../shared/agent-session/options/host-model-catalog-snapshot-rules'
+import { HOST_MODEL_CATALOG_ACCOUNT_SETTINGS } from '../../../../../shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
 import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeRuntimeHostContactRegained } from '../../hosts/connections/runtime-host-contact-regained'
 import {
   readLocalRuntimeCapabilitiesOrUnknown,

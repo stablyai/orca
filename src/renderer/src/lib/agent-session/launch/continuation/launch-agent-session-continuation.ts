@@ -12,7 +12,7 @@ import {
 import { agentChoicePending } from '../inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '../routing/agent-launch-route-input'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
+import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   adoptAgentSessionLaunchVerdict,

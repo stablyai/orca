@@ -1,12 +1,12 @@
 // Fence caller flags before dispatch: older hosts would let a session act as another caller.
 
 import type { CommandSpec, IdentityFlag } from '../../discovery/command-spec'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import {
   injectedSessionAddress,
   readInjectedAgentSessionId
-} from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
+} from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 
 export function refuseConflictingSessionCallerFlags(
   spec: CommandSpec | undefined,
