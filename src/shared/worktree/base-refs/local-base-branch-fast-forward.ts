@@ -55,7 +55,7 @@ export async function inspectLocalBaseBranch(
   }
 
   try {
-    if ((await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)) {
+    if (await isCheckedOut(git, repoPath, fullRef)) {
       return { status: 'nothing_to_do' }
     }
   } catch {
@@ -80,7 +80,7 @@ export async function inspectLocalBaseBranch(
     : { status: 'skipped_not_fast_forward' }
 }
 
-/** Fast-forward a branch no worktree has checked out with a compare-and-swap update-ref: no working tree, index or hooks. Never rejects. */
+/** Fast-forward a branch no worktree has checked out with a compare-and-swap update-ref, never touching a working tree or index. Never rejects. */
 export async function fastForwardLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs
@@ -92,13 +92,25 @@ export async function fastForwardLocalBaseBranch(
   const { repoPath, fullRef, remoteTrackingRef } = refs
   const { localOid, remoteOid } = inspection
   try {
-    await retryOnGitLockContention(() =>
-      git.exec(
-        ['update-ref', '-m', `orca: fast-forward to ${remoteTrackingRef}`, fullRef, remoteOid, localOid],
+    const moved = await retryOnGitLockContention(async () => {
+      // A checkout made since the inspection owns the branch now; update-ref would strand its files.
+      if (await isCheckedOut(git, repoPath, fullRef)) {
+        return false
+      }
+      await git.exec(
+        [
+          'update-ref',
+          '-m',
+          `orca: fast-forward to ${remoteTrackingRef}`,
+          fullRef,
+          remoteOid,
+          localOid
+        ],
         repoPath
       )
-    )
-    return { status: 'updated' }
+      return true
+    })
+    return moved ? { status: 'updated' } : { status: 'nothing_to_do' }
   } catch {
     // A concurrent pull/Orca update may already have moved local.
     return (await localContains(git, repoPath, fullRef, remoteOid))
@@ -121,6 +133,14 @@ export function toLocalBaseRefRefreshResult(
     ...(outcome.ownerWorktreePath ? { ownerWorktreePath: outcome.ownerWorktreePath } : {}),
     ...('shallowHistory' in outcome && outcome.shallowHistory ? { shallowHistory: true } : {})
   }
+}
+
+async function isCheckedOut(
+  git: LocalBaseBranchGit,
+  repoPath: string,
+  fullRef: string
+): Promise<boolean> {
+  return (await git.listWorktrees(repoPath)).some((wt) => wt.branch === fullRef)
 }
 
 async function revParseCommit(

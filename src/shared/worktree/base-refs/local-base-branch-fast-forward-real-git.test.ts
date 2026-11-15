@@ -63,8 +63,8 @@ async function createBehindRepo(): Promise<Fixture> {
   return { repoPath, env, localOid, remoteOid, git }
 }
 
-/** Real git that records every command; `beforeUpdateRef` runs after the inspection passed. */
-function realGit(fixture: Fixture, beforeUpdateRef?: () => Promise<void> | void) {
+/** Real git that records every command; `afterInspection` runs once the drift count returns. */
+function realGit(fixture: Fixture, afterInspection?: () => Promise<void> | void) {
   const commands: string[][] = []
   const run = (args: string[], cwd: string) =>
     new Promise<{ stdout: string }>((resolve, reject) => {
@@ -75,10 +75,11 @@ function realGit(fixture: Fixture, beforeUpdateRef?: () => Promise<void> | void)
   const git: LocalBaseBranchGit = {
     exec: async (args, cwd) => {
       commands.push(args)
-      if (args[0] === 'update-ref') {
-        await beforeUpdateRef?.()
+      const result = await run(args, cwd)
+      if (args[0] === 'rev-list') {
+        await afterInspection?.()
       }
-      return run(args, cwd)
+      return result
     },
     listWorktrees: async (repoPath) =>
       parseWorktreeList((await run(['worktree', 'list', '--porcelain'], repoPath)).stdout)
@@ -111,6 +112,20 @@ describe('fastForwardLocalBaseBranch against real Git', () => {
     expect(await readFile(join(fixture.repoPath, 'version.txt'), 'utf8')).toBe('one\n')
     expect(await readFile(join(fixture.repoPath, 'added.txt'), 'utf8')).toBe('my notes\n')
     expect(real.commands.map((args) => args[0])).toEqual(['rev-parse', 'rev-parse'])
+  })
+
+  it('leaves main alone when it is checked out after the inspection', async () => {
+    const fixture = await createBehindRepo()
+    fixture.git(['checkout', '--quiet', '-b', 'develop'])
+    const checkOutMain = () => {
+      fixture.git(['checkout', '--quiet', 'main'])
+    }
+
+    const outcome = await fastForward(fixture, realGit(fixture, checkOutMain).git)
+
+    expect(outcome).toEqual({ status: 'nothing_to_do' })
+    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
+    expect(fixture.git(['status', '--porcelain'])).toBe('')
   })
 
   it('keeps a move of main made after the inspection', async () => {

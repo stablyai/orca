@@ -71,13 +71,15 @@ describe('addWorktree', () => {
     const moveStarted = new Promise<void>((resolve) => {
       markMoveStarted = resolve
     })
-    queueBehindInspection().mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishMove = () => resolve({ stdout: '' })
-          markMoveStarted()
-        })
-    )
+    queueBehindInspection()
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishMove = () => resolve({ stdout: '' })
+            markMoveStarted()
+          })
+      )
     checkoutGitMock.mockImplementationOnce(async () => {
       await moveStarted
       finishMove()
@@ -95,7 +97,9 @@ describe('addWorktree', () => {
   })
 
   it('fast-forwards local base via update-ref when localBranch is not checked out', async () => {
-    queueBehindInspection().mockResolvedValueOnce({ stdout: '' })
+    queueBehindInspection()
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: '' })
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
