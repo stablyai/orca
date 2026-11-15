@@ -64,25 +64,28 @@ public enum SyntheticMouseClickDelivery {
         /// Apps read the live pointer while handling a gesture (hover, menus, drops), so wait before putting it back.
         public static let settleMicroseconds: UInt32 = 200_000
 
-        public let saved: CGPoint
+        public private(set) var saved: CGPoint?
         private var lastPosted: CGPoint?
         private var userMoved = false
 
-        public init(saved: CGPoint) {
-            self.saved = saved
-        }
+        public init() {}
 
-        /// Call before posting each event; a pointer away from the last posted point means the user moved it.
+        /// Call before posting each event with the live pointer; the first call saves it, and later ones latch
+        /// any move away from the previous posted point as the user's.
         public mutating func willPost(at point: CGPoint, current: CGPoint?) {
-            if let lastPosted, let current, !Self.near(current, lastPosted) {
-                userMoved = true
+            if let lastPosted {
+                if current.map({ !Self.near($0, lastPosted) }) ?? true {
+                    userMoved = true
+                }
+            } else {
+                saved = current
             }
             lastPosted = point
         }
 
         /// Whether a restore may still be due, so the settle pause is skipped when it can't be.
         public var mayRestore: Bool {
-            guard let lastPosted else { return false }
+            guard let saved, let lastPosted else { return false }
             return !userMoved && !Self.near(saved, lastPosted)
         }
 
