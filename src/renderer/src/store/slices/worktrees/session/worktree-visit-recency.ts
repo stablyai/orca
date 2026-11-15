@@ -3,7 +3,7 @@ import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { AppState } from '../../../types'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getWorktreeIdFromVisitKey,
@@ -116,7 +116,22 @@ export function createPruneLastVisitedTimestamps(
           changed = true
         }
       }
+      // Default-tab admission is per workspace too; left in the store it re-saves deleted workspaces.
+      let defaultsChanged = false
+      const nextDefaults: Record<string, true> = {}
+      for (const [key, applied] of Object.entries(s.defaultTerminalTabsAppliedByWorktreeId ?? {})) {
+        const scope = parseWorkspaceKey(key)
+        const id = scope?.type === 'worktree' ? scope.worktreeId : key
+        const repoIds =
+          scope?.type === 'folder' ? undefined : validIdsByRepo.get(getRepoIdFromWorktreeId(id))
+        if (repoIds && !repoIds.has(id)) {
+          defaultsChanged = true
+        } else {
+          nextDefaults[key] = applied
+        }
+      }
       const patch: {
+        defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
         lastVisitedAtByWorktreeId?: Record<string, number>
         activeWorktreeId?: null
         activeWorkspaceKey?: null
@@ -124,6 +139,9 @@ export function createPruneLastVisitedTimestamps(
       } = {}
       if (changed) {
         patch.lastVisitedAtByWorktreeId = next
+      }
+      if (defaultsChanged) {
+        patch.defaultTerminalTabsAppliedByWorktreeId = nextDefaults
       }
       // Web localStorage lacks main’s stale-pointer GC; clear active worktrees only after their repo proves them gone or phantom workspaces survive.
       const activeId = s.activeWorktreeId
