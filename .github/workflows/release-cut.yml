@@ -55,6 +55,8 @@ jobs:
     permissions:
       # Every write here uses the App token.
       contents: read
+      # Reads each draft's build manifests from the run that made it.
+      actions: read
     env: &no-git-hooks
       GIT_CONFIG_COUNT: '1'
       GIT_CONFIG_KEY_0: core.hooksPath
@@ -150,6 +152,7 @@ jobs:
         working-directory: candidate
         env:
           GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
+          ACTIONS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_APP_BOT_ID: ${{ vars.RELEASE_APP_BOT_ID }}
         run: node "$GITHUB_WORKSPACE/workflow/config/scripts/release/publication/publish-complete-draft-releases.mjs"
 
@@ -954,6 +957,29 @@ jobs:
           GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/create-draft-release.mjs "$TAG"
+
+      # Why: only this run can write its artifacts, so this record proves which run made the draft; the run ID in
+      # the draft body is just a pointer the automatic draft publisher checks against it.
+      - name: Record the run that created the draft
+        env:
+          TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_ID: ${{ steps.draft.outputs.release_id }}
+          RELEASE_SHA: ${{ steps.draft.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]] || { echo "::error::create-release recorded no release ID."; exit 1; }
+          mkdir -p "$RUNNER_TEMP/release-record"
+          jq -n --arg tag "$TAG" --argjson id "$RELEASE_ID" --arg sha "$RELEASE_SHA" --arg run "$GITHUB_RUN_ID" \
+            '{schema: "orca-release-record/v1", tag: $tag, release_id: $id, release_sha: $sha, run_id: $run}' \
+            >"$RUNNER_TEMP/release-record/manifest.json"
+
+      - name: Upload the release record
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-record
+          path: ${{ runner.temp }}/release-record/manifest.json
+          if-no-files-found: error
+          overwrite: true
 
   dependency-security:
     needs: cut

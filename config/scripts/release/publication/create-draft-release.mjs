@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { assertPolicyKeepsAppRelease } from './release-app-publish-guard.mjs'
+import { releaseRunMarker } from './verify-prior-run-provenance.mjs'
 
 const API_VERSION = '2022-11-28'
 export const MAX_RELEASE_BODY_LENGTH = 120_000
@@ -189,6 +190,7 @@ export async function createDraftRelease({
   token,
   targetCommitish,
   sourceSha,
+  runId,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   fetchImpl = fetch,
   log = console.log
@@ -211,6 +213,9 @@ export async function createDraftRelease({
   if (existingRelease && existingRelease.draft !== true) {
     // Fail rather than succeed: downstream builds must never run without a prepared draft.
     throw new Error(`Release ${tag} is already published; refusing to prepare a draft.`)
+  }
+  if (!/^[1-9][0-9]*$/.test(runId ?? '')) {
+    throw new Error('runId is required')
   }
   if (!FULL_SHA.test(sourceSha ?? '') || !FULL_SHA.test(targetCommitish)) {
     throw new Error('Approved source and checkout must be full commit SHAs')
@@ -242,7 +247,8 @@ export async function createDraftRelease({
   )
 
   const generatedBody = typeof releaseNotes.body === 'string' ? releaseNotes.body : ''
-  const body = truncateReleaseBody(generatedBody)
+  // Names this run for the automatic draft publisher, which verifies it independently (verify-prior-run-provenance).
+  const body = truncateReleaseBody(generatedBody) + releaseRunMarker(runId)
   const name =
     typeof releaseNotes.name === 'string' && releaseNotes.name.length > 0 ? releaseNotes.name : tag
   const prerelease = tag.includes('-rc.')
@@ -334,7 +340,7 @@ export async function createDraftRelease({
   await verifyUploaderDraft({ base, tag, token, release: preparedRelease, fetchImpl, sleep })
   await assertTagUnchanged(identity, tagObject, 'after draft preparation')
 
-  if (generatedBody.length !== body.length) {
+  if (`${generatedBody}${releaseRunMarker(runId)}`.length !== body.length) {
     log(
       `${existingRelease ? 'Updated' : 'Created'} draft release ${tag} with truncated generated notes (${body.length} chars).`
     )
@@ -343,7 +349,7 @@ export async function createDraftRelease({
       `${existingRelease ? 'Updated' : 'Created'} draft release ${tag} with generated notes (${body.length} chars).`
     )
   }
-  return { tagObject, releaseSha: targetCommitish }
+  return { tagObject, releaseSha: targetCommitish, releaseId: preparedRelease.id }
 }
 
 async function main() {
@@ -355,10 +361,11 @@ async function main() {
     process.env.RELEASE_SHA ||
     execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   const sourceSha = process.env.SOURCE_SHA
-  const prepared = await createDraftRelease({ repo, tag, token, targetCommitish, sourceSha })
+  const runId = process.env.GITHUB_RUN_ID
+  const prepared = await createDraftRelease({ repo, tag, token, targetCommitish, sourceSha, runId })
   if (process.env.GITHUB_OUTPUT) {
     // publish-release re-reads the tag against these before undrafting.
-    const output = `tag_object=${prepared.tagObject}\nrelease_sha=${prepared.releaseSha}\n`
+    const output = `tag_object=${prepared.tagObject}\nrelease_sha=${prepared.releaseSha}\nrelease_id=${prepared.releaseId}\n`
     appendFileSync(process.env.GITHUB_OUTPUT, output)
   }
 }

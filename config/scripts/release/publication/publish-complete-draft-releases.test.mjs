@@ -256,7 +256,7 @@ describe('RC draft tag verification', () => {
     return { result, patches }
   }
 
-  it('refuses every draft by default until prior-run asset provenance is verified', async () => {
+  it('refuses a draft whose build run cannot be verified', async () => {
     const patches = []
     const fetchImpl = vi.fn(async (url, options = {}) => {
       if (options.method === 'PATCH') {
@@ -273,7 +273,7 @@ describe('RC draft tag verification', () => {
       log: vi.fn()
     })
     expect(result.published).toEqual([])
-    expect(result.skipped[0].reason).toMatch(/not verified yet; publish by hand/)
+    expect(result.skipped[0].reason).toMatch(/actions: read token is required/)
     expect(patches).toEqual([])
   })
 

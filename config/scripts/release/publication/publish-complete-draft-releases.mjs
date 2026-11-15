@@ -5,6 +5,7 @@ import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { isReleaseAppBot } from '../workflow-contracts/release-policy.mjs'
 import { assertPolicyKeepsAppRelease } from './release-app-publish-guard.mjs'
+import { verifyPriorRunProvenance } from './verify-prior-run-provenance.mjs'
 import { verifyRequiredReleaseAssets } from './verify-release-required-assets.mjs'
 
 const API_VERSION = '2022-11-28'
@@ -105,20 +106,14 @@ async function assertDraftTagMatchesTarget(fetchImpl, repo, token, release) {
   await assertPolicyKeepsAppRelease({ repo, tag, commitSha: expected, token, fetchImpl })
 }
 
-// Why: a draft from an earlier run may be published only once its assets match the manifests that run's builds
-// wrote. Until that check exists, refuse every draft; an operator verifies the assets and publishes by hand.
-export async function refuseUnverifiedProvenance() {
-  throw new Error(
-    'asset provenance of drafts from earlier runs is not verified yet; publish by hand'
-  )
-}
-
 export async function publishCompleteDraftReleases({
   repo,
   token,
   fetchImpl = fetch,
   verifyReleaseAssets = verifyRequiredReleaseAssets,
-  verifyAssetProvenance = refuseUnverifiedProvenance,
+  // Why: anyone with contents write can swap a draft asset; publish only what that draft's run built.
+  verifyAssetProvenance = verifyPriorRunProvenance,
+  actionsToken,
   isDraftBuiltFromCurrentRef = ({ tag }) => isTagBuiltFromCurrentRef(tag),
   log = console.log
 }) {
@@ -156,7 +151,7 @@ export async function publishCompleteDraftReleases({
     }
 
     try {
-      await verifyAssetProvenance({ repo, token, release })
+      await verifyAssetProvenance({ repo, token, actionsToken, release })
       await assertDraftTagMatchesTarget(fetchImpl, repo, token, release)
     } catch (error) {
       const reason = error instanceof Error ? error.message.split('\n')[0] : String(error)
@@ -210,7 +205,8 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
 async function main() {
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
-  const result = await publishCompleteDraftReleases({ repo, token })
+  const actionsToken = process.env.ACTIONS_TOKEN
+  const result = await publishCompleteDraftReleases({ repo, token, actionsToken })
   writeGithubOutputs(result)
 }
 

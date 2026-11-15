@@ -33,7 +33,11 @@ describe('release-cut job split', () => {
   const PRIVILEGED = {
     'recover-drafts': ['publish_drafts'],
     cut: ['Push main and the release tag'],
-    'create-release': ['draft'],
+    'create-release': [
+      'draft',
+      'Record the run that created the draft',
+      'Upload the release record'
+    ],
     'publish-release': ['Verify release tag still matches the drafted source', 'Publish release']
   }
 

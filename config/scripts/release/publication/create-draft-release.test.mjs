@@ -5,12 +5,15 @@ import { runProcessSync } from '@orca/process-host'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { createDraftRelease } from './create-draft-release.mjs'
+import { releaseRunMarker } from './verify-prior-run-provenance.mjs'
 
 // Actual v1.4.259 shape: app source 1d35… is the sole parent of release commit 980c…, tag object d272….
 const source = '1d3548fb8bf2794b218affefc103d9b2a956220f'
 const checkout = '980c0024741812bd7ae934c0c22144d9926a784e'
 const tagObject = 'd2720cd6c86fdf95230bdcb6778abe0f7c061ace'
 const tag = 'v1.4.259'
+// Every draft names the run that made it, for the automatic draft publisher.
+const NOTES = `new notes${releaseRunMarker('4242')}`
 const draft = { id: 259, draft: true, tag_name: tag, body: 'original notes' }
 
 function fixture(options = {}) {
@@ -81,6 +84,7 @@ function fixture(options = {}) {
         token: 'fixture-token',
         targetCommitish: checkout,
         sourceSha: options.approvedSource ?? source,
+        runId: '4242',
         fetchImpl,
         sleep: async () => {},
         log: () => {}
@@ -95,7 +99,8 @@ describe('release draft source and uploader contract', () => {
       const f = fixture({ annotated })
       await expect(f.run()).resolves.toEqual({
         tagObject: annotated ? tagObject : checkout,
-        releaseSha: checkout
+        releaseSha: checkout,
+        releaseId: 259
       })
       expect(f.writes).toEqual([
         {
@@ -105,7 +110,7 @@ describe('release draft source and uploader contract', () => {
             tag_name: tag,
             target_commitish: checkout,
             name: 'release',
-            body: 'new notes',
+            body: NOTES,
             draft: true,
             prerelease: false,
             make_latest: 'false'
@@ -174,17 +179,17 @@ describe('release draft source and uploader contract', () => {
       {
         method: 'PATCH',
         route: '/releases/259',
-        body: { tag_name: tag, body: 'new notes', target_commitish: checkout }
+        body: { tag_name: tag, body: NOTES, target_commitish: checkout }
       }
     ])
   })
 
   it('resends tag_name when rolling back a body patched onto a just-published release', async () => {
-    const published = { ...draft, draft: false, body: 'new notes' }
+    const published = { ...draft, draft: false, body: NOTES }
     const f = fixture({ existing: true, writeResult: published, afterPatch: published })
     await expect(f.run()).rejects.toThrow('restored its published body')
     expect(f.writes.map((write) => write.body)).toEqual([
-      { tag_name: tag, body: 'new notes', target_commitish: checkout },
+      { tag_name: tag, body: NOTES, target_commitish: checkout },
       { tag_name: tag, body: 'original notes' }
     ])
   })
