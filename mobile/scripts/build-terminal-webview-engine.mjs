@@ -27,7 +27,12 @@ const cssOutputPath = path.join(
 )
 const target = 'chrome74'
 
-const packages = ['@xterm/xterm', '@xterm/addon-unicode11', '@xterm/addon-webgl']
+const packages = [
+  '@xterm/xterm',
+  '@xterm/addon-search',
+  '@xterm/addon-unicode11',
+  '@xterm/addon-webgl'
+]
 
 async function readPackageVersion(packageName) {
   // Use / in package specifier; path.join emits unresolvable backslashes on Windows.
@@ -45,6 +50,7 @@ async function buildEngineJs() {
     stdin: {
       contents: `
         import { Terminal } from '@xterm/xterm'
+        import { SearchAddon } from '@xterm/addon-search'
         import { Unicode11Addon } from '@xterm/addon-unicode11'
         import { WebglAddon } from '@xterm/addon-webgl'
 
@@ -77,6 +83,7 @@ async function buildEngineJs() {
         }
 
         window.Terminal = Terminal
+        window.SearchAddon = { SearchAddon }
         window.Unicode11Addon = { Unicode11Addon }
         window.WebglAddon = { WebglAddon }
       `,

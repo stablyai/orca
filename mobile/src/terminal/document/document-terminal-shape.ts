@@ -1,4 +1,5 @@
 import type { IUnicodeHandling } from '@xterm/xterm'
+import type { ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search'
 import type { XtermUnicodeServiceCore } from '../../../../src/shared/terminal/appearance/terminal-unicode-provider'
 
 // Describe only xterm members the document consumes; native globals and embedded imports satisfy the same seam.
@@ -110,5 +111,15 @@ export type TerminalDocumentDisposable = { dispose?: () => void }
 export type TerminalDocumentWebglAddon = {
   onContextLoss?: (listener: () => void) => void
   clearTextureAtlas?: () => void
+  dispose: () => void
+}
+
+export type TerminalDocumentSearchAddon = {
+  findNext: (term: string, options?: ISearchOptions) => boolean
+  findPrevious: (term: string, options?: ISearchOptions) => boolean
+  clearDecorations: () => void
+  onDidChangeResults: (
+    listener: (results: ISearchResultChangeEvent) => void
+  ) => TerminalDocumentDisposable
   dispose: () => void
 }

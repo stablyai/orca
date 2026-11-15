@@ -2409,7 +2409,8 @@
       "fileExplorer": "Проводник файлов",
       "sourceControl": "Управление исходным кодом",
       "newTab": "Новая вкладка",
-      "quickCommands": "Быстрые команды"
+      "quickCommands": "Быстрые команды",
+      "findInTerminal": "Найти в терминале"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "История агентов",
@@ -2923,6 +2924,13 @@
     "structuredOpen": {
       "worktreeDeleted": "Рабочее дерево удалено.",
       "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
+    },
+    "terminalFind": {
+      "placeholder": "Найти в терминале",
+      "noResults": "Нет результатов",
+      "previous": "Предыдущее совпадение",
+      "next": "Следующее совпадение",
+      "close": "Закрыть поиск"
     }
   },
   "settings": {

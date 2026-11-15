@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button'
 import type { SearchState } from '@/components/terminal-pane/input/keyboard/terminal-keyboard-shortcut-matching'
 import { useTranslate } from '@/i18n/use-translate'
 import { getFindRequestQuery } from '@/lib/text-search/find-query-bounds'
-import { safeFind } from './terminal-search-safe-find'
-import { buildTerminalSearchOptions } from './terminal-search-options'
+import { safeFind } from '../../../shared/terminal/search/terminal-search-safe-find'
+import { buildTerminalSearchOptions } from '../../../shared/terminal/search/terminal-search-options'
 
 type TerminalSearchProps = {
   isOpen: boolean

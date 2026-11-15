@@ -34,6 +34,7 @@ import { useMobileSessionBulkClose } from './tabs/use-mobile-session-bulk-close'
 import { useMobileSessionPresentation } from './use-mobile-session-presentation'
 import { useMobileSessionStoredChatTab } from './use-mobile-session-stored-chat-tab'
 import { useMobileSessionPanelRouteActions } from './use-mobile-session-panel-route-actions'
+import { useMobileTerminalFind } from '../terminal/session/find/use-mobile-terminal-find'
 
 export function useMobileSessionController() {
   const foundation = useMobileSessionFoundation()
@@ -136,9 +137,25 @@ export function useMobileSessionController() {
   )
   const bulkClose = Object.assign(closeActions, useMobileSessionBulkClose(closeActions))
   const presentation = Object.assign(bulkClose, useMobileSessionPresentation(bulkClose))
+  const terminalFind = Object.assign(presentation, {
+    terminalFind: useMobileTerminalFind({
+      terminalRefs: presentation.terminalRefs,
+      activeHandle: presentation.activeHandle,
+      available:
+        !!presentation.activeHandle &&
+        !presentation.showNativeChat &&
+        !presentation.activeMarkdownTab &&
+        !presentation.activeFileTab &&
+        !presentation.activeBrowserTab &&
+        !presentation.activePendingTerminalTab &&
+        !presentation.showLoadingState &&
+        !presentation.showEmptyState &&
+        !presentation.showOfflineState
+    })
+  })
   const panelRouteActions = Object.assign(
-    presentation,
-    useMobileSessionPanelRouteActions(presentation)
+    terminalFind,
+    useMobileSessionPanelRouteActions(terminalFind)
   )
   // The one owner of opening an existing chat, so a fork's source link follows its selection rules.
   return Object.assign(panelRouteActions, preferences, { openNativeSession })

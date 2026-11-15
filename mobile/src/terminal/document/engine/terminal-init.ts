@@ -28,6 +28,7 @@ import { cancelSelect } from '../selection/selection-mode'
 import { resetEvictionCounter } from '../selection/selection-state-and-eviction'
 import { beginTerminalSurfaceSwap, commitTerminalSurfaceSwap } from './surface-swap'
 import { attachTermObservers } from './term-observers'
+import { attachSearchAddon, rerunTerminalFind } from './terminal-find'
 import { applyTerminalTheme } from './terminal-theme'
 import { attachWebglAddon, cancelWebglContextRecovery } from './webgl-recovery'
 import { afterWritesDrained, enqueueWrite, pumpWrites, resetWriteQueue } from './write-queue'
@@ -66,6 +67,7 @@ function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) 
       activateOrcaTerminalUnicodeProvider(term)
     }
   } catch {}
+  attachSearchAddon(scope, term)
   return term
 }
 
@@ -210,6 +212,7 @@ export function init(
       applyFitScale(scope, 'init-replay')
       // Hidden renderers may not paint yet; report the available box at ready too.
       reportLaidOutCellBox(scope)
+      rerunTerminalFind(scope)
       notify(scope, { type: 'ready', cols: cols, rows: rows })
     })
   })

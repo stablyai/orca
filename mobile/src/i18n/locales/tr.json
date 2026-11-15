@@ -2271,7 +2271,8 @@
       "fileExplorer": "Dosya gezgini",
       "sourceControl": "Kaynak kontrolü",
       "newTab": "Yeni sekme",
-      "quickCommands": "Hızlı komutlar"
+      "quickCommands": "Hızlı komutlar",
+      "findInTerminal": "Terminalde bul"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Ajan Geçmişi",
@@ -2783,6 +2784,13 @@
     "structuredOpen": {
       "worktreeDeleted": "Çalışma ağacı silindi.",
       "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
+    },
+    "terminalFind": {
+      "placeholder": "Terminalde bul",
+      "noResults": "Sonuç yok",
+      "previous": "Önceki eşleşme",
+      "next": "Sonraki eşleşme",
+      "close": "Aramayı kapat"
     }
   },
   "settings": {

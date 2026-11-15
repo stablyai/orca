@@ -3,6 +3,7 @@ import type { TerminalLaidOutCellBox } from '../viewport/terminal-cell-box'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
 import {
   createEngineTerminal,
+  createEngineSearchAddon,
   createEngineUnicode11Addon,
   createEngineWebglAddon,
   installWindowErrorReporter,
@@ -19,6 +20,7 @@ import {
 } from './document-host-seams'
 import type {
   TerminalDocumentDisposable,
+  TerminalDocumentSearchAddon,
   TerminalDocumentTerminal,
   TerminalDocumentTheme,
   TerminalDocumentWebglAddon,
@@ -40,6 +42,9 @@ export type TerminalDocumentState = {
   termObserverDisposables: TerminalDocumentDisposable[]
   initRows: number
   webglAddon: TerminalDocumentWebglAddon | null
+  // The latest engine's; a replay's engine gets its own, so find follows the buffer the reader sees.
+  searchAddon: TerminalDocumentSearchAddon | null
+  findQuery: string
   webglRecoveryTimer: ReturnType<typeof setTimeout> | null
   terminalThemeInput: TerminalDocumentThemeMessage
   // Carry sub-line wheel travel between events; touch scroll resets it.
@@ -161,6 +166,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     termObserverDisposables: [],
     initRows: 24,
     webglAddon: null,
+    searchAddon: null,
+    findQuery: '',
     webglRecoveryTimer: null,
     terminalThemeInput: null,
     defaultTheme: DEFAULT_TERMINAL_THEME,
@@ -274,6 +281,7 @@ function createTerminalDocumentHostSeams(): TerminalDocumentHostSeams {
     postToHost: postToReactNativeWebView,
     createTerminal: createEngineTerminal,
     createUnicode11Addon: createEngineUnicode11Addon,
+    createSearchAddon: createEngineSearchAddon,
     createWebglAddon: createEngineWebglAddon,
     installErrorReporter: installWindowErrorReporter,
     capturedEngineErrors: windowCapturedEngineErrors,
