@@ -33,7 +33,8 @@ const FALLBACKS: Record<ThemeStudioMode, Record<string, string>> = {
   }
 }
 
-// Why escape: names are user text, and the specimen is HTML.
+// Why escape names only: colors reach this page already checked as color values by the theme
+// schemas (no `;`, braces or url()), and names are free text.
 const escapeHtml = (text: string): string =>
   text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`)
 

@@ -1,72 +1,111 @@
-import { execFile } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { createInterface } from 'node:readline/promises'
-import { promisify } from 'node:util'
+import { runProcess } from '@orca/process-host'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { validatePluginTarget } from '../plugins/authoring/plugin-folder-validation'
 import { pluginReleaseEntryForFolder } from '../plugins/authoring/plugin-release-entry'
-import type {
-  ThemeStudioDraft,
-  ThemeStudioMode
-} from '../../shared/theme-studio/theme-studio-draft'
 import { ThemeStudioError } from '../../shared/theme-studio/theme-studio-errors'
 import { themeStudioPluginFiles } from '../../shared/theme-studio/theme-studio-plugin-files'
+import {
+  themeStudioPublishKitSchema,
+  type ThemeStudioPublishKit
+} from '../../shared/theme-studio/theme-studio-protocol'
 import { call, localPath, print, stringFlag } from './theme-command-io'
+import { assertGitIdentity, publishSteps, runPublishSteps, shellLine } from './theme-publish-steps'
 
-const run = promisify(execFile)
 const DEFAULT_VERSION = '1.0.0'
+// Why longer than other theme calls: the host draws three images before answering.
+const PUBLISH_KIT_TIMEOUT_MS = 90_000
 const COMMUNITY_CATALOG = 'stablyai/orca-community-plugins'
-const REPO_NAME = /^[A-Za-z0-9._-]{1,100}$/
-const OWNER_NAME = /^[A-Za-z0-9-]{1,39}$/
-
-type PublishKit = {
-  pluginKey: string
-  id: string
-  name: string
-  draft: ThemeStudioDraft
-  images: {
-    cover: { mode: ThemeStudioMode; png: string }
-    screenshots: { mode: ThemeStudioMode; png: string }[]
-  }
-}
-
-type Step = { label: string; command: string[]; cwd?: string }
+const OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
+const REPO = /^[A-Za-z0-9._-]{1,100}$/
 
 /** The GitHub user `gh` is signed in as, or null when gh is missing or signed out. */
 async function githubUser(): Promise<string | null> {
   try {
-    const { stdout } = await run('gh', ['api', 'user', '--jq', '.login'], { timeout: 15_000 })
-    return stdout.trim() || null
+    const result = await runProcess({
+      program: 'gh',
+      args: ['api', 'user', '--jq', '.login'],
+      timeoutMs: 15_000
+    })
+    const login = result.stdout.trim()
+    return result.code === 0 && OWNER.test(login) ? login : null
   } catch {
     return null
   }
 }
 
-/** A folder that is new, empty, or this theme's earlier publish folder (re-run after a dry run). */
-function assertUsableFolder(folder: string, id: string): void {
+function parseRepo(value: string | undefined): { owner?: string; name?: string } {
+  if (value === undefined) {
+    return {}
+  }
+  const parts = value.split('/')
+  const [owner, name] = parts
+  if (parts.length !== 2 || !OWNER.test(owner) || !REPO.test(name) || /^\.+$/.test(name)) {
+    throw new RuntimeClientError('invalid_argument', '--repo must look like owner/name.')
+  }
+  return { owner, name }
+}
+
+const notUsable = (folder: string, why: string): RuntimeClientError =>
+  new RuntimeClientError('invalid_argument', `${folder} ${why}`, {
+    nextSteps: ['Pass --dir with a new or empty folder.']
+  })
+
+/**
+ * A folder that is new, empty, or this theme's earlier publish folder (a re-run or a new version)
+ * holding only what this command writes, so nothing else in it can become public.
+ */
+function assertUsableFolder(folder: string, id: string, topLevel: ReadonlySet<string>): void {
   if (!existsSync(folder) || readdirSync(folder).length === 0) {
     return
   }
-  const manifest = join(folder, 'orca-plugin.json')
-  const sameTheme = existsSync(manifest) && readFileSync(manifest, 'utf8').includes(`"id": "${id}"`)
+  let sameTheme = false
+  try {
+    const manifest: unknown = JSON.parse(readFileSync(join(folder, 'orca-plugin.json'), 'utf8'))
+    sameTheme =
+      typeof manifest === 'object' && manifest !== null && 'id' in manifest && manifest.id === id
+  } catch {
+    sameTheme = false
+  }
   if (!sameTheme) {
-    throw new RuntimeClientError('invalid_argument', `${folder} is not empty.`, {
-      nextSteps: ['Pass --dir with a new or empty folder.']
-    })
+    throw notUsable(folder, 'is not empty.')
+  }
+  const extra = readdirSync(folder).filter((name) => name !== '.git' && !topLevel.has(name))
+  if (extra.length > 0) {
+    throw notUsable(folder, `has files this command did not write: ${extra.join(', ')}.`)
   }
 }
 
-async function writeKit(folder: string, kit: PublishKit, version: string): Promise<string[]> {
-  const modes = kit.images.screenshots.map((shot) => shot.mode)
+/** Why: a link inside a reused folder would make a write land outside it. */
+function assertNoLinks(folder: string, paths: readonly string[]): void {
+  for (const path of paths) {
+    const parts = path.split('/')
+    for (let depth = 1; depth <= parts.length; depth += 1) {
+      const target = join(folder, ...parts.slice(0, depth))
+      let linked = false
+      try {
+        linked = lstatSync(target).isSymbolicLink()
+      } catch {
+        break
+      }
+      if (linked) {
+        throw notUsable(folder, `has a link at ${parts.slice(0, depth).join('/')}.`)
+      }
+    }
+  }
+}
+
+function kitFiles(kit: ThemeStudioPublishKit, version: string): Record<string, string | Buffer> {
   let files: Record<string, string>
   try {
     files = themeStudioPluginFiles(kit.draft, kit.id, {
       version,
       cover: { path: 'images/cover.png', alt: `The ${kit.name} theme in Orca` },
-      screenshots: modes.map((mode) => ({
+      screenshots: kit.images.screenshots.map(({ mode }) => ({
         path: `images/${mode}.png`,
         alt: `The ${kit.name} theme in Orca, ${mode} mode`,
         caption: `${kit.name} in ${mode} mode`,
@@ -78,7 +117,8 @@ async function writeKit(folder: string, kit: PublishKit, version: string): Promi
       ? new RuntimeClientError(error.code, error.message, error.data)
       : error
   }
-  const images: Record<string, Buffer> = {
+  return {
+    ...files,
     'images/cover.png': Buffer.from(kit.images.cover.png, 'base64'),
     ...Object.fromEntries(
       kit.images.screenshots.map((shot) => [
@@ -87,112 +127,92 @@ async function writeKit(folder: string, kit: PublishKit, version: string): Promi
       ])
     )
   }
-  for (const [path, body] of [...Object.entries(files), ...Object.entries(images)]) {
+}
+
+async function writeKit(folder: string, files: Record<string, string | Buffer>): Promise<void> {
+  assertNoLinks(folder, Object.keys(files))
+  // Why clear images: a mode the theme no longer has must not be published from an earlier run.
+  await rm(join(folder, 'images'), { recursive: true, force: true })
+  for (const [path, body] of Object.entries(files)) {
     const file = join(folder, ...path.split('/'))
     await mkdir(dirname(file), { recursive: true })
     await writeFile(file, body)
   }
-  return [...Object.keys(files), ...Object.keys(images)]
 }
 
-function publishSteps(
-  folder: string,
-  owner: string,
-  repo: string,
-  kit: PublishKit,
-  version: string
-): Step[] {
-  const slug = `${owner}/${repo}`
-  const tag = `v${version}`
-  return [
-    { label: 'Start a Git repository', command: ['git', 'init', '-b', 'main'], cwd: folder },
-    { label: 'Add the files', command: ['git', 'add', '-A'], cwd: folder },
+function printPlan(
+  ctx: HandlerContext,
+  plan: {
+    folder: string
+    files: string[]
+    version: string
+    steps: { label: string; command: string }[]
+  },
+  input: { name: string; slug: string; signedIn: boolean; rerun: string }
+): void {
+  print(
+    ctx,
     {
-      label: 'Commit',
-      command: ['git', 'commit', '-m', `Publish ${kit.name} ${version}`],
-      cwd: folder
-    },
-    {
-      label: 'Create the public GitHub repository and push',
-      command: [
-        'gh',
-        'repo',
-        'create',
-        slug,
-        '--public',
-        '--source',
-        folder,
-        '--remote',
-        'origin',
-        '--push',
-        '--description',
-        `${kit.name}: a theme for Orca`
+      status: 'planned',
+      ...plan,
+      repository: {
+        slug: input.slug,
+        url: `https://github.com/${input.slug}`,
+        visibility: 'public'
+      },
+      nextSteps: [
+        ...(input.signedIn
+          ? []
+          : ['Sign in with `gh auth login` (or pass --repo owner/name) before publishing.']),
+        'Show the user this plan: everything in the folder becomes public at the repository URL.',
+        `Only after they say yes, run: ${input.rerun}`
       ]
     },
-    { label: 'Tag the version', command: ['git', 'tag', '-a', tag, '-m', tag], cwd: folder },
-    { label: 'Push the tag', command: ['git', 'push', 'origin', tag], cwd: folder },
-    {
-      label: 'Mark it as an Orca plugin',
-      command: ['gh', 'repo', 'edit', slug, '--add-topic', 'orca-plugin']
-    },
-    {
-      label: 'Cut the release',
-      command: [
-        'gh',
-        'release',
-        'create',
-        tag,
-        '--repo',
-        slug,
-        '--title',
-        `${kit.name} ${version}`,
-        '--notes',
-        `${kit.name}, an Orca theme. Install it in Orca with: orca plugin install ${slug}`
-      ]
-    }
-  ]
-}
-
-const shellLine = (command: string[]): string =>
-  command.map((part) => (/^[\w./:@=-]+$/.test(part) ? part : JSON.stringify(part))).join(' ')
-
-async function confirmInTerminal(question: string): Promise<boolean> {
-  const prompt = createInterface({ input: process.stdin, output: process.stderr })
-  try {
-    return /^y(es)?$/i.test((await prompt.question(`${question} [y/N] `)).trim())
-  } finally {
-    prompt.close()
-  }
+    [
+      `Plan (nothing is published yet): ${input.name} ${plan.version}`,
+      `  folder: ${plan.folder} (${plan.files.length} files, passes \`orca plugin validate\`)`,
+      `  public repository: https://github.com/${input.slug}`,
+      ...plan.steps.map((step, index) => `  ${index + 1}. ${step.label}: ${step.command}`),
+      input.signedIn
+        ? `Ask the user; only when they agree, run: ${input.rerun}`
+        : 'Sign in with `gh auth login` (or pass --repo owner/name) to publish.'
+    ].join('\n')
+  )
 }
 
 /**
- * `orca theme publish`: writes a validated plugin folder with images drawn from the theme, then,
- * only after the person says yes, makes it a public GitHub repository with a tagged release and
- * prints its catalog entry. Without --yes (and no terminal to ask in) it stops at the plan.
+ * `orca theme publish`: writes a validated plugin folder with images drawn from the theme, and
+ * plans its public repository. Only with --yes, given after the person agreed to that plan, does
+ * it commit, create the repository, tag, add the topic and cut the release.
  */
 export async function publishTheme(ctx: HandlerContext): Promise<void> {
   const pluginKey = stringFlag(ctx, 'plugin')
   if (!pluginKey) {
     throw new RuntimeClientError('invalid_argument', 'Missing <plugin-key>.', {
-      nextSteps: [
-        'Run `orca theme show --json` or look in Settings → Appearance for the saved theme.'
-      ]
+      nextSteps: ['Use the key `orca theme apply` printed, or the one Settings → Appearance shows.']
     })
   }
   const version = stringFlag(ctx, 'version') ?? DEFAULT_VERSION
   if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new RuntimeClientError('invalid_argument', '--version must look like 1.0.0.')
   }
-  const kit = await call<PublishKit>(ctx, 'themeStudio.publishKit', { pluginKey })
-  const folder = localPath(ctx, stringFlag(ctx, 'dir') ?? kit.id, 'publish')
-  assertUsableFolder(folder, kit.id)
-  const [repoOwner, repoName] = (stringFlag(ctx, 'repo') ?? '').split('/')
-  const owner = repoName ? repoOwner : await githubUser()
-  const repo = repoName ?? (repoOwner || `${kit.id}-orca-theme`)
-  if ((owner && !OWNER_NAME.test(owner)) || !REPO_NAME.test(repo)) {
-    throw new RuntimeClientError('invalid_argument', '--repo must look like owner/name.')
-  }
-  const files = await writeKit(folder, kit, version)
+  const repo = parseRepo(stringFlag(ctx, 'repo'))
+  const kit = themeStudioPublishKitSchema.parse(
+    await call<unknown>(ctx, 'themeStudio.publishKit', { pluginKey }, PUBLISH_KIT_TIMEOUT_MS)
+  )
+  // Why not the current folder: agents run in project worktrees, which must not gain a theme.
+  const folder = localPath(
+    ctx,
+    stringFlag(ctx, 'dir') ?? join(homedir(), 'orca-themes', kit.id),
+    'publish'
+  )
+  const contents = kitFiles(kit, version)
+  const topLevel = [...new Set(Object.keys(contents).map((path) => path.split('/')[0]))]
+  assertUsableFolder(folder, kit.id, new Set(topLevel))
+  const owner = repo.owner ?? (await githubUser())
+  const slug = `${owner ?? '<your-github-user>'}/${repo.name ?? `${kit.id}-orca-theme`}`
+  await writeKit(folder, contents)
+  const files = Object.keys(contents)
   const validation = await validatePluginTarget(folder)
   if (!validation.valid) {
     throw new RuntimeClientError(
@@ -200,88 +220,57 @@ export async function publishTheme(ctx: HandlerContext): Promise<void> {
       `The theme folder does not pass \`orca plugin validate\`: ${validation.errors.join('; ')}`,
       {
         errors: validation.errors,
-        nextSteps: [
-          `Fix the theme with \`orca theme edit --from ${pluginKey}\`, save it, and publish again.`
-        ]
+        nextSteps: [`Fix it with \`orca theme edit --from ${pluginKey}\`, save, and publish again.`]
       }
     )
   }
-  const steps = publishSteps(folder, owner ?? '<your-github-user>', repo, kit, version)
-  const slug = `${owner ?? '<your-github-user>'}/${repo}`
+  const steps = publishSteps({ folder, slug, name: kit.name, version, files: topLevel })
   const plan = {
     pluginKey,
     folder,
     files,
     version,
-    repository: { slug, url: `https://github.com/${slug}`, visibility: 'public' },
     steps: steps.map((step) => ({ label: step.label, command: shellLine(step.command) }))
   }
-  const confirmed =
-    ctx.flags.has('yes') ||
-    (owner !== null &&
-      !ctx.json &&
-      process.stdin.isTTY === true &&
-      (await confirmInTerminal(`Publish ${kit.name} publicly to github.com/${slug}?`)))
-  if (!confirmed || owner === null) {
-    print(
-      ctx,
-      {
-        status: 'planned',
-        ...plan,
-        nextSteps: [
-          ...(owner === null
-            ? ['Install the GitHub CLI and run `gh auth login`, or pass --repo owner/name.']
-            : []),
-          'Show the user this plan: everything in the folder becomes public at the repository URL.',
-          `Only after they say yes, run: orca theme publish ${pluginKey} --dir ${JSON.stringify(folder)} --repo ${slug} --yes`
-        ]
-      },
-      [
-        `Plan (nothing is published yet): ${kit.name} ${version}`,
-        `  folder: ${folder} (${files.length} files, passes \`orca plugin validate\`)`,
-        `  public repository: https://github.com/${slug}`,
-        ...plan.steps.map((step, index) => `  ${index + 1}. ${step.label}: ${step.command}`),
-        owner === null
-          ? 'Sign in with `gh auth login` (or pass --repo owner/name) to publish.'
-          : `Ask the user; when they agree, run it again with --yes.`
-      ].join('\n')
-    )
+  // Why `=== true`: `--yes=false` must plan, not publish.
+  if (ctx.flags.get('yes') !== true || owner === null) {
+    const rerun = shellLine([
+      'orca',
+      'theme',
+      'publish',
+      pluginKey,
+      '--dir',
+      folder,
+      '--repo',
+      slug,
+      '--version',
+      version,
+      '--yes'
+    ])
+    printPlan(ctx, plan, { name: kit.name, slug, signedIn: owner !== null, rerun })
     return
   }
-  const done: string[] = []
-  for (const step of steps) {
-    try {
-      const [command, ...args] = step.command
-      await run(command, args, { cwd: step.cwd, timeout: 120_000 })
-      done.push(step.label)
-    } catch (error) {
-      throw new RuntimeClientError(
-        'publish_failed',
-        `${step.label} failed: ${error instanceof Error ? error.message : String(error)}`,
-        {
-          done,
-          failed: shellLine(step.command),
-          nextSteps: [
-            'Fix the cause, then run the remaining steps from this plan by hand, starting with the one that failed.'
-          ]
-        }
-      )
-    }
-  }
+  await assertGitIdentity(folder)
+  const done = await runPublishSteps(steps)
   const entry = await validatePluginTarget(folder)
     .then(pluginReleaseEntryForFolder)
-    .catch(() => null)
+    .then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) })
+    )
   print(
     ctx,
     {
       status: 'published',
       ...plan,
-      releaseEntry: entry,
+      repository: { slug, url: `https://github.com/${slug}`, visibility: 'public' },
+      done,
+      ...('value' in entry ? { releaseEntry: entry.value } : { releaseEntryError: entry.error }),
       install: `orca plugin install ${slug}`,
       listing: `https://orca.dev/plugins/${slug}`,
       nextSteps: [
         `Anyone can install it now with: orca plugin install ${slug}`,
-        `To list it in Orca's community catalog, ask the user first, then fork ${COMMUNITY_CATALOG}, add this entry to orca-catalog.json and open a pull request: gh repo fork ${COMMUNITY_CATALOG} --clone`
+        `To list it in Orca's community catalog, ask the user first; then fork ${COMMUNITY_CATALOG}, add the release entry to orca-catalog.json and open a pull request.`
       ]
     },
     [
@@ -289,7 +278,9 @@ export async function publishTheme(ctx: HandlerContext): Promise<void> {
       ...done.map((label) => `  ✓ ${label}`),
       `Install: orca plugin install ${slug}`,
       `Listing: https://orca.dev/plugins/${slug}`,
-      `To add it to the community catalog (ask the user first), open a pull request on ${COMMUNITY_CATALOG} with the release entry from \`orca plugin release-entry ${folder}\`.`
+      'value' in entry
+        ? `For a catalog (ask the user first): \`orca plugin release-entry ${shellLine([folder])}\` prints the entry for a pull request on ${COMMUNITY_CATALOG}.`
+        : `The release entry could not be read: ${entry.error}`
     ].join('\n')
   )
 }

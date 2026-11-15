@@ -210,8 +210,8 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'plugin', 'dir', 'repo', 'version', 'yes'],
     positionalArgs: ['plugin'],
     notes: [
-      'Without --yes it only plans: it writes the plugin folder on this machine (manifest, themes, terminal palettes, README, and a cover and screenshots drawn from the theme alone, never from your screen), checks it like `orca plugin validate`, and prints exactly which repository becomes public and every command it would run. Nothing leaves the machine.',
-      'Run it again with --yes only after the user agreed to that plan. It then commits the folder, creates the public GitHub repository with `gh` and pushes, tags v<version>, adds the orca-plugin topic, cuts the GitHub release, and prints the install command, the listing URL and the release entry for a catalog. In a terminal without --json it asks instead of needing --yes.',
+      'Without --yes it only plans: it writes the plugin folder on this machine (default ~/orca-themes/<id>; manifest, themes, terminal palettes, README, and a cover and screenshots drawn from the theme alone, never from your screen), checks it like `orca plugin validate`, and prints exactly which repository becomes public and every command it would run. Nothing leaves the machine.',
+      'Run it again with --yes only after the user agreed to that plan. It then commits the folder, creates the public GitHub repository with `gh` and pushes, tags v<version>, adds the orca-plugin topic, cuts the GitHub release, and prints the install command, the listing URL and the release entry for a catalog. Every step is skipped when already done, so a new --version or a retry after a failure continues where it stopped.',
       'It never opens a catalog pull request; nextSteps says how, once the user asks for it. Needs the GitHub CLI signed in (`gh auth login`); --repo picks the owner and name (default <your user>/<id>-orca-theme).',
       'publish_failed lists the steps that finished and the one that failed.'
     ],

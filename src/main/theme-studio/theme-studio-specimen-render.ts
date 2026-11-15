@@ -27,11 +27,22 @@ async function renderSpecimen(
     height: size.height,
     useContentSize: true,
     paintWhenInitiallyHidden: true,
-    webPreferences: { offscreen: true, javascript: false, sandbox: true, images: false }
+    focusable: false,
+    skipTaskbar: true,
+    // Why its own partition: the page never shares cookies or storage with the app.
+    webPreferences: {
+      offscreen: true,
+      javascript: false,
+      sandbox: true,
+      images: false,
+      partition: 'theme-studio-specimen'
+    }
   })
   try {
     window.webContents.setZoomFactor(1)
     const loaded = window.loadURL(`data:text/html;base64,${Buffer.from(html).toString('base64')}`)
+    // Why: after a timeout the window is destroyed and this load rejects with nobody listening.
+    loaded.catch(() => undefined)
     let timer: ReturnType<typeof setTimeout> | undefined
     await Promise.race([
       loaded,

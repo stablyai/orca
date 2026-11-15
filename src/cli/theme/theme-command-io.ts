@@ -33,9 +33,14 @@ export function print(ctx: HandlerContext, result: unknown, text: string): void 
   writeStdoutLine(ctx.json ? JSON.stringify({ ok: true, result }, null, 2) : text)
 }
 
-export async function call<T>(ctx: HandlerContext, method: string, params?: unknown): Promise<T> {
+export async function call<T>(
+  ctx: HandlerContext,
+  method: string,
+  params?: unknown,
+  timeoutMs = RPC_TIMEOUT_MS
+): Promise<T> {
   try {
-    return (await ctx.client.call<T>(method, params, { timeoutMs: RPC_TIMEOUT_MS })).result
+    return (await ctx.client.call<T>(method, params, { timeoutMs })).result
   } catch (error) {
     if (
       error instanceof RuntimeRpcFailureError &&
