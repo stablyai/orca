@@ -873,7 +873,21 @@ export async function scrubStoppedRecord(deps: LifecycleDeps, row: SandboxRow): 
   if (!recordMayHoldValues(deps, row)) {
     return
   }
-  const outcome = await scrubRecordPolicy(deps, row)
+  // Review R2: the row may have resumed since it was selected (or since its stop). Only a still-stopped row
+  // with no session is scrubbed; a scrub that raced a resume is undone by a fresh apply right after.
+  const stopped = (fresh: SandboxRow | null): boolean =>
+    fresh !== null && (fresh.status === 'suspended' || fresh.status === 'archived') && !fresh.session_id
+  const before = await getSandbox(deps.db, row.id)
+  if (!before || !stopped(before)) {
+    return
+  }
+  const outcome = await scrubRecordPolicy(deps, before)
+  const after = await getSandbox(deps.db, row.id)
+  if (after && !stopped(after) && after.session_id && (after.status === 'running' || after.status === 'resuming')) {
+    console.log(JSON.stringify({ event: 'policy_scrub_raced_resume', sandboxId: row.id }))
+    await applySandboxPolicy(deps, after, 'scrub_race').catch(() => undefined)
+    return
+  }
   const ok = outcome === 'scrubbed'
   await deps.db
     .prepare('UPDATE sandboxes SET policy_scrub_pending = ?, policy_scrubbed_at = COALESCE(?, policy_scrubbed_at) WHERE id = ?')
@@ -882,7 +896,11 @@ export async function scrubStoppedRecord(deps: LifecycleDeps, row: SandboxRow): 
   console.log(JSON.stringify({ event: 'policy_record_scrub', sandboxId: row.id, outcome: typeof outcome === 'string' ? outcome : outcome.failed }))
 }
 
-/** Stopped rows whose record may still hold values: a failed scrub, or an apply since the last scrub. */
+/**
+ * Stopped rows whose record may still hold values: a failed scrub, or an apply since the last scrub.
+ * 'failed' rows are left out on purpose (review R4): failAndRelease destroys their provider sandbox, and the
+ * cron retries a destroy that didn't finish, so no record is left to scrub.
+ */
 export async function rowsToScrub(db: D1Database, limit = 25): Promise<SandboxRow[]> {
   const { results } = await db
     .prepare(

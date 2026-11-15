@@ -113,3 +113,33 @@ describe('A4: the post-resume write retries, and a lasting failure is visible, n
     expect(record).not.toContain(KEY)
   })
 })
+
+describe('A4 review R2: a scrub never strips a workspace that resumed meanwhile', () => {
+  it('a row that resumed before the scrub is skipped; one that resumed during it gets a fresh apply', async () => {
+    const t = await setup()
+    const life = (await lifecycleDeps(t.h.env, t.h.deps))!
+    const { scrubStoppedRecord } = await import('../src/lifecycle')
+    // Selected while stopped, resumed before the scrub runs: nothing is written.
+    expect((await t.h.call('POST', `/v1/sandboxes/${t.id}/suspend`, { bearer: t.mia })).status).toBe(200)
+    const stale = await t.row()
+    expect((await t.h.call('POST', `/v1/sandboxes/${t.id}/resume`, { bearer: t.mia })).status).toBe(200)
+    t.box().recordPolicy = undefined
+    await scrubStoppedRecord(life, stale)
+    expect(t.box().recordPolicy).toBeUndefined()
+    // Resumes while the PATCH is in flight: the live policy is re-applied with its values.
+    expect((await t.h.call('POST', `/v1/sandboxes/${t.id}/suspend`, { bearer: t.mia })).status).toBe(200)
+    const deps: LifecycleDeps = {
+      ...life,
+      provider: {
+        ...life.provider,
+        updateRecordNetworkPolicy: async (name, policy) => {
+          await life.provider.updateRecordNetworkPolicy!(name, policy)
+          expect((await t.h.call('POST', `/v1/sandboxes/${t.id}/resume`, { bearer: t.mia })).status).toBe(200)
+          t.box().policy = { allow: {} }
+        }
+      }
+    }
+    await scrubStoppedRecord(deps, await t.row())
+    expect(JSON.stringify(t.box().policy)).toContain(KEY)
+  })
+})
