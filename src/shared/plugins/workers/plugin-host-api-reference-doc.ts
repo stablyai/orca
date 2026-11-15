@@ -76,7 +76,13 @@ export function renderPluginHostApiReference(): string {
     '| --- | --- | --- | --- | --- | --- |',
     ...specs.map(
       (spec) =>
-        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${capabilityCell(spec)} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
+        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${capabilityCell(spec)} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${Object.entries(
+          spec.paramsSince ?? {}
+        )
+          .map(([param, minor]) => ` (\`${param}\`: ${version(minor)})`)
+          .join(
+            ''
+          )}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
     )
   ]
   for (const spec of specs) {

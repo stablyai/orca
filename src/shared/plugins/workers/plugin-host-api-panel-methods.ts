@@ -31,8 +31,8 @@ export const PLUGIN_AGENT_LIST_LIMIT = 50
 export const PLUGIN_AGENT_TASK_TITLE_MAX = 512
 const agentsListParams = z
   .strictObject({
-    /** A workspace by the id `workspace.list` gives, instead of the focused one. Hosts that
-     *  list only the focused workspace refuse it with `invalid_params`. */
+    /** A workspace by the id `workspace.list` gives, instead of the focused one (host API 1.10;
+     *  older hosts refuse it with `invalid_params`). */
     workspaceId: pluginWorkspaceIdSchema.optional()
   })
   .optional()
@@ -84,6 +84,7 @@ export const PLUGIN_PANEL_BRIDGE_API = {
     summary:
       'The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.',
     since: 2,
+    paramsSince: { workspaceId: 10 },
     scope: 'any-workspace',
     capability: 'agent:read',
     mutation: false,
