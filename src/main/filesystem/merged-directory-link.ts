@@ -103,8 +103,16 @@ async function moveTree(
       ])
       if (!existing) {
         await options.beforeShare?.(from)
-        if (!(await moveEntry(from, to, item))) {
-          result.retained += 1
+        try {
+          if (!(await moveEntry(from, to, item))) {
+            result.retained += 1
+          }
+        } catch (error) {
+          // Another merge into the same destination created this folder first: merge into it.
+          if (!item.isDirectory() || !(await lstatIfPresent(to))?.isDirectory()) {
+            throw error
+          }
+          await moveTree(from, to, result, options)
         }
       } else if (item.isDirectory() && existing.isDirectory()) {
         await moveTree(from, to, result, options)

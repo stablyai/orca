@@ -157,11 +157,13 @@ async function clearPendingMarkers(
 type QueuedPass = { shared: boolean; pass: Promise<void> }
 
 /**
- * WSL account history passes, in request order per home (a request joins only the latest queued
- * one with the same mode); indexing runs detached, one at a time per distro.
+ * WSL account history passes, one at a time per distro in request order (homes merging into its
+ * store at once would race on its folders; a request joins only the latest queued one for that
+ * home with the same mode); indexing runs detached, one at a time per distro.
  */
 export class WslCodexAccountHistoryLaunches {
   private readonly latest = new Map<string, QueuedPass>()
+  private readonly tails = new Map<string, Promise<void>>()
   private readonly heals = new Map<string, Promise<void>>()
   // The newest guest marker list per distro, indexed once no pass runs there.
   private readonly owedHeals = new Map<
@@ -190,7 +192,7 @@ export class WslCodexAccountHistoryLaunches {
     if (previous?.shared === target.shared) {
       return previous.pass
     }
-    const pass = (previous?.pass ?? Promise.resolve())
+    const pass = (this.tails.get(distroKey) ?? Promise.resolve())
       .then(async () => {
         if (this.settledThisRun.get(key) === target.shared) {
           this.retryFailedHeal(distroKey)
@@ -215,6 +217,7 @@ export class WslCodexAccountHistoryLaunches {
       .catch((error: unknown) => {
         console.warn('[codex-account-history] WSL account history pass failed:', error)
       })
+    this.tails.set(distroKey, pass)
     this.latest.set(key, { shared: target.shared, pass })
     void pass.finally(() => {
       if (this.latest.get(key)?.pass === pass) {

@@ -16,11 +16,13 @@ const INDEX_PENDING_DIR = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
 
 /**
- * Host account history passes, in request order per home: a request joins only the latest one
- * queued for that home with the same mode. A home settled in a mode this run skips later passes in it.
+ * Host account history passes, one at a time in request order (homes merging into one store at
+ * once would race on its folders): a request joins only the latest one queued for that home with
+ * the same mode. A home settled in a mode this run skips later passes in it.
  */
 export class CodexAccountHistoryPasses {
   private readonly latest = new Map<string, QueuedPass>()
+  private tail: Promise<void> = Promise.resolve()
   private readonly settledThisRun = new Map<string, boolean>()
   private activePasses = 0
   private startedPasses = 0
@@ -35,7 +37,7 @@ export class CodexAccountHistoryPasses {
     if (previous?.shared === shared) {
       return previous.pass
     }
-    const pass = (previous?.pass ?? Promise.resolve()).then(async () => {
+    const pass = this.tail.then(async () => {
       if (this.settledThisRun.get(key) === shared) {
         // Moves are done; only index work a stopped or failed heal left behind is retried.
         if (hasIncompleteHostCodexIndexHeal(INDEX_PENDING_DIR())) {
@@ -57,6 +59,7 @@ export class CodexAccountHistoryPasses {
       // Index once no pass is moving files.
       requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
     })
+    this.tail = pass.catch(() => {})
     this.latest.set(key, { shared, pass })
     void pass.finally(() => {
       if (this.latest.get(key)?.pass === pass) {

@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, realpath, rename, unlink, writeFile } from 'n
 import { basename, join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import {
+  DirectoryLinkError,
   MERGE_PENDING_SUFFIX,
   isLinkedDirectory,
   lstatIfPresent,
@@ -48,8 +49,11 @@ const PRE_SHARE_DATABASES_DIR = '.orca-pre-share-db'
 // Present from the first unlinked folder until the databases moved aside, so a retry finishes.
 const UNSHARE_PENDING = '.orca-unshare-pending'
 
-/** `shared` once the home's history resolves to the store; `private` when a step refused. */
-export type CodexAccountHistoryShareResult = 'shared' | 'private' | 'busy'
+/**
+ * `shared` once the home's history resolves to the store; `incomplete` when it does but some entry
+ * failed to move (a later pass retries it); `private` when a step refused.
+ */
+export type CodexAccountHistoryShareResult = 'shared' | 'incomplete' | 'private' | 'busy'
 
 export type CodexAccountHistoryShareArgs = {
   accountHome: string
@@ -202,12 +206,18 @@ export async function shareCodexAccountHistory(
       mkdir(join(args.storeHome, name), { recursive: true })
     )
   )
+  let failed = false
+  const onWarning = (error: unknown): void => {
+    // A kept conflict is final; anything else left an entry behind for a later pass.
+    failed ||= !(error instanceof DirectoryLinkError && error.code === 'retained-conflict')
+    args.onWarning(error)
+  }
   const link = (name: string) =>
     mergeDirectoryIntoLink({
       source: join(args.accountHome, name),
       destination: join(args.storeHome, name),
       platform: args.platform,
-      onWarning: args.onWarning,
+      onWarning,
       beforeShare: HISTORY_DIRECTORIES.has(name)
         ? (path) => recordIndexPending(args.indexPendingDir, path)
         : undefined,
@@ -217,7 +227,7 @@ export async function shareCodexAccountHistory(
     // A held lock file moves by hard link, so its inode keeps guarding the thread.
     await link(WRITER_LOCKS)
   } catch (error) {
-    args.onWarning(error)
+    onWarning(error)
     return 'private'
   }
   // A user's own link elsewhere would split the lock namespace from the history's.
@@ -233,14 +243,14 @@ export async function shareCodexAccountHistory(
     try {
       await link(name)
     } catch (error) {
-      args.onWarning(error)
+      onWarning(error)
     }
   }
   if (!(await isCodexAccountHistoryLinked(args.accountHome, args.storeHome))) {
     return 'private'
   }
   await writeSharedSqliteHome(args.accountHome, args.sqliteHome)
-  return 'shared'
+  return failed ? 'incomplete' : 'shared'
 }
 
 /**
