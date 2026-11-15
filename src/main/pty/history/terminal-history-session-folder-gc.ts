@@ -22,7 +22,8 @@ export type SessionFolderGcOwners = {
 export type SessionFolderGcScan = SessionFolderGcOwners & {
   liveWorktreeIds: ReadonlySet<string>
   goneByWorktreeId: Map<string, Promise<boolean>>
-  presentByParentKey: Map<string, Promise<boolean>>
+  /** The known sibling that proved each parent's volume mounted, or null when none did. */
+  mountProofByParentKey: Map<string, Promise<string | null>>
   knownPathsByParentKey?: Map<string, string[]>
   candidates: { root: string; entryPath: string; sessionId: string; worktreeId: string }[]
 }
@@ -63,11 +64,11 @@ export async function isSessionFolderOfGoneWorktree(
   return gone
 }
 
-/** A recheck just before deletion, in case a volume detached during the scan; mounts are re-probed once per parent. */
+/** A recheck just before deletion, in case a volume detached during the scan. */
 export function createStillGoneCheck(
   scan: SessionFolderGcScan
 ): (worktreeId: string) => Promise<boolean> {
-  const fresh = { ...scan, presentByParentKey: new Map<string, Promise<boolean>>() }
+  const fresh = { ...scan, mountProofByParentKey: new Map<string, Promise<string | null>>() }
   return (worktreeId) => isLocalWorktreeGone(worktreeId, fresh)
 }
 
@@ -107,20 +108,26 @@ function isProbeableLocalPath(path: string): boolean {
   return process.platform === 'win32' ? /^[A-Za-z]:[\\/]/.test(path) : path.startsWith('/')
 }
 
-function cachedKnownSiblingPresent(
+async function cachedKnownSiblingPresent(
   worktreePath: string,
   scan: SessionFolderGcScan
 ): Promise<boolean> {
   // No case folding: on a case-sensitive volume a differently-cased parent is another folder.
   const parentKey = resolve(dirname(worktreePath))
-  let present = scan.presentByParentKey.get(parentKey)
-  if (!present) {
-    const siblings = knownPathsByParentKey(scan).get(parentKey) ?? []
-    // lstat: a symlinked sibling can point at another, still-mounted volume.
-    present = Promise.all(siblings.map(isRealDirectory)).then((found) => found.includes(true))
-    scan.presentByParentKey.set(parentKey, present)
+  let proof = scan.mountProofByParentKey.get(parentKey)
+  if (!proof) {
+    proof = findRealSibling(knownPathsByParentKey(scan).get(parentKey) ?? [])
+    scan.mountProofByParentKey.set(parentKey, proof)
   }
-  return present
+  // Re-probe the proving sibling every call: one lstat keeps the proof current without rescanning siblings.
+  const sibling = await proof
+  return sibling !== null && (await isRealDirectory(sibling))
+}
+
+/** lstat: a symlinked sibling can point at another, still-mounted volume. */
+async function findRealSibling(siblings: readonly string[]): Promise<string | null> {
+  const found = await Promise.all(siblings.map(isRealDirectory))
+  return siblings[found.indexOf(true)] ?? null
 }
 
 function knownPathsByParentKey(scan: SessionFolderGcScan): Map<string, string[]> {

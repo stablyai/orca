@@ -165,7 +165,7 @@ async function executeHistoryGc(
       ...sessionFolderOwners,
       liveWorktreeIds,
       goneByWorktreeId: new Map(),
-      presentByParentKey: new Map(),
+      mountProofByParentKey: new Map(),
       candidates: []
     }
     const main = await gcScanRoot(getHistoryRoot(), liveWorktreeIds, sessionFolders, signal)
@@ -194,6 +194,10 @@ async function executeHistoryGc(
     const sessionTotals = sessionFolders
       ? await pruneGoneWorktreeSessionFolders(sessionFolders, signal)
       : { orphaned: 0, pruned: 0 }
+    if (signal.aborted) {
+      console.log('[pty:history:gc] Cancelled mid-prune')
+      return
+    }
 
     // Fish files can outlive their metadata; include recorded dirs in case XDG_DATA_HOME changed.
     const fishDirs = new Set([resolveFishHistoryDir()])
@@ -248,7 +252,7 @@ async function pruneGoneWorktreeSessionFolders(
     if (signal.aborted) {
       break
     }
-    if (!(await isStillGone(worktreeId))) {
+    if (!(await isStillGone(worktreeId)) || signal.aborted) {
       continue
     }
     for (const { root, entryPath } of folders) {
