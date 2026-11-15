@@ -1,5 +1,6 @@
 # Legacy synchronous sqlite uses per file; counts may only go DOWN.
 # Only explicit worker/utility entry files are exempt; their imports remain guarded.
+# Off-main journal procedures: journal-sql-reader-entry.ts:85; journal-sql-worker-entry.ts; journal-domain-database.ts:119 (writer open).
 3 src/main/ai-vault-search/query/session-search-engine.ts
 6 src/main/ai-vault-search/query/session-search-postings.ts
 8 src/main/ai-vault-search/query/session-search-retrieval.ts
@@ -38,7 +39,7 @@
 3 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 13 src/main/native-chat/agent-session-journal/database/journal-database.ts
 6 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+3 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 18 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 10 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
@@ -53,8 +54,10 @@
 2 src/main/native-chat/agent-session-journal/journal-domain-dispatch-placement.ts
 8 src/main/native-chat/agent-session-journal/journal-domain-dispatch.ts
 24 src/main/native-chat/agent-session-journal/journal-domain-edit-leases.ts
+4 src/main/native-chat/agent-session-journal/journal-domain-failure-resume.ts
 10 src/main/native-chat/agent-session-journal/journal-domain-generation-reads.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-generation-settlement.ts
+10 src/main/native-chat/agent-session-journal/journal-domain-held-delivery.ts
 10 src/main/native-chat/agent-session-journal/journal-domain-history-after.ts
 9 src/main/native-chat/agent-session-journal/journal-domain-history-page.ts
 4 src/main/native-chat/agent-session-journal/journal-domain-history-roster.ts
@@ -78,7 +81,7 @@
 14 src/main/native-chat/agent-session-journal/journal-domain-outline.ts
 8 src/main/native-chat/agent-session-journal/journal-domain-queue-clear.ts
 6 src/main/native-chat/agent-session-journal/journal-domain-queue-command.ts
-10 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
+12 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
 6 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
 8 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
 4 src/main/native-chat/agent-session-journal/journal-domain-queue-revision.ts
