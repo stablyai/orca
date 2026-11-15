@@ -2500,6 +2500,9 @@ jobs:
     needs:
       - cut
       - build-mac
+    # Why not the implicit success(): it also checks build-mac's own needs, so a tag without the orcad template
+    # (orcad-template skipped on purpose) would skip this job and the mac build would wait for it, then fail.
+    if: ${{ !cancelled() && needs.build-mac.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
