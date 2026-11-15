@@ -33,14 +33,20 @@ type ProviderId = ProviderRateLimits['provider']
 function DetailMetric({
   section,
   label,
-  display
+  display,
+  title
 }: {
   section: UsageSection
   label: string
   display: UsagePercentageDisplay
+  title?: string
 }): React.JSX.Element {
   return (
-    <span data-usage-window={section.label} className="flex shrink-0 items-center gap-1.5">
+    <span
+      data-usage-window={section.label}
+      title={title}
+      className="flex shrink-0 items-center gap-1.5"
+    >
       <span className="text-[10px] text-muted-foreground">{label}</span>
       <UsageBar
         usedPercent={section.window.usedPercent}
@@ -224,6 +230,12 @@ export function UsageRow({
               section={section}
               label={shortUsageLabel(p, section)}
               display={display}
+              title={scopedUsageTitle(
+                p,
+                { ...section, label: shortUsageLabel(p, section) },
+                display,
+                t
+              )}
             />
           ))}
         </div>

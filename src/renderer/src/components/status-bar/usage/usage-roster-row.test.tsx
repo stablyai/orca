@@ -19,7 +19,11 @@ function fableOnly(status: ProviderRateLimits['status'], usedPercent: number): P
   }
 }
 
-function renderRow(p: ProviderRateLimits, display: UsagePercentageDisplay = 'used') {
+function renderRow(
+  p: ProviderRateLimits,
+  display: UsagePercentageDisplay = 'used',
+  mode: 'compact' | 'verbose' = 'compact'
+) {
   return render(
     <UsageRow
       p={p}
@@ -27,7 +31,7 @@ function renderRow(p: ProviderRateLimits, display: UsagePercentageDisplay = 'use
       state={{ kind: 'usage', statusLabel: null }}
       showSignInAction={false}
       now={0}
-      mode="compact"
+      mode={mode}
     />
   ).container
 }
@@ -61,4 +65,14 @@ describe('UsageRow with only a Fable reading', () => {
         ?.getAttribute('title')
     ).toContain('60')
   })
+})
+
+it('titles the Fable figure on the Detailed line beside an ordinary reading', () => {
+  const p: ProviderRateLimits = {
+    ...fableOnly('ok', 40),
+    session: { usedPercent: 10, windowMinutes: 300, resetsAt: null, resetDescription: null }
+  }
+  const titled = [...renderRow(p, 'used', 'verbose').querySelectorAll('[data-usage-window][title]')]
+  expect(titled).toHaveLength(1)
+  expect(titled[0]?.getAttribute('title')).toContain('40')
 })
