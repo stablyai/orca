@@ -134,10 +134,12 @@ export class ClaudeHookService {
     // Count either Windows launcher form: installation falls back to .cmd when the exe cannot be placed.
     const exePath = this.usesWindowsEntry ? getWindowsClaudeHookExecutablePath(scriptPath) : null
     const events = this.managedHookPlan(options).install.map((event) => event.eventName)
+    // Match every installable form: the .cmd fallback, the exec form (proves the CLI accepted it), and the legacy string command.
     const { missing, matchedForms } = findManagedEventHookForms(config, events, (eventName) =>
-      [null, exePath].map((path) =>
-        // An installed exec form proves its CLI accepted it, whatever the probe now reports.
-        getManagedEventHook(eventName, scriptPath, this.options.settings, path, { execForm: true })
+      [null, exePath, exePath].map((path, index) =>
+        getManagedEventHook(eventName, scriptPath, this.options.settings, path, {
+          execForm: index !== 2
+        })
       )
     )
     const presentCount = matchedForms.length
