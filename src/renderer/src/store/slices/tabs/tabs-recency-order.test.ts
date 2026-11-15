@@ -173,6 +173,15 @@ describe('tab bar recency ordering', () => {
     expect(order()).toEqual(['pin-1', 'pin-2', 'c', 'a', 'b'])
   })
 
+  it('drops a deferred promotion once its tab moves to another group', () => {
+    enable()
+    const record = store.getState().captureTabInteraction('c', WT)
+    store.getState().moveUnifiedTabToGroup('c', 'right', { recordInteraction: false })
+    store.getState().recordTabInteraction('right', { worktreeId: WT })
+    record()
+    expect(store.getState().groupsByWorktree[WT][1].tabOrder).toEqual(['right', 'c'])
+  })
+
   it('keeps a dragged order until the next interaction and freezes it in manual mode', () => {
     enable()
     store.getState().recordTabInteraction('c')

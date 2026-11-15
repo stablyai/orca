@@ -26,7 +26,9 @@ export function createTabsRecencyActions(
       groups.set(tab.groupId, token)
       pendingInteractions.set(worktreeId, groups)
       return () => {
-        if (groups.get(tab.groupId) === token) {
+        const current = get().unifiedTabsByWorktree[worktreeId]?.find((item) => item.id === tabId)
+        // A tab that left its captured group must not outrank newer input in its new group.
+        if (current?.groupId === tab.groupId && groups.get(tab.groupId) === token) {
           get().recordTabInteraction(tabId, { worktreeId })
         }
       }
