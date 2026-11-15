@@ -423,6 +423,22 @@ describe('parseRecord and assertReleaseCutRun', () => {
     ).toThrow()
   })
 
+  it.each([
+    ['', true],
+    ['@main', true],
+    ['@refs/heads/main', true],
+    ['@feature', false],
+    ['@main@main', false]
+  ])('release-cut path suffix %j accepted: %s', (suffix, ok) => {
+    const check = () =>
+      assertReleaseCutRun({ ...cutRun, path: `${cutRun.path}${suffix}` }, { repo, runId: '500' })
+    if (ok) {
+      expect(check).not.toThrow()
+    } else {
+      expect(check).toThrow(/not a completed release-cut.yml run/)
+    }
+  })
+
   it('refuses a run still in progress or from a fork', () => {
     expect(() =>
       assertReleaseCutRun({ ...cutRun, status: 'in_progress' }, { repo, runId: '500' })

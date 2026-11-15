@@ -10,6 +10,7 @@ import {
   parseManifest,
   verifyAssetProvenance
 } from './verify-release-asset-provenance.mjs'
+import { workflowRunPathMatches } from '../operations/workflow-run-path.mjs'
 import { githubFetch } from './verify-release-required-assets.mjs'
 
 const API = 'https://api.github.com'
@@ -86,7 +87,7 @@ export function parseRecord(text, { release, runId }) {
 export function assertReleaseCutRun(run, { repo, runId }) {
   const ok =
     String(run?.id) === runId &&
-    run.path === '.github/workflows/release-cut.yml' &&
+    workflowRunPathMatches(run.path, '.github/workflows/release-cut.yml') &&
     run.head_branch === 'main' &&
     ['schedule', 'workflow_dispatch'].includes(run.event) &&
     run.repository?.full_name === repo &&
