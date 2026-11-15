@@ -82,6 +82,7 @@ export async function checkGit(
     // A fetch failure already explains why a push would fail.
     return [
       check('git', 'git.fetch', 'fail', `Cannot reach remote "${remote}".`, {
+        code: fetchFailureCode(fetch),
         remediation: withOutputTail(
           'Check network access and Git credentials for this environment.',
           fetch
@@ -113,6 +114,39 @@ export async function checkGit(
         })
   )
   return checks
+}
+
+/**
+ * Why `git ls-remote` failed, from git's own words (GH-FETCH-REASON), so the workspace can say
+ * whether it's access (nothing to wait for) or the network (Check again). `remoteDenied`: 401/403 or
+ * no credential to send. `remoteNotFound`: GitHub's answer for a private repo it won't confirm, too.
+ * `remoteUnreachable`: DNS, connect, TLS or a timeout. Unknown wording carries no code.
+ */
+export type GitFetchFailureCode = 'remoteDenied' | 'remoteNotFound' | 'remoteUnreachable'
+
+export function fetchFailureCode(
+  result: EnvironmentDoctorCommandResult
+): GitFetchFailureCode | undefined {
+  const output = `${result.stderr}\n${result.stdout}`
+  if (/repository '[^']*' not found|Repository not found|returned error: 404/i.test(output)) {
+    return 'remoteNotFound'
+  }
+  if (
+    /returned error: 40[13]|Authentication failed|could not read (Username|Password)|Permission to .* denied|terminal prompts disabled/i.test(
+      output
+    )
+  ) {
+    return 'remoteDenied'
+  }
+  if (
+    result.timedOut ||
+    /Could not resolve host|Failed to connect|Connection (refused|reset|timed out)|Operation timed out|SSL|TLS|Couldn't connect|returned error: 5\d\d/i.test(
+      output
+    )
+  ) {
+    return 'remoteUnreachable'
+  }
+  return undefined
 }
 
 /** Where `git push` would go: pushRemote, then pushDefault, then the upstream remote, then origin. */

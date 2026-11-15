@@ -28154,7 +28154,15 @@
       "environmentHeld": "Your environment’s setup hasn’t run in this workspace, so dependencies may be missing.",
       "environmentHeldMeaning": "The environment is rebuilding for a security update. New workspaces get its setup again in a few minutes.",
       "runSetupNow": "Run setup now",
-      "environmentSetupUnreadable": "Couldn’t read the environment’s setup. Try again in a moment."
+      "environmentSetupUnreadable": "Couldn’t read the environment’s setup. Try again in a moment.",
+      "fetchReady": "This workspace can reach {{repo}} now.",
+      "fetchNoAccess": "Orca’s GitHub app doesn’t have access to {{repo}}.",
+      "fetchNoAccessMeaning": "Pulls and pushes won’t work until it does.",
+      "grantAccess": "Grant access",
+      "fetchNoAccessRequested": "An owner of {{owner}} has been asked to approve it. Pulls and pushes won’t work until they do.",
+      "fetchNoAccessCantInstall": "Only an owner of {{owner}} can grant it. Pulls and pushes won’t work until they do.",
+      "fetchNeedsRestart": "This workspace can’t use Orca’s access to {{repo}} yet.",
+      "fetchNeedsRestartMeaning": "Restart the workspace to pick it up. Your files are kept."
     },
     "toast": {
       "dismiss": "Dismiss"
