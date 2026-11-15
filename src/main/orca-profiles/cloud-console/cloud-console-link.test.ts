@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { isPackaged: false }, shell: { openExternal: vi.fn() } }))
 
 import { CLOUD_CONSOLE_TICKET_PATH, cloudConsoleOrigin } from './cloud-console-config'
-import { acceptedTicketUrl, requestCloudConsoleTicket } from './cloud-console-link'
+import {
+  acceptedTicketUrl,
+  cloudConsoleTicketBody,
+  requestCloudConsoleTicket
+} from './cloud-console-link'
 
 const config = { apiBaseUrl: 'https://login.onorca.dev' }
 
@@ -57,6 +61,23 @@ describe('console ticket', () => {
       fakeFetch(Response.json({ url: 'x' }), seen)
     )
     expect(JSON.parse(String(seen[0]?.init?.body))).toEqual({ page: 'billing' })
+  })
+
+  it('sends the billing hint only to an auth that advertises it, and only for billing', () => {
+    const hint = { plan: 'team', interval: 'year' as const }
+    const advertised = { capabilities: { flags: { 'console.billing_hint': true } } }
+    expect(
+      cloudConsoleTicketBody(advertised, { section: 'billing', orgId: 'org_1', billingHint: hint })
+    ).toEqual({ page: 'billing', orgId: 'org_1', plan: 'team', interval: 'year' })
+    expect(
+      cloudConsoleTicketBody(
+        { capabilities: { flags: {} } },
+        { section: 'billing', orgId: 'org_1', billingHint: hint }
+      )
+    ).toEqual({ page: 'billing', orgId: 'org_1' })
+    expect(
+      cloudConsoleTicketBody(advertised, { section: 'team', orgId: 'org_1', billingHint: hint })
+    ).toEqual({ page: 'team', orgId: 'org_1' })
   })
 
   it('throws on a refusal so the console opens without a ticket', async () => {

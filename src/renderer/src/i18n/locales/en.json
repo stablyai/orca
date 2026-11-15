@@ -29171,7 +29171,10 @@
       "checkAgain": "Check again",
       "raiseCapAndContinue": "Raise spend cap and continue",
       "backToDraft": "Back to draft",
-      "saveFailed": "Couldn’t save that. Try again, or change it in Plan & billing."
+      "saveFailed": "Couldn’t save that. Try again, or change it in Plan & billing.",
+      "plansStill": "No plan yet. Choose one, then check again.",
+      "plans": "Choose a plan, then check again. Orca checks again when you come back.",
+      "seePlans": "See plans"
     },
     "cloneAccess": {
       "reachableTitle": "Couldn’t clone {{repo}}",

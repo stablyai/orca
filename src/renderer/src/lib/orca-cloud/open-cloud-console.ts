@@ -3,18 +3,27 @@
 // code the browser asks the person to sign in, so a failed request still opens the page.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { OrcaCloudConsoleSection } from '../../../../shared/orca-cloud-console'
+import type {
+  OrcaCloudConsoleBillingHint,
+  OrcaCloudConsoleSection
+} from '../../../../shared/orca-cloud-console'
 
 let opening: OrcaCloudConsoleSection | null = null
 
-export async function openCloudConsole(section: OrcaCloudConsoleSection): Promise<void> {
+/** `billingHint`: the plan and period picked in the plans dialog, for the billing page to preselect. */
+export async function openCloudConsole(
+  section: OrcaCloudConsoleSection,
+  billingHint?: OrcaCloudConsoleBillingHint
+): Promise<void> {
   // A double click mints one code, not two.
   if (opening === section) {
     return
   }
   opening = section
   try {
-    const result = await window.api.orcaProfiles.openCloudConsole({ section })
+    const result = await window.api.orcaProfiles.openCloudConsole(
+      billingHint ? { section, billingHint } : { section }
+    )
     if (result.status !== 'opened') {
       toast.error(
         translate('settings.cloudConsole.openFailed', 'Couldn’t open the browser. Try again.')

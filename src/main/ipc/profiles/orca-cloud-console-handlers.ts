@@ -2,6 +2,7 @@
 import { ipcMain } from 'electron'
 import {
   isOrcaCloudConsoleSection,
+  parseOrcaCloudConsoleBillingHint,
   type OrcaCloudConsoleOpenResult
 } from '../../../shared/orca-cloud-console'
 import { openOrcaCloudConsole } from '../../orca-profiles/cloud-console/cloud-console-link'
@@ -18,7 +19,14 @@ export function registerOrcaCloudConsoleHandlers(): void {
       if (!isOrcaCloudConsoleSection(section)) {
         return { status: 'failed', error: 'invalid_orca_cloud_console_section' }
       }
-      return openOrcaCloudConsole(getProfileUserDataPath(), section)
+      const billingHint =
+        section === 'billing' &&
+        typeof rawArgs === 'object' &&
+        rawArgs !== null &&
+        'billingHint' in rawArgs
+          ? parseOrcaCloudConsoleBillingHint(rawArgs.billingHint)
+          : null
+      return openOrcaCloudConsole(getProfileUserDataPath(), section, { billingHint })
     }
   )
 }
