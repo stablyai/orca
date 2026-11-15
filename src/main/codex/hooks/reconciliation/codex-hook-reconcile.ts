@@ -81,6 +81,7 @@ function reconcileAfter(ready: Promise<unknown>, request: ReconcileRequest): Pro
 }
 
 export function scheduleCodexHookReconcile(): void {
+  releaseStartup?.()
   // One run already reads after the spawn; coalesce calls from its multiple env builders.
   if (config && (!running || findingCodexAnswer)) {
     void reconcileCodexHooks()

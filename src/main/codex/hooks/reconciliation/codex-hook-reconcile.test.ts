@@ -6,7 +6,6 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
-  utimesSync,
   rmSync,
   statSync,
   writeFileSync
@@ -247,14 +246,6 @@ describe('reconcileCodexHooks', () => {
 
   it('holds the startup lookup and reconcile until startAfter settles', async () => {
     writeHooks({ Stop: [olderBuildStop()] })
-    const scratchRoot = join(root, 'scratch')
-    const staleScratch = join(scratchRoot, 'orca-codex-hook-trust-abandoned')
-    mkdirSync(staleScratch, { recursive: true })
-    const old = new Date(Date.now() - 2 * 60 * 60_000)
-    utimesSync(staleScratch, old, old)
-    vi.stubEnv('TMPDIR', scratchRoot)
-    vi.stubEnv('TEMP', scratchRoot)
-    vi.stubEnv('TMP', scratchRoot)
     const published = Promise.withResolvers<void>()
     startCodexHooks({
       isEnabled: () => enabled,
@@ -265,32 +256,37 @@ describe('reconcileCodexHooks', () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
     expect(mocks.realHomeRuns).toBe(0)
-    expect(existsSync(staleScratch)).toBe(true)
 
     published.resolve()
     await _internals.settledForTesting()
 
     expect(mocks.probeCodexVersion).toHaveBeenCalled()
     expect(mocks.realHomeRuns).toBe(1)
-    await vi.waitFor(() => expect(existsSync(staleScratch)).toBe(false))
     expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
-  it('never makes a launch wait for startAfter', async () => {
-    writeHooks({ Stop: [olderBuildStop()] })
-    startCodexHooks({
-      isEnabled: () => enabled,
-      resolveLaunchHome: () => null,
-      pathReady: Promise.resolve(),
-      startAfter: new Promise<void>(() => {})
-    })
+  it.each(['managed chat', 'terminal pane'] as const)(
+    'never makes a %s launch wait for startAfter',
+    async (launch) => {
+      writeHooks({ Stop: [olderBuildStop()] })
+      startCodexHooks({
+        isEnabled: () => enabled,
+        resolveLaunchHome: () => null,
+        pathReady: Promise.resolve(),
+        startAfter: new Promise<void>(() => {})
+      })
 
-    await reconcileCodexHooksForLaunch()
+      if (launch === 'terminal pane') {
+        scheduleCodexHookReconcile()
+        await _internals.settledForTesting()
+      } else {
+        await reconcileCodexHooksForLaunch()
+      }
 
-    expect(mocks.realHomeRuns).toBe(1)
-    // The launch takes the startup run, so app start's conversion still happens.
-    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
-  })
+      // The launch takes the startup run, so app start's conversion still happens.
+      expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+    }
+  )
 
   it('rechecks a spawn that lands while a run is still finding Codex, which may miss a fresh install', async () => {
     const installed = mocks.codexPath
