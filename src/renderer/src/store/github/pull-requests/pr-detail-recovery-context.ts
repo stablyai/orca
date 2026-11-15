@@ -5,7 +5,7 @@ import type { PRRefreshErrorType } from '../../../../../shared/github/pull-reque
 import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { isStaleMergedGitHubReviewForHead } from '../../slices/hosted-review/hosted-review-cache-state'
-import { selectUsableGitHubPR } from '../../../components/right-sidebar/checks-panel/checks-panel-review'
+import { selectUsableGitHubPR } from '../../../components/right-sidebar/checks-panel/review-state/checks-panel-review'
 import { findWorktreeById } from '../refresh/worktree-refresh'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'

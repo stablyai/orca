@@ -21,6 +21,18 @@ const goodRow = {
 }
 
 describe('device registry load validation', () => {
+  it('recovers trusted key absence after an initially malformed snapshot is repaired', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-device-registry-repair-'))
+    const path = join(directory, DEVICE_REGISTRY_FILENAME)
+    writeFileSync(path, '[{"deviceId":')
+    const registry = new DeviceRegistry(directory)
+    expect(registry.lookupDeviceKey('absent-key')).toEqual({ kind: 'unavailable' })
+
+    writeFileSync(path, '[]')
+    expect(registry.getPendingDevice()).toBeNull()
+    expect(registry.lookupDeviceKey('absent-key')).toEqual({ kind: 'unknown' })
+  })
+
   it('drops a row without a string deviceId and sets the file aside before rewriting', () => {
     const { userDataPath, registry } = registryWith([
       goodRow,
@@ -28,9 +40,11 @@ describe('device registry load validation', () => {
       { ...goodRow, deviceId: undefined, token: 'missing-id-token' }
     ])
     expect(registry.listDevices().map((device) => device.deviceId)).toEqual(['good'])
-    expect(registry.validateToken('orphan-token')).toBeNull()
+    expect(() => registry.validateToken('orphan-token')).toThrowError(
+      expect.objectContaining({ code: 'registry_unavailable' })
+    )
     expect(registry.lookupDeviceKey('42')).toEqual({ kind: 'unavailable' })
-    registry.getOrCreatePendingDevice('Re-pair', 'mobile')
+    registry.addDevice('Re-pair', 'mobile')
     expect(readdirSync(userDataPath).some((name) => name.includes('.corrupt-'))).toBe(true)
   })
 })

@@ -3,7 +3,6 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import type { PRDetailRecoverySnapshot } from '../../../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
 import { eraseRpcMethods, type RpcContext } from '../core'
 import type { DeviceEntry } from './pairing/device-entry'
 import { DEVICE_REGISTRY_FILENAME } from './pairing/mobile-pairing-files'
@@ -48,6 +47,41 @@ vi.mock('../../../github/api/rate-limit', () => modules.rateLimitModuleMock(mock
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { GITHUB_PR_DETAIL_RECOVERY_METHODS } from '../methods/source-control/github/github-pr-detail-recovery-methods'
+
+function ticket(value: unknown) {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('ticketId' in value) ||
+    typeof value.ticketId !== 'string' ||
+    !('revision' in value) ||
+    typeof value.revision !== 'number' ||
+    !('admitted' in value) ||
+    typeof value.admitted !== 'boolean'
+  ) {
+    throw new Error('Expected a recovery ticket')
+  }
+  let preparation: { token: string } | undefined
+  if ('preparation' in value && value.preparation !== undefined) {
+    const prepared = value.preparation
+    if (
+      typeof prepared !== 'object' ||
+      prepared === null ||
+      !('token' in prepared) ||
+      typeof prepared.token !== 'string'
+    ) {
+      throw new Error('Expected a preparation token')
+    }
+    preparation = { token: prepared.token }
+  }
+  return {
+    ticketId: value.ticketId,
+    revision: value.revision,
+    admitted: value.admitted,
+    preparation,
+    terminal: 'terminal' in value ? value.terminal : undefined
+  }
+}
 
 it('cancels an encrypted committed read on ancestor loss before dispatch and keeps its restored socket fresh', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-ancestor-queue-'))
@@ -133,7 +167,7 @@ it('cancels an encrypted committed read on ancestor loss before dispatch and kee
     })
     const started = await reader.next('start')
     expect(started).toMatchObject({ ok: true })
-    let snapshot = started.result as PRDetailRecoverySnapshot
+    let snapshot = ticket(started.result)
     while (!snapshot.preparation) {
       expect(snapshot.terminal).toBeUndefined()
       sendEncryptedWsRequest(session, {
@@ -143,7 +177,7 @@ it('cancels an encrypted committed read on ancestor loss before dispatch and kee
       })
       const prepared = await reader.next('prepare')
       expect(prepared).toMatchObject({ ok: true })
-      snapshot = prepared.result as PRDetailRecoverySnapshot
+      snapshot = ticket(prepared.result)
     }
     sendEncryptedWsRequest(session, {
       id: 'commit',
@@ -154,7 +188,7 @@ it('cancels an encrypted committed read on ancestor loss before dispatch and kee
         publicationGrantId: 'ancestor-grant'
       }
     })
-    const committed = (await reader.next('commit')).result as PRDetailRecoverySnapshot
+    const committed = ticket((await reader.next('commit')).result)
     expect(committed.admitted).toBe(false)
     await preparing
     sendEncryptedWsRequest(session, {
@@ -207,7 +241,7 @@ it('cancels an encrypted committed read on ancestor loss before dispatch and kee
         method: 'github.prDetailRecovery.start',
         params
       })
-      const fresh = (await resumed.next('fresh-ticket')).result as PRDetailRecoverySnapshot
+      const fresh = ticket((await resumed.next('fresh-ticket')).result)
       expect(fresh.ticketId).not.toBe(snapshot.ticketId)
       expect(fresh.admitted).toBe(false)
       expect(fresh.terminal).toBeUndefined()

@@ -29,6 +29,29 @@ function pairedRegistries() {
   return { writer, observer: new DeviceRegistry(directory), parent, child }
 }
 
+it.each([
+  { pairingReach: 'this-computer' as const },
+  { mobilePairingConnectionMode: 'local-only' as const },
+  { callerFingerprint: 'new-owner' }
+])('retires captured authority when external access policy changes: %j', (change) => {
+  const { observer, parent } = pairedRegistries()
+  const principal = { deviceId: parent.deviceId, credentialRevision: 0, deviceToken: parent.token }
+  const authority = observer.captureAuthority(principal)!
+  const path = join(directory, DEVICE_REGISTRY_FILENAME)
+  const rows: DeviceEntry[] = JSON.parse(readFileSync(path, 'utf8'))
+  writeFileSync(
+    path,
+    JSON.stringify(
+      rows.map((row) => (row.deviceId === parent.deviceId ? { ...row, ...change } : row))
+    )
+  )
+  vi.advanceTimersByTime(1001)
+  observer.refreshAuthority()
+  expect(observer.resolveAuthenticatedPrincipal(principal, authority)).toBeNull()
+  expect(observer.validateToken(parent.token)?.deviceId).toBe(parent.deviceId)
+  expect(observer.captureAuthority(principal)?.signal.aborted).toBe(false)
+})
+
 it.each(['device', 'ancestor'] as const)(
   'retires live %s authority after another registry promotes its pairing ticket, including restoration',
   (target) => {
@@ -46,8 +69,12 @@ it.each(['device', 'ancestor'] as const)(
     const path = join(directory, DEVICE_REGISTRY_FILENAME)
     const original = readFileSync(path, 'utf8')
 
-    writer.exchangePairingTicket(parent.deviceId, parent.token, 'replacement-device-token')
-    expect(writer.validateToken('replacement-device-token')).toMatchObject({
+    writer.exchangePairingTicket(
+      parent.deviceId,
+      parent.token,
+      '888888888888888888888888888888888888888888888888'
+    )
+    expect(writer.validateToken('888888888888888888888888888888888888888888888888')).toMatchObject({
       deviceId: parent.deviceId,
       credentialRevision: 1
     })
@@ -57,10 +84,16 @@ it.each(['device', 'ancestor'] as const)(
     expect(authority.signal.aborted).toBe(true)
     expect(observer.resolveAuthenticatedPrincipal(principal, authority)).toBeNull()
     expect(observer.validateToken(parent.token)).toBeNull()
-    expect(observer.validateToken('replacement-device-token')?.deviceId).toBe(parent.deviceId)
+    expect(
+      observer.validateToken('888888888888888888888888888888888888888888888888')?.deviceId
+    ).toBe(parent.deviceId)
     const replacementPrincipal =
       target === 'device'
-        ? { ...principal, credentialRevision: 1, deviceToken: 'replacement-device-token' }
+        ? {
+            ...principal,
+            credentialRevision: 1,
+            deviceToken: '888888888888888888888888888888888888888888888888'
+          }
         : principal
     const replacement = observer.captureAuthority(replacementPrincipal)!
     expect(replacement.signal.aborted).toBe(false)
@@ -73,7 +106,7 @@ it.each(['device', 'ancestor'] as const)(
     expect(authority.signal.aborted).toBe(true)
     expect(replacement.signal.aborted).toBe(true)
     expect(observer.resolveAuthenticatedPrincipal(principal, authority)).toBeNull()
-    expect(observer.validateToken('replacement-device-token')).toBeNull()
+    expect(observer.validateToken('888888888888888888888888888888888888888888888888')).toBeNull()
     expect(observer.validateToken(parent.token)?.deviceId).toBe(parent.deviceId)
     const restored = observer.captureAuthority(principal)!
     expect(restored.signal.aborted).toBe(false)
@@ -93,16 +126,24 @@ it('does not overwrite an external token promotion when a stale registry flushes
   observer.updateLastSeen(parent.deviceId)
   observer.updateLastSeenDeferred(parent.deviceId)
 
-  writer.exchangePairingTicket(parent.deviceId, parent.token, 'replacement-device-token')
-  expect(writer.validateToken('replacement-device-token')?.deviceId).toBe(parent.deviceId)
+  writer.exchangePairingTicket(
+    parent.deviceId,
+    parent.token,
+    '888888888888888888888888888888888888888888888888'
+  )
+  expect(writer.validateToken('888888888888888888888888888888888888888888888888')?.deviceId).toBe(
+    parent.deviceId
+  )
   observer.flushPendingLastSeen()
 
   expect(authority.signal.aborted).toBe(true)
   expect(observer.validateToken(parent.token)).toBeNull()
-  expect(observer.validateToken('replacement-device-token')?.deviceId).toBe(parent.deviceId)
+  expect(observer.validateToken('888888888888888888888888888888888888888888888888')?.deviceId).toBe(
+    parent.deviceId
+  )
   const reloaded = new DeviceRegistry(directory)
   expect(reloaded.validateToken(parent.token)).toBeNull()
-  expect(reloaded.validateToken('replacement-device-token')).toMatchObject({
+  expect(reloaded.validateToken('888888888888888888888888888888888888888888888888')).toMatchObject({
     deviceId: parent.deviceId,
     credentialRevision: 1
   })

@@ -7,7 +7,7 @@ import { useNow } from '@/hooks/use-now'
 import { useAppStore } from '@/store'
 import { isMacPlatform } from '../../../terminal-pane/links/terminal-link-open-hints'
 import { openChecksPanelHostedReviewUrl } from '../review-actions/checks-panel-hosted-review-click-routing'
-import type { ChecksPanelRefreshInput } from '../checks-panel-review-state-model'
+import type { ChecksPanelRefreshInput } from '../review-state/checks-panel-review-state-model'
 import type { ChecksPanelManualRefreshResult } from '../refresh/checks-panel-manual-refresh-result'
 import {
   getPositiveReviewPresentation,

@@ -28,7 +28,7 @@ export function registerSocketDeviceKey(
   ) {
     throw new Error('bad_proof')
   }
-  const legacy = registry.resolveAuthenticatedPrincipal(socket.device)
+  const legacy = registry.resolveAuthenticatedPrincipal(socket.device, socket.device.authority)
   if (!legacy) {
     throw new Error('unauthorized')
   }
@@ -36,7 +36,10 @@ export function registerSocketDeviceKey(
     legacy.deviceId,
     params.devicePublicKeyB64,
     sanitizeDeviceLabel(params.deviceLabel, legacy.name),
-    { ephemeral: params.ephemeral === true }
+    {
+      ephemeral: params.ephemeral === true,
+      proof: { principal: socket.device, authority: socket.device.authority }
+    }
   )
   return { deviceId: entry.deviceId, credentialRevision: entry.credentialRevision ?? 0 }
 }

@@ -6,7 +6,7 @@ import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/githu
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review/hosted-review-cache-state'
 import { selectReviewCacheEntry } from '../../source-control/review/review-cache-entry-selection'
-import { selectChecksPanelReview } from './checks-panel-review'
+import { selectChecksPanelReview, selectUsableGitHubPR } from './checks-panel-review'
 import type { HostedReviewInfo as ChecksPanelReview } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { isGitLabChecksPanelReview } from '../review-data/gitlab-review-client'
 import { clearPendingPRCommentAiAck } from '../comments/pr-comments-ai-launch-ack'

@@ -12,6 +12,7 @@ import {
 import { computerUseErrorRecoveryData } from '../../../../shared/computer-use-error-recovery'
 import { errorResponse, mapEmulatorError, mapRuntimeError } from './rpc-response'
 import { PluginHookDeniedError } from '../../../plugins/hooks/plugin-hook-dispatch'
+import { DeviceRegistryUnavailableError } from '../server/pairing/device-registry-unavailable'
 
 export function invalidArgumentResponse(
   request: RpcRequest,
@@ -38,6 +39,9 @@ export function mapDispatcherError(
     return errorResponse(request.id, meta, 'runtime_error', error.message, {
       outcome: 'landed-with-warning'
     })
+  }
+  if (error instanceof DeviceRegistryUnavailableError) {
+    return errorResponse(request.id, meta, error.code, error.message, { retryable: true })
   }
   if (error instanceof ZodError) {
     return invalidArgumentResponse(request, meta, formatZodError(error))

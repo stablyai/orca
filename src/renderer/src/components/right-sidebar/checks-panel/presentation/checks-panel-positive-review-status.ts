@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { PRDetailRecoveryStatus } from '@/store/github/pull-requests/pr-detail-recovery-context'
 import type { PRRefreshErrorType } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { ChecksPanelRefreshInput } from '../checks-panel-review-state-model'
+import type { ChecksPanelRefreshInput } from '../review-state/checks-panel-review-state-model'
 import { HARD_ERROR_COPY } from './checks-panel-review-copy'
 
 export type PositiveReviewStatusKind =

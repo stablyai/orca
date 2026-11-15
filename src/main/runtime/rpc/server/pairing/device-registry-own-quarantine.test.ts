@@ -40,7 +40,9 @@ function partiallyCorruptRegistry() {
   const rows: unknown[] = JSON.parse(readFileSync(registryPath(), 'utf8'))
   writeFileSync(registryPath(), JSON.stringify([...rows, { deviceId: 'x', bogus: true }]))
   const registry = new DeviceRegistry(dir)
-  expect(registry.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
+  expect(() => registry.validateToken(phone.token)).toThrowError(
+    expect.objectContaining({ code: 'registry_unavailable' })
+  )
   return { registry, phone }
 }
 
@@ -51,7 +53,9 @@ describe('device registry after quarantining its own corrupt file', () => {
       throw new Error('disk full')
     })
 
-    expect(() => registry.addDevice('new desktop', 'runtime')).toThrow('disk full')
+    expect(() => registry.addDevice('new desktop', 'runtime')).toThrowError(
+      expect.objectContaining({ code: 'registry_unavailable', reason: 'io' })
+    )
     expect(quarantinedCopies()).toHaveLength(1)
     expect(existsSync(registryPath())).toBe(false)
     const added = registry.addDevice('new desktop', 'runtime')
@@ -65,7 +69,9 @@ describe('device registry after quarantining its own corrupt file', () => {
     vi.spyOn(secureFile, 'writeSecureJsonFile').mockImplementationOnce(() => {
       throw new Error('disk full')
     })
-    expect(() => registry.addDevice('new desktop', 'runtime')).toThrow('disk full')
+    expect(() => registry.addDevice('new desktop', 'runtime')).toThrowError(
+      expect.objectContaining({ code: 'registry_unavailable', reason: 'io' })
+    )
     // E.g. the pairing CLI on the host, writing through its own registry instance.
     const cliPaired = new DeviceRegistry(dir).addDevice('cli pairing', 'runtime')
 

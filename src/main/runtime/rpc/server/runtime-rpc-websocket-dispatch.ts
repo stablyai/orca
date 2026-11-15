@@ -1,3 +1,4 @@
+import { DeviceRegistryUnavailableError } from './pairing/device-registry-unavailable'
 import { injectDeviceScope } from './runtime-rpc-device-status'
 import { pairedAuthorityReply } from '../mobile/paired-socket-authorities'
 import type { WebSocket } from 'ws'
@@ -159,12 +160,21 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     }
     // Recheck device/credential revision per request so revocation refuses immediately, before socket close.
     const registry = this.deviceRegistry
-    const device = authenticatedSocket
-      ? registry?.resolveAuthenticatedPrincipal(
-          authenticatedSocket.device,
-          authenticatedSocket.device.authority
-        )
-      : registry?.validateToken(token ?? '')
+    let device
+    try {
+      device = authenticatedSocket
+        ? registry?.resolveAuthenticatedPrincipal(
+            authenticatedSocket.device,
+            authenticatedSocket.device.authority
+          )
+        : registry?.validateToken(token ?? '')
+    } catch (error) {
+      if (!(error instanceof DeviceRegistryUnavailableError)) {
+        throw error
+      }
+      reply(JSON.stringify(this.buildError(request.id, error.code, error.message)))
+      return
+    }
     if (!device || !registry) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
       return

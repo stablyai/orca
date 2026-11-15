@@ -14,7 +14,7 @@ describe('planDeviceKeyFork', () => {
     writeFileSync(join(userDataPath, DEVICE_REGISTRY_FILENAME), '[{"deviceId":"keyed",')
     const afterCrash = new DeviceRegistry(userDataPath)
     expect(afterCrash.lookupDeviceKey('keyed')).toEqual({ kind: 'unavailable' })
-    afterCrash.getOrCreatePendingDevice('Re-pair', 'mobile')
+    afterCrash.addDevice('Re-pair', 'mobile')
     expect(readdirSync(userDataPath).some((name) => name.includes('.corrupt-'))).toBe(true)
 
     const nextLaunch = new DeviceRegistry(userDataPath)

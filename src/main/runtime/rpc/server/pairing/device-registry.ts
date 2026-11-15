@@ -3,14 +3,8 @@ import type { AuthorizationIncarnation } from '../../../../../shared/authorizati
 import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
-import {
-  isExchangeSignIn,
-  planForkedTicketRetirement,
-  planTicketExchange,
-  promoteExchangedTicket
-} from './pairing-ticket-exchange'
 import { planIdleEphemeralPrune } from './ephemeral-device-rows'
-import { DeviceRegistrySightings } from './device-registry-sightings'
+import { DeviceRegistryAuthentication } from './device-registry-authentication'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
@@ -29,15 +23,15 @@ import {
 } from './pairing-offer-expiry'
 import {
   mobilePairingConnectionModeOf,
-  type AuthenticatedPrincipalBinding,
-  lookupDeviceKeyRow,
   type DeviceEntry,
-  type DeviceKeyLookup,
+  type AuthenticatedPrincipalBinding,
   type TokenDeviceEntry
 } from './device-entry'
 import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
+import { DeviceRegistryUnavailableError } from './device-registry-unavailable'
+import { sameDeviceSecurity, isDeviceFirstSighting } from './device-registry-reconciliation'
 
-export class DeviceRegistry extends DeviceRegistrySightings {
+export class DeviceRegistry extends DeviceRegistryAuthentication {
   addDevice(
     name: string,
     scope: DeviceScope = 'mobile',
@@ -60,7 +54,11 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     const nextDevices = [...existingDevices, entry]
     // Credentials become valid only after durable persistence.
     this.devices = this.save(nextDevices)
-    return entry
+    const persisted = this.authorityIndex.token(entry.token)
+    if (!persisted || persisted.deviceId !== entry.deviceId) {
+      throw new DeviceRegistryUnavailableError('conflict', null)
+    }
+    return { ...persisted, token: entry.token }
   }
 
   /** Coalesce re-advertisement onto one unused token so repeated QR requests cannot orphan credentials. */
@@ -71,23 +69,25 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     grants: readonly RuntimeDeviceGrant[] = [],
     offerTtlMs?: number
   ): TokenDeviceEntry {
-    // Never show a QR for an offer an admin removed on disk.
-    this.adoptExternalEdits({ fresh: true })
-    // Relay-bound rows leave through the caller's discard, which queues the cloud revoke first.
-    const live = withoutExpiredUnboundOffers(this.devices, this.seenDeviceIds)
-    if (live !== this.devices) {
-      this.saveOrLog({}, 'prune expired pairing offers', this.devices, live)
-    }
-    // Reuse only identical grants so re-advertisement cannot expand permissions.
-    const existing = this.getPendingDevice(scope, offerTtlMs, grants)
-    if (existing) {
-      // Widen advertised reach, never narrow it and break an off-host link already handed out.
-      const widen = pairingReach === 'network' && existing.pairingReach === 'this-computer'
-      // Removed on disk meanwhile: mint a fresh offer rather than hand out a revoked one.
-      const offered = widen ? this.setPairingReach(existing, 'network') : existing
-      return offered ?? this.addDevice(name, scope, pairingReach, grants, offerTtlMs)
-    }
-    return this.addDevice(name, scope, pairingReach, grants, offerTtlMs)
+    return this.runAuthorityOperation(() => {
+      // Never show a QR for an offer an admin removed on disk.
+      this.requireAuthority({ fresh: true })
+      // Relay-bound rows leave through the caller's discard, which queues the cloud revoke first.
+      const live = withoutExpiredUnboundOffers(this.devices, this.seenDeviceIds)
+      if (live !== this.devices) {
+        this.saveOrLog({}, 'prune expired pairing offers', this.devices, live)
+      }
+      // Reuse only identical grants so re-advertisement cannot expand permissions.
+      const existing = this.getPendingDevice(scope, offerTtlMs, grants)
+      if (existing) {
+        // Widen advertised reach, never narrow it and break an off-host link already handed out.
+        const widen = pairingReach === 'network' && existing.pairingReach === 'this-computer'
+        // Removed on disk meanwhile: mint a fresh offer rather than hand out a revoked one.
+        const offered = widen ? this.setPairingReach(existing, 'network') : existing
+        return offered ?? this.addDevice(name, scope, pairingReach, grants, offerTtlMs)
+      }
+      return this.addDevice(name, scope, pairingReach, grants, offerTtlMs)
+    })
   }
 
   private setPairingReach(
@@ -122,13 +122,34 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     phones: readonly DelegatedPhone[]
   ): DelegatedMobileDeviceEntry[] {
     // Plan over the file as it is: an unchanged child removed on disk would skip the save's merge.
-    this.adoptExternalEdits({ fresh: true })
+    this.requireAuthority({ fresh: true })
+    const currentParent = this.getDevice(parent.deviceId)
+    if (
+      !currentParent ||
+      (!sameDeviceSecurity(parent, currentParent) && !isDeviceFirstSighting(parent, currentParent))
+    ) {
+      return []
+    }
     const { nextDevices, entries } = planDelegatedMobileDevices(this.devices, parent, phones)
     if (nextDevices !== this.devices) {
-      this.devices = this.save(nextDevices)
+      this.devices = this.save(nextDevices, { guards: [parent.deviceId] })
     }
     // A child the file had already lost is dropped by the save: never hand out its token.
-    return entries.filter((entry) => this.getDevice(entry.deviceId) !== null)
+    return entries.flatMap((entry) => {
+      const current = this.authorityIndex.token(entry.token)
+      return current &&
+        current.deviceId === entry.deviceId &&
+        current.parentDeviceId === parent.deviceId
+        ? [
+            {
+              ...current,
+              token: entry.token,
+              parentDeviceId: parent.deviceId,
+              phoneKey: entry.phoneKey
+            }
+          ]
+        : []
+    })
   }
 
   removeDevice(deviceId: string): boolean {
@@ -151,7 +172,7 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     offerTtlMs?: number,
     grants: readonly RuntimeDeviceGrant[] = []
   ): TokenDeviceEntry | null {
-    this.adoptExternalEdits({ fresh: true })
+    this.requireAuthority({ fresh: true })
     const offers = this.listPendingDevices(scope)
     return reusablePairingOffer(offers, validGrants(grants, scope) ?? [], offerTtlMs)
   }
@@ -196,67 +217,24 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     return this.devices
   }
 
-  validateToken(token: string): DeviceEntry | null {
-    this.adoptExternalEdits()
-    this.authorityIndex.expire(this.devices)
-    const device = this.authorityIndex.token(token)
-    return device && isExchangeSignIn(device, token) ? this.retirePairingToken(device) : device
-  }
-
-  /** Durable before the reply, so a client that stores the replacement can always sign in with it. */
-  exchangePairingTicket(deviceId: string, presentedToken: string, exchangeToken: string): void {
-    this.adoptExternalEdits()
-    const next = planTicketExchange(this.devices, deviceId, presentedToken, exchangeToken)
-    this.devices = this.save(next, { durable: true })
-  }
-
-  /** After an authenticated key sign-in; a failed write is retried on the next one. */
-  retireForkedTicket(signedInDeviceId: string): void {
-    const next = planForkedTicketRetirement(this.devices, signedInDeviceId)
-    if (next) {
-      this.saveOrLog(
-        { durable: true },
-        'retire a pairing code a browser replaced',
-        this.devices,
-        next
-      )
-    }
-  }
-
-  /** First sign-in with the replacement; a failed write keeps both tokens and retries next sign-in. */
-  private retirePairingToken(device: DeviceEntry & { exchangeToken: string }): DeviceEntry {
-    const promoted = promoteExchangedTicket(device)
-    try {
-      this.devices = this.save(
-        this.devices.map((d) => (d === device ? promoted : d)),
-        { durable: true }
-      )
-      return this.getDevice(device.deviceId) ?? promoted
-    } catch (error) {
-      console.error('[runtime] Failed to retire an exchanged pairing token:', error)
-      return {
-        ...device,
-        token: device.exchangeToken,
-        callerFingerprint: promoted.callerFingerprint
-      }
-    }
-  }
-
-  // Clients erase keys on unknown; reserve that verdict for readable absence.
-  lookupDeviceKey(deviceId: string): DeviceKeyLookup {
-    this.adoptExternalEdits()
-    const lookup = lookupDeviceKeyRow(this.getDevice(deviceId), this.devices)
-    return lookup.kind === 'unknown' && (this.registryUnreadable || this.registryDoubtful)
-      ? { kind: 'unavailable' }
-      : lookup
-  }
-
   forkDeviceKey(
     legacyDeviceId: string,
     devicePublicKeyB64: string,
     label: string,
-    options: { ephemeral?: boolean } = {}
+    options: {
+      ephemeral?: boolean
+      proof?: { principal: AuthenticatedPrincipalBinding; authority?: AuthorizationIncarnation }
+    } = {}
   ): DeviceEntry {
+    this.requireAuthority({ fresh: true })
+    if (
+      options.proof &&
+      (!options.proof.authority ||
+        options.proof.authority.signal.aborted ||
+        this.authorityIndex.capture(options.proof.principal) !== options.proof.authority)
+    ) {
+      throw new Error('unauthorized')
+    }
     const fork = planDeviceKeyFork(
       this.devices,
       legacyDeviceId,
@@ -274,9 +252,17 @@ export class DeviceRegistry extends DeviceRegistrySightings {
               : device
           )
         : fork.nextDevices
-      this.devices = this.save(next, { durable: true })
+      this.devices = this.save(next, { durable: true, guards: [legacyDeviceId] })
     }
-    return fork.entry
+    const result = this.lookupDeviceKey(fork.entry.deviceId)
+    if (
+      result.kind !== 'found' ||
+      result.device.devicePublicKeyB64 !== devicePublicKeyB64 ||
+      result.device.forkedFrom !== legacyDeviceId
+    ) {
+      throw new DeviceRegistryUnavailableError('conflict', null)
+    }
+    return result.device
   }
 
   /** Removal revokes credentials, so pruning must persist durably. */
@@ -286,20 +272,5 @@ export class DeviceRegistry extends DeviceRegistrySightings {
       this.devices = this.save(plan.nextDevices, { durable: true })
     }
     return plan.removed
-  }
-
-  resolveAuthenticatedPrincipal(
-    principal: AuthenticatedPrincipalBinding,
-    authority?: AuthorizationIncarnation
-  ): DeviceEntry | null {
-    if (authority) {
-      return authority.signal.aborted ? null : this.authorityIndex.principal(principal)
-    }
-    this.refreshAuthority()
-    return this.authorityIndex.principal(principal)
-  }
-
-  captureAuthority(principal: AuthenticatedPrincipalBinding, deviceToken = principal.deviceToken) {
-    return this.authorityIndex.capture({ ...principal, deviceToken })
   }
 }

@@ -4,7 +4,7 @@ import {
 } from '../../../../component-fixtures/component-fixture'
 import type { PRDetailRecoveryStatus } from '@/store/github/pull-requests/pr-detail-recovery-context'
 import { useState } from 'react'
-import type { ChecksPanelRefreshInput } from '../checks-panel-review-state-model'
+import type { ChecksPanelRefreshInput } from '../review-state/checks-panel-review-state-model'
 import type { ChecksPanelManualRefreshResult } from '../refresh/checks-panel-manual-refresh-result'
 import { ChecksPanelPositiveReview } from './positive-review-status'
 

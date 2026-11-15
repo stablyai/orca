@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { continuesDeviceOffer } from './device-registry-reconciliation'
 import type { AuthorizationIncarnation } from '../../../../../shared/authorization-incarnation'
 import {
   isExpiredPairingOffer,
@@ -17,10 +18,15 @@ type AuthorizedDevice = {
 function credentialSignature(device: DeviceEntry, parents: AuthorizedDevice[]): string {
   return JSON.stringify([
     device.credentialRevision ?? 0,
+    device.pairedAt,
     device.credentialKind,
     device.token,
     device.devicePublicKeyB64,
     device.scope,
+    device.callerFingerprint,
+    device.pairingReach ?? 'network',
+    device.mobilePairingConnectionMode ?? 'automatic',
+    Boolean(device.ticket),
     [...(device.grants ?? [])].sort(),
     ...parents.map((parent) => parent.authority.id)
   ])
@@ -72,6 +78,7 @@ export class DeviceAuthorityIndex {
       const reusable =
         !retireCaptured &&
         previous?.signature === signature &&
+        continuesDeviceOffer(previous.device, device) &&
         (!previous.device.exchangeToken || previous.device.exchangeToken === device.exchangeToken)
       const controller = reusable ? previous.controller : new AbortController()
       const authority = reusable

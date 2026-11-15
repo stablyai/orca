@@ -43,7 +43,10 @@ describe('device registry auth checks see edits made on disk', () => {
 
     writeFileSync(registryPath(), '{ not json')
 
-    expect(registry.validateToken(desktop.token)?.deviceId).toBe(desktop.deviceId)
+    expect(() => registry.validateToken(desktop.token)).toThrowError(
+      expect.objectContaining({ code: 'registry_unavailable' })
+    )
+    expect(registry.getDevice(desktop.deviceId)?.token).toBe(desktop.token)
     expect(readFileSync(registryPath(), 'utf8')).toBe('{ not json')
   })
 
@@ -58,7 +61,9 @@ describe('device registry auth checks see edits made on disk', () => {
       throw new Error('disk full')
     })
 
-    expect(() => registry.addDevice('desktop', 'runtime')).toThrow('disk full')
+    expect(() => registry.addDevice('desktop', 'runtime')).toThrowError(
+      expect.objectContaining({ code: 'registry_unavailable', reason: 'io' })
+    )
 
     expect(registry.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
   })

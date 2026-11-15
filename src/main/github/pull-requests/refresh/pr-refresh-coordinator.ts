@@ -1,3 +1,5 @@
+import { drainer, events, pacing, queue, retry, visibility } from './pr-refresh-coordinator-state'
+import { registerPRRefreshRequest } from './pr-detail-recovery-coordinator'
 import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { runImmediatePRRefresh } from './pr-refresh-immediate-read'
 import type {
@@ -14,14 +16,9 @@ import {
   refreshKey,
   validateCandidate
 } from './pr-refresh-candidate-policy'
-import {
-  PRRefreshEventPublisher,
-  type PRRefreshOutcomeObserver
-} from './pr-refresh-event-publisher'
+import type { PRRefreshOutcomeObserver } from './pr-refresh-event-publisher'
 import { retimeQueuedErrorRetries } from './pr-refresh-error-retry-retiming'
-import { PRRefreshPacing } from './pr-refresh-pacing'
-import { PRRefreshQueue } from './pr-refresh-queue'
-import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
+import type { PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
 import {
   prWatchQueueKey,
   schedulePRWatchEntry,
@@ -33,39 +30,9 @@ import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evid
 import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import {
   deliverablePRBranchOutcome,
-  setPRBranchReadCompletion,
   type PRBranchReadResult
 } from '../../client/lookup/pr-branch-read-resources'
 import { hostedPRReadSettlement } from './hosted-pr-read-settlement'
-
-const retry = new PRRefreshRetryState()
-// Dropping an old gate index entry must not forget a visible row's current failure.
-const queue = new PRRefreshQueue((key) => {
-  if (!visibility.has(key)) {
-    retry.reset(key)
-  }
-})
-const pacing = new PRRefreshPacing()
-// A row no longer shown owes no retry for its failure (only its rate-limit gate stays), and its
-// queued visible read is dropped.
-const visibility = new PRRefreshVisibility((key) => {
-  retry.releaseFailure(key)
-  const entry = queue.get(key)
-  if (entry?.reason === 'visible') {
-    queue.delete(key)
-    events.broadcast({
-      aliases: Array.from(entry.aliases.values()),
-      reason: 'visible',
-      status: 'skipped',
-      skippedReason: 'fresh'
-    })
-  }
-})
-const events = new PRRefreshEventPublisher()
-const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
-setPRBranchReadCompletion((outcome, producer, prepared, request) =>
-  drainer.scheduler.reconcileCompletion(outcome, prepared, request, producer)
-)
 
 export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
   return events.addOutcomeObserver(observer)
@@ -104,23 +71,28 @@ export async function runHostedPRRead(
   didRead: () => boolean = () => true,
   release: () => void = () => {}
 ): Promise<PRRefreshOutcome> {
-  if (typeof read !== 'function') {
-    const owners = { queue, retry, observe: events.observe.bind(events) }
-    const settle = hostedPRReadSettlement(owners, candidate, read, false)
-    try {
-      return (await read.readResult(settle))!.outcome
-    } finally {
-      read.release()
-    }
-  }
+  const finishRequest = registerPRRefreshRequest(candidate, 'h', true)
   try {
-    const outcome = await read()
-    if (didRead()) {
-      events.observe(candidate, outcome)
+    if (typeof read !== 'function') {
+      const owners = { queue, retry, observe: events.observe.bind(events) }
+      const settle = hostedPRReadSettlement(owners, candidate, read, false)
+      try {
+        return (await read.readResult(settle))!.outcome
+      } finally {
+        read.release()
+      }
     }
-    return outcome
+    try {
+      const outcome = await read()
+      if (didRead()) {
+        events.observe(candidate, outcome)
+      }
+      return outcome
+    } finally {
+      release()
+    }
   } finally {
-    release()
+    finishRequest()
   }
 }
 

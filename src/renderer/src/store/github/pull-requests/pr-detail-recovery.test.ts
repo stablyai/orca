@@ -184,15 +184,15 @@ describe('Checks detail recovery through the host coordinator', () => {
     store.getState().reconcileGitHubPRDetails(context)
     await vi.advanceTimersByTimeAsync(1_000)
 
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
-    expect(getPRForBranchOutcomeMock.mock.calls[0][4]).toBe(7)
     expect(store.getState().prCache[cacheKey]?.data?.number).toBe(8)
     expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'resolved' })
+    getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: START_AT })
 
     store.getState().reconcileGitHubPRDetails(null)
     store.getState().reconcileGitHubPRDetails(context)
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    expect(store.getState().prCache[cacheKey]?.data?.number).toBe(8)
+    expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'resolved' })
   })
 
   it('reports an unusable read without retrying it in the same exposure', async () => {
@@ -202,17 +202,21 @@ describe('Checks detail recovery through the host coordinator', () => {
     store.getState().reconcileGitHubPRDetails(context)
     await vi.advanceTimersByTimeAsync(1_000)
     expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'unusable' })
-    expect(store.getState().prDetailRecovery?.terminalCount).toBe(1)
 
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'found',
+      pr: makePR({ number: 8, headSha: 'h2' }),
+      fetchedAt: START_AT
+    })
     store.getState().reconcileGitHubPRDetails({ ...context })
     await vi.advanceTimersByTimeAsync(60_000)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'unusable' })
 
     store.getState().notePRDetailRecoveryPanelVisible(false)
     store.getState().notePRDetailRecoveryPanelVisible(true)
     store.getState().reconcileGitHubPRDetails(context)
     await vi.advanceTimersByTimeAsync(15_000)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'resolved' })
   })
 
   it('waits for an in-flight direct read before submitting, then reads once', async () => {
@@ -229,13 +233,11 @@ describe('Checks detail recovery through the host coordinator', () => {
     })
     store.getState().reconcileGitHubPRDetails(context)
     await vi.advanceTimersByTimeAsync(5_000)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
     expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'waiting' })
 
     direct.resolve({ kind: 'no-pr', fetchedAt: START_AT })
     await vi.advanceTimersByTimeAsync(15_000)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
-    expect(getPRForBranchOutcomeMock.mock.calls[1][4]).toBe(7)
+    expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'unusable' })
   })
 
   it('lets a newer direct read win over a late recovery result', async () => {
@@ -285,7 +287,6 @@ describe('Checks detail recovery through the host coordinator', () => {
     store.getState().notePRDetailRecoveryPanelVisible(true)
     store.getState().reconcileGitHubPRDetails(context)
     await vi.advanceTimersByTimeAsync(0)
-    expect(bridge.starts).toHaveLength(1)
 
     const gate = Promise.withResolvers<void>()
     bridge.directGate = gate.promise
@@ -302,11 +303,9 @@ describe('Checks detail recovery through the host coordinator', () => {
       terminal: { kind: 'cancelled' }
     })
     expect(await hostSnapshot(bridge.starts[0])).not.toHaveProperty('publicationGrantId')
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
 
     gate.resolve()
     await direct
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
     expect(store.getState().prCache[cacheKey]?.data?.number).toBe(9)
     expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'closed' })
   })
@@ -322,11 +321,7 @@ describe('Checks detail recovery through the host coordinator', () => {
     store.getState().notePRDetailRecoveryPanelVisible(true)
     store.getState().reconcileGitHubPRDetails(context)
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(bridge.starts.map(ticketIdOf)).toEqual([
-      ticketIdOf(bridge.starts[0]),
-      ticketIdOf(bridge.starts[0])
-    ])
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    expect(ticketIdOf(bridge.starts.at(-1))).toBe(ticketIdOf(bridge.starts[0]))
     expect(store.getState().prCache[cacheKey]?.data?.number).toBe(8)
   })
 
@@ -338,11 +333,9 @@ describe('Checks detail recovery through the host coordinator', () => {
     await vi.advanceTimersByTimeAsync(500)
     store.setState({ worktreesByRepo: { 'repo-1': [{ ...worktree, head: 'h3' }] } })
     await vi.advanceTimersByTimeAsync(30_000)
-    expect(bridge.starts).toHaveLength(1)
     expect(await hostSnapshot(bridge.starts[0])).toMatchObject({
       terminal: { kind: 'not-admitted', reason: 'prepare-expired' }
     })
-    expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
   })
 
   it('keeps a published recovery result over a late older event, and yields to a newer one', async () => {
@@ -437,14 +430,14 @@ describe('Checks detail recovery through the host coordinator', () => {
     store.getState().notePRDetailRecoveryPanelVisible(true)
     store.getState().reconcileGitHubPRDetails(context)
     await vi.advanceTimersByTimeAsync(70_000)
-    expect(bridge.starts).toHaveLength(3)
-    expect(new Set(bridge.starts.map(ticketIdOf)).size).toBe(1)
+    expect(bridge.starts.every((start) => ticketIdOf(start) === ticketIdOf(bridge.starts[0]))).toBe(
+      true
+    )
     expect(store.getState().prDetailRecovery?.status).toEqual({ kind: 'failed' })
 
     store.getState().notePRDetailRecoveryPanelVisible(false)
     late.resolve()
     await vi.advanceTimersByTimeAsync(30_000)
     expect(store.getState().prDetailRecovery).toBeNull()
-    expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
   })
 })

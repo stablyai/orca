@@ -50,7 +50,7 @@ drainer.setRecoveryHooks({
         registrationCheck: () => drainer.registrationCheck,
         schedule: () => drainer.schedule(),
         followUp: (absorbed, outcome) =>
-          drainer.scheduleVisibleFollowUp(
+          drainer.scheduler.scheduleVisibleFollowUp(
             absorbed.key,
             absorbed.candidate,
             outcome,

@@ -1,3 +1,4 @@
+import { preparePairedDeviceReadiness } from './paired-device-readiness'
 import { PairedSocketAuthorities } from './paired-socket-authorities'
 import type { RuntimeClientCapabilities } from '../callers/runtime-client-capabilities'
 import { randomBytes } from 'node:crypto'
@@ -7,7 +8,8 @@ import { EPHEMERAL_DEVICE_SWEEP_INTERVAL_MS } from '../server/pairing/ephemeral-
 import type { E2EEKeypair } from '../server/pairing/e2ee-keypair'
 import { E2EEChannel } from './e2ee/e2ee-channel'
 import {
-  toAuthenticatedDevice,
+  resolvePairedToken,
+  resolvePairedDeviceKey,
   type E2EEAuthenticatedDevice
 } from '../server/mobile-e2ee-authenticated-device'
 import { createMobileE2EEOutboundMemoryBudget } from './e2ee/mobile-e2ee-outbound-memory-budget'
@@ -198,37 +200,21 @@ export class MobileSocketWiring {
             : { transport: 'direct' },
         requireV2: metadata.transport === 'relay',
         outboundMemoryBudget: this.outboundMemoryBudget,
-        resolveAuthenticatedDevice: (token) => {
-          const device = this.deviceRegistry.validateToken(token)
-          if (!device) {
-            return null
+        runAuthentication: (action) => this.deviceRegistry.runAuthorityOperation(action),
+        resolveAuthenticatedDevice: (token) =>
+          resolvePairedToken(this.deviceRegistry, token, metadata),
+        resolveAuthenticatedDeviceKey: (id) =>
+          resolvePairedDeviceKey(this.deviceRegistry, id, metadata),
+        onReady: (channel, device, revalidate) => {
+          const prepared = preparePairedDeviceReadiness(this.deviceRegistry, device, revalidate, {
+            sourceClass: metadata.transport === 'direct' ? metadata.sourceClass : undefined,
+            framing: channel.transcriptHashB64 ? 'v2' : 'legacy'
+          })
+          if (!prepared.ok) {
+            return prepared
           }
-          // Outer relay authorization cannot choose Orca identity; E2EE resolves the device before readiness.
-          if (metadata.transport === 'relay' && metadata.relayDeviceId !== device.deviceId) {
-            return null
-          }
-          return toAuthenticatedDevice(device)
-        },
-        resolveAuthenticatedDeviceKey: (deviceId) => {
-          const lookup = this.deviceRegistry.lookupDeviceKey(deviceId)
-          if (lookup.kind !== 'found') {
-            return lookup
-          }
-          // Enforce token auth's Relay binding; forks inherit it. Never answer unknown for an existing device or the client deletes its key.
-          if (
-            metadata.transport === 'relay' &&
-            metadata.relayDeviceId !== lookup.device.deviceId &&
-            metadata.relayDeviceId !== lookup.device.forkedFrom
-          ) {
-            return { kind: 'refused' }
-          }
-          return {
-            kind: 'found',
-            device: toAuthenticatedDevice(lookup.device),
-            devicePublicKeyB64: lookup.device.devicePublicKeyB64
-          }
-        },
-        onReady: (channel, device) => {
+          device = prepared.device
+          const authority = prepared.device.authority
           const socket = {
             ws,
             connectionId,
@@ -244,22 +230,6 @@ export class MobileSocketWiring {
             },
             transport: metadata
           }
-          // Do not delay e2ee_authenticated for the secure-file rewrite.
-          this.deviceRegistry.updateLastSeenDeferred(
-            device.deviceId,
-            metadata.transport === 'direct' ? metadata.sourceClass : undefined,
-            channel.transcriptHashB64 ? 'v2' : 'legacy'
-          )
-          if (device.deviceToken === undefined) {
-            this.deviceRegistry.retireForkedTicket(device.deviceId)
-          }
-          const authority = this.deviceRegistry.captureAuthority(device)
-          if (!authority) {
-            ws.close(4001, 'Unauthorized')
-            this.handleClose(ws)
-            return
-          }
-          device.authority = authority
           this.authenticatedSockets.set(ws, socket)
           if (
             !this.authorities.bind(ws, authority, () => {
@@ -267,10 +237,11 @@ export class MobileSocketWiring {
               this.handleClose(ws)
             })
           ) {
-            return
+            return { ok: false, code: 'unauthorized' }
           }
           transport.setClientId(ws, device.deviceId)
           this.onReady?.(socket)
+          return prepared
         },
         onError: (code, reason) => {
           const reportUnpairedDevice = code === 4001 && reason === 'Unauthorized'

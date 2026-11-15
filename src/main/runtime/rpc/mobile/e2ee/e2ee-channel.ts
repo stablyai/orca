@@ -1,3 +1,6 @@
+import type { E2EEChannelOptions, E2EEChannelTextHandler } from './e2ee-channel-options'
+import type * as RpcBinary from '../../transports/rpc-binary-sender'
+export type { E2EEChannelOptions } from './e2ee-channel-options'
 // Keep E2EE framing outside transport-independent plaintext RPC handlers.
 import type { WebSocket } from 'ws'
 import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../../../shared/remote-runtime/e2ee/paired-e2ee-handshake-deadline'
@@ -16,8 +19,7 @@ import { handleDesktopMobileE2EEV2Inbound } from './mobile-e2ee-v2-desktop-inbou
 import {
   authenticateMobileE2EE,
   decodeMobileE2EEPublicKey,
-  describeMobileE2EEAuthFailure,
-  type DeviceKeyResolution
+  describeMobileE2EEAuthFailure
 } from './mobile-e2ee-auth-validation'
 import {
   isMobileE2EEOutboundItemWithinLimit,
@@ -25,26 +27,12 @@ import {
   type MobileE2EEOutboundBudgetEmitter
 } from './mobile-e2ee-outbound-admission'
 import { parseRemoteRuntimeJsonText } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-frames'
-import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { createLegacyReplySenders } from './mobile-e2ee-legacy-reply-senders'
 import { RuntimeClientCapabilities } from '../../callers/runtime-client-capabilities'
-import type * as RpcBinary from '../../transports/rpc-binary-sender'
 import type { E2EEAuthenticatedDevice } from '../../server/mobile-e2ee-authenticated-device'
 
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
-
-export type E2EEChannelOptions = {
-  serverSecretKey: Uint8Array
-  resolveAuthenticatedDevice: (token: string) => E2EEAuthenticatedDevice | null
-  // Absent: key auth is refused as bad_auth, the same as before device keys existed.
-  resolveAuthenticatedDeviceKey?: (deviceId: string) => DeviceKeyResolution<E2EEAuthenticatedDevice>
-  onReady: (channel: E2EEChannel, device: E2EEAuthenticatedDevice) => void
-  onError: (code: number, reason: string) => void
-  transportContext?: DesktopMobileE2EEV2Context
-  requireV2?: boolean
-  outboundMemoryBudget?: MobileE2EEOutboundMemoryBudget
-}
 
 export class E2EEChannel {
   private state: 'awaiting_hello' | 'awaiting_auth' | 'ready' = 'awaiting_hello'
@@ -57,20 +45,15 @@ export class E2EEChannel {
     E2EEChannelOptions,
     'resolveAuthenticatedDevice' | 'resolveAuthenticatedDeviceKey'
   >
-  private readonly onReady: (channel: E2EEChannel, device: E2EEAuthenticatedDevice) => void
+  private readonly onReady: E2EEChannelOptions['onReady']
   private readonly onError: (code: number, reason: string) => void
+  private readonly runAuthentication: (action: () => void) => void
   private readonly transportContext: DesktopMobileE2EEV2Context
   private readonly requireV2: boolean
   private readonly outbound: MobileE2EEDesktopOutboundOwner
   private v2Session: DesktopMobileE2EEV2Session | null = null
   // Install the handler after readiness so its reply closure has encryption state.
-  private messageHandler:
-    | ((
-        plaintext: string,
-        encryptedReply: (response: string) => void,
-        encryptedBinaryReply: RpcBinary.RpcBinarySender
-      ) => void)
-    | null = null
+  private messageHandler: E2EEChannelTextHandler | null = null
   private binaryMessageHandler: ((plaintext: Uint8Array<ArrayBufferLike>) => void) | null = null
 
   deviceToken: string | null = null
@@ -88,6 +71,7 @@ export class E2EEChannel {
     this.resolvers = options
     this.onReady = options.onReady
     this.onError = options.onError
+    this.runAuthentication = options.runAuthentication ?? ((action) => action())
     this.transportContext = options.transportContext ?? { transport: 'direct' }
     this.requireV2 = options.requireV2 ?? false
     this.outbound = new MobileE2EEDesktopOutboundOwner(
@@ -103,13 +87,7 @@ export class E2EEChannel {
     }, PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
   }
 
-  onMessage(
-    handler: (
-      plaintext: string,
-      encryptedReply: (response: string) => void,
-      encryptedBinaryReply: RpcBinary.RpcBinarySender
-    ) => void
-  ): void {
+  onMessage(handler: E2EEChannelTextHandler): void {
     this.messageHandler = handler
   }
 
@@ -159,7 +137,7 @@ export class E2EEChannel {
 
     this.consecutiveFailures = 0
     if (this.state === 'awaiting_auth') {
-      this.handleAuth(plaintext)
+      this.runAuthentication(() => this.authenticateAndReady(plaintext))
       return
     }
 
@@ -238,31 +216,40 @@ export class E2EEChannel {
     }
   }
 
-  private handleAuth(plaintext: string): void {
-    const authentication = authenticateMobileE2EE({
-      plaintext,
-      v2Session: this.v2Session,
-      v2TokenCapabilities: this.transportContext.transport === 'direct',
-      resolveDevice: this.resolvers.resolveAuthenticatedDevice,
-      resolveDeviceKey: this.resolvers.resolveAuthenticatedDeviceKey
-    })
+  private authenticateAndReady(plaintext: string): void {
+    const authenticate = () =>
+      authenticateMobileE2EE({
+        plaintext,
+        v2Session: this.v2Session,
+        v2TokenCapabilities: this.transportContext.transport === 'direct',
+        resolveDevice: this.resolvers.resolveAuthenticatedDevice,
+        resolveDeviceKey: this.resolvers.resolveAuthenticatedDeviceKey
+      })
+    const authentication = authenticate()
     if (!authentication.ok) {
       const failure = describeMobileE2EEAuthFailure(authentication)
       this.sendEncryptedControl(failure.sealedError)
       this.onError(4001, failure.closeReason)
       return
     }
-    const authenticatedDevice = authentication.device
+    let authenticatedDevice = authentication.device
 
     this.capabilitySource.replace(authentication.clientCapabilities)
+    const readiness = this.onReady(this, authenticatedDevice, authenticate)
+    if (readiness?.ok === false) {
+      const failure = describeMobileE2EEAuthFailure(readiness)
+      this.sendEncryptedControl(failure.sealedError)
+      this.onError(4001, failure.closeReason)
+      return
+    }
+    if (readiness?.ok) {
+      authenticatedDevice = readiness.device
+    }
     this.deviceToken = authenticatedDevice.deviceToken ?? null
     this.authenticatedDevice = authenticatedDevice
     this.state = 'ready'
     clearTimeout(this.handshakeTimer ?? undefined)
     this.handshakeTimer = null
-
-    // Complete transport identity checks before auth success; relay resolvers also bind immutable relayDeviceId.
-    this.onReady(this, authenticatedDevice)
     this.sendEncryptedControl(
       this.v2Session
         ? {
@@ -281,7 +268,7 @@ export class E2EEChannel {
       awaitingAuth: this.state === 'awaiting_auth',
       onDecryptFailure: () => this.trackDecryptFailure(),
       onDecryptSuccess: () => (this.consecutiveFailures = 0),
-      onAuth: (plaintext) => this.handleAuth(plaintext),
+      onAuth: (text) => this.runAuthentication(() => this.authenticateAndReady(text)),
       onBinary: (plaintext) => this.binaryMessageHandler?.(plaintext),
       onText: (plaintext) =>
         this.messageHandler?.(

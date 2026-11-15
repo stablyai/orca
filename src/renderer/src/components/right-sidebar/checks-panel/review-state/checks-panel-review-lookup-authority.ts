@@ -1,3 +1,4 @@
+import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import type { HostedReviewLookupAuthority as ChecksPanelReviewLookup } from '../../../../../../shared/source-control/hosted-review/hosted-review-create-confirmation'
 import type { HostedReviewLookupOutcome } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
