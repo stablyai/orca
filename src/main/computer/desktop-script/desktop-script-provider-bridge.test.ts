@@ -4,9 +4,7 @@ import { execBridge, mapBridgeError } from './desktop-script-provider-bridge'
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
 
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
-vi.mock('node:fs/promises', () => ({
-  realpath: async (path: string) => (path === '/usr/bin/python3' ? '/usr/bin/python3.12' : path)
-}))
+vi.mock('node:fs/promises', () => ({ access: async () => {}, constants: { X_OK: 1 } }))
 
 type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) => void
 

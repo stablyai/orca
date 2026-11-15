@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { realpath } from 'node:fs/promises'
+import { access, constants } from 'node:fs/promises'
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { reportComputerDiagnostic } from '../sidecar-transport/computer-sidecar-diagnostics'
 import { RuntimeClientError } from '../runtime-client-error'
@@ -68,7 +68,12 @@ async function execLinuxBridge(
       throw error.mapped
     }
     linuxPython = 'python3'
-    if (command === SYSTEM_PYTHON || !(await isOtherFile(SYSTEM_PYTHON, interpreter))) {
+    // Why not compare realpaths: a venv shares the system binary but not its dist-packages.
+    if (
+      command === SYSTEM_PYTHON ||
+      interpreter === SYSTEM_PYTHON ||
+      !(await isExecutable(SYSTEM_PYTHON))
+    ) {
       throw error.mapped
     }
     failedInterpreter = interpreter
@@ -102,15 +107,13 @@ function missingPyGObjectInterpreter(error: BridgeProcessFailure): string | null
   return MISSING_PYGOBJECT.exec(error.stderr)?.[1]?.trim() || null
 }
 
-async function isOtherFile(candidate: string, interpreter: string): Promise<boolean> {
-  let candidateFile: string
+async function isExecutable(path: string): Promise<boolean> {
   try {
-    candidateFile = await realpath(candidate)
+    await access(path, constants.X_OK)
+    return true
   } catch {
     return false
   }
-  const interpreterFile = await realpath(interpreter).catch(() => interpreter)
-  return candidateFile !== interpreterFile
 }
 
 async function mapped(
