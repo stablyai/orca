@@ -85,7 +85,9 @@ import {
   resumeSandbox,
   rolloverSandbox,
   suspendSandbox,
-  rewriteLivePolicy,
+  applySandboxPolicy,
+  parseEgressSwapMode,
+  egressSwapModeFor,
   CODEX_AUTH_HOST,
   applyLiveGitAccess,
   type LifecycleDeps,
@@ -656,10 +658,9 @@ async function refreshOwnersSandboxes(env: Env, deps: Deps, userId: string): Pro
       for (const row of results) {
         await refreshSandboxEnv(life, row).catch(() => false)
         // CODEX-FIREWALL-SWAP: the firewall holds the token itself, so a refreshed one must reach it now.
-        if (life.config.codexFirewallSwap && row.session_id && egressAccountRoutes(row).some((route) => route.agent === 'codex')) {
-          await rewriteLivePolicy(life, row, row.session_id).catch((error: unknown) =>
-            console.error(JSON.stringify({ event: 'codex_firewall_rewrite_failed', sandboxId: row.id, error: String(error).slice(0, 120) }))
-          )
+        if ((life.config.codexFirewallSwap || egressSwapModeFor(life, row) === 'firewall') && row.session_id && egressAccountRoutes(row).some((route) => route.agent === 'codex')) {
+          // applySandboxPolicy logs a failure itself (code only, never the error text: it could echo a header).
+          await applySandboxPolicy(life, row, 'refresh').catch(() => undefined)
         }
       }
     }
@@ -1047,6 +1048,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       dockerEnabled: env.SANDBOX_DOCKER?.trim().toLowerCase() !== 'off',
       egressPreset: parseEgressPreset(env.SANDBOX_EGRESS_PRESET),
       codexFirewallSwap: env.CODEX_EGRESS_SWAP === 'firewall',
+      egressSwapMode: parseEgressSwapMode(env.EGRESS_SWAP_MODE),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1

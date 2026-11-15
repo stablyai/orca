@@ -61,6 +61,11 @@ export type SandboxRow = {
   user_slept_at?: number | null
   /** Background member-git setup after a create failed (0053); cleared by the next successful sync. */
   git_setup_failed_at?: number | null
+  /** EGRESS-COMPILE (0065): see migrations/0065_egress_policy_apply.sql. */
+  policy_generation?: number | null
+  policy_stale_at?: number | null
+  egress_swap_mode?: string | null
+  policy_config_hash?: string | null
   archived_at: number | null
   archive_expires_at: number | null
   /** Registry (0006). `user_id` is the current owner (reassignable); `created_by` never changes. */

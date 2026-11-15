@@ -3,7 +3,7 @@
 // memory-only env file new shells and agent launches read. Processes already running keep the
 // values they started with. Egress routes and the allowlist follow the new env first, so a new
 // model key is reachable before any shell can see its placeholder.
-import { rewriteLivePolicy, type LifecycleDeps } from './lifecycle'
+import { applySandboxPolicy, type LifecycleDeps } from './lifecycle'
 import { ProviderError } from './sandbox-provider'
 import { refreshSessionEnv } from './sandbox-vm-commands'
 import { normalizeRepo, type SecretChange } from './secrets'
@@ -80,9 +80,9 @@ export async function refreshSandboxEnv(deps: LifecycleDeps, row: SandboxRow): P
     }
     current = next
     // A policy write replaces the whole policy, so the git route is re-minted alongside.
-    const git = await rewriteLivePolicy(deps, current, row.session_id)
-    if (git) {
-      current = (await transition(deps.db, current, { github_token_expires_at: git.expiresAt }, deps.now())) ?? current
+    const applied = await applySandboxPolicy(deps, current, 'env_refresh', { sessionId: row.session_id })
+    if (applied.gitExpiresAt !== null) {
+      current = (await transition(deps.db, current, { github_token_expires_at: applied.gitExpiresAt }, deps.now())) ?? current
     }
   }
   try {
