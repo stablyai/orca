@@ -77,24 +77,34 @@ export async function applyClaudeMessageOptions(
 // Bounded so an unanswered request still lets the steer through.
 const CLAUDE_STEER_BACKGROUND_TIMEOUT_MS = 5_000
 
-/** A steer interrupts the running step but waits on foreground subagents and commands, so they keep running in the background. */
+/** A steer interrupts the running step but waits on foreground work, so top-level subagents and commands move to the background; Ctrl+B would also move a subagent's own commands, which die when it ends. */
 async function backgroundClaudeWorkForSteer(
   session: ClaudeSession,
   input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0],
   logger: StructuredAgentSessionLogger
 ): Promise<void> {
-  try {
-    await session.connection.backgroundTasks({ timeoutMs: CLAUDE_STEER_BACKGROUND_TIMEOUT_MS })
-  } catch (error) {
-    neverThrowingStructuredAgentSessionLogger(logger).warn(
-      'moving Claude foreground work to the background for a steer failed',
-      {
-        scope: 'claude-message-options',
-        sessionId: input.sessionId,
-        clientMessageId: input.clientMessageId,
-        error
-      }
-    )
+  const moves = [...session.childWork.live.values()].flatMap((task) =>
+    // A subagent's own tasks (parentTaskId) stay with it.
+    !task.backgrounded && task.parentTaskId === undefined && task.toolUseId
+      ? [
+          session.connection.backgroundTask(task.toolUseId, {
+            timeoutMs: CLAUDE_STEER_BACKGROUND_TIMEOUT_MS
+          })
+        ]
+      : []
+  )
+  for (const move of await Promise.allSettled(moves)) {
+    if (move.status === 'rejected') {
+      neverThrowingStructuredAgentSessionLogger(logger).warn(
+        'moving Claude foreground work to the background for a steer failed',
+        {
+          scope: 'claude-message-options',
+          sessionId: input.sessionId,
+          clientMessageId: input.clientMessageId,
+          error: move.reason
+        }
+      )
+    }
   }
 }
 

@@ -144,7 +144,8 @@ export function createClaudeJournalTranslator(
     prompts,
     context,
     goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable'),
-    acceptStartupFailure: deps.acceptStartupFailure
+    acceptStartupFailure: deps.acceptStartupFailure,
+    steerAwaitingEcho: deps.steerAwaitingEcho ?? (() => false)
   }
 
   const finish = (

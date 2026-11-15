@@ -268,7 +268,7 @@ const claudeScriptedChild: ScriptedAgentChildFactory = () => {
       interrupt: async () => undefined,
       cancelAsyncMessage: async () => false,
       stopTask: async () => {},
-      backgroundTasks: async () => false,
+      backgroundTask: async () => false,
       send: async (message, beforeDispatch) => {
         await beforeDispatch?.()
         prompts.push(promptText(message))

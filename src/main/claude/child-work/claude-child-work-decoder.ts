@@ -30,7 +30,8 @@ type ClaudeToolOwner = (toolUseId: string) => string | null
 type PendingEdge = (observedAt: number) => AgentChildWorkEvidence
 
 export class ClaudeChildWorkDecoder {
-  private readonly live = new Map<string, DecodedClaudeTask>()
+  /** Read-only outside the decoder; Steer moves the top-level foreground ones to the background. */
+  readonly live = new Map<string, DecodedClaudeTask>()
   /** Retain ended runs for the session to distinguish wakes from late starts. */
   private readonly ended = new Map<string, EndedClaudeTask>()
   private readonly childrenByOwner = new Map<string, Set<string>>()

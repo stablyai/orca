@@ -196,7 +196,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         interrupt: async () => undefined,
         cancelAsyncMessage: async () => false,
         stopTask: async () => {},
-        backgroundTasks: async () => false,
+        backgroundTask: async () => false,
         send: async (_message, beforeDispatch) => {
           await beforeDispatch?.()
           child.calls.push('send')

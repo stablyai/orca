@@ -175,7 +175,7 @@ export async function dispatchClaudeTurn(
   const authorize = beforeDispatch
     ? async () => {
         const { steers } = await beforeDispatch()
-        // `now` ends the running step at once and runs this message as the next turn.
+        // `now` ends the running step at once; its open turn carries on with this message.
         if (steers) {
           message.priority = 'now'
         }
@@ -184,6 +184,9 @@ export async function dispatchClaudeTurn(
             throw claudeUnwrittenUserMessageError(new Error(DISPATCH_REJECTED_QUEUE_FULL))
           }
           pending.replay = arm()
+          if (message.priority === 'now') {
+            pending.replay.waiter.steers = true
+          }
         })
       }
     : undefined

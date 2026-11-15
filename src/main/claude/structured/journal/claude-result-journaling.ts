@@ -1,5 +1,5 @@
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
-import { claudeResultOutcome } from '../turns/claude-result-outcome'
+import { claudeResultEndedStepEarly, claudeResultOutcome } from '../turns/claude-result-outcome'
 import { writeClaudeStopReadings } from '../../claude-stop-readings'
 import { journalClaudeGoal } from '../../claude-goal-journaling'
 import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
@@ -33,6 +33,7 @@ export type ClaudeResultJournalContext = Pick<
   context: ClaudeContextFacts
   goalBackgroundWork: () => ClaudeGoalBackgroundWork
   acceptStartupFailure?: ClaudeJournalTranslatorDeps['acceptStartupFailure']
+  steerAwaitingEcho: () => boolean
 }
 
 const namesClaudeInput = (value: unknown): boolean => typeof value === 'string' && value !== ''
@@ -62,7 +63,8 @@ export function journalClaudeResult(
     usageLimits,
     threadGoal,
     goalBackgroundWork,
-    acceptStartupFailure
+    acceptStartupFailure,
+    steerAwaitingEcho
   }: ClaudeResultJournalContext,
   message: Record<string, unknown>,
   observedAt: number
@@ -86,6 +88,20 @@ export function journalClaudeResult(
   const command = settlesTurn ? turn.command : null
   const commandResult = command ? claudeCommandEnd(command, message, observedAt) : null
   if (command && !commandResult) {
+    return
+  }
+  if (
+    settlesTurn &&
+    !command &&
+    message.is_error !== true &&
+    claudeResultEndedStepEarly(message) &&
+    steerAwaitingEcho()
+  ) {
+    // The steer continues this open turn, so only the cut-off step's streamed output ends here.
+    corrections.abandon()
+    streamedText.finish({ completedAt: observedAt })
+    streamedBlocks.clear()
+    streamedText.settle()
     return
   }
   const failure = claudeResultFailure(message)
