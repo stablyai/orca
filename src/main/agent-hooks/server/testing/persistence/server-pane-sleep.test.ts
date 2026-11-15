@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat/transcript-filesystem/ssh-transcript-path'
 import { nativeChatTranscriptDistro } from '../../../../native-chat/transcript-discovery/native-chat-open-wake'
-import { WSL_HOOK_RELAY_CONNECTION_PREFIX } from '../../../../../shared/wsl-hook-relay-contract'
+import { WSL_HOOK_RELAY_CONNECTION_PREFIX } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
 

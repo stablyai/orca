@@ -1,7 +1,7 @@
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
-import type { RuntimeWorktreeListResult } from '../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeListResult } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'

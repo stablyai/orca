@@ -71,7 +71,7 @@ import {
   resetWslHostsGateForTests,
   wslHostsServing
 } from '../../wsl/host-lifecycle/wsl-host-gate'
-import { WSL_HOST_CAPABILITY_CHANNEL } from '../../../shared/wsl-host-types'
+import { WSL_HOST_CAPABILITY_CHANNEL } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 function register(): void {
   registerWslHostHandlers({

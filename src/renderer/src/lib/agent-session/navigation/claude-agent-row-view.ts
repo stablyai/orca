@@ -8,7 +8,7 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisio
 import { resolveOwnerOrLocal } from '../../workspace/ownership/worktree-runtime-owner'
 import { findActiveRuntimeTerminal } from '../messaging/terminal/active-agent-note-target'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { authorityKey } from '../../../../../shared/host-authority'
+import { authorityKey } from '../../../../../shared/execution-host/host-authority'
 import type { ClaudeAgentViewResult } from '../../../../../shared/claude-agent-view'
 import { openNativeChatSubagent } from '@/components/native-chat/subagents/native-chat-open-subagent'
 

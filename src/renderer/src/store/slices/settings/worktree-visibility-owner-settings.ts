@@ -9,7 +9,7 @@ import {
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../shared/repo-types'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../../shared/external-worktree-visibility'
-import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../../shared/worktree-runtime-capabilities'
+import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 
 export type WorktreeVisibilityDefaultsByHost = Partial<
   Record<ExecutionHostId, WorktreeVisibilityDefaults | null>

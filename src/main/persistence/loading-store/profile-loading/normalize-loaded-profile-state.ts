@@ -1,5 +1,5 @@
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../../workspaces/catalog/folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../../shared/folder-workspaces/folder-workspaces'

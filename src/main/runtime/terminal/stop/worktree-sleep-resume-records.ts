@@ -7,7 +7,7 @@ import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lif
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentProcessVerdict } from '../../../../shared/agent-status/process/agent-process-presence'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 import { launchStatement, type PtyLaunchFacts } from '../launch/launch-evidence'

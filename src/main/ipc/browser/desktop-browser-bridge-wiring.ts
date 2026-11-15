@@ -17,8 +17,8 @@ import {
   getOrcadSshDeployment,
   getPreferredPairedRuntimeConnection
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import { isRemoteCliControlAllowed } from '../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import {
   DesktopBrowserBridgeManager,

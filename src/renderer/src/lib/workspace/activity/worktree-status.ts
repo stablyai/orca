@@ -6,7 +6,7 @@ import {
   collectRuntimePaneLeafIds,
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafIdFromRoot
-} from '../../../../../shared/runtime-pane-title-leaf-id'
+} from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { containsAgentSpinnerGlyph } from '../../../../../shared/agent-status/title/agent-title-glyphs'
 import { isSyntheticAgentPermissionTitle } from '../../../../../shared/agent-status/title/synthetic-agent-title'
 import type {

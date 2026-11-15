@@ -21,7 +21,7 @@ import { BrowserNewTabWorkspaceCard } from './browser-new-tab-workspace-card'
 import { BrowserImportHintButton } from '../assemble-chrome/profile-routing/BrowserImportHintButton'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const SUGGESTED_TILE_LIMIT = 8
 const NO_LINKED_ITEMS: WorkspaceLinkedItemRow[] = []

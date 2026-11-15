@@ -1,6 +1,9 @@
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { authorityKey, type HostAuthority } from '../../../../../shared/host-authority'
+import {
+  authorityKey,
+  type HostAuthority
+} from '../../../../../shared/execution-host/host-authority'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,

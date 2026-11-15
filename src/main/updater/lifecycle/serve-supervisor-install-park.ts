@@ -18,7 +18,7 @@ import {
   SERVE_PARK_DEADLINE_MS,
   type ServeParkRecord,
   type ServeSupervisorRegistration
-} from '../../../shared/serve-bundle-coordination'
+} from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
 export type ServeInstallParkResult =
   | { kind: 'parked' }

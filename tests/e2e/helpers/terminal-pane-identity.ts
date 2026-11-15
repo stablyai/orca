@@ -1,4 +1,4 @@
-import type { RuntimeTerminalSummary } from '../../../src/shared/runtime-types'
+import type { RuntimeTerminalSummary } from '../../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { makePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
 import type { Page } from '@stablyai/playwright-test'
 

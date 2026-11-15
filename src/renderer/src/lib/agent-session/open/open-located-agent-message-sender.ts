@@ -22,7 +22,7 @@ import { activateWorktreeAgentPane } from '@/components/sidebar/workspace-card/a
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '@/store/types'
-import type { RuntimeTerminalResolvePane } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalResolvePane } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { LocatedAgentSender } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
 
 /** older-host identifies the chat host; update may mean either side, and unreachable proves nothing. */

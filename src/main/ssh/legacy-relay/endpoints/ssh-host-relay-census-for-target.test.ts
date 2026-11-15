@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from '../../connection/ssh-connection'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { unusedSshConnection } from '../../../managed-server/testing/managed-host-transport.test-fixture'
 
 const mocks = vi.hoisted(() => ({

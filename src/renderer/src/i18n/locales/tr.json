@@ -11559,6 +11559,7 @@
           "e27c8d45bf": "Tanılama bir ortam değişkeni tarafından devre dışı bırakıldı."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Başka bir kısayola basın veya iptal etmek için Esc tuşuna basın.",
           "eb72c52c28": "Bir kısayola basın veya bir değiştirici tuşa iki kez dokunun (ör. {{value0}}). Esc iptal eder.",
           "70b5d25583": "{{value0}} kısayolu",
           "287e07ddde": "Değiştirildi",

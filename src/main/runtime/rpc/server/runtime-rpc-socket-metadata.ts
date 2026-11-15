@@ -1,6 +1,6 @@
 import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import {
   resolveDaemonUnixSocketPath,
   shortDaemonSocketDir

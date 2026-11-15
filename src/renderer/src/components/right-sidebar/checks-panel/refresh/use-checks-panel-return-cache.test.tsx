@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { RuntimeRpcCallQueuePool } from '../../../../../../shared/runtime-rpc-call-queue'
+import { RuntimeRpcCallQueuePool } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
 import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 import {
   _resetPRAutoRefreshCadencesForTests,

@@ -4,7 +4,7 @@ import type {
   SshPtyConsumerRecovery,
   SshRemotePtyLease,
   SshTarget
-} from './ssh-types'
+} from './remote-runtime/ssh/ssh-types'
 import type { Automation } from './automations/automation-definition'
 import type { AutomationRun } from './automations/history/automation-run'
 import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agent-status-ipc-payload'
@@ -19,8 +19,8 @@ import type { IssueInfo, PRInfo } from './github/pull-requests/pull-request-type
 import type { OnboardingState } from './onboarding-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'
-import type { RemoteLayoutSnapshot } from './remote-layout-snapshot'
-import type { HostRepoCatalogSnapshot } from './host-repo-catalog-snapshot'
+import type { RemoteLayoutSnapshot } from './remote-runtime/session-graph/remote-layout-snapshot'
+import type { HostRepoCatalogSnapshot } from './execution-host/host-repo-catalog-snapshot'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import type { SparsePreset } from './worktree/create-types'

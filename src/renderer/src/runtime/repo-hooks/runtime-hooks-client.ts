@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { ipcOrRuntimeTargetForHostId } from '../rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { repoHooksCheckWakeParams } from '../../../../shared/repo-hooks-check-wake'
 import type { SetupHooksCreateSource } from '../../../../shared/worktree/setup-hooks-create-source'
 

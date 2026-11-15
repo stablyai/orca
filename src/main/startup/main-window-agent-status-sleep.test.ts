@@ -25,7 +25,7 @@ import { ptyIncarnationById, ptyOwnership } from '../ipc/pty/provider/ownership-
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import type { IPtyProvider } from '../providers/pty/provider-contract'
 import { stopRendererOwnedPty } from '../ipc/pty/ipc/renderer-kill'
-import { toAppSshPtyId } from '../../shared/ssh-pty-id'
+import { toAppSshPtyId } from '../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
 import {
   installMainWindowAgentStatusListeners,

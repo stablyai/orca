@@ -14,7 +14,7 @@ import {
   type PairedServerWorkspaceRow
 } from '../../../../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import { describePairedServerHosts } from '../../../../../../shared/remote-runtime/host-catalog/paired-server-hosts'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'

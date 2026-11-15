@@ -1,6 +1,6 @@
 import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
 import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 /** Re-emits a server's events that renderer pages listen for as window events; true when handled. */
 export function emitRuntimeClientWindowEvent(

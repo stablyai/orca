@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabGroup } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import {
   structuredAgentSessionHostTabId,

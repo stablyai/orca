@@ -94,7 +94,7 @@ import { recoverUnavailableRuntimeBrowserClientPages } from '../../../../main/ru
 import { buildRuntimeClientBrowserTabs } from '../../../../main/runtime/session-lifecycle/projection/build-runtime-client-browser-tabs'
 import { RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT } from '../../../../main/runtime/browser/client-pages/client-hosted-browser-page-persistence'
 import { BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 

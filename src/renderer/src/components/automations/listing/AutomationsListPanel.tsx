@@ -9,7 +9,7 @@ import type {
   ExternalAutomationManager
 } from '../../../../../shared/automations/external/external-automation'
 
-import type { SshConnectionState } from '../../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'

@@ -1,5 +1,5 @@
 import { checkAcpLaunchVersion } from './acp-launch-version'
-import { overlayEnvironmentVariables } from '../../../shared/environment-overlay'
+import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
 import {
   assertStructuredAgentResolutionCurrent,

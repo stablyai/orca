@@ -8,7 +8,10 @@ import { resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from '../serve-startup/orcad-cli-launcher'
 import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
 import { prepareOrcadSecretStoreAndMigrate } from '../credentials/orcad-secret-store-startup'
-import { describeOrcadBindExposure, resolveOrcadBindHost } from '../../../shared/orcad-bind-address'
+import {
+  describeOrcadBindExposure,
+  resolveOrcadBindHost
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-bind-address'
 import {
   startOrcadAgentSessionRecordStoreOpen,
   startOrcadWithHost,
@@ -23,13 +26,13 @@ import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
 } from '../../../shared/ai-vault/search/ai-vault-search-settings'
-import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'
+import { stampRuntimeSourceEnv } from '../../../shared/remote-runtime/host-catalog/runtime-source-env'
 import { adoptWslHostLoginEnvironmentLogged } from './orcad-wsl-host-login-environment'
 import { createOrcadStartupTiming } from '../diagnostics/orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
 import { installOrcadFeatureReadiness } from '../../runtime/rpc/startup/orcad-readiness'
-import { ORCA_SERVE_SUPERVISED_ENV } from '../../../shared/serve-supervised-terminal-durability'
+import { ORCA_SERVE_SUPERVISED_ENV } from '../../../shared/remote-runtime/serve-supervisor/serve-supervised-terminal-durability'
 import { activateBackendServices } from '../../backend/service-composition'
 import { isAgentStatusHooksEnabled } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 

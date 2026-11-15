@@ -7,8 +7,8 @@ import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { upsertEphemeralVmRuntime } from '../../../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeStatus } from '../../../../shared/ephemeral-vm-runtimes'
+import { upsertEphemeralVmRuntime } from '../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeStatus } from '../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { registerRecipeVmWaker } from '../../../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import type {
   RecipeVmOpening,

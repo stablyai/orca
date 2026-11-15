@@ -3,7 +3,7 @@ import type {
   ComputerActionResult,
   ComputerListWindowsResult,
   ComputerSnapshotResult
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/computer-use-runtime-types'
 import {
   ensureOrcaRuntimeLaunched,
   ensureGeditLaunched,

@@ -111,7 +111,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/computer/desktop-script/runtime-host/desktop-script-serve-channel.test.ts',
   'src/main/providers/working-directory/validation.test.ts',
   'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
-  'src/shared/ephemeral-vm-recipe-output-capture.test.ts',
+  'src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-output-capture.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',

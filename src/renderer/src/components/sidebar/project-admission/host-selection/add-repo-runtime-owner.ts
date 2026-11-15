@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type CapturedRuntimeOwner = string | null | undefined
 

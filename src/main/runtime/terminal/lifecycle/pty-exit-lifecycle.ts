@@ -1,5 +1,5 @@
 import { RuntimePtyExitSurfaceReads } from './pty-exit-surface-reads'
-import type { RuntimeTerminalResolvePane } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalResolvePane } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 

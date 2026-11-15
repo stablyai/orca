@@ -58,7 +58,7 @@ vi.mock('../../shared/windows-batch-spawn', () => ({
 }))
 
 import { registerShellHandlers } from './shell'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { SshTarget } from '../../shared/remote-runtime/ssh/ssh-types'
 import type { OpenInApplication } from '../../shared/ui-chrome-types'
 expect.objectContaining({
   detached: true,

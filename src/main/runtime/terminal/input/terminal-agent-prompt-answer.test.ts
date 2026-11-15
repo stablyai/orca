@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
-import type { RuntimeTerminalSend } from '../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { TerminalAgentPromptAnswers } from './terminal-agent-prompt-answer'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'

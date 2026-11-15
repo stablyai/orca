@@ -1,6 +1,6 @@
 import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
 import { killSourceControlAgentProcess } from './source-control-agent-termination'
-import { wslDistroForCommand } from '../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { prepareWslPrompt, stageLocalPromptFiles } from '../prompts/source-control-prompt-files'
 import { producePromptRecords } from '../prompts/source-control-prompt-producer'
 import { argumentBudgetFailure } from './source-control-command-line-budget'

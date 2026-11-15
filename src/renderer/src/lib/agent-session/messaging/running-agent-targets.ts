@@ -10,7 +10,7 @@ import { isStructuredTab } from '../../../../../shared/agent-session/view/struct
 import { resolvePaneAgentActivity } from '@/lib/agent-status/evidence/pane-agent-evidence'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 
 export type RunningAgentTargetState = Pick<
   AppState,

@@ -28,7 +28,7 @@ import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windo
 import {
   WslHostWindowsDriveRefusalError,
   type WslHostWindowsDriveRefusal
-} from '../../../shared/wsl-host-windows-drive-refusal'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
 import { getResolvedFolderWorkspacePathStatus } from '../../project-groups/folder-workspace-path-status'
 import { runAsWslUserAct, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'

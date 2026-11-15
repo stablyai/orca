@@ -9,7 +9,7 @@ import {
   type AiVaultSessionHandoffResult
 } from '../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import { formatWorkerTranscriptMessage } from '../../shared/worker-transcript-text'
-import { isWslUncPath, toLinuxPath } from '../../shared/wsl-paths'
+import { isWslUncPath, toLinuxPath } from '../../shared/file-access/wsl-paths'
 import { readOpenCodeNativeChatTranscriptFull } from '../native-chat/transcript-history/opencode/transcript-opencode'
 import { writeAgentSessionContextSnapshot } from '../native-chat/conversation-context/agent-session-context-snapshots'
 import { wakeNativeChatTranscriptDistro } from '../native-chat/transcript-discovery/native-chat-open-wake'

@@ -26,7 +26,7 @@ import {
   type AgentSessionProviderContextBoundary
 } from '../agent-session-provider-context'
 import { isStructuredAgentId } from './provider-handles/agent-session-provider-handle-encoding'
-import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
+import { isNonNegativeSafeInteger } from '../../remote-runtime/ssh/ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
   isOptionalAgentSessionLaunchedAccount,

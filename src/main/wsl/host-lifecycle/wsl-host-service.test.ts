@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
-import type { WslHostStatus } from '../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 import { WslHostService } from './wsl-host-service'
 import type { WslHostConnector } from './wsl-host-connector-contract'

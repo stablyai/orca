@@ -1,6 +1,6 @@
-import type { RuntimeTerminalListResult } from '../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalListResult } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toHostSessionTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -20,7 +20,7 @@ import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
 
 import { getAgentLabel } from '../../../../../../shared/agent-status/title/agent-title-identity'
-import { resolveRuntimePaneTitleForLeaf } from '../../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleForLeaf } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 
 const ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS = 3000
 const ACTIVE_AGENT_TERMINAL_LIST_LIMIT = 200
