@@ -119,4 +119,6 @@ export type VirtualizedWorktreeViewportProps = {
   // Why: grouping remounts the viewport, add/delete stays mounted; bridge both so the virtualizer never resets to scrollTop 0.
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
+  /** Rendered after the last virtual row, inside the scroll area. */
+  footer?: React.ReactNode
 }

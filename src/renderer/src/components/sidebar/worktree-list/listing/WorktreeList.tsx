@@ -37,6 +37,7 @@ import { useSidebarWorktreeFilters } from './use-filters'
 import { useSidebarWorktreeSelection } from '../navigation/use-selection'
 import { useWindowSidebarListModel } from './use-window-list-model'
 import { useMainSidebarListModel } from './use-main-list-model'
+import { useSleepingWorkspacesFooter } from './SleepingWorkspacesFooter'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
@@ -161,6 +162,7 @@ const WorktreeList = React.memo(function WorktreeList({
     prCache,
     agentSendTargetWorktreeId
   })
+  const sleepingFooter = useSleepingWorkspacesFooter(visibleWorktrees, repoMap, repos.length)
   const visibleProjectRepoIdsBySection = useMemo(
     () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
     [rowModel.occurrencePlan]
@@ -404,6 +406,7 @@ const WorktreeList = React.memo(function WorktreeList({
         onReorderWorktrees={statusMutations.reorderWorktrees}
         scrollOffsetRef={scrollOffsetRef}
         scrollAnchorRef={scrollAnchorRef}
+        footer={sleepingFooter}
       />
     </>
   )
