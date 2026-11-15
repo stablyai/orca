@@ -164,6 +164,7 @@ export async function runJournalSqlCommand(
       return applyJournalSqlTombstoneCommand(db, stateDirectory, { ...command, operation }, savedAt)
     case 'queue-insert':
     case 'queue-update':
+    case 'queue-steer':
     case 'queue-hold':
     case 'queue-withdraw':
     case 'queue-move': {

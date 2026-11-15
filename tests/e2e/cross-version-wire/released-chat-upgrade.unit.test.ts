@@ -66,6 +66,8 @@ const view = async (journal: AgentSessionJournal, now: () => number) => {
     journal,
     structuredQueueSendGate(
       {
+        agents: { capabilities: () => null },
+        adapter: {},
         store: {
           getConversation: () => null,
           getRecord: () => null,

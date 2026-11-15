@@ -114,7 +114,17 @@ export class StructuredAgentSessionClientDelivery {
       readQueuePublication: (sessionId, work, inLane) =>
         tryReadQueuePublication(
           sessions.get(sessionId)?.journal,
-          structuredQueueSendGate({ store: this.deps().store, sessions }, sessionId, now, work),
+          structuredQueueSendGate(
+            {
+              store: this.deps().store,
+              agents: this.deps().agents,
+              adapter: this.deps().adapter,
+              sessions
+            },
+            sessionId,
+            now,
+            work
+          ),
           inLane
         ),
       readBackgroundTasks,

@@ -72,8 +72,12 @@ export function selectJournalEligibleQueueCard(
   now: number,
   facts: JournalSqlQueueFacts,
   allowSteer: boolean,
-  resolved?: Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>
+  options: {
+    resolved?: Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>
+    pipelineSteers?: boolean
+  } = {}
 ): JournalDomainQueuePick & { steer: boolean; command: boolean } {
+  const { resolved, pipelineSteers = false } = options
   const state = resolved ?? journalDomainInputEligibility(scope, authority)
   const none = { kind: 'selected' as const, card: null, steer: false, command: false }
   const steer = state.activeTurnId !== undefined
@@ -81,7 +85,8 @@ export function selectJournalEligibleQueueCard(
     state.blocked ||
     state.prompts.length > 0 ||
     state.pending ||
-    state.handover ||
+    (state.handover && !(steer && pipelineSteers)) ||
+    authority.handingOver.length > 0 ||
     (steer && !allowSteer)
   ) {
     return none

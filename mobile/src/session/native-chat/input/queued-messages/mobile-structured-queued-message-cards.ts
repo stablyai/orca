@@ -39,6 +39,9 @@ function queuedMessageCardCaption(
         : mobileAgentSessionWriteNoticeText(notice)
     }
     case 'paused':
+      if (card.pausedReason === 'restarted') {
+        return 'Paused after reopening'
+      }
       // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
       if (card.pausedReason !== QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
         return 'Paused'
@@ -47,6 +50,17 @@ function queuedMessageCardCaption(
         ? "Couldn't send — tap Send to retry once the agent finishes"
         : "Couldn't send — tap Send to retry"
     // The phone draws no card for a send still on its way.
+    case 'steer':
+      if (card.steerFallback === 'provider-queue-only') {
+        return 'After this turn — provider cannot steer'
+      }
+      if (card.steerFallback === 'codex-options') {
+        return 'After this turn — options need a new turn'
+      }
+      if (card.steerFallback === 'codex-legacy') {
+        return 'After this turn — Codex cannot steer'
+      }
+      return 'Pending steer — waiting to send'
     case 'sending':
     case 'turn':
     case 'queue-paused':

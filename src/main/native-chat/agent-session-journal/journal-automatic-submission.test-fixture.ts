@@ -48,6 +48,7 @@ export function automaticSubmissionFixture(cleanups: (() => void)[]) {
     .prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)')
     .run('chat-test', JSON.stringify(encodeAgentSessionRecord(record)))
   const selection: JournalAutomaticSelection = {
+    canPipelineSteers: true,
     authority: {
       handle: 'owner',
       record: {

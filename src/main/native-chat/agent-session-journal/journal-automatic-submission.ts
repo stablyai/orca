@@ -6,6 +6,8 @@ import type { JournalSqlFailure } from './journal-sql-failure'
 /** Only external owner observations cross the port; SQL derives work and card eligibility. */
 export type JournalAutomaticSelection = {
   authority: JournalCurrentWorkAuthority
+  /** Only injection-capable providers may pipeline before earlier echoes arrive. */
+  canPipelineSteers?: boolean
   child: {
     fence: number
     acquisitionGeneration: string | null

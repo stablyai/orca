@@ -9,6 +9,7 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import {
+  queuePauseHolding,
   queuePauseLiftOnItsWay,
   resumableQueuePause,
   type DerivedQueuePause
@@ -20,6 +21,10 @@ import { captureHostStructuredAgentSessionWork } from '../observations/structure
 import { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { journalSubmissionIsPersonal } from '../../agent-session-journal/submissions/journal-submission-fold'
 import { readJournalSqlWorkAnswerOnce } from '../../agent-session-journal/journal-sql-work-answer'
+import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
+import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
+import { captureStructuredMessageSteeringInputs } from '../options/structured-agent-session-message-options'
+import { structuredMessageSteeringFallback } from '../../../../shared/agent-session/options/structured-message-steering'
 
 export type QueuePublication = {
   queuedMessages: AgentSessionQueuedMessage[]
@@ -36,6 +41,7 @@ type QueueSendGate = (
   | (StructuredQueueGateInput & {
       state: ReturnType<StructuredAgentSessionObservedWork['queueState']>
       selected: QueuedMessageRow | null
+      steerFallback: (card: QueuedMessageRow) => AgentSessionQueuedMessage['steerFallback'] | null
     })
   | null
 >
@@ -43,6 +49,8 @@ type QueueSendGate = (
 export function structuredQueueSendGate(
   host: StructuredAgentSessionCurrentWorkHost & {
     store: Pick<AgentSessionRecordStore, 'getRecord'>
+    agents: Pick<StructuredAgentRegistry, 'capabilities'>
+    adapter: Pick<StructuredAgentSessionAdapter, 'captureMessageSteeringInputs'>
   },
   sessionId: string,
   now: () => number,
@@ -69,35 +77,50 @@ export function structuredQueueSendGate(
     if ('failure' in answer.queue) {
       throw restoreJournalSqlFailure(answer.queue.failure)
     }
+    const record = host.store.getRecord(sessionId)
+    const canInject = !!record && host.agents.capabilities(record.provider)?.steering === 'inject'
+    const steering = captureStructuredMessageSteeringInputs(
+      record,
+      host.sessions.get(sessionId)?.child,
+      host.adapter
+    )
     return {
-      record: host.store.getRecord(sessionId),
+      record,
       authority: captureHostStructuredAgentSessionWork(host, sessionId, journal),
       work,
       state: work.queueState(),
-      selected: answer.queue.card
+      selected: answer.queue.card,
+      steerFallback: (card) =>
+        work.working()
+          ? structuredMessageSteeringFallback(canInject, steering, card.options ?? undefined)
+          : null
     }
   }
 }
 
-/** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
- *  Stop pauses the queue, published once beside it. */
+/** Restart-held steers need their own Send action because restart pauses have no queue header. */
 function computePublishedQueuedMessages(
-  rows: readonly QueuedMessageRow[]
+  rows: readonly QueuedMessageRow[],
+  pauses: readonly DerivedQueuePause[]
 ): AgentSessionQueuedMessage[] {
   const published: AgentSessionQueuedMessage[] = []
+  const restarted = pauses.filter((pause) => pause.reason === 'restarted')
   for (const row of rows) {
     if (row.state !== 'waiting' && row.state !== 'returned') {
       continue
     }
     const held = row.state === 'waiting' && row.holdReason !== null
+    const restartHeld = row.deliveryMode === 'steer' && queuePauseHolding(restarted, row)
     published.push({
       messageId: row.messageId,
       position: row.position,
       body: row.body,
       state: row.state,
-      ...(held ? { paused: true as const } : {}),
+      ...(row.deliveryMode ? { deliveryMode: row.deliveryMode } : {}),
+      ...(held || restartHeld ? { paused: true as const } : {}),
       // Unknown stored reasons remain plain holds.
       ...(held && isPublishedPausedReason(row.holdReason) ? { pausedReason: row.holdReason } : {}),
+      ...(restartHeld ? { pausedReason: 'restarted' as const } : {}),
       ...(row.state === 'returned' ? { returnedReason: row.returnedReason } : {}),
       ...(row.state === 'returned' && row.returnedRejection
         ? { returnedRejection: row.returnedRejection }
@@ -124,6 +147,39 @@ type ListMemo = {
 /** Stable identity avoids repeated serialization on token frames. */
 const listMemos = new WeakMap<AgentSessionJournal, ListMemo>()
 const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
+const fallbackMemos = new WeakMap<
+  AgentSessionQueuedMessage[],
+  { key: string; list: AgentSessionQueuedMessage[] }
+>()
+
+function withSteerFallbacks(
+  list: AgentSessionQueuedMessage[],
+  rows: readonly QueuedMessageRow[],
+  fallback: NonNullable<Awaited<ReturnType<QueueSendGate>>>['steerFallback']
+): AgentSessionQueuedMessage[] {
+  const byId = new Map(rows.map((row) => [row.messageId, row]))
+  const reasons = list.map((message) =>
+    message.state === 'waiting' &&
+    message.deliveryMode === 'steer' &&
+    !message.paused &&
+    !message.body.command
+      ? fallback(byId.get(message.messageId)!)
+      : null
+  )
+  if (reasons.every((reason) => !reason)) {
+    return list
+  }
+  const key = reasons.join(',')
+  const memo = fallbackMemos.get(list)
+  if (memo?.key === key) {
+    return memo.list
+  }
+  const published = list.map((message, index) =>
+    reasons[index] ? { ...message, steerFallback: reasons[index]! } : message
+  )
+  fallbackMemos.set(list, { key, list: published })
+  return published
+}
 
 async function publishedQueueRows(journal: AgentSessionJournal): Promise<ListMemo> {
   const key = journal.queuedMessages.revision()
@@ -134,7 +190,7 @@ async function publishedQueueRows(journal: AgentSessionJournal): Promise<ListMem
   }
   const rows = await journal.queuedMessages.list()
   const pauses = await structuredQueuePauses(journal)
-  const list = computePublishedQueuedMessages(rows)
+  const list = computePublishedQueuedMessages(rows, pauses)
   const serialized = JSON.stringify(list)
   const next = {
     key,
@@ -164,7 +220,7 @@ export async function readQueuePublication(
   inLane = false
 ): Promise<QueuePublication | null> {
   const read = async () => {
-    const { rows: cardRows, list: queuedMessages, pauses } = await publishedQueueRows(journal)
+    const { rows: cardRows, list, pauses } = await publishedQueueRows(journal)
     // Show pauses only when Resume can send a card; hide old pauses after clear/reopen.
     const visible = Math.max(
       0,
@@ -185,6 +241,7 @@ export async function readQueuePublication(
     if (!input) {
       return null
     }
+    const queuedMessages = withSteerFallbacks(list, cardRows, input.steerFallback)
     const { state } = input
     const sending = state.owedSendingSubmissions
     const pause =

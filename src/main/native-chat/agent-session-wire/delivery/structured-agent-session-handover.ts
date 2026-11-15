@@ -7,6 +7,7 @@ import {
   type AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { StructuredAgentSessionInputNotAdmitted } from './structured-agent-session-input-admission'
+import { dispatchWithSteerDeadline } from './structured-agent-session-steer-deadline'
 import type { AgentSessionHandoverContext } from '../host/structured-agent-session-host-types'
 import {
   agentSessionFailureFact,
@@ -127,16 +128,26 @@ export async function beginSubmissionHandover(
               outcome = unwritten
                 ? cancelledDispatch(queued)
                 : ownsChild()
-                  ? await dispatchSafely(
+                  ? await dispatchWithSteerDeadline(
                       ctx,
-                      clientMessageId,
-                      carried ? withStoppedHistory(body, carried.messages) : body,
-                      requestedAt,
-                      submission.options,
-                      queued,
-                      ownsChild,
-                      prepareFresh,
-                      attempt?.signal
+                      {
+                        clientMessageId,
+                        steer: turnScope.kind === 'turn',
+                        signal: attempt?.signal,
+                        isCurrent: ownsChild
+                      },
+                      ({ signal, isCurrent }) =>
+                        dispatchSafely(
+                          ctx,
+                          clientMessageId,
+                          carried ? withStoppedHistory(body, carried.messages) : body,
+                          requestedAt,
+                          submission.options,
+                          queued,
+                          isCurrent,
+                          prepareFresh,
+                          signal
+                        )
                     )
                   : null
               break

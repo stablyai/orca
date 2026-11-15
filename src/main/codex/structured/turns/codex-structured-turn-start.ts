@@ -47,12 +47,17 @@ export async function startCodexTurn(
   }
   let steered = steerable(runningTurnId) ? await steerCodexTurn(host, runningTurnId, input) : null
   // Retry steering once if another turn opened during the refused request.
-  const runningSince = steered ? undefined : [...(host.activeTurnIds ?? [])].at(-1)
+  const runningSince =
+    steered && 'turnId' in steered ? undefined : [...(host.activeTurnIds ?? [])].at(-1)
   if (steerable(runningSince) && runningSince !== runningTurnId) {
     steered = await steerCodexTurn(host, runningSince, input)
   }
-  if (steered) {
+  if (steered && 'turnId' in steered) {
     return steered
+  }
+  if (steered && codexStopTarget(host) !== null) {
+    checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
+    throw steered.refused
   }
   let previousApplied = host.appliedTurnOptions
   let previousInput = host.appliedTurnInputOptions

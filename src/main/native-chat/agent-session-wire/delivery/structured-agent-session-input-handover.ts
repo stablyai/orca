@@ -41,7 +41,7 @@ export async function beginStructuredAgentSessionInputHandover(
   let recorder = deps.recordRanOptions?.(sessionId, binding.fence)
   const ownsInput = () => deps.sessions.get(sessionId) === session
   const isBound = () => deps.sessions.get(sessionId) === session && session.child === binding
-  const isCurrent = () => isBound() && !binding.close
+  const isCurrent = () => !isDisposed() && isBound() && !binding.close
   const validate = (signal?: AbortSignal) =>
     assertStructuredAgentSessionInputReady({
       deps,

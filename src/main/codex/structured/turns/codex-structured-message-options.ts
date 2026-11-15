@@ -72,11 +72,15 @@ export function readCodexMessageSteeringInputs(
     session.connection.closed ||
     session.fence !== input.fence ||
     session.acquisitionGeneration !== input.acquisitionGeneration ||
-    !session.appliedTurnInputOptions
+    (!session.appliedTurnInputOptions && session.steeringSupported !== false)
   ) {
     return { kind: 'codex-unavailable' }
   }
-  return { kind: 'codex', compiler: captureCodexMessageCompilerInputs(session) }
+  return {
+    kind: 'codex',
+    compiler: captureCodexMessageCompilerInputs(session),
+    ...(session.steeringSupported === false ? { steeringSupported: false } : {})
+  }
 }
 
 /** Check the live binding after options settle and again whenever the provider is about to write. */

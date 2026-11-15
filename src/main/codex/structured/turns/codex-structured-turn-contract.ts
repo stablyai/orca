@@ -22,6 +22,7 @@ export type CodexTurnHost = {
   catalogAccess?: CodexSession['catalogAccess']
   dispatchEchoes: CodexDispatchEchoes
   activeTurnIds?: ReadonlySet<string>
+  steeringSupported?: boolean
   /** Running turns whose interrupt Codex already answered: aborted, so never steered. */
   abortedTurnIds?: ReadonlySet<string>
   turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>

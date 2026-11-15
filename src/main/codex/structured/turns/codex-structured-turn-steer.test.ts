@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
-import { CodexAppServerTimeoutError } from '../../app-server/codex-app-server-session'
+import {
+  CodexAppServerTimeoutError,
+  CodexAppServerUnsupportedError
+} from '../../app-server/codex-app-server-session'
 import {
   acquiredCodexAdapter,
   codexTurnLifecycleRig,
@@ -18,7 +21,11 @@ import { CODEX_TURN_OPEN_WAIT_MS } from './codex-structured-turn-open-wait'
 async function rig(routes: Record<string, CodexTestRoute>) {
   const codex = fakeCodexAppServer(routes)
   const settlements: LateSettlement[] = []
-  const adapter = await acquiredCodexAdapter({ codex, settlements })
+  const adapter = await acquiredCodexAdapter({
+    codex,
+    settlements,
+    acquisitionGeneration: 'steer-test'
+  })
   const connection = codex.connections[0]!
   const send = (clientMessageId: string) =>
     adapter.dispatch({
@@ -38,7 +45,7 @@ async function rig(routes: Record<string, CodexTestRoute>) {
       threadId: CODEX_TEST_THREAD_ID,
       turn: { id: turnId, status }
     })
-  return { connection, settlements, send, methods, endTurn }
+  return { adapter, connection, settlements, send, methods, endTurn }
 }
 
 const refusedSteer = (message: string): CodexAppServerRequestError =>
@@ -49,7 +56,47 @@ const refusedSteer = (message: string): CodexAppServerRequestError =>
     message
   )
 
+async function rejectedSteer(error: Error) {
+  const result = await rig({
+    'turn/steer': () => {
+      throw error
+    }
+  })
+  startTurn(result.connection, 'turn-1')
+  expect(await result.send('client-1')).toMatchObject({
+    state: 'rejected',
+    rejection: { kind: 'providerRejected', neverReachedAgent: true }
+  })
+  expect(result.methods()).toEqual(['thread/start', 'turn/steer'])
+  return result
+}
+
+async function assertSteerRecovery(result: Awaited<ReturnType<typeof rig>>) {
+  result.endTurn('turn-1', 'completed')
+  expect(await result.send('recovery')).toMatchObject({ state: 'admitted' })
+  expect(result.methods()).toEqual(['thread/start', 'turn/steer', 'turn/start'])
+}
+
 describe('a Codex send while a turn runs', () => {
+  it('returns an unsupported steer for explicit recovery and publishes its unavailable capability', async () => {
+    const result = await rejectedSteer(
+      new CodexAppServerUnsupportedError('turn/steer is unavailable')
+    )
+    expect(
+      result.adapter.captureMessageSteeringInputs({
+        sessionId: 'session-1',
+        fence: 7,
+        acquisitionGeneration: 'steer-test'
+      })
+    ).toMatchObject({ kind: 'codex', steeringSupported: false })
+    await assertSteerRecovery(result)
+  })
+
+  it('returns a refused steer for explicit recovery instead of writing a fallback start', async () => {
+    const result = await rejectedSteer(refusedSteer('steering is disabled for this turn'))
+    await assertSteerRecovery(result)
+  })
+
   it.each([true, false])(
     'settles on its echo with client ID=%s when the turn completes with it',
     async (tagged) => {

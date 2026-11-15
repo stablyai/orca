@@ -5,6 +5,7 @@ type Write = {
   resolve: () => void
   reject: (error: Error) => void
   detachAbort?: () => void
+  assertWritable?: () => void
 }
 
 export class ProviderStdioWriteQueue {
@@ -21,7 +22,7 @@ export class ProviderStdioWriteQueue {
     private readonly errors: { capacity: () => Error; closed: () => Error }
   ) {}
 
-  write(line: string, signal?: AbortSignal): Promise<void> {
+  write(line: string, signal?: AbortSignal, assertWritable?: () => void): Promise<void> {
     if (this.terminalError) {
       return Promise.reject(this.terminalError)
     }
@@ -34,7 +35,7 @@ export class ProviderStdioWriteQueue {
     }
     this.bytes += bytes
     return new Promise((resolve, reject) => {
-      const write: Write = { line, resolve, reject }
+      const write: Write = { line, resolve, reject, assertWritable }
       const abort = (): void => {
         // Why: a line already handed to the stream can't be taken back, and later writes wait on it.
         if (this.active === write) {
@@ -80,7 +81,19 @@ export class ProviderStdioWriteQueue {
     if (this.active || this.terminalError) {
       return
     }
-    const write = this.queue.shift()
+    let pending = this.queue.shift()
+    while (pending) {
+      try {
+        pending.assertWritable?.()
+        break
+      } catch (error) {
+        this.bytes -= Buffer.byteLength(pending.line)
+        pending.detachAbort?.()
+        pending.reject(error instanceof Error ? error : new Error(String(error)))
+        pending = this.queue.shift()
+      }
+    }
+    const write = pending
     if (!write) {
       return
     }

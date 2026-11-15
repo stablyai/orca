@@ -3,7 +3,9 @@ import type { AgentJournalSubmission } from '../journal/agent-session-journal-ty
 import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
 import {
   headSteerableQueuedMessageCard,
-  projectQueuedMessageCards
+  projectQueuedMessageCards,
+  queuedMessageCardCanSend,
+  queuedMessageCardSteers
 } from './structured-agent-session-queued-cards'
 
 function draft(
@@ -49,6 +51,28 @@ function handOff(
 const IDLE = {}
 
 describe('queued message cards', () => {
+  it('offers explicit recovery for a restart-held steer without resending an automatic pending steer', () => {
+    const cards = projectQueuedMessageCards(
+      [
+        draft('pending', 1, { deliveryMode: 'steer' }),
+        draft('restarted', 2, { deliveryMode: 'steer', paused: true, pausedReason: 'restarted' })
+      ],
+      [],
+      { agentWorking: true }
+    )
+    expect(
+      cards.map((card) => [
+        card.hold,
+        queuedMessageCardCanSend(card),
+        queuedMessageCardSteers(card)
+      ])
+    ).toEqual([
+      ['steer', false, false],
+      ['paused', true, false]
+    ])
+    expect(headSteerableQueuedMessageCard(cards)).toBeNull()
+  })
+
   it('requeued and drained again under a fresh id, the card and the bubble never show together', () => {
     // A multi-page catch-up: the new hand-off's bubble arrives before the list that drops the card.
     const cards = projectQueuedMessageCards(

@@ -60,6 +60,7 @@ export type JournalSqlQueueWrite =
       }
     }
   | { kind: 'queue-update'; input: QueuedMessageUpdate }
+  | { kind: 'queue-steer'; messageId: string }
   | { kind: 'queue-hold'; messageIds: readonly string[]; reason: QueuedMessageHoldReason }
   | { kind: 'queue-withdraw'; messageIds: readonly string[]; systemMail?: true }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }
@@ -188,6 +189,10 @@ export class SqlJournalQueuedMessages {
       input
     })) as AgentSessionQueuedMessageUpdateResult
     return result
+  }
+
+  async steer(messageId: string, receipt?: JournalOperationReceipt): Promise<void> {
+    await this.port.write({ kind: 'queue-steer', messageId }, receipt)
   }
 
   async hold(input: {

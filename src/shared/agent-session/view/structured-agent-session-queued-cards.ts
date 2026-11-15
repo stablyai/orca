@@ -33,6 +33,7 @@ import {
 export type QueuedMessageCardHold =
   /** Plainly queued, also behind an open question: the question already says the agent waits. */
   | 'turn'
+  | 'steer'
   /** The header owns queue-wide pause wording; answering a prompt does not resume draining. */
   | 'queue-paused'
   | 'paused'
@@ -56,6 +57,7 @@ export type QueuedMessageCard = {
   /** A command card while the agent works: it offers no send until the agent is idle. */
   waitsForAgent?: true
   pausedReason?: string
+  steerFallback?: AgentSessionQueuedMessage['steerFallback']
   returnedReason?: string | null
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
   returnedRejection?: UnreadAgentSessionFailureFact
@@ -93,7 +95,9 @@ export function projectQueuedMessageCards(
           ? 'paused'
           : session.queuePaused
             ? 'queue-paused'
-            : 'turn'
+            : message.deliveryMode === 'steer' && !message.body.command
+              ? 'steer'
+              : 'turn'
     const from = readAgentMessageSource(message.body.from)
     return {
       messageId: message.messageId,
@@ -117,6 +121,7 @@ export function projectQueuedMessageCards(
           }
         : {}),
       ...(message.pausedReason !== undefined ? { pausedReason: message.pausedReason } : {}),
+      ...(message.steerFallback !== undefined ? { steerFallback: message.steerFallback } : {}),
       ...(message.returnedReason !== undefined ? { returnedReason: message.returnedReason } : {}),
       ...(message.returnedRejection !== undefined
         ? { returnedRejection: message.returnedRejection }
@@ -172,9 +177,18 @@ export function queuedMessagesQueuePause(
   return cards.some((card) => card.resumeEligible) ? queuePause : null
 }
 
-/** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */
+export function queuedMessageCardCanSend(card: QueuedMessageCard): boolean {
+  return !card.waitsForAgent && card.hold !== 'sending' && card.hold !== 'steer'
+}
+
+/** Returned/held cards use Send; pending steers already belong to the host drain. */
 export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
-  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
+  return (
+    queuedMessageCardCanSend(card) &&
+    card.hold !== 'paused' &&
+    card.hold !== 'returned' &&
+    !card.command
+  )
 }
 
 /** The card Cmd/Ctrl+Shift+Enter steers: the head only, never one behind it. */
@@ -182,7 +196,7 @@ export function headSteerableQueuedMessageCard(
   cards: readonly QueuedMessageCard[]
 ): QueuedMessageCard | null {
   const head = cards[0]
-  return head && head.hold !== 'sending' && queuedMessageCardSteers(head) ? head : null
+  return head && queuedMessageCardSteers(head) ? head : null
 }
 
 /** The card's line: its text, or for a card of images alone, the image's name or their count. */

@@ -18,6 +18,7 @@ import {
   updateQueuedStructuredAgentMessage
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
+import { captureStructuredMessageSteeringInputs } from '../options/structured-agent-session-message-options'
 
 /** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
@@ -38,6 +39,8 @@ export function wireStructuredAgentSessionQueuedMessages(
       const child = sessions.get(sessionId)?.child
       const record = ctx.deps.store.getRecord(sessionId)
       return {
+        canPipelineSteers:
+          !!record && ctx.deps.agents.capabilities(record.provider)?.steering === 'inject',
         authority: captureHostStructuredAgentSessionWork(
           { store: ctx.deps.store, sessions },
           sessionId,
@@ -52,16 +55,7 @@ export function wireStructuredAgentSessionQueuedMessages(
               stopping
             }
           : null,
-        steering:
-          record?.provider !== 'codex'
-            ? { kind: 'other' }
-            : child
-              ? (ctx.deps.adapter.captureMessageSteeringInputs?.({
-                  sessionId,
-                  fence: child.fence,
-                  acquisitionGeneration: child.generation
-                }) ?? { kind: 'codex-unavailable' })
-              : { kind: 'codex-unavailable' }
+        steering: captureStructuredMessageSteeringInputs(record, child, ctx.deps.adapter)
       }
     },
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),
