@@ -1,12 +1,9 @@
 // Derive settled-turn answers from the last assistant prose or system failure, plus the prose a Stop hook sent back; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
-// A failed Stop hook follows a completed answer, so it stays visible beside it instead of displacing it.
+// Failed hooks never fail the turn: those that end it stay visible below the answer, earlier ones fold as work.
 
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../agent-session/agent-session-compaction'
-import {
-  AGENT_SESSION_HOOK_FAILED_PRESENTATION,
-  AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
-} from '../../../agent-session/journal/agent-session-hook-outcome'
+import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../../agent-session/journal/agent-session-hook-outcome'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../agent-session/journal/agent-session-turn-notice'
 import { nativeChatRowRendersContent } from '../row-content/native-chat-row-content'
@@ -16,6 +13,7 @@ import { isGeneratedImageOperation } from '../../native-chat-generated-image'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
+  type NativeChatBlock,
   type NativeChatMessage,
   type NativeChatRole
 } from '../../native-chat-types'
@@ -33,13 +31,24 @@ export type NativeChatTurnFoldRow = {
   outlivesTurn: boolean
   /** System failures compete as final answers so failed turns end on visible errors. */
   reportsFailure: boolean
-  /** Plans, turn notices and Stop-hook outcomes remain visible independently of the agent's answer. */
+  /** Plans and turn notices remain visible independently of the agent's answer. */
   explainsTurn: boolean
   /** A Stop hook sent the agent back after it answered, so the prose before this row is an answer too. */
   sendsBack: boolean
+  /** A hook failed; it reports on the turn without ending it. */
+  failedHook: boolean
 }
 
 const rowFacts = new WeakMap<NativeChatMessage, NativeChatTurnFoldRow>()
+
+/** Hosts store a failed hook as a red row carrying the hook's frame; the turn itself completed. */
+function isFailedHookBlock(block: NativeChatBlock): boolean {
+  const frame = block.type === 'text' && block.tone === 'error' ? block.providerFrame : undefined
+  return (
+    (frame?.provider === 'codex' && frame.kind === 'notification:hook/completed') ||
+    (frame?.provider === 'claude' && frame.kind === 'message:system:hook_response')
+  )
+}
 
 /** How the fold reads a transcript row, with the same derivation the row renders from. */
 export function nativeChatTurnFoldRow(
@@ -76,13 +85,12 @@ function deriveTurnFoldRow(
           isStoppedBeforeStartBlock(block)
       ),
     // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.
-    // A failed Stop hook reports its hook, not the turn, so it cannot displace a completed answer.
     reportsFailure: message.blocks.some(
       (block) =>
         block.type === 'text' &&
         (block.tone === 'error' || block.failure?.kind === 'usageLimitReached') &&
         block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION &&
-        block.presentation !== AGENT_SESSION_HOOK_FAILED_PRESENTATION
+        !isFailedHookBlock(block)
     ),
     explainsTurn:
       message.blocks.some(
@@ -93,15 +101,15 @@ function deriveTurnFoldRow(
             block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
             block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
             block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION ||
-            block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION ||
-            block.presentation === AGENT_SESSION_HOOK_FAILED_PRESENTATION)
+            block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION)
       ) ||
       (message.blocks.some(isGeneratedImageOperation) &&
         message.blocks.some((block) => block.type === 'image-ref')),
     sendsBack: message.blocks.some(
       (block) =>
         block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
-    )
+    ),
+    failedHook: message.blocks.some(isFailedHookBlock)
   }
 }
 
@@ -156,6 +164,12 @@ export function nativeChatTurnFold({
   expandedTurnKeys: ReadonlySet<string>
 }): NativeChatTurnFold {
   const answers = nativeChatTurnAnswerRows(rows)
+  const lastWorkByTurn = new Map<string, number>()
+  for (const [index, row] of rows.entries()) {
+    if (row.turnKey !== undefined && row.draws && !row.failedHook) {
+      lastWorkByTurn.set(row.turnKey, index)
+    }
+  }
   const foldedRows = new Set<number>()
   const foldableTurnKeys = new Set<string>()
   for (const [index, row] of rows.entries()) {
@@ -172,7 +186,7 @@ export function nativeChatTurnFold({
       continue
     }
     // No-prose turns fold wholly behind the status anchor instead of leaving every command expanded.
-    if (answers.has(index)) {
+    if (answers.has(index) || (row.failedHook && index > (lastWorkByTurn.get(turnKey) ?? -1))) {
       continue
     }
     foldableTurnKeys.add(turnKey)

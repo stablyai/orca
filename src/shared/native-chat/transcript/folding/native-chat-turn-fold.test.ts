@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage, NativeChatTextBlock } from '../../native-chat-types'
-import { AGENT_SESSION_HOOK_FAILED_PRESENTATION } from '../../../agent-session/journal/agent-session-hook-outcome'
 import {
   nativeChatTurnAnswerRows,
   nativeChatTurnFold,
@@ -18,6 +17,7 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
     reportsFailure: false,
     explainsTurn: false,
     sendsBack: false,
+    failedHook: false,
     ...overrides
   }
 }
@@ -25,8 +25,7 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
 /** An error-toned system row: the agent or host reporting the turn failed. */
 const FAILURE = row({ role: 'system', reportsFailure: true })
 
-/** A red host row about a failed Stop hook, carrying the marker the fold reads. */
-function stopHookFailureMessage(id: string, presentation?: string): NativeChatMessage {
+function hookFailure(id: string, event: string): NativeChatMessage {
   return {
     id,
     role: 'system',
@@ -35,9 +34,13 @@ function stopHookFailureMessage(id: string, presentation?: string): NativeChatMe
     blocks: [
       {
         type: 'text',
-        text: 'Codex Stop hook failed: hook exited with code 1.',
+        text: `Codex ${event} hook failed: hook exited with code 1`,
         tone: 'error',
-        ...(presentation !== undefined ? { presentation } : {})
+        providerFrame: {
+          provider: 'codex',
+          kind: 'notification:hook/completed',
+          payload: { head: '{}', byteLength: 2, digest: 'fixture', truncated: false }
+        }
       }
     ]
   }
@@ -115,48 +118,23 @@ describe('rendered plans in collapsed turns', () => {
   })
 })
 
-describe('failed Stop hooks after a completed answer', () => {
-  it('keeps the answer unfolded and the hook failure visible beside it', () => {
-    const messages = [
-      PROMPT,
-      ANSWER,
-      stopHookFailureMessage('stop-hook', AGENT_SESSION_HOOK_FAILED_PRESENTATION)
-    ]
-    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
-    const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
-    expect([...result.foldedRows]).toEqual([])
-    expect([...result.foldableTurnKeys]).toEqual([])
-    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1])
-  })
-
-  it('reads a marked Stop-hook failure as turn context, not a turn failure', () => {
-    const facts = nativeChatTurnFoldRow(
-      stopHookFailureMessage('stop-hook', AGENT_SESSION_HOOK_FAILED_PRESENTATION),
-      'turn-1',
-      false
-    )
-    expect(facts.reportsFailure).toBe(false)
-    expect(facts.explainsTurn).toBe(true)
-    expect(facts.draws).toBe(true)
-  })
-
-  it('still treats an unmarked red row as the turn failing', () => {
-    const facts = nativeChatTurnFoldRow(stopHookFailureMessage('crash'), 'turn-1', false)
-    expect(facts.reportsFailure).toBe(true)
-    expect(facts.explainsTurn).toBe(false)
-  })
-
-  it('shows the Stop-hook failure alone when the agent never answered', () => {
+describe('failed hooks in a settled turn', () => {
+  it('keeps the answer and the hook failures after it visible, folding earlier ones as work', () => {
     const messages = [
       PROMPT,
       WORK,
-      stopHookFailureMessage('stop-hook', AGENT_SESSION_HOOK_FAILED_PRESENTATION)
+      hookFailure('post-tool', 'PostToolUse'),
+      ANSWER,
+      hookFailure('post-model', 'PostModelRequest'),
+      hookFailure('stop', 'Stop')
     ]
     const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
-    const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
-    expect([...result.foldedRows]).toEqual([1])
-    expect([...result.foldableTurnKeys]).toEqual(['turn-1'])
-    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([])
+    const { foldedRows } = nativeChatTurnFold({
+      rows,
+      settledTurnKeys: SETTLED,
+      expandedTurnKeys: NONE
+    })
+    expect([...foldedRows].sort()).toEqual([1, 2])
   })
 })
 

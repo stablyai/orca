@@ -13,10 +13,7 @@ import {
 } from '../../../codex/structured/journal/codex-goal-journal-rows'
 import { isProviderRecord } from '../../../provider-process/provider-json-record'
 import { classifyProviderFrame } from './provider-frame-disposition'
-import {
-  AGENT_SESSION_HOOK_FAILED_PRESENTATION,
-  hookOutcomeRowBody
-} from '../../../../shared/agent-session/journal/agent-session-hook-outcome'
+import { hookOutcomeRowBody } from '../../../../shared/agent-session/journal/agent-session-hook-outcome'
 
 export type UnhandledProviderFrameJournalItem = {
   body: AgentJournalPlainStatusItem
@@ -103,7 +100,7 @@ function hookFailureFrameText(
   kind: string,
   payload: unknown,
   fallback: string | null
-): { text: string; stopHook: boolean } | null {
+): string | null {
   if (!isProviderRecord(payload)) {
     return null
   }
@@ -119,16 +116,10 @@ function hookFailureFrameText(
         })
       : []
     const detail = errors.join('\n') || fallback
-    return {
-      text: `Codex${name} hook failed${detail ? `: ${detail}` : '.'}`,
-      stopHook: event?.toLowerCase() === 'stop'
-    }
+    return `Codex${name} hook failed${detail ? `: ${detail}` : '.'}`
   }
   if (provider === 'claude' && kind === 'message:system:hook_response') {
     const name = hookText(payload.hook_name) ?? hookText(payload.hook_event)
-    // hook_name carries the matcher-suffixed display name (for example Stop:guard);
-    // hook_event carries the bare event name, so identify Stop hooks from the event.
-    const eventName = (hookText(payload.hook_event) ?? hookText(payload.hook_name))?.toLowerCase()
     const code = payload.exit_code
     const exit =
       typeof code === 'number' && Number.isSafeInteger(code) && code !== 0
@@ -136,10 +127,7 @@ function hookFailureFrameText(
         : ''
     const detail =
       hookText(payload.stderr) ?? hookText(payload.output) ?? hookText(payload.stdout) ?? fallback
-    return {
-      text: `Claude${name ? ` ${name}` : ''} hook failed${exit}${detail ? `: ${detail}` : '.'}`,
-      stopHook: eventName === 'stop' || eventName?.startsWith('stop:') === true
-    }
+    return `Claude${name ? ` ${name}` : ''} hook failed${exit}${detail ? `: ${detail}` : '.'}`
   }
   return null
 }
@@ -192,14 +180,8 @@ export function unhandledProviderFrameJournalItem(
       : undefined
   const tone = noticeTone ?? (classification === 'error-surface' ? 'error' : undefined)
   let message = readableProviderFrameText(payload)
-  // A failed Stop hook reports the hook, not the turn: it follows a completed answer.
-  let stopHookFailure = false
   if (classification === 'error-surface') {
-    const hookFailure = hookFailureFrameText(provider, kind, payload, message)
-    if (hookFailure) {
-      message = hookFailure.text
-      stopHookFailure = hookFailure.stopHook
-    }
+    message = hookFailureFrameText(provider, kind, payload, message) ?? message
   }
   if (
     provider === 'codex' &&
@@ -227,7 +209,6 @@ export function unhandledProviderFrameJournalItem(
       kind: 'status',
       text: compaction ? 'Context compacted' : goalText || message || `${provider} · ${kind}`,
       ...(compaction ? { presentation: 'compaction' } : {}),
-      ...(stopHookFailure ? { presentation: AGENT_SESSION_HOOK_FAILED_PRESENTATION } : {}),
       ...(tone ? { tone } : {}),
       providerFrame: { provider, kind, payload: bounded },
       ...(threadGoal ? { threadGoal } : {})
