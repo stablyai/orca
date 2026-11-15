@@ -28,7 +28,10 @@ import {
 } from './skill-discovery-stopped-wsl-roots'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
-import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
+import {
+  applyClaudePluginManifestNames,
+  discoverClaudePluginSkillInstalls
+} from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'
 import {
@@ -132,6 +135,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
         providers: [...root.providers],
         sourceKind,
         sourceLabel: sourceLabelForSkill(root, sourceKind),
+        ...(root.pluginName ? { pluginName: root.pluginName } : {}),
         rootPath: root.path,
         directoryPath,
         skillFilePath,
@@ -250,7 +254,9 @@ export async function discoverSkills(args: {
     ...buildSkillDiscoverySources({ ...args, homeDir }),
     ...(pluginCwd && !pluginCwdStopped
       ? await waitForPromiseWithSignal(
-          discoverClaudePluginSkillSources({ homeDir, cwd: pluginCwd, signal: args.signal }),
+          discoverClaudePluginSkillInstalls({ homeDir, cwd: pluginCwd, signal: args.signal }).then(
+            (installs) => applyClaudePluginManifestNames(installs, args.signal)
+          ),
           args.signal
         )
       : [])
