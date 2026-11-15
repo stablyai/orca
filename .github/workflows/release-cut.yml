@@ -171,7 +171,6 @@ jobs:
       recovered_tag: ${{ steps.version.outputs.recovered_tag }}
       source_sha: ${{ steps.resolve.outputs.sha }}
       slot: ${{ steps.slot.outputs.value }}
-      latest_published_rc_tag: ${{ needs.recover-drafts.outputs.latest_published_tag }}
     steps:
       # Render dispatch audit summary locally rather than run mutable external action beside write token/secrets; parse env JSON with jq as data.
       - name: Summarize workflow inputs
@@ -754,7 +753,6 @@ jobs:
       should_release: ${{ steps.verify.outputs.tag != '' }}
       # Every build checks out this verified commit, never the movable tag name.
       release_sha: ${{ steps.verify.outputs.release_sha }}
-      latest_published_rc_tag: ${{ needs.prepare.outputs.latest_published_rc_tag }}
       # Why: downstream SignPath Slack pings need the cut source (not only the
       # new tag) so approvers know what they're signing and who cut it.
       source_ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref || 'main' }}
@@ -1117,18 +1115,6 @@ jobs:
 
       - *verify-release-checkout
 
-      - name: Restore skill-sharing test harness from the workflow ref
-        shell: bash
-        env:
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
-          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
-            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
-          fi
-          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
-
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -1180,18 +1166,6 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - *verify-release-checkout
-
-      - name: Restore skill-sharing test harness from the workflow ref
-        shell: bash
-        env:
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
-          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
-            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
-          fi
-          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -2362,6 +2336,31 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      # Why: nick-fields/retry runs `shell: bash` as whatever `bash` PATH finds first; on Windows that could be the
+      # WSL launcher in System32, which neither sees $TAG nor this checkout. Git for Windows' bash goes first.
+      - name: Put Git Bash first on PATH for the release upload
+        if: matrix.platform == 'win' && github.run_attempt == 1
+        shell: pwsh
+        run: |
+          $gitBin = Join-Path $env:ProgramFiles 'Git\bin'
+          if (-not (Test-Path -LiteralPath (Join-Path $gitBin 'bash.exe') -PathType Leaf)) {
+            Write-Output "::error::Git for Windows bash was not found in $gitBin."
+            exit 1
+          }
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $gitBin
+
+      - name: Require Git Bash for the release upload
+        if: matrix.platform == 'win' && github.run_attempt == 1
+        shell: pwsh
+        # Resolve `bash` the way the retry action does (Node's child_process), and require Git for Windows' MSYS bash.
+        run: |
+          $version = node -e "process.stdout.write(require('node:child_process').execFileSync('bash', ['--version'], { encoding: 'utf8' }).split(/\r?\n/)[0])"
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^GNU bash, version \S+ \(\w+-pc-msys\)$') {
+            Write-Output "::error::bash resolves to '$version', not Git for Windows bash; refusing the release upload."
+            exit 1
+          }
+          Write-Output "Release upload bash: $version"
+
       - name: Publish signed Windows release artifacts
         if: matrix.platform == 'win' && github.run_attempt == 1
         uses: nick-fields/retry@v4
@@ -2466,6 +2465,21 @@ jobs:
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_MAC_BUILD_RELEASE_SHA: ${{ needs.cut.outputs.release_sha }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
+
+  # Why: release-mac-build.yml can be dispatched by anyone with write access. Before building, it requires a job of
+  # its parent run with exactly this name. Only this workflow file on main sets job names of a release-cut run, and
+  # only from the tag cut computed and the run ID build-mac dispatched, so a hand-dispatched build never matches.
+  mac-build-binding:
+    name: mac release build ${{ needs.build-mac.outputs.run_id }} for ${{ needs.cut.outputs.tag }}
+    needs:
+      - cut
+      - build-mac
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Record the dispatched macOS release build in this job name
+        run: echo "release-mac-build.yml requires this job name before it builds."
 
   verify-mac-build:
     needs:
@@ -2784,14 +2798,16 @@ jobs:
     secrets: inherit
 
   homebrew-bump-published-rc-draft:
+    # Why recover-drafts, not cut: it publishes recovered drafts, and cut is skipped when there is no tag to push,
+    # which is exactly a recovery-only run.
     needs:
-      - cut
+      - recover-drafts
     # Why: publish-complete-draft-releases can expose a recovered RC without
     # running the build/publish jobs; still advance the RC cask to that tag.
-    if: ${{ needs.cut.outputs.latest_published_rc_tag != '' }}
+    if: ${{ needs.recover-drafts.outputs.latest_published_tag != '' }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
-      tag: ${{ needs.cut.outputs.latest_published_rc_tag }}
+      tag: ${{ needs.recover-drafts.outputs.latest_published_tag }}
     secrets: inherit
 
   homebrew-bump:

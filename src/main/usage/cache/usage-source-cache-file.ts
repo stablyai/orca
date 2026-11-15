@@ -46,11 +46,16 @@ export async function readUsageSourceCache<T>(ref: UsageSourceCacheRef): Promise
     return parsed?.schemaVersion === ref.schemaVersion &&
       parsed.worktreeFingerprint === ref.worktreeFingerprint &&
       Array.isArray(parsed.sources)
-      ? parsed.sources
+      ? parsed.sources.filter(isSourceRecord)
       : []
   } catch {
     return []
   }
+}
+
+// One unreadable entry would otherwise fail every later scan, since a failed scan never rewrites the sidecar.
+function isSourceRecord(source: unknown): boolean {
+  return typeof source === 'object' && source !== null && !Array.isArray(source)
 }
 
 export async function writeUsageSourceCache(
