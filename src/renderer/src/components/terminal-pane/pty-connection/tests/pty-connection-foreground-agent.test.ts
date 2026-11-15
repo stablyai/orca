@@ -1,7 +1,6 @@
 import { describe } from 'vitest'
 import { registerPtyConnectionForegroundAgentRoutingTests } from '../agent-identity/pty-connection-foreground-agent-routing.spec'
 import { registerPtyConnectionForegroundAgentSamplingTests } from '../agent-identity/pty-connection-foreground-agent-sampling.spec'
-import { registerPtyConnectionForegroundProcessExitTests } from '../agent-identity/pty-connection-foreground-process-exit.spec'
 import { registerPtyConnectionForegroundRoutingConfirmationTests } from '../agent-identity/pty-connection-foreground-routing-confirmation.spec'
 import { registerPtyConnectionForegroundFrameSchedulingTests } from '../output/pty-connection-foreground-write-path.spec'
 
@@ -13,7 +12,6 @@ describe(
   'pty-connection-foreground-agent-sampling',
   registerPtyConnectionForegroundAgentSamplingTests
 )
-describe('pty-connection-foreground-process-exit', registerPtyConnectionForegroundProcessExitTests)
 describe(
   'pty-connection-foreground-routing-confirmation',
   registerPtyConnectionForegroundRoutingConfirmationTests

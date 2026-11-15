@@ -17,10 +17,10 @@ import {
   namedHostForOwnerRef,
   resolveOwner
 } from '@/lib/workspace/ownership/resolve-owner'
-import { authorityKey } from '../../../../../shared/host-authority'
+import { authorityKey } from '../../../../../shared/execution-host/host-authority'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-sessions/local-structured-session-owner'
 import { runtimeRpcTargetForAuthorityKey } from '../../rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /**
  * The one mapping from a chat's owning host to the runtime that serves it. Null for an owner no

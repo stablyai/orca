@@ -15,7 +15,7 @@ import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './termin
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from '../sessions/session-input-path'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
-import { ClaimedAgentPtyOwnerRegistry } from '../../../shared/claimed-agent-pty-owner'
+import { ClaimedAgentPtyOwnerRegistry } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 import {
   createOrAttachClaimedAgentSession,
   type InternalCreateOrAttachOptions

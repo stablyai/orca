@@ -6,7 +6,7 @@ import { SshHostNodeMirrorAction } from '@/components/ssh-host-recovery/SshHostN
 import { SshHostMoveAnywayButton } from '@/components/ssh-host-recovery/SshHostMoveAnywayAction'
 import { OpenPlainSshTerminalButton } from '@/components/plain-ssh-terminal/OpenPlainSshTerminalButton'
 import { useAppStore } from '@/store/index'
-import type { SshConnectionStatus } from '../../../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../../../shared/remote-runtime/ssh/ssh-types'
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId

@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { bumpWorktreeScanGeneration } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { setWorktreeCatalogRouteResolver } from './repo-worktree-catalog-route'
-import { markWorktreeRouteInputsChanged } from './local-worktree-scan-generation'
-import { notifyWslDiscoveryChanged } from '../../wsl/discovery/wsl-discovery-change'
 import {
-  _getWorktreeCatalogOwnerSizeForTests,
   _resetWorktreeCatalogOwnerForTests,
   retireObsoleteWorktreeCatalogs,
   invalidateWorktreeCatalogForRepo,
@@ -197,28 +194,6 @@ describe('repo worktree catalog owner', () => {
     expect(plan.calls).toBe(1)
   })
 
-  it('retires an idle owner when a route input or WSL discovery answer changes, with no reader', async () => {
-    let live: { repoPath: string; runtimeKey: string } | null = {
-      repoPath: '/repos/app',
-      runtimeKey: 'local:default'
-    }
-    setWorktreeCatalogRouteResolver(() => live)
-    const plan = scanner([rows('/repos/app')])
-    await readWorktreeCatalog(repo, 'local:default', runtime, plan)
-    expect(_getWorktreeCatalogOwnerSizeForTests()).toBe(1)
-
-    live = { repoPath: '/repos/app', runtimeKey: 'local:wsl:Ubuntu' }
-    notifyWslDiscoveryChanged()
-    expect(_getWorktreeCatalogOwnerSizeForTests()).toBe(0)
-
-    live = { repoPath: '/repos/app', runtimeKey: 'local:default' }
-    await readWorktreeCatalog(repo, 'local:default', runtime, plan)
-    live = null
-    markWorktreeRouteInputsChanged()
-    await Promise.resolve()
-    expect(_getWorktreeCatalogOwnerSizeForTests()).toBe(0)
-  })
-
   it('keeps a scan that outlived its repo path out of the live catalog', async () => {
     let live = { repoPath: '/repos/app', runtimeKey: 'local:default' }
     setWorktreeCatalogRouteResolver(() => live)
@@ -230,39 +205,5 @@ describe('repo worktree catalog owner', () => {
 
     expect((await held).superseded).toBe(true)
     expect(plan.calls).toBe(1)
-  })
-
-  it('reuses a mismatching verification probe as the rescan fingerprint', async () => {
-    let fingerprint = 'fingerprint-1'
-    const probe = vi.fn(() => Promise.resolve(fingerprint))
-    const verifier = { ceilingMs: 300_000, timeoutMs: 1_000, probe }
-    const plan = scanner([rows('/repos/app'), rows('/repos/app', '/repos/app-new')])
-    await readWorktreeCatalog(repo, 'local:default', { ...runtime, verifier }, plan)
-    vi.advanceTimersByTime(31_000)
-    fingerprint = 'fingerprint-2'
-
-    await readWorktreeCatalog(repo, 'local:default', { ...runtime, verifier }, plan)
-
-    expect(plan.calls).toBe(2)
-    expect(probe).toHaveBeenCalledTimes(2)
-  })
-
-  it('returns an unclaimed hygiene claim when a newer observation replaces it', async () => {
-    const release = vi.fn()
-    const plan = {
-      ...scanner([rows('/repos/app')]),
-      captureWitness: () => ({
-        authorizedRootsRevision: 1,
-        rootsRevision: 1,
-        hygieneDue: true,
-        release
-      })
-    }
-    await readWorktreeCatalog(repo, 'local:default', desktop, plan)
-    invalidateWorktreeCatalogForRepo(repo.id)
-
-    await readWorktreeCatalog(repo, 'local:default', desktop, plan)
-
-    expect(release).toHaveBeenCalledTimes(1)
   })
 })

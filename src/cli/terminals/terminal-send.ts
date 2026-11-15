@@ -1,4 +1,4 @@
-import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../shared/terminal/runtime/runtime-terminal-send-contract'
 import '../../shared/protocol-version'
 import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import type { CommandHandler } from '../dispatch/dispatch'
@@ -6,8 +6,8 @@ import { formatTerminalSend, terminalSendWarnings } from './terminal-format'
 import { printResult } from '../output/command-result-output'
 import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../arguments/flags'
 import { readRetryRequestFlag } from '../orchestration/recovery/retry-request-flag'
-import { RuntimeClientError } from '../runtime/types'
-import { attachUnverifiedTerminalPromptRecovery } from '../runtime/terminal-prompt-mutation-recovery'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { attachUnverifiedTerminalPromptRecovery } from '../runtime/connection/terminal-prompt-mutation-recovery'
 import { getTerminalHandle } from './terminal-selector'
 
 type TerminalSendResult = { send: RuntimeTerminalSend; warnings?: string[] }

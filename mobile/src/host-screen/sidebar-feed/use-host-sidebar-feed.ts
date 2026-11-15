@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
-import type { SidebarFeedDomains } from '../../../../src/shared/sidebar-list/sidebar-feed-domains'
+import type { SidebarFeedDomains } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-domains'
 import type {
   SidebarFeedNotice,
   SidebarFeedReader

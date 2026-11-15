@@ -5,12 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { readCodexCliVersion } from '../codex/structured/launch/codex-cli-installation-error'
 
-import type * as CommandResolution from '../../shared/node-cli-command-resolution'
+import type * as CommandResolution from '../../shared/shell/command-resolution/node-cli-command-resolution'
 
 vi.mock('../startup/shell-environment/login-shell-environment', () => ({
   resolveLoginShellEnvironment: async () => ({})
 }))
-vi.mock('../../shared/node-cli-command-resolution', async (original) => {
+vi.mock('../../shared/shell/command-resolution/node-cli-command-resolution', async (original) => {
   const actual = await original<typeof CommandResolution>()
   return {
     ...actual,

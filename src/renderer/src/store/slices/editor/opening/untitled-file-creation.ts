@@ -11,7 +11,7 @@ import {
   createUntitledMarkdownFile,
   type UntitledMarkdownFileInfo
 } from '@/lib/editor/file-operations/create-untitled-markdown'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { findGroupForTab } from '../../tabs/tab-group-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'

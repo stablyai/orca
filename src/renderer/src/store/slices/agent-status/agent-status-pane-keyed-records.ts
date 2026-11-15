@@ -1,4 +1,4 @@
-import { replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { recordDraft, replaceRecordEntries } from '@/store/keyed-record-transitions'
 export const RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
 export const RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX = 1024
 
@@ -84,10 +84,10 @@ export function movePaneKeyedRecord<T>(
   if (value === undefined || fromPaneKey === toPaneKey) {
     return record
   }
-  const next = { ...record }
-  delete next[fromPaneKey]
-  next[toPaneKey] = transform(value)
-  return next
+  const draft = recordDraft(record)
+  draft.delete(fromPaneKey)
+  draft.set(toPaneKey, transform(value))
+  return draft.finish()
 }
 
 export function removePaneKeys<T>(

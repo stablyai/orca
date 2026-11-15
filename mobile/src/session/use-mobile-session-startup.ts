@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { worktreeActivate } from '../host-screen/host-screen-operations'
-import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
+import { headlessActivationNeedsHostRenderer } from '../worktree/navigation/worktree-activation-result'
 import { createInitialSessionAutoCreateState } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 import { withoutSessionTabHostOwnership } from './tabs/mobile-session-tab-status-clock'

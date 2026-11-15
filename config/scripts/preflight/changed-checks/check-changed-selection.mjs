@@ -202,7 +202,7 @@ export const VERIFY_CHECKS = [
     name: 'node runtime pin',
     args: ['config/scripts/node-runtime/pin-policy/check-node-runtime-pin.mjs'],
     inputs: [
-      'src/shared/node-runtime-pin',
+      'src/shared/node-runtime/node-runtime-pin',
       'config/scripts/node-dist-archive-name',
       'config/scripts/node-runtime/archive-identity/node-dist-archive-name'
     ]

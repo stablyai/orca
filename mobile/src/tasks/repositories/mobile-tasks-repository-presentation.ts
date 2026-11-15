@@ -1,9 +1,9 @@
-import { resolveRepoBadgeColor } from '../../../../src/shared/repo-badge-color'
+import { resolveRepoBadgeColor } from '../../../../src/shared/repository/appearance/repo-badge-color'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../src/shared/execution-host'
 import {
   getHostContextLabel,
   type HostContextLabelSources
-} from '../../../../src/shared/worktree/host-context-labels'
+} from '../../../../src/shared/worktree/row-display/host-context-labels'
 import { colors } from '../../theme/mobile-theme'
 import { taskTime } from '../item-detail/mobile-tasks-item-mapping'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'

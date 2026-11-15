@@ -12,7 +12,7 @@ import {
   parseOpenCodeModelListing
 } from '../../opencode/model-launch/opencode-model-catalog-listing'
 
-import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/agent-session-setup-commands'
+import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,
@@ -23,7 +23,7 @@ import { GROK_SESSION_HISTORY } from '../../grok/grok-session-history'
 import { GROK_TRANSCRIPT_IMPORT } from '../../grok/grok-transcript-import'
 import { OPENCODE_SESSION_HISTORY } from '../../opencode/transcripts/opencode-session-history'
 import { OPENCODE_TRANSCRIPT_IMPORT } from '../../opencode/transcripts/opencode-transcript-import'
-import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/opencode-launch-command'
+import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/agent-launch/startup/opencode-launch-command'
 import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'

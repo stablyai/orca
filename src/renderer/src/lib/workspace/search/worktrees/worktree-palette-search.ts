@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import { matchPaletteDocument } from '../../../../../../shared/palette-match/match-document'
 import { preparePaletteQuery } from '../../../../../../shared/palette-match/palette-query'
 import type { MatchRange } from '../../../../../../shared/palette-match/normalized-text'
@@ -21,9 +21,9 @@ import {
   type PaletteSupportingKind
 } from './worktree-palette-evidence'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorkspaceLastActiveAt } from '../../../../../../shared/workspace-last-active'
+import { getWorkspaceLastActiveAt } from '../../../../../../shared/workspace-cleanup/workspace-last-active'
 import { getWorktreeVisitTimestamp } from '../../activation/worktree-visit-recency'
 import {
   getPaletteWorktreeExecutionHostId,

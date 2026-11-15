@@ -1,9 +1,9 @@
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import type { TaskResumeState, TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
-import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
-import type { ContextualTourId } from '../../../../../shared/contextual-tours'
-import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
-import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import type { ContextualTourId } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
 import {
   sanitizeAcknowledgedAgentsByPaneKey,

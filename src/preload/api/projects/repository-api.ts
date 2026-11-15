@@ -1,4 +1,5 @@
-import type { RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
+import type { GroupHookCheckResult } from '../../../shared/project/groups/project-group-hooks'
+import type { RepoCreateFailure } from '../../../shared/repository/creation/repo-create-failure-copy'
 import type {
   CloneTargetArgs,
   CloneTargetCheck
@@ -12,7 +13,7 @@ import type {
   ProjectGroupMutation,
   ProjectGroupImportMode,
   ProjectGroupImportResult
-} from '../../../shared/project-group-types'
+} from '../../../shared/project/groups/project-group-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -25,10 +26,14 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
-} from '../../../shared/project-types'
-import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/project-types'
+import type {
+  BaseRefDefaultResult,
+  BaseRefSearchResult,
+  Repo
+} from '../../../shared/repository/repo-types'
 import type { WslMovedProject } from '../../../shared/wsl-move/wsl-moved-project'
-import type { HostRepoCatalogSnapshot } from '../../../shared/host-repo-catalog-snapshot'
+import type { HostRepoCatalogSnapshot } from '../../../shared/execution-host/host-repo-catalog-snapshot'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
@@ -81,6 +86,7 @@ export type RepositoryApi = {
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
     }
   }) => Promise<Repo>
   pickFolder: () => Promise<string | null>
@@ -127,6 +133,7 @@ export type ProjectsApi = {
 }
 
 export type ProjectGroupsApi = {
+  checkHooks: (args: { groupId: string; background?: boolean }) => Promise<GroupHookCheckResult>
   list: () => Promise<ProjectGroup[]>
   create: (args: {
     name: string

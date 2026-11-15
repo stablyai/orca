@@ -1,12 +1,12 @@
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSessionTabCloseReason,
   RuntimeSyncedTab
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { MobileSessionTabCloseOutcome } from './mobile-session-tab-close-outcome'
 import {
   delegatedMobileSessionTabClose,

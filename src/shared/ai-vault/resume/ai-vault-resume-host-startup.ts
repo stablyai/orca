@@ -1,6 +1,6 @@
 // How a saved conversation resumes on the session's own host: its platform, shell and prebuilt line.
 
-import { isAntigravityReferenceSession } from '../../antigravity-session-origin'
+import { isAntigravityReferenceSession } from '../../agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { realHomeCodexResumeEnvDeletion } from './ai-vault-resume-command'
 import {
   getAiVaultAgentProviderSession,
@@ -10,7 +10,7 @@ import {
   type AiVaultResumeStartup
 } from './ai-vault-resume-startup'
 import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
-import { managedDataAccountResumeEnv } from '../../managed-data-account-resume'
+import { managedDataAccountResumeEnv } from '../../agent-launch/environment/managed-data-account-resume'
 import type { AgentStartupShell } from '../../agent-launch/startup/tui-agent-startup-shell'
 
 /** A remote session resumes on its own host's platform; a local one on the target workspace's.

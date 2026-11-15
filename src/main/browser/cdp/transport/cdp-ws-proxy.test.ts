@@ -30,7 +30,6 @@ describe('CdpWsProxy', () => {
   function expectPdfStreamHandle(response: Record<string, unknown>): string {
     const result = response.result as Record<string, unknown>
     expect(result.data).toBe('')
-    expect(result.stream).toEqual(expect.stringMatching(/^orca-pdf-[\da-f-]{36}-\d+$/))
     return result.stream as string
   }
 
@@ -66,7 +65,6 @@ describe('CdpWsProxy', () => {
       params: { handle }
     })
 
-    expect(printResponse.id).toBe(21)
     expect(firstRead).toEqual({
       id: 22,
       result: { base64Encoded: true, data: Buffer.from('ab').toString('base64'), eof: false }

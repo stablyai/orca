@@ -22,11 +22,11 @@ import {
   type WorkspaceViewOptionKey,
   type WorkspaceViewSection
 } from '../../../../src/shared/workspace-view/workspace-view-options'
-import { getHostContextLabel } from '../../../../src/shared/worktree/host-context-labels'
+import { getHostContextLabel } from '../../../../src/shared/worktree/row-display/host-context-labels'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { resolveWorktreeHostId } from '../../worktree/worktree-host-context-labels'
-import { withServerHosts } from '../../worktree/server-workspaces'
+import { resolveWorktreeHostId } from '../../worktree/row-presentation/worktree-host-context-labels'
+import { withServerHosts } from '../../worktree/execution-hosts/server-workspaces'
 import { hostScreenStyles as styles } from '../host-screen-styles'
 import type { HostScreenController } from '../use-host-screen-controller'
 import { ListGroup, SectionHeader } from '../../components/list/ListGroup'

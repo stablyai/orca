@@ -192,6 +192,10 @@ function replaceReferenceLinks(
   return result
 }
 
+export function hasMarkdownReferenceDefinitionLines(content: string): boolean {
+  return splitReferenceDefinitions(content).definitions.size > 0
+}
+
 export function normalizeMarkdownReferenceLinks(content: string): string {
   const { definitions, markdown } = splitReferenceDefinitions(content)
   if (definitions.size === 0) {

@@ -2,7 +2,6 @@
 // run `pnpm run generate:rpc-params-catalog`.
 import type { z } from 'zod'
 import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
-import { AgentSkillShareRequestSchema } from '../agent-skill-sharing-contract'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -22,30 +21,26 @@ import {
 } from '../browser/client-hosting/browser-client-host-protocol'
 import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/browser-client-host-request-protocol'
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
-import {
-  BundledSkillAutoUpdateRequestSchema,
-  BundledSkillExecuteRequestSchema,
-  BundledSkillPlanRequestSchema
-} from '../bundled-skill-plan'
-import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
+import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
-} from '../desktop-browser-bridge-protocol'
+} from '../browser/client-hosting/desktop-browser-bridge-protocol'
+import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/locale-catalog-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
-  OrcadDeclareClientParamsSchema,
-  OrcadPeerDesktopsParamsSchema
-} from '../orcad-peer-desktops-contract'
-import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
-import {
   CrewSubscribeParams,
   WorkerApprovalsSubscribeParams
 } from '../orchestration/orchestration-crew'
 import { PeerRunCancelParams } from '../orchestration/remote-owned-wire'
+import {
+  OrcadDeclareClientParamsSchema,
+  OrcadPeerDesktopsParamsSchema
+} from '../remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
+import { OrcadTerminalCensusParamsSchema } from '../remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
 import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
@@ -199,6 +194,7 @@ import {
   ComputerPermissions,
   Drag as DragOfComputerSchemasParams,
   Hotkey,
+  LaunchApp,
   ListApps,
   ListWindows,
   PasteText,
@@ -515,7 +511,7 @@ import {
   PluginsPanelActionParams
 } from './plugins/plugins-params'
 import {
-  PreflightAgentDetection,
+  PreflightAgentRefresh,
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities,
@@ -531,6 +527,7 @@ import {
 } from './projects/project-runtime-params'
 import {
   ProjectGroupCreate,
+  ProjectGroupHooksCheck,
   ProjectGroupImportNested,
   ProjectGroupMoveProject,
   ProjectGroupScanNested,
@@ -793,20 +790,26 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './workspaces/worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './workspaces/worktree-provisioned-root-params'
-import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
-import { SidebarInputsReadParams } from '../sidebar-list/sidebar-inputs-feed-contract'
-import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
-import { SkillDeleteRequestSchema } from '../skill-delete-contract'
+import { RepoIconDataUrlsParams } from '../sidebar-list/catalog/repo-icon-data-urls-contract'
+import { SidebarInputsReadParams } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
+import {
+  BundledSkillAutoUpdateRequestSchema,
+  BundledSkillExecuteRequestSchema,
+  BundledSkillPlanRequestSchema
+} from '../skills/bundled/bundled-skill-plan'
+import { SkillDeleteRequestSchema } from '../skills/deletion/skill-delete-contract'
+import { SkillBundleInstallRequestSchema } from '../skills/installation/skill-bundle-install-contract'
 import {
   SkillInstallPreviewRequestSchema,
   SkillInstallRequestSchema,
   SkillRemoveRequestSchema
-} from '../skill-install-contract'
+} from '../skills/installation/skill-install-contract'
+import { AgentSkillShareRequestSchema } from '../skills/sharing/agent-skill-sharing-contract'
 import {
   SkillUploadBeginRequestSchema,
   SkillUploadChunkRequestSchema,
   SkillUploadCommitRequestSchema
-} from '../skill-upload-session-contract'
+} from '../skills/sharing/skill-upload-session-contract'
 
 // Why: the host parses params with these schemas, so a client that matches this map
 // matches the dispatcher. Clients must import it for types only — parsing a params
@@ -952,6 +955,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
   'browser.clientHost.pageMetadata': BrowserClientPageMetadataParams,
   'browser.clientHost.requestResult': BrowserClientHostRequestResultParams,
+  'browser.clientPage.initializationAction': BrowserPageInitializationActionParams,
   'browser.clipboardRead': BrowserTarget,
   'browser.clipboardWrite': ClipboardWrite,
   'browser.console': LimitParam,
@@ -1045,6 +1049,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.drag': DragOfComputerSchemasParams,
   'computer.getAppState': ComputerObserveTarget,
   'computer.hotkey': Hotkey,
+  'computer.launchApp': LaunchApp,
   'computer.listApps': ListApps,
   'computer.listWindows': ListWindows,
   'computer.pasteText': PasteText,
@@ -1062,6 +1067,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.send': ConnectorSend,
   'connector.start': ConnectorStart,
   'connector.watch': ConnectorWatch,
+  'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'diagnostics.memory': null,
@@ -1476,9 +1482,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':
     PreflightDetectRemoteWindowsTerminalCapabilities,
-  'preflight.refreshAgents': PreflightAgentDetection,
+  'preflight.refreshAgents': PreflightAgentRefresh,
   'project.list': null,
   'project.update': ProjectUpdate,
+  'projectGroup.checkHooks': ProjectGroupHooksCheck,
   'projectGroup.create': ProjectGroupCreate,
   'projectGroup.delete': ProjectGroupSelector,
   'projectGroup.importNested': ProjectGroupImportNested,

@@ -25,7 +25,8 @@ import {
   renderMobileSettingsSection,
   renderOrcaAccountSettingsSection,
   renderSetupGuideSettingsSection,
-  renderShareSkillsSettingsSection
+  renderShareSkillsSettingsSection,
+  renderWorkspaceCleanupSettingsSection
 } from './settings-setup-workflow-section-renderers'
 import {
   renderGitSettingsSection,
@@ -169,6 +170,7 @@ export function renderSettingsPage(
                   {renderOrcaAccountSettingsSection(context, t)}
                   {renderSetupGuideSettingsSection(context, t)}
                   {renderGeneralSettingsSection(context, t)}
+                  {renderWorkspaceCleanupSettingsSection(context, t)}
                   {renderIntegrationsSettingsSection(context, t)}
                   {renderMobileSettingsSection(context, t)}
                   {renderAutomationsSettingsSection(context, t)}

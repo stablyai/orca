@@ -1,6 +1,6 @@
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
-import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-interactions'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../../workspaces/catalog/folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../../shared/folder-workspaces/folder-workspaces'
 import { normalizeOrcadMigrationEvictedReceipts } from '../../../../shared/orcad-migration/orcad-migration-evicted-receipts'
@@ -8,7 +8,7 @@ import { normalizeOrcadMigrationImportReceipts } from '../../../../shared/orcad-
 import { normalizeOrcadMigrationStagedCatalogs } from '../../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { normalizeWorkspaceLineageByChildKey } from '../../applying-settings/ui-interaction-merge'
 import { dropInferredParentsOverFolderParents } from '../workspace-lineage/folder-parent-lineage-persistence'
-import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/cross-store-lineage-records'
+import { normalizeCrossStoreLineageByChildKey } from '../../../../shared/worktree/lineage/cross-store-lineage-records'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget

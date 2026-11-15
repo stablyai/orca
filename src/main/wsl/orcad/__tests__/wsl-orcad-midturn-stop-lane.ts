@@ -5,7 +5,7 @@ import { expect, vi } from 'vitest'
 import { z } from 'zod'
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-continue-interrupted-capability'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
@@ -16,12 +16,12 @@ import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket
 import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
-import type { WslHostStatus } from '../../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
 import '../../../orcad/artifact-slots/orcad-artifact-materializer'
 import { packagedClaudeChatScenario } from '../../../orcad/testing/structured-chat/orcad-structured-chat-scenario'
 import { wslDistroHolderKey } from '../../discovery/wsl-distro-holder-record'
-import { wslHostStoppedMessage } from '../../../../shared/wsl-host-stopped-message'
+import { wslHostStoppedMessage } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { wslHostConnectOptions } from '../../host-lifecycle/wsl-host-connect-request'
 import '../../host-lifecycle/wsl-host-connector'
 import '../../host-lifecycle/wsl-host-service'

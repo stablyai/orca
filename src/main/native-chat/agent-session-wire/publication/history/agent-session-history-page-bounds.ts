@@ -21,8 +21,8 @@ import { isSubagentBlock } from '../../../../../shared/native-chat/native-chat-t
 import {
   subagentFoldKey,
   subagentItemBlock
-} from '../../../../../shared/native-chat/transcript/native-chat-subagent-items'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
 
@@ -105,14 +105,18 @@ export function measureHistoryItem(item: AgentJournalRenderItem): HistoryItemFor
 /** Measure pages in the exact form sent to each reader. */
 export type HistoryReader = {
   form: (item: AgentJournalRenderItem) => HistoryItemForm
+  wireForm?: 'client' | 'bounded'
   budgetBytes: number
   /** Forward reads project touched identities; cold reads include retained sources before bounds. */
   snapshot?: (
     journal: AgentSessionJournal,
     snapshot?: AgentJournalSnapshot,
     touched?: Set<string>
-  ) => AgentJournalSnapshot
-  queueSourceIds?: (journal: AgentSessionJournal, messageId: string) => readonly string[]
+  ) => AgentJournalSnapshot | Promise<AgentJournalSnapshot>
+  queueSourceIds?: (
+    journal: AgentSessionJournal,
+    messageId: string
+  ) => readonly string[] | Promise<readonly string[]>
 }
 
 export function boundHistoryItemsByBytes(

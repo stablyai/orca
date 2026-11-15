@@ -1,4 +1,4 @@
-import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../shared/project/project-types'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {

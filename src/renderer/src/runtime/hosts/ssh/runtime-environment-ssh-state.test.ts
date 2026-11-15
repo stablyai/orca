@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnectionState, SshProviderEpoch } from '../../../../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshProviderEpoch
+} from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useAppStore } from '@/store/index'
 import {
   applyRuntimeEnvironmentSshStateChanged,

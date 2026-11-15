@@ -1,8 +1,8 @@
 // Cache journal fences before handlers run and follow every write; exit proof catches already-admitted spawns.
 import { resolve } from 'node:path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { onWslMoveJournalChange } from '../cutover-recovery/wsl-move-cutover-journal'
 import { onWslDriveUncConversionJournalChange } from '../../../wsl/filesystem/wsl-drive-unc-conversion-journal'
@@ -11,7 +11,7 @@ import { comparableWslPath, isAtOrUnder } from '../manifest-scope/wsl-move-compa
 import {
   findProjectHostSetup,
   type ProjectHostSetupTarget
-} from '../../../../shared/project-host-setup-target'
+} from '../../../../shared/project/host-setup/project-host-setup-target'
 
 export type WslMoveProjectRef = { repoId: string } | { folderWorkspaceId: string }
 

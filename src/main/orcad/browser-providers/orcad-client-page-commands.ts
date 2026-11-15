@@ -42,6 +42,18 @@ const LOGICAL_TAB_QUERIES = [
   'browserTabSwitch'
 ] as const
 
+export function orcadClientPageCommand<K extends 'browserTabCreate' | 'browserOpenUrlOnClient'>(
+  host: RuntimeBrowserCommandHost,
+  name: K,
+  forward: Forward,
+  engineAvailable: () => boolean
+): RuntimeBrowserCommands[K] | undefined
+export function orcadClientPageCommand(
+  host: RuntimeBrowserCommandHost,
+  name: string,
+  forward: Forward,
+  engineAvailable: () => boolean
+): ((...args: never[]) => unknown) | undefined
 export function orcadClientPageCommand(
   host: RuntimeBrowserCommandHost,
   name: string,
@@ -56,7 +68,7 @@ export function orcadClientPageCommand(
     )
   if (name === 'browserOpenUrlOnClient') {
     return (...args: Parameters<RuntimeBrowserCommands['browserOpenUrlOnClient']>) =>
-      openBrowserUrlOnClient(host, args[0])
+      openBrowserUrlOnClient(host, args[0], args[1]?.signal)
   }
   if (name === 'browserTabCreate') {
     return (...args: Parameters<RuntimeBrowserCommands['browserTabCreate']>) =>
@@ -138,7 +150,8 @@ function createTab(
       host,
       params ?? {},
       orcadBrowserProfileId(params?.profileId),
-      hasEngine ? async () => requireCreatedPage(await createOnEngine()) : undefined
+      hasEngine ? async () => requireCreatedPage(await createOnEngine()) : undefined,
+      caller?.signal
     )
   }
   return createOnEngine()

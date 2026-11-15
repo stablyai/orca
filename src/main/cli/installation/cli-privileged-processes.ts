@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { quotePowerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import { WINDOWS_PATH_WRITE_TIMEOUT_MS } from './cli-install-constants'
 
 export async function runMacPrivilegedCommand(command: string): Promise<void> {

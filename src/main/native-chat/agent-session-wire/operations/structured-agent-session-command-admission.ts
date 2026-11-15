@@ -2,12 +2,12 @@ import { parseAgentSessionOperationTimestamp } from '../../../../shared/agent-se
 import {
   agentSessionLedgerRefusal,
   refuseUnlessWriterAdmitted
-} from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   commandReceiptScope,
@@ -28,7 +28,7 @@ import {
 import { runCommandReceiptMutation } from './structured-agent-session-command-receipt'
 import {
   agentSessionOperationOutcomeUnknown,
-  resolveAgentSessionReplayOutcome
+  resolveAsyncAgentSessionReplayOutcome
 } from './structured-agent-session-replay-outcome'
 
 /** Commit command acceptance with its effect, without a separate ledger reservation. */
@@ -52,7 +52,7 @@ export async function admitCommandReceiptMutation<TValue>(
   }
   let read
   try {
-    read = store.readCommandReceipt(
+    read = await store.readCommandReceipt(
       commandReceiptScope(callerKey, plan.operationIdScope),
       envelope.clientOperationId
     )
@@ -110,7 +110,7 @@ export async function admitCommandReceiptMutation<TValue>(
           ok: true,
           replayed: false,
           fence: context.fence,
-          cursor: journal.cursor(),
+          cursor: await journal.reads.cursor(),
           value: outcome.value
         }
       : refuseAgentSessionMutation(outcome.refusal)
@@ -167,7 +167,7 @@ async function answerCommandReceipt<TValue>(
   }
   const context = mutationReplayContext(request, journal, current)
   const outcome = commandReceiptOutcome(receipt)
-  const replay = resolveAgentSessionReplayOutcome({
+  const replay = await resolveAsyncAgentSessionReplayOutcome({
     operationId: envelope.clientOperationId,
     outcome,
     reconstruct: () => plan.replay(context, outcome, receipt.result),
@@ -184,7 +184,7 @@ async function answerCommandReceipt<TValue>(
     ok: true,
     replayed: true,
     fence: context.fence,
-    cursor: journal.cursor(),
+    cursor: await journal.reads.cursor(),
     value: replay.value
   }
 }

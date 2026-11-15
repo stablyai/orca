@@ -18,7 +18,7 @@ describe('OrcaRuntimeService', () => {
 
     const status = runtime.getTerminalAgentStatus(handle)
     await vi.waitFor(() => expect(getForegroundProcess).toHaveBeenCalledWith('pty-1'))
-    syncPty('pty-2')
+    await syncPty('pty-2')
     foreground.resolve('zsh')
 
     await expect(status).rejects.toThrow('terminal_handle_stale')
@@ -35,7 +35,7 @@ describe('OrcaRuntimeService', () => {
 
     const status = runtime.getTerminalAgentStatus(handle)
     await vi.waitFor(() => expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1'))
-    syncPty('pty-2')
+    await syncPty('pty-2')
     confirmation.resolve('codex')
 
     await expect(status).rejects.toThrow('terminal_handle_stale')

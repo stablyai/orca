@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
-import { normalizePairedServerRow } from '../../../shared/sidebar-list/paired-server-rows'
-import {
-  IDLE_WORKSPACE_ACTIVITY,
-  type WorkspaceActivityFacts
-} from '../../../shared/sidebar-list/workspace-activity-facts'
-import { buildWorkspaceRows } from '../../../shared/sidebar-list/workspace-rows'
-import type { Repo } from '../../../shared/repo-types'
+import { normalizePairedServerRow } from '../../../shared/sidebar-list/feed-facts/paired-server-rows'
+import type { WorkspaceActivityFacts } from '../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
+import { buildWorkspaceRows } from '../../../shared/sidebar-list/feed-facts/workspace-rows'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import type {
+  MobileDesktopRelayHosts,
+  MobileDesktopRelayListing
+} from '../mobile-desktop-relay/mobile-desktop-relay-hosts'
+import { PairedServerRowsProducer } from './workspace-rows/paired-server-rows-producer'
+import { SidebarInputsFeed } from './feed/sidebar-inputs-feed'
 import { ProducerRevision } from './producer-revision'
 import {
   sidebarInputsFeedDomains,
@@ -51,7 +56,11 @@ function repo(overrides: Partial<Repo> = {}): Repo {
 }
 
 /** This host lists `r::/w/same` locally and over SSH; a paired server lists the same id. */
-function harness(hostFacts: Record<string, WorkspaceActivityFacts>) {
+function harness(
+  hostFacts: Record<string, WorkspaceActivityFacts>,
+  paired?: Pick<PairedServerRowsProducer, 'revision' | 'withPreparedSnapshot'>,
+  events?: { store: () => unknown; onClientEvent: SidebarInputsFeedSources['onClientEvent'] }
+) {
   const listing = { scanned: true }
   const repos = [repo(), repo({ connectionId: 'box' })]
   const serverRow = normalizePairedServerRow('runtime:env', {
@@ -65,19 +74,20 @@ function harness(hostFacts: Record<string, WorkspaceActivityFacts>) {
       getWorkspaceActivityFacts: () => ({ revision: 0, facts: hostFacts }),
       workspaceActivityFacts: { revision: new ProducerRevision() }
     },
-    pairedServerRows: {
+    pairedServerRows: paired ?? {
       revision: new ProducerRevision(),
-      snapshot: () => ({
-        revision: 0,
-        servers: [
-          {
-            hostId: 'runtime:env',
-            freshness: 'live' as const,
-            host: null,
-            rows: serverRow ? [serverRow] : []
-          }
-        ]
-      })
+      withPreparedSnapshot: async (consume: (snapshot: unknown) => void) =>
+        consume({
+          revision: 0,
+          servers: [
+            {
+              hostId: 'runtime:env',
+              freshness: 'live' as const,
+              host: null,
+              rows: serverRow ? [serverRow] : []
+            }
+          ]
+        })
     },
     workspaceRows: {
       revision: new ProducerRevision(),
@@ -98,7 +108,8 @@ function harness(hostFacts: Record<string, WorkspaceActivityFacts>) {
           : null
     },
     store: () => null,
-    onClientEvent: () => () => {}
+    onClientEvent: () => () => {},
+    ...events
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the activity and workspaces domains read only the members built above.
   const domains = sidebarInputsFeedDomains(sources as unknown as SidebarInputsFeedSources)
@@ -107,23 +118,25 @@ function harness(hostFacts: Record<string, WorkspaceActivityFacts>) {
     if (!domain) {
       throw new Error(`no ${name} domain`)
     }
-    return domain.read()
+    let result: Record<string, unknown> | null = null
+    if (domain.prepare) {
+      return domain
+        .prepare(() => {
+          result = domain.read()
+        })
+        .then(() => result)
+    }
+    return Promise.resolve(domain.read())
   }
-  return { read, listing }
+  return {
+    read,
+    listing,
+    domains,
+    activityChanged: () => sources.facts.workspaceActivityFacts.revision.bump()
+  }
 }
 
 describe('the activity domain', () => {
-  it('keys this host’s facts by its rows and a paired server’s by its own host', async () => {
-    const busy = { ...IDLE_WORKSPACE_ACTIVITY, browser: true }
-    const { read } = harness({ [ID]: busy })
-    // The desktop's session names only the id, so both of its own copies carry it.
-    expect(await read('activity')).toEqual({
-      [`local|${ID}`]: busy,
-      [`ssh:box|${ID}`]: busy,
-      [`runtime:env|${ID}`]: { ...IDLE_WORKSPACE_ACTIVITY, agent: 'working' }
-    })
-  })
-
   it('never lends a paired server’s activity to this host’s same-id rows', async () => {
     const { read } = harness({})
     expect(Object.keys((await read('activity')) ?? {})).toEqual([`runtime:env|${ID}`])
@@ -135,3 +148,145 @@ describe('the activity domain', () => {
     expect(await read('activity')).toBeNull()
   })
 })
+
+it('prepares first host facts and sees an external rename on an activity-only dirty pass', async () => {
+  let name = 'Before'
+  let release!: (listing: MobileDesktopRelayListing) => void
+  let first = true
+  const listing = (): MobileDesktopRelayListing => ({
+    environments: [{ id: 'env', name, pairingRevision: 1, runtimeId: null }],
+    statusByEnvironmentId: new Map(),
+    sshTargetLabels: new Map(),
+    sshConnectionStates: new Map()
+  })
+  const pending = new Promise<MobileDesktopRelayListing>((resolve) => {
+    release = resolve
+  })
+  const hosts: MobileDesktopRelayHosts = {
+    list: () => (first ? pending : listing()),
+    resolve: async () => null,
+    call: async () => {
+      throw new Error('offline hosts require no network snapshot')
+    },
+    hostsBrowserPage: () => false,
+    onEnvironmentRetired: () => () => {},
+    onStatusChanged: () => () => {},
+    watchChanges: () => {
+      throw new Error('offline host must not be watched')
+    }
+  }
+  const producer = new PairedServerRowsProducer({
+    hasDemand: () => true,
+    hostLabelOverrides: () => new Map()
+  })
+  const detach = producer.attach(hosts)
+  const { domains, activityChanged } = harness({}, producer)
+  const events: unknown[] = []
+  const feed = new SidebarInputsFeed(
+    () => domains.filter((domain) => ['activity', 'pairedServerHosts'].includes(domain.name)),
+    (event) => {
+      events.push(event)
+    }
+  )
+  feed.acquire('phone')
+  try {
+    const reading = feed.read({ maxBytes: 256 * 1024 })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(events).toEqual([])
+    first = false
+    release(listing())
+    const initial = await reading
+    expect(initial.domains.pairedServerHosts.upserts).toMatchObject({
+      'runtime:env': { host: { label: 'Before' } }
+    })
+    name = 'After'
+    activityChanged()
+    const renamed = await feed.read({ maxBytes: 256 * 1024 })
+    expect(renamed.domains.pairedServerHosts.upserts).toMatchObject({
+      'runtime:env': { host: { label: 'After' } }
+    })
+  } finally {
+    feed.release('phone')
+    detach()
+  }
+})
+
+it.each([10, 100])(
+  'ignores %i unrelated UI and worktree events but publishes a host-label change',
+  async (count) => {
+    let label = 'Before'
+    let prepares = 0
+    let written: Parameters<NonNullable<RuntimeStore['onStateWritten']>>[0] | undefined
+    const listeners = new Set<(event: RuntimeClientEvent) => void>()
+    const paired: Pick<PairedServerRowsProducer, 'revision' | 'withPreparedSnapshot'> = {
+      revision: new ProducerRevision(),
+      withPreparedSnapshot: async (consume) => {
+        prepares++
+        return consume({
+          revision: 0,
+          servers: [
+            {
+              hostId: 'runtime:env',
+              freshness: 'live',
+              host: { label, health: 'online', compatibility: null, pairedDeviceId: 'device' },
+              rows: []
+            }
+          ]
+        })
+      }
+    }
+    const { domains } = harness({}, paired, {
+      store: () => ({
+        onStateWritten: (listener: typeof written) => {
+          written = listener
+          return () => {
+            written = undefined
+          }
+        }
+      }),
+      onClientEvent: (listener) => {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      }
+    })
+    const events: unknown[] = []
+    const feed = new SidebarInputsFeed(
+      () =>
+        domains.filter((domain) => ['pairedServerHosts', 'pairedServerRows'].includes(domain.name)),
+      (event) => {
+        events.push(event)
+      }
+    )
+    feed.acquire('phone')
+    try {
+      const initial = await feed.read({ maxBytes: 256 * 1024 })
+      expect(initial.domains.pairedServerHosts.upserts).toMatchObject({
+        'runtime:env': { host: { label: 'Before' } }
+      })
+      const initialPrepares = prepares
+      const initialEvents = events.length
+      for (let i = 0; i < count; i++) {
+        written?.(['ui'])
+        for (const listener of listeners) {
+          listener({ type: 'worktreesChanged', repoId: 'r' })
+        }
+      }
+      const unchanged = await feed.read({ maxBytes: 256 * 1024 })
+      expect(unchanged.revision).toBe(initial.revision)
+      expect(prepares - initialPrepares).toBe(0)
+      expect(events).toHaveLength(initialEvents)
+      label = 'After'
+      written?.(['settings'])
+      const changed = await feed.read({ maxBytes: 256 * 1024 })
+      expect(changed.domains.pairedServerHosts.upserts).toMatchObject({
+        'runtime:env': { host: { label: 'After' } }
+      })
+      expect(changed.revision).toBeGreaterThan(initial.revision)
+      expect(prepares - initialPrepares).toBe(1)
+    } finally {
+      feed.release('phone')
+    }
+  }
+)

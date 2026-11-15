@@ -2,9 +2,9 @@ import { useEffect } from 'react'
 import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
 import { useHostQuery } from '../../query/host-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { buildRepoHostIdByRepoId } from '../../worktree/worktree-host-context-labels'
-import { buildSshHostHealthById } from '../../worktree/worktree-host-health'
-import type { SectionRepo } from '../../worktree/workspace-list-types'
+import { buildRepoHostIdByRepoId } from '../../worktree/row-presentation/worktree-host-context-labels'
+import { buildSshHostHealthById } from '../../worktree/execution-hosts/worktree-host-health'
+import type { SectionRepo } from '../../worktree/workspace-list/workspace-list-types'
 import {
   catalogNeedsHostLabels,
   HOST_LIST_TARGET,

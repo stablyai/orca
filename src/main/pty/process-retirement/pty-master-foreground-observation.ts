@@ -4,9 +4,12 @@ import {
   getFirstCommandToken
 } from '../../../shared/command-token-scanner'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
-import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
-import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
+import { selectForegroundProcessCandidate } from '../../../shared/agent-status/process/foreground-process-selection'
+import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../../shared/process-observation/tables/process-table-snapshot'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { isRetiredPtyMaster } from './node-pty-master-fd-retirement'

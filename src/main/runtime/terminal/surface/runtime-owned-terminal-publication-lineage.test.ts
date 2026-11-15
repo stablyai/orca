@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
@@ -25,7 +25,7 @@ it.each(['renderer:active-generation', 'headless:active-generation'])(
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    runtime.syncWindowGraph(0, {
+    await runtime.syncWindowGraph(0, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [

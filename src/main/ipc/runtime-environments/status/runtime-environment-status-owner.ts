@@ -1,7 +1,7 @@
 import { getRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import '../../../../shared/protocol-version'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/host-runtime-capabilities'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairedRuntimeConnection,
@@ -11,7 +11,7 @@ import { managedOrcadRefusalNeedingUserCode } from '../../../managed-server/life
 import { recoverRefusedPairing } from '../pairing/runtime-environment-pairing-refusal-registry'
 import { recordRuntimeEnvironmentUsage } from '../../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { RuntimeHostStatusOwner } from '../../../../shared/remote-runtime/host-status/runtime-host-status-owner'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
   type RuntimeHostStatusSnapshot,
@@ -53,7 +53,7 @@ async function answerRefusedPairing(
   if (!recovery) {
     return refused
   }
-  let outcome: 'built' | 'repaired'
+  let outcome: 'built' | 'repaired' | null
   try {
     outcome = await recovery
   } catch (error) {
@@ -61,6 +61,9 @@ async function answerRefusedPairing(
     return code && error instanceof Error
       ? runtimeHostStatusFailure(code, error.message)
       : runtimeHostStatusError(error)
+  }
+  if (outcome === null) {
+    return refused
   }
   // Rebuild re-proved the server, making refusal stale; only re-pairing retires this status owner.
   return runtimeEnvironmentChangedFailure(environment, 'status.get', outcome === 'repaired')
@@ -84,11 +87,15 @@ export function createRuntimeEnvironmentStatusOwner(
       getRuntimeEnvironmentCapabilityIncarnation(environment.id) === incarnation
     // A sleeping VM's health probe would be the dial that wakes it; answer without dialing.
     // (A tunnelled server is refused the same way by its preparation below.)
-    if (isRecipeVmEnvironmentAsleep(userDataPath, environment.id)) {
+    if (await isRecipeVmEnvironmentAsleep(userDataPath, environment.id)) {
       return runtimeHostStatusFailure(
         RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
         RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
       )
+    }
+    signal.throwIfAborted()
+    if (!isCurrent()) {
+      return runtimeEnvironmentChangedFailure(environment, 'status.get')
     }
     if (environment.connectionDependency === 'ssh-tunnel') {
       try {

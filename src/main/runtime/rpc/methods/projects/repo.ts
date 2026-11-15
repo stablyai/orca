@@ -15,7 +15,7 @@ import {
   RepoShow
 } from '../../../../../shared/rpc-contract/github/github-repo-target-params'
 import { hostQualifiedRepoSelector } from '../../../workspaces/catalog/runtime-repo-selector'
-import { repoHooksCheckIsBackground } from '../../../../../shared/repo-hooks-check-wake'
+import { repoHooksCheckIsBackground } from '../../../../../shared/workspace-setup/hooks/repo-hooks-check-wake'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
@@ -233,7 +233,10 @@ export const REPO_METHODS = [
     permission: 'workspace',
     params: RepoHooksCheck,
     handler: async (params, { runtime }) =>
-      runtime.checkRepoHooks(params.repo, { background: repoHooksCheckIsBackground(params) })
+      runtime.checkRepoHooks(params.repo, {
+        background: repoHooksCheckIsBackground(params),
+        createSource: params.createSource
+      })
   }),
   defineMethod({
     name: 'repo.setupScriptImports',

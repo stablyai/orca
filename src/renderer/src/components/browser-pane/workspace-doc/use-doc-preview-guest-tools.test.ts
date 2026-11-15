@@ -25,14 +25,14 @@ const calls = vi.hoisted<GuestToolCalls>(() => ({
 
 let pendingPayload: BrowserGrabPayload | null = null
 
-vi.mock('@/components/browser-pane/annotate/use-browser-page-annotation-send', () => ({
+vi.mock('@/components/browser-pane/annotate/delivery/use-browser-page-annotation-send', () => ({
   useBrowserPageAnnotationSend: (args: { browserTabId: string }) => {
     calls.annotationSend.push({ browserTabId: args.browserTabId })
     return { browserAnnotations: [] }
   }
 }))
 
-vi.mock('@/components/browser-pane/annotate/use-browser-page-grab-annotations', () => ({
+vi.mock('@/components/browser-pane/annotate/grab/use-browser-page-grab-annotations', () => ({
   useBrowserPageGrabAnnotations: (args: { browserTabId: string; toolTargetId: string }) => {
     calls.grabAnnotations.push({
       browserTabId: args.browserTabId,
@@ -46,18 +46,18 @@ vi.mock('@/components/browser-pane/annotate/use-browser-page-grab-annotations', 
   }
 }))
 
-vi.mock('@/components/browser-pane/annotate/use-browser-page-markup-capture', () => ({
+vi.mock('@/components/browser-pane/annotate/capture/use-browser-page-markup-capture', () => ({
   useBrowserPageMarkupCapture: () => ({ isActive: false })
 }))
 
-vi.mock('@/components/browser-pane/annotate/useGrabMode', () => ({
+vi.mock('@/components/browser-pane/annotate/grab/useGrabMode', () => ({
   useGrabMode: (toolTargetId: string) => {
     calls.grabMode.push(toolTargetId)
     return { state: 'idle' }
   }
 }))
 
-vi.mock('@/components/browser-pane/annotate/guest-annotation-viewport-bridge', () => ({
+vi.mock('@/components/browser-pane/annotate/viewport/guest-annotation-viewport-bridge', () => ({
   syncGuestAnnotationViewportBridge: (args: { toolTargetId: string; token: string }) => {
     calls.viewportBridge.push({ toolTargetId: args.toolTargetId, token: args.token })
   }

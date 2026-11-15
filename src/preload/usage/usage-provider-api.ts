@@ -1,7 +1,7 @@
 import type {
   BackendConnectionListener,
   BackendConnectionPurpose
-} from '../../shared/backend-service-contract'
+} from '../../shared/backend/backend-service-contract'
 import type { PreloadApi } from '../api-types'
 
 type UsageProviderApiKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage' | 'museUsage'

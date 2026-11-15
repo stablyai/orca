@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ConfirmedUnsavedDiscards } from './removed-workspace-unsaved-files'
 
-import type { NestedWorktreeRemovalApproval } from '../../../../../../shared/worktree/nested-removal'
+import type { NestedWorktreeRemovalApproval } from '../../../../../../shared/worktree/removal/nested-removal'
 
 export type RemoveWorktreeOptions = {
   /** Renderer-only admission check after hook trust, immediately before destructive dispatch. */

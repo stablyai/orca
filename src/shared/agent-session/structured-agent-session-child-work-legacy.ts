@@ -4,8 +4,8 @@
 // summary backgroundTasks, channel tasks/settledTasks and withoutChildViews together. New child facts must serve old readers until then.
 // structuredChildWorkLegacySubagents is in-app, not wire; retain it until AgentStatusEntry.subagents readers use children.
 
-import type { StructuredAgentId } from './lifecycle/agent-session-provider-handle'
-import { codexChildCommandDescription } from '../codex-child-command-description'
+import type { StructuredAgentId } from './lifecycle/provider-handles/agent-session-provider-handle'
+import { codexChildCommandDescription } from '../agent-hook-listener/providers/codex/codex-child-command-description'
 import {
   projectAgentChildWorkLegacyBackgroundTasks,
   projectAgentChildWorkLegacySubagents,

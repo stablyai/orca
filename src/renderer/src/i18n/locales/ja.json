@@ -183,6 +183,7 @@
         "fontFamily": "フォント",
         "fontFamilyDescription": "メッセージ、アクティビティ、入力欄に使用するフォント。",
         "inheritFont": "IDE と同じフォント",
+        "systemFont": "システムフォント",
         "fontPreviewLabel": "チャットフォントのプレビュー",
         "fontPreview": "この文章でチャットのフォントを確認できます。",
         "title": "チャット UI",
@@ -330,6 +331,8 @@
       }
     },
     "agents": {
+      "installedRegion": "インストール済みの Agent",
+      "availableRegion": "インストール可能な Agent",
       "codexTerminalServerIsolation": {
         "title": "各 Codex ターミナルを独自のサーバー上で実行する",
         "description": "Orca のステータスとタブを閉じる動作が正しく動作するようにします。 Codex の共有サーバーとその Agent の概要を使用するには、オフにします。新規ターミナルに適用されます。"
@@ -3206,6 +3209,7 @@
             "1e4b81d892": "ドスン",
             "86af8d938c": "ボン",
             "80f7cc95b3": "ツートーン",
+            "silent": "サイレント",
             "017abebfa6": "システムのデフォルト"
           }
         }
@@ -3402,8 +3406,7 @@
             "stop_command_description": "このターミナルを閉じると、その中で実行中のコマンドが停止します。",
             "dont_ask_again": "実行中のターミナルでは今後確認しない",
             "stop_agent_confirm": "Agent を停止",
-            "stop_command_confirm": "停止して閉じる",
-            "automatic_resume_warning": "このターミナルは自動的に再開されません。後で再開するには、ワークスペースをキャンセルしてスリープ状態にします。"
+            "stop_command_confirm": "停止して閉じる"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "操作を取り戻す",
@@ -3471,7 +3474,8 @@
             "ptyAllocationLimit": "システムはこれ以上 pty デバイスを割り当てられません。Orca または他のプログラムで使っていないターミナルをいくつか閉じてから、もう一度お試しください。",
             "terminalProcessLimit": "システムはこれ以上ターミナルプロセスを起動できません。使っていないターミナルを閉じるか、不要なプロセスを終了してから、もう一度お試しください。",
             "hostTerminalCap": "ホストではすでに Orca が許可する上限までターミナルが実行されています。不要になったターミナルを閉じてから、もう一度お試しください。",
-            "ownerHostMismatch": "このターミナルの保存済みセッションは別のホスト接続に属しているため、Orca はここで再接続できません。続行するには、新規ターミナルを開いてください。"
+            "ownerHostMismatch": "このターミナルの保存済みセッションは別のホスト接続に属しているため、Orca はここで再接続できません。続行するには、新規ターミナルを開いてください。",
+            "copyErrorDetails": "エラーの詳細をコピー"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash のコンソール上限に達しました",
@@ -4066,7 +4070,6 @@
             "c8857b40f7": "使用状況データを更新する",
             "75ded02687": "アカウントを管理…",
             "ff0fbe9311": "アクティブ",
-            "7657e3db9c": "Codex アカウント",
             "38b5647724": "Codex 使用ランタイム",
             "ba55303942": "Codex の詳細とアカウント切り替えを開く",
             "c35af53b73": "サインイン",
@@ -4074,7 +4077,6 @@
             "5c938d39ac": "週",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude アカウント",
             "11e2354daf": "Claude 使用ランタイム",
             "3dd7ddfae1": "Claude の詳細とアカウント切り替えを開く",
             "59c6e7b4e0": "表示されているセッションが再開されます。他のものは、ワークツリーがアクティブになると再起動します。",
@@ -4333,7 +4335,8 @@
             "compact": "コンパクト",
             "footerDetailAria": "使用量フッターの詳細",
             "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
-            "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要"
+            "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要",
+            "notChecked": "未確認"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}}を更新中",
@@ -4459,9 +4462,6 @@
             "ahead": "{{ahead}} コミット先行",
             "behind": "{{behind}} コミット遅延",
             "activeAgents_other": "稼働中の Agent {{count}} 件",
-            "completedAgents_other": "完了した Agent {{count}} 件",
-            "activeAndCompletedAgents": "{{active}}、{{completed}}",
-            "completedAgentsRetained_other": "完了した Agent {{count}} 件を保持",
             "noTrackedAgents": "追跡中の Agent は実行されていません",
             "noTerminalTabs": "ターミナルタブなし",
             "liveTerminalTabs_other": "ターミナルタブ {{count}} 個中 {{live}} 個が稼働中",
@@ -4507,12 +4507,17 @@
           "AccountSwitchList": {
             "used": "使用済み",
             "left": "残り",
-            "reset": "リセット"
+            "reset": "リセット",
+            "accounts": "アカウント"
           },
           "InlineUsageBars": {
             "now": "今",
             "resetsNow": "今リセット",
             "resetsIn": "{{duration}}後にリセット"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "残りの使用量を表示",
+            "showUsed": "使用済みの使用量を表示"
           }
         }
       },
@@ -7115,7 +7120,10 @@
           "b4e9d3f2a1c5": "{{value1}} から {{value0}} 件の Cookie を {{value2}} にインポートしました。",
           "c5a273a809": "{{value0}} から",
           "80bffd32bf": "Cookie のインポート",
-          "bd7d68f138": "ファイルから…"
+          "bd7d68f138": "ファイルから…",
+          "4054c458e1": "デフォルトの Cookie をクリア",
+          "3b662becd5": "デフォルトプロファイルの Cookie をクリアしますか？",
+          "f159cf5a3e": "このプロファイルのサイトからサインアウトされる場合があります。"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Cookie のインポートが適切でない場合、コンピュータ操作はローカルアプリを制御し、該当する場合は既存のログインブラウザセッションを使用することがあります。Orca Computer Use スキルをインストールします。 macOS ではプライバシー許可も必要です。",
@@ -7334,12 +7342,6 @@
             "idleMinutesSuffix": "分",
             "title": "Agent のスリープ",
             "toggleLabel": "Agent のスリープを切り替え"
-          },
-          "newWorktreeCardStyle": {
-            "copy": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
-            "description": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
-            "title": "新規カードスタイル",
-            "toggleLabel": "新規カードスタイルを切り替え"
           },
           "nativeChat": {
             "shellEnvNamesLabel": "シェルから渡す変数",
@@ -9496,11 +9498,9 @@
             "newWorktreeCardStyle": {
               "card": "カード",
               "cards": "カード",
-              "description": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
               "menu": "メニュー",
               "metadata": "メタデータ",
               "status": "状態",
-              "title": "新規カードスタイル",
               "worktree": "ワークツリー",
               "worktrees": "ワークツリー"
             },
@@ -10943,6 +10943,7 @@
           "e27c8d45bf": "環境変数により診断は無効になっています。"
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "別のショートカットを押すか、Esc でキャンセルします。",
           "eb72c52c28": "ショートカットを押すか、修飾キーを 2 回続けて押してください（例: {{value0}}）。Esc でキャンセルします。",
           "70b5d25583": "{{value0}} のショートカット",
           "287e07ddde": "修正済み",
@@ -12575,7 +12576,8 @@
           "catalog": "カタログ",
           "clear": "絞り込みをクリア",
           "themes": "テーマ",
-          "languages": "言語",
+          "codeLanguages": "プログラミング言語",
+          "translations": "翻訳",
           "icons": "アイコン",
           "commands": "コマンドとパネル",
           "catalogLabel": "カタログで絞り込む",
@@ -15871,10 +15873,9 @@
           "725868c75d": "フォルダーを参照する",
           "5e7f0d8a80": "フォルダーピッカーはリモートファイルには使用できません",
           "30099dca46": "フォルダー",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "ファイル名",
           "b6ed807cc6": "名前",
-          "e365f3c638": "markdown ファイルに名前を付け、フォルダーを選択します。",
+          "description": "ファイルに名前を付け、フォルダーを選択します。",
           "674b046582": "名前を付けて保存",
           "nameEmpty": "名前を空にすることはできません",
           "nameHasSeparators": "名前にパス区切り文字は使用できません",
@@ -16479,7 +16480,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome 拡張機能",
+                        "title": "Chrome 拡張機能をそのまま使おう",
+                        "everydayTitle": "いつものブラウザツールを Orca で",
                         "body": "Chrome ウェブストアからインストールし、アドレスバーの横に固定できます。",
                         "action": "ウェブストアを開く",
                         "secondaryAction": "了解"
@@ -16855,8 +16857,7 @@
           "historyUnavailable_other": "{{count}} 件のオートメーションで実行履歴を利用できません。集計には利用可能な履歴のみが含まれます。"
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "自動化のパンくずリスト",
-          "runDetails": "実行の詳細"
+          "ariaLabel": "自動化のパンくずリスト"
         },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "クロン式",
@@ -16889,8 +16890,6 @@
           "18763ded26": "スケジュール",
           "dbef8dc110": "この SSH 自動化は、Orca が SSH ホストにアクセスできる間のみ実行されます。再接続に対話型認証情報が必要な場合、またはホストが利用できない場合、実行はスキップされたとして記録されます。",
           "1f6026358e": "オートメーションの削除",
-          "d79452fb30": "自動化を再開する",
-          "91a4155e95": "自動化を一時停止する",
           "2fb1605beb": "今すぐ実行",
           "221916d93c": "自動化を作成して、Agent の作業のスケジュール設定を開始します。",
           "b09b2384fd": "一時停止中",
@@ -16967,18 +16966,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "まだ実行はありません。",
-          "9974a2b429": "状態",
           "13988187b3": "トークン",
           "86a248187e": "費用",
           "149c0b49c7": "ワークスペース",
           "8faaa00726": "実行",
-          "53fc5f07ab": "実行履歴",
-          "a00e38d1a3": "該当なし",
+          "a00e38d1a3": "—",
           "historyUnavailable": "このホストからは実行履歴を利用できません。これは、自動化が失敗したり、実行されなかったりすることを意味するものではありません。"
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "実行コンテキスト",
-          "33741dd973": "実行一覧に戻る"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "分",
@@ -17004,10 +16997,8 @@
           "5ad314118e": "セッション"
         },
         "AutomationsPage": {
-          "c3a28c9793": "実行を表示するオートメーションを選択します。",
           "295698292f": "再実行",
           "0e110a3469": "実行履歴",
-          "bb1b2cd31e": "概要",
           "25060635c6": "新規追加",
           "d207ab4c25": "テンプレートから始める",
           "15e0bfb13b": "削除",
@@ -17045,8 +17036,6 @@
           "8500baacb4": "外部ソース",
           "36f71740a7": "選択したワークスペース",
           "cd8397cc32": "実行ごとに新規ワークスペース",
-          "pendingAutomationMissing": "自動化は利用できなくなりました。",
-          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。",
           "paused": "一時停止中",
           "missingWorkspace": "ワークスペースがありません",
           "usageUnavailable": "使用量を利用できません",
@@ -17055,7 +17044,6 @@
           "latestSavedOutput": "最新の保存済み出力",
           "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
           "retryFullOutput": "再試行",
-          "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",
           "tableHost": "ホスト",
@@ -17065,7 +17053,6 @@
           "rowActions": "自動化の操作",
           "tableLastRun": "最後の実行",
           "ownerChanged": "この自動化によりホストが変更されました。更新して再試行してください。",
-          "runError": "エラー:",
           "deleteAutomationDescription": "<name/> とその実行履歴を削除します。過去の実行で作成されたワークスペースは削除されません。",
           "deleteExternalAutomationDescription": "<host/> 上の <provider/> から <name/> を削除します。",
           "runUsageSummaryTokens_other": "推定 {{cost}} · {{tokens}} トークン"
@@ -17361,12 +17348,11 @@
           "noWorkspaceLaunched": "ワークスペースは起動されていません"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "未起動",
-          "namedWorkspaceGone": "{{name}}（利用できなくなりました）"
+          "notLaunched": "未起動"
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} トークン · {{cost}}",
-          "costUnavailable": "不明"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH ホスト",
@@ -18331,7 +18317,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "次で開く（編集可能なフィールドにフォーカスがない場合）"
+            "openWith": "次で開く（Orca のテキストフィールドで入力中を除く）"
           }
         },
         "pluginInstallCount": {
@@ -19092,7 +19078,8 @@
         "safetyReviewApproved": "{{agent}} がこの操作を承認しました。詳細を表示。",
         "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
         "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
-        "forkedFrom": "分岐元"
+        "forkedFrom": "分岐元",
+        "forkedFromUnknown": "別のチャットから分岐"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} バイト"
@@ -19144,8 +19131,7 @@
         "stateMonitoringCount": "{{value0}} 監視",
         "stateUnverifiableCount": "{{value0}} は状態を取得できません",
         "stateWaitingCount": "{{value0}} 待機中",
-        "stateWorkingCount": "{{value0}} 実行中",
-        "showAgent": "会話に {{value0}} を表示"
+        "stateWorkingCount": "{{value0}} 実行中"
       },
       "railLabel": "あなたのメッセージ",
       "railImageMessage": "画像添付",
@@ -19250,7 +19236,7 @@
         "listLabel": "キュー内のメッセージ",
         "steer": "今すぐ送信",
         "send": "送信",
-        "steerHint": "モデルを中断せずに送信します",
+        "steerHint": "Agent の作業中に今すぐ送信します",
         "sendHint": "このメッセージを今すぐ送信します",
         "delete": "削除",
         "moreActions": "その他の操作",
@@ -19536,7 +19522,13 @@
         "unconfirmedDetail": "チャットが開いている可能性があります。再度分岐する前にセッション履歴を確認してください。",
         "failed": "{{agent}} はこのチャットを分岐できませんでした",
         "hostUnsupported": "このホストでは古いバージョンの Orca が実行されています。ホストの Orca を更新して再試行してください。",
-        "failedDetail": "チャットは変更されていません。もう一度お試しください。"
+        "failedDetail": "チャットは変更されていません。もう一度お試しください。",
+        "commandWorking": "{{agent}} の応答中は分岐できません。応答が終わったら、もう一度 /fork を実行してください。",
+        "mark": "分岐 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分岐: {{name}}",
+        "sourceTooltip": "{{name}} から分岐",
+        "unknownSourceTooltip": "別のチャットから分岐"
       },
       "cardKindHidden": {
         "description": "いつでも次の場所で変更できます：",
@@ -19652,7 +19644,7 @@
           "pinned": "ピン留め済み",
           "unread": "未読",
           "comment": "コメントあり",
-          "retainedDoneAgents": "完成した Agent のトランスクリプト",
+          "finishedAgents": "完成した Agent",
           "contextPresence": "タブ、ターミナル、コメントを開く",
           "completelyEmpty": "失うものは何も残っていない",
           "noWorkspaces": "ワークスペースが見つかりません。",
@@ -19770,7 +19762,7 @@
               "comment": "コメント",
               "prunable": "剪定可能",
               "locked": "ロックされています",
-              "retainedAgents": "完成した Agent"
+              "finishedAgents": "完成した Agent"
             }
           },
           "forceDeleteRisk_other": "現在 {{count}} 件のワークスペースにリスクがあり、強制削除が必要になる可能性があります",
@@ -19878,7 +19870,8 @@
       "TerminalContextMenu": {
         "copySessionId": "セッション ID をコピー",
         "copySessionIdSuccess": "セッション ID をコピーしました",
-        "copySessionIdError": "セッション ID のコピーに失敗しました"
+        "copySessionIdError": "セッション ID のコピーに失敗しました",
+        "copySessionIdUnavailable": "コピーできるセッション ID がありません"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "ワークスペース外のファイルを開くには、{{value0}} の Orca を更新してください"
@@ -22344,6 +22337,8 @@
       "tabCloseAll": "すべてのエディタータブを閉じる",
       "tabRename": "アクティブなタブの名前を変更",
       "tabReopenClosed": "閉じたタブを再度開く",
+      "tabMoveLeft": "アクティブなタブを左に移動",
+      "tabMoveRight": "アクティブなタブを右に移動",
       "tabNextSameType": "次のタブ（同じ種類）",
       "tabPreviousSameType": "前のタブ（同じ種類）",
       "tabNextAllTypes": "次のタブ（すべての種類）",
@@ -22354,6 +22349,7 @@
       "tabOpenQuickCommandsMenu": "クイックコマンドメニューの切り替え",
       "editorFind": "エディター内を検索",
       "editorReplace": "エディター内で置換",
+      "editorToggleChangesView": "変更点ビューの切り替え",
       "fileExplorerUndo": "ファイル操作を元に戻す",
       "fileExplorerRedo": "ファイル操作をやり直す",
       "fileExplorerCopyPath": "ファイルパスをコピー",
@@ -22371,6 +22367,7 @@
       "chatFind": "チャット内を検索",
       "terminalToggleNativeChat": "チャット UI とターミナルを切り替え",
       "terminalClosePane": "アクティブなペインを閉じる",
+      "terminalCopySessionId": "セッション ID をコピー",
       "terminalSplitRight": "ターミナルを右に分割",
       "terminalSplitDown": "ターミナルを下に分割",
       "terminalSwitchInputSource": "入力ソース / 言語を切り替え（ネイティブ）",

@@ -49,7 +49,6 @@ import {
   initializeBrowserExtensionSupport,
   switchBrowserExtensionSupport
 } from '../browser/extensions/browser-extension-startup'
-import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
@@ -88,7 +87,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   const canonicalUserDataPath = getCanonicalUserDataPath()
   preservePreviousHangDetection(canonicalUserDataPath)
-  installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
+  const hangWatchdog = installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
   // Install certificate decisions before any webview/headless window can issue TLS.
   app.on(
     'certificate-error',
@@ -147,7 +146,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   initializeBrowserClientHostId(profile.profileDirectory)
   // Before the profile store and the fence: a conversion that rewrites the profile here leaves
   // nothing to fence.
-  runPendingWslDriveUncConversions({
+  await runPendingWslDriveUncConversions({
     userDataPath: getAppEnvironment().getPath('userData'),
     profileUserDataPath: getProfileUserDataPath(),
     profileId: profile.profile.id
@@ -174,6 +173,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   const store = profileState.store
   state.store = store
+  hangWatchdog?.setMenuBarIconSetting(store.getSettings().showMenuBarIcon !== false)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {
     preloadSsh2()
@@ -271,6 +271,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
     }
     if ('showMenuBarIcon' in updates) {
+      hangWatchdog?.setMenuBarIconSetting(settings.showMenuBarIcon !== false)
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
@@ -322,6 +323,4 @@ export async function initializeReadyFoundation(): Promise<void> {
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
   }
-  // Why bounded: restored tabs should get content scripts, but a slow extension never blocks launch.
-  await whenBrowserExtensionSessionsLoaded(3_000)
 }

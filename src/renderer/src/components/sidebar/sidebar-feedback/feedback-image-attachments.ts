@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   INVALID_RASTER_IMAGE_PREVIEW_ERROR,
   RASTER_IMAGE_PREVIEW_TOO_LARGE_ERROR,
@@ -9,7 +9,7 @@ import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,
   MAX_FEEDBACK_IMAGE_TOTAL_BYTES
-} from '../../../../../shared/feedback-image-limits'
+} from '../../../../../shared/feedback/feedback-image-limits'
 import { shrinkFeedbackImage } from './feedback-image-shrink'
 
 export const SUPPORTED_FEEDBACK_IMAGE_TYPES = [

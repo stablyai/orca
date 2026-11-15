@@ -1,4 +1,7 @@
-import type { RuntimeRpcResponse, RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
+import type {
+  RuntimeRpcResponse,
+  RuntimeRpcSuccess
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
   WebRuntimeSubscriptionCallbacks,
   WebRuntimeTransportSubscriptionHandle

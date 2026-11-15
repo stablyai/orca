@@ -3,10 +3,10 @@
 import {
   isOrcaSessionId,
   parseOrcaSessionAddress
-} from '../../../../../shared/orca-session-address'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 
-import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { currentRunCoordinatorOrcaSessionId } from '../../db/runs/run-coordinator-orca-session'
 import type { StructuredPointerTarget } from '../structured-pointer/structured-mailbox-pointer-delivery'

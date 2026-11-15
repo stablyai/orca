@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/codex-auth-errors'
 import {
   HOST_ACCOUNT_SIGN_IN_FAILURE_COPY,

@@ -4,8 +4,8 @@ import {
   type ExecutionHostId
 } from '../../../../src/shared/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../src/shared/folder-workspaces/folder-workspace-worktree'
-import { getFolderWorkspaceHostId } from '../../../../src/shared/sidebar-list/folder-workspace-host-id'
-import type { HostSectionRow } from '../../../../src/shared/sidebar-list/host-section-rows'
+import { getFolderWorkspaceHostId } from '../../../../src/shared/sidebar-list/hosts/folder-workspace-host-id'
+import type { HostSectionRow } from '../../../../src/shared/sidebar-list/hosts/host-section-rows'
 import type { GroupHeaderRow } from '../../../../src/shared/sidebar-list/row-types'
 import { PR_GROUP_LABELS } from '../../../../src/shared/workspace-view/workspace-pr-groups'
 import type { Worktree as HostWorktree } from '../../../../src/shared/worktree/types'
@@ -14,18 +14,21 @@ import type {
   Section,
   Worktree,
   WorktreeHostContextView
-} from '../../worktree/workspace-list-types'
+} from '../../worktree/workspace-list/workspace-list-types'
 import {
   isLastVisitedWorktreeRow,
   type LastVisitedWorktreeOnHost
-} from '../../worktree/host-list-highlight'
+} from '../../worktree/row-presentation/host-list-highlight'
 import {
   resolveWorktreeHostId,
   type WorktreeHostContextOf
-} from '../../worktree/worktree-host-context-labels'
-import '../../worktree/workspace-list-sections'
-import { filterWorktrees } from '../../worktree/workspace-row-filtering'
-import { rowFiltersForView, type MobileViewState } from '../../worktree/workspace-view-settings'
+} from '../../worktree/row-presentation/worktree-host-context-labels'
+import '../../worktree/workspace-list/workspace-list-sections'
+import { filterWorktrees } from '../../worktree/workspace-list/workspace-row-filtering'
+import {
+  rowFiltersForView,
+  type MobileViewState
+} from '../../worktree/workspace-list/workspace-view-settings'
 import type { HiddenProjects } from '../../../../src/shared/hidden-projects'
 
 export type HostFeedListSources = {

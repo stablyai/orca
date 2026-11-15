@@ -1,4 +1,4 @@
-import type { BrowserHistoryEntry } from '../../../../shared/browser-workspace-types'
+import type { BrowserHistoryEntry } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { TabEntryActionClassification, TabEntryOption } from './tab-create-entry-action'
 import type { OpenTabSearchResult } from './open-tab-search'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'

@@ -13,7 +13,10 @@ import {
 import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BundledSkillInstallResult, BundledSkillPlan } from '../../shared/bundled-skill-plan'
+import type {
+  BundledSkillInstallResult,
+  BundledSkillPlan
+} from '../../shared/skills/bundled/bundled-skill-plan'
 
 const NAME = 'orca-cli'
 const OLD_TEXT = `---\nname: ${NAME}\ndescription: Old\n---\n\nOld body\n`

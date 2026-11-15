@@ -1,3 +1,4 @@
+import type { AgentSessionForkNaming } from './agent-session-fork-name'
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
 import type { AgentSessionUsageLimitContinue } from './agent-session-usage-limit-continue-wire'
@@ -6,7 +7,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
-import type { AgentSessionRewindReason } from './lifecycle/agent-session-rewind'
+import type { AgentSessionRewindReason } from './lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
 import type {
@@ -28,6 +29,7 @@ import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outc
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
+import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
 export type AgentSessionTurnActivity = {
@@ -213,11 +215,6 @@ export type AgentSessionStatusSummary = {
   model?: string
   /** Legacy host execution report; clients use the saved model for option invalidation. */
   reportedModel?: string
-  /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
-  permissionMode?: string
-  /** Permission choice used to start the currently fenced provider child. */
-  launchPermissionMode?: string
-  runtimePermission?: { fence: number; mode: string | null } | null
   /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
    *  client re-reads options. Absent from older hosts. */
   effort?: string
@@ -242,6 +239,11 @@ export type AgentSessionStatusSummary = {
   providerSession?: AgentProviderSessionMetadata
   /** Retain the saved conversation name beyond tab closure; absent while unnamed or on older hosts. */
   conversationName?: string
+  /** `'user'` once the user named the chat. Absent from older hosts. */
+  conversationNameSource?: 'user'
+  /** The chat's source, null when not a fork; current hosts always send it, making the naming
+   *  fields authoritative even while unnamed. Older hosts omit it. */
+  forkedFrom?: AgentSessionForkNaming | null
   /** Why the host could not name this chat, kept in memory only while the chat still has the
    *  name the failed run would have replaced. Absent from older hosts; older clients ignore it. */
   namingError?: AgentSessionNamingError
@@ -257,7 +259,7 @@ export type AgentSessionStatusSummary = {
   updatedAt: number
   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
   statusStartedAt?: number
-}
+} & AgentSessionStatusPermissionFields
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = {
@@ -271,7 +273,7 @@ export type AgentSessionConversationName = {
   sessionId: string
   conversationName: string | null
   namingError?: AgentSessionNamingError
-}
+} & Pick<AgentSessionStatusSummary, 'conversationNameSource' | 'forkedFrom'>
 
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
 export type AgentSessionStatusEvent =

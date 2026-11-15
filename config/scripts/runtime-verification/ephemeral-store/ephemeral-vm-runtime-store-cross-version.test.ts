@@ -85,8 +85,17 @@ test.skipIf(!targetRoot || !operation)(`STA-4274 ${operation ?? 'disabled'}`, as
     throw new Error('STA_4274_TARGET_ROOT and STA_4274_OPERATION are required')
   }
   const userDataPath = process.env.STA_4274_USER_DATA_PATH ?? makeOwnedDir('sta-4274-')
+  const explicitStoreSource = process.env.STA_4274_STORE_SOURCE
+  const currentStorePath = resolve(
+    targetRoot,
+    'src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store.ts'
+  )
   const moduleUrl = pathToFileURL(
-    resolve(targetRoot, 'src/shared/ephemeral-vm-runtime-store.ts')
+    explicitStoreSource
+      ? resolve(targetRoot, explicitStoreSource)
+      : existsSync(currentStorePath)
+        ? currentStorePath
+        : resolve(targetRoot, 'src/shared/ephemeral-vm-runtime-store.ts')
   ).href
   const store = await import(/* @vite-ignore */ moduleUrl)
 

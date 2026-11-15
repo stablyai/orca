@@ -1,7 +1,8 @@
-import type { WorktreeOccurrence } from '../worktree-occurrence-plan'
+import type { WorktreeLineageSource } from './worktree-lineage-range'
+import type { WorktreeOccurrence } from './lineage/worktree-occurrence-plan'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
 import type { DetectedWorktree, WorkspaceStatus, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
 import type { PRGroupKey } from '../workspace-view/workspace-pr-groups'
@@ -65,6 +66,8 @@ export type WorktreeRow = {
   lineageChildWorktreeIds?: readonly string[]
   lineageGroupKey?: string
   lineageCollapsed?: boolean
+  /** Every workspace nested under this one, collapsed or not; host-qualified. */
+  lineageDescendantIdentities?: WorktreeLineageSource
   hostContextLabel?: string
   showProjectName?: boolean
 }
@@ -113,6 +116,7 @@ export type PendingCreationRow = {
 }
 
 export type FolderWorkspaceRow = {
+  lineageDescendantIdentities?: WorktreeLineageSource
   type: 'folder-workspace'
   key: string
   folderWorkspace: FolderWorkspace

@@ -1,21 +1,21 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch/dispatch'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { parseOrcaYaml } from '../../shared/orca-yaml'
 import {
   getEphemeralVmRecipeResultProjectRoot,
   type EphemeralVmRecipeDoctorCheck,
   type EphemeralVmRecipeDoctorResult
-} from '../../shared/ephemeral-vm-recipes'
-import { getEphemeralVmRecipeResultWarnings } from '../../shared/ephemeral-vm-recipe-diagnostics'
-import { redactEphemeralVmRecipeDiagnosticText } from '../../shared/ephemeral-vm-recipe-diagnostic-redaction'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import { getEphemeralVmRecipeResultWarnings } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'
+import { redactEphemeralVmRecipeDiagnosticText } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostic-redaction'
 // This module uses Node fs/path; exporting it through the shared barrel would break browser bundles.
-import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'
+import { doctorEphemeralVmRecipe } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-doctor'
 import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeStart
-} from '../../shared/ephemeral-vm-recipe-runner'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-runner'
 import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 
 export const VM_HANDLERS: Record<string, CommandHandler> = {

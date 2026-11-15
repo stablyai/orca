@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { RuntimeAutomationController } from './runtime-automation-controller'
 
 describe('creating an automation for a plugin', () => {

@@ -6,7 +6,7 @@
  */
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace/status/workspace-statuses'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 

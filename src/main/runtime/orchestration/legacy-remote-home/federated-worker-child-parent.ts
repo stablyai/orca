@@ -4,7 +4,7 @@ import { OrchestrationError } from '../orchestration-error'
 import { readCallerStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
 import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import type { CrossStoreParentRef } from '../../../../shared/worktree/lineage-types'
-import { supportsCrossStoreLineage } from '../../../../shared/worktree-runtime-capabilities'
+import { supportsCrossStoreLineage } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { resolveDispatchCallerWorktreeId } from '../../rpc/methods/orchestration/orchestration-caller-workspace'
 
 /**

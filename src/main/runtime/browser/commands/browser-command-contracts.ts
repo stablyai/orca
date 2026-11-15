@@ -22,6 +22,10 @@ export type ResolvedBrowserCommandTarget = {
   browserPageId?: string
 }
 
+export type BrowserAnswerAdmission = (
+  target: ResolvedBrowserCommandTarget
+) => ResolvedBrowserCommandTarget
+
 export type ResolvedBrowserPageWebContents = {
   browserPageId: string
   webContents: Electron.WebContents
@@ -59,7 +63,7 @@ export type RuntimeBrowserCommandHost = {
     worktreeId: string | undefined,
     browserPageId: string,
     options?: BrowserSessionTabSelectionOptions
-  ): void
+  ): Promise<void>
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
   /** A page's unsent notes; see readSavedBrowserPageAnnotations. */
   readBrowserPageAnnotations?(browserPageId: string): BrowserPageAnnotation[]

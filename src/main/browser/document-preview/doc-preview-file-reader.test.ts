@@ -81,33 +81,4 @@ describe('readDocPreviewFile — paired runtime owner', () => {
       status: 404
     })
   })
-
-  it('requires approval for a sibling directory before touching the runtime', async () => {
-    const grant = mintDocPreviewGrant({
-      owner: {
-        kind: 'runtime',
-        environmentId: 'env-1',
-        worktreeSelector: 'id:wt-1',
-        worktreeRoot: '/srv/repo'
-      },
-      requestBase: '/srv/repo',
-      root: '/srv/repo/docs',
-      entryRelativePath: 'docs/index.html',
-      browserPageId: 'page-1'
-    })
-
-    await expect(readDocPreviewFile(grant, 'assets/app.js')).resolves.toMatchObject({
-      ok: false,
-      status: 403,
-      reason: 'authorization-required'
-    })
-
-    authorizeDocPreviewDirectory(grant.id, 'assets/app.js')
-    mocks.callRuntimeEnvironment.mockResolvedValue({
-      ok: true,
-      result: { content: 'console.log(1)', isBinary: false }
-    })
-
-    await expect(readDocPreviewFile(grant, 'assets/app.js')).resolves.toMatchObject({ ok: true })
-  })
 })

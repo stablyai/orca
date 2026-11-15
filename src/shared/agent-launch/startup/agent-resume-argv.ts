@@ -2,7 +2,7 @@ import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent
 } from '../../agent-session/lifecycle/agent-session-resume'
-import { ompTranscriptProfileArgs } from '../../omp-profile'
+import { ompTranscriptProfileArgs } from './omp-profile'
 
 /** Keep per-agent resume argv separate from session metadata; type-only imports avoid runtime cycles. */
 export function getAgentResumeArgv(

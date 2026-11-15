@@ -9,13 +9,13 @@ import { structuredAgentSessionBlocksTooLarge } from '../../../../../src/shared/
 import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../composer/delivery/mobile-native-chat-send'
 import {
   requestStructuredAgentSessionMutation,
   timeoutForDeadline
 } from './mobile-structured-agent-session-rpc'
-import { mobileStructuredSendDelivery } from '../composer/mobile-structured-send-delivery'
-import type { MobileNativeChatSendErrorReporter } from '../composer/use-mobile-native-chat-send-error'
+import { mobileStructuredSendDelivery } from '../composer/delivery/mobile-structured-send-delivery'
+import type { MobileNativeChatSendErrorReporter } from '../composer/delivery/use-mobile-native-chat-send-error'
 
 export async function sendMobileStructuredAgentSessionMessage(input: {
   client: RpcClient

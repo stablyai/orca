@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { autoUpdateBundledSkillsOnTarget } from './runtime-bundled-skills-client'
 import { clearRuntimeCompatibilityCache } from '../../rpc/compatibility/runtime-compatibility-cache'
 import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY } from '../../../../../shared/skill-install-capability'
+import { BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY } from '../../../../../shared/skills/capabilities/skill-install-capability'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION

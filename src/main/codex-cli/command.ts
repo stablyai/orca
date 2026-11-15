@@ -1,5 +1,5 @@
-import { resolveCliCommandAsync } from '../../shared/node-cli-command-async-resolution'
-import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
 import { WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
 
@@ -9,7 +9,7 @@ export {
   resolveCliCommands,
   resolveExecutableCommand,
   withCliRuntimeOnPath
-} from '../../shared/node-cli-command-resolution'
+} from '../../shared/shell/command-resolution/node-cli-command-resolution'
 export { WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
 
 type ResolveCommandOptions = NonNullable<Parameters<typeof resolveCliCommand>[1]>

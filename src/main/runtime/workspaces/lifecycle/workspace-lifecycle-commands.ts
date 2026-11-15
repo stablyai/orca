@@ -1,8 +1,8 @@
-import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/nested-removal'
+import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/removal/nested-removal'
 import type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -12,7 +12,7 @@ import { splitWorktreeId } from '../../../../shared/worktree/id'
 import {
   isProvenLivePtyRemovalError,
   isUnstoppedPtyRemovalError
-} from '../../../../shared/worktree/removal'
+} from '../../../../shared/worktree/removal/removal'
 import {
   getExplicitWorktreeIdSelector,
   getRuntimeWorktreeRemovalOptionsKey

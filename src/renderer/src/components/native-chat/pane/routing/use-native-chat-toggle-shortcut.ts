@@ -1,6 +1,6 @@
 import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { matchesRecentTabSwitcherChord } from '../../../../../../shared/window-shortcut-policy'
+import { matchesRecentTabSwitcherChord } from '../../../../../../shared/keybindings/window-shortcut-policy'
 import {
   globalShortcutTargetYields,
   findPluginCommandForKeybinding
@@ -9,17 +9,17 @@ import { getKeybindingContext } from '../../../terminal-workspace-model'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../../../../shared/modifier-double-tap-detector'
+} from '../../../../../../shared/keybindings/modifier-double-tap-detector'
 import { useAppStore } from '../../../../store/index'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveNativeChatTabAgentEvidence } from '../../../tab-bar/native-chat-tab-agent-evidence'
 import { canToggleNativeChat } from '../../../../../../shared/native-chat/native-chat-availability'
-import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/messages/native-chat-transcript-readability'
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { resolveKeyboardWorkspaceId } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { resolveKeyboardWorkspaceId } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId

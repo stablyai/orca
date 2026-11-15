@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import '../../../../shared/workspace-layout/terminal-surface-id'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   ENV,
   LEAF_ID,
