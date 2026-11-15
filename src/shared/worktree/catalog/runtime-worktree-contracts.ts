@@ -1,4 +1,4 @@
-import type { DictationTerm } from '../../dictation-dictionary'
+import type { DictationTerm } from '../../speech/dictation/dictation-dictionary'
 import type { SmartTier } from '../../sidebar-list/sorting/sort-stamps'
 import type {
   AgentStatusState,
@@ -15,7 +15,7 @@ import type {
 import type { AgentChildWorkView } from '../../agent-status/child-work/agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from '../../agent-status/contracts/agent-status-subagent-snapshot'
 import type { RuntimeTerminalInteractiveWait } from '../../terminal/runtime/runtime-terminal-contracts'
-import type { BaseRefSearchResult, Repo } from '../../repo-types'
+import type { BaseRefSearchResult, Repo } from '../../repository/repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from '../create-types'
 import type {
   CrossStoreWorkspaceLineage,
@@ -26,8 +26,8 @@ import type {
 } from '../lineage-types'
 import type { RuntimeListingHostScope } from '../../execution-host/runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from '../types'
-import type { WorkspaceStatusWarning } from '../../workspace-status-warning'
-import type { WorktreeStatus } from '../../worktree-status-rollup'
+import type { WorkspaceStatusWarning } from '../../workspace/status/workspace-status-warning'
+import type { WorktreeStatus } from '../row-display/worktree-status-rollup'
 
 export type RuntimeWorktreeSetResult = {
   worktree: RuntimeWorktreeRecord

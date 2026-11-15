@@ -31,7 +31,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight/preflight-params'
 
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
 import type {
   DirectWorkItemLaunchInputs,

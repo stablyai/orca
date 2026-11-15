@@ -1009,6 +1009,20 @@
         "title": "Passwords",
         "description": "Saved logins for Orca’s browser: add, import, edit and delete them.",
         "httpSuffix": " · http"
+      },
+      "memorySaver": {
+        "unviewedForLabel": "Unviewed for",
+        "unviewedForDescription": "How long a tab goes unviewed before it's freed.",
+        "hoursSuffix": "hours",
+        "title": "Memory Saver",
+        "description": "Frees memory from tabs you haven't viewed. They reload when you open them.",
+        "searchKeywords": {
+          "memory": "memory",
+          "tabs": "tabs",
+          "idle": "idle",
+          "sleep": "sleep",
+          "performance": "performance"
+        }
       }
     },
     "agents": {
@@ -21995,6 +22009,7 @@
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
         "copySessionIdError": "Unable to copy session ID",
+        "copySessionIdUnavailable": "No session ID to copy",
         "copyOrcaSessionId": "Copy Orca Session ID",
         "orcaSessionIdTooltip": "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca.",
         "orcaSessionIdCopied": "Orca session ID copied",
@@ -24710,6 +24725,7 @@
       "tabOpenQuickCommandsMenu": "Toggle Quick Commands menu",
       "editorFind": "Find in editor",
       "editorReplace": "Replace in editor",
+      "editorToggleChangesView": "Toggle changes view",
       "fileExplorerUndo": "Undo file operation",
       "fileExplorerRedo": "Redo file operation",
       "fileExplorerCopyPath": "Copy file path",
@@ -24727,6 +24743,7 @@
       "chatFind": "Find in chat",
       "terminalToggleNativeChat": "Switch between Chat UI and terminal",
       "terminalClosePane": "Close active pane",
+      "terminalCopySessionId": "Copy Session ID",
       "terminalSplitRight": "Split terminal right",
       "terminalSplitDown": "Split terminal down",
       "terminalSwitchInputSource": "Switch input source / language (native)",

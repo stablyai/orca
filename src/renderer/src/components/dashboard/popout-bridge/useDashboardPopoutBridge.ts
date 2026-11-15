@@ -6,7 +6,7 @@ import {
   getStructuredChatTabNames
 } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { revealDashboardAgent } from '../navigation/reveal-dashboard-agent'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import {
   buildDashboardSnapshot,
   type DashboardSnapshotState

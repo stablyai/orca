@@ -1,7 +1,7 @@
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { sessionFieldsRemovedWithWorkspace } from '../../orca-profiles/project-transfer/profile-project-session-field-disposition'
 import { markdownFileIdCandidates } from '../../orca-profiles/project-transfer/profile-session-markdown-transfer'
 

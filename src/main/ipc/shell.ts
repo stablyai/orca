@@ -10,11 +10,11 @@ import type {
   ShellOpenLocalPathResult
 } from '../../shared/shell/opening/shell-open-types'
 import type { RuntimeFileOpenPosition } from '../../shared/file-access/runtime-editor-file-open'
-import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
+import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repository/appearance/repo-icon'
 import {
   repoIconPickFailure,
   type RepoIconPickResult
-} from '../../shared/repo-icon-pick-failure-copy'
+} from '../../shared/repository/appearance/repo-icon-pick-failure-copy'
 import type { Store } from '../persistence/loading-store/store'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,

@@ -5,8 +5,11 @@ import type * as NodeOs from 'node:os'
 import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
-import { resolveCliCommand, resolveCliCommands } from '../../node-cli-command-resolution'
-import { buildPosixFallbackPathPrelude } from '../../posix-version-manager-bin-dirs'
+import {
+  resolveCliCommand,
+  resolveCliCommands
+} from '../../shell/command-resolution/node-cli-command-resolution'
+import { buildPosixFallbackPathPrelude } from '../../shell/command-resolution/posix-version-manager-bin-dirs'
 
 /** Use synthetic fs for absolute install prefixes that cannot fit a temp home. Build every path with host join so Windows fixtures match production candidates. */
 const fsFixture = vi.hoisted(() => ({ executables: new Set<string>() }))

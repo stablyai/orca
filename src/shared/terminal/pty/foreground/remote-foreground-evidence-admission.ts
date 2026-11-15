@@ -1,7 +1,7 @@
 import {
   isRemoteForegroundEvidence,
   type RemoteForegroundEvidence
-} from '../../../foreground-process-evidence'
+} from './foreground-process-evidence'
 
 /** Maximum host-observation age accepted by a renderer foreground sample. */
 export const REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS = 2_000

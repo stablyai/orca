@@ -1,4 +1,4 @@
-import type { BaseRefSearchResult } from '../../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../../shared/repository/repo-types'
 import { legacyBaseRefSearchResult } from '../../../../../shared/base-ref-search-result'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { ipcOrRuntimeTargetForHostId } from '../../rpc/targets/runtime-client-target'

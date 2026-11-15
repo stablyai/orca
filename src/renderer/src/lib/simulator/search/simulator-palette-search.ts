@@ -5,7 +5,7 @@ import {
   resolvePaletteRepoForWorktree
 } from '../../workspace/search/palette-repo-resolution'
 import { getActiveSimulatorTabId } from './simulator-palette-active-tab'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import { compareBaseSensitivityLocaleText } from '../../../../../shared/locale-text-collators'
 import {
   comparePaletteTabResults,

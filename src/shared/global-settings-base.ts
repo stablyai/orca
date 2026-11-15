@@ -3,8 +3,9 @@ import type { EmulatorOpeningSettings } from './emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './agent-hook-listener/providers/claude/view/claude-agent-view'
 import type { WorktreeCardDisplaySettings } from './worktree/card-display-settings-types'
-import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
-import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'
+import type { BrowserLinkOpeningSettings } from './browser/navigation/browser-link-opening-settings'
+import type { BrowserPasswordsGlobalSettings } from './browser/passwords/browser-passwords-types'
+import type { BrowserMemorySaverGlobalSettings } from './browser/guest-lifecycle/browser-memory-saver'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
@@ -15,7 +16,7 @@ import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/p
 import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update-policy'
 import type { PluginSystemSettings } from './plugins/plugin-system-settings'
 import type { TerminalScrollSettings } from './terminal/appearance/terminal-scroll-settings'
-import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
+import type { WorktreeDeletionPreferences } from './worktree/removal/worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from './agent-launch/permissions/tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/terminal-color-overrides'
 import type { WindowMaterialSettings } from './window-material'
@@ -51,6 +52,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   WindowMaterialSettings &
   EditorSaveSettings &
   BrowserPasswordsGlobalSettings &
+  BrowserMemorySaverGlobalSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &

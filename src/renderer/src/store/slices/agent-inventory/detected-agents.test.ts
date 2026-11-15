@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 import { createDetectedAgentsSlice } from './create-detected-agents-slice'
 import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'

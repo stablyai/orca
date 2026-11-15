@@ -10,7 +10,7 @@ import {
 } from './runtime-archive-download'
 import { findOrcadCachePath } from './orcad-cache-path'
 import { orcadNodeRuntimeExecutable } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
-import { nodeDistMirrorUrl } from '../../shared/node-dist-mirror'
+import { nodeDistMirrorUrl } from '../../shared/node-runtime/node-dist-mirror'
 import { configuredNodeDistMirror } from './node-dist-mirror-setting'
 import {
   NODE_RUNTIME_PIN,
@@ -18,7 +18,7 @@ import {
   nodeRuntimeExecutablePath,
   nodeRuntimeReleaseUrl,
   type NodeRuntimeTarget
-} from '../../shared/node-runtime-pin'
+} from '../../shared/node-runtime/node-runtime-pin'
 import { errorMessage } from '../../shared/error-message'
 
 export type PinnedRuntimeMaterializeOptions = {

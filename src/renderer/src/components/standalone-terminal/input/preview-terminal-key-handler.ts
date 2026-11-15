@@ -208,6 +208,12 @@ export function installPreviewTerminalKeyHandler(args: {
       case 'closeActivePane':
         args.requestClose?.()
         return consumeEvent(event)
+      // Why: also claim the release so a kitty REPORT_EVENT_TYPES agent never receives half of a user-chosen chord.
+      case 'copySessionId':
+        if (!event.repeat) {
+          nativeOnlyShortcutTracker.armKeyDown(event)
+        }
+        return consumeEvent(event)
       // Swallow pane-only actions rather than encoding shell bytes such as Ctrl+D; list each so new actions require explicit classification.
       case 'clearActivePane':
       case 'clearPaneTitle':

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { resolveCliCommands } from '../../node-cli-command-resolution'
+import { resolveCliCommands } from '../../shell/command-resolution/node-cli-command-resolution'
 
 // Why: detection may precede shell-PATH hydration, but the fallback stays bounded.
 export function detectCommandsInInstallDirs(

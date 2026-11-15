@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import * as z from 'zod'
-import type { ProjectGroup } from '../../../../src/shared/project-group-types'
+import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import {
   ProjectSectionCatalogSchema,
   type ServedProjectSections
-} from '../../../../src/shared/project-section-catalog-schema'
+} from '../../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
 import { defineHostQuery, useHostQuery } from '../../query/host-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

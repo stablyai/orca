@@ -120,6 +120,7 @@ export type MobileSessionWorktreeInputs = {
   worktreeInstanceId: string | undefined
   terminalTabs: AppState['tabsByWorktree'][string]
   browserWorkspaces: AppState['browserTabsByWorktree'][string]
+  browserRuntimeEnvironmentId: string | null
   unifiedTabs: AppState['unifiedTabsByWorktree'][string]
   groups: AppState['groupsByWorktree'][string]
   tabBarOrder: AppState['tabBarOrderByWorktree'][string] | undefined

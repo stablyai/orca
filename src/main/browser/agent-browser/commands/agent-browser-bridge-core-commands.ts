@@ -5,8 +5,8 @@ import type {
   BrowserGotoResult,
   BrowserFillResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import { BrowserError } from '../../browser-error'
 import { ORCA_TAB_SESSION_PREFIX } from '../session-lifecycle/agent-browser-session-name'
 import { FILL_ELEMENT_FUNCTION } from '../../cdp/input/browser-element-functions'

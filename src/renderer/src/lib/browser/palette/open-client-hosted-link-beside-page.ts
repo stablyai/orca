@@ -3,7 +3,7 @@ import { createWebRuntimeSessionBrowserTabOnHost } from '@/runtime/browser/creat
 import { useAppStore } from '@/store/index'
 import { isClientHostedBrowserPageHandle } from '@/store/slices/browser/hosts/browser-host-state'
 import { findPage, findWorkspace } from '@/store/slices/browser/pages/browser-page-records'
-import { redactKagiSessionToken } from '../../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
 import { resolveBrowserSourceUnifiedTab } from '../workspace/browser-workspace-source-resolution'
 import { openUrlInTabBesideBrowserPage } from './browser-page-tab-opening'
 

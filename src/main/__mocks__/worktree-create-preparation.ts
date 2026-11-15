@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import type * as WorktreeLogic from '../ipc/worktree-logic'
 import type { Store } from '../persistence/loading-store/store'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-refs/base-ref'
 
 const mocks: {

@@ -5,6 +5,22 @@ const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'terminal.expandPane',
+    title: 'Expand / collapse pane',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
+    defaultBindings: platformBindings(['Mod+Shift+Enter'])
+  },
+  {
+    id: 'terminal.setTitle',
+    title: 'Set Title…',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.projects.toggleCollapse',
     title: 'Collapse / Expand All Projects',
     group: 'Global',
@@ -69,6 +85,14 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     group: 'Terminal Panes',
     scope: 'terminal',
     searchKeywords: ['shortcut', 'terminal', 'pane', 'clear title', 'remove title', 'title'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.copySessionId',
+    title: 'Copy Session ID',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'agent', 'copy', 'session id', 'fork'],
     defaultBindings: platformBindings([])
   },
   {

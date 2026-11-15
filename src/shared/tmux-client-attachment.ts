@@ -1,6 +1,6 @@
 import { CLAUDE_AGENT_TEAMS_TMUX_DIR } from './agent-launch/startup/claude-agent-teams-tmux-compat'
-import { hasControllingTty } from './posix-controlling-terminal'
-import type { ProcessTableRow } from './process-table-snapshot'
+import { hasControllingTty } from './terminal/pty/native-process/posix-controlling-terminal'
+import type { ProcessTableRow } from './process-observation/tables/process-table-snapshot'
 
 export type TmuxHookPane = { socket: string; pane: string }
 export type TmuxAttachedClient = { pid: number; pane: string }

@@ -17,9 +17,9 @@ import {
 } from '../lib/workspace/ownership/repo-owner-index'
 import '../lib/workspace/ownership/workspace-catalog-owner-index'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

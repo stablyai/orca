@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'

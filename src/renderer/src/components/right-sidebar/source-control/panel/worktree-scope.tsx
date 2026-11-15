@@ -4,7 +4,7 @@ import { AppStateViewContext, useAppStateValue } from '@/store/retained-views/ap
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { AttachedWorktreeOwner } from '../../folder-workspaces/folder-workspace-attached-worktrees'
 
 export type SourceControlScope = AttachedWorktreeOwner & {

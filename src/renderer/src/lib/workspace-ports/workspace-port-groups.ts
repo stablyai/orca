@@ -1,5 +1,8 @@
 import { compareDisplayName } from '../workspace/display/worktree-display-name-order'
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+import type {
+  WorkspacePort,
+  WorkspacePortScanResult
+} from '../../../../shared/workspace/ports/workspace-ports'
 
 export type WorkspacePortGroup = {
   worktreeId: string

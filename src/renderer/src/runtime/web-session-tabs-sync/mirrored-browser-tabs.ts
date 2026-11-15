@@ -6,7 +6,10 @@ import {
 import { hasBrowserPageInitializationAction } from '../../components/browser-pane/navigate/browser-page-deferred-navigation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type {
   WebSessionTabsSyncState,

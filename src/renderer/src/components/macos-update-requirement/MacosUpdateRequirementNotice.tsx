@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react'
-import type { MacosUpgradeSupport } from '../../../../shared/macos-upgrade-support'
+import type { MacosUpgradeSupport } from '../../../../shared/updater/requirements/macos-upgrade-support'
 import type { UnsupportedSystemUpdate } from '../../../../shared/update-status-types'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useAppStore } from '@/store'

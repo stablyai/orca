@@ -6,7 +6,7 @@ import type {
   GitHubPRRefreshReason,
   PRSnapshotReply
 } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getPRForBranch } from '../../github/client/lookup/get-pr-for-branch'
 import type { GitHubPRBranchLookupOptions } from '../../github/client/lookup/pull-request-lookup-data'

@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'

@@ -1,7 +1,7 @@
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
   WorkspaceLineage,
   WorktreeLineage

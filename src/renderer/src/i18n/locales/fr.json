@@ -20742,7 +20742,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copier l'ID de session",
         "copySessionIdSuccess": "ID de session copié",
-        "copySessionIdError": "Impossible de copier l'ID de session"
+        "copySessionIdError": "Impossible de copier l'ID de session",
+        "copySessionIdUnavailable": "Aucun ID de session à copier"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Mettez à jour Orca sur {{value0}} pour ouvrir des fichiers en dehors de ses espaces de travail"
@@ -23036,6 +23037,7 @@
       "tabOpenQuickCommandsMenu": "Afficher/masquer le menu des commandes rapides",
       "editorFind": "Rechercher dans l'éditeur",
       "editorReplace": "Remplacer dans l'éditeur",
+      "editorToggleChangesView": "Activer/désactiver la vue des modifications",
       "fileExplorerUndo": "Annuler l'opération sur le fichier",
       "fileExplorerRedo": "Rétablir l'opération sur le fichier",
       "fileExplorerCopyPath": "Copier le chemin du fichier",
@@ -23053,6 +23055,7 @@
       "chatFind": "Rechercher dans le chat",
       "terminalToggleNativeChat": "Basculer entre l'interface de chat et le terminal",
       "terminalClosePane": "Fermer le volet actif",
+      "terminalCopySessionId": "Copier l'ID de session",
       "terminalSplitRight": "Scinder le terminal vers la droite",
       "terminalSplitDown": "Scinder le terminal vers le bas",
       "terminalSwitchInputSource": "Changer de source de saisie / langue (natif)",

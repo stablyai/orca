@@ -18,9 +18,9 @@ import type {
   CreatedWorktreeResult
 } from './create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../../shared/worktree/catalog/catalog-version'
-import type { WorkspaceKey } from '../../../../../shared/workspace-scope'
+import type { WorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace/creation/workspace-source'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent

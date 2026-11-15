@@ -12,7 +12,7 @@ import { getMobileSessionSnapshotTabIdentityKeys } from '../session-lifecycle/pr
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { isHeadlessBuiltPublication } from './mobile-session-snapshot-equality'
 import { sameRuntimeBrowserPlacement } from '../../../shared/browser/client-hosting/runtime-browser-placement'
-import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRowsEvent } from '../../../shared/browser/client-hosting/client-hosted-browser-rows'
 
 export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   protected abstract getListedBrowserTabsByPageId(

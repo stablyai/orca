@@ -3,7 +3,7 @@ import {
   getConnectionIdFromState
 } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { useAppStore } from '@/store/index'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { buildAgentResumeStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
