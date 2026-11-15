@@ -33,7 +33,10 @@ const LINUX_HARDENING = [
   '-Wl,-z,relro,-z,now'
 ]
 const MACH_O_CPU_TYPES = { x64: 0x01000007, arm64: 0x0100000c }
-const HOST_GLIBC_RUNTIME = process.report?.getReport()?.header?.glibcVersionRuntime ?? null
+const HOST_GLIBC_RUNTIME =
+  process.platform === 'linux'
+    ? (process.report?.getReport()?.header?.glibcVersionRuntime ?? null)
+    : null
 const SLOT_GLIBC_FLOORS = {
   glibc: glibcVerification.SERVER_SLOT_GLIBC_FLOOR,
   glibc217: glibcVerification.COMPAT_SLOT_GLIBC_FLOOR
@@ -201,20 +204,6 @@ export function buildProviderExec({
 /** Unpackaged main resolves native/provider-exec/.build/<platform>-<arch>; any host compiler will do. */
 export function buildHostProviderExec() {
   return buildProviderExec({ target: `${process.platform}-${process.arch}`, hostCompiler: true })
-}
-
-/** Dev has no launcher fallback, so a failed build is loud but leaves the rest of the app usable. */
-export function buildDevProviderExec() {
-  if (process.platform === 'win32') {
-    return
-  }
-  try {
-    buildHostProviderExec()
-  } catch (error) {
-    console.warn(
-      `[orca-dev] provider exec helper build failed (agent CLIs will not launch): ${error?.message ?? error}`
-    )
-  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
