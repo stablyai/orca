@@ -56,4 +56,24 @@ describe('agents.list for a named workspace', () => {
       }
     })
   })
+
+  it.each([
+    ['selector_not_found', 'action_failed', 'no workspace has this id'],
+    // Why not action_failed: the param is 1.10, after the runtime failure codes (1.7).
+    ['client_disconnected', 'unavailable', 'the host that owns this is not connected']
+  ])('refuses a workspace the runtime answers %s for', async (runtimeCode, code, error) => {
+    const refusal = Object.assign(new Error(runtimeCode), { code: runtimeCode })
+    const services = pluginHostTestServices(vi.fn().mockRejectedValue(refusal), {
+      listAgentStatuses: () => []
+    })
+
+    const outcome = await callPluginHost({
+      method: 'agents.list',
+      params: { workspaceId: 'identity:gone' },
+      granted: ['agent:read'],
+      services
+    })
+
+    expect(outcome).toEqual({ ok: false, code, error })
+  })
 })
