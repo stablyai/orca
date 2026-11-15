@@ -2401,6 +2401,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
 
+      - name: Verify release remains draft after artifact upload
+        # Re-draft immediately if publish:always exposed a partial release, then fail so latest cannot keep missing Windows assets. Use bash for $TAG expansion.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "$TAG"
+
+      # Check Linux telemetry after inseparable pack/upload, then block final undraft. Reject null identity/key transport from missing configuration (#1385); prior step re-drafts premature publication.
+      - name: Verify telemetry constants present in app.asar
+        run: node config/scripts/desktop-build/telemetry-contracts/verify-telemetry-constants.mjs
+
+      # Why after the draft and telemetry checks: a run that fails either leaves no manifest to accept.
       # Why: records exactly what this job uploaded, so publishing can refuse a draft asset someone swapped later.
       # Windows uploads only on attempt 1, so its manifest is attempt 1's too and is never overwritten.
       - name: Record the uploaded release assets
@@ -2430,18 +2443,6 @@ jobs:
           path: ${{ runner.temp }}/release-asset-manifest/manifest.json
           if-no-files-found: error
           overwrite: ${{ matrix.platform != 'win' }}
-
-      - name: Verify release remains draft after artifact upload
-        # Re-draft immediately if publish:always exposed a partial release, then fail so latest cannot keep missing Windows assets. Use bash for $TAG expansion.
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.cut.outputs.tag }}
-        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "$TAG"
-
-      # Check Linux telemetry after inseparable pack/upload, then block final undraft. Reject null identity/key transport from missing configuration (#1385); prior step re-drafts premature publication.
-      - name: Verify telemetry constants present in app.asar
-        run: node config/scripts/desktop-build/telemetry-contracts/verify-telemetry-constants.mjs
 
   build-mac:
     needs:
@@ -2641,6 +2642,8 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_SHA: ${{ needs.create-release.outputs.release_sha }}
           MAC_RUN_ID: ${{ needs.build-mac.outputs.run_id }}
+          # The attempt verify-mac-build qualified; the mac run and its manifest must still be at it.
+          MAC_RUN_ATTEMPT: ${{ needs.build-mac.outputs.run_attempt }}
           ORCA_SERVER: ${{ needs.upload-orca-server-artifact.result == 'success' }}
         run: >-
           node config/scripts/release/publication/verify-release-asset-provenance.mjs

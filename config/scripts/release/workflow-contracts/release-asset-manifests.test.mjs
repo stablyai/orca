@@ -14,7 +14,16 @@ const macBuild = parse(macBuildText)
 const WRITER = 'config/scripts/release/publication/write-release-asset-manifest.mjs'
 const PINNED = /^actions\/[\w-]+@[0-9a-f]{40}$/
 
-const stepIndex = (steps, name) => steps.findIndex((step) => step.name === name)
+// Fails on a missing step, so an order check can never pass against -1.
+const stepIndex = (steps, name) => {
+  const index = steps.findIndex((step) => step.name === name)
+  expect(index, name).toBeGreaterThanOrEqual(0)
+  return index
+}
+const FINAL_CHECKS = [
+  'Verify release remains draft after artifact upload',
+  'Verify telemetry constants present in app.asar'
+]
 
 describe('release asset manifests', () => {
   it('records Linux, source map and Windows uploads after they happen, Windows on attempt 1 only', () => {
@@ -28,6 +37,12 @@ describe('release asset manifests', () => {
     ]) {
       expect(stepIndex(steps, uploader)).toBeLessThan(steps.indexOf(record))
     }
+    // The re-draft safety check runs even if recording fails, and a run failing a final check leaves no manifest.
+    for (const check of FINAL_CHECKS) {
+      expect(stepIndex(steps, check), check).toBeLessThan(steps.indexOf(record))
+    }
+    expect(steps.indexOf(record)).toBeGreaterThanOrEqual(0)
+    expect(steps.indexOf(upload)).toBe(steps.indexOf(record) + 1)
     expect(record.run).toContain(`node ${WRITER}`)
     expect(record.run).toContain(
       'files=(dist/orca-windows-setup.exe dist/orca-windows-setup.exe.blockmap dist/latest.yml)'
@@ -52,6 +67,9 @@ describe('release asset manifests', () => {
     const steps = macBuild.jobs['build-mac'].steps
     const record = stepIndex(steps, 'Record the uploaded release assets')
     expect(stepIndex(steps, 'Gate the update manifest on the minimum macOS')).toBeLessThan(record)
+    for (const check of FINAL_CHECKS) {
+      expect(stepIndex(steps, check), check).toBeLessThan(record)
+    }
     expect(steps[record].run).toContain(
       'dist/*.dmg dist/*.dmg.blockmap dist/*.zip dist/*.zip.blockmap dist/*-mac.yml'
     )
@@ -99,6 +117,7 @@ describe('publish-release asset provenance', () => {
     )
     expect(verify.env).toMatchObject({
       MAC_RUN_ID: '${{ needs.build-mac.outputs.run_id }}',
+      MAC_RUN_ATTEMPT: '${{ needs.build-mac.outputs.run_attempt }}',
       ORCA_SERVER: "${{ needs.upload-orca-server-artifact.result == 'success' }}"
     })
     const downloads = job.steps.filter((step) => step.uses?.startsWith('actions/download-artifact'))
