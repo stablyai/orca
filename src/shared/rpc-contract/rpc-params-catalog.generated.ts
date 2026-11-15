@@ -746,6 +746,17 @@ import {
   TerminalUnsubscribe,
   TerminalUpdateViewport
 } from './terminal/terminal-viewport-schemas-params'
+import {
+  ThemeStudioAdjustParams,
+  ThemeStudioApplyParams,
+  ThemeStudioCallerParams,
+  ThemeStudioCheckParams,
+  ThemeStudioEditParams,
+  ThemeStudioPatchParams,
+  ThemeStudioShotParams,
+  ThemeStudioStatusParams,
+  ThemeStudioStepParams
+} from './theme-studio/theme-studio-params'
 import { UpdaterCheckParams } from './updater/updater-params'
 import {
   WorkspaceCleanupPreviewParams,
@@ -1656,6 +1667,16 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
   'terminalDaemon.setLimit': TerminalLimitUpdateParams,
   'terminalDaemon.severedStatus': null,
+  'themeStudio.adjust': ThemeStudioAdjustParams,
+  'themeStudio.apply': ThemeStudioApplyParams,
+  'themeStudio.check': ThemeStudioCheckParams,
+  'themeStudio.discard': ThemeStudioCallerParams,
+  'themeStudio.edit': ThemeStudioEditParams,
+  'themeStudio.patch': ThemeStudioPatchParams,
+  'themeStudio.reset': ThemeStudioCallerParams,
+  'themeStudio.shot': ThemeStudioShotParams,
+  'themeStudio.status': ThemeStudioStatusParams,
+  'themeStudio.step': ThemeStudioStepParams,
   'ui.get': null,
   'ui.getJiraQuickFilters': null,
   'ui.getJiraSavedFilters': null,

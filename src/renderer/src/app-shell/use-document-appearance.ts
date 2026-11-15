@@ -6,6 +6,7 @@ import { applyMarkdownCodeFontFamily } from '@/lib/editor/appearance/markdown-co
 import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyThemeBackground } from './appearance/theme-background'
+import { reportThemeStudioPaint } from './appearance/use-theme-studio-app-theme'
 import { syncThemeBackgroundVideo } from './appearance/theme-background-video'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import { useWindowActive } from '../hooks/use-window-active'
@@ -42,7 +43,9 @@ export function useDocumentAppearance(): void {
     pluginThemes,
     pluginThemesLoaded,
     ready,
-    appPainted
+    appPainted,
+    draftTheme,
+    draftPreview
   } = useAppThemePaint()
   const editorTheme = findCodeEditorTheme(
     useAppStore((s) => (dark ? s.settings?.editorThemeDark : s.settings?.editorThemeLight)),
@@ -66,7 +69,8 @@ export function useDocumentAppearance(): void {
   }, [surfaceOpacity])
   // Why re-parse: the theme list keeps the registration as received, and a newer host may send
   // a background this build cannot paint; it must drop to no image, never reach CSS.
-  const registeredBackground = pluginTheme?.background
+  // Why none under a draft: a kept draft has no image, so the preview must not show one.
+  const registeredBackground = draftTheme ? undefined : pluginTheme?.background
   const themeBackground = useMemo(
     () => tolerantPluginThemeBackgroundRegistration.parse(registeredBackground),
     [registeredBackground]
@@ -79,6 +83,19 @@ export function useDocumentAppearance(): void {
     }
     // Why requestedDark: an OS flip can change the terminal palette without changing `dark`.
   }, [theme, dark, requestedDark])
+
+  // Why after useAppThemePaint: the report says what that paint actually left unpainted.
+  useEffect(() => {
+    if (ready && theme && draftPreview) {
+      reportThemeStudioPaint(
+        draftPreview,
+        dark ? 'dark' : 'light',
+        draftTheme?.tokens ?? null,
+        appPainted.current,
+        editorTheme !== null
+      )
+    }
+  }, [appPainted, draftPreview, draftTheme, editorTheme, ready, theme, dark])
 
   const sidebarTint = useAppStore(
     useShallow((s) =>

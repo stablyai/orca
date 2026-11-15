@@ -15,6 +15,8 @@ import {
   resolveDocumentTheme
 } from './document-theme'
 import { browserColorProbe } from './plugin-theme-tokens'
+import { useThemeStudioAppTheme, type ThemeStudioPaint } from './use-theme-studio-app-theme'
+import type { ThemeStudioPreview } from '../../../../shared/theme-studio/theme-studio-protocol'
 import {
   resolvePaintedTheme,
   synthesizeTerminalAppTheme,
@@ -54,13 +56,16 @@ export type AppThemePaintState = {
   theme: GlobalSettings['theme'] | undefined
   dark: boolean
   requestedDark: boolean
-  appTheme: TerminalAppTheme | PluginThemeRegistration | null
+  appTheme: TerminalAppTheme | PluginThemeRegistration | ThemeStudioPaint | null
   pluginTheme: PluginThemeRegistration | null
   pluginThemes: PluginThemeRegistration[]
   pluginThemesLoaded: boolean
   ready: boolean
   /** The tokens the app theme painted, after its contrast check. */
   appPainted: RefObject<Readonly<Record<string, string>>>
+  /** The `orca theme` draft painted instead of the selected theme, if any. */
+  draftTheme: ThemeStudioPaint | null
+  draftPreview: ThemeStudioPreview
 }
 
 /** Paints the document in the selected app theme (a plugin's or Match Terminal's) and its mode.
@@ -78,10 +83,12 @@ export function useAppThemePaint(): AppThemePaintState {
   // Why find by id: a disabled or removed plugin drops out of the list, which restores built-in colors.
   const pluginTheme =
     pluginThemes.find((entry) => entry.id === selected && (entry.base === 'dark') === dark) ?? null
-  const appTheme = matchTerminal ? terminalTheme : pluginTheme
-  // Why Match Terminal needn't wait: it derives from settings alone, not the plugin list.
+  // An `orca theme` draft paints over the selected theme without touching settings.
+  const { paint: draftTheme, preview: draftPreview } = useThemeStudioAppTheme(dark)
+  const appTheme = draftTheme ?? (matchTerminal ? terminalTheme : pluginTheme)
+  // Why Match Terminal and drafts needn't wait: they don't come from the plugin list.
   const pluginThemesLoaded = usePluginThemeStore((s) => s.loaded)
-  const ready = matchTerminal || pluginThemesLoaded
+  const ready = draftTheme !== null || matchTerminal || pluginThemesLoaded
   const appPainted = useRef<Readonly<Record<string, string>>>({})
 
   useEffect(() => {
@@ -95,9 +102,10 @@ export function useAppThemePaint(): AppThemePaintState {
     // Why wait for the list: until it loads, the startup cache is still the right paint.
     // Why theme too: contrast is checked against the built-ins of the current mode.
     if (ready && theme) {
-      appPainted.current = applyPluginAppTheme(appTheme)
+      // Why no cache for a draft: a launch paints the user's own theme until main re-sends it.
+      appPainted.current = applyPluginAppTheme(appTheme, draftTheme ? { storage: null } : {})
     }
-  }, [appTheme, ready, theme, dark])
+  }, [appTheme, draftTheme, ready, theme, dark])
 
   return {
     theme,
@@ -108,7 +116,9 @@ export function useAppThemePaint(): AppThemePaintState {
     pluginThemes,
     pluginThemesLoaded,
     ready,
-    appPainted
+    appPainted,
+    draftTheme,
+    draftPreview
   }
 }
 

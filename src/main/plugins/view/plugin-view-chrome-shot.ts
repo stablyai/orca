@@ -28,20 +28,20 @@ export type PluginChromeShotResult = {
 const CHROME_TIMEOUT_MS = 10_000
 const MAX_ERRORS = 20
 
-/** `shot --status-bar` / `--window`: captures Orca's own chrome, hidden window included, where
- *  plugins draw outside their panels (status bar items, for one). */
-export async function shootPluginChrome(
-  deps: PluginViewDesktopDeps,
+export type OrcaChromeCapture = Pick<
+  PluginChromeShotResult,
+  'region' | 'png' | 'width' | 'height' | 'colorScheme' | 'themeApplied' | 'themeReason'
+>
+
+/** Captures Orca's status bar or whole window, hidden window included, in the asked theme when
+ *  nobody can see the window; the theme is put back after. */
+export async function captureOrcaChrome(
   contents: WebContents,
-  params: { pluginKey: string; region: PluginChromeRegion; colorScheme?: PluginViewColorScheme }
-): Promise<PluginChromeShotResult> {
-  const { pluginKey, region } = params
-  await resolvePluginViewLive(deps.source, pluginKey)
-  const { colorScheme, themeReason } = pluginShotThemeDecision(
-    params.colorScheme,
-    deps.windowShown()
-  )
-  const { cursor } = deps.logsSince(pluginKey)
+  windowShown: boolean,
+  params: { region: PluginChromeRegion; colorScheme?: PluginViewColorScheme }
+): Promise<OrcaChromeCapture> {
+  const { region } = params
+  const { colorScheme, themeReason } = pluginShotThemeDecision(params.colorScheme, windowShown)
   const captureId = randomUUID()
   return withPaintingWhileHidden([contents], async () => {
     try {
@@ -67,20 +67,14 @@ export async function shootPluginChrome(
         throw new Error(`Orca did not report where its ${region} is drawn.`)
       }
       const image = await capturePluginPanelPng(contents, reply.panel.rect)
-      const logged = deps
-        .logsSince(pluginKey, cursor)
-        .lines.filter((line) => line.level === 'error')
-        .map((line) => line.line)
       return {
-        pluginKey,
         region,
         png: image.png.toString('base64'),
         width: image.width,
         height: image.height,
         colorScheme: reply.panel.colorScheme,
         themeApplied: reply.panel.themeApplied,
-        ...(themeReason ? { themeReason } : {}),
-        errors: logged.slice(0, MAX_ERRORS)
+        ...(themeReason ? { themeReason } : {})
       }
     } finally {
       // Puts back the theme.
@@ -91,4 +85,25 @@ export async function shootPluginChrome(
       ).catch(() => null)
     }
   })
+}
+
+/** `shot --status-bar` / `--window`: captures Orca's own chrome, hidden window included, where
+ *  plugins draw outside their panels (status bar items, for one). */
+export async function shootPluginChrome(
+  deps: PluginViewDesktopDeps,
+  contents: WebContents,
+  params: { pluginKey: string; region: PluginChromeRegion; colorScheme?: PluginViewColorScheme }
+): Promise<PluginChromeShotResult> {
+  const { pluginKey, region } = params
+  await resolvePluginViewLive(deps.source, pluginKey)
+  const { cursor } = deps.logsSince(pluginKey)
+  const capture = await captureOrcaChrome(contents, deps.windowShown(), {
+    region,
+    ...(params.colorScheme === undefined ? {} : { colorScheme: params.colorScheme })
+  })
+  const logged = deps
+    .logsSince(pluginKey, cursor)
+    .lines.filter((line) => line.level === 'error')
+    .map((line) => line.line)
+  return { pluginKey, ...capture, errors: logged.slice(0, MAX_ERRORS) }
 }

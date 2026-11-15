@@ -46,6 +46,8 @@ Use the lowest `execution` profile that covers the request; it decides what the 
 | A virtual machine environment recipe                                                | `declarative`; `contributes.vmRecipes`                              | hand-written; fields in `references/manifest.md` |
 | A status bar item (a worker can update it)                                          | `declarative`; `contributes.statusBarItems`                         | `references/recipes.md`                          |
 
+For an app theme, `ORCA theme edit` previews colors live in Orca (`ORCA skills get orca-cli
+--reference references/themes.md`) and `ORCA theme export <dir>` writes the plugin folder.
 Examples are in `examples/plugins/` of github.com/stablyai/orca. Sidebar cards, task sources,
 connections, MCP servers and skills are reserved and not buildable yet: say so instead of faking
 them. A panel cannot type into a terminal; only a worker

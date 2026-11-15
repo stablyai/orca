@@ -7,7 +7,7 @@ import {
   readme,
   type PluginTemplate,
   type PluginTemplateInput
-} from './plugin-template-files'
+} from '../../../shared/plugins/authoring/plugin-template-files'
 
 // The rich-editor recipe as a starting point: a TypeScript editor on `orca.document.session`, its
 // sync tested in Node with `mockEditorHost`. Sandboxed frame code, so loading it needs `--approve`.

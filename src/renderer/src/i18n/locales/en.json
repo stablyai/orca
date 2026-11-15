@@ -827,6 +827,44 @@
       "uiZoom": {
         "zoomOut": "Zoom out",
         "zoomIn": "Zoom in"
+      },
+      "agentThemeEdits": {
+        "title": "Let agents edit the theme",
+        "description": "Agents in your terminals can preview theme changes with `orca theme`. Nothing is kept until you press Keep.",
+        "keywords": {
+          "agent": "agent",
+          "theme": "theme",
+          "colors": "colors"
+        }
+      },
+      "customTheme": {
+        "promptCopied": "Prompt copied. Paste it into your agent.",
+        "failed": "Could not do that: {{message}}",
+        "madeBy": "Made by {{by}} · {{when}} · {{modes}}",
+        "savedBy": "Saved by you · {{when}} · {{modes}}",
+        "badge": "Custom",
+        "editWithAgent": "Edit with your agent",
+        "more": "More actions",
+        "rename": "Rename…",
+        "duplicated": "Duplicated.",
+        "duplicate": "Duplicate",
+        "exported": "Exported to",
+        "export": "Export…",
+        "publish": "Publish with your agent",
+        "delete": "Delete…",
+        "renamed": "Renamed.",
+        "deleted": "Deleted.",
+        "draftBadge": "Not saved",
+        "light": "light",
+        "dark": "dark",
+        "inUse": "In use for {{modes}}",
+        "renameTitle": "Rename theme",
+        "nameLabel": "Theme name",
+        "cancel": "Cancel",
+        "renameAction": "Rename",
+        "deleteTitle": "Delete {{name}}?",
+        "deleteDescription": "Orca goes back to the theme you had before, or its built-in theme. Export it first to keep a copy.",
+        "deleteAction": "Delete theme"
       }
     },
     "browser": {
@@ -18282,10 +18320,14 @@
                 "newQuickCommand": "new quick command",
                 "browserRight": "browser right",
                 "splitBrowser": "split browser",
-                "browserSplit": "browser split"
+                "browserSplit": "browser split",
+                "discardTheme": "discard theme",
+                "revertTheme": "revert theme"
               },
               "newBrowserTabSplitRight": "New Browser Tab in Right Split",
-              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right."
+              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right.",
+              "discardThemeDraft": "Discard Theme Preview",
+              "discardThemeDraftDescription": "Drop the theme an agent is previewing and go back to your own."
             }
           },
           "palette": {
@@ -20070,7 +20112,8 @@
           "workspaceDisconnected": "Can’t run “{{action}}” — workspace is disconnected.",
           "noTabGroup": "Can’t run “{{action}}” — no tab group is available.",
           "noMovableChat": "Can’t run “{{action}}” — no movable chat is active.",
-          "clientUnsupported": "Can’t run “{{action}}” — this client and runtime do not support it."
+          "clientUnsupported": "Can’t run “{{action}}” — this client and runtime do not support it.",
+          "noThemeDraft": "Can’t run “{{action}}” — no theme preview is open."
         }
       },
       "plugins": {
@@ -20285,6 +20328,17 @@
       "webPairingRefused": {
         "title": "Orca refused this browser",
         "retry": "Try again"
+      }
+    },
+    "app-shell": {
+      "themeStudio": {
+        "previewing": "Previewing {{value0}}",
+        "previewHint": "An agent is editing this theme. Keep saves it as one of your themes.",
+        "keep": "Keep",
+        "discard": "Discard",
+        "lastBy": "{{label}} · by {{by}}",
+        "autoFixed": "{{count}} issues auto-fixed",
+        "undo": "Undo"
       }
     }
   },
