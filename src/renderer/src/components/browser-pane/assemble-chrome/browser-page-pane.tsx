@@ -54,6 +54,7 @@ export function BrowserPagePane({
   isAutomationVisible,
   isMobileDriven,
   isRemotelyViewed,
+  isMountAdmitted = false,
   inputLocked,
   onUpdatePageState,
   onSetUrl
@@ -202,6 +203,7 @@ export function BrowserPagePane({
     webviewPartition,
     isActive,
     isPaintable,
+    isMountAdmitted,
     slotViewport,
     viewportPresetId: browserTab.viewportPresetId ?? null,
     addressBarInputRef,

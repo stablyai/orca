@@ -49,7 +49,7 @@ export const graphState = {
     string,
     {
       inputs: MobileSessionWorktreeInputs
-      content: unknown
+      content: MobileSessionContent
       snapshot: RuntimeMobileSessionTabsSnapshot
     }
   >(),
@@ -123,5 +123,6 @@ export type MobileSessionContent = {
   activeTabType: RuntimeMobileSessionSnapshotTab['type'] | null
   tabGroups?: NonNullable<RuntimeMobileSessionTabsSnapshot['tabGroups']>
   tabGroupLayout?: RuntimeMobileSessionTabsSnapshot['tabGroupLayout']
+  browserPageInventory?: RuntimeMobileSessionTabsSnapshot['browserPageInventory']
   tabs: RuntimeMobileSessionSnapshotTab[]
 }

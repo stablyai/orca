@@ -1,16 +1,16 @@
+import { findKeybindingConflicts } from '../../../../shared/keybindings/formatting'
+import { isKeybindingActionId } from '../../../../shared/keybindings/definitions'
 import {
-  findKeybindingConflicts,
-  isKeybindingActionId,
   keybindingFileDiagnostic,
-  KEYBINDING_REASON_COPY,
-  normalizeKeybindingArrayForAction
-} from '../../../../shared/keybindings'
+  KEYBINDING_REASON_COPY
+} from '../../../../shared/keybindings/keybinding-diagnostic-copy'
+import { normalizeKeybindingArrayForAction } from '../../../../shared/keybindings/normalization'
 import type {
   KeybindingActionId,
   KeybindingFileDiagnostic,
   KeybindingOverrides,
   KeybindingPlatform
-} from '../../../../shared/keybindings'
+} from '../../../../shared/keybindings/types'
 
 export type WebKeybindingDocument = {
   version: 1

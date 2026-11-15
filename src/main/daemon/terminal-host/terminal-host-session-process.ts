@@ -1,7 +1,7 @@
 import {
   discardStagedStartupCommand,
   type StartupCommandStaging
-} from '../../../shared/startup-command-staging'
+} from '../../../shared/shell/launch/startup-command-staging'
 import type { TerminalHostSessionCreateDependencies } from './terminal-host-session-create'
 import { enumerateDirectoryOnce } from '../permissions/directory-enumeration-probe'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'

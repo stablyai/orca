@@ -105,6 +105,7 @@ export type BrowserScreencastResult =
 export type BrowserEvalResult = { result: string; origin: string }
 
 export type BrowserTabInfo = {
+  generation?: number
   browserPageId: string
   index: number
   url: string

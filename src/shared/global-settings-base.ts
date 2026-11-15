@@ -5,6 +5,7 @@ import type { ClaudeAgentViewSettings } from './agent-hook-listener/providers/cl
 import type { WorktreeCardDisplaySettings } from './worktree/card-display-settings-types'
 import type { BrowserLinkOpeningSettings } from './browser/navigation/browser-link-opening-settings'
 import type { BrowserPasswordsGlobalSettings } from './browser/passwords/browser-passwords-types'
+import type { BrowserMemorySaverGlobalSettings } from './browser/guest-lifecycle/browser-memory-saver'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
@@ -51,6 +52,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   WindowMaterialSettings &
   EditorSaveSettings &
   BrowserPasswordsGlobalSettings &
+  BrowserMemorySaverGlobalSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &

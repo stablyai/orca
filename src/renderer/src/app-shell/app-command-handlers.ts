@@ -22,7 +22,7 @@ import type {
   KeybindingActionId,
   KeybindingContext,
   PhysicalModifierToken
-} from '../../../shared/keybindings'
+} from '../../../shared/keybindings/types'
 import { shortcutPlatform } from './app-window-chrome'
 export { useAppShortcutActions } from './use-app-shortcut-actions'
 import type { useAppShortcutActions } from './use-app-shortcut-actions'

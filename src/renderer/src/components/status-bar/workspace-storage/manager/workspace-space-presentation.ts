@@ -11,7 +11,7 @@ import type { AgentStatusEntry } from '../../../../../../shared/agent-status/con
 import type { MigrationUnsupportedPtyEntry } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard/clipboard-text'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree

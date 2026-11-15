@@ -1,7 +1,7 @@
 import { basename } from '@/lib/path'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard/clipboard-text'
 import {
   buildSourceControlTree,
   compactSourceControlTree,

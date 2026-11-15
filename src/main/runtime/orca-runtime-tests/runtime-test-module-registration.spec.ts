@@ -53,7 +53,7 @@ import '../../daemon/emulation/headless-emulator'
 
 import '../../../shared/terminal/input/terminal-input'
 import '../../../shared/agent-launch/startup/agent-prompt-injection'
-import '../../../shared/clipboard-text'
+import '../../../shared/clipboard/clipboard-text'
 import '../../../shared/project/host-setup/project-host-setup-projection'
 import '../../memory/pty-registry'
 import '../../providers/pty/process-inspection'
