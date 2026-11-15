@@ -22,7 +22,12 @@ import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
-import { installOrcaCloudWorkspaceStore } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import {
+  getCloudWorkspaceSnapshot,
+  installOrcaCloudWorkspaceStore,
+  refreshCloudWorkspaceStatus
+} from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { installCloudActivityRefresh } from '@/lib/orca-cloud/cloud-guard-kill-refresh'
 import { installCloudPredictiveWake } from '@/lib/orca-cloud/install-cloud-predictive-wake'
 import { installCloudSetupSession } from '@/lib/orca-cloud/install-cloud-setup-session'
 import { notePredictiveWakeIdleSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
@@ -105,6 +110,13 @@ export function installOrcaCloudSessionEvents(): () => void {
   const disposeRunActionWake =
     window.api?.orcaCloudWorkspace?.onWakeProgress?.(syncRunActionsWithWake) ?? (() => {})
   const disposeStore = installOrcaCloudWorkspaceStore()
+  // MEMGUARD: someone came back (focus) or is typing: re-read the active cloud workspace so a guard
+  // kill's banner shows now (throttled to one read per 15 s).
+  const disposeActivity = installCloudActivityRefresh({
+    activeWorkspaceId: () => useAppStore.getState().activeWorktreeId,
+    isRunningCloud: (id) => getCloudWorkspaceSnapshot().status[id]?.status?.state === 'ready',
+    refresh: (id) => void refreshCloudWorkspaceStatus(id)
+  })
   const disposePaired = installPairedCloudWorkspaceRegistry()
   const disposePredictive = installCloudPredictiveWake()
   const disposeSetup = installCloudSetupSession()
@@ -114,6 +126,7 @@ export function installOrcaCloudSessionEvents(): () => void {
     disposeState()
     disposeIdle()
     disposeStore()
+    disposeActivity()
     disposePaired()
     disposeRunActionWake()
     disposePredictive()

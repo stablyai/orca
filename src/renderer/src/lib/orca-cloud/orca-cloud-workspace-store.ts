@@ -23,6 +23,7 @@ import type {
   OrcaCloudWorkspaceApi
 } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { eachLimited } from './each-limited'
+import { guardKillFromStatus } from './cloud-guard-kill-refresh'
 import { noteCloudGitSetupRead, noteCloudGitSetupReady } from './cloud-git-setup-store'
 import { WAKE_FAILED_STALE_MS, WAKE_STALE_MS } from './orca-cloud-workspace-state'
 import { isSilentPredictiveWake, predictiveWakeStartedAt } from './cloud-predictive-wake'
@@ -182,6 +183,11 @@ function applyStatus(
   result: CloudWorkspaceResult<CloudWorkspaceStatus>
 ): void {
   noteCloudGitSetupRead(workspaceId, !result.ok || result.value.gitSetupFailed === true)
+  // MEMGUARD: a read that shows a new guard kill raises its notice now, not on main's next poll.
+  const guardKill = result.ok ? guardKillFromStatus(workspaceId, result.value) : null
+  if (guardKill) {
+    noteCloudOom(guardKill)
+  }
   updateCloudWorkspaceSnapshot((s) => {
     const previous = s.status[workspaceId]
     if (!result.ok && result.code === 'not_cloud') {
