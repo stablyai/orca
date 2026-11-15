@@ -144,8 +144,13 @@ export async function terminateDescendantSnapshotWithVerdict(
       }
     }
   }
-  const provenAbsent = (): boolean =>
-    snapshot.descendants.every((row) => (missingObservations.get(row.pid) ?? 0) >= 2)
+  const provenExited = (matches: readonly ProcessTableRow[]): boolean => {
+    // An identity-matched zombie has exited; its PID and group still need independent reaping.
+    const zombies = new Set(matches.filter((row) => row.zombie).map((row) => row.pid))
+    return snapshot.descendants.every(
+      (row) => zombies.has(row.pid) || (missingObservations.get(row.pid) ?? 0) >= 2
+    )
+  }
   if (!deps.requireIdentityBeforeSignal) {
     for (const row of snapshot.descendants) {
       sendSignal(row.pid, 'SIGTERM')
@@ -164,13 +169,14 @@ export async function terminateDescendantSnapshotWithVerdict(
         await waitForDelay(50, deps.keepAlive)
         continue
       }
-      const live = matchingSnapshotRows(snapshot, capture.rows, deps.requireIdentityBeforeSignal)
+      const matches = matchingSnapshotRows(snapshot, capture.rows, deps.requireIdentityBeforeSignal)
+      const live = matches.filter((row) => !row.zombie)
       if (deps.requireIdentityBeforeSignal) {
-        recordIdentityObservation(capture, live)
+        recordIdentityObservation(capture, matches)
       }
       if (live.length === 0) {
         // Require two fresh absences per identity before declaring exit without signalling stale PIDs.
-        if (deps.requireIdentityBeforeSignal && !provenAbsent()) {
+        if (deps.requireIdentityBeforeSignal && !provenExited(matches)) {
           await waitForDelay(50, deps.keepAlive)
           continue
         }
@@ -228,17 +234,17 @@ export async function terminateDescendantSnapshotWithVerdict(
   if (deps.requireIdentityBeforeSignal && hasDuplicateSnapshotPids(snapshot, finalCapture.rows)) {
     return 'unverifiable'
   }
-  const finalLive = matchingSnapshotRows(
+  const finalMatches = matchingSnapshotRows(
     snapshot,
     finalCapture.rows,
     deps.requireIdentityBeforeSignal
   )
-  if (finalLive.length > 0) {
+  if (finalMatches.some((row) => !row.zombie)) {
     return 'live'
   }
   if (deps.requireIdentityBeforeSignal) {
-    recordIdentityObservation(finalCapture, finalLive)
-    return provenAbsent() ? 'exited' : 'unverifiable'
+    recordIdentityObservation(finalCapture, finalMatches)
+    return provenExited(finalMatches) ? 'exited' : 'unverifiable'
   }
   return 'exited'
 }

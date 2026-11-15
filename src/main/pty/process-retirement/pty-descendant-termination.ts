@@ -119,7 +119,7 @@ export function collectDescendantRows(
     }
   }
   // After root exit, descendants reparent; remaining rows with its old PID as parent may reflect PID reuse.
-  if (!rootRow || duplicateRoot) {
+  if (!rootRow || rootRow.zombie || duplicateRoot) {
     return { rootPgid: null, descendants: [], capturedAtMs }
   }
   const descendants: ProcessTableRow[] = []
