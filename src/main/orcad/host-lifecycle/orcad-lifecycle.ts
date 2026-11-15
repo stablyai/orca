@@ -1,3 +1,4 @@
+import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { setRuntimeBrowserCommandsFactory } from '../../runtime/browser/installation/runtime-browser-commands-factory'
 import { markHostShuttingDown } from '../../startup/quit/host-shutdown-state'
@@ -167,7 +168,11 @@ export async function startOrcadWithLifecycle<T extends object>(
       runtimeCleanupSucceeded = true
     } finally {
       await checkpointing
-      await cleanupHost(runtimeCleanupSucceeded)
+      try {
+        await closeEnvironmentStore()
+      } finally {
+        await cleanupHost(runtimeCleanupSucceeded)
+      }
     }
   })
   try {

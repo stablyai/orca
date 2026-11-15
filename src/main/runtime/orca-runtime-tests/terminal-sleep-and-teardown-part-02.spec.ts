@@ -58,7 +58,7 @@ describe('OrcaRuntimeService', () => {
       ]
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'stale-tab',
@@ -184,7 +184,7 @@ describe('OrcaRuntimeService', () => {
         }))
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'host-tab',
@@ -639,7 +639,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',

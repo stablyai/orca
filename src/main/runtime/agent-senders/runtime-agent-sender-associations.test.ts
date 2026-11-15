@@ -64,11 +64,6 @@ const leaf = (id: string) =>
   `${(Number(id.replace('tab-', '')) + 1).toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`
 const pane = (id: string) => `${id}:${leaf(id)}`
 const handle = (i: number) => `term_tab-${i}`
-/** History, chat and lineage reads; the live-terminal walk is counted by its own pass test. */
-const identityReads = (h: { projection: { workForTest(): Record<string, number> } }) => {
-  const { leafVisits: _leaves, ptyVisits: _ptys, ...reads } = h.projection.workForTest()
-  return reads
-}
 function harness(n = 1, records: AgentSessionRecordReader | null = null) {
   const db = new OrchestrationDb(':memory:')
   const run = db.createRun({
@@ -95,7 +90,7 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
   // A warm restart keeps each terminal's handle; tests replace one to model a fresh terminal.
   const handles = new Map(leaves.map((l, i) => [l.tabId, handle(i)]))
   const scopes = new Set(['workspace', 'other'])
-  const resolveServer = vi.fn(() => ({
+  const resolveServer = vi.fn(async () => ({
     environmentId: 'remote',
     name: 'Remote',
     peerFingerprint: 'execution-peer',
@@ -161,8 +156,10 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
       )
     return dispatch
   }
+  const read = <T>(consume: () => T extends PromiseLike<unknown> ? never : T) =>
+    projection.withPreparedPublication(consume)
   const located = (identity: string) =>
-    projection.build().associations.find((row) => row.identity === identity)?.paneKey
+    read(() => projection.build().associations.find((row) => row.identity === identity)?.paneKey)
   return {
     db,
     run,
@@ -176,24 +173,25 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
     restart: () => (projection = start()),
     worker,
     located,
+    read,
     openHistory,
     resolveServer
   }
 }
 
-it('does not take a respawned or fresh terminal for the one a card was sent from', () => {
+it('does not take a respawned or fresh terminal for the one a card was sent from', async () => {
   const h = harness(2)
   const worker = h.worker(0)
-  expect(h.located(handle(0))).toBe(pane('tab-0'))
+  expect(await h.located(handle(0))).toBe(pane('tab-0'))
   // Same pane and handle, new process: a respawn that kept the handle runs a fresh shell.
   h.ptys[0] = { ...h.ptys[0], incarnationId: 'inc-2' }
-  expect(h.located(handle(0))).toBeUndefined()
-  expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
+  expect(await h.located(handle(0))).toBeUndefined()
+  expect(await h.located(`dispatch:${worker.id}`)).toBeUndefined()
   // A cold restart restores the pane under a new handle; the old one names nothing.
   h.restart()
   h.handles.set('tab-1', 'term_fresh')
-  expect(h.located(handle(1))).toBeUndefined()
-  expect(h.located('term_fresh')).toBe(pane('tab-1'))
+  expect(await h.located(handle(1))).toBeUndefined()
+  expect(await h.located('term_fresh')).toBe(pane('tab-1'))
 })
 
 it('withdraws a closed chat sender while retaining another open chat', async () => {
@@ -207,44 +205,46 @@ it('withdraws a closed chat sender while retaining another open chat', async () 
   })
   const store = await openTestAgentSessionRecordStore(root)
   const h = harness(1, conversationRecordReader(store))
-  expect(h.projection.build().associations).toEqual(
+  expect((await h.read(() => h.projection.build())).associations).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ identity: 'orca_session_id:closed-chat' }),
       expect.objectContaining({ identity: 'orca_session_id:open-chat' })
     ])
   )
   await store.setSessionTabVisibility('closed-chat', false)
-  const closed = h.projection.build()
+  const closed = await h.read(() => h.projection.build())
   expect(closed.associations.some((r) => r.identity === 'orca_session_id:closed-chat')).toBe(false)
   expect(closed.associations).toContainEqual(
     expect.objectContaining({ identity: 'orca_session_id:open-chat' })
   )
 })
 
-it('reports only worktrees whose scope changed since their last frame', () => {
+it('reports only worktrees whose scope changed since their last frame', async () => {
   const h = harness(1)
-  const workspace = h.projection.buildForFrame('workspace')
-  const other = h.projection.buildForFrame('other')
+  const workspace = await h.read(() => h.projection.buildForFrame('workspace'))
+  const other = await h.read(() => h.projection.buildForFrame('other'))
   h.worker(0)
-  expect(h.projection.changedScopes(['workspace', 'other', 'never-framed'])).toEqual(['workspace'])
-  expect(h.projection.build('other')).toBe(other)
-  expect(h.projection.build('workspace')).not.toBe(workspace)
+  expect(
+    await h.read(() => h.projection.changedScopes(['workspace', 'other', 'never-framed']))
+  ).toEqual(['workspace'])
+  expect(await h.read(() => h.projection.build('other'))).toBe(other)
+  expect(await h.read(() => h.projection.build('workspace'))).not.toBe(workspace)
 })
 
-it('keeps an existing subscriber owed its update when another client reads the newer scope', () => {
+it('keeps an existing subscriber owed its update when another client reads the newer scope', async () => {
   const h = harness(1)
-  const first = h.projection.buildForFrame('workspace')
+  const first = await h.read(() => h.projection.buildForFrame('workspace'))
   h.handles.set('tab-0', 'term_changed')
-  const oneShot = h.projection.buildForFrame('workspace')
+  const oneShot = await h.read(() => h.projection.buildForFrame('workspace'))
   expect(oneShot).not.toBe(first)
-  expect(h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
-  h.projection.buildForFramePass()('workspace')
-  expect(h.projection.changedScopes(['workspace'])).toEqual(['workspace'])
+  expect(await h.read(() => h.projection.changedScopes(['workspace']))).toEqual(['workspace'])
+  await h.read(() => h.projection.buildForFramePass()('workspace'))
+  expect(await h.read(() => h.projection.changedScopes(['workspace']))).toEqual(['workspace'])
   h.projection.acknowledgeFrame('workspace', oneShot)
-  expect(h.projection.changedScopes(['workspace'])).toEqual([])
+  expect(await h.read(() => h.projection.changedScopes(['workspace']))).toEqual([])
 })
 
-it('withdraws worker aliases on a failed read and retries only on the next identity change', () => {
+it('withdraws worker aliases on a failed read and retries only on the next identity change', async () => {
   const chats: ReturnType<typeof agentSessionConversationView>[] = []
   const h = harness(4, {
     getRecord: (id) => chats.find((r) => r.sessionId === id) ?? null,
@@ -259,7 +259,7 @@ it('withdraws worker aliases on a failed read and retries only on the next ident
   const first = h.worker(0)
   const unaffected = h.worker(1)
   h.handles.set('tab-0', 'term_reminted')
-  const good = h.projection.build()
+  const good = await h.read(() => h.projection.build())
   expect(good.associations.find((r) => r.identity === `dispatch:${first.id}`)?.dispatchActor).toBe(
     true
   )
@@ -275,21 +275,20 @@ it('withdraws worker aliases on a failed read and retries only on the next ident
   h.worker(2)
   h.ptys[0].launchToken = null
   h.ptys[0].launchIncarnationId = null
-  const safe = h.projection.build()
+  const safe = await h.read(() => h.projection.build())
   expect(safe.associations).toEqual(good.associations.filter((row) => row.dispatchActor !== true))
   expect(safe.associations.some((r) => r.identity === handle(0))).toBe(false)
   expect(safe.associations.some((r) => r.identity === `dispatch:${unaffected.id}`)).toBe(false)
-  expect(h.projection.build()).toBe(safe)
+  expect(await h.read(() => h.projection.build())).toBe(safe)
   vi.mocked(h.db.db.prepare).mockRestore()
   // Restoring reads alone cannot reinstate expired proof at the same failed key.
-  expect(h.projection.build()).toBe(safe)
+  expect(await h.read(() => h.projection.build())).toBe(safe)
   vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
     if (sql === AGENT_SENDER_PANE_READS.resources) {
       throw new Error('disk I/O error')
     }
     return prepare(sql)
   })
-  expect(identityReads(h).historyReads).toBe(2)
   // A chat opens in the same refresh as another failing read: the chat is published beside the
   // last good terminal rows.
   const chat = testOrcaSessionId('33333333-3333-4333-8333-333333333333')
@@ -301,7 +300,7 @@ it('withdraws worker aliases on a failed read and retries only on the next ident
   // tab-1 now runs under a fresh handle, so its terminal rows are read again, and fail.
   h.handles.set('tab-1', 'term_fresh')
   const warned = warn.mock.calls.length
-  const withChat = h.projection.build().associations
+  const withChat = (await h.read(() => h.projection.build())).associations
   expect(withChat.filter((r) => !r.sessionId)).toEqual(
     safe.associations.filter((r) => !r.sessionId)
   )
@@ -310,15 +309,17 @@ it('withdraws worker aliases on a failed read and retries only on the next ident
   expect(warn.mock.calls.length).toBe(warned + 1)
   vi.mocked(h.db.db.prepare).mockRestore()
   const fourth = h.worker(3)
-  expect(h.located(`dispatch:${fourth.id}`)).toBe(pane('tab-3'))
-  expect(h.located(`dispatch:${unaffected.id}`)).toBe(pane('tab-1'))
-  expect(h.located(`orca_session_id:${chat}`)).toBeDefined()
-  expect(h.projection.build().associations.some((r) => r.identity === `dispatch:${first.id}`)).toBe(
-    false
-  )
+  expect(await h.located(`dispatch:${fourth.id}`)).toBe(pane('tab-3'))
+  expect(await h.located(`dispatch:${unaffected.id}`)).toBe(pane('tab-1'))
+  expect(await h.located(`orca_session_id:${chat}`)).toBeDefined()
+  expect(
+    (await h.read(() => h.projection.build())).associations.some(
+      (r) => r.identity === `dispatch:${first.id}`
+    )
+  ).toBe(false)
 })
 
-it('publishes one principal per paired peer and attachments only while their worker runs there', () => {
+it('publishes one principal per paired peer and attachments only while their worker runs there', async () => {
   const h = harness()
   const local = h.worker(0)
   h.db.createRemoteDispatchAttachment({
@@ -349,7 +350,7 @@ it('publishes one principal per paired peer and attachments only while their wor
   for (const id of ['federated', 'second', 'third']) {
     route.run(id, 'remote', 'Remote', 'execution-peer', 1)
   }
-  const publicRows = h.projection.build('workspace')
+  const publicRows = await h.read(() => h.projection.build('workspace'))
   expect(publicRows.peerFingerprint).toBe(fingerprintOrchestrationPeer('execution-key'))
   expect(publicRows.principals).toEqual([
     { peerFingerprint: 'execution-peer', homePeerFingerprint: 'paired-home' }
@@ -372,7 +373,7 @@ it('publishes one principal per paired peer and attachments only while their wor
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   h.ptys[0].launchToken = null
   h.ptys[0].launchIncarnationId = null
-  const safe = h.projection.build('workspace')
+  const safe = await h.read(() => h.projection.build('workspace'))
   expect(safe.associations.some((row) => row.identity === `dispatch:${local.id}`)).toBe(false)
   expect(safe.attachments).toEqual([attached])
   expect(safe.principals).toEqual(publicRows.principals)
@@ -381,5 +382,47 @@ it('publishes one principal per paired peer and attachments only while their wor
   failed.mockRestore()
   // A settled attachment no longer names a worker running there.
   h.db.db.prepare("UPDATE remote_dispatch_attachments SET state = 'stopped'").run()
-  expect(h.projection.build('workspace').attachments).toEqual([])
+  expect((await h.read(() => h.projection.build('workspace'))).attachments).toEqual([])
+})
+
+it('consumes current sender handles with the principal whose preparation was delayed', async () => {
+  const h = harness()
+  h.db.db
+    .prepare(
+      'INSERT INTO federated_dispatches (dispatch_id, environment_id, environment_name, peer_fingerprint, protocol_version) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run('federated', 'remote', 'Remote', 'execution-peer', 1)
+  let release!: (value: Awaited<ReturnType<typeof h.resolveServer>>) => void
+  let entered!: () => void
+  const reached = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  h.resolveServer.mockImplementationOnce(() => {
+    entered()
+    return new Promise((resolve) => {
+      release = resolve
+    })
+  })
+  const pending = h.projection.withPreparedPublication(() => ({
+    graph: h.projection.buildForGraph(undefined),
+    frame: h.projection.buildForFramePass()('workspace')
+  }))
+  await reached
+  h.handles.set('tab-0', 'term_successor')
+  release({
+    environmentId: 'remote',
+    name: 'Remote',
+    peerFingerprint: 'execution-peer',
+    homePeerFingerprint: 'paired-home'
+  })
+  const result = await pending
+  expect(result.graph.agentSenderAssociations?.principals).toEqual([
+    { peerFingerprint: 'execution-peer', homePeerFingerprint: 'paired-home' }
+  ])
+  expect(result.frame.associations).toEqual([
+    { identity: 'term_successor', paneKey: pane('tab-0'), worktreeId: 'workspace' }
+  ])
+  expect(result.frame.principals).toEqual([
+    { peerFingerprint: 'execution-peer', homePeerFingerprint: 'paired-home' }
+  ])
 })

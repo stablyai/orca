@@ -3,6 +3,7 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../../../shared/execution-host'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
+import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import {
   buildPaletteDocument,
   type PaletteDocument
@@ -111,7 +112,9 @@ function resolveIssueTitle(
     worktree.linkedIssue,
     undefined,
     repo.connectionId,
-    repo.executionHostId
+    repo.executionHostId,
+    false,
+    getWorktreeGitHubIssueRepository(worktree)
   )
   return sources.issueCache[key]?.data?.title ?? ''
 }

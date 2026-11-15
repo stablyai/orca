@@ -59,11 +59,11 @@ export function assertCrewSubscriptionInputs(
   }
 }
 
-export function resolveSubscriptionEnvironment(
+export async function resolveSubscriptionEnvironment(
   userDataPath: string,
   args: RuntimeEnvironmentSubscribeArgs
 ) {
-  const environment = resolveEnvironment(userDataPath, args.selector)
+  const environment = await resolveEnvironment(userDataPath, args.selector)
   if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
     throw new RuntimeEnvironmentSetupGuardError('runtime_manually_disconnected', {
       kind: 'manual-disconnect'
@@ -91,17 +91,17 @@ export function resolveSubscriptionEnvironment(
   return { environment, pairingRevision }
 }
 
-export function assertCrewSubscriptionCurrent(
+export async function assertCrewSubscriptionCurrent(
   event: IpcMainInvokeEvent,
   sender: WebContents,
   getUserDataPath: () => string,
-  environment: ReturnType<typeof resolveEnvironment>,
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>,
   pairingRevision: number,
   args: RuntimeEnvironmentSubscribeArgs,
   transportIsCurrent: () => boolean,
   signal: AbortSignal,
   observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
-): void {
+): Promise<void> {
   throwIfSignalAborted(signal)
   if (
     sender.isDestroyed() ||
@@ -119,12 +119,29 @@ export function assertCrewSubscriptionCurrent(
       kind: 'manual-disconnect'
     })
   }
-  let current: ReturnType<typeof resolveEnvironment>
+  let current: Awaited<ReturnType<typeof resolveEnvironment>>
   try {
-    current = resolveEnvironment(getUserDataPath(), environment.id)
+    current = await resolveEnvironment(getUserDataPath(), environment.id)
   } catch (error) {
     observeFailure(runtimeEnvironmentSetupFailure(error, 'environment-resolution'))
     throw error
+  }
+  throwIfSignalAborted(signal)
+  if (
+    sender.isDestroyed() ||
+    !event.senderFrame ||
+    event.senderFrame.detached ||
+    event.senderFrame !== sender.mainFrame
+  ) {
+    throw new RuntimeEnvironmentSetupGuardError(
+      'The window that started this subscription went away',
+      { kind: 'source-retired' }
+    )
+  }
+  if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+    throw new RuntimeEnvironmentSetupGuardError('runtime_manually_disconnected', {
+      kind: 'manual-disconnect'
+    })
   }
   if (
     !transportIsCurrent() ||
@@ -187,19 +204,19 @@ export type PendingRuntimeSubscription = {
   close: () => void
 }
 
-export function assertSubscriptionPairingCurrent(
+export async function assertSubscriptionPairingCurrent(
   getUserDataPath: () => string,
-  environment: ReturnType<typeof resolveEnvironment>,
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>,
   pairingRevision: number,
   transportIsCurrent: () => boolean,
   crewResult: boolean,
   disposeRendererLifetime: () => void,
   subscription: RemoteRuntimeTransportSubscription,
   observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
-): void {
+): Promise<void> {
   let pairingIsCurrent = false
   try {
-    const currentEnvironment = resolveEnvironment(getUserDataPath(), environment.id)
+    const currentEnvironment = await resolveEnvironment(getUserDataPath(), environment.id)
     pairingIsCurrent =
       (currentEnvironment.pairingRevision ?? currentEnvironment.createdAt) === pairingRevision
   } catch (error) {
@@ -242,15 +259,15 @@ export function runtimeEnvironmentSubscriptionId(args: RuntimeEnvironmentSubscri
     : randomUUID()
 }
 
-export function assertSettledCrewSubscriptionCurrent(
+export async function assertSettledCrewSubscriptionCurrent(
   crewResult: boolean,
-  assertCrewCurrent: () => void,
+  assertCrewCurrent: () => Promise<void>,
   disposeRendererLifetime: () => void,
   subscription: RemoteRuntimeTransportSubscription
-): void {
+): Promise<void> {
   if (crewResult) {
     try {
-      assertCrewCurrent()
+      await assertCrewCurrent()
     } catch (error) {
       disposeRendererLifetime()
       subscription.close()
@@ -259,7 +276,9 @@ export function assertSettledCrewSubscriptionCurrent(
   }
 }
 
-export function assertCrewSourceCurrent(environment: ReturnType<typeof resolveEnvironment>): void {
+export function assertCrewSourceCurrent(
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>
+): void {
   const connection = getPreferredPairedRuntimeConnection(environment)
   const accepted = getAcceptedRuntimeEnvironmentCapabilityOutcome(
     environment.id,

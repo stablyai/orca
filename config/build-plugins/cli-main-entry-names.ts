@@ -1,5 +1,7 @@
 // The CLI loads these paths after electron-vite replaces out/main.
 export const CLI_MAIN_ENTRY_NAMES = [
+  'worker-threads/worker-thread-entry-path',
+  'worker-threads/worker-thread-spawn',
   'agent-hooks/installation/managed-agent-hook-controls',
   'gitlab/projects/project-ref-parser',
   'orca-profiles/profile-index-store',

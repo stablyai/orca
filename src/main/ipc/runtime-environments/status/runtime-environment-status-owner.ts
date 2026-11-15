@@ -53,7 +53,7 @@ async function answerRefusedPairing(
   if (!recovery) {
     return refused
   }
-  let outcome: 'built' | 'repaired'
+  let outcome: 'built' | 'repaired' | null
   try {
     outcome = await recovery
   } catch (error) {
@@ -61,6 +61,9 @@ async function answerRefusedPairing(
     return code && error instanceof Error
       ? runtimeHostStatusFailure(code, error.message)
       : runtimeHostStatusError(error)
+  }
+  if (outcome === null) {
+    return refused
   }
   // Rebuild re-proved the server, making refusal stale; only re-pairing retires this status owner.
   return runtimeEnvironmentChangedFailure(environment, 'status.get', outcome === 'repaired')
@@ -84,11 +87,15 @@ export function createRuntimeEnvironmentStatusOwner(
       getRuntimeEnvironmentCapabilityIncarnation(environment.id) === incarnation
     // A sleeping VM's health probe would be the dial that wakes it; answer without dialing.
     // (A tunnelled server is refused the same way by its preparation below.)
-    if (isRecipeVmEnvironmentAsleep(userDataPath, environment.id)) {
+    if (await isRecipeVmEnvironmentAsleep(userDataPath, environment.id)) {
       return runtimeHostStatusFailure(
         RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
         RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
       )
+    }
+    signal.throwIfAborted()
+    if (!isCurrent()) {
+      return runtimeEnvironmentChangedFailure(environment, 'status.get')
     }
     if (environment.connectionDependency === 'ssh-tunnel') {
       try {

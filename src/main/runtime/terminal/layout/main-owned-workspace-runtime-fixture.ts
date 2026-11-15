@@ -63,7 +63,7 @@ function session(split: boolean, pinned: boolean): WorkspaceSessionState {
   }
 }
 
-export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolean } = {}) {
+export async function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolean } = {}) {
   let current = session(opts.split === true, opts.pinned === true)
   const written = new Set<(hostId: string | null) => void>()
   const write = (next: WorkspaceSessionState): void => {
@@ -107,7 +107,7 @@ export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolea
     },
     getForegroundProcess: async () => null
   })
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   const ptyIds = opts.split ? [PTY_A, PTY_B] : [PTY_A]
   for (const [index, ptyId] of ptyIds.entries()) {
     const leafId = index === 0 ? LEAF_A : LEAF_B

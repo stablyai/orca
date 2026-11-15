@@ -143,7 +143,7 @@ describe('remote terminal tab retirement publication', () => {
     )
     runtime.attachWindow(1)
     const staleLiveSnapshot = makeHostSnapshot()
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,

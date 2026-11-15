@@ -164,7 +164,9 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
         this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
         (await this.resolveWorkspaceSelector(worktreeSelector)).id
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
+        await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+          includeAgentSenders: false
+        }),
         result.tab.id,
         navigation,
         opts.clientNavigationId

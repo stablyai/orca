@@ -61,7 +61,11 @@ describe('session.tabs rows follow main’s layout (switch on)', () => {
   it('a tab main renamed before the window republished', async () => {
     const { runtime } = surfaceRuntime()
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [stalePublication(1)] })
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [stalePublication(1)]
+    })
     await runtime.applyLayoutCommand({
       type: 'renameTab',
       workspace: TEST_WORKTREE_ID,
@@ -69,7 +73,11 @@ describe('session.tabs rows follow main’s layout (switch on)', () => {
       kind: 'custom',
       title: 'Build'
     })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [stalePublication(2)] })
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [stalePublication(2)]
+    })
 
     const rows = await phoneRows(runtime)
     expect(rows.map((entry) => [entry.title, entry.customTitle])).toEqual([
@@ -86,9 +94,9 @@ describe('session.tabs rows follow main’s layout (switch on)', () => {
       activeGroupId: SAVED_GROUP_ID,
       tabGroups: [{ id: SAVED_GROUP_ID, activeTabId: SURFACE_TAB_ID, tabOrder: SAVED_STRIP[0]! }]
     })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [publication(1)] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [publication(1)] })
     await moveAndSplitTabs(runtime)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [publication(2)] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [publication(2)] })
 
     expect(tabStrip(await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`))).toEqual(
       MOVED_STRIP

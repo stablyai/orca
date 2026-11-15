@@ -32,7 +32,7 @@ const LEAF = '22222222-2222-4222-8222-222222222222'
 const PANE = `tab-1:${LEAF}`
 const PHONE: RpcDispatchStreamingOptions = { clientKind: 'mobile', connectionId: 'phone-1' }
 
-function createHeadlessHost() {
+async function createHeadlessHost() {
   const meta: Record<string, WorktreeMeta> = { [WT]: storeWorktreeMeta() }
   const sshMeta: Record<string, WorktreeMeta> = { [SSH_WT]: storeWorktreeMeta() }
   // A same-id project this host registered under a server's id and locally.
@@ -79,7 +79,7 @@ function createHeadlessHost() {
       Object.assign(folders[id], updates)
   }
   const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
     tabs: [{ tabId: 'tab-1', worktreeId: WT, title: 'Agent', activeLeafId: LEAF, layout: null }],
     leaves: [
       {
@@ -147,7 +147,7 @@ afterEach(() => {
 
 describe('workspace unread flag on a headless host', () => {
   it('flags a finish no one sees, clears it when the phone opens it, and spares it while open', async () => {
-    const host = createHeadlessHost()
+    const host = await createHeadlessHost()
     host.finishTurn()
     expect(host.meta[WT].isUnread).toBe(true)
 
@@ -163,7 +163,7 @@ describe('workspace unread flag on a headless host', () => {
   })
 
   it('clears a folder workspace and an SSH worktree on their own records when the phone opens them', async () => {
-    const host = createHeadlessHost()
+    const host = await createHeadlessHost()
     host.folders[FOLDER_ID].isUnread = true
     host.sshMeta[SSH_WT].isUnread = true
     await host.openOnPhone(FOLDER)
@@ -179,7 +179,7 @@ describe('workspace unread flag on a headless host', () => {
 
   // The phone names only an id, so it cannot say which of two same-id copies it shows.
   it('clears neither copy of a workspace two hosts register', async () => {
-    const host = createHeadlessHost()
+    const host = await createHeadlessHost()
     host.hubMeta[HUB_WT].isUnread = true
     host.meta[HUB_WT].isUnread = true
     await host.openOnPhone(HUB_WT)
@@ -190,7 +190,7 @@ describe('workspace unread flag on a headless host', () => {
   it('spares the tab a client window shows while its user is present', async () => {
     vi.useFakeTimers({ now: 10_000, toFake: ['Date'] })
     try {
-      const host = createHeadlessHost()
+      const host = await createHeadlessHost()
       const view = { workspaceIds: [WT], tabIds: ['tab-1'], presentForMs: 60_000 }
       expect(await host.reportView(view, 'desktop-1')).toMatchObject({ ok: true })
       host.finishTurn()
