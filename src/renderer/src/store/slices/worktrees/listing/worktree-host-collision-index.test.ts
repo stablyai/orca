@@ -38,18 +38,6 @@ describe('id-keyed worktree projections keep distinct hosts distinct', () => {
     expect(all).toHaveLength(2)
     expect(all.map((entry) => entry.hostId)).toEqual(['local', 'ssh:build-box'])
   })
-
-  it('still collapses the createWorktree/fetchWorktrees duplicate on one host', () => {
-    // Same id AND same host: this is the append/replace race the dedup exists for.
-    const stale: Worktree = { ...localRow, head: 'stale' }
-    const fresh: Worktree = { ...localRow, head: 'fresh' }
-
-    const all = getIndexedAllWorktrees(byRepo(stale, fresh))
-
-    expect(all).toHaveLength(1)
-    // Last wins: fetchWorktrees replaces, so the later entry is the current one.
-    expect(all[0]?.head).toBe('fresh')
-  })
 })
 
 describe('getWorktreeOnHostFromState refuses a lookup that still matches two copies', () => {

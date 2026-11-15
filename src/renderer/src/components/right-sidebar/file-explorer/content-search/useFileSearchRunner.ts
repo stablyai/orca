@@ -1,11 +1,11 @@
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, useRef } from 'react'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   createFileSearchResultOwner,
   type FileSearchResultOwner
-} from '@/lib/file-search-result-owner'
+} from '@/lib/files/search/file-search-result-owner'
 import {
   createEmptyRuntimeFileSearchResult,
   getRuntimeFileSearchRejectedField

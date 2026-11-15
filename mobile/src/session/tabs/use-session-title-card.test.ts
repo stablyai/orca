@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { View } from 'react-native'
-import { hookMount, performHookAction } from '../../test-support/rpc-recording/hook-mount'
-import { mountFixture } from '../../test-support/rpc-recording/recorder-fixture-shape'
+import type { HostInstance } from 'react-native'
+import {
+  hookMount,
+  performHookAction
+} from '../../test-support/rpc-recording/react-mounting/hook-mount'
+import { mountFixture } from '../../test-support/rpc-recording/react-mounting/recorder-fixture-shape'
 import { useSessionTitleCard } from './use-session-title-card'
 import {
   useAnchoredDetailCard,
   type DetailCardMeasure
-} from '../../components/use-anchored-detail-card'
+} from '../../components/detail-cards/use-anchored-detail-card'
 
 vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ width: 400, height: 800 })
@@ -16,10 +19,10 @@ vi.mock('../../layout/side-safe-area', () => ({
 }))
 vi.mock('../../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 
-type Measured = Parameters<View['measureInWindow']>[0]
+type Measured = Parameters<HostInstance['measureInWindow']>[0]
 function deferredView() {
   let measure!: Measured
-  const view = mountFixture<View>({
+  const view = mountFixture<HostInstance>({
     measureInWindow: (callback) => {
       measure = callback
     }

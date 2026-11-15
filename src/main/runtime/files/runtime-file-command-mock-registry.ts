@@ -5,7 +5,7 @@ import { vi, type Mock } from 'vitest'
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../../ipc/filesystem/access/filesystem-auth'
-import type * as GitRunner from '../../git/runner'
+import type * as wslAwareSpawnModule from '../../git/command-runner/host-routing/wsl-aware-spawn'
 import type * as BundledRipgrepPath from '../../ripgrep/bundled-ripgrep-path'
 
 // Loose mock payloads allow partial fixtures while suites assert the exact call arguments.
@@ -86,7 +86,9 @@ export async function filesystemAuthModuleMock() {
 }
 
 export async function gitRunnerModuleMock() {
-  const actual = await vi.importActual<typeof GitRunner>('../../git/runner')
+  const actual = await vi.importActual<typeof wslAwareSpawnModule>(
+    '../../git/command-runner/host-routing/wsl-aware-spawn'
+  )
   return {
     ...actual,
     wslAwareSpawn: wslAwareSpawnMock

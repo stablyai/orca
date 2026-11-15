@@ -4,7 +4,7 @@ import {
   type OrchestrationCrewSnapshot,
   type OrchestrationCrewRow
 } from '../../../../shared/orchestration/orchestration-crew'
-import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
 import { crewDisplayName, crewTaskDisplay } from './crew-rules'
@@ -39,7 +39,7 @@ function preview(body: string): string {
 export function buildCrewSnapshot(
   address: string,
   deps: CrewReadDependencies,
-  host = createCrewHostDerivation(deps, deps.now ?? Date.now())
+  host = createCrewHostDerivation(deps)
 ): OrchestrationCrewSnapshot {
   deps = { ...host.deps, now: deps.now }
   const db = deps.db
@@ -205,11 +205,18 @@ export function buildCrewSnapshot(
     return row
   }
   const snapshot = emptyCrew('ok')
+  const approvals = Map.groupBy(
+    host.sourceInputs.approvals(selfAliases()),
+    ({ approval }) => approval.worker.dispatchId
+  )
   for (const { assignment, worker, parent } of host.relations.get(self.address) ?? []) {
     if (parent.address === self.address) {
-      snapshot.sections.managing.push(
-        decorate(worker, 'worker', assignment, `dispatch:${assignment.id}`)
-      )
+      const row = decorate(worker, 'worker', assignment, `dispatch:${assignment.id}`)
+      const own = approvals.get(assignment.id)
+      if (own) {
+        row.approvals = own
+      }
+      snapshot.sections.managing.push(row)
     }
   }
   const parents = host.sourceInputs.parentInputs(selfAliases(), self.paneKey ? [self.paneKey] : [])

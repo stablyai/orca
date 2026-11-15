@@ -12,7 +12,7 @@ await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
 await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-const { toAppSshPtyId } = await import('../../../../shared/ssh-pty-id')
+const { toAppSshPtyId } = await import('../../../../shared/remote-runtime/ssh/ssh-pty-id')
 const {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -58,7 +58,10 @@ async function sweepProvider(
 }
 
 /** A host whose saved `host-tab` pane binds `ptyId`, live until the test drops it from `host.live`. */
-function savedPaneHost(ptyId: string, opts: { windowed?: boolean; splitPtyId?: string } = {}) {
+async function savedPaneHost(
+  ptyId: string,
+  opts: { windowed?: boolean; splitPtyId?: string } = {}
+) {
   const host: Host = { live: new Set([ptyId]) }
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal({
@@ -110,10 +113,13 @@ function savedPaneHost(ptyId: string, opts: { windowed?: boolean; splitPtyId?: s
   if (opts.windowed) {
     runtime.attachWindow(1)
   }
-  const publishWindowGraph = (): void => {
-    runtime.syncWindowGraph(opts.windowed ? 1 : 0, opts.windowed ? graph : { tabs: [], leaves: [] })
+  const publishWindowGraph = async (): Promise<void> => {
+    await runtime.syncWindowGraph(
+      opts.windowed ? 1 : 0,
+      opts.windowed ? graph : { tabs: [], leaves: [] }
+    )
   }
-  publishWindowGraph()
+  await publishWindowGraph()
   return { runtime, host, publishWindowGraph }
 }
 
@@ -132,12 +138,14 @@ afterEach(() => {
 
 describe('a pane main owns does not vouch for its terminal (switch on)', () => {
   it('reads a windowed pane disconnected, and a window republish does not reconnect it', async () => {
-    const { runtime, host, publishWindowGraph } = savedPaneHost('saved-pty', { windowed: true })
+    const { runtime, host, publishWindowGraph } = await savedPaneHost('saved-pty', {
+      windowed: true
+    })
     expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
 
     host.live.clear()
     expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('pending-handle')
-    publishWindowGraph()
+    await publishWindowGraph()
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(record(runtime, 'saved-pty')?.connected).toBe(false)
@@ -145,7 +153,7 @@ describe('a pane main owns does not vouch for its terminal (switch on)', () => {
   })
 
   it('leaves an SSH pane to the relay: a local sweep is not absence, the relay omitting it is', async () => {
-    const { runtime, host } = savedPaneHost(SSH_PTY)
+    const { runtime, host } = await savedPaneHost(SSH_PTY)
     runtime.registerPty(SSH_PTY, TEST_WORKTREE_ID, 'ssh-target', {
       tabId: 'host-tab',
       leafId: HEADLESS_LEAF_ID
@@ -167,7 +175,7 @@ describe('a pane main owns does not vouch for its terminal (switch on)', () => {
 
 describe('stopping a workspace through a listing gap (switch on)', () => {
   it('still targets a disconnected terminal main binds, and never reports it stopped unproven', async () => {
-    const { runtime, host } = savedPaneHost('saved-pty', { windowed: true })
+    const { runtime, host } = await savedPaneHost('saved-pty', { windowed: true })
     await rowStatus(runtime, TEST_WORKTREE_ID)
     host.live.clear()
     await rowStatus(runtime, TEST_WORKTREE_ID)
@@ -185,7 +193,7 @@ describe('stopping a workspace through a listing gap (switch on)', () => {
 
 describe('a reused terminal id of another workspace (switch on)', () => {
   it('is never a stop target of the workspace whose saved pane names the same id', async () => {
-    const { runtime, host } = savedPaneHost('reused-pty')
+    const { runtime, host } = await savedPaneHost('reused-pty')
     const other = 'repo-1::/tmp/worktree-other'
     runtime.setPtyController(hostController(host, '/tmp/worktree-other', other))
     await sweepProvider(runtime, null)
@@ -206,7 +214,7 @@ describe('idle admission across SSH inventory uncertainty', () => {
     'recovers the same incarnation ($isMain, windowed=$windowed)',
     async ({ isMain, windowed }) => {
       layoutOwner.isMain = isMain
-      const { runtime, host } = savedPaneHost(SSH_PTY, { windowed })
+      const { runtime, host } = await savedPaneHost(SSH_PTY, { windowed })
       runtime.registerPty(SSH_PTY, TEST_WORKTREE_ID, 'ssh-target', {
         tabId: 'host-tab',
         leafId: HEADLESS_LEAF_ID,
@@ -246,7 +254,7 @@ describe('idle admission across SSH inventory uncertainty', () => {
 
 describe('an exit wait through a listing gap (switch on)', () => {
   it('keeps waiting on a disconnected terminal main binds until its exit is certified', async () => {
-    const { runtime, host } = savedPaneHost('saved-pty', { windowed: true })
+    const { runtime, host } = await savedPaneHost('saved-pty', { windowed: true })
     await rowStatus(runtime, TEST_WORKTREE_ID)
     const handle = runtime.resolveTerminalPane(
       `host-tab:${HEADLESS_LEAF_ID}`,
@@ -274,7 +282,7 @@ describe('an exit wait through a listing gap (switch on)', () => {
 
 describe('an exit wait on a new process of a reused terminal id (switch on)', () => {
   it("does not settle from the old process's exit code through a listing gap", async () => {
-    const { runtime, host } = savedPaneHost('saved-pty', { windowed: true })
+    const { runtime, host } = await savedPaneHost('saved-pty', { windowed: true })
     await rowStatus(runtime, TEST_WORKTREE_ID)
     await runtime.onPtyExit('saved-pty', 0)
     // The host starts a new process under the same id in the same pane; its commit binds it.
@@ -300,7 +308,7 @@ describe('an exit wait on a new process of a reused terminal id (switch on)', ()
 describe('a terminal registered while a listing is in flight (switch on)', () => {
   it('stays connected: the listing that started before it cannot prove it absent', async () => {
     // Main's layout binds the split's pane before its shell registers, as the spawn commit does.
-    const { runtime, host } = savedPaneHost('saved-pty', {
+    const { runtime, host } = await savedPaneHost('saved-pty', {
       windowed: true,
       splitPtyId: 'split-pty'
     })

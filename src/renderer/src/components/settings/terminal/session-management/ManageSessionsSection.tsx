@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { PtyManagementSession } from '../../../../../../preload/api/pty-management-api'
+import type { PtyManagementSession } from '../../../../../../preload/api/terminal/pty-management-api'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { getManageSessionsSearchEntries } from './manage-sessions-search'
@@ -13,7 +13,7 @@ import { ManageSessionsTable } from './ManageSessionsTable'
 import {
   notifyDaemonSessionInventoryInvalidated,
   subscribeDaemonSessionInventoryInvalidated
-} from '../../../status-bar/daemon-session-inventory-invalidation'
+} from '../../../status-bar/resources/inventory/daemon-session-inventory-invalidation'
 import { MANAGE_SESSIONS_SECTION_ID } from './open-terminal-manage-sessions'
 import { TerminalTccAttributionNotice } from '../../developer-permissions/TerminalTccAttributionNotice'
 import { translate } from '@/i18n/i18n'
@@ -218,7 +218,7 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   return (
     <SettingsGroup
-      title={t('auto.components.settings.ManageSessionsSection.d1b80fd5cd', 'Manage Sessions')}
+      title={t('auto.components.settings.ManageSessionsSection.0e07cc838b', 'Manage sessions')}
       description={t(
         'auto.components.settings.ManageSessionsSection.7c4889a724',
         'Recover from a frozen or misbehaving terminal by killing sessions or restarting the underlying daemon.'

@@ -18,7 +18,7 @@ import type { WorkspaceResource } from '@/lib/workspace/ownership/workspace-copy
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { isMarkdownComment } from '@/lib/diff-comment-compat'
+import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   formatMarkdownReviewNotes,
   type MarkdownReviewNote

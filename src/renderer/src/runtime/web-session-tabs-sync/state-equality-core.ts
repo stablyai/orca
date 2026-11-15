@@ -1,9 +1,10 @@
+import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusEvidenceObservedAt
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { mainAgentStatusEqual } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 import { programStatusFacetsEqual } from '../../../../shared/program-status/facet'
 import type {
@@ -66,8 +67,10 @@ export function agentStatusEntryEqual(
     mainAgentStatusEqual(a.mainAgent, b.mainAgent) &&
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&
+    a.launchAttested === b.launchAttested &&
     programStatusFacetsEqual(a.programStatus, b.programStatus) &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
+    a.orcaSessionId === b.orcaSessionId &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }
@@ -132,13 +135,23 @@ export function writableWebSessionTabsRecord<K extends WebSessionTabsBatchRecord
 ): NonNullable<WebSessionTabsSyncState[K]> {
   const record = (state[recordKey] ?? {}) as NonNullable<WebSessionTabsSyncState[K]>
   if (!batchContext) {
-    return { ...record } as NonNullable<WebSessionTabsSyncState[K]>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each branch copies the selected record without changing its value type; TypeScript cannot narrow generic K.
+    return (
+      recordKey === 'remoteBrowserPageHandlesByPageId'
+        ? copyBrowserPageHandles(state.remoteBrowserPageHandlesByPageId)
+        : { ...record }
+    ) as NonNullable<WebSessionTabsSyncState[K]>
   }
   // Batch-owned record copies can be updated in place without recopying all workspaces.
   if (batchContext.changedRecords.has(recordKey)) {
     return record
   }
-  const next = { ...record } as NonNullable<WebSessionTabsSyncState[K]>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each branch copies the selected record without changing its value type; TypeScript cannot narrow generic K.
+  const next = (
+    recordKey === 'remoteBrowserPageHandlesByPageId'
+      ? copyBrowserPageHandles(state.remoteBrowserPageHandlesByPageId)
+      : { ...record }
+  ) as NonNullable<WebSessionTabsSyncState[K]>
   const mutableState = state as unknown as Record<
     WebSessionTabsBatchRecordKey,
     Record<string, unknown>

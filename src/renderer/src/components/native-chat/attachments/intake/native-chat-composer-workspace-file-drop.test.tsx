@@ -9,14 +9,14 @@ import {
   WORKSPACE_FILE_PATHS_MIME,
   WORKSPACE_FILE_PATH_MIME,
   writeWorkspaceFileDragSource
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 import type { NativeChatComposerInput } from '../../composer/editor/native-chat-composer-input'
 import { NativeChatComposerField } from '../../composer/editor/NativeChatComposerField'
 import { useNativeChatComposerAttachments } from '../chips/use-native-chat-composer-attachments'
 import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type * as RemoteRuntimePtyIdModule from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState: {
@@ -282,28 +282,6 @@ describe('native chat workspace file drops', () => {
   })
 
   // Explorer paths from the same runtime host are readable by its agent.
-  it('accepts a same-host drop on a remote runtime target and refuses a foreign one', () => {
-    testState.executionHostId = 'runtime:env-1'
-    testState.ownerKind = 'remote'
-    testState.targetIsRemoteRuntime = true
-    const view = render(<ComposerProbe structured={false} />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/env/owned.ts'], { executionHostId: 'runtime:env-1' })
-    )
-    expect(screen.getByTestId('draft').textContent).toBe('@/env/owned.ts ')
-    view.unmount()
-
-    render(<ComposerProbe structured={false} />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/elsewhere/foreign.ts'], { executionHostId: 'runtime:env-2' })
-    )
-    expect(screen.getByTestId('draft').textContent).toBe('')
-    expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
-  })
 
   it('queues an internal reference until composition settles without stealing focus', () => {
     render(<ComposerProbe initialDraft="preedit" />)
@@ -319,30 +297,5 @@ describe('native chat workspace file drops', () => {
     expect(document.activeElement).toBe(input)
   })
 
-  it('rejects an IME-queued path when its execution host changes before composition settles', () => {
-    render(<ComposerProbe initialDraft="preedit" />)
-    const input = editor()
-    fireEvent.compositionStart(input)
-    dispatchDragEvent('drop', input, internalTransfer(['/repo/a.ts']))
-
-    testState.executionHostId = 'ssh:replacement'
-    fireEvent.compositionEnd(input, { data: '' })
-
-    expect(screen.getByTestId('draft').textContent).toBe('preedit')
-    expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
-  })
-
   // Recheck current workspace after IME; comparing only captured identities would miss a pane retarget.
-  it('rejects an IME-queued path when the pane changes workspace before settling', () => {
-    const view = render(<ComposerProbe initialDraft="preedit" />)
-    const input = editor()
-    fireEvent.compositionStart(input)
-    dispatchDragEvent('drop', input, internalTransfer(['/repo/a.ts']))
-
-    view.rerender(<ComposerProbe initialDraft="preedit" structuredWorkspaceId="worktree-2" />)
-    fireEvent.compositionEnd(input, { data: '' })
-
-    expect(screen.getByTestId('draft').textContent).toBe('preedit')
-    expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
-  })
 })

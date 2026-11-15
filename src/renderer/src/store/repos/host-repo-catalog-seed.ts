@@ -1,8 +1,8 @@
 // Stopped WSL hosts still list their projects after a restart: seed rows from the desktop's saved answer.
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { HostRepoCatalogSnapshot } from '../../../../shared/host-repo-catalog-snapshot'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { HostRepoCatalogSnapshot } from '../../../../shared/execution-host/host-repo-catalog-snapshot'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getRepoRowIdentity } from './repo-host-identity'

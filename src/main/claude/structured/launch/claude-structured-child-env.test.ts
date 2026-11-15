@@ -2,13 +2,14 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import {
-  resolveClaudeChildEnvSources,
-  withOrcaClaudeEntrypoint
-} from './claude-structured-child-env'
-import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
+import { runProcess } from '@orca/process-host'
+import { claudeChildEnv, resolveClaudeChildEnvSources } from './claude-structured-child-env'
+import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+})
 
 it('resolves a custom Claude command against the login shell PATH', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-shell-only-cli-'))
@@ -31,13 +32,21 @@ it('resolves a custom Claude command against the login shell PATH', async () => 
   }
 })
 
-it('keeps a differently cased Windows launch value over the Orca default', () => {
-  const inherited = { Claude_Code_Entrypoint: 'cli', PATH: 'C:\\bin' }
-  expect(
-    withOrcaClaudeEntrypoint(inherited, { claude_code_entrypoint: 'company-client' }, 'win32')
-  ).toEqual({ PATH: 'C:\\bin', CLAUDE_CODE_ENTRYPOINT: 'company-client' })
-  expect(withOrcaClaudeEntrypoint(inherited, undefined, 'win32')).toEqual({
-    PATH: 'C:\\bin',
-    CLAUDE_CODE_ENTRYPOINT: 'orca'
-  })
-})
+it.skipIf(process.platform !== 'win32')(
+  'passes configured values through a real Windows child despite inherited casing',
+  async () => {
+    vi.stubEnv('ORCA_NATIVE_ENV_CASE_PROBE', 'inherited')
+    const sources = await resolveClaudeChildEnvSources({
+      resolveEnv: () => ({ orca_native_env_case_probe: 'configured' }),
+      resolveCommand: () => ({ command: process.execPath, prefixArgs: [] })
+    })
+    const result = await runProcess({
+      program: sources.command,
+      args: ['--eval', 'process.stdout.write(process.env.ORCA_NATIVE_ENV_CASE_PROBE ?? "")'],
+      env: claudeChildEnv(sources, undefined, { runtimeOnPath: false }),
+      timeoutMs: 30_000
+    })
+    expect(result.code).toBe(0)
+    expect(result.stdout).toBe('configured')
+  }
+)

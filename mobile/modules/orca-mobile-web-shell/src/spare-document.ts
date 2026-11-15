@@ -11,7 +11,8 @@ const spareModule = (): SpareDocumentModule | null =>
   requireOptionalNativeModule<SpareDocumentModule>('OrcaMobileWebShell')
 
 // Boot a page from `directory` under `sessionId` and park it, invisible, until a screen claims it.
-// False when native declined: a phone under 4 GB, the app not active, or a page document shown.
+// False when native declined: a phone under 4 GB, the app not active, a page document shown, or an iOS
+// memory warning in the last few minutes.
 export async function prepareSpareDocument(directory: string, sessionId: string): Promise<boolean> {
   return (await spareModule()?.prepareSpareDocument?.(directory, sessionId)) ?? false
 }

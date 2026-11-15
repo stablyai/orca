@@ -9,7 +9,7 @@ import {
 import {
   createIncrementalNdjsonFramer,
   encodeNdjson
-} from '../../../shared/main-process-ndjson-framer'
+} from '../../../shared/json-stream/main-process-ndjson-framer'
 import { AcpConnectionClosedError, startAcpRequestDeadline } from './acp-errors'
 import { AcpIncomingRequests } from './acp-incoming-requests'
 import { requestTimeout, resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
@@ -105,7 +105,7 @@ export class AcpJsonRpcPeer {
   request(
     method: string,
     params: unknown,
-    options?: { timeoutMs?: number | null }
+    options?: Pick<AcpRequestOptions, 'timeoutMs' | 'onTimeout'>
   ): Promise<unknown>
   request(
     method: string,

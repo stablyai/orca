@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTabDragActive } from '../tab-group/tab-drag-context'
 import {
   TERMINAL_TAB_CONTAINER_WIDTH_CLASSES,

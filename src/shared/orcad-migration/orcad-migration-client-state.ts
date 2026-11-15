@@ -6,7 +6,7 @@ import type {
   WorkspaceHostOrder,
   WorkspaceHostScope
 } from '../ui-chrome-types'
-import type { SavedPortForward } from '../ssh-types'
+import type { SavedPortForward } from '../remote-runtime/ssh/ssh-types'
 import {
   parseClientHostedBrowserCloseIntents,
   parseMobileSelections,

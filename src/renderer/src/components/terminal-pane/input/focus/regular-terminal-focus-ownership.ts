@@ -1,4 +1,4 @@
-import { isFocusKeepingPress } from '@/lib/focus-keeping-press'
+import { isFocusKeepingPress } from '@/lib/overlay-interaction/focus-keeping-press'
 import {
   isDocumentBodyOrNull,
   refreshTerminalImeInputContext,

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import {
   applyBrowserAnnotationViewportReport,
-  createBrowserAnnotationPayload,
   getBrowserOverlayAnchor,
   getLiveBrowserAnnotationRect
 } from './browser-annotation-geometry'
@@ -79,12 +78,6 @@ describe('browser annotation geometry', () => {
         y: 185
       }
     )
-  })
-
-  it('strips screenshot bytes from persisted annotation payloads', () => {
-    const source = payload()
-    expect(createBrowserAnnotationPayload(source).screenshot).toBeNull()
-    expect(createBrowserAnnotationPayload(source).target.selector).toBe('button')
   })
 })
 

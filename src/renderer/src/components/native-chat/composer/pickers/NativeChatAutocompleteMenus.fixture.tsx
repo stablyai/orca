@@ -23,7 +23,7 @@ function CommandMenu({ invertedAccent = false }: { invertedAccent?: boolean }) {
             dispatchable: true,
             grouped: false,
             commandsEnabled: true,
-            skillsEnabled: false,
+            skillsEnabled: true,
             skillStatus: 'ready',
             items: [
               {
@@ -42,6 +42,15 @@ function CommandMenu({ invertedAccent = false }: { invertedAccent?: boolean }) {
                 token: '/clear',
                 description: 'Clear conversation context',
                 skillCollision: false
+              },
+              {
+                kind: 'skill',
+                id: 'skill:demo',
+                name: 'demo',
+                token: '/demo',
+                description: 'Plan or implement a change',
+                argumentHint: '[plan|implement] [ref ...]',
+                sources: []
               }
             ]
           }}

@@ -1,22 +1,22 @@
-import type { SpeechApi } from '../../../../preload/api/speech-api'
+import type { SpeechApi } from '../../../../preload/api/speech/speech-api'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechTranscriptEvent
-} from '../../../../shared/speech-types'
-import { hostDictationErrorMessage } from '../../../../shared/host-dictation-error-messages'
+} from '../../../../shared/speech/speech-types'
+import { hostDictationErrorMessage } from '../../../../shared/speech/dictation/host-dictation-error-messages'
 import {
   MAX_DICTATION_AUDIO_CHUNK_BYTES,
   PCM_BYTES_PER_SAMPLE
-} from '../../../../shared/rpc-contract/speech-params'
+} from '../../../../shared/rpc-contract/speech/speech-params'
 import { encodeBase64Bytes } from '@/lib/base64-bytes'
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
-import { errorMessage } from '../../../../shared/error-message'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { callRuntimeResult } from './web-runtime-calls'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
-import { pairedDictationFinishTimeoutMs } from '../../../../shared/dictation-finish-deadlines'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { pairedDictationFinishTimeoutMs } from '../../../../shared/speech/dictation/dictation-finish-deadlines'
 
 const MAX_CHUNK_SAMPLES = MAX_DICTATION_AUDIO_CHUNK_BYTES / PCM_BYTES_PER_SAMPLE
 // A slow link can leave a backlog of chunks behind Stop; past this, keep the text so far instead.
@@ -89,6 +89,7 @@ export function createWebSpeechApi(): Pick<
   | 'cancelDictation'
   | 'onPartialTranscript'
   | 'onFinalTranscript'
+  | 'onSpeechPending'
   | 'onStopped'
   | 'onError'
 > {
@@ -148,8 +149,8 @@ export function createWebSpeechApi(): Pick<
   }
 
   return {
-    // No model id, like the phone: the host dictates with the model it has selected now.
-    startDictation: async (_modelId, _hotwords, sessionId) => {
+    // No model id, like the phone: the host dictates with the model it has selected now, and its own terms for the worktree.
+    startDictation: async (_modelId, context, sessionId) => {
       const dictation: HostDictation = {
         sessionId,
         dictationId: `web-${createNonSecureContextUuid()}`,
@@ -164,7 +165,10 @@ export function createWebSpeechApi(): Pick<
       }
       active = dictation
       try {
-        await callRuntimeResult('speech.dictation.start', { dictationId: dictation.dictationId })
+        await callRuntimeResult('speech.dictation.start', {
+          dictationId: dictation.dictationId,
+          ...(context?.worktreeId ? { worktreeId: context.worktreeId } : {})
+        })
         // A cancel that landed while the host was starting couldn't reach this dictation yet.
         if (active !== dictation) {
           void cancelOnHost(dictation)
@@ -247,6 +251,8 @@ export function createWebSpeechApi(): Pick<
     },
     onPartialTranscript: (callback) => subscribe(partialListeners, callback),
     onFinalTranscript: (callback) => subscribe(finalListeners, callback),
+    // Chunk replies carry no pause-cut signal, so the paired client keeps the plain pill.
+    onSpeechPending: () => () => undefined,
     onStopped: (callback) => subscribe(stoppedListeners, callback),
     onError: (callback) => subscribe(errorListeners, callback)
   }

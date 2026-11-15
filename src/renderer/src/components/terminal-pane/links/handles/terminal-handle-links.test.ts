@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { ILink } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
@@ -9,27 +10,31 @@ import {
 import { extractOrchestrationTaskLinks } from './terminal-orchestration-task-links'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 
-const mocks = vi.hoisted(() => ({
-  activateTabAndFocusPane: vi.fn(),
-  focusTerminalTabSurface: vi.fn(),
-  revealFloatingWorkspacePanel: vi.fn(),
-  storeState: {
-    tabsByWorktree: {},
-    ptyIdsByTabId: {},
-    terminalLayoutsByTabId: {},
-    agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
-    runtimeAgentOrchestrationByPaneKey: {},
-    setActiveWorktree: vi.fn(),
-    markWorktreeVisited: vi.fn(),
-    recordWorktreeVisit: vi.fn(),
-    isNavigatingHistory: false,
-    setActiveView: vi.fn(),
-    setActiveTabType: vi.fn(),
-    revealWorktreeInSidebar: vi.fn(),
-    setActiveTab: vi.fn()
+const mocks = await vi.hoisted(async () => {
+  const { acceptedAgentStatuses } =
+    await import('@/store/slices/agent-status/accepted-agent-statuses')
+  return {
+    activateTabAndFocusPane: vi.fn(),
+    focusTerminalTabSurface: vi.fn(),
+    revealFloatingWorkspacePanel: vi.fn(),
+    storeState: {
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
+
+      runtimeAgentOrchestrationByPaneKey: {},
+      setActiveWorktree: vi.fn(),
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      isNavigatingHistory: false,
+      setActiveView: vi.fn(),
+      setActiveTabType: vi.fn(),
+      revealWorktreeInSidebar: vi.fn(),
+      setActiveTab: vi.fn()
+    }
   }
-}))
+})
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -41,11 +46,11 @@ vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
 
-vi.mock('@/lib/floating-workspace-panel-reveal', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-panel-reveal', () => ({
   revealFloatingWorkspacePanel: mocks.revealFloatingWorkspacePanel
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 
@@ -202,8 +207,7 @@ describe('createTerminalHandleLinkProvider', () => {
     mocks.storeState.tabsByWorktree = {}
     mocks.storeState.ptyIdsByTabId = {}
     mocks.storeState.terminalLayoutsByTabId = {}
-    mocks.storeState.agentStatusByPaneKey = {}
-    mocks.storeState.retainedAgentsByPaneKey = {}
+    mocks.storeState.agentStatusByPaneKey = acceptedAgentStatuses(Object.entries({}))
     mocks.storeState.runtimeAgentOrchestrationByPaneKey = {}
     vi.stubGlobal('window', {
       api: {

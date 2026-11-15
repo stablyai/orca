@@ -211,6 +211,11 @@ export class EmulatorBridge {
     })
   }
 
+  /** Renderers name only a device; main resolves its registered helper so they cannot pick hosts. */
+  getIosVideoStreamUrl(deviceUdid: string): string | null {
+    return this.sessionRegistry.getIosVideoStreamUrl(deviceUdid)
+  }
+
   async runCapability<T>(
     capability: keyof EmulatorBackendCapabilities,
     opts: EmulatorTargetOpts | undefined,
@@ -317,10 +322,7 @@ export class EmulatorBridge {
 
   private backendForActiveWorktree(worktreeId: string): EmulatorBackend | null {
     const key = this.sessionRegistry.getActiveSessionKey(worktreeId)
-    if (!key) {
-      return null
-    }
-    const session = this.sessionRegistry.getSession(key)
+    const session = key ? this.sessionRegistry.getSession(key) : undefined
     return session ? this.backendForKind(session.backend) : null
   }
 

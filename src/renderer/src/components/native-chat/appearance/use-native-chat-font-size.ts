@@ -1,10 +1,10 @@
 import { useEffect, type RefObject } from 'react'
 import { chatFontSizeActionForEvent } from './native-chat-font-size'
 import { writeNativeChatFontSize } from './native-chat-font-size-write'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '../../../store/index'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function useNativeChatFontSize(
   enabled: boolean,

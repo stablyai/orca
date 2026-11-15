@@ -2,12 +2,12 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import type { TerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import type { TerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import {
   getRepoExecutionHostId,

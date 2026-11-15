@@ -1,4 +1,4 @@
-import type { UpdateStatus } from '../../shared/update-status-types'
+import type { UpdateStatus } from '../../shared/updater/update-status-types'
 import type { ElectronAutoUpdater } from './electron-updater-loader'
 
 export type UpdaterHandlerContext = {

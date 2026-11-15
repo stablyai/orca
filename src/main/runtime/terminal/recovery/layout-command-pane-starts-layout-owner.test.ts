@@ -1,8 +1,8 @@
 // Main starts panes after layout commit; replies contain no effects and failed starts retain resume records.
 import { describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord as SleepingRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RestoredPaneTrigger } from './restored-pane-start'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -95,7 +95,7 @@ async function desktopRuntime(
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   runtime.attachWindow(TEST_WINDOW_ID)
   runtime.markGraphReady(TEST_WINDOW_ID)
   electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })

@@ -2,24 +2,24 @@ import { isColdRestoreStartup, paneResumeRecord } from '../startup/pane-resume-r
 import { releaseDeferredCwdFence } from './fresh-spawn-start'
 import { isMainResumedSleepPaneCurrent, mainResumedSleepPane } from './main-resumed-sleep-pane'
 import { useAppStore } from '@/store/index'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentSessionRecord
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { stablePaneHasLivePty } from '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
 import {
   clearPaneSpawnDeferral,
   getPaneSpawnDeferral,
   setPaneSpawnDeferral
-} from '@/lib/pane-spawn-deferral-registry'
+} from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import {
   cancelDeferredRestoreRetry,
   queueDeferredRestoreRetry
-} from '@/lib/pane-spawn-deferral-drain'
+} from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-drain'
 import {
   canResumeHostAutomaticRestores,
   resumeHostAutomaticRestores
@@ -40,7 +40,7 @@ type DeferredSpawn = {
 
 function providerSessionLiveInAnotherPane(resume: SleepingAgentSessionRecord): boolean {
   const state = useAppStore.getState()
-  return Object.values(state.agentStatusByPaneKey).some((entry) => {
+  return Array.from(state.agentStatusByPaneKey.values()).some((entry) => {
     const pane = entry.paneKey === resume.paneKey ? null : parsePaneKey(entry.paneKey)
     return (
       pane !== null &&

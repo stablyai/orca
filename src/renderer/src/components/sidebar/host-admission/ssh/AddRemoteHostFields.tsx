@@ -7,7 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   translateHostAccessLinkError,
   translateRemotePairingEndpointKind
-} from '@/lib/remote-pairing-copy'
+} from '@/lib/remote-pairing/remote-pairing-copy'
 import type { ParseHostAccessLinkResult } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   applyParsedSshHostInput,

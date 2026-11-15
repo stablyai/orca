@@ -1,16 +1,16 @@
 import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { createRuntimePath } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   DEFAULT_SEARCH_ENGINE,
   type SearchEngine,
   type SearchUrlOptions
-} from '../../../../shared/browser-url'
+} from '../../../../shared/browser/navigation/browser-url'
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import {
@@ -49,8 +49,8 @@ export {
   getTabEntryAllowAbsolutePaths,
   isTabEntryAbsolutePathAllowed
 } from './tab-create-entry-local-path'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { openHtmlFilePreview } from '@/lib/open-html-file-preview'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import { openHtmlFilePreview } from '@/lib/browser/documents/open-html-file-preview'
 import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   assertEditorFileOperationCurrent,

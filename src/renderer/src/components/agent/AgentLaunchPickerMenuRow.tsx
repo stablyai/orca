@@ -161,6 +161,11 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           onSelectAgent?.(entry.agent)
         }
       }}
+      onSelect={
+        mode === 'select'
+          ? (draft) => runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
+          : undefined
+      }
       onUse={(draft) => {
         const chosen = mode === 'select' ? draft.surface : undefined
         const result =
@@ -210,8 +215,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
             <Button
               type="button"
               variant="menu-launch"
-              size="menu"
-              className="h-9"
+              size="menu-launch"
               aria-disabled={launchBlocked || undefined}
               aria-describedby={launchBlocked ? reasonId : undefined}
             >

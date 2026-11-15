@@ -1,9 +1,10 @@
 import { useMemo, useRef } from 'react'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { MountedTerminalWorktrees } from './terminal/split-group-mount'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import { useWorktreeMap } from '../store/slices/worktrees/listing/use-worktree-catalog'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import type { WorktreeTabBucketProjection } from '@/lib/workspace/tabs/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
 import {
@@ -22,8 +23,7 @@ export function useTerminalWorkspaceFoundation() {
     TerminalTab
   > | null>(null)
   terminalTopologyProjectionRef.current ??= createTerminalWorktreeTopologyProjection()
-  const mountedWorktreeIdsRef = useRef(new Set<string>())
-  const browserGuestWorktreeRecencyRef = useRef<string[]>([])
+  const mountedWorktreeIdsRef = useRef<Set<string>>(new MountedTerminalWorktrees())
   const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
   const terminalWorktreeHiddenSinceRef = useRef(new Map<string, number>())
   const measuringTerminalWorktreeIdsRef = useRef(new Set<string>())
@@ -85,9 +85,6 @@ export function useTerminalWorkspaceFoundation() {
   const terminalRetentionBudgetEnabled = useAppStore(
     (state) => state.settings?.terminalHiddenWorktreeRetentionBudget !== false
   )
-  const browserGuestRetentionBudgetEnabled = useAppStore(
-    (state) => state.settings?.browserGuestWorktreeRetentionBudget !== false
-  )
   const terminalTitleSnapshotAuthorityEnabled = useAppStore((state) =>
     isMainTerminalSideEffectAuthorityForPty({
       settings: state.settings,
@@ -97,7 +94,6 @@ export function useTerminalWorkspaceFoundation() {
 
   return {
     mountedWorktreeIdsRef,
-    browserGuestWorktreeRecencyRef,
     measurableBackgroundWorktreeIdsRef,
     terminalWorktreeHiddenSinceRef,
     measuringTerminalWorktreeIdsRef,
@@ -117,7 +113,6 @@ export function useTerminalWorkspaceFoundation() {
     terminalSshParkingEnabled,
     pairedRuntimeParkingEnvironmentIds,
     terminalRetentionBudgetEnabled,
-    browserGuestRetentionBudgetEnabled,
     terminalTitleSnapshotAuthorityEnabled
   }
 }

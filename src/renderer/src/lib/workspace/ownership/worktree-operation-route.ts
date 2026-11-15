@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
@@ -17,7 +17,7 @@ import {
 } from './worktree-runtime-owner-index'
 import { findIndexedRepoOwnerForHost, resolveIndexedRepoOwner } from './repo-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
-import { onPairedWebClientHost } from '../../paired-web-client-host'
+import { onPairedWebClientHost } from '../../../app-shell/platform/paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,

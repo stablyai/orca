@@ -73,6 +73,13 @@
     "notice": {
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
+    "queuedMessages": {
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "queuedCount_one": "{{count}} queued message",
+      "queuedCount_other": "{{count}} queued messages",
+      "foldNeedsAttention": "{{more}}, a message needs attention"
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
@@ -315,7 +322,11 @@
       "forkOriginalMissingNamed": "{{agent}} could not find this response in \"{{detail}}\". Open that chat and fork from there.",
       "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat. Open it and fork from there.",
       "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
-      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal."
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
+      "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+      "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
+      "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+      "selectedModel": "the selected model"
     },
     "fileReader": {
       "reviewNotes_one": "{{count}} review note",

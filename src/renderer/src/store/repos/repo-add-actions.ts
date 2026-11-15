@@ -1,13 +1,13 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { defaultCreationHost } from '@/runtime/hosts/selection/default-creation-host'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -27,7 +27,7 @@ import {
   runExclusiveForRuntimeEnvironment
 } from './pending-runtime-repo-removals'
 import { RuntimeRpcCallError } from '../../runtime/rpc/calls/runtime-rpc-result'
-import { readWslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
+import { readWslHostWindowsDriveRefusal } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { showWslHostWindowsDriveRefusal } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 
 export function createRepoAddActions(
@@ -215,7 +215,7 @@ export function createRepoAddActions(
           const {
             resolveDismissedOnboardingFolderAgentLaunch,
             revealOnboardingFolderWithAgentLaunch
-          } = await import('@/lib/onboarding-folder-agent-launch')
+          } = await import('@/components/onboarding/onboarding-folder-agent-launch')
           // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
           const launch = await resolveDismissedOnboardingFolderAgentLaunch({
             worktreeId: folderWorktree.id,

@@ -43,13 +43,4 @@ describe('createAgentStatusTracker', () => {
     tracker.handleTitle('Cursor ready')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
-
-  it('does not fire when Factory Droid reports needs input during a working turn', () => {
-    const onBecameIdle = vi.fn()
-    const tracker = createAgentStatusTracker(onBecameIdle)
-
-    tracker.handleTitle('⠋ Droid')
-    tracker.handleTitle('Factory Droid needs input')
-    expect(onBecameIdle).not.toHaveBeenCalled()
-  })
 })

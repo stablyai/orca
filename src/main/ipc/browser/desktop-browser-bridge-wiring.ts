@@ -5,9 +5,11 @@ import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
-  isDesktopBrowserBridgeMethod
-} from '../../../shared/desktop-browser-bridge-protocol'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
+  DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY,
+  isDesktopBrowserBridgeMethod,
+  isHostReachableDocument
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
@@ -15,17 +17,14 @@ import {
   getOrcadSshDeployment,
   getPreferredPairedRuntimeConnection
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import { isRemoteCliControlAllowed } from '../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import {
   DesktopBrowserBridgeManager,
   type DesktopBrowserBridgeCandidate
 } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-manager'
-import {
-  executeDesktopBrowserBridgeRequest,
-  isHostReachableDocument
-} from '../../browser/desktop-browser-bridge/desktop-browser-bridge-executor'
+import { executeDesktopBrowserBridgeRequest } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-executor'
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
@@ -33,8 +32,8 @@ import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
-import { getRuntimeEnvironmentStatus } from '../runtime-environments/runtime-environment-status-probe'
-import { isRuntimeEnvironmentManuallyDisconnected } from '../runtime-environments/runtime-environment-manual-disconnect'
+import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import {
   isDesktopBrowserBridgeHostStopped,
   setDesktopBrowserBridgeControl
@@ -58,10 +57,10 @@ function log(message: string): void {
   console.info(`[desktop-browser-bridge] ${message}`)
 }
 
-export function listDesktopBrowserBridgeCandidates(
+export async function listDesktopBrowserBridgeCandidates(
   userDataPath: string,
   connections: Pick<SshConnectionManager, 'getState'> | null
-): DesktopBrowserBridgeCandidate[] {
+): Promise<DesktopBrowserBridgeCandidate[]> {
   const candidates: DesktopBrowserBridgeCandidate[] = []
   // Why: a managed host's eligibility follows its orcad claim, not whether it is listed in SSH
   // settings; environment recipes connect runtime-owned targets that are claimed the same way.
@@ -82,7 +81,7 @@ export function listDesktopBrowserBridgeCandidates(
       continue
     }
     try {
-      const environment = resolveEnvironment(userDataPath, environmentId)
+      const environment = await resolveEnvironment(userDataPath, environmentId)
       if (getOrcadSshDeployment(environment)?.sshTargetId !== target.id) {
         continue
       }
@@ -122,8 +121,8 @@ export function installDesktopBrowserBridge(options: {
     return dispatcher
   }
   manager = new DesktopBrowserBridgeManager({
-    listCandidates: () =>
-      listDesktopBrowserBridgeCandidates(userDataPath, options.getConnectionManager()),
+    listCandidates: async () =>
+      await listDesktopBrowserBridgeCandidates(userDataPath, options.getConnectionManager()),
     supportsBridge: async (environmentId) => {
       const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId, undefined, {
         observeOnly: true
@@ -136,7 +135,7 @@ export function installDesktopBrowserBridge(options: {
     subscribe: (environmentId) => async (callbacks) => {
       await ensureOrcadManagedTunnel(userDataPath, environmentId)
       const connection = getPreferredPairedRuntimeConnection(
-        resolveEnvironment(userDataPath, environmentId)
+        await resolveEnvironment(userDataPath, environmentId)
       )
       return subscribeRemoteRuntimeTransport(
         connection,
@@ -153,7 +152,8 @@ export function installDesktopBrowserBridge(options: {
             ...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
             DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
             DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
-            DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY
+            DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
+            DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY
           ]
         }
       )

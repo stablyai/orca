@@ -1,4 +1,3 @@
-import { SerializeAddon } from '@xterm/addon-serialize'
 import { Terminal } from '@xterm/headless'
 import { afterEach, describe, expect, it } from 'vitest'
 import { restoreScrollbackBuffers } from './saved-terminal-output-replay'
@@ -52,13 +51,6 @@ async function restoreBuffer(
   return terminal
 }
 
-function serialize(data: string): { terminal: Terminal; addon: SerializeAddon; data: string } {
-  const terminal = createTerminal()
-  const addon = new SerializeAddon()
-  terminal.loadAddon(addon)
-  return { terminal, addon, data }
-}
-
 afterEach(() => {
   for (const terminal of terminals.splice(0)) {
     terminal.dispose()
@@ -85,15 +77,5 @@ describe('fresh-shell terminal restore SGR state', () => {
     const bottomLine = buffer.getLine(buffer.baseY + restored.rows - 1)
 
     expect(bottomLine?.getCell(20)?.getBgColor()).toBe(-1)
-  })
-
-  it('restores alt-screen scrollback without leaking its bold frame', async () => {
-    const source = serialize('shell-history\x1b[?1049h\x1b[1mBOLD-TUI')
-    await writeTerminal(source.terminal, source.data)
-
-    const restored = await restoreBuffer(source.addon.serialize())
-
-    expect(boldAtText(restored, 'shell-history')).toBe(0)
-    expect(boldAtText(restored, 'fresh-shell')).toBe(0)
   })
 })

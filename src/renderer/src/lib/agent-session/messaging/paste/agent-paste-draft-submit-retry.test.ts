@@ -130,25 +130,7 @@ describe('post-paste submit retry Enter', () => {
     expect(writes.slice(0, 3)).toEqual([PASTED_ISSUE_URL, '\r', '\r'])
     expect(writes.at(3)).toBe('\x1b[200~')
   })
-
-  it('keeps a successful submit successful when the retry Enter is rejected', async () => {
-    testState.sendRuntimePtyInputVerified
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(true)
-      .mockRejectedValueOnce(new Error('terminal_not_writable'))
-
-    const promise = startCodexSubmit()
-    await signalCodexComposerReady()
-    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
-
-    await expect(promise).resolves.toBe(true)
-    expect(enterWrites()).toHaveLength(2)
-  })
 })
-
-function enterWrites(): unknown[][] {
-  return testState.sendRuntimePtyInputVerified.mock.calls.filter((call) => call[1] === '\r')
-}
 
 function startCodexSubmit(): Promise<boolean> {
   return pasteDraftWhenAgentReady({

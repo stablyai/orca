@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { track } from '@/lib/telemetry'
+import { useAppStore } from '@/store/index'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   buildImportedHookSettings,
@@ -10,8 +10,8 @@ import {
   getDetectedSetupPreviewContent,
   isSetupScriptPromptDismissed,
   isSilentSetupScriptPromptState
-} from '@/lib/setup-script-prompt'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
+} from '@/runtime/repo-hooks/setup-script-prompt'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
 import { buildSetupScriptPromptActionTelemetry } from '../../../../shared/workspace-setup/setup-script-telemetry'
 import { SetupScriptPromptCardShell } from './SetupScriptPromptCardShell'
@@ -30,7 +30,7 @@ import { useRenderedSetupScriptPromptState } from './useRenderedSetupScriptPromp
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 

@@ -1,12 +1,12 @@
-import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser-observation-params'
+import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import type {
   BrowserSnapshotResult,
   BrowserClickResult,
   BrowserGotoResult,
   BrowserFillResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import { BrowserError } from '../../browser-error'
 import { ORCA_TAB_SESSION_PREFIX } from '../session-lifecycle/agent-browser-session-name'
 import { FILL_ELEMENT_FUNCTION } from '../../cdp/input/browser-element-functions'
@@ -18,6 +18,8 @@ import {
 import { AgentBrowserBridgeQueue } from '../command-queue/agent-browser-bridge-queue'
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
 import { agentBrowserSnapshotArgs } from '../protocol/agent-browser-snapshot-arguments'
+import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
+import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(
@@ -41,7 +43,8 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         ...result,
         browserPageId: target.browserPageId,
         url: wc.getURL(),
-        title: wc.getTitle()
+        title: wc.getTitle(),
+        passkeyRequest: getBrowserPasskeyRequest(wc.id)
       }
     })
   }
@@ -86,7 +89,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     browserPageId?: string,
     options: { reportEffects?: boolean } = {}
   ): Promise<BrowserGotoResult> {
-    return this.enqueuePageAction(
+    return this.enqueueInertAction(
       worktreeId,
       browserPageId,
       async (_sessionName, target) => {
@@ -95,6 +98,8 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         if (!navigationUrl) {
           throw new BrowserError('invalid_argument', `Unsupported browser URL: ${url}`)
         }
+        // A new tab's profile may still be starting its extensions; its first page waits for them.
+        await whenBrowserExtensionsReadyForPage(wc)
         const navigationState: { preventUnloadEvent: Electron.Event | null } = {
           preventUnloadEvent: null
         }

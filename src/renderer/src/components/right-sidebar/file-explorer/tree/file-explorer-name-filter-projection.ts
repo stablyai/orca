@@ -16,7 +16,7 @@ import {
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
 import { isDotfileRelativePath } from './file-explorer-entries'
-import { isPathIgnored } from '../../../../lib/git-path-decoration'
+import { isPathIgnored } from '../../../../lib/source-control/paths/git-path-decoration'
 
 export type FileExplorerNameFilterProjectionSource = {
   query: string

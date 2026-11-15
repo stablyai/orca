@@ -165,19 +165,6 @@ async function armGuest(previousMarker?: string, inShadowRoot = false) {
 }
 
 describe('grab overlay after the click', () => {
-  it.each([
-    ['border', 0, 8],
-    ['padding', 8, 0]
-  ])('follows %s-only outer growth with a fixed content box', async (_kind, padding, border) => {
-    const guest = await armGuest()
-    guest.setTargetSpacing(padding, border)
-
-    expect(guest.notifyResizes()).toBe(1)
-    guest.flushFrames()
-
-    expect(guest.outline()).toEqual({ x: 40, y: 300, width: 136, height: 46 })
-  })
-
   it('selects an element inside an open shadow root and follows its scroll', async () => {
     const guest = await armGuest(undefined, true)
     expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('selection-1')

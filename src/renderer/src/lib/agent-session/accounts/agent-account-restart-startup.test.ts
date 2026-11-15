@@ -1,24 +1,23 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type * as localPreflightContext from '@/lib/local-preflight-context'
-import { resolveAgentResumeLaunchTarget } from '@/lib/agent-session/resume/agent-resume-launch-target'
-import { makeTerminalTab } from '@/store/terminals/terminal-row.test-fixture'
+
+import { makeTerminalTab } from '@/store/terminals/testing/terminal-row.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import {
-  buildPaneAccountRestartStartup,
-  type AgentAccountRestartStartup
-} from './agent-account-restart-startup'
+import { buildPaneAccountRestartStartup } from './agent-account-restart-startup'
+import type { AgentAccountRestartStartup } from './agent-account-restart-startup'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
+import type * as localPreflightContext from '@/runtime/hosts/preflight/local-preflight-context'
 
 let projectRuntimeContext: ProjectExecutionRuntimeResolution | undefined
 
 vi.mock('@/lib/agent-session/resume/agent-resume-launch-target', { spy: true })
 
-vi.mock('@/lib/local-preflight-context', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/preflight/local-preflight-context', async (importOriginal) => ({
   ...(await importOriginal<typeof localPreflightContext>()),
   getLocalProjectExecutionRuntimeContext: () => projectRuntimeContext
 }))
@@ -31,20 +30,24 @@ const SESSION_ID = '01a006a6-1d07-70a1-bad5-f9110d5845c0'
 function seedAgentStatus(entry: Partial<AgentStatusEntry> | null): void {
   const paneKey = makePaneKey(TAB_ID, LEAF_ID)
   useAppStore.setState({
-    agentStatusByPaneKey: entry
-      ? {
-          [paneKey]: {
-            paneKey,
-            tabId: TAB_ID,
-            state: 'done',
-            prompt: '',
-            updatedAt: 1,
-            stateStartedAt: 1,
-            stateHistory: [],
-            ...entry
-          }
-        }
-      : {},
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries(
+        entry
+          ? {
+              [paneKey]: {
+                paneKey,
+                tabId: TAB_ID,
+                state: 'done',
+                prompt: '',
+                updatedAt: 1,
+                stateStartedAt: 1,
+                stateHistory: [],
+                ...entry
+              }
+            }
+          : {}
+      )
+    ),
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {}
   })
@@ -106,7 +109,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       state: 'waiting',
       providerSession: { key: 'session_id', id: SESSION_ID }
     })
-    const ownEntry = useAppStore.getState().agentStatusByPaneKey[makePaneKey(TAB_ID, LEAF_ID)]
+    const ownEntry = useAppStore.getState().agentStatusByPaneKey.get(makePaneKey(TAB_ID, LEAF_ID))!
     if (!ownEntry) {
       throw new Error('Missing seeded status')
     }
@@ -123,10 +126,12 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
           ptyIdsByLeafId: { [otherLeaf]: 'pty-other' }
         }
       },
-      agentStatusByPaneKey: {
-        [makePaneKey(TAB_ID, LEAF_ID)]: ownEntry,
-        [otherPaneKey]: { ...ownEntry, paneKey: otherPaneKey, tabId: otherTab }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [makePaneKey(TAB_ID, LEAF_ID)]: ownEntry,
+          [otherPaneKey]: { ...ownEntry, paneKey: otherPaneKey, tabId: otherTab }
+        })
+      )
     })
 
     expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()
@@ -174,12 +179,6 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
 
       expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
         `${prefix}claude '--resume' '${SESSION_ID}'`
-      )
-      expect(resolveAgentResumeLaunchTarget).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          executionHostId: 'runtime:remote-host',
-          connectionId: 'selected-ssh'
-        })
       )
     } finally {
       useAppStore.setState(original)

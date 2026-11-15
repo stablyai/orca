@@ -4,7 +4,7 @@ import { useQueuedIssueCommandSplit } from '../layout/split/use-queued-issue-com
 import { useRef } from 'react'
 import { useAppStore } from '../../../store/index'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog-context'
-import { isWindowsUserAgent } from '../../../lib/user-agent-platform'
+import { isWindowsUserAgent } from '../../../app-shell/platform/user-agent-platform'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import type { TerminalPaneChatController } from '../chat/use-terminal-pane-chat-state'
 

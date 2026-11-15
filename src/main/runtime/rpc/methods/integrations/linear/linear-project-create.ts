@@ -1,5 +1,5 @@
 import { defineMethod } from '../../../core'
-import { CreateProject } from '../../../../../../shared/rpc-contract/linear-project-create-params'
+import { CreateProject } from '../../../../../../shared/rpc-contract/linear/linear-project-create-params'
 
 export const LINEAR_PROJECT_CREATE_METHOD = defineMethod({
   name: 'linear.createProject',

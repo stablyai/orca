@@ -1,13 +1,18 @@
 import { app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
-import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import {
+  EphemeralVmFailureError,
+  ephemeralVmFailureFromError,
+  pickEphemeralVmFailureCode
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
@@ -24,12 +29,12 @@ import {
   getRemoteRuntimeSharedControlDiagnostics,
   getRuntimeEnvironmentStatusOwner,
   reconnectRemoteRuntimeSharedControlConnection
-} from '../ipc/runtime-environments/runtime-environment-request-connections'
+} from '../ipc/runtime-environments/connections/runtime-environment-request-connections'
 import {
   clearRuntimeEnvironmentContactLoss,
   isRuntimeEnvironmentContactLost
-} from '../ipc/runtime-environments/runtime-environment-contact-loss'
-import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/runtime-environment-manual-disconnect'
+} from '../ipc/runtime-environments/status/runtime-environment-contact-loss'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import { getRegisteredSshState } from '../ssh/targets/ssh-target-registry'
 import { isRecipeVmLostContact } from './recipe-vm-lost-contact'
 
@@ -58,8 +63,21 @@ export async function resumeEphemeralVmWorkspace(
   }
   const restoreAfterFailedRecovery = (): void => {
     if (lostContact) {
+      // The record stays as it was; a lifecycle error only shows on a resume_failed VM.
       updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, { status: runtime.status })
     }
+  }
+  // After the recipe marked the VM running, an SSH host Orca cannot reach again is still a failed
+  // resume, saved with its reason so the row can explain it after a restart.
+  const failAfterResume = (error: unknown): void => {
+    if (lostContact) {
+      restoreAfterFailedRecovery()
+      return
+    }
+    updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+      status: 'resume_failed',
+      lifecycleLastError: ephemeralVmFailureFromError(error)
+    })
   }
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
   if (lostContact && runtime.connectionMode === 'orca-server' && !recipeContext.recipe.resume) {
@@ -78,7 +96,10 @@ export async function resumeEphemeralVmWorkspace(
   })
   if (!result.ok) {
     restoreAfterFailedRecovery()
-    throw new Error(result.error)
+    throw new EphemeralVmFailureError({
+      error: result.error,
+      ...pickEphemeralVmFailureCode(result)
+    })
   }
   if (lostContact && runtime.runtimeEnvironmentId) {
     // The resume restarted the VM; its server's old failures say nothing about the new boot.
@@ -90,6 +111,7 @@ export async function resumeEphemeralVmWorkspace(
   const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
   // SSH servers use their target and have no pairing to refresh.
   if (!result.skipped && connection.type !== 'ssh' && runtime.runtimeEnvironmentId) {
+    // A pairing failure leaves the VM running: retrying the recipe's resume on it would fail.
     const pairingCode = getEphemeralVmRecipeResultPairingCode(result.runtime.recipeResult)
     if (!pairingCode) {
       throw new Error('Resume result did not include an Orca Server pairing code.')
@@ -129,7 +151,7 @@ export async function resumeEphemeralVmWorkspace(
         connection
       })
       // The reconnect can move the server's tunnel and re-pair it; the waiting open expects that.
-      const reached = resolveEnvironment(userDataPath, ssh.environmentId)
+      const reached = await resolveEnvironment(userDataPath, ssh.environmentId)
       noteRecipeVmWakePairing(reached.id, reached.pairingRevision ?? reached.createdAt)
       const woken = updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
         connectionMode: 'ssh',
@@ -139,13 +161,7 @@ export async function resumeEphemeralVmWorkspace(
       reestablishWokenServer(userDataPath, ssh.environmentId)
       return woken
     } catch (error) {
-      if (lostContact) {
-        restoreAfterFailedRecovery()
-      } else {
-        updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-          status: 'resume_failed'
-        })
-      }
+      failAfterResume(error)
       throw error
     }
   }
@@ -169,10 +185,10 @@ function isPairedServerContactLost(environmentId: string): boolean {
 /** Nothing retried this server's control socket or health probe while its VM slept; reopen them.
  *  On the next turn, once this wake is no longer pending, so the reopen is not refused as waking. */
 function reestablishWokenServer(userDataPath: string, environmentId: string): void {
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       reconnectRemoteRuntimeSharedControlConnection(environmentId)
-      void getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
+      void (await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId))
         .refresh({ reconnect: true })
         .catch(() => {})
     } catch (error) {

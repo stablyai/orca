@@ -1,12 +1,12 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { RateLimitState } from '../../../shared/rate-limit-types'
+import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RateLimitService } from './rate-limit-service'
 import { getInitialClaudeRateLimitTarget } from '../providers/claude/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from '../providers/codex/codex-rate-limit-target'
 import {
   localAccountRuntimeTargetKey,
   resolveLocalAccountUsageTarget
-} from '../../../shared/local-account-runtime'
+} from '../../../shared/agent-accounts/local-account-runtime'
 
 type AccountRuntimeRateLimitService = Pick<
   RateLimitService,
@@ -58,7 +58,7 @@ export function createAccountRuntimeTargetSettingsSync(
     }
 
     await Promise.all(refreshes)
-    // Antigravity has no targeted refresh; queueing a full one beside targeted ones can drop their reruns.
+    // Antigravity has no targeted refresh, so a usage target change needs a full one.
     if (usageTargetChanged) {
       await rateLimits.refresh()
     }

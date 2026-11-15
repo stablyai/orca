@@ -1,9 +1,9 @@
 import React from 'react'
 import { Bot, Pencil, RotateCcw, SquareArrowOutUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import { VmBuildReveal } from './VmBuildReveal'
 
 export type VmBuildFailure =

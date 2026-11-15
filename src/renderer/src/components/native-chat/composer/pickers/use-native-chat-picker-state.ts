@@ -23,17 +23,18 @@ import {
   editReplacesTriggerToken,
   isSkillPickerTriggered,
   type ComposerAutocomplete
-} from '../../../../../../shared/native-chat/input/native-chat-composer-autocomplete'
-import { applyPickerSuggestion } from '../../../../../../shared/native-chat/input/native-chat-picker-triggers'
+} from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import { applyPickerSuggestion } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-triggers'
 import {
   classifyNativeChatSend,
   type NativeChatSendClassification,
   type NativeChatSessionSkill,
   type SlashCommandSuggestion
-} from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
-import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/native-chat-skill-visibility'
+} from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
+import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
+import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
 import {
   emitNativeChatPickerItemAccepted,
   emitNativeChatPickerOpened,
@@ -52,6 +53,8 @@ export type NativeChatPickerState = {
   completeMention: (path: string) => void
   dismiss: (triggerKey: string) => void
   handleDraftOrCaretChange: (value: string, caret: number) => void
+  /** Arrow-key highlight moves; a catalog refresh keeps the row they land on until the next edit. */
+  navigateSuggestion: Dispatch<SetStateAction<number>>
 }
 
 export function useNativeChatPickerState(args: {
@@ -156,6 +159,12 @@ export function useNativeChatPickerState(args: {
         ? { ...derivedAutocomplete, skillsChecking }
         : derivedAutocomplete,
     [derivedAutocomplete, skillsChecking]
+  )
+  const navigateSuggestion = useNativeChatPreferredSuggestion(
+    autocomplete,
+    draft,
+    caret,
+    setActiveSuggestion
   )
 
   useEffect(() => {
@@ -309,6 +318,7 @@ export function useNativeChatPickerState(args: {
     completeItem,
     completeMention,
     dismiss,
-    handleDraftOrCaretChange
+    handleDraftOrCaretChange,
+    navigateSuggestion
   }
 }

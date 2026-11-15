@@ -1,14 +1,14 @@
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { releaseRemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import type {
   SharedControlLogicalSubscription,
   SharedControlPendingRequest,
   SharedControlReadyWaiter
 } from './remote-runtime-shared-control-types'
 import { getSubscriptionId, isEndResult } from './remote-runtime-shared-control-protocol'
-import { tagRuntimeSubscriptionReplayResponse } from '../../runtime-subscription-replay'
+import { tagRuntimeSubscriptionReplayResponse } from '../rpc/runtime-subscription-replay'
 
 export function rejectSharedControlPendingRequest(
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>,

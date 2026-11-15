@@ -1,8 +1,11 @@
 import type {
   BundledSkillObserved,
   BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
-import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../../shared/skills'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import type {
+  DiscoveredSkill,
+  SkillDiscoverySource
+} from '../../../../../shared/skills/discovery/skills'
 
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
@@ -13,7 +16,7 @@ import {
   sortOrchestrationAgents
 } from '@/lib/skills/orchestration-skill-coverage'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 

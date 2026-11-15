@@ -1,6 +1,10 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-publication'
-import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import '@/store/slices/linear/linear-issue-read'
+import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-write-publication'
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, FolderKanban, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'

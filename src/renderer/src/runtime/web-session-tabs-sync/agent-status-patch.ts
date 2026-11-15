@@ -1,4 +1,11 @@
-import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { recordDraft } from '@/store/keyed-record-transitions'
+import { conversationSessionStartedAt } from '../../store/slices/agent-status/agent-conversation-acceptance'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  classifyAgentPaneConversation,
+  projectAgentPaneConversation
+} from '../../store/slices/agent-status/agent-pane-conversation'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../../../shared/agent-status/lifecycle/agent-completion-time'
@@ -14,23 +21,38 @@ import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSyncState
 } from './state'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   isClientOwnedAgentStatus,
   isMirroredAgentStatusOwnedBy,
   clientAgentStatusFencesHost,
   hostAgentStatusPiercesClientAuthority,
   isMirroredAgentPaneKeyForTabs,
-  batchAgentPaneKeysForTabs,
-  remapHostAgentStatus,
-  updateBatchAgentPaneKey
+  agentPaneKeysForTabs,
+  remapHostAgentStatus
 } from './agent-status-primitives'
+import {
+  retirePaneLaunchNote,
+  retiresLaunch
+} from '../../store/slices/agent-status/agent-status-launch-config'
 import {
   agentStatusEntryEqual,
   isAgentStatusFresh,
-  isMirroredCommandCodeTurnBump,
-  writableWebSessionTabsRecord
+  isMirroredCommandCodeTurnBump
 } from './state-equality-core'
+
+type MirroredAgentStatusPatch = Pick<
+  WebSessionTabsSyncState,
+  'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
+> &
+  Partial<
+    Pick<
+      WebSessionTabsSyncState,
+      | 'agentLaunchConfigByPaneKey'
+      | 'sleepingAgentSessionsByPaneKey'
+      | 'agentConversationsByPaneKey'
+    >
+  >
 
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
@@ -42,7 +64,7 @@ export function buildMirroredAgentStatusPatch(
   retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
-): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
+): MirroredAgentStatusPatch | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
@@ -57,6 +79,11 @@ export function buildMirroredAgentStatusPatch(
     return null
   }
 
+  const survivingSleepingPaneKeys = new Set(
+    terminalSurfaceTabs.map(
+      (surface) => `${toWebTerminalSurfaceTabId(surface.parentTabId)}:${surface.leafId}`
+    )
+  )
   let retainedSurfaceByHostTabAndPrunedLeafId:
     | Map<string, ReadonlyMap<string, RuntimeMobileSessionTerminalClientTab>>
     | undefined
@@ -79,7 +106,7 @@ export function buildMirroredAgentStatusPatch(
       continue
     }
     const existing =
-      nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey[hostEntry.paneKey]
+      nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey.get(hostEntry.paneKey)
     const entry = withMirroredEvidenceReceipt(
       hostEntry.connectionId === undefined
         ? { ...hostEntry, connectionId: environmentId }
@@ -123,16 +150,29 @@ export function buildMirroredAgentStatusPatch(
                 : entry.lastAssistantMessageIsToolOutput
           }
         : entry
+    // The host owns the launch fact whichever writer wins presentation.
     const accepted =
-      nextEntry === entry ? entry : withHostProgramStatus(nextEntry, entry.programStatus)
-    const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
+      nextEntry === entry
+        ? entry
+        : withHostOrcaSessionId(
+            {
+              ...withHostProgramStatus(nextEntry, entry.programStatus),
+              ...(entry.launchAttested !== undefined
+                ? { launchAttested: entry.launchAttested }
+                : {})
+            },
+            entry
+          )
+    const source = { ...accepted, isReplay: true }
+    const conversation = classifyAgentPaneConversation(
+      state,
+      accepted,
+      source,
+      toRuntimeExecutionHostId(environmentId)
+    )
     nextByPaneKey.set(entry.paneKey, {
       ...accepted,
-      firstStateStartedAt: resolveAgentSessionStartedAt({
-        entry: accepted,
-        previous: existing ?? retained?.entry,
-        previousStartedAt: retained?.startedAt
-      })
+      firstStateStartedAt: conversationSessionStartedAt(accepted, existing, conversation, source)
     })
   }
 
@@ -141,57 +181,66 @@ export function buildMirroredAgentStatusPatch(
   let aggregateRelevantChange = false
   let sortRelevantChange = false
 
-  for (const paneKey of batchAgentPaneKeysForTabs(state, mirroredTabIds, batchContext)) {
+  for (const paneKey of agentPaneKeysForTabs(state, mirroredTabIds)) {
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
       continue
     }
-    if (
-      !isMirroredAgentStatusOwnedBy(state.agentStatusByPaneKey[paneKey], environmentId, worktreeId)
-    ) {
+    const existing = state.agentStatusByPaneKey.get(paneKey)
+    if (!existing || !isMirroredAgentStatusOwnedBy(existing, environmentId, worktreeId)) {
       continue
     }
-    // The retirement sweep must see the live row to suppress ghost retention.
+    // Explicit retraction retires pane authority after the live-row patch.
     if (isMirroredAgentPaneKeyForTabs(paneKey, retractedTabIds)) {
       continue
     }
     if (nextByPaneKey.has(paneKey)) {
       continue
     }
-    // Host omission cannot prove OSC-driven exit. Retain owned rows through staleness so wake decays them like local panes instead of erasing them (STA-3107).
-    if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
+    if (
+      state.agentStatusByPaneKey.get(paneKey)?.paneSleep &&
+      survivingSleepingPaneKeys.has(paneKey)
+    ) {
       continue
     }
-    if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
-      nextAgentStatusByPaneKey = writableWebSessionTabsRecord(
-        state,
-        'agentStatusByPaneKey',
-        batchContext
-      )
+    // Host omission cannot prove OSC-driven exit. Retain owned rows through staleness so wake decays them like local panes instead of erasing them (STA-3107).
+    if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey.get(paneKey))) {
+      continue
     }
-    delete nextAgentStatusByPaneKey[paneKey]
-    updateBatchAgentPaneKey(paneKey, false, batchContext)
+    nextAgentStatusByPaneKey = nextAgentStatusByPaneKey.replace([[paneKey, null]])
+    batchContext?.changedAgentPaneKeys?.add(paneKey)
     changed = true
     aggregateRelevantChange = true
     sortRelevantChange = true
   }
 
+  let retirement: ReturnType<typeof retirePaneLaunchNote> = {}
+  let nextConversations = state.agentConversationsByPaneKey ?? {}
+  const originalConversations = nextConversations
+  const conversationDraft = recordDraft(nextConversations)
   for (const [paneKey, entry] of nextByPaneKey) {
-    const existing = nextAgentStatusByPaneKey[paneKey]
+    nextConversations = projectAgentPaneConversation(
+      { tabsByWorktree: state.tabsByWorktree, agentConversationsByPaneKey: nextConversations },
+      entry,
+      (_entries, key, value) => {
+        conversationDraft.set(key, value)
+        return conversationDraft.view()
+      },
+      toRuntimeExecutionHostId(environmentId),
+      { ...entry, isReplay: true }
+    )
+    const existing = nextAgentStatusByPaneKey.get(paneKey)
+    // The host's retirement of this pane's launch ends the client's copies of its note.
+    if (retiresLaunch(existing, entry)) {
+      retirement = { ...retirement, ...retirePaneLaunchNote({ ...state, ...retirement }, paneKey) }
+    }
     if (
       agentStatusEntryEqual(existing, entry) &&
       existing?.firstStateStartedAt === entry.firstStateStartedAt
     ) {
       continue
     }
-    if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
-      nextAgentStatusByPaneKey = writableWebSessionTabsRecord(
-        state,
-        'agentStatusByPaneKey',
-        batchContext
-      )
-    }
-    nextAgentStatusByPaneKey[paneKey] = entry
-    updateBatchAgentPaneKey(paneKey, true, batchContext)
+    nextAgentStatusByPaneKey = nextAgentStatusByPaneKey.replace([[paneKey, entry]])
+    batchContext?.changedAgentPaneKeys?.add(paneKey)
     changed = true
     const entryAttributionChanged =
       existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
@@ -219,14 +268,19 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
-  if (!changed) {
+  nextConversations = conversationDraft.finish()
+  if (!changed && nextConversations === originalConversations) {
     return null
   }
 
   return {
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
-    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
+    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch,
+    ...(nextConversations !== originalConversations
+      ? { agentConversationsByPaneKey: nextConversations }
+      : {}),
+    ...retirement
   }
 }
 
@@ -237,4 +291,17 @@ function withHostProgramStatus(
 ): AgentStatusEntry {
   const { programStatus: _clientFacet, ...rest } = entry
   return programStatus ? { ...rest, programStatus } : rest
+}
+
+/** Only the host names its agents: for the same conversation its stamp wins, including no stamp
+ *  (a settled miss clearing a pending null); the client never mints or keeps one across keys. */
+function withHostOrcaSessionId(next: AgentStatusEntry, host: AgentStatusEntry): AgentStatusEntry {
+  if (
+    !host.providerSession ||
+    !agentProviderSessionsEqual(host.agentType, host.providerSession, next.providerSession)
+  ) {
+    return next
+  }
+  const { orcaSessionId: _client, ...rest } = next
+  return host.orcaSessionId !== undefined ? { ...rest, orcaSessionId: host.orcaSessionId } : rest
 }

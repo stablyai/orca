@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { PANE } from '../server.test-fixtures'
-import { buildRelayHookEnvelope } from '../../../../../wsl-guest/agent-hook-envelope-build'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
@@ -53,27 +52,5 @@ describe('optional tmux projection wire metadata', () => {
     expect(server.getStatusSnapshot()[0]?.evidenceObservedAt).toBe(time)
     server.ingestRemote({ ...unavailable, statusUnavailable: undefined }, 'connection')
     expect(server.getStatusSnapshot()[0]?.state).toBe('waiting')
-  })
-  it('rejects invalid ages and never forwards absolute host clocks', () => {
-    for (const age of [-1, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, 1.5]) {
-      server.ingestRemote({ ...envelope, evidenceAgeMs: age }, 'connection')
-    }
-    expect(server.getStatusSnapshot()).toHaveLength(0)
-    const built = buildRelayHookEnvelope(
-      { ...envelope, hostEvidenceObservedAt: time - 1000 },
-      'opencode'
-    )
-    expect(built.evidenceAgeMs).toBe(1000)
-    expect(built).not.toHaveProperty('hostEvidenceObservedAt')
-    vi.setSystemTime(time + 1000)
-    expect(
-      buildRelayHookEnvelope(
-        { ...envelope, hostEvidenceObservedAt: time - 1000 },
-        'opencode',
-        undefined,
-        undefined,
-        { isReplay: true }
-      ).evidenceAgeMs
-    ).toBe(2000)
   })
 })

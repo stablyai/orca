@@ -3,7 +3,6 @@ import { useAppStore } from '@/store/index'
 import { useRemoteRepo } from './AddRepoSteps'
 import { useCreateRepo } from '../create/useCreateRepo'
 import { AddRepoDialogStepContent } from './AddRepoDialogStepContent'
-import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { useAddRepoCloneFlow } from './useAddRepoCloneFlow'
 import { useAddRepoLocalFolderFlow } from './useAddRepoLocalFolderFlow'
 import { useAddRepoServerPathFlow } from './useAddRepoServerPathFlow'
@@ -21,12 +20,16 @@ import {
 import { routeAddRepoBrowse } from './add-repo-browse-authority'
 import { useAddRepoWslHostPaths } from '../host-selection/use-add-repo-wsl-host-paths'
 import { useAddRepoDialogModalPaths } from './use-add-repo-dialog-modal-paths'
+import {
+  useAddRepoEntryStepState,
+  useApplyEntryWindowsDriveRefusal
+} from './use-add-repo-entry-request-state'
 import { useAddRepoWindowsDriveRefusal } from '../host-selection/use-add-repo-windows-drive-refusal'
 import { useAddRepoWslHostOffer } from '../host-selection/use-add-repo-wsl-host-offer'
 
 export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps) {
   const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
-  const modalPaths = useAddRepoDialogModalPaths(Boolean(hosted))
+  const modalPaths = useAddRepoDialogModalPaths(Boolean(hosted), hosted?.entryRequest)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const addNonGitFolder = useAppStore((s) => s.addNonGitFolder)
   const openModal = useAppStore((s) => s.openModal)
@@ -38,7 +41,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
   const { closeModal, closeForFolderHandoff, finishProjectAdd } = useAddRepoHostedController(hosted)
-  const [step, setStep] = useState<AddRepoDialogStep>('add')
+  const [step, setStep] = useAddRepoEntryStepState(isOpen, modalPaths.entryRequest)
   const [isAdding, setIsAdding] = useState(false)
   const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
   const completeGitRepoAdd = useCompleteGitRepoAdd({
@@ -49,7 +52,8 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
   const hostSelection = useAddRepoHostSelection({
     isOpen,
     setStep,
-    preferredHostId: modalPaths.preferredHostId
+    preferredHostId: modalPaths.preferredHostId,
+    openKey: modalPaths.entryRequest?.id ?? null
   })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
@@ -169,6 +173,8 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
   const { handleBrowse, resetLocalFolderFlow, handleAddLocalPath } = useAddRepoLocalFolderFlow({
     isOpen,
     droppedLocalPath: modalPaths.droppedLocalPath,
+    pickedLocalPaths: modalPaths.pickedLocalPaths,
+    onPickedPathsUnsettled: closeModal,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     addRepoPath,
     openModal,
@@ -205,31 +211,6 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
     onWindowsDriveRefusal: (refusal) => windowsDrive.showRefusal(refusal)
   })
 
-  const resetState = useCallback(() => {
-    // Closing/backing out must abort an active clone instead of leaving it running on disk.
-    void window.api.repos.cloneAbort()
-    resetLocalFolderFlow()
-    setStep('add')
-    setIsAdding(false)
-    setAddProjectBusyLabel(null)
-    resetServerPathFlow()
-    resetCloneFlow()
-    resetNestedImportFlow()
-    resetNestedRepoReviewState()
-    resetCreateDefaultState()
-    resetCreateState()
-    resetRemoteState()
-  }, [
-    resetCloneFlow,
-    resetLocalFolderFlow,
-    resetNestedRepoReviewState,
-    resetCreateDefaultState,
-    resetServerPathFlow,
-    resetNestedImportFlow,
-    resetRemoteState,
-    resetCreateState
-  ])
-
   const resetHostScopedState = useCallback(() => {
     setIsAdding(false)
     setAddProjectBusyLabel(null)
@@ -248,6 +229,15 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
     resetServerPathFlow
   ])
 
+  const resetState = useCallback(() => {
+    // Closing/backing out must abort an active clone instead of leaving it running on disk.
+    void window.api.repos.cloneAbort()
+    setStep('add')
+    resetHostScopedState()
+    resetNestedImportFlow()
+    resetNestedRepoReviewState()
+  }, [resetHostScopedState, resetNestedImportFlow, resetNestedRepoReviewState, setStep])
+
   useAddRepoHostChangeReset({
     isOpen,
     selectedHostId: hostSelection.selectedHostId,
@@ -262,6 +252,12 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
     addLocalPath: handleAddLocalPath,
     createStep: { setStep, setCreateParent }
   })
+  useApplyEntryWindowsDriveRefusal({
+    isOpen,
+    entryRequest: modalPaths.entryRequest,
+    selectedHostId: hostSelection.selectedHostId,
+    showRefusal: windowsDrive.showRefusal
+  })
   // Apply dropped paths after host reset so the switch cannot erase them.
   const { browseWslHost, prefilledServerPath, clearPrefilledServerPath } = useAddRepoWslHostPaths({
     isOpen,
@@ -272,30 +268,33 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
     onWindowsDriveRefusal: windowsDrive.showRefusal
   })
 
-  const handleBack = useCallback(() => {
+  const handleBack = (): void => {
     if (step === 'nested') {
       trackNestedBackAction()
     }
     resetState()
-  }, [resetState, step, trackNestedBackAction])
+  }
 
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) {
-        if (step === 'nested' && !isAdding) {
-          trackNestedBackAction()
-        }
-        closeModal()
-        resetState()
+  const handleOpenChange = (open: boolean): void => {
+    if (!open) {
+      if (step === 'nested' && !isAdding) {
+        trackNestedBackAction()
       }
-    },
-    [closeModal, isAdding, resetState, step, trackNestedBackAction]
-  )
+      closeModal()
+      resetState()
+    }
+  }
+
+  const startStepNotice = windowsDrive.notice ?? wslHostOffer.notice(handleAddLocalPath)
+  const directEntry = modalPaths.entryRequest !== null
+  const suppressStartStep = modalPaths.entryRequest?.kind === 'picked-local-paths'
+  const chromeOpen = isOpen && (!suppressStartStep || step !== 'add' || startStepNotice !== null)
 
   return (
     <AddRepoDialogChrome
-      isOpen={isOpen}
+      isOpen={chromeOpen}
       step={step}
+      hideBack={directEntry}
       isAdding={isAdding}
       isCloning={isCloning}
       onBack={handleBack}
@@ -313,6 +312,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
         nestedScanId={nestedScanId}
         serverPath={serverPath}
         serverPathPrefilled={prefilledServerPath !== null && prefilledServerPath === serverPath}
+        directEntry={directEntry}
         isAddingServerPath={isAddingServerPath}
         cloneUrl={cloneUrl}
         cloneDestination={cloneDestination}
@@ -334,7 +334,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
         createError={createError}
         isCreating={isCreating}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
-        windowsDriveNotice={windowsDrive.notice ?? wslHostOffer.notice(handleAddLocalPath)}
+        windowsDriveNotice={startStepNotice}
         actionsDisabled={!hostSelection.selectedHostId}
         browseHostKind={hostSelection.selectedParsedHost?.kind === 'local' ? 'local' : 'runtime'}
         createDefaultParent={createDefaultParent}

@@ -12,20 +12,20 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 // of that case is in acknowledged-terminal-tab-retirement-main-close.test.ts.
 const itSwitchOff = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
 
-const fixtures: ReturnType<typeof createAcknowledgedTabRetirementFixture>[] = []
+const fixtures: Awaited<ReturnType<typeof createAcknowledgedTabRetirementFixture>>[] = []
 afterEach(async () => {
   for (const fixture of fixtures.splice(0)) {
     await fixture.dispose()
   }
 })
-function fixture() {
-  const result = createAcknowledgedTabRetirementFixture(true)
+async function fixture() {
+  const result = await createAcknowledgedTabRetirementFixture(true)
   fixtures.push(result)
   return result
 }
 
 itSwitchOff('withholds the acknowledged close until its host retirement is durable', async () => {
-  const f = fixture()
+  const f = await fixture()
   let acknowledged = false
   const closing = f.close().then((result) => {
     acknowledged = true
@@ -42,7 +42,7 @@ itSwitchOff('withholds the acknowledged close until its host retirement is durab
 })
 
 it('publishes physical-exit retirement before its durable write completes', async () => {
-  const f = fixture()
+  const f = await fixture()
   await f.store.flushPendingOrThrowAsync()
   const published = vi.fn()
   const unsubscribe = f.runtime.onMobileSessionTabsChanged(published)
@@ -61,7 +61,7 @@ it('publishes physical-exit retirement before its durable write completes', asyn
 })
 
 it('publishes nothing when the exit write lands after a replacement is admitted', async () => {
-  const f = fixture()
+  const f = await fixture()
   await f.store.flushPendingOrThrowAsync()
   const published = vi.fn()
   const unsubscribe = f.runtime.onMobileSessionTabsChanged(published)
@@ -76,7 +76,7 @@ it('publishes nothing when the exit write lands after a replacement is admitted'
   unsubscribe()
 })
 
-async function exitWithFailedDurableWrite(f: ReturnType<typeof fixture>): Promise<void> {
+async function exitWithFailedDurableWrite(f: Awaited<ReturnType<typeof fixture>>): Promise<void> {
   await f.store.flushPendingOrThrowAsync()
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   f.authority.failNextWrite()
@@ -94,7 +94,7 @@ async function exitWithFailedDurableWrite(f: ReturnType<typeof fixture>): Promis
 }
 
 it('persists a failed exit retirement with the next unrelated profile write', async () => {
-  const f = fixture()
+  const f = await fixture()
   await exitWithFailedDurableWrite(f)
   f.store.addRepo({
     id: 'repo2',
@@ -110,7 +110,7 @@ it('persists a failed exit retirement with the next unrelated profile write', as
 })
 
 it('persists a failed exit retirement with the final quit flush', async () => {
-  const f = fixture()
+  const f = await fixture()
   await exitWithFailedDurableWrite(f)
   await f.quit()
   expect(f.readDisk().workspaceSession.terminalLayoutsByTabId[ACK_TAB]?.ptyIdsByLeafId).toEqual({

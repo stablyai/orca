@@ -9,8 +9,8 @@ import type * as WebEnvironment from '@/runtime/web-session-tabs-sync/identity/w
 import type * as RuntimeRpcClient from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { AgentLaunchChoices } from '../../src/shared/agent-launch/choices/agent-launch-choices'
 import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../src/shared/project-group-types'
-import type * as LaunchAgentKindModule from '../../src/shared/agent-kind'
+import type { ProjectGroup } from '../../src/shared/project/groups/project-group-types'
+import type * as LaunchAgentKindModule from '../../src/shared/agent-status/identity/agent-kind'
 
 const mocks = vi.hoisted(() => ({
   actualOperation: false,
@@ -107,7 +107,7 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.hostRpc
 }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('sonner', () => ({
   toast: { message: vi.fn(), error: mocks.toastError, success: mocks.toastSuccess }
 }))
@@ -118,12 +118,9 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.f
 vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: vi.fn()
 }))
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: mockLaunchAgentKind
-}))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
-vi.mock('../../src/shared/agent-kind', async (importOriginal) => ({
+vi.mock('../../src/shared/agent-status/identity/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))

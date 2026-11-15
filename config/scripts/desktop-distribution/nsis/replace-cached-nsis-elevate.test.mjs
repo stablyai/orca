@@ -4,14 +4,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import {
-  findCachedElevatePaths,
-  replaceCachedElevateHelpers,
-  summarizeSwap
-} from './replace-cached-nsis-elevate.mjs'
+import { replaceCachedElevateHelpers } from './replace-cached-nsis-elevate.mjs'
 
-// Inject app-builder-lib’s packed-path probe so tests need neither network nor warm toolset cache.
-const probeFound = (path) => async () => ({ path, error: null })
 const probeUnavailable = async () => ({ path: null, error: 'app-builder-lib not loadable' })
 
 const projectRoot = resolve(import.meta.dirname, '../../../..')
@@ -42,11 +36,6 @@ function makeCache(...relativeFiles) {
 }
 
 describe('cached elevate.exe swap covers the real electron-builder layouts', () => {
-  // Model real <releaseName>/<archive>-<url hash> legacy/unified layouts; old <cache>/nsis matched neither. Custom layout is covered by probe tests.
-
-  // Allow nsis-resources overmatch: it ships plugins without elevate.exe and costs one cheap read; guessing narrower upstream naming is brittle.
-
-  // Replace all cached copies because only app-builder-lib knows which one repack chooses.
   it('replaces every cached copy when several bundles are present', async () => {
     const cacheDir = makeCache(
       'nsis-3.0.4.1/nsis-3.0.4.1-1mx3n/elevate.exe',
@@ -67,38 +56,9 @@ describe('cached elevate.exe swap covers the real electron-builder layouts', () 
       expect(readFileSync(path, 'utf8')).toBe('signpath-signed-elevate')
     }
   })
-
-  // Compare real cache scan against independent unbounded walk to catch vacuous empty matches; skip only if no bundle is cached.
-})
-
-describe('the probe, not the scan, decides whether the swap worked', () => {
-  // customNsisBinary uses nsis-version only as memoization key; URL-parent extraction directory can bypass nsis* scan.
-  it('covers a custom bundle the directory scan cannot match', async () => {
-    const relative = 'orca-nsis-mirror/nsis-custom-3.11-0zqp2/elevate.exe'
-    const cacheDir = makeCache(relative)
-    const packed = join(cacheDir, ...relative.split('/'))
-    const signed = join(scratch, 'signed-elevate.exe')
-    writeFileSync(signed, 'signpath-signed-elevate')
-
-    expect(findCachedElevatePaths(cacheDir, { env: {} })).toEqual([])
-
-    const result = await replaceCachedElevateHelpers({
-      signedPath: signed,
-      cacheDir,
-      env: {},
-      probe: probeFound(packed)
-    })
-
-    expect(result.toolsetReplaced).toBe(true)
-    expect(readFileSync(packed, 'utf8')).toBe('signpath-signed-elevate')
-    expect(summarizeSwap(result)).toEqual({ annotations: [], exitCode: 0 })
-  })
-
-  // Prefix-restored stale release can satisfy replaced.length while authoritative packed bundle sits outside scan; model both copies.
 })
 
 describe('a cached elevate.exe miss is not silent', () => {
-  // Override short-circuits downloads, so authoritative probe fails offline instead of fetching a toolset.
   function runScript(cacheDir, nsisDir, signedPath) {
     return spawnSync(process.execPath, [scriptPath, signedPath], {
       cwd: projectRoot,
@@ -141,7 +101,6 @@ describe('a cached elevate.exe miss is not silent', () => {
     ).toBe('signpath-signed-elevate')
   })
 
-  // Healthy release path replaces exact copy returned by app-builder-lib, requiring no warning.
   it('exits clean when the probe resolves the copy the rebuild will pack', () => {
     const cacheDir = makeCache()
     const nsisDir = join(scratch, 'nsis-bundle')

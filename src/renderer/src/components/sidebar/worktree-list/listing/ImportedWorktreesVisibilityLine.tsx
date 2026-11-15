@@ -3,10 +3,10 @@ import { ChevronRight, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import NoticeHostGlyph from '../rows/NoticeHostGlyph'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getExternalWorktreeParentPath } from '../../../../../../shared/external-worktree-visibility'
+import { getExternalWorktreeParentPath } from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
 import { useTranslate } from '@/i18n/use-translate'
 

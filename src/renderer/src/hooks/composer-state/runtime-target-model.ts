@@ -1,15 +1,18 @@
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RefObject } from 'react'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
-import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type {
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaVmRecipe } from '../../../../shared/orca-yaml-hook-types'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
-import type { WorkspaceCreationTargetResolution } from '@/lib/project-host-workspace-target'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
+import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
+import type { WorkspaceCreationTargetResolution } from '@/lib/workspace/creation/project-host-workspace-target'
 
 export type ComposerRuntimeTargetModel = {
   isProjectGroupTarget: boolean

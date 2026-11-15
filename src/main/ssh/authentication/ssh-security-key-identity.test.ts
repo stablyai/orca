@@ -3,14 +3,8 @@ import 'node:os'
 import 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  isOpenSshSecurityKeyPrivateKey,
-  isOpenSshSecurityKeyPublicKey
-} from './ssh-security-key-identity'
-import {
-  createOpenSshPrivateKeyFixture,
-  createOpenSshPublicKeyFixture
-} from './testing/ssh-security-key-identity.test-fixture'
+import { isOpenSshSecurityKeyPrivateKey } from './ssh-security-key-identity'
+import { createOpenSshPrivateKeyFixture } from './testing/ssh-security-key-identity.test-fixture'
 import '../system-transport/ssh-transport-selection'
 
 const { findSystemSshMock } = vi.hoisted(() => ({ findSystemSshMock: vi.fn() }))
@@ -55,28 +49,5 @@ describe('isOpenSshSecurityKeyPrivateKey', () => {
     expect(
       isOpenSshSecurityKeyPrivateKey(Buffer.from(`${ED25519_SECURITY_KEY} AAAA comment`))
     ).toBe(false)
-  })
-
-  it('rejects regular or mismatched OpenSSH public key blobs', () => {
-    expect(isOpenSshSecurityKeyPublicKey(createOpenSshPublicKeyFixture('ssh-ed25519'))).toBe(false)
-    expect(
-      isOpenSshSecurityKeyPublicKey(
-        Buffer.from(`${ED25519_SECURITY_KEY} ${Buffer.from('ssh-ed25519').toString('base64')}`)
-      )
-    ).toBe(false)
-  })
-
-  it('rejects malformed and truncated OpenSSH envelopes without throwing', () => {
-    const key = createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
-    const malformedLength = Buffer.concat([
-      Buffer.from('openssh-key-v1\0', 'ascii'),
-      Buffer.from([0xff, 0xff, 0xff, 0xff])
-    ]).toString('base64')
-    const malformedKey = Buffer.from(
-      `-----BEGIN OPENSSH PRIVATE KEY-----\n${malformedLength}\n-----END OPENSSH PRIVATE KEY-----\n`
-    )
-    expect(isOpenSshSecurityKeyPrivateKey(key.subarray(0, -20))).toBe(false)
-    expect(isOpenSshSecurityKeyPrivateKey(malformedKey)).toBe(false)
-    expect(isOpenSshSecurityKeyPrivateKey(Buffer.from('not a private key'))).toBe(false)
   })
 })

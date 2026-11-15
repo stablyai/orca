@@ -10,8 +10,8 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import {
   isWorkspaceSleepRecord,
   WORKTREE_TERMINALS_SLEEPING_ERROR
-} from '../../../../../../shared/workspace-sleep'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+} from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import type { ColdRestoreAgentResumeStartup, FreshSpawnOptions } from '../startup/fresh-spawn-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
