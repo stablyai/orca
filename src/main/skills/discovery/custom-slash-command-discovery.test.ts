@@ -90,6 +90,13 @@ describe('discoverCustomSlashCommands', () => {
     expect(await discoverCustomSlashCommands({ homeDir: home, cwd })).toEqual([])
   })
 
+  it('walks a directory whose name ends in .md', async () => {
+    const { home, cwd } = await buildFixture()
+    await writeCommand(join(cwd, '.claude', 'commands'), 'team.md/deploy.md')
+    const commands = await discoverCustomSlashCommands({ homeDir: home, cwd })
+    expect(commands.map((command) => command.name)).toEqual(['team.md:deploy'])
+  })
+
   it('returns nothing when no commands root exists', async () => {
     const { home, cwd } = await buildFixture()
     expect(await discoverCustomSlashCommands({ homeDir: home, cwd })).toEqual([])
