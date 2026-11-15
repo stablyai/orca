@@ -6,9 +6,11 @@ import { openCodexAppServerConnection } from './codex-app-server-connection'
 import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import { codexStartFailure } from './codex-startup-outcome'
 import canonicalRefusal from './fixtures/start-resume-canonical-filename-refusal.json'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
+import { runCodexAppServerSession } from './codex-app-server-session'
 
 vi.mock('../../provider-process/provider-process-spawn', () => ({
-  spawnProviderProcess: (_spec: unknown, spawnImpl: () => unknown) => spawnImpl()
+  spawnProviderProcess: (spec: unknown, spawnImpl: (spec: unknown) => unknown) => spawnImpl(spec)
 }))
 
 function stubChild() {
@@ -29,6 +31,27 @@ function stubChild() {
 }
 
 describe('Codex app-server exit order', () => {
+  it('preserves lost outcome when a request begins after close without a pending RPC', async () => {
+    const child = Object.assign(createFakeSpawnedChild(9_999_999), {
+      outcomeLost: true,
+      groupVerdict: 'exited'
+    })
+    child.stdin.once('data', () => {
+      child.stdout.write(`${JSON.stringify({ id: 1, result: {} })}\n`)
+    })
+    await expect(
+      runCodexAppServerSession(
+        { command: 'codex', args: ['app-server'], cliPath: null, timeoutMs: null },
+        async ({ request }) => {
+          child.emit('exit', null, null)
+          child.emit('close', null, null)
+          return request('test/after-close')
+        },
+        () => child
+      )
+    ).rejects.toMatchObject({ providerOutcomeLost: true })
+  })
+
   it('reports an exit whose stdout ended first once the exit is seen, with its usual reason', async () => {
     const { child, spawnImpl } = stubChild()
     const exits: string[] = []

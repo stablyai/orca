@@ -16,6 +16,7 @@ import { sameProviderProcess, type ProviderGroupIdentity } from './provider-grou
 import {
   PROCESS_ROW_TIMEOUT_MS,
   readPosixProcessRow,
+  type ProviderProcessRowReader,
   type ProcessRowRead
 } from './provider-process-row-read'
 import type { publishProviderOwnership } from './provider-ownership-journal'
@@ -59,7 +60,7 @@ export class ProviderFaultOwnership {
 
 type FaultOwnershipDeps = {
   readTable?: ProcessTableReader
-  readProcessRow?: (pid: number) => Promise<ProcessRowRead>
+  readProcessRow?: ProviderProcessRowReader
   sendSignal?: SignalSender
 }
 
@@ -82,7 +83,7 @@ export async function terminateProviderFaultDescendants(
       hasUnambiguousStartTime(expected.startedAt, capturedAtMs))
   const ownedTable: ProcessTableReader = async (timeoutMs) => {
     const sequence = ++readSequence
-    const before = rootRetired ? null : await readRow(expected.pid)
+    const before = rootRetired ? null : await readRow(expected.pid, expected.startResolution)
     if (before === 'unverifiable') {
       throw new Error('Provider ownership is unreadable')
     }
@@ -92,7 +93,7 @@ export async function terminateProviderFaultDescendants(
     const capture = await readTable(timeoutMs)
     const roots = capture.rows.filter((row) => row.pid === expected.pid)
     const root = roots.length === 1 ? roots[0] : undefined
-    const after = rootRetired ? null : await readRow(expected.pid)
+    const after = rootRetired ? null : await readRow(expected.pid, expected.startResolution)
     if (after === 'unverifiable') {
       throw new Error('Provider ownership is unreadable')
     }

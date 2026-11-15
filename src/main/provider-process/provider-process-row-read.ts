@@ -22,12 +22,37 @@ export type ProviderProcessRow = Pick<ProcessTableRow, 'pid' | 'ppid' | 'pgid' |
 
 /** `null`: no such process. `'unverifiable'`: the read failed, which proves nothing. */
 export type ProcessRowRead = ProviderProcessRow | null | 'unverifiable'
+export type ProviderProcessRowReader = (
+  pid: number,
+  resolution?: ProviderProcessRow['startResolution']
+) => Promise<ProcessRowRead>
+
+/** Older native readers can omit a PID when inspection fails; only ESRCH proves absence. */
+export function providerOwnerPidAbsent(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'ESRCH'
+  }
+  return false
+}
 
 export function readPosixProcessRow(
   pid: number,
+  resolution?: ProviderProcessRow['startResolution'],
   platform: NodeJS.Platform = process.platform
 ): Promise<ProcessRowRead> {
-  return platform === 'linux' ? readLinuxProcStatRow(pid) : readDarwinProcessRow(pid)
+  if (platform === 'linux') {
+    return !resolution || resolution === 'clock-tick'
+      ? readLinuxProcStatRow(pid)
+      : Promise.resolve('unverifiable')
+  }
+  if (platform === 'win32' || resolution === 'clock-tick') {
+    return Promise.resolve('unverifiable')
+  }
+  return resolution === 'second'
+    ? readPsProcessRow(pid)
+    : readDarwinProcessRow(pid, resolution === 'microsecond')
 }
 
 /** Parses /proc/<pid>/stat; the comm field can hold spaces and parentheses, so cut past ") ". */
@@ -52,7 +77,7 @@ async function readLinuxProcStatRow(pid: number): Promise<ProcessRowRead> {
   }
 }
 
-async function readDarwinProcessRow(pid: number): Promise<ProcessRowRead> {
+async function readDarwinProcessRow(pid: number, preciseOnly: boolean): Promise<ProcessRowRead> {
   const addon = loadLibprocAddon()
   if (addon && isNativeReaderHealthy()) {
     try {
@@ -81,7 +106,7 @@ async function readDarwinProcessRow(pid: number): Promise<ProcessRowRead> {
       // Older native readers still have the bounded ps fallback.
     }
   }
-  return readPsProcessRow(pid)
+  return preciseOnly ? 'unverifiable' : readPsProcessRow(pid)
 }
 
 async function readPsProcessRow(pid: number): Promise<ProcessRowRead> {

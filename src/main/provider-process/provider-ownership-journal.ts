@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { profileStateAccessBootIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
-import { readPosixProcessRow, type ProcessRowRead } from './provider-process-row-read'
+import { readPosixProcessRow, providerOwnerPidAbsent } from './provider-process-row-read'
 import {
   proveProviderProcessIdentity,
   sweepOrphanedProviderGroup,
@@ -155,7 +155,7 @@ async function scanOwnership(directory: string, bootId: string): Promise<void> {
   ) {
     throw new Error('Provider ownership directory is not private')
   }
-  const owners = new Map<number, Promise<ProcessRowRead>>()
+  const owners = new Map<string, ReturnType<typeof readPosixProcessRow>>()
   const localHostname = hostname()
   const dir = await opendir(directory)
   for await (const entry of dir) {
@@ -180,10 +180,13 @@ async function scanOwnership(directory: string, bootId: string): Promise<void> {
     ) {
       continue
     }
-    let ownerRead = owners.get(record.owner.pid)
+    const ownerKey = `${record.owner.pid}:${record.owner.startResolution}`
+    let ownerRead = owners.get(ownerKey)
     if (!ownerRead) {
-      ownerRead = readPosixProcessRow(record.owner.pid)
-      owners.set(record.owner.pid, ownerRead)
+      ownerRead = readPosixProcessRow(record.owner.pid, record.owner.startResolution).then((row) =>
+        row === null && !providerOwnerPidAbsent(record.owner.pid) ? 'unverifiable' : row
+      )
+      owners.set(ownerKey, ownerRead)
     }
     const owner = await ownerRead
     if (

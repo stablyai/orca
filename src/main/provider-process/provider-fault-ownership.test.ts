@@ -39,7 +39,7 @@ it.each([150, 1_500])('skips host inventories for %s absent provider roots', asy
   expect(sendSignal).not.toHaveBeenCalled()
 })
 
-it('terminates captured same-group and detached tools even after both anchors disappear', async () => {
+it('terminates captured tools across native recovery and later anchor loss', async () => {
   let rootReads = 0
   const live = new Map([tool, sameGroupChild].map((row) => [row.pid, row]))
   const sendSignal = vi.fn((pid: number, signal: NodeJS.Signals) => {
@@ -48,7 +48,16 @@ it('terminates captured same-group and detached tools even after both anchors di
     }
   })
   const pending = terminateProviderFaultDescendants(identity, {
-    readProcessRow: async () => (++rootReads <= 2 ? leader : null),
+    readProcessRow: async (_pid, resolution) =>
+      ++rootReads <= 2
+        ? resolution === 'second'
+          ? leader
+          : {
+              ...leader,
+              startedAt: 'microsecond:1794740400:5',
+              startResolution: 'microsecond'
+            }
+        : null,
     readTable: async () => {
       const rows = rootReads === 1 ? [root, watcher, ...live.values()] : [...live.values()]
       return { rows, capturedAtMs: Date.now() }

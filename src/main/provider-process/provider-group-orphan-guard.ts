@@ -4,7 +4,7 @@ import { hasUnambiguousStartTime } from '../pty/process-retirement/pty-descendan
 import {
   readPosixProcessRow,
   type ProviderProcessRow,
-  type ProcessRowRead
+  type ProviderProcessRowReader
 } from './provider-process-row-read'
 
 export type ProviderGroupIdentity = {
@@ -16,7 +16,7 @@ export type ProviderGroupIdentity = {
 export type ProviderGroupSweepVerdict = 'absent' | 'killed' | 'refused'
 export type ProviderGroupGuardDeps = {
   signal?: AbortSignal
-  readProcessRow?: (pid: number) => Promise<ProcessRowRead>
+  readProcessRow?: ProviderProcessRowReader
   signalGroup?: (pgid: number, signal: NodeJS.Signals | 0) => void
 }
 
@@ -35,7 +35,7 @@ export async function proveProviderProcessIdentity(
   }
   await delay(1_050 - (Date.now() % 1_000))
   const rereadAt = Date.now()
-  const second = await readRow(pid)
+  const second = await readRow(pid, first.startResolution)
   return second &&
     second !== 'unverifiable' &&
     sameProviderProcess(first, second) &&
@@ -86,7 +86,7 @@ export async function sweepOrphanedProviderGroup(
     if (deps.signal?.aborted) {
       return 'refused'
     }
-    const row = await read(expected.pid)
+    const row = await read(expected.pid, expected.startResolution)
     if (deps.signal?.aborted) {
       return 'refused'
     }
@@ -130,7 +130,10 @@ export async function retireProviderWatcher(
   } catch (error) {
     return isNoProcess(error) ? 'absent' : 'refused'
   }
-  const actual = await (deps.readProcessRow ?? readPosixProcessRow)(identity.watcher.pid)
+  const actual = await (deps.readProcessRow ?? readPosixProcessRow)(
+    identity.watcher.pid,
+    identity.watcher.startResolution
+  )
   if (deps.signal?.aborted || actual === 'unverifiable') {
     return 'refused'
   }

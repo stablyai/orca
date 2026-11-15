@@ -24,6 +24,86 @@ const identity = { pgid: 4242, leader, watcher }
 afterEach(() => vi.useRealTimers())
 
 describe('provider group ownership', () => {
+  it('proves a second-resolution launch across native reader recovery', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2023-11-14T22:13:20.100Z'))
+    const recorded: ProviderProcessRow = {
+      ...leader,
+      startedAt: '2023-11-14T22:13:20.000Z',
+      startResolution: 'second'
+    }
+    let first = true
+    const proving = proveProviderProcessIdentity(4242, async (_pid, resolution) => {
+      if (first || resolution === 'second') {
+        first = false
+        return recorded
+      }
+      return {
+        ...recorded,
+        startedAt: 'microsecond:1700000000:123456',
+        startResolution: 'microsecond'
+      }
+    })
+    await vi.advanceTimersByTimeAsync(1100)
+    await expect(proving).resolves.toEqual(recorded)
+  })
+
+  it('sweeps and retires recorded seconds after native recovery while refusing lost precision', async () => {
+    const recorded: ProviderProcessRow = {
+      ...leader,
+      startedAt: '2023-11-14T22:13:20.000Z',
+      startResolution: 'second'
+    }
+    const recordedWatcher = { ...recorded, pid: 4243, pgid: 4243 }
+    const owned = { pgid: 4242, leader: recorded, watcher: recordedWatcher }
+    const readProcessRow = async (
+      pid: number,
+      resolution?: ProviderProcessRow['startResolution']
+    ) => {
+      const row = pid === 4242 ? recorded : recordedWatcher
+      return resolution === 'second'
+        ? row
+        : {
+            ...row,
+            startedAt: 'microsecond:1700000000:123456',
+            startResolution: 'microsecond' as const
+          }
+    }
+    const signalGroup = vi.fn()
+    await expect(sweepOrphanedProviderGroup(owned, { readProcessRow, signalGroup })).resolves.toBe(
+      'killed'
+    )
+    const retireSignal = vi.fn((pgid: number) => {
+      if (pgid === 4242) {
+        throw Object.assign(new Error('gone'), { code: 'ESRCH' })
+      }
+    })
+    await expect(
+      retireProviderWatcher(owned, { readProcessRow, signalGroup: retireSignal })
+    ).resolves.toBe('killed')
+    signalGroup.mockClear()
+    const precise = {
+      ...owned,
+      leader: {
+        ...recorded,
+        startedAt: 'microsecond:1700000000:123456',
+        startResolution: 'microsecond' as const
+      },
+      watcher: {
+        ...recordedWatcher,
+        startedAt: 'microsecond:1700000000:123457',
+        startResolution: 'microsecond' as const
+      }
+    }
+    await expect(
+      sweepOrphanedProviderGroup(precise, {
+        signalGroup,
+        readProcessRow: async () => recorded
+      })
+    ).resolves.toBe('refused')
+    expect(signalGroup).not.toHaveBeenCalledWith(4242, 'SIGKILL')
+  })
+
   it('can reap a leaderless group through the recorded watcher after reparenting', async () => {
     const signalGroup = vi.fn()
     await expect(

@@ -131,7 +131,7 @@ export async function runCodexAppServerSession<T>(
   })
   // close guarantees complete stderr for classifying missing-subcommand versus transient failure.
   child.on('close', () => {
-    failPending(withLostProviderOutcome(buildEarlyExitError(), child))
+    failPending(buildEarlyExitError())
   })
   // Exit can race stdin.write(); reject RPCs on EPIPE instead of leaving an unhandled stream error.
   child.stdin.on('error', (error) => {
@@ -278,8 +278,11 @@ export async function runCodexAppServerSession<T>(
         `codex CLI does not support the app-server subcommand: ${stderrDetail()}`
       )
     }
-    return new Error(
-      `codex app-server exited before completing the session${managed.stderrTail() ? `: ${stderrDetail()}` : ''}`
+    return withLostProviderOutcome(
+      new Error(
+        `codex app-server exited before completing the session${managed.stderrTail() ? `: ${stderrDetail()}` : ''}`
+      ),
+      child
     )
   }
 

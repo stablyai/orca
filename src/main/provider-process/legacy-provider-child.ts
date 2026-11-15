@@ -123,8 +123,10 @@ export class LegacyProviderChild extends EventEmitter implements ProviderChild {
     this.reportedPgid = pgid
     const supervisorPid = this.raw.pid
     // A row read after the supervisor is reaped could match a reused parent PID.
-    const readRow = async (pid: number): ReturnType<typeof readPosixProcessRow> => {
-      const row = await readPosixProcessRow(pid)
+    const readRow = async (
+      ...args: Parameters<typeof readPosixProcessRow>
+    ): ReturnType<typeof readPosixProcessRow> => {
+      const row = await readPosixProcessRow(...args)
       return this.rawExited ? 'unverifiable' : row
     }
     this.identity = proveProviderProcessIdentity(pgid, readRow)
@@ -285,5 +287,11 @@ function streamEnded(stream: Readable): Promise<void> {
 }
 
 function aborted(signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve()
+    } else {
+      signal.addEventListener('abort', () => resolve(), { once: true })
+    }
+  })
 }
