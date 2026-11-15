@@ -96,7 +96,7 @@ export async function antigravityHostAcpReady(
         // A present keychain item does not prove agy can sign in silently; session requests
         // answer "Authentication required" until it has. Unlike session/new, listing writes no
         // conversation into agy's history.
-        await connection.listSessions(folder)
+        await connection.listSessions({ cwd: folder })
       }
     ).then(
       () => true,
