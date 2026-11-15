@@ -167,6 +167,14 @@ describe('the paired cloud workspace surface', () => {
     expect(wakePaired).toHaveBeenCalledWith(ID, { source: 'open' })
   })
 
+  it('a just-created paired row with no status read and no pane yet is not shown as asleep', async () => {
+    seedCloudWorkspaceSnapshot({ paired: { [ID]: 'env-paired' }, idsLoaded: true })
+    const { container } = render(<OrcaCloudWorkspaceSurface worktreeId={ID} />)
+    await flush()
+    expect(container.querySelector('[data-cloud-cover="asleep"]')).toBeNull()
+    expect(container.textContent).not.toContain('Wake to continue')
+  })
+
   it('after a paired Sleep: saving (never the empty states) until a new-enough sealed copy is read', async () => {
     // The old copy, then nothing new, then the one this Sleep sealed.
     reads = [
