@@ -11,6 +11,10 @@ import {
   useNativeChatOpenSubagent
 } from './native-chat-open-subagent'
 import { NativeChatStructuredSubagentStatusBar } from './NativeChatSubagentStatusBar'
+import {
+  NativeChatPartyWorkerApprovalStack,
+  nativeChatWorkerApprovalParty
+} from '../worker-approvals/NativeChatWorkerApprovals'
 
 /** A structured chat's agents strip and open subagent's bar, which share the strip's one Stop. */
 export function useStructuredNativeChatSubagents({
@@ -35,20 +39,30 @@ export function useStructuredNativeChatSubagents({
   const openId = open?.agentId ?? null
   const parentId = open?.parentId ?? null
   const stop = useStructuredSessionTaskStop(sessionId, controller)
+  const strip = (
+    <NativeChatStructuredSessionStatus
+      sessionId={sessionId}
+      target={target}
+      paneKey={paneKey}
+      isVisible={isVisible}
+      backgroundTasks={controller.backgroundTasks}
+      stop={stop}
+      currentAgentId={openId}
+    />
+  )
   return {
     /** The subagent whose view replaces the conversation and the composer; null for none. */
     openId,
     onKeyDown: (event: React.KeyboardEvent) => closeNativeChatSubagentOnEscape(event, paneKey),
-    strip: (
-      <NativeChatStructuredSessionStatus
-        sessionId={sessionId}
-        target={target}
-        paneKey={paneKey}
-        isVisible={isVisible}
-        backgroundTasks={controller.backgroundTasks}
-        stop={stop}
-        currentAgentId={openId}
-      />
+    dock: (
+      <>
+        {strip}
+        <NativeChatPartyWorkerApprovalStack
+          party={nativeChatWorkerApprovalParty({ sessionId, target })}
+          target={target}
+          isVisible={isVisible}
+        />
+      </>
     ),
     statusBar:
       openId === null ? null : (

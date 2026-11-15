@@ -19,6 +19,36 @@ export function useWorkerDockGestureHeld(): boolean {
   return useContext(GestureContext)
 }
 
+function observeDockFrame(element: HTMLDivElement | null, measure: () => void) {
+  const pane = element?.closest('[data-native-chat-root]')
+  if (!element || !pane) {
+    return
+  }
+  let scheduled = 0
+  const schedule = () => {
+    cancelAnimationFrame(scheduled)
+    scheduled = requestAnimationFrame(measure)
+  }
+  const resize = new ResizeObserver(schedule)
+  const observeChildren = () => {
+    resize.disconnect()
+    resize.observe(pane)
+    resize.observe(element)
+    for (const child of element.children) {
+      resize.observe(child)
+    }
+    schedule()
+  }
+  observeChildren()
+  const mutations = new MutationObserver(observeChildren)
+  mutations.observe(element, { childList: true, subtree: true })
+  return () => {
+    resize.disconnect()
+    mutations.disconnect()
+    cancelAnimationFrame(scheduled)
+  }
+}
+
 /** Defer structural dock updates through pointerup/click and a complete Enter/Space gesture. */
 export function NativeChatWorkerDockFrame({ children }: { children: ReactNode }) {
   const [held, setHeld] = useState(false)
@@ -53,35 +83,7 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
     setHeight(Math.max(44, Math.floor(boundary)))
   })
   useLayoutEffect(measure, [held, measure])
-  useEffect(() => {
-    const element = frame.current
-    const pane = element?.closest('[data-native-chat-root]')
-    if (!element || !pane) {
-      return
-    }
-    let scheduled = 0
-    const schedule = () => {
-      cancelAnimationFrame(scheduled)
-      scheduled = requestAnimationFrame(measure)
-    }
-    const resize = new ResizeObserver(schedule)
-    resize.observe(pane)
-    resize.observe(element)
-    const observeChildren = () => {
-      for (const child of element.children) {
-        resize.observe(child)
-      }
-      schedule()
-    }
-    observeChildren()
-    const mutations = new MutationObserver(observeChildren)
-    mutations.observe(element, { childList: true, subtree: true })
-    return () => {
-      resize.disconnect()
-      mutations.disconnect()
-      cancelAnimationFrame(scheduled)
-    }
-  }, [measure])
+  useEffect(() => observeDockFrame(frame.current, measure), [measure])
   useEffect(() => {
     if (!held) {
       return
@@ -154,9 +156,9 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
 
 export function useWorkerDockStructuralValue<T>(value: T): T {
   const held = useWorkerDockGestureHeld()
-  const previous = useRef(value)
-  if (!held) {
-    previous.current = value
+  const [previous, setPrevious] = useState({ value })
+  if (!held && previous.value !== value) {
+    setPrevious({ value })
   }
-  return held ? previous.current : value
+  return held ? previous.value : value
 }

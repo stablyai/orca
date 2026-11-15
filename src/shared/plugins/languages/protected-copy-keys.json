@@ -736,6 +736,7 @@
     "components.native-chat.urlRequest.openAgain",
     "components.native-chat.urlRequest.opened",
     "components.native-chat.urlRequest.title",
+    "components.native-chat.workerDock.notNow",
     "components.native-chat.wrapLines",
     "components.newWorkspace.directSetup.askRunDefaultTabs",
     "components.newWorkspace.directSetup.askRunSetup",

@@ -1,6 +1,6 @@
-import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
+import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import { randomUUID } from 'node:crypto'
-import type Database from '../../../sqlite/sync-database'
+import type { OrchestrationDb } from '../orchestration-db'
 
 // The projection is written inside the existing lifecycle/report transaction, before its wake.
 const projection = (identity: string) => `
@@ -33,13 +33,15 @@ const projection = (identity: string) => `
       OR worker_dock_facts.state <> excluded.state OR worker_dock_facts.report_id IS NOT excluded.report_id OR worker_dock_facts.model IS NOT excluded.model OR worker_dock_facts.reason IS NOT excluded.reason;
 `
 
-export function installWorkerDockSchema(db: Database.Database): void {
-  const installed = db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'worker_dock_facts'").get()
-  db.exec('CREATE TABLE IF NOT EXISTS worker_dock_authority (id TEXT PRIMARY KEY)')
-  if (!db.prepare('SELECT id FROM worker_dock_authority LIMIT 1').get()) {
-    db.prepare('INSERT INTO worker_dock_authority(id) VALUES(?)').run(randomUUID())
+export function installWorkerDockSchema(this: OrchestrationDb): void {
+  const installed = this.db
+    .prepare("SELECT 1 FROM sqlite_master WHERE name = 'worker_dock_facts'")
+    .get()
+  this.db.exec('CREATE TABLE IF NOT EXISTS worker_dock_authority (id TEXT PRIMARY KEY)')
+  if (!this.db.prepare('SELECT id FROM worker_dock_authority LIMIT 1').get()) {
+    this.db.prepare('INSERT INTO worker_dock_authority(id) VALUES(?)').run(randomUUID())
   }
-  db.exec(`
+  this.db.exec(`
     CREATE TABLE IF NOT EXISTS worker_dock_facts (
       dispatch_id TEXT PRIMARY KEY, source TEXT, home TEXT NOT NULL, state TEXT NOT NULL,
       changed_at INTEGER, report_id TEXT, settlement TEXT, result_lost_at INTEGER, model TEXT, reason TEXT
@@ -73,22 +75,12 @@ export function installWorkerDockSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS worker_dock_revision (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL);
     INSERT OR IGNORE INTO worker_dock_revision VALUES(1, 0);
   `)
-  if (
-    !db
-      .prepare('PRAGMA table_info(worker_dock_facts)')
-      .all()
-      .some((row) => row.name === 'result_lost_at')
-  ) {
-    db.exec('ALTER TABLE worker_dock_facts ADD COLUMN result_lost_at INTEGER')
+  if (!this.hasColumn('worker_dock_facts', 'result_lost_at')) {
+    this.db.exec('ALTER TABLE worker_dock_facts ADD COLUMN result_lost_at INTEGER')
   }
   for (const column of ['model', 'reason']) {
-    if (
-      !db
-        .prepare('PRAGMA table_info(worker_dock_facts)')
-        .all()
-        .some((row) => row.name === column)
-    ) {
-      db.exec(`ALTER TABLE worker_dock_facts ADD COLUMN ${column} TEXT`)
+    if (!this.hasColumn('worker_dock_facts', column)) {
+      this.db.exec(`ALTER TABLE worker_dock_facts ADD COLUMN ${column} TEXT`)
     }
   }
   for (const [table, identity, columns] of [
@@ -97,23 +89,26 @@ export function installWorkerDockSchema(db: Database.Database): void {
     ['attempt_observation_facts', 'NEW.dispatch_id', 'payload']
   ]) {
     for (const event of ['INSERT', `UPDATE OF ${columns}`]) {
-      db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_${table}_${event.startsWith('UPDATE') ? 'update' : 'insert'}
+      this.db
+        .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_${table}_${event.startsWith('UPDATE') ? 'update' : 'insert'}
         AFTER ${event} ON ${table} BEGIN ${projection(identity)} END;`)
     }
   }
-  db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_run_source AFTER UPDATE OF coordinator_orca_session_id ON runs BEGIN
+  this.db
+    .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_run_source AFTER UPDATE OF coordinator_orca_session_id ON runs BEGIN
     UPDATE worker_dock_facts SET source = NEW.coordinator_orca_session_id
       WHERE dispatch_id IN (SELECT id FROM dispatch_contexts WHERE run_id = NEW.id AND creator_orca_session_id IS NULL AND creator_dispatch_id IS NULL);
   END;
   CREATE TRIGGER IF NOT EXISTS worker_dock_report_deleted AFTER DELETE ON messages BEGIN
     UPDATE worker_dock_facts SET report_id = NULL, result_lost_at = CAST(round(unixepoch('now', 'subsec') * 1000) AS INTEGER), changed_at = CAST(round(unixepoch('now', 'subsec') * 1000) AS INTEGER) WHERE report_id = OLD.id;
   END;`)
-  db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_report_inserted AFTER INSERT ON messages
+  this.db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_report_inserted AFTER INSERT ON messages
     WHEN NEW.type = 'worker_done' BEGIN
     ${projection("(SELECT dispatch_id FROM attempt_observation_facts WHERE id = 'worker_report:' || NEW.id)")}
   END;`)
   for (const event of ['INSERT', 'UPDATE']) {
-    db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_failure_result_${event} AFTER ${event} ON worker_dock_facts BEGIN
+    this.db
+      .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_failure_result_${event} AFTER ${event} ON worker_dock_facts BEGIN
       DELETE FROM worker_dock_failure_results WHERE dispatch_id = NEW.dispatch_id;
       INSERT INTO worker_dock_failure_results(dispatch_id, source, id, changed_at, settlement)
         SELECT NEW.dispatch_id, NEW.source, 'settlement:' || NEW.settlement, NEW.changed_at, NEW.settlement
@@ -122,7 +117,8 @@ export function installWorkerDockSchema(db: Database.Database): void {
           AND NOT EXISTS(SELECT 1 FROM worker_dock_owner_stops s WHERE s.dispatch_id = NEW.dispatch_id AND s.confirmed = 1 AND s.settlement = NEW.settlement);
     END;`)
   }
-  db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_confirmed_stop AFTER UPDATE ON worker_dock_owner_stops
+  this.db
+    .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_confirmed_stop AFTER UPDATE ON worker_dock_owner_stops
     WHEN NEW.confirmed = 1 AND NEW.settlement IS NOT NULL BEGIN
     DELETE FROM worker_dock_failure_results WHERE dispatch_id = NEW.dispatch_id;
     INSERT OR IGNORE INTO worker_dock_stop_results(dispatch_id, source, id, changed_at, settlement)
@@ -136,11 +132,12 @@ export function installWorkerDockSchema(db: Database.Database): void {
     'worker_dock_owner_stops'
   ]) {
     for (const event of ['INSERT', 'UPDATE', 'DELETE']) {
-      db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_revision_${table}_${event}
+      this.db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_revision_${table}_${event}
         AFTER ${event} ON ${table} BEGIN UPDATE worker_dock_revision SET revision = revision + 1 WHERE id = 1; END;`)
     }
   }
-  db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_dispatch_delete AFTER DELETE ON dispatch_contexts BEGIN
+  this.db
+    .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_dispatch_delete AFTER DELETE ON dispatch_contexts BEGIN
     DELETE FROM worker_dock_failure_results WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_stop_results WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_activity WHERE dispatch_id = OLD.id;
@@ -149,9 +146,9 @@ export function installWorkerDockSchema(db: Database.Database): void {
     DELETE FROM worker_dock_owner_stops WHERE dispatch_id = OLD.id;
   END;`)
   if (!installed) {
-    runLifecycleWriteTransaction(db, 'worker_dock_install', () => {
-      for (const row of db.prepare('SELECT dispatch_id FROM worker_dispatches').all()) {
-        db.prepare(projection('?')).run(row.dispatch_id)
+    runLifecycleWriteTransaction(this.db, 'worker_dock_install', () => {
+      for (const row of this.db.prepare('SELECT dispatch_id FROM worker_dispatches').all()) {
+        this.db.prepare(projection('?')).run(row.dispatch_id)
       }
     })
   }

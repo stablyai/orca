@@ -8,51 +8,65 @@ export async function measureStickyLayout(page: Page, askCount: number) {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
       )
   )
-  const layout = await page.evaluate(() => {
-    const frame = document.querySelector<HTMLElement>('[data-native-chat-worker-dock]')
-    const pane = document.querySelector<HTMLElement>('[data-native-chat-root]')
-    const queue = document.querySelector<HTMLElement>('[aria-label="Queued worker questions"]')
-    const rect = (element: Element | null | undefined) => element?.getBoundingClientRect().toJSON()
-    const frameRect = frame?.getBoundingClientRect()
-    const rows = [
-      ...document.querySelectorAll<HTMLElement>('[data-native-chat-worker-question-summary]')
-    ].map((row) => {
-      const button = row.querySelector('button')!
-      const bounds = button.getBoundingClientRect()
+  const readLayout = () =>
+    page.evaluate(() => {
+      const frame = document.querySelector<HTMLElement>('[data-native-chat-worker-dock]')
+      const pane = document.querySelector<HTMLElement>('[data-native-chat-root]')
+      const queue = document.querySelector<HTMLElement>('[aria-label="Queued worker questions"]')
+      const rect = (element: Element | null | undefined) =>
+        element?.getBoundingClientRect().toJSON()
+      const frameRect = frame?.getBoundingClientRect()
+      const rows = [
+        ...document.querySelectorAll<HTMLElement>('[data-native-chat-worker-question-summary]')
+      ].map((row) => {
+        const button = row.querySelector('button')!
+        const bounds = button.getBoundingClientRect()
+        return {
+          id: row.dataset.nativeChatWorkerQuestionSummary,
+          button: rect(button),
+          intersectsFrame:
+            !!frameRect && bounds.top < frameRect.bottom && bounds.bottom > frameRect.top,
+          completeInFrame:
+            !!frameRect && bounds.top >= frameRect.top && bounds.bottom <= frameRect.bottom
+        }
+      })
+      const reasons = [...document.querySelectorAll<HTMLElement>('[data-worker-dock-reason]')].map(
+        (reason) => {
+          const state = reason.previousElementSibling!.getBoundingClientRect()
+          const bounds = reason.getBoundingClientRect()
+          const text = reason.firstChild!
+          const range = document.createRange()
+          range.setStart(text, Math.max(0, (text.textContent?.length ?? 0) - 2))
+          range.setEnd(text, text.textContent?.length ?? 0)
+          return {
+            gap: bounds.top - state.bottom,
+            bounds: bounds.toJSON(),
+            ending: range.getBoundingClientRect().toJSON()
+          }
+        }
+      )
       return {
-        id: row.dataset.nativeChatWorkerQuestionSummary,
-        button: rect(button),
-        intersectsFrame:
-          !!frameRect && bounds.top < frameRect.bottom && bounds.bottom > frameRect.top,
-        completeInFrame:
-          !!frameRect && bounds.top >= frameRect.top && bounds.bottom <= frameRect.bottom
+        reasons,
+        viewport: [innerWidth, innerHeight],
+        frame: rect(frame),
+        pane: rect(pane),
+        queue: rect(queue),
+        rows,
+        composer: rect(document.querySelector('[data-composer-field]'))
       }
     })
-    const reasons = [...document.querySelectorAll<HTMLElement>('[data-worker-dock-reason]')].map(
-      (reason) => {
-        const state = reason.previousElementSibling!.getBoundingClientRect()
-        const bounds = reason.getBoundingClientRect()
-        const text = reason.firstChild!
-        const range = document.createRange()
-        range.setStart(text, Math.max(0, (text.textContent?.length ?? 0) - 2))
-        range.setEnd(text, text.textContent?.length ?? 0)
-        return {
-          gap: bounds.top - state.bottom,
-          bounds: bounds.toJSON(),
-          ending: range.getBoundingClientRect().toJSON()
-        }
-      }
-    )
-    return {
-      reasons,
-      viewport: [innerWidth, innerHeight],
-      frame: rect(frame),
-      pane: rect(pane),
-      queue: rect(queue),
-      rows,
-      composer: rect(document.querySelector('[data-composer-field]'))
-    }
-  })
+  await expect
+    .poll(async () => {
+      const layout = await readLayout()
+      return (
+        !layout.frame ||
+        !layout.pane ||
+        (layout.frame.height <= layout.pane.height * 0.4 + 1 &&
+          (!askCount || layout.rows.every((row) => !row.intersectsFrame || row.completeInFrame)))
+      )
+    })
+    .toBe(true)
+  const layout = await readLayout()
   if (layout.viewport[0] === 320) {
     for (const reason of layout.reasons) {
       expect(reason.gap).toBeLessThanOrEqual(1)
@@ -73,7 +87,6 @@ export async function measureStickyLayout(page: Page, askCount: number) {
   }
   const stop = page.locator('[data-worker-dock-action][aria-label^="Stop "]').first()
   if (await stop.count()) {
-    await stop.focus()
     const size = await stop.boundingBox()
     expect(size?.width).toBeGreaterThanOrEqual(page.viewportSize()!.width < 700 ? 44 : 26)
     expect(size?.height).toBeGreaterThanOrEqual(page.viewportSize()!.width < 700 ? 44 : 26)
@@ -106,12 +119,17 @@ export async function verifyQuestionKeyboardReachability(page: Page, count: numb
         [target.left + 1, target.top + target.height / 2],
         [target.right - 1, target.top + target.height / 2]
       ]
-      const hit = points.every(([x, y]) => element.contains(document.elementFromPoint(x, y)))
+      const hits = points.map(([x, y]) => {
+        const hit = document.elementFromPoint(x, y)
+        return { x, y, inside: element.contains(hit), element: hit?.outerHTML.slice(0, 200) }
+      })
+      const hit = hits.every((point) => point.inside)
       return {
         label: element.getAttribute('aria-label'),
         target: target.toJSON(),
         frame: frame.toJSON(),
         queue: queue.toJSON(),
+        hits,
         hit
       }
     })

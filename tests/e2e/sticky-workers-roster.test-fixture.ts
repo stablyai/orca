@@ -71,6 +71,9 @@ export function seedStickyWorkers(file: string, session: string, count: number, 
             }
           })
         })
+        db.db
+          .prepare("UPDATE messages SET read = 1, delivered_at = datetime('now') WHERE id = ?")
+          .run(approvalReportId(dispatch.id, approvalId, 'open'))
       } else if (index === 1 && count > 2) {
         saveFailedReport(db, session, task.id, dispatch.id)
       }
@@ -120,6 +123,7 @@ function saveFailedReport(
     body,
     payload: JSON.stringify({ outcome: 'failed' })
   })
+  db.db.prepare("UPDATE messages SET read = 1, delivered_at = datetime('now') WHERE id = ?").run(id)
   db.recordAttemptObservation({
     id: `worker_report:${id}`,
     dispatchId,

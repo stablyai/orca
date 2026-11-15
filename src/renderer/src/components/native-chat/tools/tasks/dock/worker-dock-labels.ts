@@ -31,13 +31,13 @@ export function workerDockKindLabel(t: Translate, kind: string): string {
     case 'worker':
       return t('components.native-chat.workerDock.worker', 'Worker')
     case 'command':
-      return t('components.native-chat.backgroundTasks.command', 'Command')
+      return t('components.native-chat.workerDock.command', 'Command')
     case 'workflow':
-      return t('components.native-chat.backgroundTasks.workflow', 'Workflow')
+      return t('components.native-chat.workerDock.workflow', 'Workflow')
     case 'monitor':
-      return t('components.native-chat.backgroundTasks.monitor', 'Monitor')
+      return t('components.native-chat.workerDock.monitor', 'Monitor')
     default:
-      return t('components.native-chat.backgroundTasks.agent', 'Agent')
+      return t('components.native-chat.workerDock.agent', 'Agent')
   }
 }
 export function workerDockKindCount(t: Translate, kind: string, count: number): string {

@@ -65,7 +65,7 @@ export function NativeChatWorkerApprovalReceipt({
 /** Workers' prompts pinned above the composer, oldest first: open ones as cards, and ones just
  *  closed as their receipt. A card here never takes focus or cancels the chat's turn. */
 export function NativeChatWorkerApprovalStack({
-  approvals,
+  approvals: liveApprovals,
   target,
   isVisible = true
 }: {
@@ -78,7 +78,7 @@ export function NativeChatWorkerApprovalStack({
   const seenPrompts = useRef(new Set<string>())
   const [announcement, setAnnouncement] = useState<{ id: string; text: string } | null>(null)
   useEffect(() => {
-    const arrived = approvals.filter(
+    const arrived = liveApprovals.filter(
       (entry) =>
         entry.approval.state === 'open' && !seenPrompts.current.has(entry.approval.approvalId)
     )
@@ -98,8 +98,8 @@ export function NativeChatWorkerApprovalStack({
         )
       })
     }
-  }, [approvals, t])
-  approvals = useWorkerDockStructuralValue(approvals)
+  }, [liveApprovals, t])
+  const approvals = useWorkerDockStructuralValue(liveApprovals)
   const roster = useWorkerDockRosterState()
   const root = useRef<HTMLDivElement>(null)
   const [short, setShort] = useState(false)
@@ -280,7 +280,7 @@ export function NativeChatWorkerApprovalStack({
                   onFocus={(event) =>
                     event.currentTarget
                       .closest('[data-native-chat-worker-question-summary]')
-                      ?.scrollIntoView({ block: 'nearest' })
+                      ?.scrollIntoView({ block: 'center' })
                   }
                   onClick={() => {
                     if (compact) {

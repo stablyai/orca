@@ -39,7 +39,7 @@ function startTurn(frame) {
   // The CLI's --replay-user-messages echo, which opens the turn.
   write({ ...frame, isReplay: true })
   const prompt = JSON.stringify(frame.message ?? '')
-  const stickyCount = /sticky-roster:(\d+)/.exec(prompt)
+  const stickyCount = /sticky-(?:roster|mixed):(\d+)/.exec(prompt)
   if (stickyCount) {
     for (let index = 0; index < Math.min(75, Number(stickyCount[1])); index++) {
       write({
@@ -48,7 +48,7 @@ function startTurn(frame) {
         session_id: sessionId,
         uuid: randomUUID(),
         task_id: `sticky-${index}`,
-        task_type: 'local_agent',
+        task_type: prompt.includes('sticky-mixed:') && index === 1 ? 'local_bash' : 'local_agent',
         is_backgrounded: true,
         description: `Review journal writes ${index + 1}`,
         subagent_type: 'general-purpose'

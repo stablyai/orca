@@ -6,7 +6,7 @@ export function useWorkerDockScroll({
   viewport,
   virtual,
   items,
-  anchor,
+  onAnchorChange,
   measure,
   hold,
   setBrowsing,
@@ -14,9 +14,9 @@ export function useWorkerDockScroll({
 }: {
   small: boolean
   viewport: RefObject<HTMLDivElement | null>
-  virtual: Virtualizer<HTMLDivElement, Element>
+  virtual: Virtualizer<HTMLDivElement, HTMLDivElement>
   items: readonly { id: string }[]
-  anchor: RefObject<{ id: string; offset: number; index: number } | null>
+  onAnchorChange: (anchor: { id: string; offset: number; index: number }) => void
   measure: () => void
   hold: () => void
   setBrowsing: (value: boolean) => void
@@ -36,11 +36,11 @@ export function useWorkerDockScroll({
             .find((item) => item.end > event.currentTarget.scrollTop)
         : virtual.getVirtualItems().find((item) => item.end > (viewport.current?.scrollTop ?? 0))
       if (first) {
-        anchor.current = {
+        onAnchorChange({
           id: items[first.index].id,
           offset: (viewport.current?.scrollTop ?? 0) - first.start,
           index: first.index
-        }
+        })
       }
       if ((viewport.current?.scrollTop ?? 0) > 0) {
         setBrowsing(true)

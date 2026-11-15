@@ -4,7 +4,7 @@ import { OrchestrationDb } from '../db/orchestration-db'
 import { acknowledgeWorkerDock, readWorkerDock, readWorkerDockResult } from './worker-dock-read'
 import { refreshWorkerDockActivity } from './worker-dock-activity'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { installWorkerDockSchema } from './worker-dock-schema'
+import { installWorkerDockSchema } from '../db/schema/worker-dock-schema'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -209,7 +209,7 @@ describe('worker dock lifecycle projection', () => {
     const concurrent = worker()
     report(concurrent, 'failed')
     acknowledgeWorkerDock(db, { party, settlements: captured, acknowledged: true })
-    installWorkerDockSchema(db.db)
+    installWorkerDockSchema.call(db)
     expect(read().identities.map((row) => row.dispatchId)).toEqual([concurrent])
     expect(readWorkerDockResult(db, party, first)?.acknowledged).toBe(true)
     acknowledgeWorkerDock(db, { party, settlements: captured, acknowledged: false })

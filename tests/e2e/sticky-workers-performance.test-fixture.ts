@@ -1,4 +1,5 @@
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import type { Page, Locator } from '@playwright/test'
 
 export async function measureStickyPerformance(page: Page, composer: Locator, tracePath: string) {
@@ -35,9 +36,34 @@ export async function measureStickyPerformance(page: Page, composer: Locator, tr
         ),
       marks
     )
+    await composer.evaluate((element) => {
+      const samples: number[] = []
+      element.setAttribute('data-sticky-key-latencies', '[]')
+      let keys = 0
+      const capture = (event: Event) => {
+        const at = event.timeStamp
+        requestAnimationFrame(() => {
+          samples.push(performance.now() - at)
+          element.setAttribute('data-sticky-key-latencies', JSON.stringify(samples))
+        })
+        if (++keys === 12) {
+          element.removeEventListener('keydown', capture)
+        }
+      }
+      element.addEventListener('keydown', capture)
+    })
+    await composer.pressSequentially(' typing12345')
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    )
+    const keyToFrameMs: number[] = JSON.parse(
+      (await composer.getAttribute('data-sticky-key-latencies')) ?? '[]'
+    )
     const frames = await page.evaluate(async () => {
       const samples: number[] = []
-      const region = document.querySelector('[data-native-chat-background-tasks] [role="region"]')
+      const strip = document.querySelector('[data-native-chat-background-tasks]')
+      const region = strip?.querySelector('[role="region"]') ?? strip?.querySelector('[id]')
+      const transcript = document.querySelector('[data-native-chat-scroll]')
       let last = performance.now()
       for (let frame = 0; frame < 90; frame++) {
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -47,6 +73,9 @@ export async function measureStickyPerformance(page: Page, composer: Locator, tr
         if (region) {
           region.scrollTop += frame % 2 ? 12 : -12
         }
+        if (transcript) {
+          transcript.scrollTop += frame % 2 ? 12 : -12
+        }
       }
       return samples
     })
@@ -54,6 +83,7 @@ export async function measureStickyPerformance(page: Page, composer: Locator, tr
       const previous = new Map(before.metrics.map((metric) => [metric.name, metric.value]))
       repeats.push({
         renderCounts: counts,
+        keyToFrameMs,
         rendererMetricsDelta: Object.fromEntries(
           after.metrics
             .filter((metric) =>
@@ -86,12 +116,13 @@ export async function measureStickyPerformance(page: Page, composer: Locator, tr
       }
     }
     await client.send('IO.close', { handle: stream })
+    mkdirSync(dirname(tracePath), { recursive: true })
     writeFileSync(tracePath, chunks.join(''))
   }
   await client.detach()
   return {
     method:
-      'Five warm edits/90-frame scrolls, then five saved repeats; CDP renderer CPU metrics; temporary identical function-entry performance marks; browser trace retained',
+      'Five warm edits/12-key inputs/90-frame scrolls, then five saved repeats; hidden Chromium keyboard-to-animation-frame latency, CDP renderer CPU metrics; identical temporary function-entry marks; browser trace retained',
     repeats
   }
 }

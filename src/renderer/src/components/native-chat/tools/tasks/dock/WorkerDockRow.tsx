@@ -1,4 +1,4 @@
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { workerDockKindLabel, workerDockStateLabel } from './worker-dock-labels'
 import { memo, useRef } from 'react'
 import {
@@ -16,12 +16,12 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { useNowSnapshot } from '@/hooks/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { formatCompactDuration } from '../../../../../../../shared/agent-status/presentation/agent-row-decay-state'
-import { getIntlLocale } from '@/i18n/i18n'
 import { cn } from '@/lib/class-names'
 import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
 
 function Age({ at, visible }: { at: number | null; visible: boolean }) {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const label = useNowSnapshot(
     30_000,
     (now) => (at === null ? '—' : formatShortTimeAgo(at, now)),
@@ -33,7 +33,7 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
       title={
         at === null
           ? t('components.native-chat.workerDock.timeUnavailable', 'Status time unavailable')
-          : new Date(at).toLocaleString(getIntlLocale())
+          : new Date(at).toLocaleString(locale)
       }
     >
       {label}
@@ -65,6 +65,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   onAction: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
 }) {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const elapsed = useNowSnapshot(
     30_000,
     (now) => (row.startedAt === null ? '' : formatCompactDuration(now - row.startedAt)),
@@ -115,7 +116,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           narrow ? 'pr-0' : 'items-center'
         )}
         aria-label={`${row.name} · ${row.title} · ${state}${row.reason ? ` · ${row.reason}` : ''}`}
-        title={`${row.name} · ${row.title}${row.model ? ` · ${row.model}` : ''}${row.startedAt ? t('components.native-chat.workerDock.startedAt', ' · Started {{time}} · {{elapsed}} elapsed', { time: new Date(row.startedAt).toLocaleString(getIntlLocale()), elapsed }) : ''}${t('components.native-chat.workerDock.contactUnavailable', ' · Last confirmed contact unavailable')}`}
+        title={`${row.name} · ${row.title}${row.model ? ` · ${row.model}` : ''}${row.startedAt ? t('components.native-chat.workerDock.startedAt', ' · Started {{time}} · {{elapsed}} elapsed', { time: new Date(row.startedAt).toLocaleString(locale), elapsed }) : ''}${t('components.native-chat.workerDock.contactUnavailable', ' · Last confirmed contact unavailable')}`}
         onClick={(event) => onOpen(row, event.currentTarget)}
       >
         <Icon

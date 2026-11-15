@@ -20,6 +20,7 @@ test('captures the worker strip in an isolated hidden native chat', async ({
   electronApp,
   claudeStub
 }) => {
+  // Ten viewport/theme captures include a complete 20-question keyboard pass in each.
   test.setTimeout(180_000)
   const identity = await electronApp.evaluate(({ app, BrowserWindow }) => ({
     appPath: app.getAppPath(),
@@ -53,16 +54,21 @@ test('captures the worker strip in an isolated hidden native chat', async ({
     if (!sessionId) {
       throw new Error('No capture source session.')
     }
-    seedStickyWorkers(join(profile, 'orchestration.db'), sessionId, count, scenario === 'asks-20')
+    const database = join(profile, 'orchestration.db')
+    seedStickyWorkers(database, sessionId, count, scenario === 'asks-20')
+    seeded = { sessionId, database }
     await page.locator('[data-testid="sortable-tab"]').filter({ hasText: 'Terminal 1' }).click()
     await chat.tab.click()
   }
   await chat.composer.fill(
-    scenario === 'providers' || scenario === 'mixed'
-      ? `sticky-roster:${count}`
-      : 'Show the synthetic worker roster'
+    scenario === 'mixed'
+      ? 'sticky-mixed:2'
+      : scenario === 'providers'
+        ? `sticky-roster:${count}`
+        : 'Show the synthetic worker roster'
   )
   await chat.send.click()
+  await expect(page.getByText('Stub reply.', { exact: true }).last()).toBeVisible()
   const strip = page.locator('[data-native-chat-background-tasks="true"]')
   await expect(strip).toBeVisible({ timeout: 30_000 })
   const disclosure = strip.getByRole('button', { expanded: false })
@@ -91,10 +97,15 @@ test('captures the worker strip in an isolated hidden native chat', async ({
           element.scrollTop = 0
         }
       })
+      measurements.push(await measureStickyLayout(page, scenario === 'asks-20' ? count : 0))
       await page.screenshot({
         path: join(root, 'shots', `${phase}-${scene}-native-${theme}-${width}x${height}.png`)
       })
-      measurements.push(await measureStickyLayout(page, scenario === 'asks-20' ? count : 0))
+      const stopTarget = page.locator('[data-worker-dock-action][aria-label^="Stop "]').first()
+      if (await stopTarget.count()) {
+        await stopTarget.focus()
+        await expect(stopTarget).toBeFocused()
+      }
       if (scenario === 'asks-20') {
         measurements.push({
           theme,

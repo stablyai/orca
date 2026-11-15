@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { useRef, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { useWorkerDockGestureHeld } from './NativeChatWorkerDockFrame'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -36,16 +36,18 @@ export function WorkerDockHeader({
   const t = useTranslate()
   const held = useWorkerDockGestureHeld()
   const header = useRef<HTMLDivElement>(null)
-  const heldHeight = useRef<number | undefined>(undefined)
-  if (!held) {
-    heldHeight.current = header.current?.getBoundingClientRect().height
-  }
+  const [heldHeight, setHeldHeight] = useState<number | undefined>(undefined)
+  useLayoutEffect(() => {
+    if (!held) {
+      setHeldHeight(header.current?.getBoundingClientRect().height)
+    }
+  }, [held, count, narrow])
   return (
     <div
       ref={header}
       style={
-        held && heldHeight.current
-          ? { height: heldHeight.current, minHeight: heldHeight.current, overflow: 'hidden' }
+        held && heldHeight
+          ? { height: heldHeight, minHeight: heldHeight, overflow: 'hidden' }
           : undefined
       }
       className={cn('relative flex items-center gap-1 px-2 pr-8', narrow ? 'min-h-11' : 'h-8')}

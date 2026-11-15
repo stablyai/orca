@@ -14,6 +14,26 @@ import {
 } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import { useWorkerDockResults } from './worker-dock-feed'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
+import { NativeChatWorkerApprovalTimeline } from '../../../worker-approvals/NativeChatWorkerApprovals'
+
+export function NativeChatWorkerTimeline({
+  approvalParty,
+  children,
+  ...source
+}: Omit<Parameters<typeof NativeChatWorkerResultTimeline>[0], 'children'> & {
+  approvalParty: string | null
+  children: (rows: readonly NativeChatTimedRow[]) => React.ReactNode
+}) {
+  return (
+    <NativeChatWorkerApprovalTimeline party={approvalParty} isVisible={source.isVisible}>
+      {(approvalRows) => (
+        <NativeChatWorkerResultTimeline {...source}>
+          {(resultRows) => children([...approvalRows, ...resultRows])}
+        </NativeChatWorkerResultTimeline>
+      )}
+    </NativeChatWorkerApprovalTimeline>
+  )
+}
 
 function WorkerResult({
   reference,

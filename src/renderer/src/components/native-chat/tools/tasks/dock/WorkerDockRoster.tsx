@@ -1,6 +1,7 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual'
+import { defaultRangeExtractor } from '@tanstack/react-virtual'
+import { useNativeChatToolRunWindow } from '../../runs/use-native-chat-tool-run-window'
 import { Button } from '@/components/ui/button'
 import { workerDockNeedsAttention } from '../../../../../../../shared/orchestration/dock/worker-dock'
 import type { WorkerDockRowView } from './WorkerDockRow'
@@ -9,6 +10,7 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import { workerDockSummary } from './worker-dock-summary'
 import { WorkerDockHeader } from './WorkerDockHeader'
 import { useWorkerDockScroll } from './use-worker-dock-scroll'
+import { useWorkerDockRowCache } from './use-worker-dock-row-cache'
 
 export function WorkerDockRoster(props: {
   identities: readonly {
@@ -50,15 +52,7 @@ export function WorkerDockRoster(props: {
   const [active, setActive] = useState<string | null>(null)
   const [focused, setFocused] = useState<string | null>(null)
   const [browsing, setBrowsing] = useState(false)
-  const cached = useRef(new Map<string, WorkerDockRowView>())
-  for (const [key, row] of props.rows) {
-    cached.current.set(key, row)
-  }
-  for (const key of cached.current.keys()) {
-    if (!props.rows.has(key) && key !== active && key !== focused) {
-      cached.current.delete(key)
-    }
-  }
+  const cached = useWorkerDockRowCache(props.rows, active, focused)
   const current = useMemo(
     () => new Map(props.identities.map((row) => [row.id, row])),
     [props.identities]
@@ -80,13 +74,12 @@ export function WorkerDockRoster(props: {
   const clearUnavailable = props.identities.some(
     (row) =>
       (row.state === 'failed' || row.state === 'unexpected') &&
-      (row.ownerActionsAvailable === false ||
-        cached.current.get(row.id)?.ownerActionsAvailable === false)
+      (row.ownerActionsAvailable === false || cached.get(row.id)?.ownerActionsAvailable === false)
   )
-  const { failures } = workerDockSummary(props.identities, cached.current, t)
+  const { failures } = workerDockSummary(props.identities, cached, t)
   const { mixed, total, count } = workerDockSummary(
     props.countIdentities ?? props.identities,
-    cached.current,
+    cached,
     t
   )
   const [height, setHeight] = useState(props.narrow ? 120 : 100)
@@ -107,12 +100,11 @@ export function WorkerDockRoster(props: {
     () => items.findIndex((row) => row.id === (focused ?? active)),
     [items, active, focused]
   )
-  const itemKey = useCallback((index: number) => items[index].id, [items])
+  const rowKeys = useMemo(() => items.map((item) => ({ key: item.id })), [items])
   const estimateSize = useCallback(
     (index: number) => (props.narrow ? 64 : 40) + (items[index].heading ? 24 : 0),
     [items, props.narrow]
   )
-  const scrollElement = useCallback(() => viewport.current, [])
   const extractRange = useCallback(
     (range: Parameters<typeof defaultRangeExtractor>[0]) => {
       const indices = defaultRangeExtractor(range)
@@ -122,18 +114,17 @@ export function WorkerDockRoster(props: {
     },
     [activeIndex]
   )
-  const virtual = useVirtualizer({
-    count: items.length,
-    getScrollElement: scrollElement,
-    getItemKey: itemKey,
+  const rowWindow = useNativeChatToolRunWindow({
+    rows: rowKeys,
+    scrollerRef: viewport,
+    isVisible: props.visible,
+    drawsEveryRow: small,
     estimateSize,
-    overscan: 3,
     rangeExtractor: extractRange,
     enabled: props.expanded && !small
   })
-  const visibleItems = small
-    ? items.map((row, index) => ({ key: row.id, index, start: 0, end: 0, size: 0 }))
-    : virtual.getVirtualItems()
+  const virtual = rowWindow.virtualizer
+  const visibleItems = rowWindow.drawn
   const modelColumn =
     props.identities.some((row) => row.hasModel) ||
     [...props.rows.values()].some((row) => row.model)
@@ -143,25 +134,22 @@ export function WorkerDockRoster(props: {
       return
     }
     const pane = root.current?.closest('[data-native-chat-root]')?.getBoundingClientRect()
-    const short = (pane?.height ?? window.innerHeight) < 520
+    const short = (pane?.height ?? globalThis.innerHeight) < 520
     const nominal = props.narrow ? (short ? 120 : 200) : short ? 100 : 160
-    const joined = root.current
-      ?.closest('[data-native-chat-worker-dock]')
-      ?.getBoundingClientRect().height
+    const joined = root.current?.closest('[data-native-chat-worker-dock]')
+    const paneHeight = pane?.height ?? globalThis.innerHeight
+    const cap = Math.max(44, Math.min(paneHeight * 0.4, paneHeight - 180))
     const budget = joined
-      ? Math.min(
-          nominal,
-          Math.max(0, joined - (props.narrow ? 44 : 32) - 24 - (orderHeld ? 28 : 0))
-        )
+      ? Math.min(nominal, Math.max(0, cap - (props.narrow ? 44 : 32) - 24 - (orderHeld ? 28 : 0)))
       : nominal
-    const start = element.scrollTop
-    let end = start
     const measured = small
       ? [...element.querySelectorAll<HTMLElement>('[data-index]')].map((node) => ({
           start: node.offsetTop,
           end: node.offsetTop + node.offsetHeight
         }))
       : virtual.getVirtualItems()
+    const start = measured.find((item) => item.end > element.scrollTop + 1)?.start ?? 0
+    let end = start
     for (const item of measured) {
       if (item.end <= start + 1) {
         continue
@@ -171,8 +159,11 @@ export function WorkerDockRoster(props: {
       }
       end = item.end
     }
+    const last = element.firstElementChild?.lastElementChild
     const totalSize = small
-      ? (element.firstElementChild?.scrollHeight ?? 0)
+      ? last instanceof HTMLElement
+        ? last.offsetTop + last.offsetHeight
+        : 0
       : virtual.getTotalSize()
     const next = Math.max(24, Math.min(end - start, totalSize - start))
     setHeight(next)
@@ -196,9 +187,7 @@ export function WorkerDockRoster(props: {
       void props.loadWindow?.(key)
     }
   })
-  const firstVisibleKey = visibleItems.find(
-    (item) => item.end > (viewport.current?.scrollTop ?? 0)
-  )?.key
+  const firstVisibleKey = visibleItems[0]?.index
   useEffect(loadVisibleWindow, [firstVisibleKey, props.rows, loadVisibleWindow])
   const preserveAnchor = useLatestHandler(() => {
     if (!anchor.current || !viewport.current) {
@@ -244,7 +233,9 @@ export function WorkerDockRoster(props: {
     viewport,
     virtual,
     items,
-    anchor,
+    onAnchorChange: (value) => {
+      anchor.current = value
+    },
     measure,
     hold,
     setBrowsing,
@@ -349,13 +340,14 @@ export function WorkerDockRoster(props: {
           >
             <div
               style={{
-                height: small ? 'auto' : virtual.getTotalSize() + height,
+                height: small ? 'auto' : rowWindow.totalSize + height,
+                paddingBottom: small ? height : undefined,
                 position: 'relative'
               }}
             >
               {visibleItems.map((item) => {
                 const identity = items[item.index]
-                const row = props.rows.get(identity.id) ?? cached.current.get(identity.id)
+                const row = props.rows.get(identity.id) ?? cached.get(identity.id)
                 const retired = !current.has(identity.id)
                 return (
                   <WorkerDockItem
@@ -366,7 +358,7 @@ export function WorkerDockRoster(props: {
                     retired={retired}
                     small={small}
                     start={item.start}
-                    measure={virtual.measureElement}
+                    measure={rowWindow.measureRow}
                     narrow={props.narrow}
                     mixed={mixed}
                     modelColumn={modelColumn}

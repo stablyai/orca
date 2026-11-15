@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { WorkerDockResult } from '../../../../../../shared/orchestration/dock/worker-dock'
 import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/native-chat-worker-approval-feed'
@@ -7,7 +7,7 @@ import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { useWorkerDockRosterState } from './dock/NativeChatWorkerDockFrame'
 import { Button } from '@/components/ui/button'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
@@ -118,7 +118,7 @@ export function NativeChatStructuredSessionStatus(props: {
     [workerIdentities, ownerActionsAvailable]
   )
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
-  const retryAction = useRef<(() => void) | null>(null)
+  const [retryAction, setRetryAction] = useState<(() => void) | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<WorkerDockResult | null>(null)
   const [opened, setOpened] = useState<{ row: WorkerDockRowView; opener: HTMLElement } | null>(null)
@@ -198,7 +198,7 @@ export function NativeChatStructuredSessionStatus(props: {
               })
         void request
           .catch((value) => {
-            retryAction.current = attempt
+            setRetryAction(() => attempt)
             setError(value instanceof Error ? value.message : String(value))
           })
           .finally(() =>
@@ -230,7 +230,7 @@ export function NativeChatStructuredSessionStatus(props: {
       setPending((current) => new Set([...current, ...capturedIds]))
       void acknowledge(captured)
         .catch((value) => {
-          retryAction.current = attempt
+          setRetryAction(() => attempt)
           setError(value instanceof Error ? value.message : String(value))
         })
         .finally(() =>
@@ -274,8 +274,8 @@ export function NativeChatStructuredSessionStatus(props: {
       {error && !opened ? (
         <div role="alert" className="px-4 py-1 text-xs text-muted-foreground">
           {error}
-          {retryAction.current ? (
-            <Button variant="ghost" size="xs" onClick={() => retryAction.current?.()}>
+          {retryAction ? (
+            <Button variant="ghost" size="xs" onClick={() => retryAction?.()}>
               {t('components.native-chat.workerDock.retry', 'Retry')}
             </Button>
           ) : null}

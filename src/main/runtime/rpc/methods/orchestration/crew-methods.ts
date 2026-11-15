@@ -5,7 +5,6 @@ import {
 import { subscribeCrew } from '../../../orchestration/crew/crew-stream'
 import type { RpcContext } from '../../core'
 import { defineOrchestrationStreamingMethod } from './access/orchestration-method-access'
-import { ORCHESTRATION_WORKER_DOCK_METHODS } from './worker-dock-methods'
 
 let sequence = 0
 /** Run a stream until its client leaves; `start` returns the stream's stop. */
@@ -44,7 +43,6 @@ async function streamUntilClosed(
 }
 
 export const ORCHESTRATION_CREW_METHODS = [
-  ...ORCHESTRATION_WORKER_DOCK_METHODS,
   defineOrchestrationStreamingMethod({
     name: 'orchestration.crewSubscribe',
     access: { kind: 'localOnly', targets: { party: 'party' } },

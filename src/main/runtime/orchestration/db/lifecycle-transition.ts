@@ -10,17 +10,20 @@ type LifecycleWriteTransaction = {
   savepoint: string | null
 }
 
-export function beginLifecycleWriteTransaction(
+export function beginLifecycleTransaction(
   db: Database.Database,
-  savepoint: string
+  savepoint: string,
+  mode: 'read' | 'write' = 'write'
 ): LifecycleWriteTransaction {
   if (!/^[a-z][a-z0-9_]*$/.test(savepoint)) {
     throw new Error(`Invalid lifecycle savepoint: ${savepoint}`)
   }
   const nested = db.isTransaction
-  db.exec(nested ? `SAVEPOINT ${savepoint}` : 'BEGIN IMMEDIATE')
+  db.exec(nested ? `SAVEPOINT ${savepoint}` : mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE')
   return { savepoint: nested ? savepoint : null }
 }
+
+export const beginLifecycleWriteTransaction = beginLifecycleTransaction
 
 export function commitLifecycleWriteTransaction(
   db: Database.Database,
