@@ -700,6 +700,7 @@
     "browserExtensions.unsupported.identity",
     "browserExtensions.unsupported.line",
     "common.delete",
+    "common.retry",
     "components.managed-runtime.removeConfirm",
     "components.managed-runtime.removeDescription",
     "components.managed-runtime.removeKeep",
