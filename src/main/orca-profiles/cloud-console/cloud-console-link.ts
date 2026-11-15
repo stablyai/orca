@@ -83,22 +83,30 @@ export async function requestCloudConsoleTicket(
   },
   fetchImpl: typeof fetch = fetch
 ): Promise<unknown> {
-  const response = await fetchImpl(cloudConsoleTicketUrl(config), {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${session.accessToken}`
-    },
-    body: JSON.stringify(cloudConsoleTicketBody(session, args)),
-    // Never follow a redirect with the access token attached.
-    redirect: 'error',
-    signal: AbortSignal.timeout(CLOUD_CONSOLE_TICKET_TIMEOUT_MS)
-  })
+  const post = (body: Record<string, string>): Promise<Response> =>
+    fetchImpl(cloudConsoleTicketUrl(config), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${session.accessToken}`
+      },
+      body: JSON.stringify(body),
+      // Never follow a redirect with the access token attached.
+      redirect: 'error',
+      signal: AbortSignal.timeout(CLOUD_CONSOLE_TICKET_TIMEOUT_MS)
+    })
+  const body = cloudConsoleTicketBody(session, args)
+  let response = await post(body)
+  if (response.status === 400 && 'plan' in body) {
+    // An auth that refuses the hint (rolled back, or advertising it too early): the signed-in
+    // landing matters more than the preselect, so ask once more without it.
+    response = await post(cloudConsoleTicketBody({}, args))
+  }
   if (!response.ok) {
     throw new OrcaCloudRequestError(response.status, await extractErrorCode(response))
   }
-  const body: unknown = await response.json().catch(() => null)
-  return typeof body === 'object' && body !== null && 'url' in body ? body.url : null
+  const answer: unknown = await response.json().catch(() => null)
+  return typeof answer === 'object' && answer !== null && 'url' in answer ? answer.url : null
 }
 
 async function mintTicketUrl(

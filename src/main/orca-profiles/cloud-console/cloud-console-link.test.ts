@@ -80,6 +80,32 @@ describe('console ticket', () => {
     ).toEqual({ page: 'team', orgId: 'org_1' })
   })
 
+  it('asks once more without the billing hint when auth refuses it', async () => {
+    const seen: { url: string; init?: RequestInit }[] = []
+    const answers = [
+      Response.json({ error: 'invalid_request' }, { status: 400 }),
+      Response.json({ url: 'https://login.onorca.dev/console/redeem?t=abc' })
+    ]
+    const fetchImpl: typeof fetch = async (url, init) => {
+      seen.push({ url: String(url), init })
+      return answers.shift()!
+    }
+    const url = await requestCloudConsoleTicket(
+      config,
+      {
+        accessToken: 'at',
+        capabilities: { flags: { 'console.billing_hint': true }, refreshedAt: 0 }
+      },
+      { section: 'billing', orgId: 'org_1', billingHint: { plan: 'team', interval: 'month' } },
+      fetchImpl
+    )
+    expect(url).toBe('https://login.onorca.dev/console/redeem?t=abc')
+    expect(seen.map((entry) => JSON.parse(String(entry.init?.body)))).toEqual([
+      { page: 'billing', orgId: 'org_1', plan: 'team', interval: 'month' },
+      { page: 'billing', orgId: 'org_1' }
+    ])
+  })
+
   it('throws on a refusal so the console opens without a ticket', async () => {
     await expect(
       requestCloudConsoleTicket(
