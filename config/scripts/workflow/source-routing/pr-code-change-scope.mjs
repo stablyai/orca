@@ -146,6 +146,7 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
   'config/build-plugins/markdown-parser-exports',
   'config/tsconfig',
   'src/packages/',
+  'native/windows-notifications/package.json',
   'native/windows-registry/package.json',
   'native/windows-security/package.json'
 ]
@@ -232,7 +233,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.test.ts',
   'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.ts',
   'src/shared/agent-session/lifecycle/resume/agent-session-resume-marker.ts',
-  'src/shared/agent-session/failures/agent-session-wire-refusals.test.ts',
   'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
   'src/shared/agent-session-mutation-envelope',
   // Cover client sends to release hosts and fingerprints re-derived by host ledger/journal.
@@ -349,6 +349,7 @@ const NATIVE_CACHE_PREFIXES = [
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.
+  'native/windows-notifications/',
   'native/windows-registry/',
   'native/windows-security/'
 ]
