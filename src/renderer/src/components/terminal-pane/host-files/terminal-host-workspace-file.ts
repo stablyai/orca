@@ -4,12 +4,12 @@ import {
   hostRouteForAuthority,
   runtimeTargetEnvironmentId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routing'
-import { userNamedFileAccess } from '@/lib/local-file-access'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import {

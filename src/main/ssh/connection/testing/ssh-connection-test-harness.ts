@@ -4,13 +4,15 @@ import type { SshConnection } from '../ssh-connection'
 import type { MockSystemCommandChannel, MockSystemSshProcess } from './ssh-connection-test-fixtures'
 import type { SshResolvedConfig } from '../../config/ssh-g-config-resolution'
 import type { SystemSshBuildArgsOptions } from '../../system-transport/system-ssh-args'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type * as SystemSshArgs from '../../system-transport/system-ssh-args'
 import type * as SystemSshCommand from '../../system-transport/system-ssh-command'
 import type * as SystemSshFileBinaryTransfer from '../../system-transport/file-transfer/system-ssh-file-binary-transfer'
 import type * as SystemSshFileTransfer from '../../system-transport/file-transfer/system-ssh-file-transfer'
 import type * as SshGConfigResolution from '../../config/ssh-g-config-resolution'
 import { resetSsh2ClientState, ssh2Mock } from './ssh-connection-test-client'
+import { resetSshCredentialDeclinesForTests } from '../../authentication/ssh-credential-decline'
+import { resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
 
 export type SystemSshBinaryModuleMock = { findSystemSsh: typeof findSystemSshMock }
 
@@ -105,6 +107,9 @@ export function withSshGConfigResolutionMocks(actual: typeof SshGConfigResolutio
 }
 
 export function resetSshConnectionMocks(): void {
+  // Session holds are module state that outlives a file in a shared worker; a stale hold refuses the next suite's dial.
+  resetSshCredentialDeclinesForTests()
+  resetSshUserDisconnectsForTests()
   resetSsh2ClientState()
   getOrcaControlSocketPathMock.mockReset()
   getOrcaControlSocketPathMock.mockReturnValue(null)

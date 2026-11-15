@@ -5,13 +5,12 @@ import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/
 import { agentSessionRefusalCauseParts } from '../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { StructuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import type { AgentSessionRefusalReference } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { joinSentences } from '../../../../../../shared/sentence-joining'
+import { joinSentences } from '../../../../../../shared/text/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
-  isNativeChatSignInFailureKind,
-  nativeChatSignInLabel,
-  type NativeChatSignIn
-} from '../../host-access/native-chat-sign-in'
+  nativeChatSetupAction,
+  type NativeChatHostSetup
+} from '../../host-access/native-chat-host-setup'
 import type {
   NativeChatComposerNotice,
   NativeChatComposerNoticeContent
@@ -23,14 +22,14 @@ function nativeChatLaunchNotice(
     failure = null,
     agentLabel,
     onRetry,
-    signIn = null
+    setup = null
   }: {
     lifecycle: StructuredAgentSessionLaunchLifecycle | null
     failure?: StructuredLaunchFailure | null
     agentLabel?: string
     onRetry: () => void
-    /** Replace Retry with sign-in until authentication succeeds. */
-    signIn?: NativeChatSignIn | null
+    /** Replace Retry with the host setup step (sign in, install) that fixes the failure. */
+    setup?: NativeChatHostSetup | null
   },
   t: Translate = translate
 ): NativeChatComposerNotice | null {
@@ -58,7 +57,8 @@ function nativeChatLaunchNotice(
     details?.reason,
     agentLabel,
     details && 'account' in details ? details.account : undefined,
-    t
+    t,
+    setup?.host
   )
   return {
     content: signInContent,
@@ -66,19 +66,13 @@ function nativeChatLaunchNotice(
     kind: 'error',
     text: cause ? (saysStartFailure ? cause : joinSentences([message, cause])) : message,
     action:
-      signIn && isNativeChatSignInFailureKind(failure?.details?.reason, signIn)
-        ? {
-            label: nativeChatSignInLabel(signIn, t),
-            primary: true,
-            onClick: signIn.signIn,
-            disabled: signIn.signingIn
-          }
-        : signInContent
-          ? undefined
-          : {
-              label: t('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
-              onClick: onRetry
-            }
+      nativeChatSetupAction(failure?.details?.reason, setup, t) ??
+      (signInContent
+        ? undefined
+        : {
+            label: t('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
+            onClick: onRetry
+          })
   }
 }
 
@@ -89,7 +83,7 @@ export function structuredSessionNotices(
     sessionError,
     readRefusal,
     composerError,
-    signIn = null,
+    setup = null,
     availability = null,
     hostPermission = null
   }: {
@@ -102,7 +96,7 @@ export function structuredSessionNotices(
     sessionError: string | null
     readRefusal?: AgentSessionRefusalReference
     composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
-    signIn?: NativeChatSignIn | null
+    setup?: NativeChatHostSetup | null
     availability?: NativeChatComposerNotice | null
     hostPermission?: NativeChatComposerNotice | null
   },
@@ -115,7 +109,7 @@ export function structuredSessionNotices(
       failure: launch.failure,
       agentLabel,
       onRetry: launch.retry,
-      signIn
+      setup
     },
     t
   )

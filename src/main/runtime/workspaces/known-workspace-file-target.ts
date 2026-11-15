@@ -1,4 +1,4 @@
-import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import type { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
@@ -50,6 +50,7 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Run
     const repos = this.store?.getRepos() ?? []
     const repoOwners = createRepoRowExecutionHostLookup(repos)
     const resolvedWorktrees = await this.listResolvedWorktrees()
+    const visibilityOwners = createRepoRowExecutionHostLookup(this.store?.getRepos() ?? [])
     const visibilitySourceMatchersByRepoId =
       this.buildRuntimeVisibilitySourceMatchersByRepoId(resolvedWorktrees)
     for (const worktree of resolvedWorktrees) {
@@ -64,7 +65,10 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Run
             ? visibilitySourceMatchersByRepoId.get(
                 getRepoHostIdentityForParts(worktree.repoId, routing.hostId)
               )
-            : undefined
+            : undefined,
+          true,
+          undefined,
+          visibilityOwners
         )
       ) {
         continue

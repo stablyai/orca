@@ -1,17 +1,17 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
-import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { upsertEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { removeEphemeralVmRuntimeSshTarget } from './runtime-ssh-cleanup'
 
 const tempDirs: string[] = []
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await removeTempDirs(tempDirs.splice(0))
 })
 
 function createRuntime(

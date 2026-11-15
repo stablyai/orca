@@ -1,10 +1,11 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
+import { executeOpenEditorPathMove } from '@/lib/editor/file-operations/execute-open-editor-path-move'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import { captureFileExplorerOperationGuard } from '../navigation/file-explorer-operation-owner'
+import { translate } from '@/i18n/i18n'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -99,7 +100,14 @@ export function useFileExplorerMoveDrop({
             }
           })
         } catch (err) {
-          toast.error(extractIpcErrorMessage(err, `Failed to move '${fileName}'.`))
+          toast.error(
+            extractIpcErrorMessage(
+              err,
+              translate('components.toastFallbacks.fileMoveFailed', "Failed to move '{{name}}'.", {
+                name: fileName
+              })
+            )
+          )
           return
         }
         await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])

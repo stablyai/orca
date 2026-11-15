@@ -1,5 +1,6 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AppState } from '@/store/types'
-import type { RunningAgentTargetState } from '@/lib/running-agent-targets'
+import type { RunningAgentTargetState } from '@/lib/agent-session/messaging/running-agent-targets'
 
 export type SendTargetInputsState = Pick<
   AppState,
@@ -24,7 +25,7 @@ export type SendTargetControlInputs = {
 
 // Share an inactive-card sentinel so pane-title/status churn cannot wake every idle agent body.
 export const EMPTY_SEND_TARGET_INPUTS: RunningAgentTargetState = Object.freeze({
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
   tabsByWorktree: {},
   unifiedTabsByWorktree: {},
   terminalLayoutsByTabId: {},

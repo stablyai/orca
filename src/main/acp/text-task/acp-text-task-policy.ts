@@ -1,7 +1,7 @@
 import { AcpRpcError } from '../transport/acp-errors'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import { GROK_TEXT_TASK_ENV } from '../../grok/grok-text-task'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
 import { z } from 'zod'
@@ -46,7 +46,6 @@ export const TASK_ENV_TO_DELETE = [
   ...STRUCTURED_CHILD_ENV_TO_DELETE,
   'ORCA_AGENT_SESSION_ID',
   'ORCA_AGENT_SESSION_SPAWN_TOKEN',
-  'ORCA_TERMINAL_HANDLE',
   'ORCA_STRUCTURED_SESSION',
   'ORCA_CHAT_SCRATCH_DIR',
   'ORCA_CHAT_VISUALS_DIR'

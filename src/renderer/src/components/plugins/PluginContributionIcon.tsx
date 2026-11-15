@@ -1,6 +1,6 @@
 import { createElement, isValidElement, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { parsePluginImageUrl } from '../../../../shared/plugins/images/plugin-image-url'
 
 /** A plugin contribution's image icon (an orca-plugin-image URL main verified), or `fallback`

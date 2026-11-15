@@ -1,24 +1,21 @@
-import type { StateCreator } from 'zustand'
-import type { AppState } from '../../types'
 import { haveSameDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
-import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
+import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch } from './local-agent-legacy-loading'
-import {
-  markLocalAgentRefusal,
-  refreshLocalAgentInventory,
-  type LocalAgentInventoryLifecycle
-} from './local-agent-inventory-refresh'
-import {
-  createEmptyLocalDetectedAgentState,
-  type LocalAgentRefreshOptions,
-  type LocalDetectedAgentState
+import { markLocalAgentRefusal, refreshLocalAgentInventory } from './local-agent-inventory-refresh'
+import type { LocalAgentInventoryLifecycle } from './local-agent-inventory-refresh'
+import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
+import type {
+  LocalAgentRefreshOptions,
+  LocalDetectedAgentState
 } from './local-detected-agent-store-state'
 import { readLocalAgentInventoryOutcome } from './local-agent-inventory-outcome'
+import type { StateCreator } from 'zustand'
+import type { AppState } from '../../types'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 function haveSameCommandOverrides(
   a: Partial<Record<string, string>> | undefined,
@@ -39,6 +36,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     detectPromises: new Map(),
     refreshPromises: new Map(),
     wakeRefreshes: new WeakSet(),
+    explicitRefreshes: new WeakSet(),
     wakeDetects: new WeakSet(),
     refusedContextKeys: new Set(),
     keptThroughFailure: new WeakSet(),

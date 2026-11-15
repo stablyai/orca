@@ -13,9 +13,9 @@ import {
   trackCmdJPaletteFeatureTipShown,
   trackOrcaCliFeatureTipShown
 } from '../components/feature-tips/feature-tip-telemetry'
-import { useAppStore } from '../store'
-import { isWebClientLocation } from '../lib/web-client-location'
-import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import { useAppStore } from '../store/index'
+import { isWebClientLocation } from './platform/web-client-location'
+import type { OnboardingState } from '../../../shared/onboarding/onboarding-state-types'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
 

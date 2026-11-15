@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
-import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/codex-auth-errors'
+import { stripAnsiEscapeSequences } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/agent-accounts/codex/codex-auth-errors'
 import {
   HOST_ACCOUNT_SIGN_IN_FAILURE_COPY,
   HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES,
@@ -10,7 +10,7 @@ import {
   type HostAccountSignInChannel,
   type HostAccountSignInProvider,
   type HostAccountSignInStatus
-} from '../../../../shared/host-account-sign-in-types'
+} from '../../../../shared/agent-accounts/host-account-sign-in-types'
 
 // Keep long polls inside typical RPC deadlines.
 const WAIT_MS = 20_000

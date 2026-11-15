@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   applyWorkspaceEmojiSuggestion,
   getActiveWorkspaceEmojiShortcode,
   replaceCompletedWorkspaceEmojiShortcode,
   searchWorkspaceEmojiShortcodes,
-  type WorkspaceEmojiReplacement,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+  type WorkspaceEmojiReplacement
+} from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
 
 type WorkspaceEmojiShortcodeInputOptions = {
   disabled?: boolean
@@ -92,7 +92,7 @@ export function useWorkspaceEmojiShortcodeInput({
   const close = useCallback(() => setCursor(null), [])
 
   const selectSuggestion = useCallback(
-    (suggestion: WorkspaceEmojiSuggestion) => {
+    (suggestion: StandardEmojiShortcodeEntry) => {
       if (!activeShortcode) {
         return
       }

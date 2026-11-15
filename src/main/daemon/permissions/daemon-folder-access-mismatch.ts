@@ -5,8 +5,8 @@ import { homedir } from 'node:os'
 import {
   classifyDaemonPtyCwd,
   type DaemonPtyCwdClass
-} from '../../../shared/daemon-adoption-telemetry'
-import type { EventProps } from '../../../shared/telemetry-events'
+} from '../../../shared/telemetry/daemon-adoption-telemetry'
+import type { EventProps } from '../../../shared/telemetry/telemetry-event-classification'
 import { track } from '../../telemetry/client'
 import {
   probeFolderAccessForFreshDaemon,

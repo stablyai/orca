@@ -4,7 +4,7 @@ import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultProjectRoot,
   type EphemeralVmRecipeResult
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 
 export function getProvisionedRootResumeIntegrityError(
   previous: EphemeralVmRecipeResult,

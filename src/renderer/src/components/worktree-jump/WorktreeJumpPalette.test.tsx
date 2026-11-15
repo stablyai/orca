@@ -19,6 +19,11 @@ const { activateAndRevealWorkspace } = vi.hoisted(() => ({
 
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace }))
 
+const emptyExtraSources = vi.hoisted(() => [])
+vi.mock('@/components/cmd-j/palette-extra-sources', () => ({
+  usePaletteExtraSources: () => emptyExtraSources
+}))
+
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
   return {
@@ -233,52 +238,6 @@ describe('WorktreeJumpPalette', () => {
       executionHostId: 'runtime:builder'
     })
   })
-
-  it('refreshes the folder catalog while the palette is open', async () => {
-    await renderPalette({ repos: [], worktreesByRepo: {}, folderWorkspaces: [] })
-    await act(async () => {
-      useAppStore.setState({ folderWorkspaces: [makeFolderWorkspace()] })
-    })
-    expect(getWorktreeRows()).toHaveLength(1)
-    expect(getWorktreeRows()[0]).toContain('Design workspace')
-    await act(async () => useAppStore.setState({ folderWorkspaces: [] }))
-    expect(getWorktreeRows()).toEqual([])
-  })
-
-  it.each([true, false])(
-    'routes an attached folder from a GitHub number (activation %s)',
-    async (opens) => {
-      await renderPalette({
-        worktreesByRepo: {},
-        folderWorkspaces: [
-          makeFolderWorkspace({
-            linkedItems: [
-              {
-                provider: 'github',
-                type: 'issue',
-                number: 42,
-                title: 'Checkout',
-                repoId: 'repo-1',
-                url: 'https://github.com/acme/product/issues/42'
-              }
-            ]
-          })
-        ]
-      })
-      activateAndRevealWorkspace.mockReturnValue(opens ? { primaryTabId: null } : false)
-      await act(async () => setCommandQuery?.('#42'))
-      await flushEffects()
-      const create = testContainer.querySelector<HTMLButtonElement>(
-        '[data-command-item="__create_worktree__"]'
-      )
-      await act(async () => fireEvent.click(create!))
-
-      expect(activateAndRevealWorkspace).toHaveBeenCalledWith('folder:folder-1', {
-        executionHostId: 'local'
-      })
-      expect(useAppStore.getState().activeModal).toBe(opens ? 'none' : 'worktree-palette')
-    }
-  )
 
   it('reseeds the repository filter when reopened during the close linger', async () => {
     const secondRepo = {

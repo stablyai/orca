@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Project } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import type { Project } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   captureNativeLocalWorktreeMetadataScanExpectation,
@@ -127,6 +127,27 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
     expect(state.repos[0]).toBe(replacement)
     expect(state.worktreeMeta[worktreeId]).toBeDefined()
+  })
+
+  it('keeps an archived workspace whose checkout was deleted on purpose', () => {
+    const state = makeState()
+    const archivedId = `${REPO_ID}::/workspace/archived`
+    const deletedId = `${REPO_ID}::/workspace/deleted`
+    state.worktreeMeta[archivedId] = {
+      ...makeMeta(archivedId),
+      comment: 'pick up after review',
+      linkedPR: 42,
+      isArchived: true,
+      archivedCheckout: { branch: 'feature/archived', archivedAt: 1 }
+    }
+    state.worktreeMeta[deletedId] = makeMeta(deletedId)
+    const scan = capture(state)
+
+    expect(pruneCaptured(state, scan, [archivedId, deletedId])).toEqual([deletedId])
+    expect(state.worktreeMeta[archivedId]).toMatchObject({
+      comment: 'pick up after review',
+      linkedPR: 42
+    })
   })
 
   // Route-retired tombstones must not pin metadata forever (#17775).

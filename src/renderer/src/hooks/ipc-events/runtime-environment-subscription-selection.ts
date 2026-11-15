@@ -111,7 +111,7 @@ type RuntimeEnvironmentStoreSyncSubscriberDeps = {
   getReachableEnvironmentIds: (state: RuntimeEnvironmentStoreSyncState) => string[]
   requestProjectRefresh: (environmentId: string) => void
   markEnvironmentSshStateStale: (environmentId: string) => void
-  sync: () => void
+  sync: (recoveryEnvironmentIds?: readonly string[]) => void
 }
 
 export type RuntimeEnvironmentStoreSyncSubscriber = (
@@ -170,7 +170,7 @@ export function createRuntimeEnvironmentStoreSyncSubscriber(
       }
       desiredEnvironmentKey = nextDesiredEnvironmentKey
       reachableEnvironmentKey = nextReachableEnvironmentKey
-      deps.sync()
+      deps.sync(refreshEnvironmentIds)
     } finally {
       handlingStoreWrite = false
     }

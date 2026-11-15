@@ -10,7 +10,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import {
   floatingWorkspaceToWorktree,
@@ -36,7 +36,7 @@ import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-work
 let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null = null
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
-import { branchName } from '@/lib/git-utils'
+import { branchName } from '@/lib/source-control/branches/branch-name'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 
 export function applyDetectedWorktreeUpdates(

@@ -1,19 +1,19 @@
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import '@/lib/launch-structured-agent-session'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import '@/lib/agent-session/launch/structured-agent-session-launch-intent'
+import {
+  StructuredAgentSessionCreateRefusalError,
+  StructuredAgentSessionCreateAbandonedError
+} from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import type { StructuredAgentSessionCreateGate } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import {
   cancelStructuredAgentLaunch,
   startStructuredAgentLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type {
   StructuredAgentLaunchOptions,
   StructuredPromptDeliveryResult
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
-import {
-  StructuredAgentSessionCreateAbandonedError,
-  type StructuredAgentSessionCreateGate
-} from '../structured-agent-session-launch-errors'
 
 export type StructuredAgentLaunchSettlement =
   | {

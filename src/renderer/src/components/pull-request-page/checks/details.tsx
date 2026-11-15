@@ -2,7 +2,7 @@ import React from 'react'
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getCheckConclusion } from '@/components/pr-check-counts'
 import {
   formatCheckTimestamp,
@@ -11,7 +11,7 @@ import {
 } from '@/components/github/pr-check-presentation'
 import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { assignUniqueListKeys } from './details-list-keys'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 

@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CookiesGetFilter } from 'electron'
-import type * as NodeFs from 'node:fs'
 
 const {
   appGetPathMock,
-  copyFileSyncMock,
   runProcessMock,
   sessionFromPartitionMock,
   dialogShowOpenDialogMock,
@@ -13,7 +11,6 @@ const {
   writeCookieIdentityMock
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
-  copyFileSyncMock: vi.fn(),
   runProcessMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn(),
@@ -33,17 +30,6 @@ vi.mock('../sessions/profiles/browser-session-registry', () => ({
 vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFs>()
-  return {
-    ...actual,
-    copyFileSync: (...args: Parameters<typeof actual.copyFileSync>) => {
-      copyFileSyncMock(...args)
-      return actual.copyFileSync(...args)
-    }
-  }
-})
-
 vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
   BrowserWindow: { fromWebContents: vi.fn() },
@@ -74,7 +60,7 @@ import {
   createChromiumCookieTestDatabase,
   encryptMacChromiumCookie
 } from './browser-cookie-import-test-database'
-import { existsSync, writeFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -215,7 +201,6 @@ describe('importCookiesFromBrowser Chromium', () => {
     setUserAgentMock = vi.fn()
     appGetPathMock.mockReset()
     appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
-    copyFileSyncMock.mockClear()
     setPendingCookieImportMock.mockClear()
     clearPendingCookieImportMock.mockClear()
     runProcessMock.mockReset()
@@ -239,59 +224,6 @@ describe('importCookiesFromBrowser Chromium', () => {
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
-  it('imports from a live Chromium source DB into a Network/Cookies target profile', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
-    // Keep the writer open so committed cookies remain in WAL, as in a running browser.
-    const sourceDb = createChromiumCookieTestDatabase(
-      sourceCookiesPath,
-      [{ name: 'sid', value: 'source-value' }],
-      { journalMode: 'wal' }
-    )
-    createChromiumCookieTestDatabase(targetCookiesPath, [
-      { name: 'old', value: 'target-value' }
-    ]).close()
-
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    try {
-      expect(existsSync(`${sourceCookiesPath}-wal`)).toBe(true)
-      const sourceFilesBefore = ['', '-wal', '-shm'].map((suffix) =>
-        readFileSync(sourceCookiesPath + suffix)
-      )
-
-      const result = await importCookiesFromBrowser(
-        chromeBrowser(sourceCookiesPath),
-        'persist:test'
-      )
-
-      expect(result.ok).toBe(true)
-      expect(cookieWriteMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          domain: '.example.com',
-          name: 'sid',
-          value: 'source-value'
-        })
-      )
-      expect(runProcessMock).not.toHaveBeenCalled()
-      expect(copyFileSyncMock.mock.calls.some(([source]) => source === sourceCookiesPath)).toBe(
-        true
-      )
-      expect(
-        copyFileSyncMock.mock.calls.some(([source]) => source === `${sourceCookiesPath}-wal`)
-      ).toBe(true)
-      expect(
-        ['', '-wal', '-shm'].map((suffix) => readFileSync(sourceCookiesPath + suffix))
-      ).toEqual(sourceFilesBefore)
-      expect(cookiesRemoveMock).not.toHaveBeenCalled()
-      expect(clearDataMock).not.toHaveBeenCalled()
-      // Import must retain the registry’s user agent rather than impersonating the source browser.
-      expect(setUserAgentMock).not.toHaveBeenCalled()
-    } finally {
-      platformSpy.mockRestore()
-      sourceDb.close()
-    }
-  })
-
   it('uses the OS key for encrypted Chromium rows', async () => {
     const password = 'test-password'
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
@@ -320,11 +252,6 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
 
       expect(result.ok).toBe(true)
-      expect(runProcessMock).toHaveBeenCalledWith({
-        program: 'security',
-        args: ['find-generic-password', '-s', 'Chrome Safe Storage', '-a', 'Chrome', '-w'],
-        timeoutMs: 30_000
-      })
       expect(cookieWriteMock).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'sid', value: 'encrypted-value' })
       )

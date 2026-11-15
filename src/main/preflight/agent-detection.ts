@@ -3,11 +3,14 @@ import type {
   PathSource,
   ShellHydrationFailureReason
 } from '../../shared/shell/launch/shell-path-hydration-types'
-import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../startup/shell-environment/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
-import { _resetKnownHostsCache } from '../gitlab/gl-utils'
+import { _resetKnownHostsCache } from '../gitlab/projects/gitlab-known-host-probe'
 import { mergePersistedWindowsPathAsync } from '../pty/environment/windows-environment-path'
 import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
 import {

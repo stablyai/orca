@@ -1,4 +1,4 @@
-import { fencedCode } from '../../selection-copy'
+import { fencedCode } from '../../contextual-copy/selection-copy'
 import type { QuotableSelection } from '../../../native-chat/selection-quotes/SelectionAddToChatPopover'
 import { selectedTextEdges } from '../../../native-chat/selection-quotes/native-chat-quote-selection'
 

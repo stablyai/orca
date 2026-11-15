@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   deferred,
   fixture
-} from '../../../persistence/loading-store/profile-state-delayed-authority-fixture'
+} from '../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
 
 const hooks = vi.hoisted(() => ({ apply: vi.fn(async () => {}) }))

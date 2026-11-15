@@ -20,7 +20,7 @@ import {
   RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
   RUNTIME_FILE_WATCH_MAX_SETUP_ATTEMPTS
 } from '../../../../shared/file-watch/runtime-file-watch-limits'
-import { PromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
+import { PromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 
 const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 const RUNTIME_FILE_WATCH_EVENT_LIMIT = 200

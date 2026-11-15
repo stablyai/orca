@@ -235,7 +235,7 @@ test.describe('Toggle Child Workspaces shortcut', () => {
       if (!folder) {
         throw new Error('Missing created folder workspace')
       }
-      return `folder:${folder.id}`
+      return `folder:${folder.folderWorkspace.id}`
     })
     const folder = sidebarWorktreeRow(orcaPage, folderKey)
     await expect(folder).toBeVisible()

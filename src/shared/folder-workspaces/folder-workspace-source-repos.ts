@@ -5,11 +5,11 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import { getProjectGroupSubtreeIds } from '../project-groups'
-import { isGitRepoKind } from '../repo-kind'
+import { getProjectGroupSubtreeIds } from '../project/groups/project-groups'
+import { isGitRepoKind } from '../repository/repo-kind'
 
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
 
 const EMPTY_REPOS: Repo[] = []
 

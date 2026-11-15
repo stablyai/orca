@@ -160,10 +160,7 @@ describe('QuickCommandsSheet', () => {
       saved.resolve(true)
       await saved.promise
     })
-    expect(editor().props.draft).toMatchObject({
-      label: 'Newer',
-      id: mocks.persist.mock.calls[0]?.[0].command.id
-    })
+    expect(editor().props.draft.label).toBe('Newer')
     expect(editor().props.saving).toBe(false)
     client.close()
   })

@@ -7,9 +7,9 @@ import { rm } from '../../../filesystem/asar-transparent-fs'
 import { ensurePrivateDir } from '../../endpoint/publication/daemon-private-file-modes'
 import { inspectMacProcessCodeIdentity } from './daemon-mac-code-identity'
 
-/** Plain Node helper packaged by config/scripts/macos-terminal-host-bundle.cjs. */
-export const MAC_TERMINAL_HOST_BUNDLE = 'Orca Terminal Host.app'
-export const MAC_TERMINAL_HOST_EXECUTABLE = 'orca-terminal-host'
+/** Plain Node helper packaged by config/scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.cjs. */
+export const MAC_TERMINAL_HOST_BUNDLE = 'Orca Agents.app'
+export const MAC_TERMINAL_HOST_EXECUTABLE = 'Orca Agents'
 export const MAC_DAEMON_COPY_PREFIX = 'terminal-host-'
 
 export type MacDaemonBundle = {

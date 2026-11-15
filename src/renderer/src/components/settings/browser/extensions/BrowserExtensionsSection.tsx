@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FolderOpen, Puzzle, RotateCw, Settings2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type {
   BrowserExtensionActionResult,
   BrowserExtensionListing,
@@ -14,13 +15,15 @@ import { useConfirmationDialog } from '../../../confirmation-dialog-context'
 import { describeUnsupportedBrowserExtensionFeatures } from '../../../browser-extension-permission-messages'
 import { browserExtensionRemovalDescription } from '../../../browser-extension-removal-description'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getBrowserExtensionsSearchEntry } from './browser-extensions-search'
 import { BrowserExtensionsWebStoreInstall } from './BrowserExtensionsWebStoreInstall'
 
 type BrowserExtensionsSectionProps = {
   profileId: string
   profileLabel: string
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
 function ExtensionRow({
@@ -88,13 +91,13 @@ function ExtensionRow({
             {t('settings.browser.extensions.options', 'Options')}
           </Button>
         ) : null}
-        <SettingsSwitch
+        <Switch
           checked={extension.enabled}
           disabled={busy}
-          ariaLabel={t('settings.browser.extensions.toggleLabel', 'Turn {{name}} on or off', {
+          aria-label={t('settings.browser.extensions.toggleLabel', 'Turn {{name}} on or off', {
             name: extension.name
           })}
-          onChange={onToggle}
+          onCheckedChange={onToggle}
         />
         {extension.source === 'unpacked' ? (
           <Tooltip>
@@ -137,9 +140,12 @@ function ExtensionRow({
 
 export function BrowserExtensionsSection({
   profileId,
-  profileLabel
+  profileLabel,
+  settings,
+  updateSettings
 }: BrowserExtensionsSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const enabled = settings.browserExtensionsEnabled !== false
   const confirm = useConfirmationDialog()
   const entry = getBrowserExtensionsSearchEntry()
   const [listing, setListing] = useState<{
@@ -231,23 +237,36 @@ export function BrowserExtensionsSection({
             )}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="xs"
-          className="shrink-0"
-          disabled={!active || busyId !== null}
-          onClick={() => void loadUnpacked()}
-        >
-          <FolderOpen className="size-3" />
-          {t('settings.browser.extensions.loadUnpacked', 'Load unpacked…')}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {enabled ? (
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={!active || busyId !== null}
+              onClick={() => void loadUnpacked()}
+            >
+              <FolderOpen className="size-3" />
+              {t('settings.browser.extensions.loadUnpacked', 'Load unpacked…')}
+            </Button>
+          ) : null}
+          <Switch
+            checked={enabled}
+            aria-label={t(
+              'settings.browser.extensions.enabledToggleLabel',
+              'Turn browser extensions on or off'
+            )}
+            onCheckedChange={() => updateSettings({ browserExtensionsEnabled: !enabled })}
+          />
+        </div>
       </div>
-      <BrowserExtensionsWebStoreInstall
-        profileId={profileId}
-        disabled={!active || busyId !== null}
-        onFinished={() => setRevision((value) => value + 1)}
-      />
-      {active && result.extensions.length === 0 ? (
+      {enabled ? (
+        <BrowserExtensionsWebStoreInstall
+          profileId={profileId}
+          disabled={!active || busyId !== null}
+          onFinished={() => setRevision((value) => value + 1)}
+        />
+      ) : null}
+      {enabled && active && result.extensions.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {t(
             'settings.browser.extensions.empty',
@@ -255,7 +274,7 @@ export function BrowserExtensionsSection({
           )}
         </p>
       ) : null}
-      {active && result.extensions.length > 0 ? (
+      {enabled && active && result.extensions.length > 0 ? (
         <div className="space-y-2">
           {result.extensions.map((extension) => (
             <ExtensionRow

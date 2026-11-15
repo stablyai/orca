@@ -91,6 +91,29 @@ export async function waitForActiveTerminalManager(page: Page, timeoutMs = 30_00
       }
     )
     .toBe(true)
+    .catch(async (error: unknown) => {
+      const tabId = await resolveActiveTabId(page).catch(() => null)
+      const diagnostic = await page
+        .evaluate(async (tabId) => {
+          const manager = tabId ? window.__paneManagers?.get(tabId) : undefined
+          const report = await window.api.crashReports.getLatestReport()
+          return {
+            tabId,
+            managerPresent: Boolean(manager),
+            paneCount: manager?.getPanes?.().length ?? 0,
+            reportId: report?.id,
+            surface: report?.details.surface,
+            rendererError: report?.details.error_message,
+            errorStack: report?.details.error_stack,
+            componentStack: report?.details.component_stack
+          }
+        }, tabId)
+        .catch(() => null)
+      throw new Error(
+        `Active terminal PaneManager did not finish mounting: ${JSON.stringify(diagnostic)}`,
+        { cause: error }
+      )
+    })
 }
 
 export async function splitActiveTerminalPane(

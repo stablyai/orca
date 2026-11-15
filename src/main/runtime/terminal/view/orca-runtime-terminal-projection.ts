@@ -1,7 +1,7 @@
 import { detectTerminalComposerDraft } from '../../../../shared/terminal/input/terminal-composer-draft'
 import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import type { HeadlessTerminalRow } from '../../../daemon/emulation/headless-terminal-rows'
-import type { RuntimeTerminalRowMetadata } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalRowMetadata } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 type TerminalProjectionEmulator = Pick<
   HeadlessEmulator,

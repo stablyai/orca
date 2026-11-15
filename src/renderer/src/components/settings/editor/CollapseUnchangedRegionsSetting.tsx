@@ -1,3 +1,4 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -17,8 +18,8 @@ const KEYWORDS = [
 
 function getTitle(t: Translate = translate): string {
   return t(
-    'auto.components.settings.GeneralEditorSettingsSection.collapseUnchangedTitle',
-    'Collapse Unchanged Regions'
+    'auto.components.settings.GeneralEditorSettingsSection.916c5582f2',
+    'Collapse unchanged regions'
   )
 }
 
@@ -42,6 +43,7 @@ export function CollapseUnchangedRegionsSetting({
 
   return (
     <SearchableSetting
+      id={GENERAL_SETTING_ANCHORS.collapseUnchanged}
       title={title}
       description={description}
       keywords={KEYWORDS}

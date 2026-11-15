@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
-import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'

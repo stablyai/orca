@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { WslHostStatus } from '../../../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
 
 /** Each WSL host's connection status as main's liveness owner publishes it, by environment id. */

@@ -9,7 +9,7 @@ import type {
   WorkspacePortPageProbeResult,
   WorkspacePortScanRequest,
   WorkspacePortScanResult
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 import {
   getStoreWorkspacePortProbes,
   killWorkspacePort,

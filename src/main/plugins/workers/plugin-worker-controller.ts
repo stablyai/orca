@@ -1,16 +1,19 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import type { PluginHostCallOutcome } from '../../../shared/plugins/frames/plugin-protocol'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import { resolveContainedPluginArtifact } from '../plugin-artifact-validation'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import { resolveContainedPluginArtifact } from '../artifacts/plugin-contained-artifact'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import { PluginWorkerManager } from './plugin-worker-manager'
+import type {
+  PluginWorkerFactory,
+  PluginWorkerSpawnSpec
+} from './worker-supervision/plugin-worker-startup'
 import {
-  PluginWorkerManager,
-  type PluginWorkerFactory,
-  type PluginWorkerSpawnSpec
-} from './plugin-worker-manager'
-import { buildPluginWorkerSpawnSpec, pluginWorkerSpawnSpecsEqual } from './plugin-worker-spawn-spec'
-import type { PluginWorkerHandle } from './plugin-host-process'
-import type { PluginRunState } from './plugin-supervisor'
+  buildPluginWorkerSpawnSpec,
+  pluginWorkerSpawnSpecsEqual
+} from './worker-admission/plugin-worker-spawn-spec'
+import type { PluginWorkerHandle } from './parent-process/plugin-host-process-types'
+import type { PluginRunState } from './worker-supervision/plugin-supervisor'
 import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 export type PluginWorkerControllerOptions = {
@@ -93,7 +96,8 @@ export class PluginWorkerController {
           this.options.contentVerifier.verifyNow({
             pluginKey: plugin.pluginKey,
             rootDir: plugin.rootDir,
-            contentHash: spec.reviewedContentHash ?? null
+            contentHash: spec.reviewedContentHash ?? null,
+            devFolder: plugin.isDev
           })
       })
       if (!this.options.isCurrentApproved(spec)) {

@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 

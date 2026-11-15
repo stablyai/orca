@@ -10,12 +10,12 @@ import type {
   BrowserCertificateProceedFailureReason,
   BrowserCertificateProceedResult,
   BrowserLoadError
-} from '../../../../../shared/browser-workspace-types'
-import { normalizeCertificateError } from '../../../../../shared/browser-certificate-errors'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { normalizeCertificateError } from '../../../../../shared/browser/certificate-trust/browser-certificate-errors'
 import {
   describeBrowserLoadFailure,
   type BrowserLoadFailureRoute
-} from '../../../../../shared/browser-load-failure'
+} from '../../../../../shared/browser/navigation/browser-load-failure'
 import {
   formatLoadFailureDescription,
   formatLoadFailureTitle,

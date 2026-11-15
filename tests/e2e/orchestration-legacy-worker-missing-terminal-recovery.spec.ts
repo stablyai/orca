@@ -13,7 +13,7 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import { DaemonClient } from '../../src/main/daemon/transport/client/daemon-client'
 import {
   getDaemonSocketPath,
@@ -25,7 +25,10 @@ import { LEGACY_CONTRACT_VERSION } from '../../src/main/runtime/orchestration/db
 import '../../src/main/runtime/orchestration/db/messages/mailbox-routing-page'
 import '../../src/main/runtime/orchestration/db/dispatch-row-writer'
 import '../../src/main/runtime/orchestration/db/attempt-outcome-projection'
-import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import type {
+  RuntimeTerminalListResult,
+  RuntimeTerminalRead
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL

@@ -4,7 +4,7 @@ import {
   type BrowserSitePermission,
   type BrowserSitePermissionDecision,
   type BrowserSitePermissionEntry
-} from '../../../../shared/browser-site-permission'
+} from '../../../../shared/browser/site-settings/browser-site-permission'
 import { createBrowserProfileSiteStore } from '../browser-profile-site-store'
 
 export const BROWSER_SITE_PERMISSIONS_FILE_NAME = 'browser-site-permissions.json'
