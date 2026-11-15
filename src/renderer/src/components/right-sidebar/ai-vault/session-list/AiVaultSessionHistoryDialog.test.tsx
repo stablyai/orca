@@ -52,11 +52,13 @@ vi.mock('./AiVaultSessionVirtualList', () => ({
   AiVaultSessionVirtualList: (props: {
     groups: AiVaultSessionListGroup[]
     onResumeInNewChat: (session: null, id: string) => void
+    resumeHere?: { tabId: string }
   }) => (
     <>
       <button type="button" onClick={() => props.onResumeInNewChat(null, 'wt-own')}>
         Resume row
       </button>
+      <p>{props.resumeHere ? `Replaces ${props.resumeHere.tabId}` : 'Resumes in new tabs'}</p>
       {props.groups.flatMap((group) => group.sessions.map(({ id }) => <p key={id}>{id}</p>))}
     </>
   )
@@ -85,11 +87,15 @@ function Host({ withSidebar = false }: { withSidebar?: boolean }) {
   )
 }
 
-function openHistory(initialQuery = '', agent?: AiVaultAgent) {
+function openHistory(
+  initialQuery = '',
+  agent?: AiVaultAgent,
+  chatTabId: string | null = 'chat-tab'
+) {
   act(() =>
     openAgentSessionHistoryModal({
       workspace: { worktreeId: CHAT_WORKTREE },
-      chatTabId: 'chat-tab',
+      ...(chatTabId ? { chatTabId } : {}),
       initialQuery,
       ...(agent ? { agent } : {})
     })
@@ -148,6 +154,17 @@ describe('Session History dialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resume row' }))
     await waitFor(() => expect(useAppStore.getState().activeModal).toBe('none'))
     expect(composer).not.toHaveFocus()
+  })
+
+  it('replaces the /resume chat, and resumes in new tabs when opened without one', async () => {
+    render(<Host />)
+    openHistory()
+    expect(await screen.findByText('Replaces chat-tab')).toBeInTheDocument()
+
+    act(() => useAppStore.getState().closeModal())
+    openHistory('', 'codex', null)
+    await waitFor(() => expect(dialogSearch()).toHaveFocus())
+    expect(screen.getByText('Resumes in new tabs')).toBeInTheDocument()
   })
 
   it("keeps its search apart from the sidebar's and leaves Settings' request to the sidebar", async () => {

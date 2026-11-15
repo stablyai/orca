@@ -25184,6 +25184,7 @@
     "argumentsHint": "Applies only to CLI launches.",
     "launchChat": "Launch chat",
     "launchTerminal": "Launch terminal",
+    "resumeSession": "Resume session…",
     "sameAsTextDefault": "Same as default · {{value0}}",
     "setByArguments": "Set by your Arguments",
     "searchModels": "Search models",

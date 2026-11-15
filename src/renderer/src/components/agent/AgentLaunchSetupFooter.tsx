@@ -1,6 +1,6 @@
 import { terminalPendingLabel } from '../tab-bar/new-tab-agent-menu-model'
 import { useImperativeHandle, useRef, type Ref } from 'react'
-import { CornerDownLeft, MessageSquare, SquareTerminal } from 'lucide-react'
+import { CornerDownLeft, History, MessageSquare, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -9,6 +9,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
 import { AgentLaunchPromptComposer } from './AgentLaunchPromptComposer'
+import { useAgentLaunchResumeSession } from './agent-launch-resume-session'
 import {
   agentPickerButtonOrder,
   type AgentPickerEntry,
@@ -123,6 +124,8 @@ export function AgentLaunchSetupFooter({
   terminalBlocked?: boolean
   onLaunch: (surface: AgentPickerSurface, prompt?: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
+  const resumeSession = useAgentLaunchResumeSession(entry.agent)
   const composer = useRef<NativeChatComposerHandle>(null)
   // Enter launches the default way; a Launch button names its own before it submits the prompt.
   const surface = useRef(entry.defaultSurface)
@@ -166,6 +169,21 @@ export function AgentLaunchSetupFooter({
           onSelect={launch}
         />
       </div>
+      {resumeSession ? (
+        <div className="border-t border-border p-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            disabled={disabled}
+            onClick={resumeSession}
+          >
+            <History />
+            {t('agentPicker.resumeSession', 'Resume session…')}
+          </Button>
+        </div>
+      ) : null}
     </>
   )
 }

@@ -24061,6 +24061,7 @@
     "argumentsHint": "Aplica-se apenas às inicializações pela CLI.",
     "launchChat": "Iniciar chat",
     "launchTerminal": "Iniciar terminal",
+    "resumeSession": "Retomar sessão…",
     "setByArguments": "Definido pelos seus argumentos",
     "searchModels": "Pesquisar modelos",
     "noModels": "Nenhum modelo corresponde à pesquisa.",

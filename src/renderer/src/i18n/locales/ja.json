@@ -22815,6 +22815,7 @@
     "argumentsHint": "CLI での起動にのみ適用されます。",
     "launchChat": "チャットを起動",
     "launchTerminal": "ターミナルを起動",
+    "resumeSession": "セッションを再開…",
     "setByArguments": "引数で設定",
     "searchModels": "モデルを検索",
     "noModels": "検索に一致するモデルがありません。",

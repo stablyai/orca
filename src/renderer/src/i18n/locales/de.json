@@ -23615,6 +23615,7 @@
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
     "launchTerminal": "Terminal starten",
+    "resumeSession": "Sitzung fortsetzen…",
     "use": "Verwenden",
     "select": "Agent auswählen",
     "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",

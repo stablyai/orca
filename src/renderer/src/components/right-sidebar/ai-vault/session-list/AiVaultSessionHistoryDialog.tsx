@@ -26,7 +26,7 @@ function selectVisibleTabs(state: AppState, chatWorkspaceId: string | null): str
     .join('\n')
 }
 
-/** `/resume`'s Session History: each opening mounts a fresh panel, apart from the sidebar's. */
+/** Session History for `/resume` and the launch menu: each opening mounts a fresh panel, apart from the sidebar's. */
 export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null {
   const t = useTranslate()
   const modalData = useAppStore((s) => s.modalData)
@@ -89,18 +89,23 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
             // An agent the filter doesn't list leaves every agent shown rather than none.
             initialAgents={request.agent ? aiVaultHistoryAgents(request.agent) : AI_VAULT_AGENTS}
             onSessionOpened={closeModal}
-            resumeHere={{
-              tabId: request.chatTabId,
-              workspaceId: request.workspace.worktreeId,
-              agent: request.agent,
-              // A refusal can settle after this opening closed and another modal took the slot.
-              dismiss: () => {
-                if (useAppStore.getState().modalData === modalData) {
-                  closeModal()
-                }
-              },
-              confirm
-            }}
+            // Without a chat to replace, rows keep the sidebar's actions and resume in new tabs.
+            resumeHere={
+              request.chatTabId
+                ? {
+                    tabId: request.chatTabId,
+                    workspaceId: request.workspace.worktreeId,
+                    agent: request.agent,
+                    // A refusal can settle after this opening closed and another modal took the slot.
+                    dismiss: () => {
+                      if (useAppStore.getState().modalData === modalData) {
+                        closeModal()
+                      }
+                    },
+                    confirm
+                  }
+                : undefined
+            }
             headerAction={
               <DialogClose asChild>
                 <Button
