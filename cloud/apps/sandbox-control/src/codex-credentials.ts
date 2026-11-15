@@ -186,6 +186,16 @@ export const codexAccount: AccountProvider = {
       detail: 'Orca Cloud can’t use your ChatGPT sign-in here. Check it in Orca: Settings → Agent accounts.'
     })
   },
+  // CODEX-EGRESS-BLOCKED: chatgpt.com answers Cloudflare Workers' egress with a 403 "Unable to load
+  // site" page, whatever the token. Same shape as signedOut, so Codex prints it and stops.
+  upstreamBlocked: {
+    status: 403,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      detail:
+        'Orca Cloud can’t reach ChatGPT with your Orca account right now: ChatGPT refused Orca’s network, not your sign-in. Use another agent for now.'
+    })
+  },
   credential: async (db, keyring, userId, now) => {
     const value = await readUsableAgentCredential(db, keyring, userId, 'codex', now)
     const tokens = value ? parseStoredCodex(value) : null

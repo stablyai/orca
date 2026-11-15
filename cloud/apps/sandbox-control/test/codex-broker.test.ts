@@ -73,6 +73,8 @@ async function setup(overrides: Record<string, string> = {}) {
   const upstream: { url: string; headers: Headers }[] = []
   const tokenCalls: Record<string, unknown>[] = []
   const upstreamStatus = { value: 200 }
+  // CODEX-EGRESS-BLOCKED: chatgpt.com's edge answering Workers' egress (what dev saw, 2026-11-15).
+  const edgeBlock = { on: false }
   let tokenReply: () => Response = () =>
     Response.json({ access_token: ACCESS_2, refresh_token: REFRESH_2, id_token: ID })
   const h = await createHarness(
@@ -82,6 +84,12 @@ async function setup(overrides: Record<string, string> = {}) {
       credentials: { authorizationFor: async () => null },
       egressFetch: async (input, init) => {
         upstream.push({ url: String(input), headers: new Headers(init?.headers) })
+        if (edgeBlock.on) {
+          return new Response('<html><body>Unable to load site</body></html>', {
+            status: 403,
+            headers: { 'content-type': 'text/html; charset=UTF-8', server: 'cloudflare' }
+          })
+        }
         return new Response('{}', { status: upstreamStatus.value })
       },
       codexTokenFetch: async (input, init) => {
@@ -144,6 +152,7 @@ async function setup(overrides: Record<string, string> = {}) {
     proxied,
     upstream,
     upstreamStatus,
+    edgeBlock,
     tokenCalls,
     signIn,
     refreshDeps: async () => ({ ...deps(), keyring: await deps().keyring }),
@@ -458,5 +467,27 @@ describe('Codex lease refresher', () => {
     }
     expect(await refreshCodexCredential({ ...deps, fetch: slowFetch }, 'mia')).toBe('skipped')
     expect(await view()).toBe('none')
+  })
+})
+
+describe('CODEX-EGRESS-BLOCKED: chatgpt.com refuses the proxy itself', () => {
+  it('answers with a message Codex prints, never the HTML page, and leaves the login alone', async () => {
+    const { h, as, signIn, proxied, upstream, edgeBlock, tokenCalls } = await setup()
+    const mia = await as('mia', 'acme', 'member')
+    await signIn(mia)
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    const auth = { authorization: `Bearer ${codexPlaceholder({ id })}` }
+    edgeBlock.on = true
+    const refreshesBefore = tokenCalls.length
+    const answer = await proxied(id, 'chatgpt.com', auth)
+    expect(upstream.at(-1)!.url).toBe('https://chatgpt.com/backend-api/codex/responses')
+    expect(answer.status).toBe(403)
+    expect(answer.body).not.toContain('<html')
+    expect(JSON.parse(answer.body).detail).toContain('ChatGPT refused Orca’s network')
+    // Not a credential problem: no refresh, no revoke, the next request still swaps.
+    expect(tokenCalls.length).toBe(refreshesBefore)
+    edgeBlock.on = false
+    expect((await proxied(id, 'chatgpt.com', auth)).status).toBe(200)
   })
 })
