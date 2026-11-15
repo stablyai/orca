@@ -1,5 +1,6 @@
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { workflowRunPathMatches } from './workflow-run-path.mjs'
 
 const DEFAULT_API_VERSION = '2026-03-10'
 const DEFAULT_TIMEOUT_MINUTES = 90
@@ -66,7 +67,7 @@ export function assertReleaseMacBuildRunIdentity(run, options, expected) {
   if (
     String(run.id) !== String(expected.id) ||
     run.event !== 'workflow_dispatch' ||
-    run.path !== `.github/workflows/${options.workflow}` ||
+    !workflowRunPathMatches(run.path, `.github/workflows/${options.workflow}`) ||
     run.display_title !== expectedReleaseMacBuildRunTitle(options) ||
     run.head_branch !== options.ref ||
     !/^[a-f0-9]{40}$/.test(run.head_sha ?? '') ||
