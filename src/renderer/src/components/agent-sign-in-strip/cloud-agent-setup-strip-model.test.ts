@@ -123,7 +123,8 @@ describe('cloudAgentSetupStripModel (PC-3b)', () => {
     expect(idle.primary?.action).toEqual({ kind: 'setUpOnce' })
     expect(idle.alternative).toEqual({
       label: 'Sign in inside this workspace instead',
-      detail: 'Orca won’t store your sign-in. You’ll sign in again in each new workspace.',
+      detail:
+        'Orca won’t store your sign-in. You’ll sign in again in each new workspace. Team API keys won’t be used for this agent.',
       action: { kind: 'signInInsideWorkspace' }
     })
     const failed = cloudAgentSetupStripModel({

@@ -83,6 +83,10 @@ export function AccountRow({
               variant="ghost"
               size="sm"
               className="text-muted-foreground"
+              title={t(
+                'agentSignInStrip.signInInsideWorkspaceDetail',
+                'Orca won’t store your sign-in. You’ll sign in again in each new workspace. Team API keys won’t be used for this agent.'
+              )}
               onClick={() =>
                 void actions.setSource(agent, IN_WORKSPACE_SOURCE).then((error) => {
                   if (error) {
@@ -108,7 +112,7 @@ export function AccountRow({
           title={t('orcaCloudAccounts.inWorkspace', 'Signs in inside each workspace')}
           detail={t(
             'orcaCloudAccounts.inWorkspaceDetail',
-            'Orca doesn’t store your {{product}} sign-in. You sign in again in each new cloud workspace.',
+            'Orca doesn’t store your {{product}} sign-in. You sign in again in each new cloud workspace. Team API keys aren’t used for this agent.',
             { product }
           )}
           actions={

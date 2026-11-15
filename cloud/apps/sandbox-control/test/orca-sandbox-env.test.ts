@@ -135,3 +135,37 @@ describe('orca-sandbox-env: Claude Code API-key approval (G9)', () => {
     expect(claude(file).hasCompletedOnboarding).toBe(true)
   })
 })
+
+describe('orca-sandbox-env: Claude signed in inside the workspace', () => {
+  const claudeJson = (file: (path: string) => string | null) => JSON.parse(file('.claude.json') ?? '{}')
+
+  it('with no login yet, leaves onboarding to Claude so it opens on its own sign-in screens; never a shell variable', () => {
+    const { run, file, sessionEnv } = scratch()
+    run({ ORCA_SIGN_IN_INSIDE: 'claude,codex', FOO: 'bar' })
+    const c = claudeJson(file)
+    expect(c.hasCompletedOnboarding).toBeUndefined()
+    // The other first-run answers still apply.
+    expect(c.bypassPermissionsModeAccepted).toBe(true)
+    expect(sessionEnv()).not.toContain('ORCA_SIGN_IN_INSIDE')
+  })
+
+  it('clears a mark an earlier session made, and marks onboarding done once a login exists here', () => {
+    const { home, run, file } = scratch()
+    run({})
+    expect(claudeJson(file).hasCompletedOnboarding).toBe(true)
+    run({ ORCA_SIGN_IN_INSIDE: 'claude' })
+    expect(claudeJson(file).hasCompletedOnboarding).toBeUndefined()
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(join(home, '.claude', '.credentials.json'), '{}')
+    run({ ORCA_SIGN_IN_INSIDE: 'claude' })
+    expect(claudeJson(file).hasCompletedOnboarding).toBe(true)
+  })
+
+  it('only Codex inside, or a malformed value, keeps Claude onboarding done', () => {
+    const { run, file } = scratch()
+    run({ ORCA_SIGN_IN_INSIDE: 'codex' })
+    expect(claudeJson(file).hasCompletedOnboarding).toBe(true)
+    run({ ORCA_SIGN_IN_INSIDE: 'claude;rm -rf /' })
+    expect(claudeJson(file).hasCompletedOnboarding).toBe(true)
+  })
+})
