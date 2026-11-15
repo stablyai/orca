@@ -1,7 +1,0 @@
-id: main-worker-thread-spawn
-valid:
-  - 'spawnWorkerThread(workerPath, { workerData })'
-  - 'new WorkerThreadChildProcessHost(factory)'
-invalid:
-  - 'new Worker(workerPath)'
-  - 'new workerThreads.Worker(workerPath)'

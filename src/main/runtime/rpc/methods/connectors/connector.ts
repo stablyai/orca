@@ -1,6 +1,6 @@
 /** Gate every connector.* conversation handler on this host's experimentalConnectors setting, regardless of caller. */
 
-import { delayUnlessAborted } from '../../../../../shared/abort-aware-delay'
+import { delayUnlessAborted } from '../../../../../shared/concurrency/abort-aware-delay'
 import { cloudConversation } from '../../../../../shared/connector-cloud-contract'
 import {
   ConnectorAnswer,
@@ -10,7 +10,7 @@ import {
   ConnectorSend,
   ConnectorStart,
   ConnectorWatch
-} from '../../../../../shared/rpc-contract/connector-params'
+} from '../../../../../shared/rpc-contract/connectors/connector-params'
 import type {
   ConversationEvent,
   ConversationSnapshot

@@ -5,7 +5,7 @@ import { SourceControlAgentActionDialog } from '@/components/right-sidebar/sourc
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { saveFixChecksActionDefault, startFixChecksFromDialog } from './fix-launch'
 
 export function ChecksFixDialog({

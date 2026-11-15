@@ -9,17 +9,18 @@ import {
   sessionTerminalRename
 } from '../../terminal/session/mobile-session-terminal-operations'
 import type { MobileSessionTab } from './mobile-session-tabs'
-import type { Terminal } from '../../terminal/session/mobile-terminal-model'
+import type { TerminalRecord as Terminal } from '../../terminal/session/inventory/mobile-terminal-records'
 import { removeRecentSessionCard } from '../recent-session-cards'
 import type { MobileSessionContentCreateActionsModel } from '../use-mobile-session-content-create-actions'
-import { mobileNativeChatScopeKey } from '../native-chat/mobile-native-chat-scope-key'
-import { closeMobileNativeChatTabDraft } from '../native-chat/composer/mobile-native-chat-draft-store'
+import { mobileNativeChatScopeKey } from '../native-chat/conversation/mobile-native-chat-scope-key'
+import { closeMobileNativeChatTabDraft } from '../native-chat/composer/drafts/mobile-native-chat-draft-store'
 import {
   defineHostMutation,
   useHostMutation,
   type HostMutationPhase
 } from '../../query/host-mutation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { translate } from '../../i18n/mobile-i18n'
 
 async function sendTerminalRename(
   client: RpcClient,
@@ -65,9 +66,22 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     scheduleDelayedAction,
     unsubscribeTerminal,
     subscribeToTerminal,
-    fetchTerminals
+    fetchTerminals,
+    showToast
   } = scope
   const terminalRenameWrite = useHostMutation(terminalRename, { hostId, client })
+  // A refused or lost close keeps the tab, so say so rather than leave the tap unanswered.
+  function showCloseFailed(code?: string) {
+    showToast(
+      code === 'runtime_unavailable'
+        ? translate(
+            'session.useCloseActions.closeFailedDesktopNotReady',
+            "Couldn't close the tab. Orca on your computer is still loading. Try again in a moment."
+          )
+        : translate('session.useCloseActions.closeFailed', "Couldn't close the tab. Try again."),
+      2400
+    )
+  }
   // Throws on refusal so the sheet keeps the typed name and offers Retry.
   async function handleRenameTerminal(
     value: string,
@@ -97,10 +111,11 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     }
 
     try {
-      const response = sessionTerminalClose.interpret(
-        await sessionTerminalClose.request(client, { terminal: target.handle })
-      )
-      if (response.accepted) {
+      const reply = await sessionTerminalClose.request(client, { terminal: target.handle })
+      const response = sessionTerminalClose.interpret(reply)
+      if (!response.accepted) {
+        showCloseFailed(reply.ok ? undefined : reply.error.code)
+      } else {
         if (hostId && worktreeId) {
           removeRecentSessionCard(hostId, worktreeId, undefined, target.handle)
         }
@@ -125,7 +140,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           }
         }
       }
-    } catch {}
+    } catch {
+      showCloseFailed()
+    }
   }
 
   async function handleCloseSessionTab(tab: MobileSessionTab) {
@@ -133,16 +150,17 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       return
     }
     try {
-      const response = sessionTabClose.interpret(
-        await sessionTabClose.request(client, {
-          worktree: `id:${worktreeId}`,
-          tabId: tab.id,
-          // Why: a tapped tab close is explicit user intent; older hosts strip
-          // the unknown field and keep their legacy behavior.
-          reason: 'user'
-        })
-      )
-      if (response.accepted && !response.value.refused) {
+      const reply = await sessionTabClose.request(client, {
+        worktree: `id:${worktreeId}`,
+        tabId: tab.id,
+        // Why: a tapped tab close is explicit user intent; older hosts strip
+        // the unknown field and keep their legacy behavior.
+        reason: 'user'
+      })
+      const response = sessionTabClose.interpret(reply)
+      if (!response.accepted || response.value.refused) {
+        showCloseFailed(reply.ok ? undefined : reply.error.code)
+      } else {
         if (hostId && worktreeId) {
           removeRecentSessionCard(
             hostId,
@@ -207,7 +225,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           setActiveHandle(null)
         }
       }
-    } catch {}
+    } catch {
+      showCloseFailed()
+    }
   }
   return {
     handleRenameTerminal,

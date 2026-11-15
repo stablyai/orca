@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Button } from '../../ui/button'
 import { Minus, Plus, RotateCcw } from 'lucide-react'
-import { applyUIZoom } from '@/lib/ui-zoom'
+import { applyUIZoom } from '@/app-shell/chrome/ui-zoom'
 import {
   UI_ZOOM_STEP as ZOOM_STEP,
   UI_ZOOM_MIN as ZOOM_MIN,
@@ -36,6 +36,7 @@ export function UIZoomControl(): React.JSX.Element {
         size="icon-sm"
         onClick={() => applyZoom(zoomLevel - ZOOM_STEP)}
         disabled={zoomLevel <= ZOOM_MIN}
+        aria-label={t('settings.appearance.uiZoom.zoomOut', 'Zoom out')}
       >
         <Minus className="size-3" />
       </Button>
@@ -45,6 +46,7 @@ export function UIZoomControl(): React.JSX.Element {
         size="icon-sm"
         onClick={() => applyZoom(zoomLevel + ZOOM_STEP)}
         disabled={zoomLevel >= ZOOM_MAX}
+        aria-label={t('settings.appearance.uiZoom.zoomIn', 'Zoom in')}
       >
         <Plus className="size-3" />
       </Button>

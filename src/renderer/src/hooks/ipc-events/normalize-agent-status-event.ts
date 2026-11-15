@@ -31,13 +31,22 @@ export function normalizeAgentStatusMetadata(
   data: AgentStatusIpcPayload,
   authorityRestartId?: string
 ): AgentStatusMetadata | undefined {
-  if (!data.providerSession && !data.launchToken && !authorityRestartId && !data.paneOwner) {
+  if (
+    !data.providerSession &&
+    !data.launchToken &&
+    data.launchConfig === undefined &&
+    !authorityRestartId &&
+    !data.paneOwner &&
+    data.orcaSessionId === undefined
+  ) {
     return undefined
   }
   return {
     ...(authorityRestartId ? { authorityRestartId } : {}),
     ...(data.providerSession ? { providerSession: data.providerSession } : {}),
+    ...(data.orcaSessionId !== undefined ? { orcaSessionId: data.orcaSessionId } : {}),
     ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+    ...(data.launchConfig !== undefined ? { launchConfig: data.launchConfig } : {}),
     ...(data.paneOwner ? { paneOwner: data.paneOwner } : {})
   }
 }

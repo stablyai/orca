@@ -6,15 +6,15 @@ import {
 import type {
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab
-} from '../../../shared/runtime-mobile-session-tab-contracts'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab } from '../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { editorRowHost } from '../../../shared/workspace-session/session-tab-file-host'
 import {
   editorTabNamesFile,
   sameEditorFile
-} from '../../../shared/workspace-layout/workspace-layout-editor-tab-file'
+} from '../../../shared/workspace-layout/editor-tabs/workspace-layout-editor-tab-file'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState

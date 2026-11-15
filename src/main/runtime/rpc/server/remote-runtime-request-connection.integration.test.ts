@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
 
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 
@@ -18,18 +18,19 @@ import { RemoteRuntimeRequestConnection } from '../../../../shared/remote-runtim
 
 import { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 
-import { subscribeRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
-} from '../../../../shared/runtime-client-events'
+} from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/host-runtime-capabilities'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000
 const REMOTE_RUNTIME_REQUEST_TIMEOUT_MS = 5_000
@@ -145,7 +146,7 @@ describe('remote runtime request connection integration', () => {
         const clientEvents: RuntimeClientEventStreamMessage[][] = [[], []]
         const subscriptions = await Promise.all(
           clientEvents.map((events) =>
-            subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
+            subscribeRemoteRuntimeTransport<RuntimeClientEventStreamMessage>(
               pairedRuntimeConnectionFromOffer(pairing),
               'runtime.clientEvents.subscribe',
               undefined,
@@ -197,22 +198,23 @@ describe('remote runtime request connection integration', () => {
             ).toEqual(['started', 'committed'])
           }
           const reconnectedEvents: RuntimeClientEventStreamMessage[] = []
-          const reconnected = await subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
-            pairedRuntimeConnectionFromOffer(pairing),
-            'runtime.clientEvents.subscribe',
-            undefined,
-            REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
-            {
-              onResponse: (response) => {
-                if (response.ok) {
-                  reconnectedEvents.push(response.result)
+          const reconnected =
+            await subscribeRemoteRuntimeTransport<RuntimeClientEventStreamMessage>(
+              pairedRuntimeConnectionFromOffer(pairing),
+              'runtime.clientEvents.subscribe',
+              undefined,
+              REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
+              {
+                onResponse: (response) => {
+                  if (response.ok) {
+                    reconnectedEvents.push(response.result)
+                  }
+                },
+                onError: (error) => {
+                  throw error
                 }
-              },
-              onError: (error) => {
-                throw error
               }
-            }
-          )
+            )
           try {
             await waitFor(() => reconnectedEvents.some((event) => event.type === 'ready'))
             expect(

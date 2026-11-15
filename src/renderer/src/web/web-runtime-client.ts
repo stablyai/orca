@@ -6,7 +6,7 @@ import {
 } from './web-runtime-dedicated-subscription'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { RuntimeEnvironmentSetupFailure } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type {
@@ -14,7 +14,7 @@ import type {
   RuntimeHostStatusResponse
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from './web-runtime-request-registry'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { WebRuntimeConnectionTransport } from './web-runtime-connection-transport'
 import type { WebRuntimeCredentialSource } from './web-runtime-credential-source'
 import { subscribeWebRuntimeFileWatch } from './web-runtime-file-watch-subscription'

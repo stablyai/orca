@@ -1,3 +1,4 @@
+// @orca-isolated-worker: the Electron app, mock server and temp root live at module level, one per test file.
 import type { PopupCompatibilityStatus } from './browser-popup-compatibility-status'
 import { spawnProcess } from '@orca/process-host'
 import { createServer } from 'node:http'
@@ -87,9 +88,7 @@ const server = createServer((request, response) => {
     }
     response.setHeader('Content-Type', 'text/html')
     response.end(
-      ['/local', '/route', '/local-control', '/route-control', '/probe-one', '/probe-two'].includes(
-        path
-      )
+      ['/local', '/route', '/local-control', '/route-control'].includes(path)
         ? popupFixtureHtml(origin)
         : `<title>Hostile synthetic title</title><body>${path}<script>if(window.opener)window.opener.postMessage('callback:'+document.cookie,'*')</script></body>`
     )
@@ -167,8 +166,7 @@ beforeAll(async () => {
       ORCA_BACKGROUND_LAUNCH: '1',
       ORCA_POPUP_FIXTURE_ORIGIN: origin,
       ORCA_POPUP_FIXTURE_STATUS: statusPath,
-      ORCA_POPUP_FIXTURE_NATIVE_CONTROLS: nativeControls ? '1' : '0',
-      ORCA_POPUP_FIXTURE_ADAPTER_PROBE: adapterProbe ? '1' : '0'
+      ORCA_POPUP_FIXTURE_NATIVE_CONTROLS: nativeControls ? '1' : '0'
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
@@ -189,12 +187,7 @@ beforeAll(async () => {
     return current.ready === true
   })
   expect(status()).toMatchObject({ ready: true, windowsHidden: true })
-  const names = [
-    'local',
-    'route',
-    ...(nativeControls ? ['local-control', 'route-control'] : []),
-    ...(adapterProbe ? ['probe-one', 'probe-two'] : [])
-  ]
+  const names = ['local', 'route', ...(nativeControls ? ['local-control', 'route-control'] : [])]
   for (const name of names) {
     await waitForFixture(() =>
       Boolean(
@@ -282,10 +275,6 @@ export async function closeChildren(page: Page): Promise<void> {
 
 let evidenceName = 'electron-evidence.json'
 let nativeControls = false
-let adapterProbe = false
-export function enablePopupAdapterProbe(): void {
-  adapterProbe = true
-}
 export function enablePopupFixtureNativeControls(): void {
   nativeControls = true
 }

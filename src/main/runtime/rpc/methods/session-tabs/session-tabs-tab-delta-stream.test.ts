@@ -1,14 +1,14 @@
-import { RuntimeClientCapabilities } from '../../runtime-client-capabilities'
+import { RuntimeClientCapabilities } from '../../callers/runtime-client-capabilities'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../client-events/runtime-client-capabilities'
 import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
   SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY
-} from '../../../../../shared/session-tabs-runtime-capabilities'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { createSessionTabsTabDeltaDecoder } from '../../../../../shared/session-tabs-tab-delta'
 import { RpcDispatcher } from '../../dispatcher'
 import { SESSION_TAB_METHODS } from './session-tabs'
@@ -61,8 +61,11 @@ describe.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'] as const)(
             }
           ]
         }
+        const observedFrames: RuntimeMobileSessionTabsResult[][] = []
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these real RPC handlers reach only the runtime members stubbed here.
         const runtime = {
+          observeClientHostedPageSnapshots: (frames: RuntimeMobileSessionTabsResult[]) =>
+            observedFrames.push(frames),
           getRuntimeId: () => 'runtime',
           getClientSettings: () => ({}),
           listMobileSessionTabs: async () => initial,
@@ -145,9 +148,15 @@ describe.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'] as const)(
         // A capability the projection ignores sends no frame; the next real change still decodes.
         await update([...source.current, 'unrelated.test.v1'])
         expect(messages).toHaveLength(1)
+        expect(observedFrames).toHaveLength(2)
         await update(structured)
         expect(siblingMessages).toHaveLength(1)
         expect(messages).toHaveLength(2)
+        expect(observedFrames).toHaveLength(3)
+        expect(observedFrames.at(-1)?.[0]?.tabs[0]).toMatchObject({
+          type: 'agent-session',
+          title: 'Claude chat'
+        })
         const recovered = decode(messages[1]!)
         expect(JSON.stringify(recovered)).toContain('Claude chat')
         const proofState = { retiredTerminalSurfaces: delta ? [] : initial.retiredTerminalSurfaces }

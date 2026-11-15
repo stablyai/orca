@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
 import { runtimeHostContactFromSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RuntimeHostConnectionState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** `stopped`: a WSL host's distro stopped; only an explicit Start boots it (E9). */
 export type NativeChatHostOutageKind = 'reconnecting' | 'offline' | 'stopped'

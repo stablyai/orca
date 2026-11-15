@@ -19,7 +19,7 @@ import {
 } from './helpers/ssh-remote-only-browser-fixture'
 import { createRetentionFixtureDirectory } from './helpers/host-created-terminal-retention-oracle'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles/orca-profiles'
 import { deriveBrowserRoutePartition } from '../../src/main/browser/routing/partitions/browser-route-identity'
 import { sshExecutionHostStorageIdentity } from '../../src/main/browser/routing/identity/browser-execution-host-storage-identity'
 import { reconnect } from './helpers/orcad-convert-flow'

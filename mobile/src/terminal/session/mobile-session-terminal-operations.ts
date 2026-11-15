@@ -1,14 +1,11 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import { terminalComposerDraftSchema, terminalSendAcceptedSchema } from '../terminal-reply-schema'
+import {
+  terminalComposerDraftSchema,
+  terminalSendAcceptedSchema
+} from '../host-operations/terminal-reply-schema'
 import { sessionTerminalInventorySchema } from './mobile-session-terminal-reply-schema'
-import '../../session/agent-launch/mobile-agent-detection-reply-schema'
-import '../../files/session-documents/mobile-markdown-tab-reply-schema'
 import { sessionWriteUnreadReplySchema } from '../../transport/rpc/rpc-uninterpreted-reply-schemas'
-import '../../worktree/session-worktree-record-reply-schema'
-import '../../session/native-chat/composer/mobile-native-chat-skill-reply-schema'
-import '../quick-commands/mobile-quick-command-reply-schema'
-import '../../files/workspace-file-paths-reply-schema'
 
 export const nativeChatTerminalDraftRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -31,7 +28,6 @@ export const sessionTerminalListRead = bindDeferredRpcOperation(
   })
 )
 
-import '../../session/tabs/mobile-session-tab-write-reply-schema'
 import '../quick-commands/mobile-quick-command-operations'
 
 // Keep chat writes distinct from query/accessory responders: losing a reply here means unknown delivery and forbids automatic retry.

@@ -1,7 +1,7 @@
-import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getProvider } from '../provider/registry'
 import {
@@ -23,7 +23,7 @@ import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import {
   ensureJcodeRuntimeDir,
   JCODE_RUNTIME_DIR_ENV_KEY
-} from '../../../../shared/jcode-runtime-dir'
+} from '../../../../shared/agent-launch/startup/jcode-runtime-dir'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState

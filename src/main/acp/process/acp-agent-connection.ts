@@ -70,6 +70,10 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   private readonly diagnoseLifecycle: (message: string) => void
   readonly spawned: Promise<void>
 
+  /** Any session the agent reports on this connection, including a subagent's child session. */
+  closeSession = (sessionId: string, timeoutMs = 10_000): Promise<unknown> =>
+    this.peer.request('session/close', { sessionId }, { timeoutMs, onTimeout: 'cancel' })
+
   constructor(
     launch: ProviderProcessLaunch,
     options: AcpAgentConnectionOptions = {},
@@ -249,8 +253,8 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   }
 
   /** Requires advertised session listing support. */
-  listSessions(cwd: string): Promise<unknown> {
-    return this.call('session/list', { cwd }, z.unknown())
+  listSessions(params: { cwd?: string; cursor?: string }): Promise<unknown> {
+    return this.call('session/list', params, z.unknown())
   }
 
   /** The stderr tail once an exited process's stderr ends, bounded for a descendant holding it. */

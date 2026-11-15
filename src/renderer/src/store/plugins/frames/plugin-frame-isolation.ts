@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { useAppStore } from '@/store'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useAppStore } from '@/store/index'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
 /**

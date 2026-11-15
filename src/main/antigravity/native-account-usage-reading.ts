@@ -1,8 +1,11 @@
-import type { ProviderRateLimits, RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitRuntimeTarget
+} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   isSameRuntimeTarget,
   type AntigravityUsageLogin
-} from '../rate-limits/antigravity-account-usage'
+} from '../rate-limits/providers/antigravity/antigravity-account-usage'
 import type { StoredAntigravityAccount, StoredAntigravityUsage } from './native-account-store'
 import type { AntigravityNativeCredential } from './native-credential-codec'
 

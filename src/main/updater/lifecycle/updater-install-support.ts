@@ -2,13 +2,16 @@ import { app } from 'electron'
 import {
   isWindowsSignatureCheckUnavailableFailure,
   isWindowsSignatureMismatchFailure
-} from '../../../shared/updater-windows-signature-check'
+} from '../../../shared/updater/updater-windows-signature-check'
 import { redactLinuxPackageInstallText } from '../linux-package/linux-package-install-diagnostic'
 import { getTrackedLinuxPackageArtifact } from '../linux-package/linux-package-update-recovery'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { disarmUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { resetMacInstallState } from '../mac-install/updater-mac-install'
-import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../../shared/update-status-types'
+import type {
+  LinuxPackageInstallRecovery,
+  UpdateStatus
+} from '../../../shared/updater/update-status-types'
 import { compareVersions } from '../releases/updater-fallback'
 import { PRE_QUIT_CLEANUP_TIMEOUT_MS, REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS } from './updater-state'
 import { UpdaterCheckState } from './updater-check-state'

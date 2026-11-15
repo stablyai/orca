@@ -1,9 +1,9 @@
 import {
   agentArgTerminatorIndex,
   removeAgentArgOption
-} from '../../agent-session/options/agent-session-option-agent-args'
+} from '../../agent-session/options/launch/agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
-import { PI_THINKING_LEVELS } from '../../agent-session/options/structured-agent-session-effective-effort'
+import { PI_THINKING_LEVELS } from '../../agent-session/options/reconciliation/structured-agent-session-effective-effort'
 import { findOptionOccurrence } from '../../command-option-occurrence'
 import {
   quoteStartupArg,

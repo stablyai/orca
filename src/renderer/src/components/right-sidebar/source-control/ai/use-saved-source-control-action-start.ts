@@ -5,8 +5,8 @@ import {
 import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
-} from '@/lib/host-chat-program-acquisition'
-import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+} from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
+import { agentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
@@ -14,7 +14,7 @@ import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { projectSelectedSourceControlActionLaunch } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { sourceControlLaunchAppliesAgentArgs } from './source-control-launch-agent-args-applicability'

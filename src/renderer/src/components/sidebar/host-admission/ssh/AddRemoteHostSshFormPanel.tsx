@@ -1,7 +1,7 @@
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import type { EditingTarget } from '../../../settings/ssh/targets/ssh-target-draft'
+import type { EditingTarget } from '../../../ssh-host-form/ssh-target-draft'
 import { SshHostFields } from './AddRemoteHostFields'
 
 export function AddRemoteHostSshFormPanel({

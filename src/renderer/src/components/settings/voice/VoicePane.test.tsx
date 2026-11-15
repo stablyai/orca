@@ -5,7 +5,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeveloperPermissionRequestResult } from '../../../../../shared/developer-permissions-types'
-import type { SpeechModelManifest } from '../../../../../shared/speech-types'
+import type { SpeechModelManifest } from '../../../../../shared/speech/speech-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { getDefaultVoiceSettings } from '../../../../../shared/constants'
 
@@ -19,7 +19,8 @@ const { useAppStoreMock, useShortcutLabelMock } = vi.hoisted(() => ({
 vi.mock('@/store/index', () => ({ useAppStore: useAppStoreMock }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: useShortcutLabelMock
+  useShortcutLabel: useShortcutLabelMock,
+  useShortcutKeyDetails: () => ({ keys: [], doubleTap: false })
 }))
 
 vi.mock('sonner', () => ({
@@ -105,9 +106,21 @@ describe('VoicePane', () => {
     document.body.appendChild(container)
     const root = createRoot(container)
     await act(async () => {
-      root.render(<VoicePane settings={settingsWithKey(true)} updateSettings={updateSettings} />)
+      root.render(
+        <VoicePane
+          settings={settingsWithKey(true)}
+          updateSettings={updateSettings}
+          writeSourceControlAiSettings={async () => {}}
+        />
+      )
     })
 
+    const cloudTab = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+    ).find((button) => button.textContent === 'Cloud')
+    await act(async () => {
+      cloudTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
     const disconnect = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Disconnect OpenAI API key"]'
     )
@@ -119,7 +132,13 @@ describe('VoicePane', () => {
     })
 
     await act(async () => {
-      root.render(<VoicePane settings={settingsWithKey(false)} updateSettings={updateSettings} />)
+      root.render(
+        <VoicePane
+          settings={settingsWithKey(false)}
+          updateSettings={updateSettings}
+          writeSourceControlAiSettings={async () => {}}
+        />
+      )
     })
 
     await act(async () => {

@@ -10,7 +10,7 @@ import { PanelBottomClose, PanelRightClose, SquareTerminal } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function TerminalTabSplitMenuSection({
   unifiedTabId,

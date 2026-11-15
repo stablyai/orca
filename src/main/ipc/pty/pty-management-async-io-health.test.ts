@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { DaemonAsyncIoStatus } from '../../../shared/daemon-async-io-health'
+import type { DaemonAsyncIoStatus } from '../../../shared/terminal/daemon/daemon-async-io-health'
 
 const { handlers, provider, adapter, restart } = vi.hoisted(() => ({
   handlers: new Map<string, () => Promise<DaemonAsyncIoStatus>>(),

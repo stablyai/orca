@@ -6,10 +6,10 @@ import type {
   RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionTerminalClientTab,
   RuntimeMobileSessionTerminalTab
-} from '../../../../src/shared/runtime-mobile-session-tab-contracts'
-import type { RuntimeMobileSessionTabsResult } from '../../../../src/shared/runtime-session-contracts'
+} from '../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { MirroredEvidenceReceipt } from '../../../../src/shared/agent-status/contracts/agent-status-observation'
-import type { MobileNativeChatIdentity } from '../native-chat/mobile-native-chat-eligibility'
+import type { MobileNativeChatIdentity } from '../native-chat/conversation/mobile-native-chat-eligibility'
 
 export type MobileBrowserTab = Pick<
   RuntimeMobileSessionBrowserTab,
@@ -42,6 +42,10 @@ export type MobileSessionTab =
           RuntimeMobileSessionTerminalTab,
           | 'parentTabId'
           | 'leafId'
+          | 'customTitle'
+          | 'quickCommandLabel'
+          | 'aiVaultTitle'
+          | 'generatedTitle'
           | 'agentStatus'
           | 'launchAgent'
           | 'launchDraft'
@@ -54,7 +58,7 @@ export type MobileSessionTab =
       } & MobileTerminalTabPhoneFields)
   | (Pick<
       RuntimeMobileSessionAgentTab,
-      'type' | 'id' | 'title' | 'sessionId' | 'agent' | 'isActive'
+      'type' | 'id' | 'title' | 'sessionId' | 'agent' | 'isActive' | 'forked'
     > & {
       chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
     })

@@ -1,13 +1,14 @@
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import type {
-  FeatureInteractionId,
-  FeatureInteractionState
-} from '../../../../../shared/feature-interactions'
-import type { FeatureTipId, FeatureTipSeenId } from '../../../../../shared/feature-tips'
+  FeatureTipId,
+  FeatureTipSeenId
+} from '../../../../../shared/feature-education/feature-tips'
 import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
-import type { ContextualTourId } from '../../../../../shared/contextual-tours'
-import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
-import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
+import type { ContextualTourId } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type { OrcaHookTrustKind } from '../../../../../shared/orca-hook-trust-entries'
+import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
 export type UISliceContextual = {
@@ -101,7 +102,7 @@ export type UISliceContextual = {
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   markOrcaHookScriptConfirmed: (
     repoId: string,
-    kind: OrcaHookScriptKind,
+    kind: OrcaHookTrustKind,
     contentHash: string
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
@@ -133,6 +134,8 @@ export type UISliceContextual = {
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean
   markCodexSharedSettingsNoticeSeen: () => void
+  worktreeCardsUpdateNoticeSeen: boolean
+  markWorktreeCardsUpdateNoticeSeen: () => void
   claudeDiffPanelNoticeSeen: boolean
   markClaudeDiffPanelNoticeSeen: () => void
 }

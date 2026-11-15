@@ -14,7 +14,7 @@ import {
   mobileFileTabsReadSameDocument,
   mobileSessionTabsEqual,
   terminalRecordsEqual
-} from '../../terminal/session/mobile-terminal-records'
+} from '../../terminal/session/inventory/mobile-terminal-records'
 import {
   acceptSessionSnapshot,
   applyClosedTabTombstones,
@@ -27,16 +27,16 @@ import {
   activateMobileSessionTab,
   consumePendingCrossWorktreeTabTarget
 } from './mobile-session-tab-activation'
-import { releaseTerminalCreateLock } from '../../terminal/session/terminal-create-lock'
+import { releaseTerminalCreateLock } from '../../terminal/session/creation/terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
-import { withRememberedNativeChatIdentity } from '../native-chat/mobile-native-chat-eligibility'
+import { withRememberedNativeChatIdentity } from '../native-chat/conversation/mobile-native-chat-eligibility'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-tabs'
-import type { MobileSessionTerminalListModel } from '../../terminal/session/use-mobile-session-terminal-list'
-import { pruneMobileNativeChatTabDrafts } from '../native-chat/composer/mobile-native-chat-draft-store'
+import type { MobileSessionTerminalListModel } from '../../terminal/session/inventory/use-mobile-session-terminal-list'
+import { pruneMobileNativeChatTabDrafts } from '../native-chat/composer/drafts/mobile-native-chat-draft-store'
 import {
   trackPhoneOwnedDraftTabs,
   type DraftTabOwnership
-} from '../native-chat/composer/mobile-native-chat-draft-tab-ownership'
+} from '../native-chat/composer/drafts/mobile-native-chat-draft-tab-ownership'
 
 export function useMobileSessionTabApplication(scope: MobileSessionTerminalListModel) {
   const {

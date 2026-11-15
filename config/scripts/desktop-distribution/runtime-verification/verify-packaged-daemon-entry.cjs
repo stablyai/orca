@@ -3,7 +3,7 @@ const { spawn, spawnSync } = require('node:child_process')
 const { randomUUID } = require('node:crypto')
 const { connect } = require('node:net')
 const { tmpdir } = require('node:os')
-const { join, relative } = require('node:path')
+const { basename, join, relative } = require('node:path')
 const { setTimeout: delay } = require('node:timers/promises')
 const {
   macTerminalHostPaths
@@ -267,7 +267,7 @@ async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
   const stderr = []
   // Boot clone outside build tree so ancestor node_modules cannot satisfy missing packaged dependency.
   const isolated = mkdtempSync(join(tmpdir(), 'orca-terminal-host-boot-'))
-  const clone = join(isolated, 'Orca Terminal Host.app')
+  const clone = join(isolated, basename(paths.bundle))
   try {
     const cloned = spawnSync('/bin/cp', ['-cR', paths.bundle, clone], { encoding: 'utf8' })
     if (cloned.status !== 0) {

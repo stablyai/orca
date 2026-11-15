@@ -12,7 +12,7 @@ import type {
 import { getRuntimeServerConnectionLabel } from '../catalog/runtime-environment-host-details'
 
 import { getRemoteServerUpdatePhaseLabel } from '../updates/RemoteServerUpdateStatus'
-import type { ServerRowStatus } from './runtime-server-list-row'
+import type { ServerRowStatus } from '../../host-rows/ServerListRow'
 
 const UPDATING_PHASES: ReadonlySet<RemoteServerUpdatePhase> = new Set([
   'queued',

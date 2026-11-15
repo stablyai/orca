@@ -1,7 +1,7 @@
-import { keepsTerminalPaneVisible } from '../../terminal/session/mobile-terminal-pane-layout'
+import { keepsTerminalPaneVisible } from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { useCallback } from 'react'
-import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../src/shared/startup-cwd-fallback'
-import { triggerSelection } from '../../platform/haptics'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../src/shared/shell/launch/startup-cwd-fallback'
+import { triggerSelection } from '../../platform/haptics/haptics'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { isCachedActiveDocumentRetap } from '../../files/session-documents/mobile-session-active-document-retap'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
@@ -9,7 +9,7 @@ import { activatedAtWorkspaceRoot } from '../../terminal/session/mobile-session-
 import { getMobileTerminalTabHostAgentIdentity } from '../../terminal/session/mobile-terminal-tab-agent'
 import { buildRecentSessionCardFromTab, recordRecentSessionCardVisit } from '../recent-session-cards'
 import type { MobileSessionTab } from './mobile-session-tabs'
-import type { MobileSessionKeyboardStateModel } from '../../terminal/session/use-mobile-session-keyboard-state'
+import type { MobileSessionKeyboardStateModel } from '../../terminal/session/input-controls/use-mobile-session-keyboard-state'
 
 function rememberRecentSessionCard(args: {
   hostId: string | undefined

@@ -6,15 +6,15 @@
 import { win32 } from 'node:path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
-import type { Project } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import type { Project } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { isForeignLink } from '../../git/worktrees/removal/worktree-prune-guard'
 import type {
   WslDriveProjectConversionResult,
   WslDriveProjectPreview
-} from '../../../shared/wsl-drive-project-types'
+} from '../../../shared/wsl-move/wsl-drive-project-types'
 
 /** Windows Git only: the runner never routes through WSL. */
 export type WindowsGitRunner = (args: string[], cwd: string) => Promise<string>

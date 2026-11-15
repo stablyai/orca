@@ -1,4 +1,5 @@
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
 import type { AgentSessionPublishedWork } from '../../observations/agent-session-published-work'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { Subscriber } from './agent-session-subscribe-input'
@@ -24,7 +25,7 @@ export type SubscriberFieldState = {
     previous: QueuePublication | undefined,
     current: QueuePublication | undefined,
     work?: AgentSessionPublishedWork
-  ) => AgentSessionSubscribeEvent
+  ) => AgentSessionSubscribeEvent | Promise<AgentSessionSubscribeEvent>
   commands?: AgentSessionSlashCommand[] | null
   /** Deduplicate canonical state before reader-specific projection. */
   queuePublication?: QueuePublication
@@ -36,12 +37,17 @@ export type SubscriberFieldHooks = {
     sessionId: string,
     commandsOnRequest?: boolean
   ) => AgentSessionSlashCommand[] | undefined
-  readQueuePublication?: (sessionId: string) => QueuePublication | undefined
+  /** `inLane`: read inside a held frame capture; never admits the lane itself. */
+  readQueuePublication?: (
+    sessionId: string,
+    work?: StructuredAgentSessionObservedWork,
+    inLane?: boolean
+  ) => QueuePublication | null | undefined | Promise<QueuePublication | null | undefined>
   /** Read expensive child-derived rosters only when a frame owes them. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null
 }
 
-export type SubscriberFrame = {
+type SubscriberFrame = {
   /** Bounded subscribers receive side lists after history. */
   frames: AgentSessionSubscribeEvent[]
   /** Last observed inventory also deduplicates bounded command-change hints. */
@@ -56,14 +62,15 @@ export function backgroundTaskFingerprint(state: AgentSessionBackgroundTaskState
 }
 
 /** Advance dedup references only after successful emission. */
-export function buildSubscriberFrame(
+async function buildSubscriberFrame(
   hooks: SubscriberFieldHooks,
   subscriber: SubscriberFieldState,
   event: AgentSessionSubscribeEvent,
   withholdQueued: boolean,
   work?: AgentSessionPublishedWork,
-  journal?: AgentSessionJournal
-): SubscriberFrame {
+  journal?: AgentSessionJournal,
+  queuePublication?: { value: QueuePublication | undefined }
+): Promise<SubscriberFrame> {
   const commands =
     subscriber.boundedFrames && !subscriber.commandsOnRequest
       ? undefined
@@ -76,19 +83,21 @@ export function buildSubscriberFrame(
   const queued =
     withholdQueued || (subscriber.projectJournalEvent && !journal)
       ? undefined
-      : hooks.readQueuePublication?.(subscriber.sessionId)
+      : queuePublication
+        ? queuePublication.value
+        : ((await hooks.readQueuePublication?.(subscriber.sessionId)) ?? undefined)
   const attachedQueued =
     queued !== undefined &&
     event.type !== 'end' &&
     (event.type !== 'batch' || queued !== subscriber.queuePublication)
   event = journal
-    ? (subscriber.projectJournalEvent?.(
+    ? ((await subscriber.projectJournalEvent?.(
         journal,
         event,
         subscriber.queuePublication,
         queued,
         work
-      ) ?? event)
+      )) ?? event)
     : event
   const backgroundTasks = subscriberBackgroundTasks(hooks, subscriber, event)
   const sideQueued = attachedQueued
@@ -157,19 +166,8 @@ export function subscriberCommandsChanged(
   )
 }
 
-/** Changed queue publications still require delivery when the subscriber is already caught up. */
-export function subscriberQueuedMessagesChanged(
-  hooks: SubscriberFieldHooks,
-  subscriber: SubscriberFieldState
-): boolean {
-  return (
-    hooks.readQueuePublication !== undefined &&
-    hooks.readQueuePublication(subscriber.sessionId) !== subscriber.queuePublication
-  )
-}
-
 /** Publication contains only a version; read completion supplies payload delivery credit. */
-export function emitSubscriberFrame(
+export async function emitSubscriberFrame(
   hooks: SubscriberFieldHooks,
   subscriber: Subscriber,
   event: AgentSessionSubscribeEvent,
@@ -177,23 +175,32 @@ export function emitSubscriberFrame(
     withholdQueued?: boolean
     currentWork?: AgentSessionPublishedWork
     journal?: AgentSessionJournal
+    queuePublication?: { value: QueuePublication | undefined }
+    isActive?: () => boolean
   }
-): void {
+): Promise<void> {
   const marker =
     event.type !== 'end' && subscriber.readsCurrentRequests
       ? options?.currentWork?.requestProjection(subscriber.sessionId).marker
       : undefined
   const includeMarker =
     marker && (event.type !== 'batch' || marker.version !== subscriber.requestVersion)
-  const built = buildSubscriberFrame(
+  const built = await buildSubscriberFrame(
     hooks,
     subscriber,
     includeMarker && event.type !== 'end' ? { ...event, currentRequests: marker } : event,
     options?.withholdQueued === true,
     options?.currentWork,
-    options?.journal
+    options?.journal,
+    options?.queuePublication
   )
+  if (options?.isActive && !options.isActive()) {
+    return
+  }
   for (const outgoing of built.frames) {
+    if (options?.isActive && !options.isActive()) {
+      return
+    }
     subscriber.emit(outgoing)
   }
   if (includeMarker) {

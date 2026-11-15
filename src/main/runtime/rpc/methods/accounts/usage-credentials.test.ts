@@ -4,7 +4,7 @@ import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { setSecretStore } from '../../../../../shared/secret-store'
+import { setSecretStore } from '../../../../../shared/secure-storage/secret-store'
 import type { RpcRequest } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
 import { USAGE_CREDENTIAL_METHODS } from './usage-credentials'
@@ -16,7 +16,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => home.dir }
 })
 // Why: the CLI sign-in probe reads platform credential stores this test must not touch.
-vi.mock('../../../../rate-limits/zcode-usage-fetcher', () => ({
+vi.mock('../../../../rate-limits/providers/zcode/zcode-usage-fetcher', () => ({
   hasZcodeCliPlanCredentials: () => false
 }))
 

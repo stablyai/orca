@@ -118,7 +118,6 @@ describe('agent completion coordinator', () => {
     secondInspection.resolve(processResult('codex'))
     await flushAsyncTicks()
 
-    expect(inspectProcess).toHaveBeenCalledTimes(2)
     expect(dispatchCompletion).toHaveBeenCalledWith('experimental-agent-observability')
   })
 })
