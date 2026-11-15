@@ -115,6 +115,14 @@ async function focusedByLeaf(runtime: OrcaRuntimeService): Promise<Record<string
   return Object.fromEntries(terminals.map((terminal) => [terminal.leafId, terminal.focused]))
 }
 
+async function handleByLeaf(runtime: OrcaRuntimeService): Promise<Record<string, string>> {
+  const { terminals } = await runtime.listTerminals(undefined, 50, { includeVisualLayouts: false })
+  return Object.fromEntries(terminals.map((terminal) => [terminal.leafId, terminal.handle]))
+}
+
+// No fake clock: a watch that waited for its deadline instead of the push would time the test out.
+const WATCH_DEADLINE_MS = 60_000
+
 describe('focused terminal', () => {
   it('lists only the active pane of the tab the window shows as focused', async () => {
     const { runtime } = windowShowingRightPane()
@@ -127,5 +135,29 @@ describe('focused terminal', () => {
     write({ activeTabTypeByWorktree: { [WORKTREE_ID]: 'editor' } })
 
     expect(await focusedByLeaf(runtime)).toEqual({ [LEFT]: false, [RIGHT]: false, [SINGLE]: false })
+  })
+
+  it('answers a focus watch when the window focuses another tab', async () => {
+    const { runtime, write } = windowShowingRightPane()
+    const handles = await handleByLeaf(runtime)
+    const change = runtime.focusedTerminal.waitForChange(handles[RIGHT]!, {
+      timeoutMs: WATCH_DEADLINE_MS
+    })
+
+    write({ activeTabId: SINGLE_TAB, activeTabIdByWorktree: { [WORKTREE_ID]: SINGLE_TAB } })
+
+    await expect(change).resolves.toEqual({ handle: handles[SINGLE] })
+  })
+
+  it('answers a focus watch with no terminal when the window goes away', async () => {
+    const { runtime } = windowShowingRightPane()
+    const handles = await handleByLeaf(runtime)
+    const change = runtime.focusedTerminal.waitForChange(handles[RIGHT]!, {
+      timeoutMs: WATCH_DEADLINE_MS
+    })
+
+    runtime.markGraphUnavailable(1)
+
+    await expect(change).resolves.toEqual({ handle: null })
   })
 })
