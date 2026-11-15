@@ -13,7 +13,7 @@ import {
   suspendSandbox,
   type LifecycleDeps
 } from './lifecycle'
-import { guardrails } from './lifecycle'
+import { applySandboxPolicy, guardrails, policyConfigHash } from './lifecycle'
 import { killSwitchOn } from './guardrails'
 import { drainAll, housekeeping, openHold, type HousekeepingSummary } from './retention'
 import { CREATE_ABANDONED_MS, listByStatus, transition, type SandboxRow } from './store'
@@ -78,6 +78,13 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
   }
   for (const row of await listByStatus(deps.db, ['running'])) {
     await guard(() => reconcileRunning(deps, row, summary))
+    // Design §7.2/§4.5: an operator input changed since this policy was applied, or its last write failed.
+    if (row.session_id && (row.policy_stale_at != null || (row.policy_config_hash ?? null) !== (await policyConfigHash(deps, row)))) {
+      const reason = row.policy_config_hash != null && row.policy_stale_at == null ? 'config_change' : 'stale_retry'
+      await guard(async () => {
+        await applySandboxPolicy(deps, row, reason)
+      })
+    }
   }
   const now = deps.now()
   for (const row of await listByStatus(deps.db, ['creating', 'failed', 'destroying', 'suspending', 'resuming'])) {

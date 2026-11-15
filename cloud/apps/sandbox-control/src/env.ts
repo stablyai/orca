@@ -101,6 +101,8 @@ export type Env = {
   CODEX_EGRESS_SWAP?: string
   /** Egress firewall migration (design §3): `proxy` (default) or `firewall` for sandboxes without their own mode. */
   EGRESS_SWAP_MODE?: string
+  /** Comma list of the classes firewall mode swaps (model_key, claude, codex, github_app); unset: all. */
+  EGRESS_FIREWALL_CLASSES?: string
   /** (secret) service-account JSON holding run.invoker on CHATGPT_RELAY_URL's service only. */
   CHATGPT_RELAY_SERVICE_ACCOUNT?: string
   /** Shortened session deadline (ms) for staging rollover rehearsals; refused when SANDBOX_ENV=prod. */

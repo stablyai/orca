@@ -87,6 +87,7 @@ import {
   suspendSandbox,
   applySandboxPolicy,
   parseEgressSwapMode,
+  parseFirewallClasses,
   egressSwapModeFor,
   CODEX_AUTH_HOST,
   applyLiveGitAccess,
@@ -1049,6 +1050,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       egressPreset: parseEgressPreset(env.SANDBOX_EGRESS_PRESET),
       codexFirewallSwap: env.CODEX_EGRESS_SWAP === 'firewall',
       egressSwapMode: parseEgressSwapMode(env.EGRESS_SWAP_MODE),
+      ...(env.EGRESS_FIREWALL_CLASSES !== undefined ? { egressFirewallClasses: parseFirewallClasses(env.EGRESS_FIREWALL_CLASSES) } : {}),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1
