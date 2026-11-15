@@ -35,8 +35,18 @@ it('releases the placeholder observation when the preview mounts and keeps the p
   const report = observed.get(placeholder)!
   const intersect = (isIntersecting: boolean): void => {
     act(() => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: visibility reads only target and isIntersecting.
-      report([{ target: placeholder, isIntersecting } as IntersectionObserverEntry])
+      const bounds = placeholder.getBoundingClientRect()
+      report([
+        {
+          target: placeholder,
+          isIntersecting,
+          boundingClientRect: bounds,
+          intersectionRect: bounds,
+          rootBounds: null,
+          intersectionRatio: isIntersecting ? 1 : 0,
+          time: 0
+        }
+      ])
     })
   }
   expect(screen.queryByRole('button')).toBeNull()
