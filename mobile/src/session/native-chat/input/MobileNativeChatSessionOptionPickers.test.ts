@@ -156,6 +156,31 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(label).not.toContain('Opus 4.8')
   })
 
+  it('names a deferred permission pick on the model pill and explains it in the drill-in', () => {
+    mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'permissionMode')
+    expect(pill('Model').props.accessibilityLabel).toContain(
+      'Full access applies to your next message; running Ask for approval'
+    )
+    expect(
+      findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text').map(
+        (node) => node.props.children
+      )
+    ).toContain('Full access applies to your next message; running Ask for approval')
+  })
+
+  it('uses the full deferred explanation for the home permissions row accessibility label', () => {
+    mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'model')
+    const row = renderer!.root.find(
+      (node) =>
+        String(node.type) === 'Pressable' &&
+        node.props.accessibilityLabel ===
+          'Permissions, Full access applies to your next message; running Ask for approval'
+    )
+    expect(findAllByHostType(row, 'Text').map((node) => node.props.children)).toContain(
+      'Full access · next message'
+    )
+  })
+
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
     const placeholder: SessionOptionDescriptor = {
       ...MODEL_DESCRIPTOR,
@@ -191,4 +216,12 @@ const PERMISSION_DESCRIPTOR: SessionOptionDescriptor = {
   valueSource: 'applied',
   transport: 'agent-session',
   settable: true
+}
+
+const DEFERRED_PERMISSION_DESCRIPTOR: SessionOptionDescriptor = {
+  ...PERMISSION_DESCRIPTOR,
+  kind: { type: 'select', currentValue: 'full-access', choices: PERMISSION_CHOICES },
+  valueSource: 'dispatched',
+  activeValue: 'ask',
+  description: 'Full access'
 }

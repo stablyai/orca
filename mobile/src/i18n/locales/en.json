@@ -3111,7 +3111,8 @@
       "setWhenSessionStarts": "Set when the session starts.",
       "availableAfterSessionStarts": "Available after the session starts.",
       "sessionOptions": "Session options",
-      "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}"
+      "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+      "permissionAppliesNextMessageCompact": "{{saved}} · next message"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",
