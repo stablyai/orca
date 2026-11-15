@@ -1,5 +1,6 @@
 import { app, powerMonitor } from 'electron'
 import { getOrcaCloudAuthConfig } from '../../orca-profiles/cloud-auth/profile-cloud-auth-config'
+import { isZotzCloudFeatureAllowed } from '../../../shared/zotz/zotz-network-policy'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { DesktopRelayService } from '../../runtime/mobile-cloud-relay/desktop-relay-service'
@@ -15,7 +16,7 @@ export function startDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): void
     isFenced: () => state.isQuitting,
     create: () => {
       const cloudAuth = getOrcaCloudAuthConfig()
-      return cloudAuth.configured
+      return cloudAuth.configured && isZotzCloudFeatureAllowed('relay')
         ? new DesktopRelayService({
             authConfig: cloudAuth.config,
             userDataPath: getProfileUserDataPath(),

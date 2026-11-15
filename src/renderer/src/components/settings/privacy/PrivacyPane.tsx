@@ -16,6 +16,7 @@ import { PRIVACY_SETTING_ANCHORS } from './privacy-search'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { isZotzCloudFeatureAllowed } from '../../../../../shared/zotz/zotz-network-policy'
 
 export type EnvBlockedReason = 'do_not_track' | 'orca_disabled' | 'ci'
 export type BlockedReason = { kind: 'env'; reason: EnvBlockedReason }
@@ -94,45 +95,52 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
 
   return (
     <SettingsGroup id={PRIVACY_SETTING_ANCHORS.overview}>
-      <div
-        id={PRIVACY_SETTING_ANCHORS.usageData}
-        data-settings-row=""
-        className="flex items-center justify-between gap-4 py-2"
-      >
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="size-4" />
-            <Label>
-              {t('auto.components.settings.PrivacyPane.fe904ac984', 'Share anonymous usage data')}
-            </Label>
+      {isZotzCloudFeatureAllowed('telemetry') ? (
+        <>
+          <div
+            id={PRIVACY_SETTING_ANCHORS.usageData}
+            data-settings-row=""
+            className="flex items-center justify-between gap-4 py-2"
+          >
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="size-4" />
+                <Label>
+                  {t(
+                    'auto.components.settings.PrivacyPane.fe904ac984',
+                    'Share anonymous usage data'
+                  )}
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'auto.components.settings.PrivacyPane.8bfdd23a88',
+                  'Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.'
+                )}{' '}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-foreground"
+                  onClick={(event) => openAppHttpLink(PRIVACY_URL, { event })}
+                >
+                  {t('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
+                </button>
+              </p>
+            </div>
+            <Switch
+              checked={toggleChecked}
+              aria-label={t(
+                'auto.components.settings.PrivacyPane.fe904ac984',
+                'Share anonymous usage data'
+              )}
+              aria-describedby={blocked ? PRIVACY_PANE_BLOCKED_HELPER_ID : undefined}
+              disabled={blocked !== null || inFlight}
+              onCheckedChange={() => void handleToggle()}
+            />
           </div>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.PrivacyPane.8bfdd23a88',
-              'Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.'
-            )}{' '}
-            <button
-              type="button"
-              className="underline underline-offset-2 hover:text-foreground"
-              onClick={(event) => openAppHttpLink(PRIVACY_URL, { event })}
-            >
-              {t('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
-            </button>
-          </p>
-        </div>
-        <Switch
-          checked={toggleChecked}
-          aria-label={t(
-            'auto.components.settings.PrivacyPane.fe904ac984',
-            'Share anonymous usage data'
-          )}
-          aria-describedby={blocked ? PRIVACY_PANE_BLOCKED_HELPER_ID : undefined}
-          disabled={blocked !== null || inFlight}
-          onCheckedChange={() => void handleToggle()}
-        />
-      </div>
 
-      {blocked ? <BlockedHelper blocked={blocked} id={PRIVACY_PANE_BLOCKED_HELPER_ID} /> : null}
+          {blocked ? <BlockedHelper blocked={blocked} id={PRIVACY_PANE_BLOCKED_HELPER_ID} /> : null}
+        </>
+      ) : null}
       <PrivacyDiagnosticsSection />
     </SettingsGroup>
   )

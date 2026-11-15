@@ -11,6 +11,7 @@ import { ArtifactPublishedLinkPanel } from './ArtifactPublishedLinkPanel'
 import { getPublishedArtifactLink } from './artifact-published-link-client'
 import { publishArtifactFromSurface } from './artifact-publish-flow'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
+import { isZotzCloudFeatureAllowed } from '../../../../shared/zotz/zotz-network-policy'
 
 type PublishedLinkLookup = {
   key: string
@@ -18,7 +19,13 @@ type PublishedLinkLookup = {
   shareUrl: string | null
 }
 
-export function ArtifactPublishButton({
+export function ArtifactPublishButton(
+  props: Parameters<typeof UpstreamArtifactPublishButton>[0]
+): React.JSX.Element | null {
+  return isZotzCloudFeatureAllowed('share') ? <UpstreamArtifactPublishButton {...props} /> : null
+}
+
+function UpstreamArtifactPublishButton({
   sourceKey,
   createRequest,
   className,

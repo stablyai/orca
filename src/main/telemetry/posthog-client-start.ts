@@ -1,5 +1,6 @@
 import type { PostHog } from 'posthog-node'
 import type { Store } from '../persistence/loading-store/store'
+import { isZotzCloudFeatureAllowed } from '../../shared/zotz/zotz-network-policy'
 import { resolveConsent } from './consent'
 import { POSTHOG_FLUSH_AT, POSTHOG_FLUSH_INTERVAL_MS } from './posthog-transport'
 
@@ -19,6 +20,9 @@ export function deferStart(
   schedule: StartScheduler,
   start: () => void
 ): void {
+  if (!isZotzCloudFeatureAllowed('telemetry')) {
+    return
+  }
   writeKey = key
   storeRef = store
   schedule(start)

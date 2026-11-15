@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { useAppStore } from '../store'
+import { isZotzCloudFeatureAllowed } from '../../../shared/zotz/zotz-network-policy'
 import { FirstLaunchBanner } from './FirstLaunchBanner'
 
 export function TelemetryFirstLaunchSurface(): React.JSX.Element | null {
@@ -11,7 +12,7 @@ export function TelemetryFirstLaunchSurface(): React.JSX.Element | null {
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const [dismissedThisSession, setDismissedThisSession] = useState(false)
 
-  if (!settings || dismissedThisSession) {
+  if (!settings || dismissedThisSession || !isZotzCloudFeatureAllowed('telemetry')) {
     return null
   }
 

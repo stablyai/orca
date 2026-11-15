@@ -30,6 +30,7 @@ import { buildInterfaceSettingsSections } from './settings-navigation-interface-
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
+import { isZotzSettingsSectionVisible } from './zotz-settings-section-visibility'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -118,7 +119,7 @@ export function buildSettingsNavigationMetadata(
     ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries, t),
     ...buildInterfaceSettingsSections(options, t),
     ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById, t)
-  ]
+  ].filter(isZotzSettingsSectionVisible)
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {

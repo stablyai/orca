@@ -1,5 +1,6 @@
 import { hostname } from 'node:os'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { isZotzCloudFeatureAllowed } from '../../shared/zotz/zotz-network-policy'
 import { admitConnectorAgent, CONNECTOR_AGENTS } from '../external-conversations/connector-agents'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-seam'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
@@ -21,7 +22,7 @@ export function createDesktopConnectorCloud(
   isFenced: () => boolean
 ): ConnectorCloud | null {
   const auth = getOrcaCloudAuthConfig()
-  if (!auth.configured) {
+  if (!auth.configured || !isZotzCloudFeatureAllowed('connector')) {
     return null
   }
   const environment = getAppEnvironment()

@@ -11,6 +11,10 @@ import type {
   SkillCloudShare,
   SkillCloudVersion
 } from '../../../shared/skills/sharing/skill-cloud-contract'
+import {
+  isZotzCloudFeatureAllowed,
+  ZOTZ_CLOUD_DISABLED_MESSAGE
+} from '../../../shared/zotz/zotz-network-policy'
 import { resolveArtifactCloudApiUrl } from '../../artifacts/artifact-cloud-config'
 import { runSkillCloudOperation } from './skill-cloud-auth'
 import { uploadSkillPackageToSignedPolicy } from './skill-cloud-direct-upload'
@@ -298,6 +302,9 @@ export class SkillCloudService {
     options: SkillCloudOptions,
     operation: (apiUrl: string) => Promise<T>
   ): Promise<SkillCloudOperation<T>> {
+    if (!isZotzCloudFeatureAllowed('share')) {
+      return { status: 'unconfigured', message: ZOTZ_CLOUD_DISABLED_MESSAGE }
+    }
     const value = await operation(resolveArtifactCloudApiUrl(options.apiUrl))
     return { status: 'ok', value }
   }

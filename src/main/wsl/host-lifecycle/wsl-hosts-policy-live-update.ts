@@ -9,6 +9,7 @@ import {
   WSL_HOSTS_POLICY_MAX_BYTES,
   type WslHostsPolicy
 } from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
+import { isZotzCloudFeatureAllowed } from '../../../shared/zotz/zotz-network-policy'
 import { getMainHttpClient } from '../../network/http-client'
 import { noteWslHostsLivePolicyBlock } from './wsl-host-gate'
 import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'
@@ -180,7 +181,11 @@ export class WslHostsPolicyLiveUpdater {
 
 /** Fetches only where the launch environment opened the gate, even while a cached block closes it. */
 export function startWslHostsPolicyLiveUpdates(): void {
-  if (process.platform !== 'win32' || !isWslHostsInternalGateOpen(process.env)) {
+  if (
+    process.platform !== 'win32' ||
+    !isWslHostsInternalGateOpen(process.env) ||
+    !isZotzCloudFeatureAllowed('wsl-hosts-policy')
+  ) {
     return
   }
   const environment = getAppEnvironment()
