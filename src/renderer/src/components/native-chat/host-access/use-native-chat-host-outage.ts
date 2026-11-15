@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
+import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
 import { runtimeHostContactFromSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
@@ -76,20 +77,24 @@ export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChat
     setEarned({ environmentId, kind: 'offline' })
   }
   const inOutage = kind !== null
-  useEffect(() => {
-    if (environmentId === null || !inOutage) {
-      return
-    }
-    const timer = setTimeout(() => {
-      setEarned((current) =>
-        current?.environmentId === environmentId ? current : { environmentId, kind: 'reconnecting' }
-      )
-    }, NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS)
-    return () => {
-      clearTimeout(timer)
-      setEarned((current) => (current?.environmentId === environmentId ? null : current))
-    }
-  }, [environmentId, inOutage])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      if (environmentId === null || !inOutage) {
+        return
+      }
+      const timer = setTimeout(() => {
+        setEarned((current) =>
+          current?.environmentId === environmentId
+            ? current
+            : { environmentId, kind: 'reconnecting' }
+        )
+      }, NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS)
+      return () => {
+        clearTimeout(timer)
+        setEarned((current) => (current?.environmentId === environmentId ? null : current))
+      }
+    }, [environmentId, inOutage])
+  )
   const shown = kind === 'offline' ? 'offline' : kind === null ? null : earnedHere
   return useMemo(() => {
     if (environmentId === null) {
