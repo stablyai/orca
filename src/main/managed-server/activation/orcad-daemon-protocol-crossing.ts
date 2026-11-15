@@ -3,7 +3,7 @@ import {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION
 } from '../../daemon/protocol/daemon-protocol-version'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 export type OrcadDaemonProtocolFacts = {
   protocolVersion: number

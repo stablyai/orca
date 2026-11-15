@@ -4,7 +4,7 @@ import type {
   StructuredAgentSessionProviderOpenInput,
   StructuredAgentSessionProviderOpenResult
 } from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { readClaudeStructuredSessionSettings } from './launch/claude-structured-session-acquisition-options'
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
 import { catchUpClaudeTranscript } from '../transcripts/claude-transcript-catch-up'

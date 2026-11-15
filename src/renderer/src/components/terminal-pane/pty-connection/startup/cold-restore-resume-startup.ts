@@ -3,9 +3,9 @@ import {
   getConnectionIdFromState
 } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { useAppStore } from '@/store/index'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { buildAgentResumeStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
@@ -35,7 +35,7 @@ type AppState = ReturnType<typeof useAppStore.getState>
 
 /** The agent session a cold restore of this pane would resume; read-only, so pre-spawn checks can share it. */
 export function findColdRestoreResumeSource(session: ConnectPanePtySession, state: AppState) {
-  const entry = state.agentStatusByPaneKey[session.cacheKey]
+  const entry = state.agentStatusByPaneKey.get(session.cacheKey)
   const sleepingRecordEntry = session.getSleepingRecordForPane(state)
   const sleepingRecord = sleepingRecordEntry?.record
   const liveEntry = entry && entry.state !== 'done' ? entry : null

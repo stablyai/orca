@@ -1,4 +1,4 @@
-import { createCommandCodeOutputStatusDetector } from '../../../../../../shared/command-code-output-status'
+import { createCommandCodeOutputStatusDetector } from '../../../../../../shared/agent-status/output/command-code-output-status'
 import { readInFlightCommandCodeTurn } from '../../parking/output-watchers/parked-terminal-command-status'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

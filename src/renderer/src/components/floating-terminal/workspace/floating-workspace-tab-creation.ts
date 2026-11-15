@@ -3,7 +3,7 @@ import { createUntitledMarkdownFileWithTemplateSelection } from '../../../lib/ed
 import { getConnectionId } from '../../../lib/workspace/ownership/connection-context'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { focusTerminalTabSurface } from '../../terminal-pane/input/focus/focus-terminal-tab-surface'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import { assertClientCreationActionAvailable } from '../../../lib/workspace/creation/surface-policy/client-creation-action-policy'
 import type { AppState } from '@/store/types'

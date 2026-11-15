@@ -4,13 +4,13 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { ProviderIcon } from './provider-usage-panel'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { formatPlanLabel } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import {
   getUrgentScopedSection,
   getUsageHeadlineSection,

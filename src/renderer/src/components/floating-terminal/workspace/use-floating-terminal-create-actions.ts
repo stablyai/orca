@@ -7,14 +7,14 @@ import { ensureClientCreationActionAllowed } from '@/lib/workspace/creation/surf
 import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/workspace/open-document-in-floating-workspace'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from '../state/use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelStoreState } from '../state/use-floating-terminal-panel-store-state'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 

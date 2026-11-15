@@ -19,7 +19,8 @@ const {
 } = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { blockedWslDistroForPath } = await import('../../../wsl/filesystem/wsl-unc-access-gate')
 const { isWslUserActFor } = await import('../../../wsl/discovery/wsl-user-act-scope')
-const { wslDistroHoldMessage } = await import('../../../../shared/wsl-distro-stopped-hold')
+const { wslDistroHoldMessage } =
+  await import('../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold')
 
 const PARENT = '\\\\wsl.localhost\\Ubuntu\\home\\me'
 const FOLDER = `${PARENT}\\notes`

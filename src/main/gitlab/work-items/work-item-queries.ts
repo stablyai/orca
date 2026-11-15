@@ -5,7 +5,7 @@ import type {
   GitLabWorkItem,
   MRListState
 } from '../../../shared/gitlab-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapIssueToWorkItem, mapMRToWorkItem } from '../requests/gitlab-response-mapping'
 import { acquire, release } from '../requests/glab-request-admission'
 import { classifyListFetchError } from '../requests/glab-error-classification'

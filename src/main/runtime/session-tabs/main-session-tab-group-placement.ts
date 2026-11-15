@@ -1,7 +1,7 @@
 // Place side-only rows consistently in main groups for both row-writer reorder and projection merge.
 
-import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
-import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabGroup } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type Group = RuntimeMobileSessionTabGroup
 

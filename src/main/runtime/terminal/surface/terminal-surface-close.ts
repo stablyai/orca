@@ -1,4 +1,4 @@
-import type { RuntimeSessionTabCloseReason } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeSessionTabCloseReason } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   hasClosedTerminalTabRecord,

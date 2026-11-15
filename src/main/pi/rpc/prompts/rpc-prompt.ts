@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatImageRefBlock } from '../../../../shared/native-chat/native-chat-types'
-import { agentInlineImageMimeType } from '../../../../shared/agent-inline-image-types'
+import { agentInlineImageMimeType } from '../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { detectImageFileSignature } from '../../../../shared/image-file-signature'
 import {
   agentSessionFailureFact,

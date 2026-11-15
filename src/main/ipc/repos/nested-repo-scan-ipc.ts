@@ -1,7 +1,7 @@
 import type { IpcMainInvokeEvent } from 'electron'
 import { isAbsolute } from 'node:path'
 import type { z } from 'zod'
-import type { NestedRepoScanResult } from '../../../shared/project-group-types'
+import type { NestedRepoScanResult } from '../../../shared/project/groups/project-group-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { scanNestedRepos } from '../../project-groups/nested-repo-discovery'

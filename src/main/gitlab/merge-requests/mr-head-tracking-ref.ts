@@ -11,7 +11,7 @@ import {
   SshHostNotServedError
 } from '../../providers/ssh-host-not-served-error'
 import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 type LocalGitExecOptions = {
   cwd: string

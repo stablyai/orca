@@ -1,4 +1,4 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,10 +11,10 @@ import type {
   AgentSessionAccountUsage,
   AgentSessionUsageAccount
 } from '../../../../../shared/agent-session/agent-session-account-usage'
-import type { CodexRateLimitResetOutcome } from '../../../../../shared/rate-limit-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+import type { CodexRateLimitResetOutcome } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { ProviderIdentityCard } from '../../status-bar/accounts/ProviderIdentityCard'
 import {
   CodexResetConfirmation,

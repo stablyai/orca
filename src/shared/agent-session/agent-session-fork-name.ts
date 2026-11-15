@@ -4,7 +4,7 @@ import {
   AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH,
   normalizeAgentSessionConversationName
 } from './agent-session-conversation-name'
-import { sliceAtCodeUnitLimit } from '../surrogate-safe-text-slice'
+import { sliceAtCodeUnitLimit } from '../text/surrogate-safe-text-slice'
 
 /** A chat's fork ancestry as naming frames carry it. `plainName` marks a fork saved under its
  *  source's name; older forks were saved as "<source> fork". */

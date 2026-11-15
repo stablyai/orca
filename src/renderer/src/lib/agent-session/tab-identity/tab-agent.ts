@@ -8,26 +8,27 @@ import {
   selectCompletedTabAgentPanes,
   selectLiveTabAgentPanes
 } from './tab-agent-status-index'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
 
 /** Hook status is primary tab-icon identity, matching sidebar rows and OSC 133 exit cleanup. Resolve focused leaf first, then sibling split panes. */
 export function resolveFocusedTabAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  agentStatusByPaneKey: AcceptedAgentStatuses,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
 ): TerminalAgent | null {
   const activeLeafId = layout?.activeLeafId
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
-    return agentFromStatusEntry(agentStatusByPaneKey[makePaneKey(tabId, activeLeafId)])
+    return agentFromStatusEntry(agentStatusByPaneKey.get(makePaneKey(tabId, activeLeafId)))
   }
   // Hook events can arrive while layout unmounts; without a focused leaf, same-tab hook status remains primary.
   return resolveAnyTabAgent(agentStatusByPaneKey, tabId)
 }
 
 export function resolveSiblingTabAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  agentStatusByPaneKey: AcceptedAgentStatuses,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
 ): TerminalAgent | null {
@@ -40,7 +41,7 @@ export function resolveSiblingTabAgent(
 }
 
 function resolveAnyTabAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  agentStatusByPaneKey: AcceptedAgentStatuses,
   tabId: string,
   excludedLeafId?: string
 ): TerminalAgent | null {
@@ -58,19 +59,19 @@ function agentFromStatusEntry(entry: AgentStatusEntry | undefined): TerminalAgen
 }
 
 export function resolveFocusedCompletedTabAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  agentStatusByPaneKey: AcceptedAgentStatuses,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
 ): TerminalAgent | null {
   const activeLeafId = layout?.activeLeafId
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
-    return completedAgentFromStatusEntry(agentStatusByPaneKey[makePaneKey(tabId, activeLeafId)])
+    return completedAgentFromStatusEntry(agentStatusByPaneKey.get(makePaneKey(tabId, activeLeafId)))
   }
   return resolveAnyCompletedTabAgent(agentStatusByPaneKey, tabId)
 }
 
 export function resolveSiblingCompletedTabAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  agentStatusByPaneKey: AcceptedAgentStatuses,
   layout: TerminalLayoutSnapshot | undefined,
   tabId: string
 ): TerminalAgent | null {
@@ -83,7 +84,7 @@ export function resolveSiblingCompletedTabAgent(
 }
 
 function resolveAnyCompletedTabAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  agentStatusByPaneKey: AcceptedAgentStatuses,
   tabId: string,
   excludedLeafId?: string
 ): TerminalAgent | null {

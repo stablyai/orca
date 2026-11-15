@@ -1,4 +1,4 @@
-import type { SkillDiscoveryResult } from '../../../../../shared/skills'
+import type { SkillDiscoveryResult } from '../../../../../shared/skills/discovery/skills'
 
 // Bound runtime/project keys accumulated across long renderer sessions to recent targets.
 export const INSTALLED_AGENT_SKILL_DISCOVERY_CACHE_MAX = 256

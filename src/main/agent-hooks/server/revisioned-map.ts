@@ -1,9 +1,17 @@
 /** Revision tracking avoids diffing the map. */
 export class RevisionedMap<K, V> extends Map<K, V> {
+  constructor(private readonly tracksDirtyKeys: () => boolean = () => true) {
+    super()
+  }
+
   revision = 0
+  readonly dirtyKeys = new Set<K>()
 
   override set(key: K, value: V): this {
     this.revision++
+    if (this.tracksDirtyKeys()) {
+      this.dirtyKeys.add(key)
+    }
     return super.set(key, value)
   }
 
@@ -20,6 +28,9 @@ export class RevisionedMap<K, V> extends Map<K, V> {
     const deleted = super.delete(key)
     if (deleted) {
       this.revision++
+      if (this.tracksDirtyKeys()) {
+        this.dirtyKeys.add(key)
+      }
     }
     return deleted
   }
@@ -27,6 +38,11 @@ export class RevisionedMap<K, V> extends Map<K, V> {
   override clear(): void {
     if (this.size > 0) {
       this.revision++
+      for (const key of this.keys()) {
+        if (this.tracksDirtyKeys()) {
+          this.dirtyKeys.add(key)
+        }
+      }
     }
     super.clear()
   }

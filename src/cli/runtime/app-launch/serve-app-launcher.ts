@@ -2,7 +2,7 @@ import { accessSync, constants } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, relative } from 'node:path'
 import { RuntimeClientError } from '../connection/types'
 import { resolveLaunchUserDataPath } from '../profile/launch-user-data-path'
-import { appImageEphemeralRootOf } from '../../../shared/appimage-ephemeral-root'
+import { appImageEphemeralRootOf } from '../../../shared/desktop-distribution/appimage/appimage-ephemeral-root'
 
 /** A remote server’s Node-based CLI cannot start a local app server. */
 export function canStartOrcaServer(env: NodeJS.ProcessEnv): boolean {

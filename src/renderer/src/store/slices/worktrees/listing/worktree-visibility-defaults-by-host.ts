@@ -4,7 +4,10 @@ import {
 } from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Repo, WorktreeVisibilityDefaults } from '../../../../../../shared/repo-types'
+import type {
+  Repo,
+  WorktreeVisibilityDefaults
+} from '../../../../../../shared/repository/repo-types'
 
 export function getRepoOwnerWorktreeVisibilityDefaults(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>,

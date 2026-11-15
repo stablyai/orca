@@ -1,4 +1,4 @@
-import type { AntigravityChatAuthConfig } from '../../../shared/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { AcpHistoryTurnIdentity } from '../history/acp-history-replay'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'

@@ -3,8 +3,8 @@
  * listener for it: the bridge must tell the runtime itself, whichever route closed the tab.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import { toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { getRemoteHostPlatform } from '../../remote-host/ssh-remote-platform'
 import type { PtyRuntimeControllerDeps } from '../../../ipc/pty/runtime/controller-deps'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

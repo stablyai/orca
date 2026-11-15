@@ -14,7 +14,7 @@ import {
 } from './quick-open-recent-validation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 export { isNestedWorktreePath, getNestedWorktreeExcludePaths } from './quick-open-nested-worktrees'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import { isQuickOpenRemoteQueryTooLarge } from '../../../shared/quick-open/quick-open-path-search'
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open/quick-open-listing-limits'
 import {

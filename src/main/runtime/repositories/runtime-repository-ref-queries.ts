@@ -1,11 +1,11 @@
-import type { BaseRefDefaultResult, Repo } from '../../../shared/repo-types'
-import type { RuntimeRepoSearchRefs } from '../../../shared/runtime-worktree-contracts'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import type { BaseRefDefaultResult, Repo } from '../../../shared/repository/repo-types'
+import type { RuntimeRepoSearchRefs } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import {
   clampRepoSearchRefsLimit,
   getRepoSearchRefsProbeLimit,
   isRepoSearchRefsRequestLimit
-} from '../../../shared/repo-search-limits'
+} from '../../../shared/git/refs/repo-search-limits'
 import { getDefaultBaseRefAsync as getBaseRefDefault } from '../../git/refs/resolution/repo-default-base-ref'
 import { getRemoteCount } from '../../git/remotes/repo-remote-queries'
 import { searchRemoteRefPage } from '../../git/refs/resolution/repo-remote-ref-search'

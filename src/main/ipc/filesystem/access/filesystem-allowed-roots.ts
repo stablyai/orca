@@ -9,10 +9,10 @@ import {
   buildProjectGroupChildIndex,
   collectProjectGroupSubtreeIds,
   type ProjectGroupChildIndex
-} from '../../../../shared/project-groups'
+} from '../../../../shared/project/groups/project-groups'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { hasRemoteFilesystemOwner } from '../../remote-filesystem-owner'
 
 type FolderScopeStore = Pick<RuntimeStore, 'getRepos'> &

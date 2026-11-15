@@ -12,7 +12,7 @@ import {
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
-} from '../../shared/structured-native-chat-launch-route'
+} from '../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentCreateSupportReason,

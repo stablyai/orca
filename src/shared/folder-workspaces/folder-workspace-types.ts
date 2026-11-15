@@ -3,7 +3,7 @@ import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { DiffComment } from '../diff-comment-types'
 import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
-import type { OrcadRetainedMarker } from '../orcad-retained-marker'
+import type { OrcadRetainedMarker } from '../remote-runtime/orcad-lifecycle/orcad-retained-marker'
 import type { ExternalConversationLink } from '../external-conversation-link'
 import type {
   WorkspaceCreatorProvenance,

@@ -1,7 +1,7 @@
 import '../../../../../shared/protocol-version'
 import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../../shared/automations/automation-runtime-capabilities'
 import type { AutomationOwnerPrecondition } from '../../../../../shared/automations/ownership/automation-owner-precondition'
-import { remoteRpcContentBudget } from '../../../../../shared/remote-rpc-content-budget'
+import { remoteRpcContentBudget } from '../../../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 import { defineMethod, type RpcContext } from '../../core'
 import { previewAutomationRunsPage } from './automation-runs-preview-page'
 import {

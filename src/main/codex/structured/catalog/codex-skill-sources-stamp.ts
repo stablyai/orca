@@ -10,7 +10,7 @@ import {
 } from '../../configuration/homes/codex-home-paths'
 import { readCopiedResourceSource } from '../../configuration/homes/codex-managed-home-resource-copy-marker'
 import { parse as parseToml } from 'smol-toml'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 
 // Mirrors Codex's skill walk (codex-rs ext/skills loader: MAX_SCAN_DEPTH).

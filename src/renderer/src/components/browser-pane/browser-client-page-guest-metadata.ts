@@ -1,4 +1,4 @@
-import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { BrowserPageFailLoadEvent } from './describe-page/browser-page-types'
 import { resolveBrowserWebviewLoadFailure } from './navigate/browser-webview-load-failure'
 import { cachedBrowserGuestMetadata } from './host-guest/metadata/browser-guest-metadata-cache'

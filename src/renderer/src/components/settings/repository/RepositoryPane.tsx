@@ -5,10 +5,10 @@ import type {
   Project,
   ProjectHostSetup,
   ProjectUpdateArgs
-} from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+} from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
-import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
+import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'

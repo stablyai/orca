@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
 import type { PluginsApi } from '../../../../../preload/api/plugins/plugin-host-api'
-import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
 import { arrayElementsUnchanged } from '../../../lib/catalog-reconciliation/catalog-identity'
 
 type PluginContentListState<Entry> = {

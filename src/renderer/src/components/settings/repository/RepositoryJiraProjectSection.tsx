@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { JiraProjectReference } from '../../../../../shared/jira/jira-project-reference'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'

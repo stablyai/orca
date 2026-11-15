@@ -4,12 +4,12 @@ import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { mergeMobileSessionTabGroups } from './mobile-session-tab-merge'
 import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
@@ -30,7 +30,7 @@ import {
   retitleStructuredConversationTabs,
   titleStructuredConversationTabs
 } from '../../session-tabs/structured-conversation-tab-title'
-import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
+import { structuredChatDisplayName } from '../../../../shared/agent-session/view/structured-chat-row-name'
 import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
@@ -137,7 +137,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       isRendererOwnedMobileBrowserTab: (...args) => this.isRendererOwnedMobileBrowserTab(...args),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
-      getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      getStatusRows: (paneKey, terminalHandle) =>
+        this.publicPaneStatusFn?.(paneKey, terminalHandle) ?? [],
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),

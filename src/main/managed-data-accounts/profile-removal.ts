@@ -6,7 +6,7 @@ import { removeHostTree } from '../filesystem/host-tree-removal'
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 
 export class ManagedDataAccountProfileRemoval {

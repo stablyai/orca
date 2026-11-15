@@ -1,11 +1,11 @@
 // One sign-in flow per host; only its initiating client receives the link or controls it.
 
-import { resolveAntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
+import { resolveAntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type * as accountTypes from '../../shared/antigravity-account-types'
+import type * as accountTypes from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import {
   createAcpAgentConnection,
   type AcpAgentConnection

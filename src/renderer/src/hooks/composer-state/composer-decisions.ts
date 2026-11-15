@@ -1,7 +1,7 @@
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
-} from '../../../../shared/workspace-name'
+} from '../../../../shared/workspace/naming/workspace-name'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'

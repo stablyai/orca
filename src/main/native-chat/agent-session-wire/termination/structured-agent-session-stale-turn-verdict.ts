@@ -3,7 +3,7 @@
 import {
   interruptedAgentJournalToolCall,
   isUnverifiedEndAgentJournalToolCall
-} from '../../../../shared/agent-journal-tool-call-lifecycle'
+} from '../../../../shared/agent-session/journal/agent-journal-tool-call-lifecycle'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,

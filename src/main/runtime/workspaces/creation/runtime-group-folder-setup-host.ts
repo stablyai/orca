@@ -4,10 +4,10 @@ import {
   groupFolderCreationIsUserAct,
   type RuntimeGroupFolderCreateInput
 } from './runtime-group-folder-setup'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
 import { wslUserAct } from '../startup/workspace-create-activation'
 import {
@@ -15,7 +15,7 @@ import {
   buildWorktreeStartupForDraft
 } from '../startup/runtime-worktree-agent-startup'
 import { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
-import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
+import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 
 export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   protected finishGroupFolderCreation = async (

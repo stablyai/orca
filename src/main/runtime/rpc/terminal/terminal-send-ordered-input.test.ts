@@ -4,7 +4,7 @@ import type { RpcDispatchStreamingOptions } from '../dispatch/dispatcher-stream-
 import { z } from 'zod'
 import { TERMINAL_METHODS } from '../methods/terminal/terminal'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { RuntimeTerminalSend } from '../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 
 const mobile = { clientId: 'phone', caller: { kind: 'paired-device', deviceId: 'device' } } as const
 const client = { id: 'phone', type: 'mobile' } as const

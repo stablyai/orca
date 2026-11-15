@@ -1,4 +1,4 @@
-import type { CodexManagedAccount } from '../../../shared/managed-account-types'
+import type { CodexManagedAccount } from '../../../shared/agent-accounts/managed-account-types'
 
 export type CodexAuthIdentity = {
   email: string | null

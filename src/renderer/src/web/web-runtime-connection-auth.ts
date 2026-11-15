@@ -2,7 +2,7 @@ import type {
   PairedE2EEAuthReply,
   PairedE2EEClientHandshake
 } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { resolveWebRuntimeAuthRejection } from './web-runtime-auth-verdict'
 import {
   createWebRuntimeUnauthorizedError,

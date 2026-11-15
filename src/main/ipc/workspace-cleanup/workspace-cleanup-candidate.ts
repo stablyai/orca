@@ -1,5 +1,5 @@
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { getWorktreeExecutionHostId } from '../../../shared/execution-host'
 import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { AvccFrameStream } from '../emulator/avcc-frame-stream'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 export function registerEmulatorVideoStreamHandlers(

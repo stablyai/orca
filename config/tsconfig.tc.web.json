@@ -1,6 +1,8 @@
 {
   "extends": "./tsconfig.web.json",
   "exclude": [
+    "../src/renderer/src/components/browser-pane/host-guest/browser-profile-guest-lifetime.test.tsx",
+    "../src/renderer/src/components/browser-pane/host-guest/browser-profile-native.test-fixture.ts",
     "../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-host-platform.test.ts",
     "../src/renderer/src/components/browser-pane/ClientHostedBrowserPagePane.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
@@ -31,6 +33,8 @@
     "../src/preload/usage/usage-provider-api.ts",
     "../src/main/pi/rpc/options/rpc-model-schema.ts",
     "../src/main/pi/rpc/options/rpc-model-options.ts",
+    "../src/main/worker-threads/worker-thread-spawn.ts",
+    "../src/main/worker-threads/worker-thread-entry-path.ts",
     "../src/shared/**/*",
     "../mobile/src/worktree/agent-lineage/worktree-agent-child-rows.ts",
     "../src/packages/process-host/src/__fixtures__/**/*",
@@ -49,6 +53,7 @@
     "../src/main/runtime/sidebar-inputs/temporal/sidebar-retention-owner.ts",
     "../src/main/runtime/sidebar-inputs/producer-revision.ts",
     "../src/main/runtime/sidebar-inputs/feed/sidebar-inputs-feed.ts",
+    "../src/main/runtime/sidebar-inputs/feed/sidebar-inputs-feed-domain-read.ts",
     "../src/main/runtime/sidebar-inputs/feed/sidebar-inputs-feed-log.ts",
     "../src/main/runtime/sidebar-inputs/feed/sidebar-inputs-feed-pages.ts",
     "../src/main/runtime/sidebar-inputs/feed/sidebar-inputs-feed-pins.ts",
