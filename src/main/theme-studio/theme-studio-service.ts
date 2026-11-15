@@ -161,7 +161,9 @@ export function createThemeStudioService(deps: ThemeStudioServiceDeps) {
         if (action === 'undo') {
           await stepDraft(core, 'undo')
         } else {
-          await applyDraft(core, undefined, 'you')
+          // Why the last change's author: Keep saves what the agent made; "you" only when the
+          // person made it (or nobody is named).
+          await applyDraft(core, undefined, session.current?.by ?? 'you')
           session.end('user', 'kept it')
         }
       }).catch((error: unknown) => {
