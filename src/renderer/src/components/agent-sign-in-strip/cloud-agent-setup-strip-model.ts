@@ -3,6 +3,7 @@
 // and once it's saved the strip offers "Start {{agent}}". Pure: the strip renders what this returns.
 import type { Translate } from '@/i18n/use-translate'
 import {
+  deviceCodeOffHint,
   setupFailureCopy,
   setupFailureTone
 } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
@@ -10,7 +11,6 @@ import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/o
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
 import type { CloudStripModel } from './cloud-agent-strip-model'
-import { deviceCodeOffHint } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
 
 function base(agent: string, t: Translate): CloudStripModel {
   const title = t('agentSignInStrip.notSetUp', '{{agent}} isn’t set up for Orca Cloud', { agent })
