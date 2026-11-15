@@ -5,9 +5,21 @@ import {
   ephemeralDrafts,
   isNativeChatEditDraft
 } from '../../drafts/native-chat-composer-draft-memory'
+import { createNativeChatPastedTextHistory } from './native-chat-pasted-text-history'
 
-type Options = Partial<EditorOptions>
-type OwnedEditor = { editor: Editor; options: Options; release: () => void }
+type HistoryPaths = ReturnType<typeof createNativeChatPastedTextHistory>
+type Options = Omit<Partial<EditorOptions>, 'onTransaction'> & {
+  onTransaction?: (
+    event: Parameters<EditorOptions['onTransaction']>[0],
+    historyPaths: HistoryPaths
+  ) => void
+}
+type OwnedEditor = {
+  editor: Editor
+  historyPaths: HistoryPaths
+  options: Options
+  release: () => void
+}
 
 class ComposerEditors {
   private editors = new Map<string, OwnedEditor>()
@@ -38,9 +50,10 @@ class ComposerEditors {
     const entry: OwnedEditor = {
       options,
       release: () => {},
+      historyPaths: createNativeChatPastedTextHistory(scope),
       editor: new Editor({
         ...options,
-        onTransaction: (...args) => entry.options.onTransaction?.(...args),
+        onTransaction: (event) => entry.options.onTransaction?.(event, entry.historyPaths),
         onUpdate: (...args) => entry.options.onUpdate?.(...args),
         onSelectionUpdate: (...args) => entry.options.onSelectionUpdate?.(...args)
       })
@@ -68,7 +81,10 @@ export function NativeChatComposerEditorOwner({ children }: { children: React.Re
   return <ComposerEditorOwner value={owner}>{children}</ComposerEditorOwner>
 }
 
-export function useNativeChatComposerEditor(scope: string, options: Options): Editor {
+export function useNativeChatComposerEditor(
+  scope: string,
+  options: Options
+): Pick<OwnedEditor, 'editor' | 'historyPaths'> {
   const owner = useContext(ComposerEditorOwner)
   const local = useMemo(() => ({ scope, editors: new ComposerEditors() }), [scope])
   const entry = (owner ?? local.editors).get(scope, options)
@@ -76,5 +92,5 @@ export function useNativeChatComposerEditor(scope: string, options: Options): Ed
   useLayoutEffect(() => {
     entry.editor.setOptions({ editorProps: entry.options.editorProps })
   })
-  return entry.editor
+  return entry
 }

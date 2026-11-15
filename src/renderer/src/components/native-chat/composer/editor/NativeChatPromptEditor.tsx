@@ -3,7 +3,6 @@ import {
   nativeChatDraftPositions,
   hasUnsavedNativeChatComposerDraftChange
 } from '../../drafts/native-chat-composer-draft-memory'
-import { createNativeChatPastedTextHistory } from './native-chat-pasted-text-history'
 import { resolveNativeChatPastedText } from '../../paste/native-chat-composer-pasted-text-references'
 import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
 import {
@@ -67,7 +66,6 @@ function NativePromptEditor({
   className,
   ...events
 }: NativeChatPromptEditorProps): React.JSX.Element {
-  const historyPaths = useMemo(() => createNativeChatPastedTextHistory(scopeKey ?? ''), [scopeKey])
   const adopted = useRef(readNativeChatDraftSnapshot(scopeKey, initialValue))
   const userOwned = useRef(false)
   const appliedPosition = useRef<unknown>(undefined)
@@ -78,7 +76,7 @@ function NativePromptEditor({
       position.pending = false
     }
   }
-  const editor = useNativeChatComposerEditor(scopeKey ?? '', {
+  const { editor, historyPaths } = useNativeChatComposerEditor(scopeKey ?? '', {
     extensions: [
       StarterKit.configure({
         blockquote: false,
@@ -149,7 +147,7 @@ function NativePromptEditor({
           true
         )
     },
-    onTransaction: ({ editor: current, transaction }) => {
+    onTransaction: ({ editor: current, transaction }, history) => {
       if (
         !transaction.getMeta('preventUpdate') &&
         (transaction.docChanged || transaction.selectionSet)
@@ -157,7 +155,7 @@ function NativePromptEditor({
         claimSelection()
       }
       const pastedTextFiles = transaction.docChanged
-        ? historyPaths(current.state.doc, transaction.docs)
+        ? history(current.state.doc, transaction.docs)
         : undefined
       // Remote/late draft adoption is already saved; only this window’s edits should persist their document and skill chips.
       if (

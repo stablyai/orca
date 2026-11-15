@@ -5,7 +5,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { NativeChatComposerEditorOwner } from './native-chat-composer-editor-owner'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import { openNativeChatEditDraft } from '../../drafts/native-chat-composer-draft-store'
+import {
+  openNativeChatEditDraft,
+  readNativeChatComposerDraft
+} from '../../drafts/native-chat-composer-draft-store'
 import {
   closeNativeChatEditDraft,
   redirectNativeChatEditDraft
@@ -91,3 +94,47 @@ it.each([20, 200])(
     view.unmount()
   }
 )
+
+it('restores a deleted pasted-text file with undo after the composer remounts', () => {
+  const scope = 'queued-edit:retained-paste'
+  const id = '00000000-0000-0000-0000-000000000001'
+  const token = '[Pasted text](orca-paste:00000000-0000-0000-0000-000000000001)'
+  openNativeChatEditDraft(scope, {
+    text: token,
+    images: [],
+    pastedTextFiles: { [id]: '/workspace/paste.txt' }
+  })
+  const input = createRef<NativeChatComposerInput>()
+  const pane = (shown: boolean) => (
+    <NativeChatComposerEditorOwner>
+      {shown && (
+        <NativeChatPromptEditor
+          scopeKey={scope}
+          inputRef={input}
+          initialValue={token}
+          disabled={false}
+          placeholder="Message"
+          onChange={() => {}}
+          onSelect={() => {}}
+        />
+      )}
+    </NativeChatComposerEditorOwner>
+  )
+  const view = render(pane(true))
+  act(() => {
+    promptEditor(within(view.container).getByRole('textbox')).commands.selectAll()
+    promptEditor(within(view.container).getByRole('textbox')).commands.deleteSelection()
+  })
+  expect(readNativeChatComposerDraft(scope).pastedTextFiles).toBeUndefined()
+  view.rerender(pane(false))
+  view.rerender(pane(true))
+  act(() => {
+    promptEditor(within(view.container).getByRole('textbox')).commands.undo()
+  })
+  expect(readNativeChatComposerDraft(scope).text).toBe(token)
+  expect(readNativeChatComposerDraft(scope).pastedTextFiles).toEqual({
+    '00000000-0000-0000-0000-000000000001': '/workspace/paste.txt'
+  })
+  view.unmount()
+  closeNativeChatEditDraft(scope)
+})
