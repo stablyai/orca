@@ -37,9 +37,9 @@ export function readProviderLeaderOutcome(stream: Readable): Promise<ProviderLea
           return
         }
         const signal = Object.entries(constants.signals).find(([, n]) => n === value.signal)?.[0]
-        resolve(
-          value.code === null && signal ? { code: null, signal: signal as NodeJS.Signals } : null
-        )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: signal is a key read directly from the platform's Node signal-name table.
+        const namedSignal = signal as NodeJS.Signals | undefined
+        resolve(value.code === null && namedSignal ? { code: null, signal: namedSignal } : null)
       } catch {
         resolve(null)
       }

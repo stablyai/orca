@@ -16,6 +16,10 @@ function child() {
   }
 }
 
+function supervisedChild(groupVerdict: DescendantTreeVerdict) {
+  return { ...child(), leaderExited: false, groupVerdict }
+}
+
 describe('terminateProviderProcessTree', () => {
   beforeEach(() => {
     resetSelfInitiatedTreeKillLogForTest()
@@ -155,7 +159,7 @@ it('never reads or signals a retired group PID when the CLI wait outcome is unkn
 })
 
 it('discards an in-flight tree read after native group absence retires its PID', async () => {
-  const target = { ...child(), leaderExited: false, groupVerdict: 'live' as DescendantTreeVerdict }
+  const target = supervisedChild('live')
   const snapshot = Promise.withResolvers<{
     rootPgid: number
     descendants: never[]
@@ -182,11 +186,7 @@ it('discards an in-flight tree read after native group absence retires its PID',
 it.each(['resolve', 'reject'] as const)(
   'discards snapshot signals after retirement during descendant %s',
   async (result) => {
-    const target = {
-      ...child(),
-      leaderExited: false,
-      groupVerdict: 'live' as DescendantTreeVerdict
-    }
+    const target = supervisedChild('live')
     const release = Promise.withResolvers<DescendantTreeVerdict>()
     const started = Promise.withResolvers<void>()
     const signalProcess = vi.fn()

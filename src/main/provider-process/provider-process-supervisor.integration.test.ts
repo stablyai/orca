@@ -13,10 +13,14 @@ import {
 import type { ProviderChild } from './provider-child'
 import * as orphanGuard from './provider-group-orphan-guard'
 
-const state = vi.hoisted(() => ({
+const state = vi.hoisted<{
+  root: string
+  holdPublication: Promise<void> | undefined
+  publicationStarted: (() => void) | undefined
+}>(() => ({
   root: '',
-  holdPublication: undefined as Promise<void> | undefined,
-  publicationStarted: undefined as (() => void) | undefined
+  holdPublication: undefined,
+  publicationStarted: undefined
 }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const fs = await importOriginal<typeof FsPromises>()

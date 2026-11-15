@@ -62,7 +62,7 @@ function launch(index: number) {
   gate.once('finish', () => status.end())
   const child = new DirectProviderChild(raw, spec)
   // Connections install callbacks that retain their writer and pending requests.
-  const connection = { child, failures: [] as Error[] }
+  const connection: { child: DirectProviderChild; failures: Error[] } = { child, failures: [] }
   child.stdin.on('error', (error) => connection.failures.push(error))
   const errors: Error[] = []
   child.on('error', (error) => errors.push(error))
