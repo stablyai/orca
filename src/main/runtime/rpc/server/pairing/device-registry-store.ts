@@ -48,7 +48,6 @@ export class DeviceRegistryStore {
   protected registryUnreadable = false
   /** Parse failures prevent authoritative absence/revocation verdicts. */
   protected registryDoubtful = false
-  private corruptFilePending = false
   protected pendingLastSeenFlush: NodeJS.Timeout | null = null
   private readonly writer: DeviceRegistryWriter
 
@@ -126,10 +125,9 @@ export class DeviceRegistryStore {
   }
 
   private load(): void {
-    const read = this.writer.read()
+    const read = this.writer.read({ recoverCorrupt: true })
     this.registryUnreadable = read.unreadable
     this.registryDoubtful = read.doubtful
-    this.corruptFilePending = read.corruptFilePending
     this.devices = withoutEphemeralRows(read.devices)
     this.writer.retireRows(read.devices.filter((row) => row.ephemeral).map((row) => row.deviceId))
     // Session-only browser keys died with the prior host; remove their registry rows.
@@ -156,20 +154,13 @@ export class DeviceRegistryStore {
     return this.devices.some((candidate) => candidate.deviceId === deviceId)
   }
 
-  private assertReadable(): void {
-    if (this.corruptFilePending) {
-      this.writer.quarantineCorrupt()
-      this.corruptFilePending = false
-    }
-  }
-
   /** Writes `devices` merged over the file as it is now; memory takes the result. */
   protected save(
     devices: readonly DeviceEntry[],
     options: DeviceRegistrySaveOptions = {},
     before: readonly DeviceEntry[] = this.devices
   ): DeviceEntry[] {
-    this.assertReadable()
+    this.writer.quarantineCorrupt()
     try {
       const written = this.writer.write(before, devices, options)
       this.registryUnreadable = false

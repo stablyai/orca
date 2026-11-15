@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -13,11 +14,13 @@ import { DeviceRegistryUnavailableError } from './device-registry-unavailable'
 const EXTERNAL_EDIT_CHECK_INTERVAL_MS = 1000
 const MAX_WRITE_ATTEMPTS = 5
 export type DeviceRegistrySaveOptions = { durable?: boolean; guards?: readonly string[] }
+type CorruptRegistrySnapshot = { stamp: string; digest: string }
 
 export class DeviceRegistryWriter {
   private readonly removedIds = new Set<string>()
   private baseline: DeviceEntry[] = []
   private quarantinedUntilWritten = false
+  private corruptSnapshot: CorruptRegistrySnapshot | null = null
   private readStamp: string | null = null
   private checkedAt = Number.NEGATIVE_INFINITY
   unavailable = false
@@ -50,23 +53,59 @@ export class DeviceRegistryWriter {
   }
 
   quarantineCorrupt(): void {
-    if (quarantineCorruptRegistry(this.registryPath)) {
+    if (!this.corruptSnapshot) {
+      return
+    }
+    const current = readRegistrySnapshot(this.registryPath)
+    if (
+      !current ||
+      current.stamp !== this.corruptSnapshot.stamp ||
+      current.digest !== this.corruptSnapshot.digest
+    ) {
+      this.corruptSnapshot = null
+      return
+    }
+    const quarantined = quarantineCorruptRegistry(this.registryPath)
+    this.corruptSnapshot = null
+    if (quarantined) {
       this.quarantinedUntilWritten = true
       this.baseline = []
       this.readStamp = null
     }
   }
 
-  read(): DeviceRegistryFileRead {
+  read(options: { recoverCorrupt?: boolean } = {}): DeviceRegistryFileRead {
     const stamp = fileStamp(this.registryPath)
+    if (stamp !== 'missing') {
+      this.quarantinedUntilWritten = false
+    }
     const disk = readDeviceRegistryFile(this.registryPath)
-    this.unavailable = disk.unreadable || disk.corruptFilePending
-    this.doubtful = disk.doubtful
+    this.noteSnapshot(disk)
+    if (options.recoverCorrupt) {
+      const snapshot = disk.corruptDigest ? readRegistrySnapshot(this.registryPath) : null
+      this.corruptSnapshot = snapshot?.digest === disk.corruptDigest ? snapshot : null
+    }
     if (!this.unavailable) {
       this.baseline = disk.devices
       this.readStamp = stamp
     }
     return disk
+  }
+
+  private noteSnapshot(disk: DeviceRegistryFileRead): void {
+    this.unavailable = disk.unreadable || disk.corruptFilePending
+    this.doubtful = disk.doubtful
+    if (
+      this.corruptSnapshot &&
+      (this.corruptSnapshot.digest !== disk.corruptDigest ||
+        this.corruptSnapshot.stamp !== fileStamp(this.registryPath))
+    ) {
+      this.corruptSnapshot = null
+    }
+    // Only our still-missing quarantine permits restoring cached rows.
+    if (!disk.missing) {
+      this.quarantinedUntilWritten = false
+    }
   }
 
   adoptExternalEdits(
@@ -129,8 +168,7 @@ export class DeviceRegistryWriter {
           }).devices
     this.readStamp = null
     const observe = (disk: DeviceRegistryFileRead): boolean => {
-      this.unavailable = disk.unreadable || disk.corruptFilePending
-      this.doubtful = disk.doubtful
+      this.noteSnapshot(disk)
       if (this.unavailable) {
         return false
       }
@@ -148,6 +186,9 @@ export class DeviceRegistryWriter {
     while (operation.remaining > 0) {
       operation.remaining--
       const raw = readRawRegistry(this.registryPath)
+      if (raw !== null) {
+        this.quarantinedUntilWritten = false
+      }
       const disk = readDeviceRegistryFile(this.registryPath)
       if (raw !== readRawRegistry(this.registryPath)) {
         continue
@@ -194,9 +235,26 @@ export class DeviceRegistryWriter {
 
 function readRawRegistry(path: string): string | null {
   try {
-    return readFileSync(path, 'utf8')
+    return readRegistryContents(path).toString('utf8')
   } catch (error) {
     return isMissingFileError(error) ? null : `unreadable:${String(error)}`
+  }
+}
+
+function readRegistryContents(path: string): Buffer {
+  return readFileSync(path)
+}
+
+function readRegistrySnapshot(path: string): CorruptRegistrySnapshot | null {
+  try {
+    const stamp = fileStamp(path)
+    if (stamp === 'missing' || stamp === 'unstattable') {
+      return null
+    }
+    const digest = createHash('sha256').update(readRegistryContents(path)).digest('hex')
+    return fileStamp(path) === stamp ? { stamp, digest } : null
+  } catch {
+    return null
   }
 }
 
