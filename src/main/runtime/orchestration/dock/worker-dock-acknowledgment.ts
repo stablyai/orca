@@ -1,0 +1,46 @@
+import type { z } from 'zod'
+import type { OrchestrationDb } from '../db/orchestration-db'
+import type { WorkerDockAcknowledge } from '../../../../shared/orchestration/dock/worker-dock'
+import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
+import { workerDockSession } from './worker-dock-read'
+import { OrchestrationError } from '../orchestration-error'
+
+export function acknowledgeWorkerDock(
+  db: OrchestrationDb,
+  request: z.infer<typeof WorkerDockAcknowledge>
+): void {
+  const source = workerDockSession(request.party)
+  runLifecycleWriteTransaction(db.db, 'worker_dock_acknowledge', () => {
+    for (const { dispatchId } of request.settlements) {
+      if (db.getFederatedDispatch(dispatchId)) {
+        throw new OrchestrationError(
+          'remote_owner_actions_unsupported',
+          'Stop or clear this from the computer it runs on.'
+        )
+      }
+    }
+    for (const { dispatchId, settlement } of request.settlements) {
+      if (request.acknowledged) {
+        db.db
+          .prepare(`INSERT OR IGNORE INTO worker_dock_acknowledgments(source, dispatch_id, settlement)
+          SELECT source, dispatch_id, settlement FROM worker_dock_facts
+          WHERE source = ? AND dispatch_id = ? AND settlement = ? AND state IN ('failed', 'stopped', 'abandoned')`)
+          .run(source, dispatchId, settlement)
+        if (db.workerDockSources.hasProviderFailures(source)) {
+          db.db
+            .prepare(`INSERT OR IGNORE INTO worker_dock_acknowledgments(source, dispatch_id, settlement)
+            SELECT source, id, settlement FROM worker_dock_provider_failures
+            WHERE source = ? AND id = ? AND settlement = ?`)
+            .run(source, dispatchId, settlement)
+        }
+      } else {
+        db.db
+          .prepare(
+            `DELETE FROM worker_dock_acknowledgments WHERE source = ? AND dispatch_id = ? AND settlement = ?`
+          )
+          .run(source, dispatchId, settlement)
+      }
+    }
+  })
+  db.crewChanges.notify(new Set(['topology']))
+}

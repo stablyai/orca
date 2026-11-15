@@ -5,6 +5,7 @@ import type { StructuredSessionBackgroundTasksView } from '../../../../../shared
 import { NativeChatStructuredSessionStatus } from '../tools/tasks/NativeChatStructuredSessionStatus'
 import { useStructuredSessionTaskStop } from '../tools/tasks/use-structured-session-task-stop'
 import { useTranslate } from '@/i18n/use-translate'
+import { NativeChatWorkerDockFrame } from '../tools/tasks/dock/NativeChatWorkerDockFrame'
 import {
   backFromNativeChatSubagent,
   closeNativeChatSubagentOnEscape,
@@ -39,6 +40,13 @@ export function useStructuredNativeChatSubagents({
   const openId = open?.agentId ?? null
   const parentId = open?.parentId ?? null
   const stop = useStructuredSessionTaskStop(sessionId, controller)
+  const background = controller.backgroundTasks
+  const hasWork = Boolean(
+    background.workerDock?.open ||
+    background.tasks.length ||
+    background.children?.length ||
+    background.incomplete
+  )
   const strip = (
     <NativeChatStructuredSessionStatus
       sessionId={sessionId}
@@ -54,16 +62,17 @@ export function useStructuredNativeChatSubagents({
     /** The subagent whose view replaces the conversation and the composer; null for none. */
     openId,
     onKeyDown: (event: React.KeyboardEvent) => closeNativeChatSubagentOnEscape(event, paneKey),
-    dock: (
-      <>
-        {strip}
-        <NativeChatPartyWorkerApprovalStack
-          party={nativeChatWorkerApprovalParty({ sessionId, target })}
-          target={target}
-          isVisible={isVisible}
-        />
-      </>
-    ),
+    dock:
+      isVisible && hasWork ? (
+        <NativeChatWorkerDockFrame>
+          {strip}
+          <NativeChatPartyWorkerApprovalStack
+            party={nativeChatWorkerApprovalParty({ sessionId, target })}
+            target={target}
+            isVisible={isVisible}
+          />
+        </NativeChatWorkerDockFrame>
+      ) : null,
     statusBar:
       openId === null ? null : (
         <NativeChatStructuredSubagentStatusBar

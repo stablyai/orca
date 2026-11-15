@@ -1,4 +1,3 @@
-import { NativeChatWorkerDockFrame } from '../../tools/tasks/dock/NativeChatWorkerDockFrame'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from '../focus/native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
@@ -320,7 +319,7 @@ export function NativeChatComposerField({
               '[contain:paint]'
             )}
           >
-            {dock ? <NativeChatWorkerDockFrame>{dock}</NativeChatWorkerDockFrame> : null}
+            {dock}
             {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
                 {imageAttachments.map((attachment, index) => (

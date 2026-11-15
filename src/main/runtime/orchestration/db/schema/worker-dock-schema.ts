@@ -74,6 +74,11 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     CREATE INDEX IF NOT EXISTS worker_dock_stop_result_time ON worker_dock_stop_results(source, changed_at DESC, dispatch_id);
     CREATE TABLE IF NOT EXISTS worker_dock_revision (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL);
     INSERT OR IGNORE INTO worker_dock_revision VALUES(1, 0);
+    CREATE TABLE IF NOT EXISTS worker_dock_provider_failures (
+      id TEXT PRIMARY KEY, source TEXT NOT NULL, settlement TEXT NOT NULL, changed_at INTEGER NOT NULL,
+      entry TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS worker_dock_provider_failure_source ON worker_dock_provider_failures(source);
   `)
   if (!this.hasColumn('worker_dock_facts', 'result_lost_at')) {
     this.db.exec('ALTER TABLE worker_dock_facts ADD COLUMN result_lost_at INTEGER')
@@ -129,6 +134,7 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     'worker_dock_facts',
     'worker_dock_activity',
     'worker_dock_acknowledgments',
+    'worker_dock_provider_failures',
     'worker_dock_owner_stops'
   ]) {
     for (const event of ['INSERT', 'UPDATE', 'DELETE']) {

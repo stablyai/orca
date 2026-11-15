@@ -122,7 +122,7 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
         <div
           ref={frame}
           data-native-chat-worker-dock=""
-          className="scrollbar-sleek hidden has-[[data-native-chat-background-tasks]]:block has-[[data-native-chat-worker-approvals]]:block -mx-1.5 -mt-1.5 mb-1.5 min-h-0 overflow-y-auto rounded-t-xl border-b border-border bg-muted/50"
+          className="scrollbar-sleek -mx-1.5 -mt-1.5 mb-1.5 min-h-0 overflow-y-auto rounded-t-xl border-b border-border bg-muted/50"
           style={{ maxHeight: height ?? 'min(40cqh, calc(100cqh - 180px))' }}
           onPointerDownCapture={(event) => {
             if (event.button === 0) {

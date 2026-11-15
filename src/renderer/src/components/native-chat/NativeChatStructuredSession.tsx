@@ -305,6 +305,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 <NativeChatHostSetupContext.Provider value={setup}>
                   <NativeChatWorkerTimeline
                     approvalParty={workerApprovalParty}
+                    workerDock={controller.backgroundTasks.workerDock}
                     target={props.target}
                     sessionId={props.sessionId}
                     isVisible={props.isVisible}

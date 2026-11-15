@@ -22,6 +22,7 @@ import { subscribeWorkerDock } from '../../../orchestration/dock/worker-dock-str
 import { stopWorkerAndHelpers } from './worker/worker-stop'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import type { RpcContext } from '../../core'
+import { z } from 'zod'
 
 function requireOwner({ ctx }: { ctx: RpcContext }): void {
   const caller = ctx.caller
@@ -141,8 +142,8 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
     name: 'orchestration.workerDockSubscribe',
     permission: 'workspace',
     access: { kind: 'localOnly', targets: { party: 'party' } },
-    params: WorkerDockSource,
-    handler: ({ party }, { runtime, signal, connectionId }, emit) =>
+    params: WorkerDockSource.extend({ includeRows: z.boolean().optional() }),
+    handler: ({ party, includeRows }, { runtime, signal, connectionId }, emit) =>
       new Promise<void>((resolve) => {
         if (signal?.aborted) {
           resolve()
@@ -151,10 +152,22 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
         const key = `worker-dock:${connectionId ?? 'local'}:${++sequence}`
         const close = () => runtime.cleanupSubscription(key)
         const db = runtime.getOrchestrationDb()
-        const stop = subscribeWorkerDock(db, party, emit, {
-          refresh: () => refreshWorkerDockActivity(db, party, runtime),
-          subscribe: (wake) => runtime.crewChanges.subscribe(wake)
-        })
+        const panes = new Set<string>()
+        const stop = subscribeWorkerDock(
+          db,
+          party,
+          emit,
+          {
+            refresh: () => refreshWorkerDockActivity(db, party, runtime, panes),
+            subscribe: (wake) =>
+              runtime.subscribeAgentStatusRowChanges((pane) => {
+                if (panes.has(pane)) {
+                  wake()
+                }
+              })
+          },
+          includeRows !== false
+        )
         runtime.registerSubscriptionCleanup(
           key,
           () => {

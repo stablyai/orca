@@ -61,7 +61,7 @@ import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authorit
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
 import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
 import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
-const DEFAULT_WORKTREE_PS_LIMIT = 200
+import { workerDockFailureSink } from '../../orchestration/dock/worker-dock-provider-failures'
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
@@ -72,7 +72,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   listAgentTasksByPaneKey = () => this.agentOrchestrationProjection.buildByPaneKey() ?? {}
 
   async getWorktreePs(
-    limit = DEFAULT_WORKTREE_PS_LIMIT,
+    limit = 200,
     sourceDefaultsSupported = true,
     includeAgentWait = false,
     worktreeId?: string
@@ -292,7 +292,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
           firstWorkRenameDeps(this.requireStore(), this)
         )
       },
-      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
+      statusSink: workerDockFailureSink(this.structuredAgentStatusSinkFn, this),
       conversationNaming: nameChat,
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
       queuedAgentMessageOwed: (sessionId, from) => this.structuredChatMailOwed(sessionId, from),

@@ -16,6 +16,7 @@ import {
 import { useWorkerDockResults } from './worker-dock-feed'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { NativeChatWorkerApprovalTimeline } from '../../../worker-approvals/NativeChatWorkerApprovals'
+import type { WorkerDockPresence } from '../../../../../../../shared/agent-session/agent-session-background-task-wire'
 
 export function NativeChatWorkerTimeline({
   approvalParty,
@@ -25,6 +26,13 @@ export function NativeChatWorkerTimeline({
   approvalParty: string | null
   children: (rows: readonly NativeChatTimedRow[]) => React.ReactNode
 }) {
+  if (!source.workerDock) {
+    return (
+      <NativeChatWorkerApprovalTimeline party={approvalParty} isVisible={source.isVisible}>
+        {children}
+      </NativeChatWorkerApprovalTimeline>
+    )
+  }
   return (
     <NativeChatWorkerApprovalTimeline party={approvalParty} isVisible={source.isVisible}>
       {(approvalRows) => (
@@ -172,15 +180,17 @@ export function NativeChatWorkerResultTimeline({
   target,
   sessionId,
   isVisible,
+  workerDock,
   children
 }: {
   target: RuntimeClientTarget
   sessionId: string
   isVisible: boolean
+  workerDock?: WorkerDockPresence
   children: (rows: readonly NativeChatTimedRow[]) => React.ReactNode
 }) {
   const t = useTranslate()
-  const feed = useWorkerDockResults(target, sessionId, isVisible)
+  const feed = useWorkerDockResults(target, sessionId, isVisible, workerDock)
   const [older, setOlder] = useState<readonly WorkerDockResultRef[]>([])
   const refs = useMemo(
     () => [...new Map([...(feed.results ?? []), ...older].map((ref) => [ref.id, ref])).values()],

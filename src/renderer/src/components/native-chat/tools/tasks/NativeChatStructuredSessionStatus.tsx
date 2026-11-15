@@ -45,7 +45,14 @@ export function NativeChatStructuredSessionStatus(props: {
   const roster = useWorkerDockRosterState()
   const target = props.target ?? LOCAL
   const ownerActionsAvailable = target.kind === 'local'
-  const feed = useWorkerDockFeed(target, props.sessionId, props.isVisible)
+  const expandedHere = expanded?.sessionId === props.sessionId && expanded.expanded
+  const feed = useWorkerDockFeed(
+    target,
+    props.sessionId,
+    props.isVisible,
+    backgroundTasks.workerDock,
+    expandedHere
+  )
   const approvals = useNativeChatPinnedWorkerApprovals(feed.party, props.isVisible, target)
   const openApprovals = useMemo(
     () =>
@@ -260,7 +267,7 @@ export function NativeChatStructuredSessionStatus(props: {
         incomplete={backgroundTasks.incomplete || !feed.available}
         stoppingTaskIds={new Set([...stop.stoppingTaskIds, ...pending])}
         stoppingAll={stop.stoppingAll}
-        expanded={expanded?.sessionId === props.sessionId && expanded.expanded}
+        expanded={expandedHere}
         onExpandedChange={(value) => {
           setExpanded({ sessionId: props.sessionId, expanded: value })
           roster.setExpanded(value)

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { CrewParty } from '../orchestration-crew'
 
-export const WorkerDockSource = z.object({ party: CrewParty })
+export const WorkerDockSource = z.object({ party: CrewParty, includeRows: z.boolean().optional() })
 export const WorkerDockState = z.enum([
   'starting',
   'running',
@@ -17,6 +17,7 @@ export const WorkerDockState = z.enum([
 ])
 export const WorkerDockEntry = z.object({
   kind: z.enum(['worker', 'agent', 'command', 'workflow', 'monitor', 'unknown']).default('worker'),
+  providerId: z.string().optional(),
   id: z.string(),
   dispatchId: z.string(),
   source: z.string(),
@@ -34,6 +35,7 @@ export const WorkerDockEntry = z.object({
 })
 export type WorkerDockEntry = z.infer<typeof WorkerDockEntry>
 export const WorkerDockIdentity = WorkerDockEntry.pick({
+  kind: true,
   id: true,
   dispatchId: true,
   state: true,
@@ -82,6 +84,7 @@ export const WorkerDockSnapshot = z.object({
 })
 export type WorkerDockSnapshot = z.infer<typeof WorkerDockSnapshot>
 export const WorkerDockRead = WorkerDockSource.extend({
+  includeRows: z.boolean().optional(),
   revision: z.number().optional(),
   anchor: z.string().optional(),
   direction: z.enum(['before', 'after', 'around']).default('around')

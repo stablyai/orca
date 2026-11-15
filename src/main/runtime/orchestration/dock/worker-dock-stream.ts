@@ -1,10 +1,12 @@
 import type { OrchestrationDb } from '../db/orchestration-db'
-import { readWorkerDock } from './worker-dock-read'
+import { readWorkerDock, workerDockSession } from './worker-dock-read'
 import type { WorkerDockSnapshot } from '../../../../shared/orchestration/dock/worker-dock'
 
 type Producer = {
-  listeners: Set<(value: WorkerDockSnapshot) => void>
+  listeners: Map<(value: WorkerDockSnapshot) => void, boolean>
   snapshot: WorkerDockSnapshot
+  detailed: boolean
+  upgrade: () => void
   close: () => void
 }
 const producers = new WeakMap<OrchestrationDb, Map<string, Producer>>()
@@ -13,13 +15,15 @@ type ActivitySource = {
   subscribe: (wake: () => void) => () => void
 }
 
-/** Only visible consumers subscribe; a hidden source has no producer, poll or read. */
+/** Visible source consumers share one read; folded consumers request no row details. */
 export function subscribeWorkerDock(
   db: OrchestrationDb,
   party: string,
   emit: (value: WorkerDockSnapshot) => void,
-  activity?: ActivitySource
+  activity?: ActivitySource,
+  includeRows = true
 ): () => void {
+  const source = workerDockSession(party)
   let sources = producers.get(db)
   if (!sources) {
     sources = new Map()
@@ -32,14 +36,48 @@ export function subscribeWorkerDock(
       clearTimeout(expiry)
       const deadline = activity?.refresh()
       if (deadline) {
-        expiry = setTimeout(schedule, Math.max(1, deadline - Date.now() + 1))
+        expiry = setTimeout(
+          () => {
+            activityChanged = true
+            schedule()
+          },
+          Math.max(1, deadline - Date.now() + 1)
+        )
       }
     }
+    const publish = () => {
+      for (const [listener, rows] of held.listeners) {
+        listener(rows ? held.snapshot : { ...held.snapshot, rows: [] })
+      }
+    }
+    let activityChanged = false
     refresh()
     const held: Producer = {
-      listeners: new Set(),
-      snapshot: readWorkerDock(db, { party, direction: 'around' }),
+      listeners: new Map(),
+      detailed: includeRows,
+      snapshot: readWorkerDock(db, { party, direction: 'around', includeRows }),
+      upgrade: () => {
+        held.snapshot = readWorkerDock(db, { party, direction: 'around', includeRows: true })
+        seen = db.workerDockSources.version(source)
+        publish()
+      },
       close: () => {}
+    }
+    let seen = db.workerDockSources.version(source)
+    let unwatchActivity: (() => void) | undefined
+    const watchActivity = () => {
+      const live = held.snapshot.identities.some(
+        (row) => !['failed', 'unexpected', 'saving'].includes(row.state)
+      )
+      if (live && !unwatchActivity) {
+        unwatchActivity = activity?.subscribe(() => {
+          activityChanged = true
+          schedule()
+        })
+      } else if (!live && unwatchActivity) {
+        unwatchActivity()
+        unwatchActivity = undefined
+      }
     }
     let queued = false
     function schedule() {
@@ -53,32 +91,40 @@ export function subscribeWorkerDock(
           return
         }
         try {
-          refresh()
-          const version = db.db
-            .prepare('SELECT revision FROM worker_dock_revision WHERE id = 1')
-            .get()
-          if (version?.revision === held.snapshot.revision && !held.snapshot.unavailable) {
+          if (activityChanged) {
+            activityChanged = false
+            refresh()
+          }
+          const version = db.workerDockSources.version(source)
+          if (version === seen && !held.snapshot.unavailable) {
             return
           }
-          const next = readWorkerDock(db, { party, direction: 'around' })
+          const next = readWorkerDock(db, {
+            party,
+            direction: 'around',
+            includeRows: held.detailed
+          })
+          seen = version
           if (JSON.stringify(next) !== JSON.stringify(held.snapshot)) {
             held.snapshot = next
-            for (const listener of held.listeners) {
-              listener(next)
-            }
+            watchActivity()
+            publish()
           }
         } catch {
           clearTimeout(expiry)
           expiry = setTimeout(schedule, 5000)
           held.snapshot = { ...held.snapshot, unavailable: true }
-          for (const listener of held.listeners) {
-            listener(held.snapshot)
-          }
+          publish()
         }
       })
     }
-    const unwatchDb = db.crewChanges.subscribe(schedule)
-    const unwatchActivity = activity?.subscribe(schedule)
+    const unwatchDb = db.crewChanges.subscribe(() => {
+      if (db.workerDockSources.version(source) !== seen) {
+        activityChanged = true
+        schedule()
+      }
+    })
+    watchActivity()
     held.close = () => {
       unwatchDb()
       unwatchActivity?.()
@@ -88,13 +134,21 @@ export function subscribeWorkerDock(
     producer = held
   }
   const held = producer
-  held.listeners.add(emit)
-  emit(held.snapshot)
+  held.listeners.set(emit, includeRows)
+  if (includeRows && !held.detailed) {
+    held.detailed = true
+    held.upgrade()
+  } else {
+    emit(includeRows ? held.snapshot : { ...held.snapshot, rows: [] })
+  }
   return () => {
     held.listeners.delete(emit)
     if (!held.listeners.size) {
       held.close()
       sources.delete(party)
+    } else if (held.detailed && ![...held.listeners.values()].some(Boolean)) {
+      held.detailed = false
+      held.snapshot = { ...held.snapshot, rows: [] }
     }
   }
 }

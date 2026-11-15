@@ -2,6 +2,11 @@ import { useCallback, useSyncExternalStore } from 'react'
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { WorkerDockPresence } from '../../../../../../../shared/agent-session/agent-session-background-task-wire'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '@/lib/window-activity/window-park-visibility'
 import {
   WorkerDockSnapshot,
   type WorkerDockEntry,
@@ -21,6 +26,8 @@ const EMPTY: State = { snapshot: null, available: true, rows: new Map() }
 class WorkerDockFeed {
   state = EMPTY
   private listeners = new Set<() => void>()
+  private details = new Set<() => void>()
+  private detailed = false
   private stop: (() => void) | undefined
   private retry: ReturnType<typeof setTimeout> | undefined
   private generation = 0
@@ -34,6 +41,9 @@ class WorkerDockFeed {
     readonly party: string
   ) {}
   private publish(snapshot: WorkerDockSnapshot | null, available: boolean): void {
+    if (snapshot && this.state.snapshot && snapshot.revision < this.state.snapshot.revision) {
+      return
+    }
     const rows = new Map(this.state.rows)
     for (const row of snapshot?.rows ?? []) {
       const previous = rows.get(row.id)
@@ -92,7 +102,7 @@ class WorkerDockFeed {
     void subscribeRuntimeRpc(
       this.target,
       'orchestration.workerDockSubscribe',
-      { party: this.party },
+      { party: this.party, includeRows: this.detailed },
       {
         onEvent: (value) => {
           if (!live()) {
@@ -116,13 +126,26 @@ class WorkerDockFeed {
       }
     }, lose)
   }
-  subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener)
-    if (this.listeners.size === 1 && !this.active) {
-      this.open()
+  private reconcile(): void {
+    const detailed = this.details.size > 0
+    if (detailed !== this.detailed) {
+      ++this.generation
+      this.active = false
+      this.stop?.()
+      this.stop = undefined
+      this.detailed = detailed
     }
+    this.open()
+  }
+  subscribe = (listener: () => void, detailed: boolean): (() => void) => {
+    this.listeners.add(listener)
+    if (detailed) {
+      this.details.add(listener)
+    }
+    this.reconcile()
     return () => {
       this.listeners.delete(listener)
+      this.details.delete(listener)
       queueMicrotask(() => {
         if (!this.listeners.size) {
           ++this.generation
@@ -130,6 +153,8 @@ class WorkerDockFeed {
           clearTimeout(this.retry)
           this.stop?.()
           this.stop = undefined
+        } else {
+          this.reconcile()
         }
       })
     }
@@ -140,15 +165,21 @@ class WorkerDockFeed {
       return
     }
     this.loading.add(anchor)
+    const generation = this.generation
+    const revision = this.state.snapshot?.revision
     try {
       const result = await callRuntimeRpc(this.target, 'orchestration.workerDockRead', {
         party: this.party,
-        revision: this.state.snapshot?.revision,
+        revision,
         anchor
       })
-      this.publish(WorkerDockSnapshot.parse(result), true)
+      if (generation === this.generation && this.listeners.size) {
+        this.publish(WorkerDockSnapshot.parse(result), true)
+      }
     } catch {
-      this.publish(null, false)
+      if (generation === this.generation && this.state.snapshot?.revision === revision) {
+        this.publish(null, false)
+      }
     } finally {
       this.loading.delete(anchor)
     }
@@ -160,11 +191,18 @@ function useWorkerDockSource<T>(
   target: RuntimeClientTarget,
   sessionId: string,
   visible: boolean,
+  presence: WorkerDockPresence | undefined,
+  detailed: boolean,
   select: (state: State) => T
 ) {
-  const key = `${target.kind === 'local' ? 'local' : target.environmentId}\0${sessionId}`
+  const windowVisible = useSyncExternalStore(
+    subscribeWindowParkVisibility,
+    getWindowParkVisible,
+    getWindowParkVisible
+  )
+  const key = `${target.kind === 'local' ? 'local' : target.environmentId}\0${sessionId}\0${presence?.revision.split(':')[0] ?? ''}`
   let feed = feeds.get(key)
-  if (!feed && isOrcaSessionId(sessionId)) {
+  if (!feed && presence && isOrcaSessionId(sessionId)) {
     feed = new WorkerDockFeed(target, formatOrcaSessionAddress(sessionId))
     feeds.set(key, feed)
     if (feeds.size > 32) {
@@ -179,8 +217,11 @@ function useWorkerDockSource<T>(
     }
   }
   const subscribe = useCallback(
-    (listener: () => void) => (visible && feed ? feed.subscribe(listener) : noopSubscribe()),
-    [feed, visible]
+    (listener: () => void) =>
+      visible && windowVisible && presence && feed
+        ? feed.subscribe(listener, detailed)
+        : noopSubscribe(),
+    [feed, visible, windowVisible, presence, detailed]
   )
   const read = useCallback(() => select(feed?.read() ?? EMPTY), [feed, select])
   const value = useSyncExternalStore(subscribe, read)
@@ -193,16 +234,19 @@ const readResults = (state: State) => state.snapshot?.results ?? NO_RESULTS
 export function useWorkerDockFeed(
   target: RuntimeClientTarget,
   sessionId: string,
-  visible: boolean
+  visible: boolean,
+  presence?: WorkerDockPresence,
+  detailed = true
 ) {
-  const source = useWorkerDockSource(target, sessionId, visible, readState)
+  const source = useWorkerDockSource(target, sessionId, visible, presence, detailed, readState)
   return { ...source.value, party: source.party, loadWindow: source.loadWindow }
 }
 export function useWorkerDockResults(
   target: RuntimeClientTarget,
   sessionId: string,
-  visible: boolean
+  visible: boolean,
+  presence?: WorkerDockPresence
 ) {
-  const source = useWorkerDockSource(target, sessionId, visible, readResults)
+  const source = useWorkerDockSource(target, sessionId, visible, presence, false, readResults)
   return { results: source.value, party: source.party }
 }

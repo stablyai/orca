@@ -1,20 +1,24 @@
+export { acknowledgeWorkerDock } from './worker-dock-acknowledgment'
 import { readWorkerDockSnapshot } from './worker-dock-read-snapshot'
-import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
 import { workerLaunchModel } from '../workers/launch/worker-launch-observation'
 import { z } from 'zod'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   type WorkerDockRead,
-  type WorkerDockAcknowledge,
   WorkerDockEntry,
   WorkerDockResultRef,
   WorkerDockResult,
   compareWorkerDockResultRefs,
+  compareWorkerDockEntries,
   type WorkerDockSnapshot
 } from '../../../../shared/orchestration/dock/worker-dock'
 import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import { OrchestrationError } from '../orchestration-error'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
+import {
+  readProviderFailureIdentities,
+  readProviderFailureRows
+} from './worker-dock-provider-failures'
 import { workerDockEligibleSql as eligible } from '../db/worker-dock-eligibility'
 
 export function workerDockSession(party: string): string {
@@ -33,6 +37,7 @@ const stateSql = `CASE f.state
 const changedSql = `CASE WHEN f.state = 'ready' THEN COALESCE((SELECT changed_at FROM worker_dock_activity WHERE dispatch_id = f.dispatch_id), f.changed_at) ELSE f.changed_at END`
 const identitySql = `json_array(f.home, f.source, 'worker', f.dispatch_id)`
 const Metadata = z.object({
+  kind: WorkerDockEntry.shape.kind,
   id: z.string(),
   dispatchId: z.string(),
   state: WorkerDockEntry.shape.state,
@@ -83,25 +88,35 @@ export function readWorkerDock(
         changedAt IS NULL, changedAt DESC, ${identitySql} COLLATE BINARY`)
       .all(source)
       .map((row) => Metadata.parse(row))
+    const providerFailures = readProviderFailureIdentities(db, source)
+    if (providerFailures?.length) {
+      identities.push(...providerFailures)
+      identities.sort(compareWorkerDockEntries)
+    }
     const found = request.anchor ? identities.findIndex((row) => row.id === request.anchor) : 0
     const center = Math.max(0, found)
     const start =
       request.direction === 'after'
         ? center
         : Math.max(0, center - (request.direction === 'before' ? 49 : 10))
-    const selected = identities.slice(start, start + 50)
+    const selected = request.includeRows === false ? [] : identities.slice(start, start + 50)
+    const workers = providerFailures?.length
+      ? selected.filter((row) => row.kind === 'worker')
+      : selected
     const details = new Map(
-      db.db
-        .prepare(`SELECT f.dispatch_id, f.source, f.changed_at, f.report_id, f.reason,
+      workers.length
+        ? db.db
+            .prepare(`SELECT f.dispatch_id, f.source, f.changed_at, f.report_id, f.reason,
       w.start_options, w.created_at, w.last_error, w.state,
       EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS remote, d.last_failure, COALESCE(t.task_title, t.spec) AS title, t.display_name
       FROM json_each(?) selected CROSS JOIN worker_dock_facts f ON f.dispatch_id = selected.value
       CROSS JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
       CROSS JOIN dispatch_contexts d ON d.id = f.dispatch_id CROSS JOIN tasks t ON t.id = d.task_id`)
-        .all(JSON.stringify(selected.map((row) => row.dispatchId)))
-        .map((row) => [row.dispatch_id, row])
+            .all(JSON.stringify(workers.map((row) => row.dispatchId)))
+            .map((row) => [row.dispatch_id, row])
+        : []
     )
-    const rows = selected.map((identity) => {
+    const rows = workers.map((identity) => {
       const row = details.get(identity.dispatchId)
       if (!row) {
         throw new Error('Worker dock snapshot changed inside its read transaction.')
@@ -121,6 +136,17 @@ export function readWorkerDock(
         ownerActionsAvailable: row.remote !== 1
       })
     })
+    if (workers.length < selected.length) {
+      rows.push(
+        ...readProviderFailureRows(
+          db,
+          selected.filter((row) => row.kind !== 'worker').map((row) => row.id)
+        )
+      )
+    }
+    if (identities.length === 0) {
+      db.workerDockSources.rememberEmpty(source)
+    }
     return {
       revision,
       results: readWorkerDockResultRefs(db, request.party),
@@ -130,39 +156,6 @@ export function readWorkerDock(
       anchor: identities[center]?.id ?? null
     }
   })
-}
-
-export function acknowledgeWorkerDock(
-  db: OrchestrationDb,
-  request: z.infer<typeof WorkerDockAcknowledge>
-): void {
-  const source = workerDockSession(request.party)
-  runLifecycleWriteTransaction(db.db, 'worker_dock_acknowledge', () => {
-    for (const { dispatchId } of request.settlements) {
-      if (db.getFederatedDispatch(dispatchId)) {
-        throw new OrchestrationError(
-          'remote_owner_actions_unsupported',
-          'Stop or clear this from the computer it runs on.'
-        )
-      }
-    }
-    for (const { dispatchId, settlement } of request.settlements) {
-      if (request.acknowledged) {
-        db.db
-          .prepare(`INSERT OR IGNORE INTO worker_dock_acknowledgments(source, dispatch_id, settlement)
-          SELECT source, dispatch_id, settlement FROM worker_dock_facts
-          WHERE source = ? AND dispatch_id = ? AND settlement = ? AND state IN ('failed', 'stopped', 'abandoned')`)
-          .run(source, dispatchId, settlement)
-      } else {
-        db.db
-          .prepare(
-            `DELETE FROM worker_dock_acknowledgments WHERE source = ? AND dispatch_id = ? AND settlement = ?`
-          )
-          .run(source, dispatchId, settlement)
-      }
-    }
-  })
-  db.crewChanges.notify(new Set(['topology']))
 }
 
 export function readWorkerDockResult(

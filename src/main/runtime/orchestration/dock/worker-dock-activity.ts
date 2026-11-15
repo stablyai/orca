@@ -19,7 +19,8 @@ export function refreshWorkerDockActivity(
     | 'readObservedAgentStatusPaneIdentityFn'
     | 'getAgentStatusTerminalHandleForPaneKey'
     | 'getTerminalProcessIncarnation'
-  >
+  >,
+  panes?: Set<string>
 ): number | null {
   const source = workerDockSession(party)
   const now = Date.now()
@@ -29,6 +30,15 @@ export function refreshWorkerDockActivity(
     FROM worker_dock_facts f INDEXED BY worker_dock_source_state
     JOIN dispatch_contexts d ON d.id = f.dispatch_id WHERE f.source = ? AND f.state = 'ready'`)
     .all(source)
+  panes?.clear()
+  for (const row of candidates) {
+    if (typeof row.assignee_pane_key === 'string') {
+      panes?.add(row.assignee_pane_key)
+    }
+  }
+  if (!candidates.length) {
+    return null
+  }
   const statuses = runtime.getAgentStatusSnapshotFn?.() ?? []
   const byPane = new Map(statuses.map((status) => [status.paneKey, status]))
   const sessionFor = createSessionWorkerLivenessReader(
