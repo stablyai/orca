@@ -29,8 +29,8 @@ const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 // Codex recorded the account's conversations under its own path in the shared index, a home
 // that was busy at every launch may still hold its only copy, and a merge keeps conflicting
 // copies (and set-aside rollout forms, listed in the cleanup manifest) beside the links; all of
-// it outlives the login. The account's own databases stay too: deleting them waits for a later
-// release that has seen the shared store work.
+// it outlives the login. A home that was shared (it has the manifest) keeps its own databases
+// too: deleting them waits for a later release that has seen the shared store work.
 const KEPT_HISTORY = [
   'sessions',
   'archived_sessions',
@@ -45,7 +45,7 @@ const KEEP_ON_REMOVAL_SCRIPT = [
   '  case "${1##*/}" in',
   '    *.orca-profile-merge) return 0 ;;',
   `    ${KEPT_HISTORY.join(' | ')}) return 0 ;;`,
-  '    *.sqlite | *.sqlite-wal | *.sqlite-shm) return 0 ;;',
+  `    *.sqlite | *.sqlite-wal | *.sqlite-shm) [ -f "$home/${HISTORY_CLEANUP_MANIFEST}" ] ;;`,
   '    *) return 1 ;;',
   '  esac',
   '}',
@@ -70,10 +70,11 @@ const KEEP_ON_REMOVAL_SCRIPT = [
  */
 async function removeManagedHomeKeepingSharedHistory(home: string): Promise<boolean> {
   const entries = await readdir(home, { withFileTypes: true })
+  const sharedOnce = entries.some((entry) => entry.name === HISTORY_CLEANUP_MANIFEST)
   const kept = (entry: Dirent): boolean =>
     KEPT_HISTORY.includes(entry.name) ||
     entry.name.endsWith(MERGE_PENDING_SUFFIX) ||
-    (entry.isFile() && CODEX_DATABASE_FILE.test(entry.name))
+    (sharedOnce && entry.isFile() && CODEX_DATABASE_FILE.test(entry.name))
   for (const entry of entries.filter((candidate) => !kept(candidate))) {
     const path = join(home, entry.name)
     if (entry.isSymbolicLink()) {

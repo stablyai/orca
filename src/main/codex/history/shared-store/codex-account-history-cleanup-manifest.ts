@@ -314,22 +314,24 @@ export async function inventoryCodexHistoryLeftBehind(args: {
   accountHome: string
   storeHome: string
 }): Promise<void> {
-  await updateManifest(args.accountHome, async (current) => {
-    if (!current) {
-      throw new Error('No cleanup manifest to inventory')
-    }
-    const previous = new Map(current.rollouts.map((rollout) => [rollout.path, rollout]))
-    const pairs = await storeTwinPairs(args.storeHome)
-    if (pairs.length > 0) {
-      console.warn(
-        `[codex-account-history] ${pairs.length} rollouts are in ${args.storeHome} as both .jsonl and .jsonl.zst; both kept`
-      )
-    }
-    return {
-      ...current,
-      rollouts: await leftBehindRollouts(args.accountHome, args.storeHome, previous),
-      storeTwinPairs: pairs,
-      updatedAt: new Date().toISOString()
-    }
-  })
+  const before = await readManifest(args.accountHome)
+  if (!before || before === 'newer') {
+    return
+  }
+  // Walked outside the write, which then touches only these fields: a pass (or, in WSL, another
+  // process) may rewrite the streak meanwhile, and a launch never waits behind the walk.
+  const previous = new Map(before.rollouts.map((rollout) => [rollout.path, rollout]))
+  const rollouts = await leftBehindRollouts(args.accountHome, args.storeHome, previous)
+  const pairs = await storeTwinPairs(args.storeHome)
+  if (pairs.length > 0) {
+    console.warn(
+      `[codex-account-history] ${pairs.length} rollouts are in ${args.storeHome} as both .jsonl and .jsonl.zst; both kept`
+    )
+  }
+  await updateManifest(args.accountHome, async (current) => ({
+    ...(current ?? before),
+    rollouts,
+    storeTwinPairs: pairs,
+    updatedAt: new Date().toISOString()
+  }))
 }
