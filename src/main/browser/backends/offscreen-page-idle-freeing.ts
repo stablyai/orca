@@ -1,7 +1,6 @@
 import type { WebContents } from 'electron'
 import type { AgentBrowserBridge } from '../agent-browser/agent-browser-bridge'
 import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
-import { readBrowserGuestDiscardProtection } from '../guest-lifecycle/manager/registration/browser-guest-discard-protection'
 import { getBrowserJavaScriptDialog } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import { rendererPublicationThrottle } from '../../window/visibility/renderer-publication-throttle'
 import {
@@ -16,7 +15,8 @@ export function memorySaverIdleMs(settings: BrowserMemorySaverGlobalSettings | u
 }
 
 /** Freeing would retarget page-less commands to another page, or drop the agent's request routes,
- * HAR capture, an open dialog, the page's popups, or what the desktop Memory Saver keeps. */
+ * HAR capture, an open dialog, the page's popups, or a page playing sound. Serve pages have no
+ * edit observer, so unsaved form input is not detected; a woken page reloads like a discarded tab. */
 export function mustKeepOffscreenPage(
   browserPageId: string,
   contents: WebContents,
@@ -30,37 +30,51 @@ export function mustKeepOffscreenPage(
     deps.bridge?.isRoutedPage(browserPageId) === true ||
     deps.bridge?.holdsPageNetworkState(browserPageId) === true ||
     getBrowserJavaScriptDialog(contents.id) !== null ||
-    readBrowserGuestDiscardProtection(contents).protection === 'protected' ||
+    contents.isCurrentlyAudible() ||
     deps.browserManager.getPopupPages().some((popup) => popup.openerBrowserPageId === browserPageId)
   )
 }
+
+const SETTING_RECHECK_MS = 60 * 60_000
 
 /** Fires once a page has gone the idle time without a command, capture or viewer lease. */
 export class OffscreenPageIdleClock {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly untracks = new Map<string, () => void>()
 
-  // Read on every arm, so a changed setting applies from each page's next idle period.
-  constructor(private readonly idleMs: () => number) {}
+  // Read whenever a timer fires, so turning Memory Saver off or changing its hours applies to
+  // pages already idle; while it is off, pages recheck the setting hourly.
+  constructor(
+    private readonly idleMs: () => number,
+    private readonly now: () => number = Date.now
+  ) {}
 
   track(browserPageId: string, contents: WebContents, onIdle: () => void): void {
+    let idleSince = this.now()
     const arm = (): void => {
       this.clear(browserPageId)
       const idleMs = this.idleMs()
-      if (idleMs <= 0) {
+      const remaining = idleMs > 0 ? idleSince + idleMs - this.now() : SETTING_RECHECK_MS
+      if (idleMs > 0 && remaining <= 0) {
+        onIdle()
         return
       }
       this.timers.set(
         browserPageId,
         setTimeout(() => {
           this.timers.delete(browserPageId)
-          onIdle()
-        }, idleMs)
+          arm()
+        }, remaining)
       )
     }
-    const stopObserving = rendererPublicationThrottle.observe(contents, (leased) =>
-      leased ? this.clear(browserPageId) : arm()
-    )
+    const stopObserving = rendererPublicationThrottle.observe(contents, (leased) => {
+      if (leased) {
+        this.clear(browserPageId)
+      } else {
+        idleSince = this.now()
+        arm()
+      }
+    })
     this.untracks.set(browserPageId, () => {
       stopObserving()
       this.clear(browserPageId)
