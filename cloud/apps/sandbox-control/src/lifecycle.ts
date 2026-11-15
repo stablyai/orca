@@ -730,7 +730,7 @@ async function boot(
   const [, connection] = await Promise.all([
     needsPolicy
       ? options.timer.time('policy', () =>
-          deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed, prep.minted?.token, prep.memberPlaceholders, prep.firewall))
+          writeBootPolicy(deps, routed, state.session.id, egressPolicy(deps, routed, prep.minted?.token, prep.memberPlaceholders, prep.firewall))
         )
       : Promise.resolve(),
     options.timer.time('orcad', async () => {
@@ -895,6 +895,32 @@ export async function rowsToScrub(db: D1Database, limit = 25): Promise<SandboxRo
     .bind(limit)
     .all<SandboxRow>()
   return results
+}
+
+const BOOT_POLICY_BACKOFF_MS = [250, 1000, 3000]
+
+/**
+ * A wake's policy write, with backoff. The record it resumes from was scrubbed (A4), so until this lands the
+ * firewall answers the placeholders itself (keys-withheld or signed-out errors the agent prints): fail closed,
+ * never a hang. If it still fails the workspace opens anyway, marked stale for reconcile's next tick.
+ */
+async function writeBootPolicy(deps: LifecycleDeps, row: SandboxRow, sessionId: string, policy: ReturnType<typeof egressPolicy>): Promise<void> {
+  let failure: unknown = null
+  for (let attempt = 0; attempt <= BOOT_POLICY_BACKOFF_MS.length; attempt++) {
+    try {
+      await deps.provider.updateNetworkPolicy(sessionId, policy)
+      return
+    } catch (error) {
+      failure = error
+      const delay = BOOT_POLICY_BACKOFF_MS[attempt]
+      if (delay !== undefined) {
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+  }
+  const code = failure instanceof ProviderError ? (failure.code ?? `status_${failure.status}`) : failure instanceof Error ? failure.name : 'unknown'
+  console.error(JSON.stringify({ event: 'policy_apply_failed', sandboxId: row.id, reason: 'boot', narrowing: false, code }))
+  await deps.db.prepare('UPDATE sandboxes SET policy_stale_at = ? WHERE id = ?').bind(deps.now(), row.id).run().catch(() => undefined)
 }
 
 /** Stamps what a boot's policy was compiled from (A4/§7.2): the create and wake writes don't go through apply. */

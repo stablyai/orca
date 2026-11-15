@@ -73,3 +73,43 @@ describe('A4: stopped records are token-free', () => {
     expect((await t.row()).policy_scrubbed_at).toBeNull()
   })
 })
+
+describe('A4: the post-resume write retries, and a lasting failure is visible, not a hang', () => {
+  it('retries with backoff; if it never lands, the wake still answers and the row is stale for reconcile', async () => {
+    const { vi } = await import('vitest')
+    const t = await setup()
+    expect((await t.h.call('POST', `/v1/sandboxes/${t.id}/suspend`, { bearer: t.mia })).status).toBe(200)
+    const life = (await lifecycleDeps(t.h.env, t.h.deps))!
+    let calls = 0
+    const deps: LifecycleDeps = {
+      ...life,
+      provider: {
+        ...life.provider,
+        updateNetworkPolicy: async () => {
+          calls++
+          throw new ProviderError(502, 'bad_gateway')
+        },
+        // The pre-resume record write fails too: the session resumes from the scrubbed record.
+        updateRecordNetworkPolicy: async () => {
+          throw new ProviderError(502, 'bad_gateway')
+        }
+      }
+    }
+    vi.useFakeTimers({ shouldAdvanceTime: true, advanceTimeDelta: 50 })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { resumeSandbox } = await import('../src/lifecycle')
+    const woke = resumeSandbox(deps, await t.row())
+    await vi.advanceTimersByTimeAsync(10_000)
+    await woke
+    vi.useRealTimers()
+    expect(calls).toBe(4)
+    expect((await t.row()).status).toBe('running')
+    expect((await t.row()).policy_stale_at).not.toBeNull()
+    expect(errors.mock.calls.map(([line]) => String(line)).join('\n')).toContain('"reason":"boot"')
+    errors.mockRestore()
+    // Meanwhile the record the session resumed from answers placeholders itself (keys withheld), never hangs.
+    const record = JSON.stringify(t.box().recordPolicy)
+    expect(record).toContain('Orca Cloud didn')
+    expect(record).not.toContain(KEY)
+  })
+})
