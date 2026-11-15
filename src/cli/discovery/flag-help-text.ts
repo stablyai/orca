@@ -1,6 +1,8 @@
 export const FLAG_HELP_TEXT: Record<string, string> = {
   'external-worktree-visibility':
     '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
+  'browser-profile':
+    '--browser-profile <id>|inherit  Browser profile for new tabs in this repo, or inherit the Browser setting',
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
   'agent-wait': "--agent-wait           Add each agent row's terminal wait verdict to JSON output",
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
