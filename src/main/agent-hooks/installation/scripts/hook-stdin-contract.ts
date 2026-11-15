@@ -80,15 +80,32 @@ export const POSIX_HOOK_STDIN_EXEC: PosixHookStdinReader = {
   prelude: []
 }
 
+// Zero Orca context anywhere: no pane, no endpoint file, nothing downstream can succeed. Any one
+// variable present keeps the full path — an endpoint file may still refresh stale coordinates.
+const POSIX_HOOK_ORCA_CONTEXT_GUARD =
+  'if [ -z "${ORCA_AGENT_HOOK_PORT:-}" ] && [ -z "${ORCA_AGENT_HOOK_TOKEN:-}" ] && [ -z "${ORCA_PANE_KEY:-}" ] && [ -z "${ORCA_AGENT_HOOK_ENDPOINT:-}" ]; then'
+
+// A hook whose registration outlived its Orca pays this drain, not an interpreter cold start.
+const POSIX_HOOK_NO_CONTEXT_EXIT: readonly string[] = [
+  POSIX_HOOK_ORCA_CONTEXT_GUARD,
+  `  ${POSIX_HOOK_STDIN_DRAIN_COMMAND}`,
+  '  exit 0',
+  'fi'
+]
+
 // POSIX hooks must drain stdin before any no-op exit to prevent agent-side broken pipes.
 export function buildPosixHookPayloadCapture(
   emptyPayloadPolicy: PosixHookEmptyPayloadPolicy = 'exit',
-  stdinReader: PosixHookStdinReader = { reader: POSIX_HOOK_STDIN_READER, prelude: [] }
+  stdinReader: PosixHookStdinReader = { reader: POSIX_HOOK_STDIN_READER, prelude: [] },
+  options: { stdinHeldOpen?: boolean } = {}
 ): string[] {
   const emptyPayloadLines =
     emptyPayloadPolicy === 'empty-object' ? ["  payload='{}'"] : ['  exit 0']
   return [
     ...stdinReader.prelude,
+    // Writers that keep stdin open need the bounded reader even without Orca context, so those
+    // callers pass stdinHeldOpen and keep the capture-first order.
+    ...(options.stdinHeldOpen === true ? [] : POSIX_HOOK_NO_CONTEXT_EXIT),
     `payload=$(${stdinReader.reader})`,
     'if [ -z "$payload" ]; then',
     ...emptyPayloadLines,

@@ -34,7 +34,10 @@ export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): strin
 
   return [
     '#!/bin/sh',
-    ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_JSON_STDIN),
+    // Grok keeps the pipe open, so the bounded reader must run even without Orca context.
+    ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_JSON_STDIN, {
+      stdinHeldOpen: true
+    }),
     ...buildPosixHookSpoolLines('grok'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',

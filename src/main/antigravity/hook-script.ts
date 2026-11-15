@@ -47,8 +47,11 @@ export function getManagedScript(
     '    printf "{}\\n"',
     '    ;;',
     'esac',
-    // Events without stdin still need a status post.
-    ...buildPosixHookPayloadCapture('empty-object', POSIX_HOOK_JSON_STDIN),
+    // Events without stdin still need a status post; agy keeps the pipe open, so the bounded
+    // reader must run even without Orca context.
+    ...buildPosixHookPayloadCapture('empty-object', POSIX_HOOK_JSON_STDIN, {
+      stdinHeldOpen: true
+    }),
     ...buildHookProcessCapture(),
     ...buildPosixHookSpoolLines('antigravity', 'ORCA_ANTIGRAVITY_EVENT'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
