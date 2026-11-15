@@ -22,8 +22,24 @@ export function isWindowCloseCheckpointInProgress(): boolean {
   return windowCloseCheckpointInProgress
 }
 
+let pendingCloseCheckpoint: Promise<boolean> | null = null
+
+/** Null means an earlier close already awaits this write; main counts its answer for the newer request too. */
+export async function prepareWindowCloseCheckpoint(): Promise<boolean | null> {
+  if (pendingCloseCheckpoint) {
+    await pendingCloseCheckpoint
+    return null
+  }
+  pendingCloseCheckpoint = stageWindowCloseCheckpoint()
+  try {
+    return await pendingCloseCheckpoint
+  } finally {
+    pendingCloseCheckpoint = null
+  }
+}
+
 /** Close proceeds only after the checkpoint it staged is durable; a failed write cancels the close once. */
-export async function prepareWindowCloseCheckpoint(): Promise<boolean> {
+async function stageWindowCloseCheckpoint(): Promise<boolean> {
   windowCloseCheckpointInProgress = true
   let accepted: boolean
   try {
@@ -95,7 +111,11 @@ export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }):
       activeHandler(data)
       return
     }
-    if (await prepareWindowCloseCheckpoint()) {
+    const accepted = await prepareWindowCloseCheckpoint()
+    if (accepted === null) {
+      return
+    }
+    if (accepted) {
       window.api.ui.confirmWindowClose()
       return
     }

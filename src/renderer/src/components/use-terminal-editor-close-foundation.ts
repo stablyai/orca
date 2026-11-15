@@ -38,6 +38,9 @@ export function useTerminalEditorCloseFoundation(
   const confirmNativeWindowClose = useCallback(async () => {
     // Capture only after every close guard commits so canceled process prompts cannot consume App’s unload guard.
     const accepted = await prepareWindowCloseCheckpoint()
+    if (accepted === null) {
+      return
+    }
     if (!accepted) {
       // Report checkpoint-vetoed quits instead of silently trapping the window (#15352); dirty-file vetoes provide no reason.
       showShutdownCheckpointFailureToast()

@@ -9,6 +9,7 @@ import {
 import {
   dispatchWindowCloseRequest,
   isWindowCloseCheckpointInProgress,
+  prepareWindowCloseCheckpoint,
   registerWindowCloseGuard,
   setWindowCloseRequestHandler
 } from './window-close-request-coordinator'
@@ -76,6 +77,20 @@ describe('window-close-request-coordinator', () => {
       'Quit canceled: the session snapshot could not be saved (sendSync payload rejected).'
     )
     expect(consumeShutdownCheckpointFailureReason()).toBeNull()
+  })
+
+  it('counts one failed write once when a second close overlaps it', async () => {
+    awaitBeforeUnloadCheckpoint.mockRejectedValueOnce(new Error('disk full'))
+
+    const results = await Promise.all([
+      prepareWindowCloseCheckpoint(),
+      prepareWindowCloseCheckpoint()
+    ])
+
+    expect(results).toEqual([false, null])
+    expect(awaitBeforeUnloadCheckpoint).toHaveBeenCalledTimes(1)
+    // A later attempt stages its own write, which clears the failure.
+    await expect(prepareWindowCloseCheckpoint()).resolves.toBe(true)
   })
 
   it('cancels a close once when its staged checkpoint fails to reach disk, then closes anyway', async () => {
