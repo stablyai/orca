@@ -13,7 +13,7 @@ import {
   type ProcessTableRow
 } from '../pty/process-retirement/pty-process-table-parser'
 
-const PROCESS_ROW_TIMEOUT_MS = 2_000
+export const PROCESS_ROW_TIMEOUT_MS = 2_000
 
 /** Linux /proc starts use clock ticks; ps lstart requires second-boundary PID-reuse checks. */
 export type ProviderProcessRow = Pick<ProcessTableRow, 'pid' | 'ppid' | 'pgid' | 'startedAt'> & {

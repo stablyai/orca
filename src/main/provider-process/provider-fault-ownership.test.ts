@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { terminateProviderFaultDescendants } from './provider-fault-ownership'
 import type { ProviderProcessRow, ProcessRowRead } from './provider-process-row-read'
+import { DirectProviderStop } from './direct-provider-stop'
+import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import type { ProcessTableRow } from '../pty/process-retirement/pty-process-table-parser'
 
 const NOW = Date.parse('2026-11-15T12:00:00.100Z')
@@ -103,4 +105,83 @@ it('never uses a recycled root to authorize escalation of birth-second descendan
   await vi.runAllTimersAsync()
   await expect(pending).resolves.toBe('live')
   expect(sendSignal).not.toHaveBeenCalled()
+})
+
+it('allows both bounded identity reads around a slow process-table capture', async () => {
+  const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 900))
+  let live = true
+  const sendSignal = vi.fn((_pid: number, signal: NodeJS.Signals) => {
+    if (signal === 'SIGKILL') {
+      live = false
+    }
+  })
+  const pending = terminateProviderFaultDescendants(identity, {
+    readProcessRow: async () => {
+      await wait()
+      return leader
+    },
+    readTable: async () => {
+      await wait()
+      return { rows: [root, ...(live ? [tool] : [])], capturedAtMs: Date.now() }
+    },
+    sendSignal
+  })
+  await vi.runAllTimersAsync()
+  await expect(pending).resolves.toBe('exited')
+  expect(sendSignal.mock.calls).toEqual([
+    [200, 'SIGTERM'],
+    [200, 'SIGKILL']
+  ])
+})
+
+it('retries an unreadable root without treating it as a recycled identity', async () => {
+  let reads = 0
+  let live = true
+  const bornNow = { ...tool, startedAt: new Date(NOW).toString() }
+  const sendSignal = vi.fn((_pid: number, signal: NodeJS.Signals) => {
+    if (signal === 'SIGKILL') {
+      live = false
+    }
+  })
+  const pending = terminateProviderFaultDescendants(identity, {
+    readProcessRow: async () => (++reads === 3 ? 'unverifiable' : leader),
+    readTable: async () => ({ rows: [root, ...(live ? [bornNow] : [])], capturedAtMs: Date.now() }),
+    sendSignal
+  })
+  await vi.runAllTimersAsync()
+  await expect(pending).resolves.toBe('exited')
+  expect(sendSignal.mock.calls).toEqual([
+    [200, 'SIGTERM'],
+    [200, 'SIGKILL']
+  ])
+})
+
+it('carries the original stdin deadline across watcher loss', async () => {
+  const spec: ProviderSpawnSpec = {
+    program: 'helper',
+    command: 'agent',
+    args: [],
+    env: {},
+    cwd: '/tmp',
+    detached: true,
+    supervised: true,
+    lifetime: 'session',
+    closeRequest: 'stdin-end',
+    stdinEndGraceMs: 1000,
+    sigtermGraceMs: 3000
+  }
+  const stop = new DirectProviderStop(
+    spec,
+    () => undefined,
+    () => false
+  )
+  const term = vi.fn()
+  stop.stdinEnded()
+  await vi.advanceTimersByTimeAsync(800)
+  stop.ownerLost(false, term)
+  await vi.advanceTimersByTimeAsync(199)
+  expect(term).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(term).toHaveBeenCalledOnce()
+  stop.complete()
 })

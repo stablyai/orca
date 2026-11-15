@@ -1,3 +1,4 @@
+import { readPosixProcessRow } from './provider-process-row-read'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -11,6 +12,7 @@ import { readProviderLeaderOutcome } from './provider-leader-outcome'
 import { profileStateAccessBootIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
 import {
   proveProviderProcessIdentity,
+  sameProviderProcess,
   providerGroupAbsent,
   sweepOrphanedProviderGroup
 } from './provider-group-orphan-guard'
@@ -155,7 +157,7 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
             '-e',
             String.raw`
       require('node:child_process').spawn(process.execPath, ['-e',
-        "process.on('SIGTERM', () => {}); process.stdout.write('ready\\n'); setInterval(() => {}, 60000)"
+        "process.on('SIGTERM', () => {}); process.stdout.write(JSON.stringify({ tool: process.pid }) + '\\n'); setInterval(() => {}, 60000)"
       ], { stdio: ['ignore', 'inherit', 'inherit'] })
       setInterval(() => {}, 60000)
     `
@@ -172,7 +174,16 @@ describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => 
         child.kill('SIGKILL')
         await closed
       })
-      await outputLine(child.stdout, (line) => line === 'ready')
+      const ready = await outputLine(child.stdout, (line) => line.startsWith('{'))
+      const tool = await readPosixProcessRow(JSON.parse(ready).tool)
+      cleanups.push(async () => {
+        if (tool && tool !== 'unverifiable') {
+          const live = await readPosixProcessRow(tool.pid)
+          if (live && live !== 'unverifiable' && sameProviderProcess(tool, live)) {
+            process.kill(live.pid, 'SIGKILL')
+          }
+        }
+      })
       const directory = join(state.root, 'provider-processes')
       const [name] = await readdir(directory)
       const record = JSON.parse(await readFile(join(directory, name), 'utf8'))

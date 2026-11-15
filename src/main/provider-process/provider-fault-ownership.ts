@@ -11,12 +11,13 @@ import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
 } from '../pty/process-retirement/pty-descendant-exit-verification'
-import {
-  DESCENDANT_SNAPSHOT_TIMEOUT_MS,
-  type ProcessTableReader
-} from '../pty/process-retirement/pty-descendant-fresh-table'
+import type { ProcessTableReader } from '../pty/process-retirement/pty-descendant-fresh-table'
 import { sameProviderProcess, type ProviderGroupIdentity } from './provider-group-orphan-guard'
-import { readPosixProcessRow, type ProcessRowRead } from './provider-process-row-read'
+import {
+  PROCESS_ROW_TIMEOUT_MS,
+  readPosixProcessRow,
+  type ProcessRowRead
+} from './provider-process-row-read'
 import type { publishProviderOwnership } from './provider-ownership-journal'
 
 export class ProviderFaultOwnership {
@@ -81,16 +82,17 @@ export async function terminateProviderFaultDescendants(
       hasUnambiguousStartTime(expected.startedAt, capturedAtMs))
   const ownedTable: ProcessTableReader = async (timeoutMs) => {
     const sequence = ++readSequence
-    const deadline = performance.now() + (timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS)
     const before = rootRetired ? null : await readRow(expected.pid)
-    const remaining = deadline - performance.now()
-    if (remaining <= 0) {
-      throw new Error('Provider ownership read timed out')
+    if (before === 'unverifiable') {
+      throw new Error('Provider ownership is unreadable')
     }
-    const capture = await readTable(remaining)
+    const capture = await readTable(timeoutMs)
     const roots = capture.rows.filter((row) => row.pid === expected.pid)
     const root = roots.length === 1 ? roots[0] : undefined
-    const after = rootRetired || performance.now() >= deadline ? null : await readRow(expected.pid)
+    const after = rootRetired ? null : await readRow(expected.pid)
+    if (after === 'unverifiable') {
+      throw new Error('Provider ownership is unreadable')
+    }
     const expectedStart =
       expected.startResolution === 'microsecond'
         ? Number(expected.startedAt.split(':')[1]) * 1_000
@@ -116,7 +118,9 @@ export async function terminateProviderFaultDescendants(
     }
     return capture
   }
-  ownedTable.deadlineAllowanceMs = readTable.deadlineAllowanceMs
+  // The table keeps its own budget; the two bounded identity reads surround it.
+  ownedTable.deadlineAllowanceMs = (timeoutMs) =>
+    2 * PROCESS_ROW_TIMEOUT_MS + (readTable.deadlineAllowanceMs?.(timeoutMs) ?? 0)
   const snapshot = await captureDescendantSnapshot(expected.pid, { readTable: ownedTable })
   if (!snapshot?.root || rootRetired) {
     return 'unverifiable'

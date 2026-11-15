@@ -1,3 +1,5 @@
+import { readPosixProcessRow, type ProcessRowRead } from './provider-process-row-read'
+import { sameProviderProcess } from './provider-group-orphan-guard'
 import type { ChildProcess } from 'node:child_process'
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { once } from 'node:events'
@@ -62,6 +64,7 @@ function cliWithDetachedTool(onStop: string): string {
 
 function spawnCliWithTool(onStop: string) {
   let parent: ChildProcess | undefined
+  let toolIdentity: ProcessRowRead = null
   const managed = spawnManagedProviderProcess(
     { command: process.execPath, cwd: state.root, args: ['-e', cliWithDetachedTool(onStop)] },
     {
@@ -83,6 +86,12 @@ function spawnCliWithTool(onStop: string) {
   cleanups.push(async () => {
     managed.child.kill('SIGKILL')
     await closed
+    if (toolIdentity && toolIdentity !== 'unverifiable') {
+      const live = await readPosixProcessRow(toolIdentity.pid)
+      if (live && live !== 'unverifiable' && sameProviderProcess(toolIdentity, live)) {
+        process.kill(live.pid, 'SIGKILL')
+      }
+    }
   })
   const started = (async () => {
     await once(managed.child.stdout, 'data')
@@ -92,6 +101,7 @@ function spawnCliWithTool(onStop: string) {
     if (!parent?.pid || !leaderPid || !toolPid) {
       throw new Error('Missing native fixture')
     }
+    toolIdentity = await readPosixProcessRow(toolPid)
     const parentExited = once(parent, 'exit')
     return { parentPid: parent.pid, leaderPid, toolPid, parentExited }
   })()
