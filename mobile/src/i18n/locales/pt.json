@@ -1267,7 +1267,11 @@
     "native-chat": {
       "composer": {
         "planMode": "Plano",
-        "exitPlanMode": "Sair do modo de planejamento"
+        "exitPlanMode": "Sair do modo de planejamento",
+        "permissionAsk": "Pedir aprovação",
+        "permissionAcceptEdits": "Aceitar edições",
+        "permissionAuto": "Aprovar por mim",
+        "permissionFullAccess": "Acesso total"
       },
       "turnDiff": {
         "changedFiles_one": "{{count}} arquivo alterado",

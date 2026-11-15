@@ -1143,7 +1143,11 @@
     "native-chat": {
       "composer": {
         "planMode": "計畫",
-        "exitPlanMode": "結束計畫模式"
+        "exitPlanMode": "結束計畫模式",
+        "permissionAsk": "請求核准",
+        "permissionAcceptEdits": "接受編輯",
+        "permissionAuto": "替我核准",
+        "permissionFullAccess": "完整存取權"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"

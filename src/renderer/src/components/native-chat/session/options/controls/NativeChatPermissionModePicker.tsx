@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { ChevronDown, Settings2 } from 'lucide-react'
+import { ChevronDown, PencilRuler, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -119,13 +119,18 @@ function NativeChatPermissionModePickerInner({
   const t = useTranslate()
   useUiLanguageRevision()
   const title = nativeChatPermissionPickerTitle(t)
-  // Own shows the mode the agent reports; before it reports, name the delegation.
-  const shown = current === 'own' && reported !== undefined ? reported : current
+  // Own shows the mode the agent reports when it has a translated name; otherwise name the delegation.
+  const own = current === 'own'
+  const shown = own && isAgentChatPermissionMode(reported) ? reported : current
+  const ownPlan = own && reported === 'plan'
   const selectedLabel = isAgentChatPermissionMode(shown)
     ? nativeChatPermissionModeLabel(shown, t)
-    : shown === 'own'
-      ? t('settings.agents.permissionOwnAll', "Agents' own settings")
-      : (currentLabel ?? inherit?.label ?? title)
+    : ownPlan
+      ? t('components.native-chat.composer.planMode', 'Plan')
+      : own
+        ? t('settings.agents.permissionOwnAll', "Agents' own settings")
+        : (currentLabel ?? inherit?.label ?? title)
+  const Icon = ownPlan ? PencilRuler : Settings2
   const activeLabel = isAgentChatPermissionMode(activeValue)
     ? nativeChatPermissionModeLabel(activeValue, t)
     : activeValue === 'own'
@@ -163,7 +168,7 @@ function NativeChatPermissionModePickerInner({
                 <NativeChatPermissionModeName mode={shown} label={label} truncate />
               ) : (
                 <>
-                  <Settings2 className="size-3.5 shrink-0" aria-hidden />
+                  <Icon className="size-3.5 shrink-0" aria-hidden />
                   <span data-composer-label className="truncate">
                     {label}
                   </span>

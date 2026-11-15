@@ -1328,7 +1328,11 @@
       },
       "composer": {
         "planMode": "计划",
-        "exitPlanMode": "退出计划模式"
+        "exitPlanMode": "退出计划模式",
+        "permissionAsk": "请求批准",
+        "permissionAcceptEdits": "接受编辑",
+        "permissionAuto": "替我批准",
+        "permissionFullAccess": "完全访问"
       },
       "goal": {
         "sentAsGoal": "作为目标发送"

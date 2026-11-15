@@ -5,6 +5,10 @@ import {
   selectedNativeChatChoice
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import {
+  isAgentChatPermissionMode,
+  type AgentChatPermissionMode
+} from '../../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 
 /** The value a drill-in row shows beside its label; desktop lists the choices in place instead. */
 export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescriptor): string {
@@ -24,10 +28,13 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
     descriptor.kind.type === 'select' &&
     descriptor.kind.currentValue === 'own'
   ) {
-    // The descriptor names the mode the agent reports running in, once it has reported one.
-    return descriptor.kind.reportedValue !== undefined && descriptor.description
-      ? descriptor.description
-      : translate('settings.agents.permissionOwnAll', "Agents' own settings")
+    // Name the mode the agent reports running in when it has a translated name.
+    const reported = descriptor.kind.reportedValue
+    return isAgentChatPermissionMode(reported)
+      ? mobilePermissionModeLabel(reported)
+      : reported === 'plan'
+        ? translate('components.native-chat.composer.planMode', 'Plan')
+        : translate('settings.agents.permissionOwnAll', "Agents' own settings")
   }
   const choice = selectedNativeChatChoice(descriptor)
   if (!choice) {
@@ -97,4 +104,28 @@ function deferredPermissionSummary(
       { saved, active: activeLabel }
     )
   }
+}
+
+function mobilePermissionModeLabel(mode: AgentChatPermissionMode): string {
+  switch (mode) {
+    case 'ask':
+      return translate('components.native-chat.composer.permissionAsk', 'Ask for approval')
+    case 'accept-edits':
+      return translate('components.native-chat.composer.permissionAcceptEdits', 'Accept edits')
+    case 'auto':
+      return translate('components.native-chat.composer.permissionAuto', 'Approve for me')
+    case 'full-access':
+      return translate('components.native-chat.composer.permissionFullAccess', 'Full access')
+  }
+}
+
+/** The mode a chat runs in: Own follows what the agent reports, other choices are their own value. */
+export function mobileEffectivePermissionValue(
+  descriptor: SessionOptionDescriptor | undefined
+): string | undefined {
+  if (descriptor?.kind.type !== 'select') {
+    return undefined
+  }
+  const { currentValue, reportedValue } = descriptor.kind
+  return currentValue === 'own' && reportedValue !== undefined ? reportedValue : currentValue
 }

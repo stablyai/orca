@@ -1629,7 +1629,11 @@
       "composer": {
         "planMode": "Plan",
         "exitPlanMode": "Exit plan mode",
-        "pastedTextLabel": "Pasted text"
+        "pastedTextLabel": "Pasted text",
+        "permissionAsk": "Ask for approval",
+        "permissionAcceptEdits": "Accept edits",
+        "permissionAuto": "Approve for me",
+        "permissionFullAccess": "Full access"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
