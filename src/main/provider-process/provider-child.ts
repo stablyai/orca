@@ -16,7 +16,6 @@ export type ProviderChild = Pick<
   | 'kill'
 > &
   EventEmitter & {
-    spawnAbsenceKnown?: boolean
     /** Actual CLI writer, which differs from the root on the compatibility path. */
     readonly writerPid?: number
     ready?: Promise<void>

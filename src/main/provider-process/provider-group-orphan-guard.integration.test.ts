@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createProviderSpawnSpec, resolveProviderExecPath } from './provider-process-supervisor'
 import { spawnProviderProcess } from './provider-process-spawn'
 import { readProviderLeaderOutcome } from './provider-leader-outcome'
+import { profileStateAccessBootIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
 import {
   proveProviderProcessIdentity,
   providerGroupAbsent,
@@ -77,6 +78,10 @@ function outputLine(stream: Readable, predicate: (line: string) => boolean): Pro
 }
 
 async function gatedNative() {
+  const bootId = profileStateAccessBootIdentity()
+  if (!bootId) {
+    throw new Error('Missing host boot identity')
+  }
   const child = spawn(
     resolveProviderExecPath(),
     [
@@ -121,7 +126,7 @@ async function gatedNative() {
   if (control instanceof Readable) {
     control.resume()
   }
-  const boot: { leaderPid: number; watcherPid: number; bootId: string } = JSON.parse(
+  const boot: { leaderPid: number; watcherPid: number } = JSON.parse(
     await outputLine(status, () => true)
   )
   const [leader, watcher] = await Promise.all([
@@ -136,7 +141,7 @@ async function gatedNative() {
     await sweepOrphanedProviderGroup(identity)
     await waitForProviderOwnershipReap(identity)
   })
-  return { child, closed, exited, boot, leader, watcher }
+  return { child, closed, exited, boot: { ...boot, bootId }, leader, watcher }
 }
 
 describe.runIf(process.platform !== 'win32')('provider orphan ownership', () => {

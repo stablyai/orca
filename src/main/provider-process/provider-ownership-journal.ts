@@ -38,7 +38,7 @@ const recordSchema = z.object({
 })
 const startups = new Map<string, Promise<void>>()
 const MAX_RECORD_BYTES = 16_384
-const availableDirectories = new Map<string, boolean>()
+const availableDirectories = new Map<string, string | null>()
 let ownerIdentity: ReturnType<typeof proveProviderProcessIdentity> | undefined
 
 export function providerOwnershipDirectory(): string {
@@ -46,13 +46,13 @@ export function providerOwnershipDirectory(): string {
 }
 
 /** This synchronous launch seam checks host capability once, never once per chat. */
-export function providerOwnershipAvailable(): boolean {
+export function providerOwnershipBootId(): string | null {
   const directory = providerOwnershipDirectory()
   const previous = availableDirectories.get(directory)
   if (previous !== undefined) {
     return previous
   }
-  let available = false
+  let available: string | null = null
   try {
     const bootId = profileStateAccessBootIdentity()
     if (bootId && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(bootId)) {
@@ -63,6 +63,8 @@ export function providerOwnershipAvailable(): boolean {
         info.isDirectory() &&
         (info.mode & 0o077) === 0 &&
         (!process.getuid || info.uid === process.getuid())
+          ? bootId
+          : null
     }
   } catch {}
   availableDirectories.set(directory, available)

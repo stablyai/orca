@@ -2,11 +2,10 @@ import { spawnProcess } from '@orca/process-host'
 import type { ChildProcess } from 'node:child_process'
 import type { PipedProcessSpec } from '@orca/process-host/process-spec'
 import type { ProviderChild } from './provider-child'
-import type { ProviderSpawnSpec } from './provider-process-supervisor'
+import { supervisedPosixLaunch, type ProviderSpawnSpec } from './provider-process-supervisor'
 import { DirectProviderChild } from './direct-provider-child'
 import { LegacyProviderChild } from './legacy-provider-child'
-import { providerOwnershipAvailable } from './provider-ownership-journal'
-import { createLegacyProviderSpawnSpec } from './legacy-provider-supervisor'
+import { providerOwnershipBootId } from './provider-ownership-journal'
 
 export type ProviderProcessSpawner = (spec: PipedProcessSpec) => ChildProcess
 
@@ -15,7 +14,8 @@ export function spawnProviderProcess(
   spec: ProviderSpawnSpec,
   spawnImpl: ProviderProcessSpawner = spawnProcess
 ): ProviderChild {
-  const native = spec.supervised && providerOwnershipAvailable()
+  const bootId = spec.supervised ? providerOwnershipBootId() : null
+  const native = bootId !== null
   const raw = spawnImpl(
     spec.supervised && !native
       ? createLegacyProviderSpawnSpec(spec)
@@ -30,8 +30,8 @@ export function spawnProviderProcess(
             : ['pipe', 'pipe', 'pipe']
         }
   )
-  if (native) {
-    return new DirectProviderChild(raw, spec)
+  if (bootId !== null) {
+    return new DirectProviderChild(raw, spec, bootId)
   }
   if (spec.supervised) {
     return new LegacyProviderChild(raw, spec)
@@ -43,4 +43,21 @@ export function spawnProviderProcess(
   }
   const child = Object.assign(raw, { stdin, stdout, stderr })
   return child
+}
+
+/** The returned child is the legacy supervisor, including its PID and signal semantics. */
+function createLegacyProviderSpawnSpec(spec: ProviderSpawnSpec): PipedProcessSpec {
+  const legacy = supervisedPosixLaunch(
+    { command: spec.command, args: spec.args.slice(6), cwd: spec.cwd },
+    spec.env,
+    spec
+  )
+  return {
+    program: legacy.command,
+    args: legacy.args,
+    env: legacy.env,
+    cwd: spec.cwd,
+    detached: true,
+    stdio: ['pipe', 'pipe', 'pipe', 'ipc']
+  }
 }

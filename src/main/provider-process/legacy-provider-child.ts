@@ -17,9 +17,9 @@ import {
 } from './provider-process-supervisor'
 import {
   PROVIDER_SPAWN_FAILURE_MARKER,
-  legacyProviderSpawnFailure,
-  legacyProviderStderrForDisplay
-} from './legacy-provider-supervisor'
+  supervisedProviderSpawnFailure,
+  providerStderrForDisplay
+} from './provider-spawn-failure-report'
 import { drainDirectProviderOutput } from './direct-provider-output-drain'
 import { reportProviderLaunchFailure } from './provider-launch-failure'
 import {
@@ -33,7 +33,6 @@ const REPORT_LINE_MAX_CHARS = 16_384
 
 /** Wraps the legacy `-e` supervisor: its pid and signals are the wrapper's, never the CLI's. */
 export class LegacyProviderChild extends EventEmitter implements ProviderChild {
-  readonly spawnAbsenceKnown = true
   readonly stdin: Writable
   readonly stdout = new PassThrough()
   readonly stderr = new PassThrough()
@@ -138,7 +137,7 @@ export class LegacyProviderChild extends EventEmitter implements ProviderChild {
       // The report is the supervisor's last stderr line, which can trail its exit.
       await withTimeout(streamEnded(this.stderrFilter), PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS, undefined)
     }
-    const spawnFailure = legacyProviderSpawnFailure(code, this.stderrFilter.finalReport ?? '')
+    const spawnFailure = supervisedProviderSpawnFailure(code, this.stderrFilter.finalReport ?? '')
     if (spawnFailure) {
       this.failure ??= reportProviderLaunchFailure(
         Object.assign(spawnFailure.error, { path: this.spec.command }),
@@ -266,7 +265,7 @@ class LegacyStderrFilter extends Transform {
         if (line.trim()) {
           this.finalReport = line.startsWith(PROVIDER_SPAWN_FAILURE_MARKER) ? line : null
         }
-        output += legacyProviderStderrForDisplay(line) + end
+        output += providerStderrForDisplay(line) + end
       }
       this.atLineStart = end !== ''
     }

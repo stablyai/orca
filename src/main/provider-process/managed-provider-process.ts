@@ -178,16 +178,8 @@ export function spawnManagedProviderProcess(
     if (absence !== undefined) {
       return absence
     }
-    // A direct spawn error names what this process spawned: the supervisor, when there is one.
     if (spawnError) {
-      const direct = providerSpawnAbsence(
-        spawnError,
-        child.spawnAbsenceKnown ? launch.command : spec.program,
-        launch.cwd
-      )
-      // A missing supervisor is Orca's own binary (e.g. mid-update), never the agent's CLI.
-      absence =
-        spec.supervised && !child.spawnAbsenceKnown && direct === 'executable' ? null : direct
+      absence = providerSpawnAbsence(spawnError, launch.command, launch.cwd)
       return absence
     }
     return null

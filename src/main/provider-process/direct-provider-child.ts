@@ -30,7 +30,6 @@ type Ownership = Awaited<ReturnType<typeof publishProviderOwnership>>
 
 export class DirectProviderChild extends EventEmitter implements ProviderChild {
   readonly ready: Promise<void>
-  readonly spawnAbsenceKnown = true
   readonly stdin = new PassThrough()
   readonly stdout = new PassThrough()
   readonly stderr = new PassThrough()
@@ -59,7 +58,8 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
 
   constructor(
     private readonly raw: ChildProcess,
-    private readonly spec: ProviderSpawnSpec
+    private readonly spec: ProviderSpawnSpec,
+    private readonly bootId: string
   ) {
     super()
     this.stop = new DirectProviderStop(spec, this.send.bind(this), () => this.forceReap())
@@ -142,14 +142,14 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     if (!bootstrap || !this.gate || !this.control || !this.raw.pid) {
       throw new Error('Provider bootstrap control pipes are unavailable')
     }
-    const { leaderPid, watcherPid, bootId } = await bootstrap.initial
+    const { leaderPid, watcherPid } = await bootstrap.initial
     this.writerPid = leaderPid
     if (this.canceled || this.outcome !== undefined) {
       throw new Error('Provider launch canceled before registration')
     }
     this.publication = publishProviderOwnership(
       providerOwnershipDirectory(),
-      bootId,
+      this.bootId,
       leaderPid,
       watcherPid,
       this.raw.pid

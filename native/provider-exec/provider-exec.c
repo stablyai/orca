@@ -20,9 +20,6 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
-#if defined(__APPLE__)
-#include <sys/sysctl.h>
-#endif
 #if defined(__linux__)
 #include <sys/prctl.h>
 #endif
@@ -83,52 +80,6 @@ static int parse_ms(const char *text, unsigned max, unsigned *out) {
     }
     *out = value;
     return 0;
-}
-
-static int is_uuid(const char *text) {
-    if (strlen(text) != 36) {
-        return 0;
-    }
-    for (int i = 0; i < 36; i++) {
-        char c = text[i];
-        int hyphen = i == 8 || i == 13 || i == 18 || i == 23;
-        int hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-        if (hyphen ? c != '-' : !hex) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-// Empty when the host withholds it; the owner then treats boot identity as unknown.
-static void read_boot_id(char out[37]) {
-    char value[64] = {0};
-    out[0] = '\0';
-#if defined(__APPLE__)
-    size_t size = sizeof value - 1;
-    if (sysctlbyname("kern.bootsessionuuid", value, &size, NULL, 0) != 0) {
-        return;
-    }
-    value[size < sizeof value ? size : sizeof value - 1] = '\0';
-#else
-    int fd = open("/proc/sys/kernel/random/boot_id", O_RDONLY | O_CLOEXEC);
-    if (fd < 0) {
-        return;
-    }
-    ssize_t got;
-    do {
-        got = read(fd, value, sizeof value - 1);
-    } while (got < 0 && errno == EINTR);
-    close(fd);
-    if (got <= 0) {
-        return;
-    }
-    value[got] = '\0';
-    value[strcspn(value, "\n")] = '\0';
-#endif
-    if (is_uuid(value)) {
-        memcpy(out, value, 37);
-    }
 }
 
 static int set_cloexec(int fd, int enabled) {
@@ -508,16 +459,9 @@ static _Noreturn void run_leader(struct watcher *watcher, char *command[]) {
     // Only the watcher holds the owner pipe, so its EOF on either side means the other died.
     close(OWNER_FD);
 
-    char boot_id[37];
-    read_boot_id(boot_id);
     char status[128];
-    int length = boot_id[0] != '\0'
-                     ? snprintf(status, sizeof status,
-                                "{\"leaderPid\":%ld,\"watcherPid\":%ld,\"bootId\":\"%s\"}\n",
-                                (long)watcher->group, (long)watcher_pid, boot_id)
-                     : snprintf(status, sizeof status,
-                                "{\"leaderPid\":%ld,\"watcherPid\":%ld,\"bootId\":null}\n",
-                                (long)watcher->group, (long)watcher_pid);
+    int length = snprintf(status, sizeof status, "{\"leaderPid\":%ld,\"watcherPid\":%ld}\n",
+                          (long)watcher->group, (long)watcher_pid);
     if (length <= 0 || (size_t)length >= sizeof status ||
             write_all(STATUS_FD, status, (size_t)length) != 0) {
         fail(EXIT_BOOTSTRAP);

@@ -56,11 +56,9 @@ function launch(index: number) {
   const gate = new PassThrough()
   const control = createControl()
   Object.assign(raw, { stdio: [raw.stdin, raw.stdout, raw.stderr, control, gate, status, outcome] })
-  status.write(
-    `${JSON.stringify({ leaderPid: parentPid + 1, watcherPid: parentPid + 2, bootId: 'test-boot' })}\n`
-  )
+  status.write(`${JSON.stringify({ leaderPid: parentPid + 1, watcherPid: parentPid + 2 })}\n`)
   gate.once('finish', () => status.end())
-  const child = new DirectProviderChild(raw, spec)
+  const child = new DirectProviderChild(raw, spec, 'test-boot')
   // Connections install callbacks that retain their writer and pending requests.
   const connection: { child: DirectProviderChild; failures: Error[] } = { child, failures: [] }
   child.stdin.on('error', (error) => connection.failures.push(error))

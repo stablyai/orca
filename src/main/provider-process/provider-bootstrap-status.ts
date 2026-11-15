@@ -1,20 +1,18 @@
 import type { Readable } from 'node:stream'
 
 export function readBootstrapStatus(stream: Readable): {
-  initial: Promise<{ leaderPid: number; watcherPid: number; bootId: string }>
+  initial: Promise<{ leaderPid: number; watcherPid: number }>
   ended: Promise<number | null>
   checkGated: () => void
 } {
-  let ready: (value: { leaderPid: number; watcherPid: number; bootId: string }) => void = () => {}
+  let ready: (value: { leaderPid: number; watcherPid: number }) => void = () => {}
   let failReady: (error: Error) => void = () => {}
   let finish: (errno: number | null) => void = () => {}
   let failEnd: (error: Error) => void = () => {}
-  const initial = new Promise<{ leaderPid: number; watcherPid: number; bootId: string }>(
-    (resolve, reject) => {
-      ready = resolve
-      failReady = reject
-    }
-  )
+  const initial = new Promise<{ leaderPid: number; watcherPid: number }>((resolve, reject) => {
+    ready = resolve
+    failReady = reject
+  })
   const ended = new Promise<number | null>((resolve, reject) => {
     finish = resolve
     failEnd = reject
@@ -60,14 +58,10 @@ export function readBootstrapStatus(stream: Readable): {
           'watcherPid' in value &&
           typeof value.watcherPid === 'number' &&
           Number.isSafeInteger(value.watcherPid) &&
-          value.watcherPid > 1 &&
-          'bootId' in value &&
-          typeof value.bootId === 'string' &&
-          value.bootId.length > 0 &&
-          value.bootId.length <= 255
+          value.watcherPid > 1
         ) {
           bootstrapped = true
-          ready({ leaderPid: value.leaderPid, watcherPid: value.watcherPid, bootId: value.bootId })
+          ready({ leaderPid: value.leaderPid, watcherPid: value.watcherPid })
         } else if (
           bootstrapped &&
           errno === null &&
