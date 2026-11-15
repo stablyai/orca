@@ -8,7 +8,8 @@ export function printResult<TResult>(
   formatter: (value: TResult) => string
 ): void {
   if (json) {
-    console.log(JSON.stringify(prepareComputerCliJsonResult(response), null, 2))
+    // Agents pay per byte of --json output; people can pipe it through `jq .` to read it.
+    console.log(JSON.stringify(prepareComputerCliJsonResult(response)))
     return
   }
   console.log(formatter(response.result) + formatBrowserActionEffects(response.result))

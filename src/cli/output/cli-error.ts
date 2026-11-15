@@ -139,21 +139,12 @@ function formatRuntimeUnavailableError(message: string, error: RuntimeClientErro
   return `${message}\nOrca is not running. Run '${command} open' first.`
 }
 
-// Streaming commands print one JSON object per line with --json, so their failure is one line too.
-const JSON_LINES_COMMANDS = new Set(['plugin dev watch'])
-
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
   const selector = contextRecovery(error, context)
   const concise = context.conciseOrchestration
   if (json) {
     const response = cliErrorJsonResponse(error, context, selector)
-    console.log(
-      concise
-        ? JSON.stringify({ ok: false, error: response.error })
-        : JSON_LINES_COMMANDS.has(context.commandPath?.join(' ') ?? '')
-          ? JSON.stringify(response)
-          : JSON.stringify(response, null, 2)
-    )
+    console.log(JSON.stringify(concise ? { ok: false, error: response.error } : response))
     if (concise) {
       console.error(formatOrchestrationErrorLine(response.error.code, response.error.message))
     }
