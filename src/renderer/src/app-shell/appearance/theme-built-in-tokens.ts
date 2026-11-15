@@ -10,6 +10,21 @@ function collectStyle(style: CSSStyleDeclaration, into: Map<string, string>): vo
   }
 }
 
+/**
+ * Declarations nested in a matching rule: after a nested rule they parse as nested-declarations
+ * rules, and the build wraps color-mix() values in a nested `@supports` after an opaque fallback,
+ * so a supported block is what paints.
+ */
+function collectNested(rules: CSSRuleList, into: Map<string, string>): void {
+  for (const nested of Array.from(rules)) {
+    if (nested instanceof CSSNestedDeclarations) {
+      collectStyle(nested.style, into)
+    } else if (nested instanceof CSSSupportsRule && CSS.supports(nested.conditionText)) {
+      collectNested(nested.cssRules, into)
+    }
+  }
+}
+
 /** Custom properties declared by `:root` (light) or `.dark` rules, in stylesheet order. */
 function collectDeclarations(
   rules: CSSRuleList,
@@ -20,14 +35,12 @@ function collectDeclarations(
     if (rule instanceof CSSStyleRule) {
       if (rule.selectorText.split(',').some((part) => part.trim() === selector)) {
         collectStyle(rule.style, into)
-        // Why: declarations after a nested rule parse as their own nested-declarations rules.
-        for (const nested of Array.from(rule.cssRules)) {
-          if (nested instanceof CSSNestedDeclarations) {
-            collectStyle(nested.style, into)
-          }
-        }
+        collectNested(rule.cssRules, into)
       }
-    } else if (rule instanceof CSSLayerBlockRule || rule instanceof CSSSupportsRule) {
+    } else if (
+      rule instanceof CSSLayerBlockRule ||
+      (rule instanceof CSSSupportsRule && CSS.supports(rule.conditionText))
+    ) {
       // Why not media rules: a rule for another screen or scheme is not this mode's built-in.
       collectDeclarations(rule.cssRules, selector, into)
     }

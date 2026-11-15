@@ -16,7 +16,7 @@ import { terminalPaletteRgba } from '../../../../shared/terminal-themes/terminal
 import type { ITheme } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppThemePaint } from './document-theme'
-import type { ColorProbe } from './plugin-theme-tokens'
+import type { ColorProbe } from '../../../../shared/theme/theme-contrast-engine'
 
 export type TerminalAppTheme = AppThemePaint & {
   id: typeof MATCH_TERMINAL_APP_THEME

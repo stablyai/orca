@@ -1,5 +1,6 @@
-import { MIN_TEXT_CONTRAST } from './plugin-theme-contrast-rules'
-import { browserColorProbe, paintedThemeColors, type ColorProbe } from './plugin-theme-tokens'
+import { MIN_TEXT_CONTRAST } from '../../../../shared/theme/theme-contrast-rules'
+import { browserColorProbe } from './plugin-theme-tokens'
+import { paintedThemeColors, type ColorProbe } from '../../../../shared/theme/theme-contrast-engine'
 import { contrastRatio, mix, type Rgba } from '../../../../shared/color/rgba-contrast'
 
 export const CHAT_SELECTION_MIX_TOKEN = '--chat-selection-mix'

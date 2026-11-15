@@ -11,6 +11,8 @@ export type ThemeStudioPaint = {
   dropped: string[]
   editor?: 'follows-app' | 'pinned'
   windows: number
+  /** What the contrast gate is expected to leave unpainted per mode, worked out without a window. */
+  predicted?: Partial<Record<ThemeStudioMode, string[]>>
 }
 
 /** The smallest fix of each finding (or only of `ids`), as one patch. */

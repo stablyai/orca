@@ -27,6 +27,9 @@ const { validateDeclaredPluginArtifacts, validatePluginInstallContent } = loadPl
 const { strictPluginArtifactErrors, strictPluginArtifactWarnings } = loadPluginSchemaModule(
   'authoring/plugin-strict-artifact-checks.ts'
 )
+// Why shared: the same contrast gate the renderer runs before painting a theme.
+const { pluginThemeContrastFindings, pluginThemeContrastMessages, pluginThemeContrastNotes } =
+  loadPluginSchemaModule('authoring/plugin-theme-contrast-findings.ts')
 
 const { englishSourceLookup } = loadPluginSchemaModule(
   'languages/plugin-translation-string-policy.ts'
@@ -64,10 +67,16 @@ async function installContentErrors(root, manifest) {
   return errors
 }
 
-const targets = process.argv.slice(2)
+// Why --strict: a theme color Orca refuses to paint is a warning, or an error for a release gate.
+const strict = process.argv.includes('--strict')
+function contrastFindings(manifest, root) {
+  return pluginThemeContrastFindings(manifest, readPluginText(root))
+}
+
+const targets = process.argv.slice(2).filter((arg) => arg !== '--strict')
 if (targets.length === 0) {
   console.error(
-    'usage: validate-plugin-files <plugin dir | orca-plugin.json | orca-catalog.json>...'
+    'usage: validate-plugin-files [--strict] <plugin dir | orca-plugin.json | orca-catalog.json>...'
   )
   process.exit(2)
 }
@@ -112,6 +121,9 @@ for (const target of targets) {
       const { manifest } = parsePluginManifest(raw)
       errors.push(...strictPluginArtifactErrors(manifest, readPluginText(root), englishLookup()))
       errors.push(...(await installContentErrors(root, manifest)))
+      if (strict) {
+        errors.push(...pluginThemeContrastMessages(contrastFindings(manifest, root)))
+      }
     }
     for (const error of errors) {
       console.error(`${file}: ${error}`)
@@ -120,7 +132,9 @@ for (const target of targets) {
       const { manifest } = parsePluginManifest(raw)
       for (const warning of [
         ...pluginManifestWarnings(raw),
-        ...strictPluginArtifactWarnings(manifest, readPluginText(root))
+        ...strictPluginArtifactWarnings(manifest, readPluginText(root)),
+        ...(strict ? [] : pluginThemeContrastMessages(contrastFindings(manifest, root))),
+        ...pluginThemeContrastNotes(contrastFindings(manifest, root))
       ]) {
         console.warn(`${file}: warning: ${warning}`)
       }

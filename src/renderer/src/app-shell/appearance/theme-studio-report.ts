@@ -17,7 +17,7 @@ import {
   evaluatePluginThemeTokens,
   type ColorProbe,
   type PluginThemeTokenDrop
-} from './plugin-theme-tokens'
+} from '../../../../shared/theme/theme-contrast-engine'
 
 // Why a margin: a fix exactly at the minimum can round under it once written as hex.
 const FIX_MARGIN = 0.1

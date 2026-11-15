@@ -1,5 +1,5 @@
-import { MIN_TEXT_CONTRAST } from './plugin-theme-contrast-rules'
-import { paintedThemeColors, type ColorProbe } from './plugin-theme-tokens'
+import { MIN_TEXT_CONTRAST } from '../../../../shared/theme/theme-contrast-rules'
+import { paintedThemeColors, type ColorProbe } from '../../../../shared/theme/theme-contrast-engine'
 import {
   contrastRatio,
   hexToRgb,

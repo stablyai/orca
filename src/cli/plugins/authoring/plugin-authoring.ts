@@ -204,7 +204,8 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
   },
   'plugin validate': async (ctx) => {
     const path = resolveLocalPluginPath(ctx, requirePluginPathArg(ctx, 'path'), 'validate')
-    const report = await readTarget(validatePluginTarget, path)
+    const strict = ctx.flags.get('strict') === true
+    const report = await readTarget((target) => validatePluginTarget(target, { strict }), path)
     if (!report.valid) {
       throw invalidError(report)
     }

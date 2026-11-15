@@ -77,6 +77,16 @@ export const VERIFY_CHECKS = [
     inputs: ['src/main/runtime/rpc/', 'src/shared/']
   },
   {
+    name: 'theme built-in values',
+    args: ['config/scripts/theme/generate-theme-built-in-values.mjs', '--check'],
+    inputs: [
+      'src/renderer/src/assets/',
+      'src/shared/theme/theme-built-in-css.ts',
+      'src/shared/plugins/artifacts/plugin-theme-artifact.ts',
+      'config/scripts/theme/'
+    ]
+  },
+  {
     name: 'acp protocol',
     args: ['config/scripts/acp/generate-protocol.mjs', '--check'],
     inputs: ['src/main/acp/generated/', 'config/scripts/acp/']
