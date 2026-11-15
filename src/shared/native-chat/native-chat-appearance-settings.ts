@@ -1,9 +1,9 @@
 import type { NativeChatProviderChoices } from './native-chat-providers'
 
 export type NativeChatAppearanceSettings = {
-  /** Absent follows the IDE font. */
+  /** Absent: the system UI font while the IDE font is the default, else the IDE font. */
   fontFamily?: string
-  /** Chat text size in px, 12–20; absent = 14. */
+  /** Chat text size in px, 12–20; absent = 13. Explicit 14 was stored as absent before 13. */
   fontSize?: number
   /** Code text size in px, 10–18; absent = 12. */
   codeFontSize?: number
@@ -31,6 +31,18 @@ export type NativeChatGlobalSettings = {
   nativeChatTurnDiffSummary?: boolean
   /** Lines saying how CI went on a pull request the chat opened or pushed to. Absent means on. */
   nativeChatCiResultLines?: boolean
+  /** A "New" line above what arrived while the reader was away. Absent follows the default below. */
+  nativeChatMarkNewMessages?: boolean
+}
+
+/** Not written into default settings, so flipping this reaches everyone who never chose. */
+const NATIVE_CHAT_MARKS_NEW_MESSAGES_BY_DEFAULT = true
+
+export function nativeChatMarksNewMessages(
+  settings: { readonly nativeChatMarkNewMessages?: unknown } | null | undefined
+): boolean {
+  const value = settings?.nativeChatMarkNewMessages
+  return typeof value === 'boolean' ? value : NATIVE_CHAT_MARKS_NEW_MESSAGES_BY_DEFAULT
 }
 
 /** Only explicit OFF keeps a reader's place on send. */
@@ -54,7 +66,7 @@ export function nativeChatShowsCiResultLines(
   return settings?.nativeChatCiResultLines !== false
 }
 
-export const DEFAULT_NATIVE_CHAT_FONT_SIZE = 14
+export const DEFAULT_NATIVE_CHAT_FONT_SIZE = 13
 export const DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE = 12
 export const DEFAULT_NATIVE_CHAT_CONTRAST = 100
 
@@ -72,7 +84,12 @@ export function normalizeNativeChatAppearanceSettings(
   }
   const fontFamily =
     'fontFamily' in value && typeof value.fontFamily === 'string' ? value.fontFamily.trim() : ''
-  const fontSize = normalizeSize('fontSize' in value ? value.fontSize : undefined, 12, 20, 14)
+  const fontSize = normalizeSize(
+    'fontSize' in value ? value.fontSize : undefined,
+    12,
+    20,
+    DEFAULT_NATIVE_CHAT_FONT_SIZE
+  )
   const codeFontSize = normalizeSize(
     'codeFontSize' in value ? value.codeFontSize : undefined,
     10,

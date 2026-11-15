@@ -1,7 +1,7 @@
 import {
   AUTOMATION_RUN_FAILURE_COPY as EN,
   type AutomationRunFailureCode
-} from '../../../src/shared/automation-run-failure-copy'
+} from '../../../src/shared/automations/history/automation-run-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { MobileAutomationRun } from './automation-reply-schema'

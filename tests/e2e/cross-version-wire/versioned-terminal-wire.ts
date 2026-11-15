@@ -119,7 +119,7 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<TerminalWire
     importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/terminal.ts'),
     importReleaseCheckoutModule(
       checkout,
-      '/src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+      '/src/renderer/src/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry.ts'
     )
   ])
   return {

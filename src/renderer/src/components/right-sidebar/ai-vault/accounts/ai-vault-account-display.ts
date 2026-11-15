@@ -3,7 +3,7 @@ import {
   getCodexAccountDisplayLabel,
   normalizeCodexAccountEmail,
   type CodexDisplayAccount
-} from '@/lib/codex-account-display-label'
+} from '@/lib/provider-accounts/codex-account-display-label'
 
 export class AccountDisplayPeers {
   readonly accounts: readonly CodexDisplayAccount[]

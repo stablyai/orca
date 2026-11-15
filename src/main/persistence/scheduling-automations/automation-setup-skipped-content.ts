@@ -1,4 +1,4 @@
-import type { AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 
 // orca.yaml setup is small; a larger value is not worth keeping on every run record.
 const MAX_SETUP_SKIPPED_CONTENT_CHARS = 64 * 1024

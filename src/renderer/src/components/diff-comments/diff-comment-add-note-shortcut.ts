@@ -1,6 +1,8 @@
-import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor, Selection } from 'monaco-editor'
-import { installEditorAddReviewNoteShortcut } from '../editor/editor-shortcuts'
+// Why: a value import of 'monaco-editor' here would evaluate Monaco ahead of its NLS pack
+// (see monaco-nls-import-order.test.ts); the enum module carries no localized labels.
+import { EditorOption } from 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js'
+import { installEditorAddReviewNoteShortcut } from '../editor/commands/editor-shortcuts'
 import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
 import {
   clampFocusLineToCommentable,
@@ -61,7 +63,7 @@ export function installDiffCommentAddNoteShortcut({
     if (!target) {
       return false
     }
-    const lineHeight = editor.getOption(monaco.editor.EditorOption.lineHeight)
+    const lineHeight = editor.getOption(EditorOption.lineHeight)
     const top = getDiffCommentPopoverTop(editor, target.lineNumber, lineHeight)
     if (top == null) {
       return false

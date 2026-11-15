@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { useAppStore } from '../store'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { useAppStore } from '../store/index'
 import { isMac } from './app-window-chrome'
 import { selectWindowVisibilityActions } from './window-visibility-actions-selector'
 

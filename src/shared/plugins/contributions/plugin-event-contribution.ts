@@ -7,6 +7,7 @@ import {
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
 import type { PluginCapabilityKind } from '../capabilities/plugin-capabilities'
+import { PLUGIN_EDITOR_TYPOGRAPHY_SINCE } from '../workers/plugin-host-api-editor-typography'
 
 /** Domain events a plugin can subscribe to in v0. Closed set: server-side
  *  filtering means plugins only ever receive what they subscribed to. */
@@ -14,7 +15,8 @@ export const PLUGIN_EVENT_NAMES = [
   'workspace.created',
   'workspace.removed',
   'agent.status.changed',
-  'workspace.changed'
+  'workspace.changed',
+  'editor.typography.changed'
 ] as const
 export const PLUGIN_EVENT_SUBSCRIPTION_LIMIT = PLUGIN_EVENT_NAMES.length
 
@@ -25,7 +27,8 @@ export const PLUGIN_EVENT_SINCE: Record<PluginEventName, string> = {
   'workspace.created': PLUGIN_MANIFEST_V2_SINCE,
   'workspace.removed': PLUGIN_MANIFEST_V2_SINCE,
   'agent.status.changed': PLUGIN_SCHEMA_SINCE_V1,
-  'workspace.changed': PLUGIN_PANEL_BRIDGE_SINCE
+  'workspace.changed': PLUGIN_PANEL_BRIDGE_SINCE,
+  'editor.typography.changed': PLUGIN_EDITOR_TYPOGRAPHY_SINCE
 }
 
 /** Format 1 event names, rewritten on parse and still dispatched to handlers registered under them. */
@@ -34,12 +37,23 @@ export const PLUGIN_V1_EVENT_ALIASES: ReadonlyMap<string, PluginEventName> = new
   ['worktree.removed', 'workspace.removed']
 ])
 
-/** Each event is gated by the read capability of its domain, never a blanket event grant. */
-export const PLUGIN_EVENT_CAPABILITY: Record<PluginEventName, PluginCapabilityKind> = {
+/** Each event is gated by the read capability of its domain, never a blanket event grant.
+ *  Null: the domain is not sensitive, so any approved plugin may listen. */
+export const PLUGIN_EVENT_CAPABILITY: Record<PluginEventName, PluginCapabilityKind | null> = {
   'workspace.created': 'workspace:read',
   'workspace.removed': 'workspace:read',
   'agent.status.changed': 'agent:read',
-  'workspace.changed': 'workspace:read'
+  'workspace.changed': 'workspace:read',
+  'editor.typography.changed': null
+}
+
+/** Whether a plugin with these grants (null: not approved) may hear `event`. */
+export function pluginEventCapabilityGranted(
+  event: PluginEventName,
+  granted: readonly PluginCapabilityKind[] | null | undefined
+): boolean {
+  const required = PLUGIN_EVENT_CAPABILITY[event]
+  return Boolean(granted) && (required === null || granted?.includes(required) === true)
 }
 
 export const pluginEventContributionSchema = z
@@ -53,7 +67,7 @@ export const pluginEventContributionSchema = z
   .meta({
     id: 'EventContribution',
     description:
-      "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events."
+      "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events. Editor events need no capability."
   })
 
 export type PluginEventContribution = z.infer<typeof pluginEventContributionSchema>

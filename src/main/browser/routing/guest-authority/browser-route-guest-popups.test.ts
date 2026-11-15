@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const popupMocks = vi.hoisted(() => ({ openPopupWithOriginBar: vi.fn() }))
 
-vi.mock('../../guest-lifecycle/popups/popup-origin-bar-window', () => ({
+vi.mock('../../guest-lifecycle/popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: popupMocks.openPopupWithOriginBar
 }))
 

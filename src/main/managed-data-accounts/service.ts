@@ -13,7 +13,7 @@ import { ManagedDataAccountProfileRemoval } from './profile-removal'
 import {
   captureManagedDataAccountOriginalEnvironment,
   restoreManagedDataAccountEnvironment
-} from '../../shared/managed-data-account-environment'
+} from '../../shared/agent-launch/environment/managed-data-account-environment'
 
 const MAX_INLINE_AUTH_BASELINES = 64
 const MAX_INLINE_AUTH_BYTES = 64 * 1024

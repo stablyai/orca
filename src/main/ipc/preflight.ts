@@ -78,11 +78,11 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
 
   ipcMain.handle(
     'preflight:refreshAgents',
-    async (_event, args?: AgentDetectionRequest & PreflightWake) =>
+    async (_event, args?: AgentDetectionRequest & PreflightWake & { userInitiated?: boolean }) =>
       runPreflightAct(args, async () => {
         const host: AgentDetectionHost = { kind: 'local', context: args }
         await assertAgentDetectionHostRunning(host)
-        return refreshAgentsOnHost(host, detectionOptions(args))
+        return refreshAgentsOnHost(host, detectionOptions(args), args?.userInitiated)
       })
   )
 

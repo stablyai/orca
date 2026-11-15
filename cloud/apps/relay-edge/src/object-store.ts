@@ -27,7 +27,6 @@ export const EXPORT_FREEZE_MS = 30_000
 // Every table an object holds. Changing any of it (including a regenerated credential-store
 // schema) needs OBJECT_SCHEMA_VERSION bumped and the step in MIGRATIONS: existing objects keep
 // their old tables, because CREATE TABLE IF NOT EXISTS never alters them.
-// test/object-store-schema.test.ts pins the version to a hash of this DDL.
 export const OBJECT_SCHEMA_VERSION = 1
 export const MIGRATIONS: Readonly<Record<number, readonly string[]>> = {}
 const META_DDL = `CREATE TABLE IF NOT EXISTS edge_meta (

@@ -20,7 +20,7 @@ export function AutomationsSettingsPane({
     <div className="space-y-8">
       <SettingsGroup>
         <SettingsSwitchRow
-          label={t('auto.components.settings.automations.showButton', 'Show Automations Button')}
+          label={t('auto.components.settings.automations.d92f253d2d', 'Show automations button')}
           description={t(
             'auto.components.settings.automations.showButtonDescription',
             'Show the Automations shortcut in the sidebar.'
@@ -104,7 +104,7 @@ export function AutomationsSettingsPane({
             </span>
             <span className="min-w-0 flex-1 space-y-0.5">
               <span className="block text-sm font-medium text-foreground">
-                {t('auto.components.settings.automations.openAutomations', 'Open Automations')}
+                {t('auto.components.settings.automations.9cb6e73d53', 'Open automations')}
               </span>
               <span className="block text-xs font-normal text-muted-foreground">
                 {t(

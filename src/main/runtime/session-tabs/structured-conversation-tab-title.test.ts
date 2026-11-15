@@ -1,36 +1,47 @@
-import { describe, expect, it } from 'vitest'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import { retitleStructuredConversationTab } from './structured-conversation-tab-title'
+import { expect, it } from 'vitest'
+import {
+  retitleStructuredConversationTabs,
+  titleStructuredConversationTabs
+} from './structured-conversation-tab-title'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const snapshot: RuntimeMobileSessionTabsSnapshot = {
-  worktree: 'workspace-1',
-  publicationEpoch: 'epoch-1',
-  snapshotVersion: 2,
+  worktree: 'workspace',
+  publicationEpoch: 'epoch',
+  snapshotVersion: 3,
   activeGroupId: null,
-  activeTabId: 'agent-session:session-1',
-  activeTabType: 'agent-session',
+  activeTabId: null,
+  activeTabType: null,
   tabs: [
     {
       type: 'agent-session',
-      id: 'agent-session:session-1',
-      sessionId: 'session-1',
-      title: 'Claude Chat',
-      agent: 'claude',
+      id: 'tab',
+      title: 'Annotate fork',
+      sessionId: 'fork',
+      agent: 'codex',
       isActive: true
     }
   ]
 }
 
-describe('structured conversation tab title', () => {
-  it('bumps the stored snapshot version only when the title changes', () => {
-    const titled = retitleStructuredConversationTab(snapshot, 'session-1', 'auth/login')
-    expect(titled).toMatchObject({
-      snapshotVersion: 3,
-      tabs: [{ title: 'auth/login' }]
-    })
-    expect(retitleStructuredConversationTab(titled!, 'session-1', 'auth/login')).toBeNull()
-    expect(retitleStructuredConversationTab(titled!, 'session-1', null)?.tabs[0]).toMatchObject({
-      title: 'Claude Chat'
-    })
-  })
+it("marks a forked chat's phone tab and titles it with the shown name", () => {
+  const titled = titleStructuredConversationTabs(
+    snapshot,
+    () => 'Annotate',
+    (id) => id === 'fork'
+  )
+  expect(titled.tabs[0]).toMatchObject({ title: 'Annotate', forked: true })
+})
+
+it('republishes a fork mark that appears under an unchanged title', () => {
+  const next = retitleStructuredConversationTabs(
+    snapshot,
+    new Map([['fork', 'Annotate fork']]),
+    () => true
+  )
+  expect(next?.snapshotVersion).toBe(4)
+  expect(next?.tabs[0]).toMatchObject({ title: 'Annotate fork', forked: true })
+  expect(
+    retitleStructuredConversationTabs(next!, new Map([['fork', 'Annotate fork']]), () => true)
+  ).toBeNull()
 })

@@ -2,12 +2,12 @@ import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-r
 import {
   relayHostReachabilityForCloseCode,
   type RelayHostReachabilityFromCloseCode
-} from '../transport/relay-host-reachability'
+} from '../transport/relay/relay-host-reachability'
 import type {
   ConnectionLogEntry,
-  ConnectionState,
   MobileConnectionDiagnosticPath
-} from '../transport/types'
+} from './connection/connection-log-types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 export type ConnectionDiagnosis = {
   likelyCause: string

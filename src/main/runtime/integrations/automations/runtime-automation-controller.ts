@@ -1,26 +1,30 @@
 import { hostQualifiedRepoSelector } from '../../workspaces/catalog/runtime-repo-selector'
 import { RUNTIME_AUTOMATION_PATCH_KEYS } from './runtime-automation-patch-keys'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { AutomationService } from '../../../automations/service'
+import type { AutomationService } from '../../../automations/automation-service'
 import type {
   Automation,
-  AutomationRun,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   AutomationListParams,
   AutomationListResult
-} from '../../../../shared/automation-list-scope'
+} from '../../../../shared/automations/ownership/automation-list-scope'
 import type {
   AutomationOwnerFenceOperation,
   AutomationOwnerPrecondition,
   AutomationDestination
-} from '../../../../shared/automation-owner-precondition'
-import { runAutomationNowFenced } from '../../../automations/refused-manual-run'
-import { paginateAutomationRuns } from '../../../../shared/automation-run-cursor'
+} from '../../../../shared/automations/ownership/automation-owner-precondition'
+import { runAutomationNowFenced } from '../../../automations/dispatch/refused-manual-run'
+import { paginateAutomationRuns } from '../../../../shared/automations/history/automation-run-cursor'
 import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
+import {
+  updateRuntimeAutomations,
+  type RuntimeAutomationBatchUpdate
+} from './runtime-automation-batch-update'
 import {
   assertAutomationRunContextMatchesTarget,
   type RuntimeAutomationTargetResolvers,
@@ -94,12 +98,16 @@ export class RuntimeAutomationController {
 
   async create(
     input: RuntimeAutomationCreateInput,
-    destination?: AutomationDestination
+    destination?: AutomationDestination,
+    /** Runs after the target resolves, right before the write; a throw refuses it (a plugin
+     *  creator that lost its approval meanwhile). */
+    beforeWrite?: () => void
   ): Promise<Automation> {
     if (!this.store?.createAutomation) {
       throw new Error('runtime_unavailable')
     }
     const target = await this.resolveTarget(input)
+    beforeWrite?.()
     assertAutomationRunContextMatchesTarget(input.runContext, target.repo)
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
@@ -126,7 +134,8 @@ export class RuntimeAutomationController {
         rrule: input.rrule,
         dtstart: input.dtstart,
         enabled: input.enabled,
-        missedRunGraceMinutes: input.missedRunGraceMinutes
+        missedRunGraceMinutes: input.missedRunGraceMinutes,
+        createdBy: input.createdBy
       },
       { destination: destination ?? input.destination, resolvedRepo: target.repo ?? undefined }
     )
@@ -185,6 +194,11 @@ export class RuntimeAutomationController {
     const automation = this.store.updateAutomation(id, patch, { ...options, resolvedRepo })
     await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
     return automation
+  }
+
+  /** `update` for many automations with one store write and one flush; moves need `update`. */
+  updateMany(entries: readonly RuntimeAutomationBatchUpdate[]) {
+    return updateRuntimeAutomations(this.store, entries)
   }
 
   async delete(

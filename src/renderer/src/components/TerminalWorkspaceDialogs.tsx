@@ -28,6 +28,10 @@ export function TerminalWorkspaceDialogs({
     windowCloseDialogKind,
     windowCloseDialogOpen
   } = controller
+  const cancelWindowClose = (): void => {
+    setWindowCloseDialogOpen(false)
+    window.api.ui.cancelWindowClose()
+  }
   return (
     <>
       <Dialog
@@ -71,7 +75,7 @@ export function TerminalWorkspaceDialogs({
         open={windowCloseDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setWindowCloseDialogOpen(false)
+            cancelWindowClose()
           }
         }}
       >
@@ -87,18 +91,13 @@ export function TerminalWorkspaceDialogs({
                     'A remote host could not be reached, so Orca cannot tell whether work is still running there. Close the window anyway?'
                   )
                 : t(
-                    'auto.components.Terminal.7958465754',
-                    'There are terminals with running processes. Close the window anyway?'
+                    'auto.components.Terminal.93c2e9d845',
+                    'There is running work in chats or terminals. Close the window anyway?'
                   )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setWindowCloseDialogOpen(false)}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={cancelWindowClose}>
               {t('auto.components.Terminal.f82e9f02df', 'Cancel')}
             </Button>
             <Button
@@ -108,7 +107,7 @@ export function TerminalWorkspaceDialogs({
               autoFocus
               onClick={() => {
                 setWindowCloseDialogOpen(false)
-                confirmNativeWindowClose()
+                void confirmNativeWindowClose()
               }}
             >
               {t('auto.components.Terminal.73768427cf', 'Close')}

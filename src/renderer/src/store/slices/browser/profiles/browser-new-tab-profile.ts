@@ -7,12 +7,12 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getManagedBrowserProfileOwner,
   type ManagedBrowserProfileOwner
-} from '../../../../../../shared/browser-profile-scope'
+} from '../../../../../../shared/browser/profiles/browser-profile-scope'
 
 /** Profile a new tab gets when its caller names none: the workspace's own under a repo or workspace scope, else the host default. */
 export function resolveNewBrowserTabProfile(

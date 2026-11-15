@@ -14,8 +14,8 @@ import type {
   WslMoveRowRef,
   WslMoveUnfinished
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
-import type { LazyChunkRecoveryReloadOutcome } from '@/lib/lazy-chunk-recovery-reload'
-import { useAppStore } from '@/store'
+import type { LazyChunkRecoveryReloadOutcome } from '@/app-shell/startup/lazy-chunk-recovery-reload'
+import { useAppStore } from '@/store/index'
 import { collectWslMoveSleptPaneBindings } from './wsl-move-slept-pane-bindings'
 
 /** Projects listed with a checkbox; from main's whole-distro preview, or the catalog fallback. */

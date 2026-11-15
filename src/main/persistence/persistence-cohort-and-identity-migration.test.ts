@@ -11,7 +11,7 @@ import { writeFileSync, rmSync, mkdtempSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { createProfileStateStore } from './profile-state/profile-state-store-factory'
+import { createProfileStateStore } from './profile-state/startup/profile-state-store-factory'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -109,9 +109,28 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
     expect(store.getSettings().searchKeybindingSeed).toBe('done')
+    expect(store.getSettings().nonMacSearchKeybindingSeed).toBe('done')
     await closeTestStores()
     const reopened = await createStore()
     expect(reopened.getSettings().searchKeybindingSeed).toBe('done')
+    expect(reopened.getSettings().nonMacSearchKeybindingSeed).toBe('done')
+  })
+
+  it('keeps profiles created after the Mac rollout in the legacy non-Mac search cohort', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      ui: {},
+      settings: { searchKeybindingSeed: 'done' }
+    })
+    const store = await createStore()
+    expect(store.getSettings().nonMacSearchKeybindingSeed).toBe('legacy')
+    store.flush()
+    await closeTestStores()
+    const reopened = await createStore()
+    expect(reopened.getSettings().searchKeybindingSeed).toBe('done')
+    expect(reopened.getSettings().nonMacSearchKeybindingSeed).toBe('legacy')
   })
 })
 

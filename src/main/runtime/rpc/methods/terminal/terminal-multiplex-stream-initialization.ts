@@ -4,7 +4,7 @@ import {
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { recordYieldedTerminalQueries } from './terminal-multiplex-yielded-queries'
 import { EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
-import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
+import { iterateTerminalOutputFrameChunks } from '../../terminal/terminal-output-frame-chunks'
 import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { createTerminalOutputBatcher } from './terminal-output-batcher'
 import { appendPendingMultiplexOutput } from './terminal-stream-replay'
@@ -61,8 +61,10 @@ export async function initializeMultiplexStream(
     ackPendingOutputBytes: 0,
     ackPendingOutputOverflowed: false,
     ackRecoverySnapshotInFlight: false,
+    ackRecoveryAwaitedBytes: 0,
     ackPendingHoldbackBytes: 0,
     ackAdmittedPacedWindowBytes: null,
+    ackOutputWaited: false,
     yieldedQueries: [],
     yieldedQueryScan: EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
     ackRecoveryHistoryOwed: false,

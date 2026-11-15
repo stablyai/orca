@@ -1,12 +1,12 @@
 import type { AppState } from '@/store/types'
-import type { WorktreeAgentInventoryState } from '@/lib/agent-detection-target-inventory'
+import type { WorktreeAgentInventoryState } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import type {
   GitConflictOperation,
   GitStatusEntry
 } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type SourceControlAiStoreSnapshot = Pick<AppState, 'settings' | 'repos'> &
   Omit<WorktreeAgentInventoryState, 'repos'>

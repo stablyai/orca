@@ -1,23 +1,23 @@
 import React, { useId } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { SidebarHeaderActions } from './sidebar-header-actions'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Sparkles, Bell } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
-import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
+import { cn } from '@/lib/class-names'
 
 type SidebarHeaderProps = {
+  activityBadgeTarget?: React.Ref<HTMLSpanElement>
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
   projectsCollapseTarget?: React.Ref<HTMLDivElement>
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
+  activityBadgeTarget,
   onWorkspaceBoardMenuOpenChange,
   activityOptionsTarget,
   projectsCollapseTarget
@@ -30,14 +30,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
-  const counts = useAgentBucketCounts()
   const activityBadgeId = useId()
-  const activityCount = counts.attention || counts.working
-  const activityStatusLabel = counts.attention
-    ? t('dashboardPopout.bucket.attention', 'Needs You')
-    : counts.working
-      ? t('dashboardPopout.bucket.working', 'Working')
-      : t('dashboardPopout.bucket.idle', 'Idle')
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
     (s) => s.settings?.agentsSidebarMigratedFromExperimental === true
@@ -104,34 +97,10 @@ const SidebarHeader = React.memo(function SidebarHeader({
                     <span className="relative h-5 w-6 shrink-0">
                       <Bell className="absolute left-0 top-1 size-3" />
                       <span
-                        className="pointer-events-none absolute inset-0"
                         id={activityBadgeId}
-                        aria-label={`${activityStatusLabel}: ${activityCount}`}
-                      >
-                        <span className="absolute right-0 top-0 flex h-2 w-3 items-center justify-center">
-                          {counts.attention > 0 ? (
-                            <AgentQuestionIcon className="size-2" />
-                          ) : (
-                            <span
-                              className={cn(
-                                'size-1 rounded-full',
-                                counts.working > 0 ? 'bg-(--status-warning)' : 'bg-muted-foreground'
-                              )}
-                            />
-                          )}
-                        </span>
-                        <span className="absolute right-0 top-2.5 flex h-2.5 w-3 items-center justify-center">
-                          <span
-                            className={cn(
-                              'icon-superscript-count',
-                              activityCount > 99 && 'origin-center scale-x-65'
-                            )}
-                            data-multiple-digits={activityCount > 9}
-                          >
-                            {activityCount > 99 ? '99+' : activityCount}
-                          </span>
-                        </span>
-                      </span>
+                        ref={activityBadgeTarget}
+                        className="pointer-events-none absolute inset-0"
+                      />
                     </span>
                   </Button>
                 </PopoverAnchor>

@@ -1,3 +1,4 @@
+import { openTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type {
   MobileQueuedEditHostFixtureModule,
   MobileCommandMenuHostFixtureModule
@@ -5,7 +6,7 @@ import type {
 import {
   QueuedMessageEditHoldParams,
   QueuedMessageUpdateParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+} from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER
@@ -14,7 +15,7 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 // Keep the real host checked with Node globals; the phone compiler checks the fixture contract.
 export const createMobileQueuedEditHostFixture: MobileQueuedEditHostFixtureModule['createMobileQueuedEditHostFixture'] =
@@ -66,27 +67,27 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
     const { tmpdir } = await import('node:os')
     const { join } = await import('node:path')
     const { ClaudeAtRestCommandCatalog } =
-      await import('../../../../claude/claude-at-rest-commands')
+      await import('../../../../claude/command-catalog/claude-at-rest-commands')
     const { commandDiscoveryRig, OMP, DISCOVERY_SESSION } =
-      await import('../../../../acp/acp-command-discovery.test-fixture')
+      await import('../../../../acp/discovery/testing/acp-command-discovery.test-fixture')
     const { acpStructuredAgentDefinition } =
-      await import('../../../../acp/acp-structured-agent-definitions')
+      await import('../../../../acp/session/acp-structured-agent-definitions')
     const { CLAUDE_STRUCTURED_AGENT } =
       await import('../../../../claude/structured/claude-structured-agent-definition')
     const { structuredAgentsDeclaringNothing } =
-      await import('../../providers/testing/structured-agent-session-adapter-router-test-support')
+      await import('../../providers/testing/structured-agent-session-adapter-router.test-fixture')
     const { StructuredAgentRegistry } = await import('../../providers/structured-agent-registry')
     const { StructuredAgentSessionAdapterRouter } =
       await import('../../providers/structured-agent-session-adapter-router')
     const { StructuredAgentSessionHost } = await import('../structured-agent-session-host')
     const { openTestAgentSessionRecordStore } =
       await import('../../../../runtime/agent-session/records/agent-session-record-store-test-harness')
-    const { openTestJournalHostDatabase, closeTestJournalHostDatabase } =
+    const { closeTestJournalHostDatabase } =
       await import('../../../agent-session-journal/store-lifecycle/journal-host-database-test-support')
     const { bindAtRestCommandContexts, retireAtRestCommandSettings, retireAtRestCommandContext } =
       await import('../../options/at-rest-command-context')
     const { recordingStructuredAgentSessionLogger } =
-      await import('./structured-agent-session-logger-test-support')
+      await import('./structured-agent-session-logger.test-fixture')
     const root = await mkdtemp(join(tmpdir(), 'orca-35069-phone-'))
     const cwd = join(root, 'workspace')
     await mkdir(cwd)
@@ -176,7 +177,7 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
       agents,
       store,
       adapter: new StructuredAgentSessionAdapterRouter(agents, async () => {}),
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestAgentSessionDatabase(root),
       claimKeyId: 'key',
       logger: recordingStructuredAgentSessionLogger().logger,
       probeOwner: async () => ({ outcome: 'pid-absent' })

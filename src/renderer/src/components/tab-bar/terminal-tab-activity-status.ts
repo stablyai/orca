@@ -2,9 +2,12 @@ import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
 } from '@/attention/agent-attention-contract'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
+
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { resolveProgramStatusPresentation } from '../../../../shared/program-status/presentation'
@@ -13,9 +16,10 @@ import {
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
+  type WorktreeStatus,
   applyAgentPaneActivityFlags,
   type AgentPaneActivityFlags
-} from '../../../../shared/worktree-status-rollup'
+} from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -71,7 +75,7 @@ export function getTerminalTabActivityFlags(
       continue
     }
     // Apply sidebar freshness rules so abandoned/slept panes cannot keep tab spinners alive.
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       // Stale identity suppresses Orca's one-shot permission label without suppressing native titles.
       getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).stalePaneIds.add(
         identity.paneId
@@ -184,10 +188,9 @@ export function resolveTerminalTabActivityStatus({
     hasFailed: flags?.hasFailed ?? false,
     hasInterrupted: flags?.hasInterrupted ?? false,
     hasUnconfirmed: flags?.hasUnconfirmed ?? false,
-    hasLiveDone: flags?.hasLiveDone ?? false,
+    hasLiveDone: flags?.hasLiveDone ?? false
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
-    hasRetainedDone: false
   })
 }
 

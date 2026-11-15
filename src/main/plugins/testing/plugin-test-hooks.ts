@@ -9,15 +9,15 @@ import { readFile } from 'node:fs/promises'
 import { posix, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isPluginWorkerSourcePath } from '../../../shared/plugins/frames/plugin-frame-source-modules'
-import { resolvePluginModuleSpecifier } from '../panels/plugin-frame-module-resolution'
-import { formatPluginTranspileFailure } from '../panels/plugin-source-transpile-failure'
-import { transpilePluginSource } from '../panels/plugin-source-transpiler'
-import { pluginModuleCandidatePaths } from '../plugin-module-candidate-paths'
-import { transformPluginSource } from '../plugin-source-sucrase-transform'
+import { resolvePluginModuleSpecifier } from '../panels/frame-serving/plugin-frame-module-resolution'
+import { formatPluginTranspileFailure } from '../panels/source-transpilation/plugin-source-transpile-failure'
+import { transpilePluginSource } from '../panels/source-transpilation/plugin-source-transpiler'
+import { pluginModuleCandidatePaths } from '../source-loading/plugin-module-candidate-paths'
+import { transformPluginSource } from '../source-loading/plugin-source-sucrase-transform'
 import {
   isOrcaSpecifier,
   pluginWorkerOrcaImportMessage
-} from '../workers/plugin-worker-orca-import'
+} from '../workers/child-runtime/plugin-worker-orca-import'
 
 type ResolveResult = { url: string; shortCircuit?: boolean; format?: string }
 type NextResolve = (specifier: string, context: ResolveContext) => Promise<ResolveResult>

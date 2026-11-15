@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { CircleAlert, SquareTerminal } from 'lucide-react-native'
-import { MobileOfflineState, MobileStateView } from '../components/MobileStateView'
-import { describeLoadError } from '../components/load-error-description'
-import { formatOfflineAsOfTime } from '../components/offline-as-of-time'
+import { MobileOfflineState, MobileStateView } from '../components/feedback/MobileStateView'
+import { describeLoadError } from '../components/feedback/load-error-description'
+import { formatOfflineAsOfTime } from '../components/host-connection/offline-as-of-time'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { ConnectionState } from '../transport/types'
-import { useLastSessionTabsAt } from './mobile-session-last-tabs'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { useLastSessionTabsAt } from './tabs/mobile-session-last-tabs'
 
 // Tab hydration retries on its own; past this a person needs to know it stalled and how to nudge it.
 const TABS_STALL_MS = 12_000

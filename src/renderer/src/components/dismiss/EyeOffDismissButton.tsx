@@ -1,6 +1,6 @@
 import { EyeOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 /** The eye-slash control that hides a teaching or info surface; its label names what goes away. */
 export function EyeOffDismissButton({

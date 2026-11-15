@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type { CrewFacet, CrewInvalidation } from './crew-changes'
 import { buildCrewSnapshot } from './crew-party-snapshot'
 import type { CrewReadDependencies } from './crew-read-dependencies'
-import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration-crew'
+import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
 import {
   createCrewHostDerivation,
   refreshCrewStatuses,
@@ -86,9 +86,7 @@ export class CrewReadModel {
         deps = { ...deps, records: previous.deps.records }
       }
       // A one-shot read has no watch to keep captured truth current.
-      const host = createCrewHostDerivation(deps, deps.now ?? now, () =>
-        Math.max(32, this.listeners.size * 2)
-      )
+      const host = createCrewHostDerivation(deps, () => Math.max(32, this.listeners.size * 2))
       if (this.listeners.size === 0) {
         return buildCrewSnapshot(address, { ...host.deps, now }, host)
       }
@@ -104,10 +102,8 @@ export class CrewReadModel {
         previous.registry.refreshRecordNames(deps.records, renamed)
         this.host = isDeepStrictEqual(identities(previous.deps.statuses), identities(statuses))
           ? refreshCrewStatuses(previous, statuses)
-          : createCrewHostDerivation(
-              { ...sources, records: previous.deps.records, statuses },
-              now,
-              () => Math.max(32, this.listeners.size * 2)
+          : createCrewHostDerivation({ ...sources, records: previous.deps.records, statuses }, () =>
+              Math.max(32, this.listeners.size * 2)
             )
       } else {
         this.host = previous

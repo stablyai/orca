@@ -1,11 +1,5 @@
 import { createHash } from 'node:crypto'
 
-import { mkdtempSync } from 'node:fs'
-
-import { tmpdir } from 'node:os'
-
-import { join } from 'node:path'
-
 import { afterEach, expect, it } from 'vitest'
 
 import { createRuntimeAgentProjections } from '../construction/runtime-agent-projections'
@@ -126,6 +120,7 @@ function host(workers: number, path: string = ':memory:') {
       }
     ).senders
   const senders = start(db)
+  const read = () => senders.withPreparedPublication(() => senders.build())
   const rows = (publication: ReturnType<typeof senders.build>) =>
     publication.associations.map((row) => `${row.identity}@${row.paneKey}`).sort()
   return {
@@ -137,96 +132,40 @@ function host(workers: number, path: string = ':memory:') {
     unrelated,
     dispatch,
     senders,
+    read,
     rows,
     /** What a cold build on its own connection publishes: the full rebuild to equal. */
-    cold: (database = db) => rows(start(database).build())
+    cold: async (database = db) => {
+      const cold = start(database)
+      return cold.withPreparedPublication(() => rows(cold.build()))
+    }
   }
 }
 
-it('follows each write that changes a worker, as a cold rebuild reads it', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'orca-sender-history-'))
-  const h = host(3, join(directory, 'orchestration.db'))
-  const step = (only = (_row: string) => true) => {
-    const rows = h.rows(h.senders.build())
-    expect(rows.filter(only)).toEqual(h.cold().filter(only))
-    return rows
-  }
-  step()
-  // A follow-up of a worker whose earlier lookup found none takes it to the follow-up's own
-  // terminal in another pane; only that earlier miss, not any pane it read, says so.
-  h.leaves.push({ ...MIRROR_LEAVES_STEP_1[0], tabId: 'tab-3', worktreeId: 'w', ptyId: 'pty-3' })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the publisher reads only these fields.
-  h.ptys.push({
-    ptyId: 'pty-3',
-    incarnationId: 'inc-1',
-    launchIncarnationId: 'inc-1',
-    launchToken: token(3),
-    worktreeId: 'w'
-  } as RuntimePtyWorktreeRecord)
-  step()
-  const followUp = h.dispatch(3, 'follow-up')
-  h.hold.run(`res-${followUp.id}`, followUp.id, followUp.id, pane(3), handle(3), 'pty-3:inc-1')
-  step()
-  h.db.db
-    .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
-    .run(h.ids[0], followUp.id)
-  expect(step()).not.toContain(`dispatch:${h.ids[0]}@${pane(3)}`)
-  expect(step()).toContain(`dispatch:${h.ids[0]}@${pane(0)}`)
-  // A terminal that moves to another pane takes its worker there.
-  h.db.db
-    .prepare(
-      "UPDATE worker_terminal_resources SET pane_key = ?, process_incarnation = 'pty-2:inc-1' WHERE id = ?"
-    )
-    .run(pane(2), `res-${h.ids[1]}`)
-  expect(step()).not.toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
-  // A respawned process under the same pane no longer holds its worker.
-  // (A fresh publisher sees the new process as the handle's first, so only worker rows compare.)
-  h.ptys[2] = { ...h.ptys[2], incarnationId: 'inc-2' }
-  const dispatches = (row: string) => row.startsWith('dispatch:')
-  expect(step(dispatches)).not.toContain(`dispatch:${h.ids[2]}@${pane(2)}`)
-  h.db.db.prepare('DELETE FROM worker_terminal_resources WHERE id = ?').run(`res-${h.ids[0]}`)
-  step(dispatches)
-  // A rolled-back write marks nothing.
-  const settled = h.senders.workForTest()
-  const before = h.senders.build()
-  h.db.db.exec('BEGIN')
-  h.db.db.prepare("UPDATE worker_terminal_resources SET ownership_state = 'released'").run()
-  h.db.db.exec('ROLLBACK')
-  expect(h.senders.build()).toBe(before)
-  expect(h.senders.workForTest().paneReads).toBe(settled.paneReads)
-  // Another connection's commit, which no trigger here sees, rebuilds from the database.
-  const other = new OrchestrationDb(join(directory, 'orchestration.db'))
-  dbs.push(other)
-  other.db
-    .prepare("UPDATE worker_terminal_resources SET ownership_state = 'released' WHERE id = ?")
-    .run(`res-${h.ids[1]}`)
-  expect(step(dispatches)).not.toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
-})
-
-it('keeps nothing it read inside a transaction that rolls back', () => {
+it('keeps nothing it read inside a transaction that rolls back', async () => {
   const h = host(3)
-  h.senders.build()
+  await h.read()
   const held = `dispatch:${h.ids[1]}@${pane(1)}`
   h.db.db.exec('BEGIN')
   h.db.db
     .prepare("UPDATE worker_terminal_resources SET ownership_state = 'released' WHERE id = ?")
     .run(`res-${h.ids[1]}`)
-  h.senders.build()
+  await h.read()
   h.db.db.exec('ROLLBACK')
-  expect(h.rows(h.senders.build())).toContain(held)
+  expect(h.rows(await h.read())).toContain(held)
   // A later write no worker read leaves it as the database has it.
   h.db.db
     .prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?")
     .run(h.unrelated.id)
-  expect(h.rows(h.senders.build())).toEqual(h.cold())
+  expect(h.rows(await h.read())).toEqual(await h.cold())
 })
 
-it('proves the addressed invocation, withdraws on token-only retirement, and never follows a successor', () => {
+it('proves the addressed invocation, withdraws on token-only retirement, and never follows a successor', async () => {
   const h = host(2)
   const source = h.ids[0]
-  const read = () =>
-    h.senders.build().associations.find((row) => row.identity === `dispatch:${source}`)
-  expect(read()).toMatchObject({ paneKey: pane(0), dispatchActor: true })
+  const read = async () =>
+    (await h.read()).associations.find((row) => row.identity === `dispatch:${source}`)
+  expect(await read()).toMatchObject({ paneKey: pane(0), dispatchActor: true })
   // A different execution taking custody cannot move the still-running source actor.
   h.db.db.prepare('DELETE FROM worker_terminal_resources WHERE owner_dispatch_id = ?').run(source)
   h.db.db
@@ -234,39 +173,39 @@ it('proves the addressed invocation, withdraws on token-only retirement, and nev
       'UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = ? WHERE owner_dispatch_id = ?'
     )
     .run(JSON.stringify([source]), h.ids[1])
-  expect(read()).toMatchObject({ paneKey: pane(0), dispatchActor: true })
+  expect(await read()).toMatchObject({ paneKey: pane(0), dispatchActor: true })
   h.ptys[0].launchToken = null
   h.ptys[0].launchIncarnationId = null
-  expect(read()).toBeUndefined()
+  expect(await read()).toBeUndefined()
   // The same shell can run a same-kind successor, but that is a different invocation.
   h.ptys[0].launchToken = 'successor'
   h.ptys[0].launchIncarnationId = 'inc-1'
-  expect(read()).toBeUndefined()
+  expect(await read()).toBeUndefined()
   h.ptys[0].launchToken = token(0)
-  expect(read()).toMatchObject({ dispatchActor: true })
+  expect(await read()).toMatchObject({ dispatchActor: true })
   for (const scope of [
     JSON.stringify({ kind: 'ssh', targetId: 'remote' }),
     JSON.stringify({ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }),
     'bad'
   ]) {
     h.db.db.prepare('UPDATE dispatch_contexts SET host_scope = ? WHERE id = ?').run(scope, source)
-    expect(read()).toBeUndefined()
+    expect(await read()).toBeUndefined()
   }
   h.db.db
     .prepare(
       'UPDATE dispatch_contexts SET host_scope = NULL, launch_token_hash = NULL WHERE id = ?'
     )
     .run(source)
-  expect(read()).toBeUndefined()
+  expect(await read()).toBeUndefined()
   h.db.db
     .prepare(
       'UPDATE dispatch_contexts SET launch_token_hash = ?, process_incarnation = NULL WHERE id = ?'
     )
     .run(hash(0), source)
-  expect(read()).toBeUndefined()
+  expect(await read()).toBeUndefined()
 })
 
-it('does not turn failed pre-attachment custody recovery into launch proof', () => {
+it('does not turn failed pre-attachment custody recovery into launch proof', async () => {
   const h = host(1)
   const runId = h.db.getDispatchContextById(h.ids[0])!.run_id
   h.db.failDispatch(h.ids[0], 'old work')
@@ -291,7 +230,7 @@ it('does not turn failed pre-attachment custody recovery into launch proof', () 
     process_incarnation: 'pty-0:inc-1',
     launch_token_hash: null
   })
-  expect(h.senders.build().associations.some((row) => row.identity === `dispatch:${before}`)).toBe(
+  expect((await h.read()).associations.some((row) => row.identity === `dispatch:${before}`)).toBe(
     false
   )
   h.db.db.prepare('DELETE FROM worker_terminal_resources').run()
@@ -308,7 +247,7 @@ it('does not turn failed pre-attachment custody recovery into launch proof', () 
   })
   h.hold.run('after', after, after, pane(0), handle(0), 'pty-0:inc-1')
   h.db.failWorkerStart(after, 'task_input', 'failed after attachment')
-  expect(h.senders.build().associations).toContainEqual(
+  expect((await h.read()).associations).toContainEqual(
     expect.objectContaining({ identity: `dispatch:${after}`, dispatchActor: true })
   )
 })

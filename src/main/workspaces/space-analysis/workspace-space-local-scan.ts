@@ -1,7 +1,7 @@
 import { lstat, opendir } from 'node:fs/promises'
 import { platform } from 'node:process'
 import type { Dirent } from 'node:fs'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorkspaceSpaceWorktree } from '../../../shared/workspace-disk-space/workspace-space-types'
 import { compactWorkspaceSpaceItems } from '../../../shared/workspace-disk-space/workspace-space-compaction'

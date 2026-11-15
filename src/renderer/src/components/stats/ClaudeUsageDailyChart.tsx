@@ -87,7 +87,7 @@ export function ClaudeUsageDailyChart({ daily }: ClaudeUsageDailyChartProps): Re
                   <div className="flex h-full w-full flex-col justify-end">
                     {segments.map((segment) =>
                       segment.value > 0 ? (
-                        <TooltipProvider key={segment.key} delayDuration={120}>
+                        <TooltipProvider key={segment.key}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div

@@ -1,11 +1,11 @@
-import { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
+import { WatcherProcessSupervisor } from './supervision/parcel-watcher-process-supervisor'
 import type { WatcherProcessSubscribeOptions } from './parcel-watcher-process-protocol'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
   WatcherProcessSubscription
 } from './parcel-watcher-process-subscription'
-import { RuntimeWatcherProcessPool } from './runtime-watcher-process-pool'
+import { RuntimeWatcherProcessPool } from './runtime-pool/runtime-watcher-process-pool'
 
 const sharedWatcherProcessSupervisor = new WatcherProcessSupervisor()
 // Healthy roots share a child; quarantine adds isolation only after faults to limit RSS.

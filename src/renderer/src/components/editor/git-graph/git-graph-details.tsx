@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,10 +14,12 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function GitGraphDetails({
   item,
+  commitActions,
   actions,
   onParent
 }: {
   item: GitHistoryItem
+  commitActions?: ReactNode
   actions: ReturnType<typeof useGitHistoryCommitActions>
   onParent: (id: string) => void
 }) {
@@ -49,6 +52,7 @@ export function GitGraphDetails({
     <div>
       <div className="space-y-3 p-4">
         <h2 className="break-words text-sm font-semibold">{item.subject}</h2>
+        {commitActions}
         {body && <p className="whitespace-pre-wrap break-words text-xs">{body}</p>}
         <div className="text-xs text-muted-foreground">
           <div>

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { parseCursorSessionToken } from '../rate-limits/cursor-session-token'
+import { parseCursorSessionToken } from '../rate-limits/providers/cursor/cursor-session-token'
 
 /** Everything cursor-agent keeps for one sign-in; switching accounts moves all of it together. */
 export type CursorCredentialSnapshot = {

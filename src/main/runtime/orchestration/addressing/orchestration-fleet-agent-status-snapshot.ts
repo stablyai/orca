@@ -1,3 +1,4 @@
+import { orchestrationProjectionFacts } from '../crew/orchestration-projection-facts'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import { conversationRecordReader } from './session-lineage/structured-session-lineage'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -8,7 +9,7 @@ import {
 } from '../crew/runtime-agent-orchestration-projection'
 import { createOrchestrationProjectionScope } from '../crew/runtime-agent-orchestration-scope'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration-fleet-agent-status-evidence'
+import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import {
   mintAgentStatusFleetEvidence,
   type AgentStatusRuntimeEnrichment,
@@ -39,17 +40,22 @@ export function readCapturedOrchestrationFleetAgentStatusSnapshot(
   dependencies: RuntimeAgentOrchestrationDependencies
 ): readonly FleetAgentStatusEvidence[] {
   const projection = new RuntimeAgentOrchestrationProjection(dependencies)
+  const raw = dependencies.getDb()
+  const sourceFacts = raw?.db ? orchestrationProjectionFacts(raw) : undefined
+  const db = sourceFacts?.view ?? raw
   let scope: ReturnType<typeof createOrchestrationProjectionScope> | undefined
   return readOrchestrationFleetAgentStatusSnapshot({
     ...source,
     getAgentStatusOrchestrationContextForPaneKey: (paneKey) => {
+      if (raw?.db && !sourceFacts) {
+        return undefined
+      }
       const handle = source.getAgentStatusTerminalHandleForPaneKey?.(paneKey)
       if (!handle) {
         return undefined
       }
-      const db = dependencies.getDb()
       scope ??= createOrchestrationProjectionScope(db, dependencies)
-      return projection.getForHandle(handle, db, { paneKey }, scope)
+      return projection.getForHandle(handle, db, { paneKey, deferAttention: true }, scope)
     }
   })
 }

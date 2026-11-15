@@ -240,6 +240,15 @@ const SCENARIOS = [
     endMs: 70_000
   },
   {
+    // A full-screen truecolor repaint at 60fps outruns the link ~50x, so the queue overflows and recovers continuously.
+    name: '1 Mbit/s, 50ms, 6.4 MB/s TUI',
+    bytesPerMs: 125,
+    ackReturnMs: 50,
+    floodEveryMs: 10,
+    echoAtMs: 40_000,
+    endMs: 70_000
+  },
+  {
     name: '1 Mbit/s, 50-450ms jitter',
     bytesPerMs: 125,
     ackReturnMs: 50,

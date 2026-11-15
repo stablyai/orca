@@ -25,7 +25,7 @@ import {
   waitForBoundPanes
 } from './helpers/terminal-layout-journeys'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import {
   TERMINAL_LAYOUT_PARITY_OUT_ENV,
   type RawParityCheckpoint,

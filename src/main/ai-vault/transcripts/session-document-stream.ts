@@ -1,8 +1,11 @@
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { StringDecoder } from 'node:string_decoder'
 import { FlexAssembler, arrayRule, objectRule } from 'stream-json/core/utils/flex-assembler.js'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { createJsonTokenReader } from '../../../shared/json-stream/json-token-reader'
-import { throwIfAiVaultScanCancelled } from '../ai-vault-scan-cancellation'
 
 /** Fold one root array while retaining only the root fields the agent parser uses. */
 export async function readStreamedSessionDocument<T>(args: {
@@ -13,6 +16,7 @@ export async function readStreamedSessionDocument<T>(args: {
   create: () => T
   consume: (state: T, value: unknown) => void
   signal?: AbortSignal
+  drain?: () => Promise<void>
 }): Promise<{ record: Record<string, unknown>; state: T } | null> {
   const record: Record<string, unknown> = Object.create(null)
   const fields = new Set(args.fields)
@@ -122,16 +126,23 @@ export async function readStreamedSessionDocument<T>(args: {
     }
   )
   const decoder = new StringDecoder('utf8')
-  for await (const chunk of args.bytes) {
+  try {
+    for await (const chunk of args.bytes) {
+      throwIfAiVaultScanCancelled(args.signal)
+      parser.write(decoder.write(chunk))
+      await waitForAiVaultScan(args.drain?.() ?? Promise.resolve(), args.signal)
+      await waitForAiVaultScan(yieldToEventLoop(undefined, { signal: args.signal }), args.signal)
+    }
+  } catch (error) {
     throwIfAiVaultScanCancelled(args.signal)
-    parser.write(decoder.write(chunk))
-    await yieldToEventLoop()
+    throw error
   }
   const tail = decoder.end()
   if (tail) {
     parser.write(tail)
   }
   parser.end()
+  await waitForAiVaultScan(args.drain?.() ?? Promise.resolve(), args.signal)
   throwIfAiVaultScanCancelled(args.signal)
   if (consumeFailure) {
     throw consumeFailure.error

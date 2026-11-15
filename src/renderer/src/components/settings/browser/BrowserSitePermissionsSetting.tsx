@@ -1,12 +1,12 @@
 // @protected-copy: saved site permission choices.
 import { useEffect, useState } from 'react'
-import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   BROWSER_SITE_PERMISSIONS,
   isBrowserSitePermissionDecision,
   type BrowserSitePermission,
   type BrowserSitePermissionEntry
-} from '../../../../../shared/browser-site-permission'
+} from '../../../../../shared/browser/site-settings/browser-site-permission'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import {
@@ -19,6 +19,7 @@ import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { useAppStore } from '../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 
 function SitePermissionRow({
   entry,
@@ -138,7 +139,7 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
             <SelectContent align="end">
               {profiles.map((profile) => (
                 <SelectItem key={profile.id} value={profile.id}>
-                  {profile.label}
+                  {translateBrowserSessionProfileLabel(profile.label, profile.id)}
                 </SelectItem>
               ))}
             </SelectContent>

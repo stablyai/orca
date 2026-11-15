@@ -2,11 +2,12 @@
 
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+
 import {
   collectAgentPaneConversations,
   resolvePaneAgentConversation,
   resolvePaneLastAgentConversation
-} from '@/lib/agent-session/history/title-sync/ai-vault-tab-title-requests'
+} from '../../lib/agent-session/identity/pane-agent-conversations'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultListArgs,
@@ -23,7 +24,7 @@ import {
   CLI_CONVERSATION_ADOPTING_AGENTS,
   cliConversationRowsShareAgent,
   type CliConversationRowAgent
-} from '../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { agentForksConversations } from '../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -48,7 +49,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 
 /** Find native chats by Orca session ID and terminal tabs by their provider conversation. */
 export type TabSessionHistorySubject = {

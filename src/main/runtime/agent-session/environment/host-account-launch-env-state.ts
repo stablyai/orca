@@ -1,10 +1,10 @@
 import { retireAtRestCommandContext } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   hostAccountLaunchEnvFor,
   type HostAccountLaunchEnv
-} from '../../../../shared/host-account-launch-env'
+} from '../../../../shared/agent-launch/startup/host-account-launch-env'
 import {
   refreshSelectedClaudeProfile,
   type HostClaudeProfileRefresh

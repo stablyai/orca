@@ -10,7 +10,7 @@ import {
   Puzzle,
   SquareTerminal
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import type { PluginListEntry } from './plugin-list-entries'
 
@@ -51,6 +51,8 @@ const ART_TYPE_BY_CATEGORY: Readonly<Record<string, PluginCatalogType>> = {
   languages: 'syntax',
   'language-packs': 'interface-language',
   localization: 'interface-language',
+  i18n: 'interface-language',
+  translations: 'interface-language',
   keybindings: 'instructions',
   commands: 'instructions',
   'vm-recipes': 'instructions',

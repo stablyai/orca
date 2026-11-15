@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},
     agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+
     runtimeAgentOrchestrationByPaneKey: {},
     setActiveWorktree: vi.fn(),
     markWorktreeVisited: vi.fn(),
@@ -37,15 +37,15 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
+vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
 
-vi.mock('@/lib/floating-workspace-panel-reveal', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-panel-reveal', () => ({
   revealFloatingWorkspacePanel: mocks.revealFloatingWorkspacePanel
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 
@@ -203,7 +203,6 @@ describe('createTerminalHandleLinkProvider', () => {
     mocks.storeState.ptyIdsByTabId = {}
     mocks.storeState.terminalLayoutsByTabId = {}
     mocks.storeState.agentStatusByPaneKey = {}
-    mocks.storeState.retainedAgentsByPaneKey = {}
     mocks.storeState.runtimeAgentOrchestrationByPaneKey = {}
     vi.stubGlobal('window', {
       api: {

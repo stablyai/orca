@@ -66,6 +66,9 @@ export function selectCodexHistoryTurn(
   turn: Record<string, unknown>,
   anchor: CodexHistoryJournalView
 ): boolean {
+  if (anchor.covered?.has(turnId(turn))) {
+    return false
+  }
   if (anchor.unresolvedOrigin) {
     throw new Error('no-legacy-origin')
   }

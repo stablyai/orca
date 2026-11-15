@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { runProcess } from '@orca/process-host'
 import { z } from 'zod'
-import { getCursorCliConfigPath } from '../rate-limits/cursor-auth-paths'
+import { getCursorCliConfigPath } from '../rate-limits/providers/cursor/cursor-auth-paths'
 import {
   isSafeCursorSecret,
   projectCursorCredential,

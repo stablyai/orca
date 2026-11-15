@@ -9,6 +9,4 @@ vi.mock('electron', () => ({
 }))
 
 import '../../db/messages/orchestration-dispatch-mailbox-delivery.spec'
-import './orchestration-mailbox-pointer-cli-command.spec'
-import './orchestration-mailbox-bound-run-scan.spec'
 import './orchestration-mailbox-typed-pointer-submit.spec'

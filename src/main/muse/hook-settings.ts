@@ -3,14 +3,14 @@ import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
-  getSharedManagedScriptPath,
-  wrapPosixHookCommand,
   type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { readManagedHookEventsFromJson } from '../agent-hooks/managed-hooks-json-events'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { readManagedHookEventsFromJson } from '../agent-hooks/installation/configuration/managed-hooks-json-events'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import { parseMuseSettingsText } from './hook-config-json'
 
 const MUSE_SCRIPT_BASE = 'muse-hook'

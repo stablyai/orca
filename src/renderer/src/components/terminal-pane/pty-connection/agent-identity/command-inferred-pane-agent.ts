@@ -9,7 +9,7 @@ import type {
 import { registerAgentHookTerminalLifecycleHandler } from '../../agent-completion/agent-hook-terminal-lifecycle'
 import type { AgentCompletionStatusSnapshot } from '../../agent-completion/agent-completion-coordinator-types'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
 import { recognizeAgentLaunchCommand } from '../../../../../../shared/agent-launch/startup/agent-command-line-intent'
 import type { TerminalAgent } from '../../../../../../shared/agent-status/identity/terminal-agent'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -178,7 +178,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
     ) {
       return false
     }
-    const explicitTitleAgentType = resolveCommittedTitleAgentType(title)
+    const explicitTitleAgentType = resolveExplicitTerminalTitleAgentType(title)
     const activeHookAgentForTitle = resolveCompatibleAgentTypeForOwner(
       activeHookStatus?.agentType,
       explicitTitleAgentType

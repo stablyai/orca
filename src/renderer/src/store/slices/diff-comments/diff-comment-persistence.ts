@@ -5,9 +5,9 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { findCopyRows } from './worktree-diff-comments-selector'
 import { diffCommentOwnerKey, findOwnedFolder, type DiffCommentOwner } from './diff-comment-owner'
-import type { getExecutionHostIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'
+import type { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { writeDiffCommentsToHost } from './diff-comment-host-write'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
   const rawSource = (comment as { source?: unknown }).source

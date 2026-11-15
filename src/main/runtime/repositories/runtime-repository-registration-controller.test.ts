@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
 import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
-  detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
+  detectRepoLocalMetadata: vi.fn().mockResolvedValue({})
 }))
 vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)

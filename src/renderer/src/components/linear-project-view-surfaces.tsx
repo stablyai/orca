@@ -1,5 +1,5 @@
-import { linearIssueReadError } from '@/lib/linear-read-error'
-import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import { linearIssueReadError } from '@/lib/work-items/linear/linear-read-error'
+import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import React from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, Layers3, LoaderCircle, RefreshCw } from 'lucide-react'
 
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   LinearProjectDetail,
   LinearProjectSummary

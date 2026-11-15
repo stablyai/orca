@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
-import type { RendererPublicationThrottleTarget } from '../../../window/renderer-publication-throttle'
+import type { RendererPublicationThrottleTarget } from '../../../window/visibility/renderer-publication-throttle'
 
 // The part of the authoritative window a browser stream touches: its renderer's throttle lease target.
 export type AuthoritativeWindowDouble = {

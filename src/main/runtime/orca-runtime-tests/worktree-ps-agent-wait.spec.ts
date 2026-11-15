@@ -3,7 +3,7 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
-import { AgentHookServer, _internals } from '../../agent-hooks/server'
+import { AgentHookServer, _internals } from '../../agent-hooks/server/agent-hook-server'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 
@@ -22,7 +22,7 @@ async function makeRuntimeWithHookRow(
     getForegroundProcess: async () => null
   })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
     command: 'claude'
   })

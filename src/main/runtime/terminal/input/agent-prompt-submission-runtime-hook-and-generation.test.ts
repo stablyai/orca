@@ -61,6 +61,7 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     hook: {
       state: 'done' | 'working'
       stateStartedAt: number
+      mainAgent?: { state: 'done' | 'working'; stateStartedAt: number }
     },
     launchAgent: 'antigravity' | 'kimi' | 'codex' = 'kimi'
   ): Promise<{
@@ -81,7 +82,8 @@ describe('agent prompt submission runtime hook and generation cases', () => {
           connectionId: null,
           // receivedAt changes even on same-state tool pings.
           receivedAt: Date.now(),
-          stateStartedAt: hook.stateStartedAt
+          stateStartedAt: hook.stateStartedAt,
+          ...(hook.mainAgent ? { mainAgent: { ...hook.mainAgent } } : {})
         }
       ]
     })
@@ -101,6 +103,44 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     ).handle
     return { runtime, handle, writes }
   }
+
+  // Child work holds the row working across the prompt; only the main agent's turn start moves.
+  it('settles a prompt whose turn starts while child work keeps the row working', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const mainAgent: { state: 'done' | 'working'; stateStartedAt: number } = {
+      state: 'done',
+      stateStartedAt: 800
+    }
+    const hook = { state: 'working' as const, stateStartedAt: 500, mainAgent }
+    const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook, 'codex')
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        if (data === '\r') {
+          vi.setSystemTime(3_000)
+          hook.mainAgent = { state: 'working', stateStartedAt: 3_000 }
+        }
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving',
+      acceptQueued: true,
+      requestId: 'held-open-turn',
+      observationTimeoutMs: 20_000
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({
+      prompt: { stages: ['input_accepted', 'turn_started'] }
+    })
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
 
   it('reserves a hook-only turn start for the oldest queued prompt receipt', async () => {
     vi.useFakeTimers()

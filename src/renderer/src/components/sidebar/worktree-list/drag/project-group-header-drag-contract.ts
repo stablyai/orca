@@ -1,3 +1,4 @@
+import type { RootProjectHeaderDrag } from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
 import type {
@@ -5,7 +6,7 @@ import type {
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
 import { REPO_HEADER_ACTION_SELECTOR } from './project-header-drag-contract'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 
 export type ProjectGroupDragState = {
   draggingGroupId: string | null
@@ -19,7 +20,7 @@ export const INITIAL_PROJECT_GROUP_DRAG_STATE: ProjectGroupDragState = {
   dropIndicatorY: null
 }
 
-export type UseProjectGroupHeaderDragArgs = {
+export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
   sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
@@ -38,6 +39,8 @@ export type ProjectGroupHeaderDragSession = {
   groupId: string
   bucketKey: ProjectGroupHeaderDragBucketKey
   sidebarProjectGroupHeaderIds: readonly string[]
+  rootProjectHeaderKeys?: readonly string[]
+  rootProjectHeaderHostId?: string
   pointerId: number
   headerRects: ProjectGroupHeaderDragRect[]
   handleEl: HTMLElement

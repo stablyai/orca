@@ -1,5 +1,5 @@
 import { countAgentTuiInputLines } from './agent-tui-input-clear'
-import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../orchestration-timing-budgets'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../orchestration/orchestration-timing-budgets'
 import {
   iterateTerminalInputChunks,
   TERMINAL_INPUT_CHUNK_MAX_BYTES

@@ -11,7 +11,7 @@ import {
   foldWslUncPathCaseInsensitiveParts,
   isWslUncPath,
   toWindowsWslDrivePath
-} from '../../wsl-paths'
+} from '../../file-access/wsl-paths'
 
 function abortError(): Error {
   const error = new Error('The operation was aborted.')

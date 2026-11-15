@@ -3,19 +3,19 @@ import type {
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
 } from '../../shared/managed-account-types'
-import { ClaudeAccountRegistration } from './claude-account-registration'
+import { ClaudeAccountRegistration } from './sign-in/claude-account-registration'
 import {
   ClaudeAccountSelection,
   type ClaudeAccountRuntime,
   type ClaudeAccountStore,
   type ClaudeAccountUsage
-} from './claude-account-selection'
-import { runClaudeCommandProcess } from './claude-command-process'
-import { runClaudeLoginSession } from './claude-login-session'
-import { runClaudePastedCodeLogin } from './claude-pasted-code-login'
+} from './selection/claude-account-selection'
+import { runClaudeCommandProcess } from './sign-in/claude-command-process'
+import { runClaudeLoginSession } from './sign-in/claude-login-session'
+import { runClaudePastedCodeLogin } from './sign-in/claude-pasted-code-login'
 import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
-import type { ClaudeAccountSelectionTarget } from './runtime-selection'
+import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()

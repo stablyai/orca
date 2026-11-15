@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import {
   createNormalizedPathInsideOrEqualMatcher,

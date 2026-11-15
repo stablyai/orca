@@ -1,4 +1,5 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import { recordBrowserInitializationReceipt } from './browser-initialization-presentation'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   latestReceivedSessionTabsInventoryFrameByEnvironment,
   latestReceivedSessionTabsSnapshotByWorktree,
@@ -89,6 +90,7 @@ export function recordReceivedWebSessionTabsSnapshot(
   source: 'stream' | 'bootstrap' = 'stream'
 ): number {
   const frame = receivedFrame ?? nextReceivedSessionTabsFrame()
+  recordBrowserInitializationReceipt(environmentId, snapshot, frame)
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   const current = latestReceivedSessionTabsSnapshotByWorktree.get(key)
   // Bootstrap reserves before request; a later received stream makes its eventual response stale and unable to advance epoch history.

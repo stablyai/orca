@@ -1,4 +1,4 @@
-import { encodePowerShellCommand } from '../../powershell-command-encoding'
+import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
 import {
   buildShellCommandFromArgv,
   isPosixStartupShell,

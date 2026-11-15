@@ -11,6 +11,7 @@ import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'
 import { ComputerUseSkillSetupPanel } from './ComputerUseSkillSetupPanel'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { COMPUTER_USE_SETTINGS_TARGET_ID } from './computer-use-search'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -292,7 +293,7 @@ export function ComputerUsePane(): React.JSX.Element {
   return (
     <div className="space-y-8">
       {isMac ? (
-        <SettingsGroup>
+        <SettingsGroup id={COMPUTER_USE_SETTINGS_TARGET_ID}>
           <div className="flex flex-wrap items-start justify-between gap-4 py-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -384,8 +385,9 @@ export function ComputerUsePane(): React.JSX.Element {
         </SettingsGroup>
       ) : null}
 
-      <SettingsGroup>
-        <div className="py-4">
+      <SettingsGroup id={isMac ? undefined : COMPUTER_USE_SETTINGS_TARGET_ID}>
+        {/* The inline panel adds pt-1.5 of its own; this evens the top inset with the bottom. */}
+        <div className="pb-4 pt-2.5">
           <ComputerUseSkillSetupPanel />
         </div>
       </SettingsGroup>

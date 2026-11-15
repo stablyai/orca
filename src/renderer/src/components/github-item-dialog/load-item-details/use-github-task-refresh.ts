@@ -2,9 +2,12 @@ import { useGitHubItemTargetIdentity } from './github-work-item-target-context'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
-import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../../../shared/task-source-runtime-capabilities'
-import { githubTaskExecutionIdentity, captureGitHubTaskTarget } from '@/lib/github-task-target'
+import { getGitHubSourceRuntimeHost } from '@/lib/work-items/github/github-source-runtime-context'
+import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../../../shared/work-items/task-source-runtime-capabilities'
+import {
+  githubTaskExecutionIdentity,
+  captureGitHubTaskTarget
+} from '@/lib/work-items/github/github-task-target'
 import {
   useCallback,
   useLayoutEffect,
@@ -16,16 +19,16 @@ import {
 } from 'react'
 import { useAppStore } from '@/store'
 
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
 import { workItemDetailsCache } from './work-item-details-cache'
 import {
   startWorkItemDetailsFetch,
   loadCanonicalGitHubTaskDetails
 } from './work-item-details-fetch-settle'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
 export function useGitHubTaskRefresh({

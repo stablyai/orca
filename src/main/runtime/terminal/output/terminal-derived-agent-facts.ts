@@ -3,7 +3,7 @@ import type {
   RuntimePtyTitleTrackerEntry,
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
-import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
+import { createCommandCodeOutputStatusDetector } from '../../../../shared/agent-status/output/command-code-output-status'
 import {
   extractLastOsc7Uri,
   extractOscScanTail

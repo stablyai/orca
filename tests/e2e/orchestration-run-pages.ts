@@ -1,4 +1,4 @@
-import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../src/shared/orchestration-run-pagination'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../src/shared/orchestration/orchestration-run-pagination'
 
 export type OrchestrationRunSummary = {
   id: string

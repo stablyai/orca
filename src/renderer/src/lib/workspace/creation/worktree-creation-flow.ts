@@ -20,7 +20,7 @@ import {
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
@@ -172,8 +172,10 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
     provisioningLog: undefined,
+    environmentCheck: undefined,
     checkoutProgress: undefined,
-    worktreeId: undefined
+    worktreeId: undefined,
+    chatHandedOffAt: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

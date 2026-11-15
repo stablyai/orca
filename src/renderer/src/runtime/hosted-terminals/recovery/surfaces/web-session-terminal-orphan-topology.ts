@@ -1,4 +1,4 @@
-import type { RuntimeTerminalOrphanTopology } from '../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalOrphanTopology } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TabGroup, TabGroupLayoutNode } from '../../../../../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,

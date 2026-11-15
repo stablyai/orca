@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import type { VisiblePtyRecoveryState } from './terminal-remote-runtime-recovery-ui-state'
-import type { WslHostUnavailableReason } from '../../../../../lib/wsl-host-availability'
+import type { WslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
 import { WslHostUnavailableBanner } from '../../recovery/wsl/WslHostUnavailableBanner'
 import { RemoteRuntimeRecoveryCard } from './RemoteRuntimeRecoveryCard'
 import {

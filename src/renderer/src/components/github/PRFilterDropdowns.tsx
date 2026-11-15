@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import type { PickerOption } from '@/components/github/PRFilterPickers'
 import {
@@ -14,12 +14,10 @@ import {
   type PRFilterChange,
   type SectionKey
 } from '@/components/github/PRFilterSections'
-import type {
-  GitHubAssignableUser,
-  GitHubOwnerRepo
-} from '../../../../shared/github/pull-request-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 

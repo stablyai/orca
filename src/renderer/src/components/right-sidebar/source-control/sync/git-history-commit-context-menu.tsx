@@ -1,5 +1,4 @@
 import { useSourceControlState, useSourceControlScope } from '../panel/worktree-scope'
-import type React from 'react'
 import { Copy, Globe, Hash, Sparkles } from 'lucide-react'
 import {
   ContextMenuContent,
@@ -7,16 +6,19 @@ import {
   ContextMenuSeparator
 } from '@/components/ui/context-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import type React from 'react'
 import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 export type GitHistoryCommitAction = 'open-remote' | 'copy-hash' | 'copy-message' | 'explain'
 
 export function GitHistoryCommitContextMenu({
   item,
+  children,
   onAction
 }: {
   item: GitHistoryItem
+  children?: React.ReactNode
   onAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -29,6 +31,7 @@ export function GitHistoryCommitContextMenu({
   )
   return (
     <ContextMenuContent className="w-56">
+      {children}
       {managedBrowserCreationEnabled ? (
         <ContextMenuItem onSelect={() => onAction('open-remote', item)}>
           <Globe className="size-3.5" />

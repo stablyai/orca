@@ -6,8 +6,8 @@ import {
 } from '../../../../shared/execution-host'
 import { stat } from 'node:fs/promises'
 import type { Store } from '../../../persistence/loading-store/store'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   resolveTerminalStartupCwdForWorkspace,
   type TerminalStartupCwdMissingDirFallback
@@ -23,9 +23,9 @@ import {
   wslMoveHostDistro,
   wslMoveProjectRefForWorkspace,
   WslMoveProjectFencedError
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { listLiveDaemonPtyIds } from '../../../daemon/providers/lifecycle/daemon-provider-state'
-import { wslDistroHoldMessage } from '../../../../shared/wsl-distro-stopped-hold'
+import { wslDistroHoldMessage } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import {
   blockedWslDistroForPath,
   runAsWslUserAct,

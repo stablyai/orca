@@ -9,7 +9,7 @@ import {
   type AgentSessionAttachmentUploadTarget
 } from '../../../../shared/agent-session/agent-session-attachments'
 import { encodeBase64Bytes } from '@/lib/base64-bytes'
-import { readBrowserAttachmentFile } from '@/lib/browser-attachment-files'
+import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
 import { callEnvironmentEnvelope } from './web-runtime-calls'
 import { resolveEnvironment } from './web-runtime-session'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'

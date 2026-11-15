@@ -268,20 +268,6 @@ export function cancelSetup(filePath: string): void {
   }))
 }
 
-export function markRunCommitted(filePath: string, key: string): void {
-  updateSession(filePath, ({ runs }) => {
-    const run = runs[key]
-    return run ? { runs: { ...runs, [key]: { ...run, outputs: [], committed: true } } } : {}
-  })
-}
-
-/** Forgets finished runs, e.g. after Clear All Outputs; the executing run keeps streaming. */
-export function forgetFinishedRuns(filePath: string): void {
-  updateSession(filePath, ({ runs }) => ({
-    runs: Object.fromEntries(Object.entries(runs).filter(([, run]) => run.finishedAt === null))
-  }))
-}
-
 function handleFrame({ filePath, frame }: KernelFrameEvent): void {
   if (!isOpen(filePath)) {
     return
@@ -312,9 +298,10 @@ function handleFrame({ filePath, frame }: KernelFrameEvent): void {
     pump(filePath)
     return
   }
-  updateSession(filePath, ({ runs }) => ({
-    runs: { ...runs, [key]: applyKernelOutput(runs[key], frame.type, frame.content) }
-  }))
+  const next = applyKernelOutput(session.runs[key], frame.type, frame.content)
+  if (next !== session.runs[key]) {
+    updateSession(filePath, ({ runs }) => ({ runs: { ...runs, [key]: next } }))
+  }
 }
 
 // Subscribe lazily with the notebook viewer, which owns kernel sessions.

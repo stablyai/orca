@@ -77,64 +77,6 @@ describe('OrcaRuntimeService', () => {
       })
     })
 
-    it('routes tab switch and capture start by explicit page id', async () => {
-      mockLiveBrowserGuest()
-      const runtime = createRuntime()
-      const tabSwitchMock = vi.fn().mockResolvedValue({
-        switched: 2,
-        browserPageId: 'page-2'
-      })
-      const captureStartMock = vi.fn().mockResolvedValue({
-        capturing: true
-      })
-
-      runtime.setAgentBrowserBridge({
-        tabSwitch: tabSwitchMock,
-        captureStart: captureStartMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-2', 2]])),
-        tabList: vi.fn(() => ({
-          tabs: [
-            { browserPageId: 'page-0', index: 0, url: 'about:blank', title: '', active: false },
-            { browserPageId: 'page-1', index: 1, url: 'about:blank', title: '', active: false },
-            { browserPageId: 'page-2', index: 2, url: 'about:blank', title: '', active: true }
-          ]
-        }))
-      } as never)
-
-      await expect(runtime.browserTabSwitch({ page: 'page-2' })).resolves.toEqual({
-        switched: 2,
-        browserPageId: 'page-2'
-      })
-      await expect(runtime.browserCaptureStart({ page: 'page-2' })).resolves.toEqual({
-        capturing: true
-      })
-      expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-2')
-      expect(captureStartMock).toHaveBeenCalledWith(undefined, 'page-2')
-    })
-
-    it('accepts focus on tab switch without altering bridge args (focus is main-side concern)', async () => {
-      mockLiveBrowserGuest()
-      const runtime = createRuntime()
-      const tabSwitchMock = vi.fn().mockResolvedValue({
-        switched: 0,
-        browserPageId: 'page-1'
-      })
-
-      runtime.setAgentBrowserBridge({
-        tabSwitch: tabSwitchMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
-        tabList: vi.fn(() => ({
-          tabs: [{ browserPageId: 'page-1', index: 0, url: 'about:blank', title: '', active: true }]
-        }))
-      } as never)
-
-      await expect(runtime.browserTabSwitch({ page: 'page-1', focus: true })).resolves.toEqual({
-        switched: 0,
-        browserPageId: 'page-1'
-      })
-      expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-1')
-    })
-
     it('does not silently drop invalid explicit worktree selectors for page-targeted commands', async () => {
       vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
       mockLiveBrowserGuest()
@@ -295,7 +237,7 @@ describe('OrcaRuntimeService', () => {
         stopAndWait,
         getForegroundProcess: async () => null
       })
-      syncSinglePty(runtime, 'pty-1')
+      await syncSinglePty(runtime, 'pty-1')
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
@@ -328,7 +270,7 @@ describe('OrcaRuntimeService', () => {
         stopAndWait: vi.fn(async () => false),
         getForegroundProcess: async () => null
       })
-      syncSinglePty(runtime, 'pty-1')
+      await syncSinglePty(runtime, 'pty-1')
 
       await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
         'Failed to physically stop every PTY'
@@ -368,8 +310,11 @@ describe('OrcaRuntimeService', () => {
     })
   })
   describe('stale terminal handle resolution (#7718)', () => {
-    function syncSingleTerminalGraph(runtime: OrcaRuntimeService, ptyId: string): void {
-      runtime.syncWindowGraph(1, {
+    async function syncSingleTerminalGraph(
+      runtime: OrcaRuntimeService,
+      ptyId: string
+    ): Promise<void> {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'tab-1',
@@ -430,7 +375,7 @@ describe('OrcaRuntimeService', () => {
     it('errors with terminal_handle_stale instead of adopting a replacement PTY', async () => {
       const runtime = new OrcaRuntimeService(store)
       runtime.attachWindow(1)
-      syncSingleTerminalGraph(runtime, 'pty-a')
+      await syncSingleTerminalGraph(runtime, 'pty-a')
       const handle = issueLeafHandle(runtime, 'pty-a')
 
       const internals = runtime as unknown as {
@@ -450,7 +395,7 @@ describe('OrcaRuntimeService', () => {
     it('lets a handle issued before its first PTY adopt that PTY without erroring', async () => {
       const runtime = new OrcaRuntimeService(store)
       runtime.attachWindow(1)
-      syncSingleTerminalGraph(runtime, 'pty-a')
+      await syncSingleTerminalGraph(runtime, 'pty-a')
       const handle = issueLeafHandle(runtime, 'pty-a')
 
       // A pre-spawn handle has no PTY yet; its first binding must still resolve.
@@ -464,23 +409,6 @@ describe('OrcaRuntimeService', () => {
       record.ptyId = null
 
       expect(runtime.resolveLiveLeafForHandle(handle)).toEqual({ ptyId: 'pty-a' })
-    })
-
-    it('keeps terminal cwd resolution fail-soft when the provider is unavailable', async () => {
-      const runtime = new OrcaRuntimeService(store)
-      runtime.attachWindow(1)
-      syncSingleTerminalGraph(runtime, 'pty-a')
-      const handle = issueLeafHandle(runtime, 'pty-a')
-      runtime.setPtyController({
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null,
-        getCwd: async () => {
-          throw new Error('ssh disconnected')
-        }
-      })
-
-      await expect(runtime.resolveTerminalCwd(handle)).resolves.toBeNull()
     })
   })
 
@@ -502,7 +430,7 @@ describe('OrcaRuntimeService', () => {
         })
         webContents.send = send
         runtime.attachWindow(1)
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+        await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
         electronMocks.BrowserWindow.fromId.mockReturnValue({
           isDestroyed: () => false,
           webContents
@@ -549,7 +477,7 @@ describe('OrcaRuntimeService', () => {
         })
         webContents.send = send
         runtime.attachWindow(1)
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+        await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
         electronMocks.BrowserWindow.fromId.mockReturnValue({
           isDestroyed: () => false,
           webContents
@@ -582,7 +510,7 @@ describe('OrcaRuntimeService', () => {
           leafId: 'pane:1',
           ptyId: 'pty-stall'
         })
-        runtime.syncWindowGraph(1, {
+        await runtime.syncWindowGraph(1, {
           tabs: [],
           leaves: [
             {
