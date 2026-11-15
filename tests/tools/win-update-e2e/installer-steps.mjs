@@ -7,8 +7,8 @@ import { spawnSync } from 'node:child_process'
 import { assertWin32 } from './platform-guard.mjs'
 import { runCommandSync } from './powershell-runner.mjs'
 
-const PRODUCT_NAME = 'Orca'
-const EXE_NAME = 'Orca.exe'
+const PRODUCT_NAME = 'Zotz'
+const EXE_NAME = 'Zotz.exe'
 
 /** Programs root that per-user oneClick NSIS installs into. */
 function programsRoot() {

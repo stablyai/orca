@@ -124,19 +124,19 @@ jobs:
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
 
       # Why: silent-install the branch build so the crash harness has a packaged
-      # Orca.exe to drive. A clean CI runner installs to the default per-user
-      # location (%LOCALAPPDATA%\Programs\Orca), which the harness auto-locates.
+      # Zotz.exe to drive. A clean CI runner installs to the default per-user
+      # location (%LOCALAPPDATA%\Programs\Zotz), which the harness auto-locates.
       - name: Silent-install branch build
         shell: pwsh
         run: |
           $exe = "dist/orca-windows-setup.exe"
           if (-not (Test-Path $exe)) { throw "Installer not found at $exe" }
           Start-Process -FilePath $exe -ArgumentList '/S' -Wait
-          $installed = Join-Path $env:LOCALAPPDATA 'Programs/Orca/Orca.exe'
+          $installed = Join-Path $env:LOCALAPPDATA 'Programs/Zotz/Zotz.exe'
           if (-not (Test-Path $installed)) {
-            $installed = Join-Path $env:LOCALAPPDATA 'Programs/orca/Orca.exe'
+            $installed = Join-Path $env:LOCALAPPDATA 'Programs/zotz/Zotz.exe'
           }
-          if (-not (Test-Path $installed)) { throw "Installed Orca.exe not found after silent install" }
+          if (-not (Test-Path $installed)) { throw "Installed Zotz.exe not found after silent install" }
           "ORCA_EXE=$installed" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       # Why: crash ONLY the app main and assert the relocated daemon + its shell
