@@ -245,7 +245,10 @@ export async function readWorktreeCatalog(
       if (requirement.verifier && !requirement.needsHygieneClaim?.()) {
         const verification = await verify(success, requirement.verifier, now)
         if (verification.reuse && entry.success === success && isCurrent(entry, success)) {
-          success.confirmedAt = Math.max(success.confirmedAt, Date.now())
+          // A watch answer is rechecked on every read so the reconcile ceiling still bounds it.
+          if (!verification.byWatch) {
+            success.confirmedAt = Math.max(success.confirmedAt, Date.now())
+          }
           if (verification.provenAtWatchEpoch !== undefined) {
             success.catalogWatchEpoch = verification.provenAtWatchEpoch
           }

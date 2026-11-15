@@ -60,7 +60,7 @@ export async function startGitCommonWatch(
       }
     }
   }
-  const polling = await startGitCommonPolling(
+  return startGitCommonPolling(
     target.path,
     onEvents,
     pollIntervalMs,
@@ -69,5 +69,4 @@ export async function startGitCommonWatch(
     true,
     getStatusRefPaths
   )
-  return { ...polling, coversCatalog: () => true }
 }

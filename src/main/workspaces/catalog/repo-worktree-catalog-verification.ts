@@ -4,7 +4,7 @@ import type {
 } from './repo-worktree-catalog-observation'
 
 type Verification =
-  | { reuse: true; provenAtWatchEpoch?: number | null }
+  | { reuse: true; byWatch?: true; provenAtWatchEpoch?: number | null }
   | { reuse: false; probe: Promise<string | null> | null }
 
 /** Reuse when the watch saw no change, or a probe proves, or cannot yet disprove (#19312), that rows fingerprinted before their scan still hold. */
@@ -19,7 +19,7 @@ export async function verify(
   // Read before probing so a change during the probe cannot be stamped as already observed.
   const watchEpoch = verifier.watchEpoch?.() ?? null
   if (watchEpoch !== null && observation.catalogWatchEpoch === watchEpoch) {
-    return { reuse: true }
+    return { reuse: true, byWatch: true }
   }
   // Without a fingerprint from before its scan, no probe can certify these rows.
   if (!observation.adminFingerprint) {

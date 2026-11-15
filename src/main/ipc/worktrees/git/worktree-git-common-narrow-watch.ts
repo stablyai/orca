@@ -300,7 +300,7 @@ export async function startGitCommonNarrowWatch(
   await reconciliation.ensureStarted()
 
   return {
-    coversCatalog: () => !disposed && subscription !== null,
+    coversCatalog: () => !disposed && subscription !== null && !usingPollingFallback,
     unsubscribe: async () => {
       disposed = true
       stopExistencePoll()

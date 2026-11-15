@@ -115,11 +115,15 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
       expect(scanCallsFor(unwatchedPath)).toBe(2)
 
       watchEpoch = 2
-      vi.advanceTimersByTime(BASE_TTL_MS + 1_000)
+      vi.advanceTimersByTime(2_000)
       await listSettled()
       expect(scanCallsFor(watchedPath)).toBe(2)
 
-      vi.advanceTimersByTime(WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS)
+      vi.advanceTimersByTime(WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS - 1_000)
+      await listSettled()
+      expect(scanCallsFor(watchedPath)).toBe(2)
+
+      vi.advanceTimersByTime(2_000)
       await listSettled()
       expect(scanCallsFor(watchedPath)).toBe(3)
     } finally {
