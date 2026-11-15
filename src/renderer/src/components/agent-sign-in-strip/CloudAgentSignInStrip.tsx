@@ -354,12 +354,13 @@ export function CloudAgentSignInStrip({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-w-72">
               <DropdownMenuItem
-                className="flex-col items-start gap-0.5"
                 onSelect={() => model.alternative && actions.primary(model.alternative.action)}
               >
-                <span>{model.alternative.label}</span>
-                <span className="text-xs leading-4 text-muted-foreground">
-                  {model.alternative.detail}
+                <span className="flex flex-col gap-0.5">
+                  <span>{model.alternative.label}</span>
+                  <span className="text-xs leading-4 text-muted-foreground">
+                    {model.alternative.detail}
+                  </span>
                 </span>
               </DropdownMenuItem>
             </DropdownMenuContent>
